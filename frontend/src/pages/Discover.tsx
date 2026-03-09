@@ -232,7 +232,7 @@ export const Discover = () => {
             attributionControl={true}
           >
             <TileLayer
-              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
               subdomains="abcd"
               maxZoom={20}
@@ -275,7 +275,7 @@ export const Discover = () => {
             )}
           </MapContainer>
         ) : (
-          <div className="w-full h-full bg-[#1A1D23] flex flex-col items-center justify-center gap-3">
+          <div className="w-full h-full bg-[#222632] flex flex-col items-center justify-center gap-3">
             {error ? (
               <p className="text-[#FF6B6B]/80 text-sm px-8 text-center">{error}</p>
             ) : (
@@ -296,7 +296,7 @@ export const Discover = () => {
           <select
             value={radius}
             onChange={(e) => handleRadiusChange(Number(e.target.value))}
-            className="bg-[#1A1D23]/90 backdrop-blur-sm border border-white/10 text-[#F2F4F8] text-xs font-medium px-2.5 py-1.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#4F8CFF] cursor-pointer"
+            className="bg-[#222632]/90 backdrop-blur-sm border border-white/10 text-[#F2F4F8] text-xs font-medium px-2.5 py-1.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#4F8CFF] cursor-pointer"
           >
             <option value={1}>1 km</option>
             <option value={2}>2 km</option>
@@ -307,7 +307,7 @@ export const Discover = () => {
 
           <button
             onClick={() => setShowFilters(true)}
-            className="flex items-center justify-center gap-1.5 bg-[#1A1D23]/90 backdrop-blur-sm border border-white/10 text-[#F2F4F8] text-xs font-medium px-2.5 py-1.5 rounded-xl hover:bg-white/5 transition-all"
+            className="flex items-center justify-center gap-1.5 bg-[#222632]/90 backdrop-blur-sm border border-white/10 text-[#F2F4F8] text-xs font-medium px-2.5 py-1.5 rounded-xl hover:bg-white/5 transition-all"
           >
             <FilterIcon className="w-3.5 h-3.5" />
             Filters

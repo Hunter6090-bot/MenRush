@@ -106,9 +106,9 @@ export const Messages = () => {
   };
 
   return (
-    <div className="fixed inset-0 bg-[#0F1115] flex flex-col">
+    <div className="fixed inset-0 bg-[#151821] flex flex-col">
       {/* ── Header ── */}
-      <div className="flex-shrink-0 h-14 flex items-center gap-3 px-4 bg-[#0F1115]/90 backdrop-blur-xl border-b border-white/[0.06] z-10">
+      <div className="flex-shrink-0 h-14 flex items-center gap-3 px-4 bg-[#151821]/92 backdrop-blur-xl border-b border-white/[0.06] z-10">
         <button
           onClick={() => navigate('/conversations')}
           className="p-1.5 rounded-xl text-[#F2F4F8]/40 hover:text-[#F2F4F8] hover:bg-white/5 transition-all"
@@ -167,7 +167,7 @@ export const Messages = () => {
       </div>
 
       {/* ── Input ── */}
-      <div className="flex-shrink-0 border-t border-white/[0.06] bg-[#0F1115]/90 backdrop-blur-xl px-4 py-3 safe-area-inset-bottom">
+      <div className="flex-shrink-0 border-t border-white/[0.06] bg-[#151821]/92 backdrop-blur-xl px-4 py-3 safe-area-inset-bottom">
         <form onSubmit={handleSend} className="flex items-center gap-2">
           <input
             type="text"
@@ -175,7 +175,7 @@ export const Messages = () => {
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             placeholder="Type a message…"
-            className="flex-1 bg-[#1A1D23] border border-white/[0.08] text-[#F2F4F8] placeholder:text-[#F2F4F8]/25 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#4F8CFF]/50 transition-all"
+            className="flex-1 bg-[#222632] border border-white/[0.08] text-[#F2F4F8] placeholder:text-[#F2F4F8]/25 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#4F8CFF]/50 transition-all"
           />
           <button
             type="submit"

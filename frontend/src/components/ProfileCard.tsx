@@ -46,7 +46,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
   };
 
   return (
-    <div className="group relative bg-[#1A1D23] border border-white/[0.06] rounded-2xl shadow-card overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover hover:border-[#4F8CFF]/25 flex flex-col">
+    <div className="group relative bg-[#222632] border border-white/[0.06] rounded-2xl shadow-card overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover hover:border-[#4F8CFF]/25 flex flex-col">
       {/* Match Overlay */}
       {showMatch && (
         <div className="absolute inset-0 z-50 bg-[#4F8CFF]/90 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in text-white p-4 text-center">
@@ -65,7 +65,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
       )}
 
       {/* Photo area */}
-      <div className="relative h-52 bg-gradient-to-br from-[#21252D] to-[#1A1D23] flex-shrink-0">
+      <div className="relative h-52 bg-gradient-to-br from-[#272C3A] to-[#222632] flex-shrink-0">
         {fullPhotoUrl ? (
           <img
             src={fullPhotoUrl}
@@ -81,7 +81,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
         )}
 
         {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#1A1D23] via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#222632] via-transparent to-transparent" />
 
         {/* Status badge */}
         <div className="absolute top-3 left-3">

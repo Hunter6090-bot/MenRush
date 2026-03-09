@@ -65,9 +65,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const isActive = (path: string) => location.pathname === path;
 
   return (
-    <div className="min-h-dvh bg-[#0F1115] flex flex-col">
+    <div className="min-h-dvh bg-[#151821] flex flex-col">
       {/* ── Top header ── */}
-      <header className="fixed top-0 left-0 right-0 z-30 h-14 flex items-center px-4 bg-[#0F1115]/80 backdrop-blur-xl border-b border-white/[0.06]">
+      <header className="fixed top-0 left-0 right-0 z-30 h-14 flex items-center px-4 bg-[#151821]/85 backdrop-blur-xl border-b border-white/[0.06]">
         <div className="max-w-5xl mx-auto w-full flex items-center justify-between">
           {/* Wordmark */}
           <Link
@@ -130,7 +130,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </main>
 
       {/* ── Mobile bottom nav ── */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#0F1115]/85 backdrop-blur-xl border-t border-white/[0.06] safe-area-inset-bottom">
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#151821]/90 backdrop-blur-xl border-t border-white/[0.06] safe-area-inset-bottom">
         <div className="flex items-stretch h-16">
           {navLinks.map(({ to, label, icon: Icon, badge }) => (
             <Link

@@ -39,7 +39,7 @@ export const Matches = () => {
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-80 bg-[#1A1D23] rounded-2xl animate-pulse" />
+              <div key={i} className="h-80 bg-[#222632] rounded-2xl animate-pulse" />
             ))}
           </div>
         ) : matches.length > 0 ? (
@@ -49,7 +49,7 @@ export const Matches = () => {
             ))}
           </div>
         ) : (
-          <div className="text-center py-24 bg-[#1A1D23] rounded-3xl border border-white/[0.03]">
+          <div className="text-center py-24 bg-[#222632] rounded-3xl border border-white/[0.03]">
             <div className="w-16 h-16 bg-[#4F8CFF]/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <HeartIcon className="w-8 h-8 text-[#4F8CFF]/40" />
             </div>

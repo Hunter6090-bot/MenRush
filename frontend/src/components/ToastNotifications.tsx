@@ -44,7 +44,7 @@ export const ToastNotifications = () => {
         <div
           key={toast.id}
           onClick={() => handleToastClick(toast)}
-          className="pointer-events-auto cursor-pointer bg-[#1A1D23]/95 backdrop-blur-md border border-white/10 rounded-2xl p-4 shadow-2xl animate-slide-in-right hover:border-[#4F8CFF]/50 transition-all flex items-start gap-3 group"
+          className="pointer-events-auto cursor-pointer bg-[#222632]/95 backdrop-blur-md border border-white/10 rounded-2xl p-4 shadow-2xl animate-slide-in-right hover:border-[#4F8CFF]/50 transition-all flex items-start gap-3 group"
         >
           <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
             toast.type === 'match' ? 'bg-[#4F8CFF]/20 text-[#4F8CFF]' : 

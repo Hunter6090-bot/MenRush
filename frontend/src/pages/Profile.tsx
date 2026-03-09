@@ -152,7 +152,7 @@ export const Profile = () => {
 
       <div className="max-w-xl mx-auto px-4 py-6 pb-10 space-y-4">
         {/* ── Profile hero ── */}
-        <div className="bg-[#1A1D23] border border-white/[0.06] rounded-2xl overflow-hidden shadow-card">
+        <div className="bg-[#222632] border border-white/[0.06] rounded-2xl overflow-hidden shadow-card">
           {/* Cover gradient */}
           <div className="h-24 bg-gradient-to-br from-[#4F8CFF]/30 via-[#4F8CFF]/10 to-[#FF6B6B]/10" />
           {/* Avatar overlapping cover */}
@@ -163,7 +163,7 @@ export const Profile = () => {
                 photoUrl={profile.photo_url}
                 online={profile.online}
                 size="xl"
-                className="ring-4 ring-[#1A1D23]"
+                className="ring-4 ring-[#222632]"
               />
               <StatusBadge online={!!profile.online} lastSeen={profile.last_seen} />
             </div>
@@ -190,7 +190,7 @@ export const Profile = () => {
         </div>
 
         {/* ── Location card ── */}
-        <div className="bg-[#1A1D23] border border-white/[0.06] rounded-2xl p-5 flex items-center justify-between shadow-card">
+        <div className="bg-[#222632] border border-white/[0.06] rounded-2xl p-5 flex items-center justify-between shadow-card">
           <div>
             <p className="text-[#F2F4F8]/80 text-sm font-semibold">Your location</p>
             {lat && lng ? (
@@ -212,7 +212,7 @@ export const Profile = () => {
         </div>
 
         {/* ── Danger zone ── */}
-        <div className="bg-[#1A1D23] border border-white/[0.06] rounded-2xl p-5 shadow-card flex items-center justify-between">
+        <div className="bg-[#222632] border border-white/[0.06] rounded-2xl p-5 shadow-card flex items-center justify-between">
           <div>
             <p className="text-[#F2F4F8]/80 text-sm font-semibold">Sign out</p>
             <p className="text-[#F2F4F8]/30 text-xs mt-0.5">You'll need to log back in</p>
@@ -227,7 +227,7 @@ export const Profile = () => {
         </div>
 
         {/* ── Edit form ── */}
-        <div className="bg-[#1A1D23] border border-white/[0.06] rounded-2xl p-5 shadow-card">
+        <div className="bg-[#222632] border border-white/[0.06] rounded-2xl p-5 shadow-card">
           <h3 className="text-[#F2F4F8] font-semibold mb-4">Edit Profile</h3>
 
           <form onSubmit={handleSave} className="space-y-4">

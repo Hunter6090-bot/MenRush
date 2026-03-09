@@ -14,7 +14,7 @@ html {
 }
 
 body {
-  background-color: #0F1115;
+  background-color: #151821;
   color: #F2F4F8;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -33,7 +33,7 @@ body {
 
 /* ── Leaflet map overrides ──────────────────────── */
 .leaflet-container {
-  background: #1A1D23 !important;
+  background: #222632 !important;
   font-family: 'Inter', sans-serif !important;
 }
 

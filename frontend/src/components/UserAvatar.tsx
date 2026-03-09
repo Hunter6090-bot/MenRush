@@ -63,6 +63,6 @@ interface StatusDotProps {
 
 export const StatusDot: React.FC<StatusDotProps> = ({ online, className = '' }) => (
   <span
-    className={`rounded-full border-2 border-[#0F1115] ${online ? 'bg-emerald-400' : 'bg-white/20'} ${className}`}
+    className={`rounded-full border-2 border-[#151821] ${online ? 'bg-emerald-400' : 'bg-white/20'} ${className}`}
   />
 );

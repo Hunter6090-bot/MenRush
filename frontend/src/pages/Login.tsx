@@ -70,7 +70,7 @@ export const Login = () => {
         </div>
 
         {/* Glass card */}
-        <div className="bg-[#1A1D23]/80 backdrop-blur-xl border border-white/[0.08] rounded-2xl p-6 shadow-card">
+        <div className="bg-[#222632]/80 backdrop-blur-xl border border-white/[0.08] rounded-2xl p-6 shadow-card">
           <h2 className="text-lg font-bold text-[#F2F4F8] mb-5">Welcome back</h2>
 
           {error && (

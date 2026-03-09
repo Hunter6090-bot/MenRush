@@ -53,13 +53,13 @@ export const Conversations = () => {
             {[...Array(5)].map((_, i) => (
               <div
                 key={i}
-                className="h-[70px] bg-[#1A1D23] rounded-2xl border border-white/[0.06] animate-pulse"
+                className="h-[70px] bg-[#222632] rounded-2xl border border-white/[0.06] animate-pulse"
               />
             ))}
           </div>
         ) : convs.length === 0 ? (
           <div className="text-center py-20 animate-fade-in">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#1A1D23] border border-white/[0.06] flex items-center justify-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#222632] border border-white/[0.06] flex items-center justify-center">
               <ChatIcon className="w-8 h-8 text-[#4F8CFF]/50" />
             </div>
             <p className="text-[#F2F4F8]/60 font-medium mb-1">No conversations yet</p>

@@ -27,7 +27,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   return (
     <button
       onClick={() => navigate(`/messages/${userId}`)}
-      className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-[#1A1D23] border border-white/[0.06] hover:border-[#4F8CFF]/30 hover:bg-[#21252D] transition-all duration-200 text-left group"
+      className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-[#222632] border border-white/[0.06] hover:border-[#4F8CFF]/30 hover:bg-[#272C3A] transition-all duration-200 text-left group"
     >
       <div className="relative">
         <UserAvatar name={name} photoUrl={photoUrl} online={online} size="md" />
