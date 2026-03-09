@@ -1,27 +1,47 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { messagesAPI } from '../api/client';
 import { ConversationItem } from '../components/ConversationItem';
 import { Layout } from '../components/Layout';
+import { useUnreadStore } from '../hooks/store';
+import { useSocket } from '../hooks/useSocket';
 
 interface Conversation {
   other_user_id: string;
   other_user_name: string;
   last_message_time: string;
+  last_message?: string;
+  photo_url?: string;
+  online?: boolean;
 }
 
 export const Conversations = () => {
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const clearUnread = useUnreadStore((s) => s.clearUnread);
+  const socket = useSocket();
 
-  useEffect(() => {
+  const fetchConversations = useCallback(() => {
     messagesAPI
       .getConversations()
       .then((r) => setConvs(r.data))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    fetchConversations();
+    clearUnread();
+  }, []);
+
+  // Real-time: refresh conversation list when a new message arrives
+  useEffect(() => {
+    if (!socket) return;
+    const onMessage = () => fetchConversations();
+    socket.on('message', onMessage);
+    return () => { socket.off('message', onMessage); };
+  }, [socket, fetchConversations]);
 
   return (
     <Layout>
@@ -33,13 +53,13 @@ export const Conversations = () => {
             {[...Array(5)].map((_, i) => (
               <div
                 key={i}
-                className="h-[70px] bg-[#1A1D23] rounded-2xl border border-white/[0.06] animate-pulse"
+                className="h-[70px] bg-[#222632] rounded-2xl border border-white/[0.06] animate-pulse"
               />
             ))}
           </div>
         ) : convs.length === 0 ? (
           <div className="text-center py-20 animate-fade-in">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#1A1D23] border border-white/[0.06] flex items-center justify-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#222632] border border-white/[0.06] flex items-center justify-center">
               <ChatIcon className="w-8 h-8 text-[#4F8CFF]/50" />
             </div>
             <p className="text-[#F2F4F8]/60 font-medium mb-1">No conversations yet</p>
@@ -58,7 +78,10 @@ export const Conversations = () => {
                 key={c.other_user_id}
                 userId={c.other_user_id}
                 name={c.other_user_name}
+                photoUrl={c.photo_url}
+                online={c.online}
                 lastMessageTime={c.last_message_time}
+                lastMessage={c.last_message}
               />
             ))}
           </div>

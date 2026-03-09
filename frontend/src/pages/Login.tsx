@@ -1,7 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
+
+const BG_IMAGES = ['/bg1.png', '/bg2.png'];
+
+const useRandomBgSlideshow = () => {
+  const [index, setIndex] = useState(() => Math.floor(Math.random() * BG_IMAGES.length));
+  const [fade, setFade] = useState(true);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setFade(false);
+      setTimeout(() => {
+        setIndex((i) => {
+          const next = Math.floor(Math.random() * BG_IMAGES.length);
+          return next === i ? (i + 1) % BG_IMAGES.length : next;
+        });
+        setFade(true);
+      }, 600);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return { src: BG_IMAGES[index], fade };
+};
 
 export const Login = () => {
   const [email, setEmail] = useState('');
@@ -10,6 +33,7 @@ export const Login = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
+  const { src, fade } = useRandomBgSlideshow();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,10 +51,14 @@ export const Login = () => {
   };
 
   return (
-    <div className="min-h-dvh bg-[#0F1115] flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Ambient glows */}
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#4F8CFF]/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-[#FF6B6B]/8 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-dvh flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background slideshow */}
+      <div
+        className="absolute inset-0 bg-cover bg-center transition-opacity duration-700"
+        style={{ backgroundImage: `url(${src})`, opacity: fade ? 1 : 0 }}
+      />
+      {/* Dark overlay for legibility */}
+      <div className="absolute inset-0 bg-black/55" />
 
       <div className="w-full max-w-sm relative z-10 animate-slide-up">
         {/* Wordmark */}
@@ -42,7 +70,7 @@ export const Login = () => {
         </div>
 
         {/* Glass card */}
-        <div className="bg-[#1A1D23]/80 backdrop-blur-xl border border-white/[0.08] rounded-2xl p-6 shadow-card">
+        <div className="bg-[#222632]/80 backdrop-blur-xl border border-white/[0.08] rounded-2xl p-6 shadow-card">
           <h2 className="text-lg font-bold text-[#F2F4F8] mb-5">Welcome back</h2>
 
           {error && (

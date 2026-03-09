@@ -1,6 +1,7 @@
 import express from 'express';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import http from 'http';
+import path from 'path';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth';
@@ -24,6 +25,8 @@ const io: any = new SocketIOServer(server, {
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.set('io', io);
 
 // Routes
 app.use('/api/auth', authRoutes);

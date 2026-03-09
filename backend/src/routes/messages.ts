@@ -15,6 +15,11 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       data.receiver_id,
       data.message
     );
+    
+    // Emit real-time message through socket
+    const io = req.app.get('io');
+    io.to(`user:${data.receiver_id}`).emit('message', message);
+    
     res.status(201).json(message);
   } catch (error: any) {
     res.status(400).json({ error: error.message });

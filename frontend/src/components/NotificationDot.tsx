@@ -15,7 +15,7 @@ export const NotificationDot: React.FC<NotificationDotProps> = ({
 
   return (
     <span
-      className={`absolute -top-1 -right-1 flex items-center justify-center rounded-full bg-[#FF6B6B] text-white font-bold leading-none border-2 border-[#0F1115] ${
+      className={`absolute -top-1 -right-1 flex items-center justify-center rounded-full bg-[#FF6B6B] text-white font-bold leading-none border-2 border-[#151821] ${
         count && count > 0 ? 'min-w-[18px] h-[18px] text-[10px] px-1' : 'w-2.5 h-2.5'
       } ${className}`}
     >
