@@ -21,13 +21,36 @@ export const authAPI = {
 
 export const usersAPI = {
   getMe: () => apiClient.get('/users/me'),
-  getNearby: (lat: number, lng: number, radius?: number) =>
-    apiClient.get('/users/nearby', { params: { lat, lng, radius } }),
+  getNearby: (
+    lat: number,
+    lng: number,
+    radius?: number,
+    filters?: { minAge?: number; maxAge?: number; interests?: string[] }
+  ) =>
+    apiClient.get('/users/nearby', {
+      params: {
+        lat,
+        lng,
+        radius,
+        minAge: filters?.minAge,
+        maxAge: filters?.maxAge,
+        interests: filters?.interests?.join(','),
+      },
+    }),
   getProfile: (id: string) => apiClient.get(`/users/profile/${id}`),
   updateLocation: (lat: number, lng: number) =>
     apiClient.post('/users/location', { lat, lng }),
-  updateProfile: (data: { bio?: string; photo_url?: string }) =>
+  updateProfile: (data: { bio?: string; photo_url?: string; interests?: string[] }) =>
     apiClient.post('/users/profile', data),
+  uploadPhoto: (file: File) => {
+    const formData = new FormData();
+    formData.append('photo', file);
+    return apiClient.post('/users/photo', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  likeUser: (id: string) => apiClient.post(`/users/like/${id}`),
+  getMatches: () => apiClient.get('/users/matches'),
 };
 
 export const messagesAPI = {
