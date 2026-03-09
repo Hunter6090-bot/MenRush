@@ -19,6 +19,13 @@ const sizes: Record<Size, { outer: string; text: string; dot: string; dotPos: st
   xl: { outer: 'w-24 h-24', text: 'text-3xl',  dot: 'w-4 h-4',  dotPos: 'bottom-1 right-1' },
 };
 
+export const getPhotoUrl = (url?: string) => {
+  if (!url) return undefined;
+  if (url.startsWith('http')) return url;
+  const baseUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
+  return `${baseUrl}${url}`;
+};
+
 export const UserAvatar: React.FC<UserAvatarProps> = ({
   name,
   photoUrl,
@@ -29,14 +36,15 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
 }) => {
   const s = sizes[size];
   const initial = name?.[0]?.toUpperCase() ?? '?';
+  const fullPhotoUrl = getPhotoUrl(photoUrl);
 
   return (
     <div className={`relative flex-shrink-0 ${className}`}>
       <div
         className={`${s.outer} rounded-full overflow-hidden bg-gradient-to-br from-[#4F8CFF]/30 to-[#4F8CFF]/10 border border-white/10 flex items-center justify-center font-semibold text-[#F2F4F8]`}
       >
-        {photoUrl ? (
-          <img src={photoUrl} alt={name} className="w-full h-full object-cover" />
+        {fullPhotoUrl ? (
+          <img src={fullPhotoUrl} alt={name} className="w-full h-full object-cover" />
         ) : (
           <span className={s.text}>{initial}</span>
         )}
@@ -55,6 +63,6 @@ interface StatusDotProps {
 
 export const StatusDot: React.FC<StatusDotProps> = ({ online, className = '' }) => (
   <span
-    className={`rounded-full border-2 border-[#0F1115] ${online ? 'bg-emerald-400' : 'bg-white/20'} ${className}`}
+    className={`rounded-full border-2 border-[#151821] ${online ? 'bg-emerald-400' : 'bg-white/20'} ${className}`}
   />
 );

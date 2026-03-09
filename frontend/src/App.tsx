@@ -5,6 +5,7 @@ import { Register } from './pages/Register';
 import { Discover } from './pages/Discover';
 import { Messages } from './pages/Messaging';
 import { Conversations } from './pages/Conversations';
+import { Matches } from './pages/Matches';
 import { Profile } from './pages/Profile';
 import { useAuthStore } from './hooks/store';
 
@@ -20,12 +21,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Router>
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 
           <Route path="/discover" element={<ProtectedRoute><Discover /></ProtectedRoute>} />
+          <Route path="/matches" element={<ProtectedRoute><Matches /></ProtectedRoute>} />
           <Route path="/conversations" element={<ProtectedRoute><Conversations /></ProtectedRoute>} />
           <Route path="/messages/:otherId" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />

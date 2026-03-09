@@ -2,22 +2,42 @@ import { query } from '../db';
 import { ProfileInput } from '../types/validation';
 
 export const userService = {
-  async getNearbyUsers(userId: string, lat: number, lng: number, radiusKm: number = 5) {
+  async getNearbyUsers(
+    userId: string,
+    lat: number,
+    lng: number,
+    radiusKm: number = 5,
+    filters?: { minAge?: number; maxAge?: number; interests?: string[] }
+  ) {
     const radiusMeters = radiusKm * 1000;
-
-    const result = await query(
-      `SELECT
+    const values: any[] = [lat, lng, userId, radiusMeters];
+    let queryStr = `
+      SELECT
         u.id, u.name, u.age, u.bio, u.photo_url, u.interests,
         p.lat, p.lng, p.online, p.last_seen,
         ST_Distance(p.location, ST_MakePoint($2, $1)::geography) as distance_m
-       FROM users u
-       JOIN profiles p ON u.id = p.user_id
-       WHERE u.id != $3
-         AND ST_DWithin(p.location, ST_MakePoint($2, $1)::geography, $4)
-       ORDER BY p.online DESC, p.last_seen DESC
-       LIMIT 50`,
-      [lat, lng, userId, radiusMeters]
-    );
+      FROM users u
+      JOIN profiles p ON u.id = p.user_id
+      WHERE u.id != $3
+        AND ST_DWithin(p.location, ST_MakePoint($2, $1)::geography, $4)
+    `;
+
+    if (filters?.minAge) {
+      values.push(filters.minAge);
+      queryStr += ` AND u.age >= $${values.length}`;
+    }
+    if (filters?.maxAge) {
+      values.push(filters.maxAge);
+      queryStr += ` AND u.age <= $${values.length}`;
+    }
+    if (filters?.interests && filters.interests.length > 0) {
+      values.push(filters.interests);
+      queryStr += ` AND u.interests && $${values.length}`;
+    }
+
+    queryStr += ` ORDER BY p.online DESC, p.last_seen DESC LIMIT 50`;
+
+    const result = await query(queryStr, values);
 
     return result.rows.map((row) => ({
       ...row,
@@ -90,5 +110,38 @@ export const userService = {
       values
     );
     return result.rows[0];
+  },
+
+  async likeUser(likerId: string, likedId: string) {
+    // Record the like
+    await query(
+      `INSERT INTO likes (liker_id, liked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [likerId, likedId]
+    );
+
+    // Check if it's a match
+    const result = await query(
+      `SELECT id FROM likes WHERE liker_id = $1 AND liked_id = $2`,
+      [likedId, likerId]
+    );
+
+    return result.rows.length > 0;
+  },
+
+  async getMatches(userId: string) {
+    const result = await query(
+      `SELECT u.id, u.name, u.age, u.bio, u.photo_url, p.online, p.last_seen
+       FROM users u
+       JOIN profiles p ON u.id = p.user_id
+       WHERE u.id IN (
+         SELECT l1.liked_id
+         FROM likes l1
+         JOIN likes l2 ON l1.liker_id = l2.liked_id AND l1.liked_id = l2.liker_id
+         WHERE l1.liker_id = $1
+       )
+       ORDER BY p.online DESC, p.last_seen DESC`,
+      [userId]
+    );
+    return result.rows;
   },
 };

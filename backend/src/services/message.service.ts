@@ -14,7 +14,15 @@ export const messageService = {
       [id, senderId, receiverId, sanitized]
     );
 
-    return result.rows[0];
+    const message = result.rows[0];
+    
+    // Get sender name for notification
+    const senderRes = await query(`SELECT name FROM users WHERE id = $1`, [senderId]);
+    if (senderRes.rows[0]) {
+      message.sender_name = senderRes.rows[0].name;
+    }
+
+    return message;
   },
 
   async getConversation(userId: string, otherId: string, limit: number = 50) {
@@ -33,19 +41,31 @@ export const messageService = {
 
   async getConversations(userId: string) {
     const result = await query(
-      `SELECT DISTINCT 
-        CASE 
-          WHEN sender_id = $1 THEN receiver_id 
-          ELSE sender_id 
-        END as other_user_id,
-        (SELECT name FROM users u WHERE u.id = CASE 
-          WHEN sender_id = $1 THEN receiver_id 
-          ELSE sender_id 
-        END) as other_user_name,
-        MAX(created_at) as last_message_time
-       FROM messages
-       WHERE sender_id = $1 OR receiver_id = $1
-       GROUP BY other_user_id
+      `SELECT
+        other_user_id,
+        other_user_name,
+        last_message_time,
+        last_message,
+        photo_url,
+        online
+       FROM (
+         SELECT DISTINCT ON (
+           CASE WHEN m.sender_id = $1 THEN m.receiver_id ELSE m.sender_id END
+         )
+           CASE WHEN m.sender_id = $1 THEN m.receiver_id ELSE m.sender_id END AS other_user_id,
+           u.name AS other_user_name,
+           m.created_at AS last_message_time,
+           m.message AS last_message,
+           u.photo_url,
+           COALESCE(p.online, false) AS online
+         FROM messages m
+         JOIN users u ON u.id = CASE WHEN m.sender_id = $1 THEN m.receiver_id ELSE m.sender_id END
+         LEFT JOIN profiles p ON p.user_id = u.id
+         WHERE m.sender_id = $1 OR m.receiver_id = $1
+         ORDER BY
+           CASE WHEN m.sender_id = $1 THEN m.receiver_id ELSE m.sender_id END,
+           m.created_at DESC
+       ) sub
        ORDER BY last_message_time DESC`,
       [userId]
     );

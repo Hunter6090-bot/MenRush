@@ -32,9 +32,19 @@ CREATE TABLE messages (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE likes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  liker_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  liked_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(liker_id, liked_id)
+);
+
 CREATE INDEX idx_profiles_location ON profiles USING GIST(location);
 CREATE INDEX idx_profiles_online ON profiles(online);
 CREATE INDEX idx_messages_sender ON messages(sender_id);
 CREATE INDEX idx_messages_receiver ON messages(receiver_id);
 CREATE INDEX idx_messages_created ON messages(created_at);
 CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_likes_liker ON likes(liker_id);
+CREATE INDEX idx_likes_liked ON likes(liked_id);
