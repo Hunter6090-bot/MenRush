@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { usersAPI } from '../api/client';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { Layout } from '../components/Layout';
@@ -30,13 +31,15 @@ interface ProfileData {
 type Toast = { type: 'success' | 'error'; msg: string };
 
 export const Profile = () => {
-  const { user, token, setAuth } = useAuthStore();
+  const { user, token, setAuth, logout } = useAuthStore();
   const { lat, lng, setLocation } = useLocationStore();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [bio, setBio] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
   const [interests, setInterests] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [locating, setLocating] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
 
@@ -59,6 +62,24 @@ export const Profile = () => {
     setInterests((prev) =>
       prev.includes(tag) ? prev.filter((t) => t !== tag) : prev.length < 10 ? [...prev, tag] : prev
     );
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const res = await usersAPI.uploadPhoto(file);
+      setPhotoUrl(res.data.photo_url);
+      setProfile((p) => p ? { ...p, photo_url: res.data.photo_url } : p);
+      if (user && token) setAuth({ ...user, photo_url: res.data.photo_url }, token);
+      showToast('success', 'Photo uploaded!');
+    } catch (err: any) {
+      showToast('error', err.response?.data?.error || 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -190,6 +211,21 @@ export const Profile = () => {
           </button>
         </div>
 
+        {/* ── Danger zone ── */}
+        <div className="bg-[#1A1D23] border border-white/[0.06] rounded-2xl p-5 shadow-card flex items-center justify-between">
+          <div>
+            <p className="text-[#F2F4F8]/80 text-sm font-semibold">Sign out</p>
+            <p className="text-[#F2F4F8]/30 text-xs mt-0.5">You'll need to log back in</p>
+          </div>
+          <button
+            onClick={() => { logout(); navigate('/login'); }}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#FF6B6B]/10 hover:bg-[#FF6B6B]/20 text-[#FF6B6B] text-xs font-semibold border border-[#FF6B6B]/20 transition-all"
+          >
+            <LogoutIcon className="w-3.5 h-3.5" />
+            Sign out
+          </button>
+        </div>
+
         {/* ── Edit form ── */}
         <div className="bg-[#1A1D23] border border-white/[0.06] rounded-2xl p-5 shadow-card">
           <h3 className="text-[#F2F4F8] font-semibold mb-4">Edit Profile</h3>
@@ -210,15 +246,44 @@ export const Profile = () => {
 
             <div>
               <label className="block text-xs font-medium text-[#F2F4F8]/40 mb-1.5 uppercase tracking-wide">
-                Photo URL
+                Profile Photo
               </label>
-              <input
-                type="url"
-                value={photoUrl}
-                onChange={(e) => setPhotoUrl(e.target.value)}
-                placeholder="https://example.com/photo.jpg"
-                className={inputClass}
-              />
+              <div className="flex gap-4 items-start">
+                <div className="flex-1">
+                  <input
+                    type="url"
+                    value={photoUrl}
+                    onChange={(e) => setPhotoUrl(e.target.value)}
+                    placeholder="https://example.com/photo.jpg"
+                    className={inputClass}
+                  />
+                  <p className="text-[10px] text-[#F2F4F8]/25 mt-1.5 px-1">
+                    Enter a direct image URL or upload a file
+                  </p>
+                </div>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoUpload}
+                    className="hidden"
+                    id="photo-upload"
+                    disabled={uploading}
+                  />
+                  <label
+                    htmlFor="photo-upload"
+                    className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-white/[0.05] border border-dashed border-white/20 hover:border-[#4F8CFF]/50 hover:bg-[#4F8CFF]/5 cursor-pointer transition-all ${
+                      uploading ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    {uploading ? (
+                      <Spinner className="w-5 h-5 text-[#4F8CFF]" />
+                    ) : (
+                      <UploadIcon className="w-5 h-5 text-[#F2F4F8]/40" />
+                    )}
+                  </label>
+                </div>
+              </div>
             </div>
 
             {/* Interests */}
@@ -265,9 +330,21 @@ export const Profile = () => {
   );
 };
 
+const LogoutIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+  </svg>
+);
+
 const PinIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
     <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z" />
+  </svg>
+);
+
+const UploadIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0l-4 4m4-4v12" />
   </svg>
 );
 

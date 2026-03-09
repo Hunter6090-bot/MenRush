@@ -28,8 +28,16 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
     return res.status(400).json({ error: 'Validation error', details: err.errors });
   }
 
-  if (err.message.includes('Invalid credentials')) {
+  if (err.message && err.message.includes('Invalid credentials')) {
     return res.status(401).json({ error: err.message });
+  }
+
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({ error: 'File size too large (max 5MB)' });
+  }
+
+  if (err.message === 'Only images are allowed') {
+    return res.status(400).json({ error: err.message });
   }
 
   return res.status(500).json({ error: 'Internal server error' });

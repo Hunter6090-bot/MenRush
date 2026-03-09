@@ -109,3 +109,26 @@ body {
 .radar-ring-1 { animation: radarRing 2.4s ease-out infinite; }
 .radar-ring-2 { animation: radarRing 2.4s ease-out 0.8s infinite; }
 .radar-ring-3 { animation: radarRing 2.4s ease-out 1.6s infinite; }
+
+/* ── Custom Animations ─────────────────────────── */
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.animate-slide-in-right { animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+
+@keyframes scaleUp {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.animate-scale-up { animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+
+@keyframes slideUp {
+  from { transform: translate(-50%, 20px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+.animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* ── Shadow Glows ──────────────────────────────── */
+.shadow-glow-blue { box-shadow: 0 0 20px rgba(79, 140, 255, 0.4); }
+.shadow-glow-red { box-shadow: 0 0 20px rgba(255, 107, 107, 0.4); }

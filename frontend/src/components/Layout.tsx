@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../hooks/store';
+import { useAuthStore, useUnreadStore, useNotificationStore } from '../hooks/store';
+import { useSocket } from '../hooks/useSocket';
 import { UserAvatar } from './UserAvatar';
+import { ToastNotifications } from './ToastNotifications';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -9,8 +11,44 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, logout } = useAuthStore();
+  const { count: unreadCount, addUnread } = useUnreadStore();
+  const { addNotification } = useNotificationStore();
   const location = useLocation();
   const navigate = useNavigate();
+  const socket = useSocket();
+
+  // Listen for incoming messages and notifications
+  useEffect(() => {
+    if (!socket) return;
+
+    const onMessage = (data: any) => {
+      const isViewingConversation = location.pathname === `/messages/${data.sender_id}`;
+      if (!isViewingConversation) {
+        addUnread(data.sender_id);
+        addNotification({
+          type: 'message',
+          message: `New message from ${data.sender_name || 'someone'}`,
+          userId: data.sender_id,
+        });
+      }
+    };
+
+    const onNotification = (data: any) => {
+      addNotification({
+        type: data.type,
+        message: data.message,
+        userId: data.userId,
+      });
+    };
+
+    socket.on('message', onMessage);
+    socket.on('notification', onNotification);
+
+    return () => {
+      socket.off('message', onMessage);
+      socket.off('notification', onNotification);
+    };
+  }, [socket, location.pathname, addUnread, addNotification]);
 
   const handleLogout = () => {
     logout();
@@ -18,9 +56,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   const navLinks = [
-    { to: '/discover', label: 'Discover', icon: CompassIcon },
-    { to: '/conversations', label: 'Messages', icon: ChatIcon },
-    { to: '/profile', label: 'Profile', icon: PersonIcon },
+    { to: '/discover', label: 'Discover', icon: CompassIcon, badge: 0 },
+    { to: '/matches', label: 'Matches', icon: HeartIcon, badge: 0 },
+    { to: '/conversations', label: 'Messages', icon: ChatIcon, badge: unreadCount },
+    { to: '/profile', label: 'Profile', icon: PersonIcon, badge: 0 },
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -40,7 +79,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
           {/* Desktop nav links */}
           <nav className="hidden sm:flex items-center gap-1">
-            {navLinks.map(({ to, label, icon: Icon }) => (
+            {navLinks.map(({ to, label, icon: Icon, badge }) => (
               <Link
                 key={to}
                 to={to}
@@ -50,7 +89,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     : 'text-[#F2F4F8]/55 hover:text-[#F2F4F8] hover:bg-white/5'
                 }`}
               >
-                <Icon className="w-4 h-4" />
+                <span className="relative">
+                  <Icon className="w-4 h-4" />
+                  {badge > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-[#FF6B6B] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
+                      {badge > 9 ? '9+' : badge}
+                    </span>
+                  )}
+                </span>
                 {label}
               </Link>
             ))}
@@ -86,7 +132,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* ── Mobile bottom nav ── */}
       <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#0F1115]/85 backdrop-blur-xl border-t border-white/[0.06] safe-area-inset-bottom">
         <div className="flex items-stretch h-16">
-          {navLinks.map(({ to, label, icon: Icon }) => (
+          {navLinks.map(({ to, label, icon: Icon, badge }) => (
             <Link
               key={to}
               to={to}
@@ -96,19 +142,20 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   : 'text-[#F2F4F8]/35 hover:text-[#F2F4F8]/70'
               }`}
             >
-              <Icon className={`w-5 h-5 transition-transform duration-200 ${isActive(to) ? 'scale-110' : ''}`} />
+              <span className="relative">
+                <Icon className={`w-5 h-5 transition-transform duration-200 ${isActive(to) ? 'scale-110' : ''}`} />
+                {badge > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-[#FF6B6B] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
+                    {badge > 9 ? '9+' : badge}
+                  </span>
+                )}
+              </span>
               {label}
             </Link>
           ))}
-          <button
-            onClick={handleLogout}
-            className="flex-1 flex flex-col items-center justify-center gap-1 text-[10px] font-medium text-[#F2F4F8]/30 hover:text-[#FF6B6B] transition-colors"
-          >
-            <LogoutIcon className="w-5 h-5" />
-            Sign out
-          </button>
         </div>
       </nav>
+      <ToastNotifications />
     </div>
   );
 };
@@ -118,6 +165,12 @@ const CompassIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <circle cx="12" cy="12" r="10" />
     <polygon points="16.24,7.76 14.12,14.12 7.76,16.24 9.88,9.88" />
+  </svg>
+);
+
+const HeartIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
   </svg>
 );
 

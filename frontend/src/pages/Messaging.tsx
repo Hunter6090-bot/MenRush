@@ -90,7 +90,6 @@ export const Messages = () => {
       const res = await messagesAPI.sendMessage(otherId, text);
       const saved: Message = res.data;
       setMessages((prev) => [...prev, saved]);
-      socket?.emit('message', saved);
     } catch {
       // restore input on failure
       setInput(text);

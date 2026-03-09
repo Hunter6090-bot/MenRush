@@ -1,7 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
+
+const BG_IMAGES = ['/bg1.png', '/bg2.png'];
+
+const useRandomBgSlideshow = () => {
+  const [index, setIndex] = useState(() => Math.floor(Math.random() * BG_IMAGES.length));
+  const [fade, setFade] = useState(true);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setFade(false);
+      setTimeout(() => {
+        setIndex((i) => {
+          const next = Math.floor(Math.random() * BG_IMAGES.length);
+          return next === i ? (i + 1) % BG_IMAGES.length : next;
+        });
+        setFade(true);
+      }, 600);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return { src: BG_IMAGES[index], fade };
+};
 
 export const Register = () => {
   const [form, setForm] = useState({ name: '', email: '', age: '', password: '' });
@@ -28,16 +51,22 @@ export const Register = () => {
     }
   };
 
+  const { src, fade } = useRandomBgSlideshow();
+
   const inputClass =
     'w-full bg-white/[0.06] border border-white/[0.08] text-[#F2F4F8] placeholder:text-[#F2F4F8]/25 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#4F8CFF]/50 focus:border-[#4F8CFF]/50 transition-all duration-200';
 
   const labelClass = 'block text-xs font-medium text-[#F2F4F8]/50 mb-1.5 uppercase tracking-wide';
 
   return (
-    <div className="min-h-dvh bg-[#0F1115] flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Ambient glows */}
-      <div className="absolute top-1/4 right-0 w-80 h-80 bg-[#4F8CFF]/8 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-72 h-72 bg-[#FF6B6B]/6 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-dvh flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background slideshow */}
+      <div
+        className="absolute inset-0 bg-cover bg-center transition-opacity duration-700"
+        style={{ backgroundImage: `url(${src})`, opacity: fade ? 1 : 0 }}
+      />
+      {/* Dark overlay for legibility */}
+      <div className="absolute inset-0 bg-black/55" />
 
       <div className="w-full max-w-sm relative z-10 animate-slide-up">
         <div className="text-center mb-8">

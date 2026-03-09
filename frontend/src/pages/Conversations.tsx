@@ -1,27 +1,47 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { messagesAPI } from '../api/client';
 import { ConversationItem } from '../components/ConversationItem';
 import { Layout } from '../components/Layout';
+import { useUnreadStore } from '../hooks/store';
+import { useSocket } from '../hooks/useSocket';
 
 interface Conversation {
   other_user_id: string;
   other_user_name: string;
   last_message_time: string;
+  last_message?: string;
+  photo_url?: string;
+  online?: boolean;
 }
 
 export const Conversations = () => {
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const clearUnread = useUnreadStore((s) => s.clearUnread);
+  const socket = useSocket();
 
-  useEffect(() => {
+  const fetchConversations = useCallback(() => {
     messagesAPI
       .getConversations()
       .then((r) => setConvs(r.data))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    fetchConversations();
+    clearUnread();
+  }, []);
+
+  // Real-time: refresh conversation list when a new message arrives
+  useEffect(() => {
+    if (!socket) return;
+    const onMessage = () => fetchConversations();
+    socket.on('message', onMessage);
+    return () => { socket.off('message', onMessage); };
+  }, [socket, fetchConversations]);
 
   return (
     <Layout>
@@ -58,7 +78,10 @@ export const Conversations = () => {
                 key={c.other_user_id}
                 userId={c.other_user_id}
                 name={c.other_user_name}
+                photoUrl={c.photo_url}
+                online={c.online}
                 lastMessageTime={c.last_message_time}
+                lastMessage={c.last_message}
               />
             ))}
           </div>

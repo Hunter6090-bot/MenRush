@@ -9,6 +9,7 @@ interface ConversationItemProps {
   photoUrl?: string;
   online?: boolean;
   lastMessageTime?: string;
+  lastMessage?: string;
   unreadCount?: number;
 }
 
@@ -18,6 +19,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   photoUrl,
   online,
   lastMessageTime,
+  lastMessage,
   unreadCount,
 }) => {
   const navigate = useNavigate();
@@ -43,8 +45,8 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
             </span>
           )}
         </div>
-        <p className="text-xs text-[#F2F4F8]/40 mt-0.5">
-          {online ? 'Active now' : 'Tap to open conversation'}
+        <p className={`text-xs mt-0.5 truncate ${unreadCount ? 'text-[#F2F4F8]/70 font-medium' : 'text-[#F2F4F8]/40'}`}>
+          {lastMessage ?? (online ? 'Active now' : 'Say hello!')}
         </p>
       </div>
 

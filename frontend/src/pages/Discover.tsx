@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import { usersAPI } from '../api/client';
 import { useLocationStore } from '../hooks/store';
 import { ProfileCard, NearbyUser } from '../components/ProfileCard';
 import { Layout } from '../components/Layout';
+import { getPhotoUrl } from '../components/UserAvatar';
 
 /* ── Map helpers ───────────────────────────────── */
 
@@ -31,8 +33,9 @@ const selfIcon = L.divIcon({
   iconAnchor: [21, 21],
 });
 
-const createUserIcon = (user: NearbyUser) =>
-  L.divIcon({
+const createUserIcon = (user: NearbyUser) => {
+  const fullPhotoUrl = getPhotoUrl(user.photo_url);
+  return L.divIcon({
     className: '',
     html: `
       <div style="
@@ -45,14 +48,15 @@ const createUserIcon = (user: NearbyUser) =>
         transition:transform .2s;
         font-family:Inter,sans-serif;
       ">
-        ${user.photo_url
-          ? `<img src="${user.photo_url}" style="width:100%;height:100%;object-fit:cover;" />`
+        ${fullPhotoUrl
+          ? `<img src="${fullPhotoUrl}" style="width:100%;height:100%;object-fit:cover;" />`
           : `<span>${user.name[0]?.toUpperCase() ?? '?'}</span>`}
       </div>`,
     iconSize: [40, 40],
     iconAnchor: [20, 20],
     popupAnchor: [0, -24],
   });
+};
 
 /* ── Page component ────────────────────────────── */
 
@@ -61,16 +65,21 @@ export const Discover = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [radius, setRadius] = useState(5);
+  const [minAge, setMinAge] = useState(18);
+  const [maxAge, setMaxAge] = useState(100);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [showFilters, setShowFilters] = useState(false);
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
   const { lat, lng, setLocation } = useLocationStore();
   const watchIdRef = useRef<number | null>(null);
   const hasFetchedRef = useRef(false);
+  const navigate = useNavigate();
 
   const fetchNearbyUsers = useCallback(
-    async (latitude: number, longitude: number, r: number) => {
+    async (latitude: number, longitude: number, r: number, filters?: any) => {
       setLoading(true);
       try {
-        const res = await usersAPI.getNearby(latitude, longitude, r);
+        const res = await usersAPI.getNearby(latitude, longitude, r, filters);
         setUsers(res.data);
         setError('');
       } catch {
@@ -96,7 +105,7 @@ export const Discover = () => {
         setMapCenter([latitude, longitude]);
         if (!hasFetchedRef.current) {
           hasFetchedRef.current = true;
-          fetchNearbyUsers(latitude, longitude, radius);
+          fetchNearbyUsers(latitude, longitude, radius, { minAge, maxAge, interests: selectedInterests });
         }
       },
       () => {
@@ -114,20 +123,104 @@ export const Discover = () => {
   const handleRefresh = () => {
     if (lat && lng) {
       hasFetchedRef.current = false;
-      fetchNearbyUsers(lat, lng, radius);
+      fetchNearbyUsers(lat, lng, radius, { minAge, maxAge, interests: selectedInterests });
       hasFetchedRef.current = true;
     }
   };
 
   const handleRadiusChange = (newRadius: number) => {
     setRadius(newRadius);
-    if (lat && lng) fetchNearbyUsers(lat, lng, newRadius);
+    if (lat && lng) fetchNearbyUsers(lat, lng, newRadius, { minAge, maxAge, interests: selectedInterests });
+  };
+
+  const applyFilters = () => {
+    setShowFilters(false);
+    if (lat && lng) fetchNearbyUsers(lat, lng, radius, { minAge, maxAge, interests: selectedInterests });
+  };
+
+  const toggleInterest = (interest: string) => {
+    setSelectedInterests(prev =>
+      prev.includes(interest) ? prev.filter(i => i !== interest) : [...prev, interest]
+    );
   };
 
   const onlineCount = users.filter((u) => u.online).length;
 
+  const INTEREST_OPTIONS = [
+    'Travel', 'Music', 'Food', 'Sports', 'Art', 'Technology',
+    'Gaming', 'Photography', 'Fitness', 'Movies', 'Books', 'Cooking',
+    'Dancing', 'Hiking', 'Coffee', 'Fashion', 'Yoga', 'Skateboarding',
+    'Climbing', 'Cycling',
+  ];
+
   return (
     <Layout>
+      {/* ── Filter Modal ── */}
+      {showFilters && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#1A1D23] border border-white/10 w-full max-w-md rounded-3xl p-6 shadow-2xl animate-scale-up">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-[#F2F4F8]">Discovery Filters</h3>
+              <button onClick={() => setShowFilters(false)} className="text-[#F2F4F8]/40 hover:text-[#F2F4F8] transition-colors">
+                <CloseIcon className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Age Range */}
+              <div>
+                <label className="block text-xs font-bold text-[#F2F4F8]/40 uppercase tracking-widest mb-3">Age Range: {minAge} - {maxAge}</label>
+                <div className="flex gap-4">
+                  <input
+                    type="range"
+                    min="18"
+                    max="100"
+                    value={minAge}
+                    onChange={(e) => setMinAge(Math.min(Number(e.target.value), maxAge))}
+                    className="flex-1 accent-[#4F8CFF]"
+                  />
+                  <input
+                    type="range"
+                    min="18"
+                    max="100"
+                    value={maxAge}
+                    onChange={(e) => setMaxAge(Math.max(Number(e.target.value), minAge))}
+                    className="flex-1 accent-[#4F8CFF]"
+                  />
+                </div>
+              </div>
+
+              {/* Interests */}
+              <div>
+                <label className="block text-xs font-bold text-[#F2F4F8]/40 uppercase tracking-widest mb-3">Filter by Interests</label>
+                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                  {INTEREST_OPTIONS.map(tag => (
+                    <button
+                      key={tag}
+                      onClick={() => toggleInterest(tag)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                        selectedInterests.includes(tag)
+                          ? 'bg-[#4F8CFF] border-[#4F8CFF] text-white shadow-glow-blue/40'
+                          : 'bg-white/5 border-white/10 text-[#F2F4F8]/60 hover:bg-white/10'
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={applyFilters}
+                className="w-full py-3.5 rounded-2xl bg-[#4F8CFF] hover:bg-[#3a6fe0] text-white font-bold text-sm shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+              >
+                Apply Filters
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Map ── */}
       <div className="relative w-full" style={{ height: '45vh', minHeight: 280 }}>
         {mapCenter ? (
@@ -158,7 +251,7 @@ export const Discover = () => {
                   icon={createUserIcon(user)}
                 >
                   <Popup>
-                    <div className="p-2 min-w-[140px]">
+                    <div className="p-2 min-w-[160px]">
                       <p className="font-semibold text-sm text-[#F2F4F8]">{user.name}, {user.age}</p>
                       <p className="text-xs text-[#F2F4F8]/50 mt-0.5">
                         {parseFloat(String(user.distance_km)).toFixed(1)} km away
@@ -169,6 +262,12 @@ export const Discover = () => {
                           Online now
                         </span>
                       )}
+                      <button
+                        onClick={() => navigate(`/messages/${user.id}`)}
+                        className="mt-2 w-full py-1.5 rounded-lg bg-[#4F8CFF] hover:bg-[#3a6fe0] text-white text-xs font-semibold transition-colors"
+                      >
+                        Message
+                      </button>
                     </div>
                   </Popup>
                 </Marker>
@@ -205,6 +304,14 @@ export const Discover = () => {
             <option value={10}>10 km</option>
             <option value={25}>25 km</option>
           </select>
+
+          <button
+            onClick={() => setShowFilters(true)}
+            className="flex items-center justify-center gap-1.5 bg-[#1A1D23]/90 backdrop-blur-sm border border-white/10 text-[#F2F4F8] text-xs font-medium px-2.5 py-1.5 rounded-xl hover:bg-white/5 transition-all"
+          >
+            <FilterIcon className="w-3.5 h-3.5" />
+            Filters
+          </button>
         </div>
       </div>
 
@@ -292,5 +399,17 @@ const RefreshIcon = ({ className }: { className?: string }) => (
 const RadarIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M9 3.75A6.75 6.75 0 0115.75 9M6.75 9a5.25 5.25 0 0110.5 0M3 9a9 9 0 0118 0M12 9h.008v.008H12V9z" />
+  </svg>
+);
+
+const FilterIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+  </svg>
+);
+
+const CloseIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
   </svg>
 );
