@@ -24,6 +24,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: nearnow-backend
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://nearnow:nearnow123@postgres:5432/nearnow
       JWT_SECRET: your-secret-jwt-key-change-in-production
@@ -37,6 +39,19 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/src:/app/src
+      - uploads_data:/app/uploads
+
+  nginx:
+    image: nginx:alpine
+    container_name: nearnow-nginx
+    ports:
+      - '80:80'
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - uploads_data:/var/www/uploads:ro
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:
+  uploads_data:

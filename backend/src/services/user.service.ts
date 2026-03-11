@@ -14,12 +14,14 @@ export const userService = {
     let queryStr = `
       SELECT
         u.id, u.name, u.age, u.bio, u.photo_url, u.interests,
-        p.lat, p.lng, p.online, p.last_seen,
+        ROUND(p.lat::numeric, 3) as lat, ROUND(p.lng::numeric, 3) as lng,
+        p.online, p.last_seen,
         ST_Distance(p.location, ST_MakePoint($2, $1)::geography) as distance_m
       FROM users u
       JOIN profiles p ON u.id = p.user_id
       WHERE u.id != $3
         AND ST_DWithin(p.location, ST_MakePoint($2, $1)::geography, $4)
+        AND p.is_visible = true
     `;
 
     if (filters?.minAge) {
@@ -45,10 +47,11 @@ export const userService = {
     }));
   },
 
-  async getUserProfile(userId: string) {
+  async getUserProfile(userId: string, includeEmail: boolean = true) {
+    const emailField = includeEmail ? 'u.email, ' : '';
     const result = await query(
       `SELECT
-        u.id, u.email, u.name, u.age, u.bio, u.photo_url, u.interests, u.created_at,
+        u.id, ${emailField}u.name, u.age, u.bio, u.photo_url, u.interests, u.created_at,
         p.lat, p.lng, p.online, p.last_seen
        FROM users u
        LEFT JOIN profiles p ON u.id = p.user_id
@@ -87,6 +90,14 @@ export const userService = {
       updates.push(`bio = $${values.length + 1}`);
       values.push(data.bio || null);
     }
+    if (data.headline !== undefined) {
+      updates.push(`headline = $${values.length + 1}`);
+      values.push(data.headline || null);
+    }
+    if (data.looking_for !== undefined) {
+      updates.push(`looking_for = $${values.length + 1}`);
+      values.push(data.looking_for || null);
+    }
     if (data.photo_url !== undefined) {
       updates.push(`photo_url = $${values.length + 1}`);
       values.push(data.photo_url || null);
@@ -98,15 +109,17 @@ export const userService = {
 
     if (updates.length === 0) {
       const res = await query(
-        `SELECT id, name, age, bio, photo_url, interests FROM users WHERE id = $1`,
+        `SELECT id, name, age, bio, headline, looking_for, photo_url, interests FROM users WHERE id = $1`,
         [userId]
       );
       return res.rows[0];
     }
 
+    updates.push(`updated_at = NOW()`);
+
     const result = await query(
       `UPDATE users SET ${updates.join(', ')} WHERE id = $1
-       RETURNING id, name, age, bio, photo_url, interests`,
+       RETURNING id, name, age, bio, headline, looking_for, photo_url, interests`,
       values
     );
     return result.rows[0];
@@ -128,18 +141,37 @@ export const userService = {
     return result.rows.length > 0;
   },
 
+  async updateVisibility(userId: string, isVisible: boolean) {
+    await query(
+      `UPDATE profiles SET is_visible = $1, updated_at = NOW() WHERE user_id = $2`,
+      [isVisible, userId]
+    );
+  },
+
   async getMatches(userId: string) {
     const result = await query(
-      `SELECT u.id, u.name, u.age, u.bio, u.photo_url, p.online, p.last_seen
+      `SELECT
+        u.id, u.name, u.age, u.bio, u.photo_url,
+        p.online, p.last_seen,
+        msg.message as last_message,
+        msg.created_at as last_message_at
        FROM users u
        JOIN profiles p ON u.id = p.user_id
+       LEFT JOIN LATERAL (
+         SELECT message, created_at
+         FROM messages
+         WHERE (sender_id = u.id AND receiver_id = $1)
+            OR (sender_id = $1 AND receiver_id = u.id)
+         ORDER BY created_at DESC
+         LIMIT 1
+       ) msg ON true
        WHERE u.id IN (
          SELECT l1.liked_id
          FROM likes l1
          JOIN likes l2 ON l1.liker_id = l2.liked_id AND l1.liked_id = l2.liker_id
          WHERE l1.liker_id = $1
        )
-       ORDER BY p.online DESC, p.last_seen DESC`,
+       ORDER BY p.online DESC, COALESCE(msg.created_at, p.last_seen) DESC`,
       [userId]
     );
     return result.rows;

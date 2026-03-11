@@ -62,6 +62,7 @@ const createUserIcon = (user: NearbyUser) => {
 
 export const Discover = () => {
   const [users, setUsers] = useState<NearbyUser[]>([]);
+  const [likedUsers, setLikedUsers] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [radius, setRadius] = useState(5);
@@ -263,10 +264,19 @@ export const Discover = () => {
                         </span>
                       )}
                       <button
-                        onClick={() => navigate(`/messages/${user.id}`)}
+                        onClick={async () => {
+                          if (likedUsers.has(user.id)) {
+                            navigate(`/messages/${user.id}`);
+                            return;
+                          }
+                          try {
+                            await usersAPI.likeUser(user.id);
+                            setLikedUsers(prev => new Set([...prev, user.id]));
+                          } catch {}
+                        }}
                         className="mt-2 w-full py-1.5 rounded-lg bg-[#4F8CFF] hover:bg-[#3a6fe0] text-white text-xs font-semibold transition-colors"
                       >
-                        Message
+                        {likedUsers.has(user.id) ? 'Message' : 'Like'}
                       </button>
                     </div>
                   </Popup>
