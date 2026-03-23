@@ -2,10 +2,22 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usersAPI } from '../api/client';
 import { Layout } from '../components/Layout';
-import { ProfileCard, NearbyUser } from '../components/ProfileCard';
+import { ConversationItem } from '../components/ConversationItem';
+
+interface Match {
+  id: string;
+  name: string;
+  age: number;
+  bio?: string;
+  photo_url?: string;
+  online: boolean;
+  last_seen?: string;
+  last_message?: string;
+  last_message_at?: string;
+}
 
 export const Matches = () => {
-  const [matches, setMatches] = useState<NearbyUser[]>([]);
+  const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -14,9 +26,7 @@ export const Matches = () => {
     const fetchMatches = async () => {
       try {
         const res = await usersAPI.getMatches();
-        // The API returns users, we need to adapt them to NearbyUser type for ProfileCard
-        // ProfileCard expects distance_km, which might not be there for matches
-        setMatches(res.data.map((m: any) => ({ ...m, distance_km: 0 })));
+        setMatches(res.data);
       } catch (err) {
         setError('Could not load matches.');
       } finally {
@@ -32,20 +42,32 @@ export const Matches = () => {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-black text-[#F2F4F8] tracking-tight">Your Matches</h1>
-            <p className="text-[#F2F4F8]/40 text-sm mt-1">People who liked you back</p>
+            <p className="text-[#F2F4F8]/40 text-sm mt-1">Your mutual connections</p>
           </div>
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <div className="flex flex-col gap-3">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-80 bg-[#222632] rounded-2xl animate-pulse" />
+              <div key={i} className="h-[72px] bg-[#222632] rounded-2xl animate-pulse" />
             ))}
           </div>
+        ) : error ? (
+          <div className="text-center py-12">
+            <p className="text-[#FF6B6B] text-sm">{error}</p>
+          </div>
         ) : matches.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 animate-fade-in">
-            {matches.map((user) => (
-              <ProfileCard key={user.id} user={user} />
+          <div className="flex flex-col gap-3 animate-fade-in">
+            {matches.map((match) => (
+              <ConversationItem
+                key={match.id}
+                userId={match.id}
+                name={match.name}
+                photoUrl={match.photo_url}
+                online={match.online}
+                lastMessageTime={match.last_message_at}
+                lastMessage={match.last_message ?? (match.online ? 'Active now — say hi!' : 'Say hello!')}
+              />
             ))}
           </div>
         ) : (

@@ -3,6 +3,16 @@ import { v4 as uuidv4 } from 'uuid';
 
 export const messageService = {
   async sendMessage(senderId: string, receiverId: string, message: string) {
+    const matchCheck = await query(
+      `SELECT 1 FROM likes l1
+       JOIN likes l2 ON l1.liker_id = l2.liked_id AND l1.liked_id = l2.liker_id
+       WHERE l1.liker_id = $1 AND l1.liked_id = $2`,
+      [senderId, receiverId]
+    );
+    if (matchCheck.rows.length === 0) {
+      throw new Error('You can only message people you have matched with');
+    }
+
     const id = uuidv4();
     // Simple sanitization: remove any potential script tags
     const sanitized = message.replace(/<script[^>]*>.*?<\/script>/gi, '').trim();
@@ -14,15 +24,22 @@ export const messageService = {
       [id, senderId, receiverId, sanitized]
     );
 
-    const message = result.rows[0];
+    const createdMessage = result.rows[0] as {
+      id: string;
+      sender_id: string;
+      receiver_id: string;
+      message: string;
+      created_at: string;
+      sender_name?: string;
+    };
     
     // Get sender name for notification
     const senderRes = await query(`SELECT name FROM users WHERE id = $1`, [senderId]);
     if (senderRes.rows[0]) {
-      message.sender_name = senderRes.rows[0].name;
+      createdMessage.sender_name = senderRes.rows[0].name;
     }
 
-    return message;
+    return createdMessage;
   },
 
   async getConversation(userId: string, otherId: string, limit: number = 50) {

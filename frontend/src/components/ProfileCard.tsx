@@ -9,6 +9,7 @@ export interface NearbyUser {
   name: string;
   age: number;
   bio?: string;
+  headline?: string;
   photo_url?: string;
   interests?: string[];
   online: boolean;
@@ -116,9 +117,13 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
           <span className="text-[#F2F4F8]/40 text-sm">{user.age}</span>
         </div>
 
+        {user.headline && (
+          <p className="text-[#4F8CFF]/80 text-xs font-medium mb-1">{user.headline}</p>
+        )}
+
         {user.bio ? (
           <p className="text-[#F2F4F8]/55 text-xs leading-relaxed line-clamp-2 flex-1">{user.bio}</p>
-        ) : (
+        ) : user.headline ? null : (
           <p className="text-[#F2F4F8]/25 text-xs italic flex-1">No bio yet</p>
         )}
 
@@ -142,10 +147,10 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
         )}
 
         <button
-          onClick={() => navigate(`/messages/${user.id}`)}
+          onClick={liked ? () => navigate(`/messages/${user.id}`) : handleLike}
           className="mt-4 w-full py-2.5 rounded-xl bg-[#4F8CFF] hover:bg-[#3a6fe0] text-white text-sm font-semibold transition-all duration-200 hover:shadow-glow-blue active:scale-95"
         >
-          Message
+          {liked ? 'Message' : 'Like to Connect'}
         </button>
       </div>
     </div>

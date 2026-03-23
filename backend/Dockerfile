@@ -6,6 +6,8 @@ COPY package*.json ./
 
 RUN npm install
 
+RUN mkdir -p /app/uploads
+
 COPY . .
 
 RUN npm run build

@@ -40,7 +40,7 @@ export const usersAPI = {
   getProfile: (id: string) => apiClient.get(`/users/profile/${id}`),
   updateLocation: (lat: number, lng: number) =>
     apiClient.post('/users/location', { lat, lng }),
-  updateProfile: (data: { bio?: string; photo_url?: string; interests?: string[] }) =>
+  updateProfile: (data: { bio?: string; headline?: string; looking_for?: string; photo_url?: string; interests?: string[] }) =>
     apiClient.post('/users/profile', data),
   uploadPhoto: (file: File) => {
     const formData = new FormData();
@@ -50,6 +50,8 @@ export const usersAPI = {
     });
   },
   likeUser: (id: string) => apiClient.post(`/users/like/${id}`),
+  updateVisibility: (isVisible: boolean) =>
+    apiClient.patch('/users/visibility', { is_visible: isVisible }),
   getMatches: () => apiClient.get('/users/matches'),
 };
 

@@ -74,7 +74,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             to="/discover"
             className="text-lg font-black tracking-tight text-[#F2F4F8] hover:text-[#4F8CFF] transition-colors"
           >
-            Near<span className="text-[#4F8CFF]">&</span>Now
+            NearNow
           </Link>
 
           {/* Desktop nav links */}

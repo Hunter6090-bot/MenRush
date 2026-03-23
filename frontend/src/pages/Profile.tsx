@@ -19,6 +19,8 @@ interface ProfileData {
   email: string;
   age: number;
   bio?: string;
+  headline?: string;
+  looking_for?: string;
   photo_url?: string;
   interests?: string[];
   lat?: number;
@@ -36,8 +38,11 @@ export const Profile = () => {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [bio, setBio] = useState('');
+  const [headline, setHeadline] = useState('');
+  const [lookingFor, setLookingFor] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
   const [interests, setInterests] = useState<string[]>([]);
+  const [isVisible, setIsVisible] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [locating, setLocating] = useState(false);
@@ -48,6 +53,8 @@ export const Profile = () => {
       const d: ProfileData = r.data;
       setProfile(d);
       setBio(d.bio ?? '');
+      setHeadline(d.headline ?? '');
+      setLookingFor(d.looking_for ?? '');
       setPhotoUrl(d.photo_url ?? '');
       setInterests(d.interests ?? []);
     });
@@ -86,7 +93,7 @@ export const Profile = () => {
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await usersAPI.updateProfile({ bio, photo_url: photoUrl || undefined, interests });
+      const res = await usersAPI.updateProfile({ bio, headline, looking_for: lookingFor, photo_url: photoUrl || undefined, interests });
       setProfile((p) => p ? { ...p, ...res.data } : p);
       if (user && token) setAuth({ ...user, bio, photo_url: photoUrl || undefined }, token);
       showToast('success', 'Profile saved!');
@@ -211,6 +218,38 @@ export const Profile = () => {
           </button>
         </div>
 
+        {/* ── Visibility card ── */}
+        <div className="bg-[#222632] border border-white/[0.06] rounded-2xl p-5 flex items-center justify-between shadow-card">
+          <div>
+            <p className="text-[#F2F4F8]/80 text-sm font-semibold">Profile visibility</p>
+            <p className="text-[#F2F4F8]/30 text-xs mt-0.5">
+              {isVisible ? 'You appear in nearby discovery' : 'Hidden from nearby discovery'}
+            </p>
+          </div>
+          <button
+            onClick={async () => {
+              const next = !isVisible;
+              setIsVisible(next);
+              try {
+                await usersAPI.updateVisibility(next);
+                showToast('success', next ? 'Now visible to nearby users' : 'Profile hidden');
+              } catch {
+                setIsVisible(!next);
+                showToast('error', 'Could not update visibility');
+              }
+            }}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+              isVisible ? 'bg-[#4F8CFF]' : 'bg-white/10'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                isVisible ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+
         {/* ── Danger zone ── */}
         <div className="bg-[#222632] border border-white/[0.06] rounded-2xl p-5 shadow-card flex items-center justify-between">
           <div>
@@ -242,6 +281,30 @@ export const Profile = () => {
                 className="w-full bg-white/[0.06] border border-white/[0.08] text-[#F2F4F8] placeholder:text-[#F2F4F8]/25 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#4F8CFF]/50 transition-all resize-none"
               />
               <p className="text-[10px] text-[#F2F4F8]/25 mt-1 text-right">{bio.length}/500</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-[#F2F4F8]/40 mb-1.5 uppercase tracking-wide">Headline</label>
+              <input
+                type="text"
+                value={headline}
+                onChange={(e) => setHeadline(e.target.value)}
+                placeholder="One line about you…"
+                maxLength={100}
+                className={inputClass}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-[#F2F4F8]/40 mb-1.5 uppercase tracking-wide">Looking For</label>
+              <input
+                type="text"
+                value={lookingFor}
+                onChange={(e) => setLookingFor(e.target.value)}
+                placeholder="Dating, friends, fun, exploring…"
+                maxLength={100}
+                className={inputClass}
+              />
             </div>
 
             <div>

@@ -1,4 +1,5 @@
 import { Router, Response } from 'express';
+import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
 import { userService } from '../services/user.service';
@@ -6,11 +7,14 @@ import { AuthRequest, authMiddleware } from '../middleware/auth';
 import { LocationSchema, ProfileSchema } from '../types/validation';
 
 const router = Router();
+const uploadsDir = path.resolve(__dirname, '../../uploads/profiles');
+
+fs.mkdirSync(uploadsDir, { recursive: true });
 
 // Multer storage configuration
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/profiles');
+    cb(null, uploadsDir);
   },
   filename: (req: any, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -90,7 +94,7 @@ router.get('/nearby', async (req: AuthRequest, res: Response) => {
 
 router.get('/profile/:id', async (req: AuthRequest, res: Response) => {
   try {
-    const user = await userService.getUserProfile(req.params.id);
+    const user = await userService.getUserProfile(req.params.id, false);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -162,6 +166,19 @@ router.post('/profile', async (req: AuthRequest, res: Response) => {
     res.json(user);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+router.patch('/visibility', async (req: AuthRequest, res: Response) => {
+  try {
+    const { is_visible } = req.body;
+    if (typeof is_visible !== 'boolean') {
+      return res.status(400).json({ error: 'is_visible must be a boolean' });
+    }
+    await userService.updateVisibility(req.userId!, is_visible);
+    res.json({ is_visible });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 

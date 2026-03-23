@@ -71,7 +71,7 @@ export const Register = () => {
       <div className="w-full max-w-sm relative z-10 animate-slide-up">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-black tracking-tight text-[#F2F4F8]">
-            Near<span className="text-[#4F8CFF]">&</span>Now
+            NearNow
           </h1>
           <p className="text-[#F2F4F8]/40 mt-2 text-sm">Join the community</p>
         </div>
