@@ -55,24 +55,3 @@ jobs:
       - name: Build
         run: npm run build
 
-  chatgpt-app-checks:
-    name: ChatGPT app checks
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: chatgpt-app
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: chatgpt-app/package-lock.json
-      - name: Install dependencies
-        run: npm ci
-      - name: Typecheck
-        run: npm run typecheck
-      - name: Build
-        run: npm run build
