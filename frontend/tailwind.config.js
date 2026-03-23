@@ -7,12 +7,14 @@ export default {
       },
       colors: {
         nn: {
-          bg: '#0F1115',
-          card: '#1A1D23',
-          elevated: '#21252D',
-          blue: '#4F8CFF',
-          coral: '#FF6B6B',
-          text: '#F2F4F8',
+          bg: '#0D0A06',
+          card: '#1E1508',
+          elevated: '#2A1C0A',
+          copper: '#C4832A',
+          rust: '#8B4513',
+          border: '#3D2B0E',
+          text: '#F0E0C0',
+          muted: '#A89070',
         },
       },
       animation: {
@@ -39,8 +41,8 @@ export default {
       boxShadow: {
         card: '0 4px 24px rgba(0,0,0,0.5)',
         'card-hover': '0 12px 48px rgba(0,0,0,0.7)',
-        'glow-blue': '0 0 32px rgba(79,140,255,0.35)',
-        'glow-coral': '0 0 32px rgba(255,107,107,0.35)',
+        'glow-blue': '0 0 32px rgba(196,131,42,0.45)',
+        'glow-coral': '0 0 32px rgba(139,69,19,0.45)',
       },
     },
   },

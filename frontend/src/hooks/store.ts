@@ -97,3 +97,32 @@ export const useNotificationStore = create<NotificationState>((set) => ({
     })),
   clearAll: () => set({ notifications: [] }),
 }));
+
+// ── Call store ────────────────────────────────────────────────────────────────
+
+type CallStatus = 'idle' | 'calling' | 'ringing' | 'connected' | 'ended';
+
+interface CallState {
+  callStatus: CallStatus;
+  peerId: string | null;
+  peerName: string | null;
+  incomingOffer: RTCSessionDescriptionInit | null;
+  setIncoming: (peerId: string, peerName: string, offer: RTCSessionDescriptionInit) => void;
+  setCalling: (peerId: string, peerName: string) => void;
+  setConnected: () => void;
+  resetCall: () => void;
+}
+
+export const useCallStore = create<CallState>((set) => ({
+  callStatus: 'idle',
+  peerId: null,
+  peerName: null,
+  incomingOffer: null,
+  setIncoming: (peerId, peerName, offer) =>
+    set({ callStatus: 'ringing', peerId, peerName, incomingOffer: offer }),
+  setCalling: (peerId, peerName) =>
+    set({ callStatus: 'calling', peerId, peerName, incomingOffer: null }),
+  setConnected: () => set({ callStatus: 'connected' }),
+  resetCall: () =>
+    set({ callStatus: 'idle', peerId: null, peerName: null, incomingOffer: null }),
+}));

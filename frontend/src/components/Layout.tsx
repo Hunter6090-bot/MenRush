@@ -4,6 +4,7 @@ import { useAuthStore, useUnreadStore, useNotificationStore } from '../hooks/sto
 import { useSocket } from '../hooks/useSocket';
 import { UserAvatar } from './UserAvatar';
 import { ToastNotifications } from './ToastNotifications';
+import { CoinFlip } from './CoinFlip';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -59,23 +60,31 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     { to: '/discover', label: 'Discover', icon: CompassIcon, badge: 0 },
     { to: '/matches', label: 'Matches', icon: HeartIcon, badge: 0 },
     { to: '/conversations', label: 'Messages', icon: ChatIcon, badge: unreadCount },
+    { to: '/rooms', label: 'Rooms', icon: RoomsNavIcon, badge: 0 },
     { to: '/profile', label: 'Profile', icon: PersonIcon, badge: 0 },
   ];
 
   const isActive = (path: string) => location.pathname === path;
 
   return (
-    <div className="min-h-dvh bg-[#151821] flex flex-col">
+    <div className="min-h-dvh bg-[#0D0A06] flex flex-col">
       {/* ── Top header ── */}
-      <header className="fixed top-0 left-0 right-0 z-30 h-14 flex items-center px-4 bg-[#151821]/85 backdrop-blur-xl border-b border-white/[0.06]">
+      <header className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center relative overflow-visible px-4 bg-[#0D0A06]/85 backdrop-blur-xl border-b border-[#3D2B0E]">
+        {/* Coin pendant — absolutely positioned, hangs below the header bar */}
+        <Link
+          to="/discover"
+          className="absolute left-1/2 -translate-x-1/2 top-full -translate-y-1 z-50 hover:opacity-80 transition-opacity"
+        >
+          <CoinFlip
+            qrValue={`https://nearnow.app/u/${user?.id ?? ''}`}
+            qrLabel={user?.name ?? 'NearNow'}
+            sizeClass="h-40"
+          />
+        </Link>
+
         <div className="max-w-5xl mx-auto w-full flex items-center justify-between">
-          {/* Wordmark */}
-          <Link
-            to="/discover"
-            className="text-lg font-black tracking-tight text-[#F2F4F8] hover:text-[#4F8CFF] transition-colors"
-          >
-            NearNow
-          </Link>
+          {/* Left spacer to balance the coin (desktop) */}
+          <div className="hidden sm:block w-10" />
 
           {/* Desktop nav links */}
           <nav className="hidden sm:flex items-center gap-1">
@@ -85,19 +94,18 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 to={to}
                 className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                   isActive(to)
-                    ? 'bg-[#4F8CFF]/15 text-[#4F8CFF]'
-                    : 'text-[#F2F4F8]/55 hover:text-[#F2F4F8] hover:bg-white/5'
+                    ? 'bg-[#C4832A]/15 text-[#C4832A]'
+                    : 'text-[#F0E0C0]/55 hover:text-[#F0E0C0] hover:bg-[#3D2B0E]/40'
                 }`}
               >
                 <span className="relative">
                   <Icon className="w-4 h-4" />
                   {badge > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-[#FF6B6B] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
+                    <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-[#8B4513] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
                       {badge > 9 ? '9+' : badge}
                     </span>
                   )}
                 </span>
-                {label}
               </Link>
             ))}
           </nav>
@@ -110,12 +118,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 photoUrl={user?.photo_url}
                 size="xs"
                 showStatus={false}
-                className="group-hover:ring-2 group-hover:ring-[#4F8CFF]/50 rounded-full transition-all"
+                className="group-hover:ring-2 group-hover:ring-[#C4832A]/50 rounded-full transition-all"
               />
             </Link>
             <button
               onClick={handleLogout}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-[#F2F4F8]/40 hover:text-[#FF6B6B] hover:bg-[#FF6B6B]/10 transition-all duration-200"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-[#F0E0C0]/40 hover:text-[#8B4513] hover:bg-[#8B4513]/10 transition-all duration-200"
             >
               <LogoutIcon className="w-3.5 h-3.5" />
               Sign out
@@ -125,32 +133,32 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </header>
 
       {/* ── Page content ── */}
-      <main className="flex-1 pt-14 pb-16 sm:pb-0">
+      {/* pt-44: header h-14 (56px) + coin h-40 (160px) - 16px overlap = 200px ≈ pt-[200px] */}
+      <main className="flex-1 pt-[200px] pb-16 sm:pb-0">
         <div className="page-enter">{children}</div>
       </main>
 
       {/* ── Mobile bottom nav ── */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#151821]/90 backdrop-blur-xl border-t border-white/[0.06] safe-area-inset-bottom">
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0D0A06]/90 backdrop-blur-xl border-t border-[#3D2B0E] safe-area-inset-bottom">
         <div className="flex items-stretch h-16">
           {navLinks.map(({ to, label, icon: Icon, badge }) => (
             <Link
               key={to}
               to={to}
-              className={`flex-1 flex flex-col items-center justify-center gap-1 text-[10px] font-medium transition-all duration-200 ${
+              className={`flex-1 flex flex-col items-center justify-center font-medium transition-all duration-200 ${
                 isActive(to)
-                  ? 'text-[#4F8CFF]'
-                  : 'text-[#F2F4F8]/35 hover:text-[#F2F4F8]/70'
+                  ? 'text-[#C4832A]'
+                  : 'text-[#F0E0C0]/35 hover:text-[#F0E0C0]/70'
               }`}
             >
               <span className="relative">
-                <Icon className={`w-5 h-5 transition-transform duration-200 ${isActive(to) ? 'scale-110' : ''}`} />
+                <Icon className={`w-6 h-6 transition-transform duration-200 ${isActive(to) ? 'scale-110' : ''}`} />
                 {badge > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-[#FF6B6B] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-[#8B4513] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
                     {badge > 9 ? '9+' : badge}
                   </span>
                 )}
               </span>
-              {label}
             </Link>
           ))}
         </div>
@@ -189,5 +197,15 @@ const PersonIcon = ({ className }: { className?: string }) => (
 const LogoutIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+  </svg>
+);
+
+const RoomsNavIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+    />
   </svg>
 );

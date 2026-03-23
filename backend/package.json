@@ -10,6 +10,7 @@
     "db:migrate": "psql $DATABASE_URL < ../database/schema.sql"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@types/multer": "^2.1.0",
     "bcryptjs": "^2.4.3",
     "body-parser": "^2.2.2",
@@ -17,6 +18,7 @@
     "dotenv": "^16.0.3",
     "express": "^4.18.2",
     "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
     "multer": "^2.1.1",
     "pg": "^8.8.0",
     "qs": "^6.15.0",

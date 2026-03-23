@@ -41,20 +41,20 @@ export const Matches = () => {
       <div className="max-w-5xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-2xl font-black text-[#F2F4F8] tracking-tight">Your Matches</h1>
-            <p className="text-[#F2F4F8]/40 text-sm mt-1">Your mutual connections</p>
+            <h1 className="text-2xl font-black text-[#F0E0C0] tracking-tight">Your Matches</h1>
+            <p className="text-[#A89070] text-sm mt-1">Your mutual connections</p>
           </div>
         </div>
 
         {loading ? (
           <div className="flex flex-col gap-3">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-[72px] bg-[#222632] rounded-2xl animate-pulse" />
+              <div key={i} className="h-[72px] bg-[#1E1508] rounded-2xl border border-[#3D2B0E] animate-pulse" />
             ))}
           </div>
         ) : error ? (
           <div className="text-center py-12">
-            <p className="text-[#FF6B6B] text-sm">{error}</p>
+            <p className="text-[#F0E0C0]/70 text-sm">{error}</p>
           </div>
         ) : matches.length > 0 ? (
           <div className="flex flex-col gap-3 animate-fade-in">
@@ -71,17 +71,17 @@ export const Matches = () => {
             ))}
           </div>
         ) : (
-          <div className="text-center py-24 bg-[#222632] rounded-3xl border border-white/[0.03]">
-            <div className="w-16 h-16 bg-[#4F8CFF]/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <HeartIcon className="w-8 h-8 text-[#4F8CFF]/40" />
+          <div className="text-center py-24 bg-[#1E1508] rounded-3xl border border-[#3D2B0E]">
+            <div className="w-16 h-16 bg-[#C4832A]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <HeartIcon className="w-8 h-8 text-[#C4832A]/40" />
             </div>
-            <h2 className="text-[#F2F4F8] font-bold text-lg">No matches yet</h2>
-            <p className="text-[#F2F4F8]/30 text-sm mt-1 max-w-xs mx-auto">
+            <h2 className="text-[#F0E0C0] font-bold text-lg">No matches yet</h2>
+            <p className="text-[#A89070] text-sm mt-1 max-w-xs mx-auto">
               Keep exploring the discovery page and liking people you're interested in!
             </p>
             <button
               onClick={() => navigate('/discover')}
-              className="mt-6 px-6 py-2.5 bg-[#4F8CFF] hover:bg-[#3a6fe0] text-white rounded-xl font-semibold text-sm transition-all"
+              className="mt-6 px-6 py-2.5 bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] text-white rounded-xl font-semibold text-sm transition-all"
             >
               Start Discovering
             </button>

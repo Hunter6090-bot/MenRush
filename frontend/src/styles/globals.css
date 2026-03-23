@@ -14,8 +14,8 @@ html {
 }
 
 body {
-  background-color: #151821;
-  color: #F2F4F8;
+  background-color: #0D0A06;
+  color: #F0E0C0;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -29,54 +29,54 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 
 /* ── Selection ──────────────────────────────────── */
-::selection { background: rgba(79,140,255,0.3); color: #F2F4F8; }
+::selection { background: rgba(196,131,42,0.35); color: #F0E0C0; }
 
 /* ── Leaflet map overrides ──────────────────────── */
 .leaflet-container {
-  background: #222632 !important;
+  background: #1E1508 !important;
   font-family: 'Inter', sans-serif !important;
 }
 
 .leaflet-control-attribution {
-  background: rgba(15,17,21,0.7) !important;
-  color: rgba(242,244,248,0.3) !important;
+  background: rgba(13,10,6,0.7) !important;
+  color: rgba(240,224,192,0.3) !important;
   font-size: 9px !important;
   backdrop-filter: blur(4px);
   border-radius: 6px 0 0 0 !important;
 }
-.leaflet-control-attribution a { color: rgba(242,244,248,0.5) !important; }
+.leaflet-control-attribution a { color: rgba(240,224,192,0.5) !important; }
 
 .leaflet-control-zoom {
   border: none !important;
   margin: 12px !important;
 }
 .leaflet-control-zoom a {
-  background: rgba(26,29,35,0.9) !important;
-  color: #F2F4F8 !important;
-  border: 1px solid rgba(255,255,255,0.08) !important;
+  background: rgba(30,21,8,0.9) !important;
+  color: #F0E0C0 !important;
+  border: 1px solid rgba(196,131,42,0.15) !important;
   backdrop-filter: blur(8px);
   width: 32px !important;
   height: 32px !important;
   line-height: 30px !important;
 }
 .leaflet-control-zoom a:hover {
-  background: rgba(33,37,45,0.95) !important;
+  background: rgba(61,43,14,0.95) !important;
 }
 .leaflet-control-zoom-in { border-radius: 8px 8px 0 0 !important; }
 .leaflet-control-zoom-out { border-radius: 0 0 8px 8px !important; }
 
 /* ── Custom Leaflet popup ──────────────────────── */
 .leaflet-popup-content-wrapper {
-  background: rgba(26,29,35,0.95) !important;
-  color: #F2F4F8 !important;
-  border: 1px solid rgba(255,255,255,0.08) !important;
+  background: rgba(30,21,8,0.95) !important;
+  color: #F0E0C0 !important;
+  border: 1px solid rgba(196,131,42,0.15) !important;
   border-radius: 12px !important;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important;
   backdrop-filter: blur(12px);
   padding: 0 !important;
 }
 .leaflet-popup-tip {
-  background: rgba(26,29,35,0.95) !important;
+  background: rgba(30,21,8,0.95) !important;
 }
 .leaflet-popup-content { margin: 0 !important; }
 
@@ -130,5 +130,119 @@ body {
 .animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
 
 /* ── Shadow Glows ──────────────────────────────── */
-.shadow-glow-blue { box-shadow: 0 0 20px rgba(79, 140, 255, 0.4); }
-.shadow-glow-red { box-shadow: 0 0 20px rgba(255, 107, 107, 0.4); }
+.shadow-glow-blue { box-shadow: 0 0 20px rgba(196, 131, 42, 0.5); }
+.shadow-glow-red { box-shadow: 0 0 20px rgba(139, 69, 19, 0.5); }
+
+/* ── Coin flip animation ────────────────────────── */
+@keyframes coinFlip {
+  0%   { transform: rotateY(0deg); }
+  100% { transform: rotateY(360deg); }
+}
+
+/* Legacy single-image spin (kept for backwards compat) */
+.logo-coin-flip {
+  animation: coinFlip 4s linear infinite;
+  transform-style: preserve-3d;
+}
+
+/* ── Two-face 3-D coin ──────────────────────────── */
+.coin-container {
+  perspective: 800px;
+  aspect-ratio: 1 / 1;
+  width: auto;
+}
+
+.coin-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  animation: coinFlip 4s linear infinite;
+}
+
+.coin-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.coin-front {
+  transform: rotateY(0deg);
+}
+
+.coin-back {
+  transform: rotateY(180deg);
+}
+
+/* ── Bronze medallion back face ─────────────────── */
+.coin-back-face {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #C8924A, #8B5A1E 55%, #5C3610 100%);
+  box-shadow:
+    inset 0 2px 6px rgba(255,210,120,0.35),
+    inset 0 -3px 8px rgba(0,0,0,0.55),
+    0 4px 24px rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.coin-back-ring {
+  width: 88%;
+  height: 88%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 30%, #B07A30, #7A4A18 60%, #4A2C0A 100%);
+  box-shadow:
+    inset 0 3px 8px rgba(255,200,100,0.25),
+    inset 0 -4px 10px rgba(0,0,0,0.6),
+    0 0 0 2px rgba(200,146,74,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.coin-back-inner {
+  width: 84%;
+  height: 84%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #9A6828, #6B3E12 60%, #3E2008 100%);
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.5), inset 0 -1px 4px rgba(255,180,80,0.15);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8% 10%;
+}
+
+.coin-back-divider {
+  width: 70%;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent, rgba(210,160,70,0.6), transparent);
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.coin-back-qr {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4));
+}
+
+.coin-back-label {
+  font-size: 0.42rem;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #C8924A;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6), 0 -1px 0 rgba(255,210,120,0.3);
+  flex-shrink: 0;
+  line-height: 1;
+}

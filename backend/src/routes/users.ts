@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
+import { z } from 'zod';
 import { userService } from '../services/user.service';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 import { LocationSchema, ProfileSchema } from '../types/validation';
@@ -169,12 +170,15 @@ router.post('/profile', async (req: AuthRequest, res: Response) => {
   }
 });
 
+const VisibilitySchema = z.object({ is_visible: z.boolean() });
+
 router.patch('/visibility', async (req: AuthRequest, res: Response) => {
+  const parsed = VisibilitySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.errors[0].message });
+  }
   try {
-    const { is_visible } = req.body;
-    if (typeof is_visible !== 'boolean') {
-      return res.status(400).json({ error: 'is_visible must be a boolean' });
-    }
+    const { is_visible } = parsed.data;
     await userService.updateVisibility(req.userId!, is_visible);
     res.json({ is_visible });
   } catch (error: any) {

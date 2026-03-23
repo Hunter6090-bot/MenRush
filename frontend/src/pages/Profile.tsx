@@ -5,6 +5,7 @@ import { useAuthStore, useLocationStore } from '../hooks/store';
 import { Layout } from '../components/Layout';
 import { UserAvatar } from '../components/UserAvatar';
 import { StatusBadge } from '../components/StatusBadge';
+import { ImageGenerator } from '../components/ImageGenerator';
 
 const INTEREST_OPTIONS = [
   'Travel', 'Music', 'Food', 'Sports', 'Art', 'Technology',
@@ -127,13 +128,13 @@ export const Profile = () => {
   };
 
   const inputClass =
-    'w-full bg-white/[0.06] border border-white/[0.08] text-[#F2F4F8] placeholder:text-[#F2F4F8]/25 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#4F8CFF]/50 transition-all';
+    'w-full bg-[#1E1508]/60 border border-[#3D2B0E] text-[#F0E0C0] placeholder:text-[#A89070]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all';
 
   if (!profile) {
     return (
       <Layout>
         <div className="flex items-center justify-center py-24">
-          <svg className="w-8 h-8 text-[#4F8CFF] animate-spin" fill="none" viewBox="0 0 24 24">
+          <svg className="w-8 h-8 text-[#C4832A] animate-spin" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
           </svg>
@@ -150,7 +151,7 @@ export const Profile = () => {
           className={`fixed top-16 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-xl text-sm font-medium shadow-card border animate-slide-up ${
             toast.type === 'success'
               ? 'bg-emerald-500/15 border-emerald-500/25 text-emerald-400'
-              : 'bg-[#FF6B6B]/15 border-[#FF6B6B]/25 text-[#FF6B6B]'
+              : 'bg-[#8B4513]/15 border-[#8B4513]/25 text-[#F0E0C0]/80'
           }`}
         >
           {toast.msg}
@@ -159,9 +160,9 @@ export const Profile = () => {
 
       <div className="max-w-xl mx-auto px-4 py-6 pb-10 space-y-4">
         {/* ── Profile hero ── */}
-        <div className="bg-[#222632] border border-white/[0.06] rounded-2xl overflow-hidden shadow-card">
+        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl overflow-hidden shadow-card">
           {/* Cover gradient */}
-          <div className="h-24 bg-gradient-to-br from-[#4F8CFF]/30 via-[#4F8CFF]/10 to-[#FF6B6B]/10" />
+          <div className="h-24 bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#8B4513]/10" />
           {/* Avatar overlapping cover */}
           <div className="px-5 pb-5">
             <div className="-mt-10 mb-3 flex items-end justify-between">
@@ -170,23 +171,23 @@ export const Profile = () => {
                 photoUrl={profile.photo_url}
                 online={profile.online}
                 size="xl"
-                className="ring-4 ring-[#222632]"
+                className="ring-4 ring-[#1E1508]"
               />
               <StatusBadge online={!!profile.online} lastSeen={profile.last_seen} />
             </div>
-            <h2 className="text-xl font-bold text-[#F2F4F8]">{profile.name}</h2>
-            <p className="text-[#F2F4F8]/40 text-sm mt-0.5">
+            <h2 className="text-xl font-bold text-[#F0E0C0]">{profile.name}</h2>
+            <p className="text-[#A89070] text-sm mt-0.5">
               {profile.email} · Age {profile.age}
             </p>
             {profile.bio && (
-              <p className="text-[#F2F4F8]/65 text-sm mt-3 leading-relaxed">{profile.bio}</p>
+              <p className="text-[#F0E0C0]/65 text-sm mt-3 leading-relaxed">{profile.bio}</p>
             )}
             {profile.interests && profile.interests.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-3">
                 {profile.interests.map((tag) => (
                   <span
                     key={tag}
-                    className="px-2.5 py-1 rounded-full bg-[#4F8CFF]/10 text-[#4F8CFF] text-xs font-medium border border-[#4F8CFF]/20"
+                    className="px-2.5 py-1 rounded-full bg-[#C4832A]/10 text-[#C4832A] text-xs font-medium border border-[#C4832A]/20"
                   >
                     {tag}
                   </span>
@@ -197,21 +198,21 @@ export const Profile = () => {
         </div>
 
         {/* ── Location card ── */}
-        <div className="bg-[#222632] border border-white/[0.06] rounded-2xl p-5 flex items-center justify-between shadow-card">
+        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 flex items-center justify-between shadow-card">
           <div>
-            <p className="text-[#F2F4F8]/80 text-sm font-semibold">Your location</p>
+            <p className="text-[#F0E0C0]/80 text-sm font-semibold">Your location</p>
             {lat && lng ? (
-              <p className="text-[#F2F4F8]/35 text-xs mt-0.5">
+              <p className="text-[#A89070] text-xs mt-0.5">
                 {lat.toFixed(5)}, {lng.toFixed(5)}
               </p>
             ) : (
-              <p className="text-[#F2F4F8]/25 text-xs mt-0.5">Not shared yet</p>
+              <p className="text-[#A89070]/50 text-xs mt-0.5">Not shared yet</p>
             )}
           </div>
           <button
             onClick={handleUpdateLocation}
             disabled={locating}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#4F8CFF]/10 hover:bg-[#4F8CFF]/20 text-[#4F8CFF] text-xs font-semibold border border-[#4F8CFF]/20 transition-all disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#C4832A]/10 hover:bg-[#C4832A]/20 text-[#C4832A] text-xs font-semibold border border-[#C4832A]/20 transition-all disabled:opacity-50"
           >
             {locating ? <Spinner className="w-3.5 h-3.5" /> : <PinIcon className="w-3.5 h-3.5" />}
             {locating ? 'Locating…' : 'Update'}
@@ -219,10 +220,10 @@ export const Profile = () => {
         </div>
 
         {/* ── Visibility card ── */}
-        <div className="bg-[#222632] border border-white/[0.06] rounded-2xl p-5 flex items-center justify-between shadow-card">
+        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 flex items-center justify-between shadow-card">
           <div>
-            <p className="text-[#F2F4F8]/80 text-sm font-semibold">Profile visibility</p>
-            <p className="text-[#F2F4F8]/30 text-xs mt-0.5">
+            <p className="text-[#F0E0C0]/80 text-sm font-semibold">Profile visibility</p>
+            <p className="text-[#A89070] text-xs mt-0.5">
               {isVisible ? 'You appear in nearby discovery' : 'Hidden from nearby discovery'}
             </p>
           </div>
@@ -239,7 +240,7 @@ export const Profile = () => {
               }
             }}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none ${
-              isVisible ? 'bg-[#4F8CFF]' : 'bg-white/10'
+              isVisible ? 'bg-[#C4832A]' : 'bg-[#3D2B0E]'
             }`}
           >
             <span
@@ -251,40 +252,48 @@ export const Profile = () => {
         </div>
 
         {/* ── Danger zone ── */}
-        <div className="bg-[#222632] border border-white/[0.06] rounded-2xl p-5 shadow-card flex items-center justify-between">
+        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card flex items-center justify-between">
           <div>
-            <p className="text-[#F2F4F8]/80 text-sm font-semibold">Sign out</p>
-            <p className="text-[#F2F4F8]/30 text-xs mt-0.5">You'll need to log back in</p>
+            <p className="text-[#F0E0C0]/80 text-sm font-semibold">Sign out</p>
+            <p className="text-[#A89070] text-xs mt-0.5">You'll need to log back in</p>
           </div>
           <button
             onClick={() => { logout(); navigate('/login'); }}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#FF6B6B]/10 hover:bg-[#FF6B6B]/20 text-[#FF6B6B] text-xs font-semibold border border-[#FF6B6B]/20 transition-all"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#8B4513]/10 hover:bg-[#8B4513]/20 text-[#F0E0C0]/80 text-xs font-semibold border border-[#8B4513]/20 transition-all"
           >
             <LogoutIcon className="w-3.5 h-3.5" />
             Sign out
           </button>
         </div>
 
+        {/* ── AI Image Generator ── */}
+        <ImageGenerator
+          onSelectImage={(dataUrl) => {
+            setPhotoUrl(dataUrl);
+            showToast('success', 'AI image set as photo — save your profile to apply it.');
+          }}
+        />
+
         {/* ── Edit form ── */}
-        <div className="bg-[#222632] border border-white/[0.06] rounded-2xl p-5 shadow-card">
-          <h3 className="text-[#F2F4F8] font-semibold mb-4">Edit Profile</h3>
+        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card">
+          <h3 className="text-[#F0E0C0] font-semibold mb-4">Edit Profile</h3>
 
           <form onSubmit={handleSave} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-[#F2F4F8]/40 mb-1.5 uppercase tracking-wide">Bio</label>
+              <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">Bio</label>
               <textarea
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 placeholder="Tell people about yourself…"
                 rows={3}
                 maxLength={500}
-                className="w-full bg-white/[0.06] border border-white/[0.08] text-[#F2F4F8] placeholder:text-[#F2F4F8]/25 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#4F8CFF]/50 transition-all resize-none"
+                className="w-full bg-[#1E1508]/60 border border-[#3D2B0E] text-[#F0E0C0] placeholder:text-[#A89070]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all resize-none"
               />
-              <p className="text-[10px] text-[#F2F4F8]/25 mt-1 text-right">{bio.length}/500</p>
+              <p className="text-[10px] text-[#A89070]/60 mt-1 text-right">{bio.length}/500</p>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#F2F4F8]/40 mb-1.5 uppercase tracking-wide">Headline</label>
+              <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">Headline</label>
               <input
                 type="text"
                 value={headline}
@@ -296,7 +305,7 @@ export const Profile = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#F2F4F8]/40 mb-1.5 uppercase tracking-wide">Looking For</label>
+              <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">Looking For</label>
               <input
                 type="text"
                 value={lookingFor}
@@ -308,7 +317,7 @@ export const Profile = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#F2F4F8]/40 mb-1.5 uppercase tracking-wide">
+              <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">
                 Profile Photo
               </label>
               <div className="flex gap-4 items-start">
@@ -320,7 +329,7 @@ export const Profile = () => {
                     placeholder="https://example.com/photo.jpg"
                     className={inputClass}
                   />
-                  <p className="text-[10px] text-[#F2F4F8]/25 mt-1.5 px-1">
+                  <p className="text-[10px] text-[#A89070]/60 mt-1.5 px-1">
                     Enter a direct image URL or upload a file
                   </p>
                 </div>
@@ -335,14 +344,14 @@ export const Profile = () => {
                   />
                   <label
                     htmlFor="photo-upload"
-                    className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-white/[0.05] border border-dashed border-white/20 hover:border-[#4F8CFF]/50 hover:bg-[#4F8CFF]/5 cursor-pointer transition-all ${
+                    className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-[#1E1508]/60 border border-dashed border-[#3D2B0E] hover:border-[#C4832A]/50 hover:bg-[#C4832A]/5 cursor-pointer transition-all ${
                       uploading ? 'opacity-50 cursor-not-allowed' : ''
                     }`}
                   >
                     {uploading ? (
-                      <Spinner className="w-5 h-5 text-[#4F8CFF]" />
+                      <Spinner className="w-5 h-5 text-[#C4832A]" />
                     ) : (
-                      <UploadIcon className="w-5 h-5 text-[#F2F4F8]/40" />
+                      <UploadIcon className="w-5 h-5 text-[#A89070]" />
                     )}
                   </label>
                 </div>
@@ -351,8 +360,8 @@ export const Profile = () => {
 
             {/* Interests */}
             <div>
-              <label className="block text-xs font-medium text-[#F2F4F8]/40 mb-2 uppercase tracking-wide">
-                Interests <span className="normal-case text-[#F2F4F8]/20">({interests.length}/10)</span>
+              <label className="block text-xs font-medium text-[#A89070] mb-2 uppercase tracking-wide">
+                Interests <span className="normal-case text-[#A89070]/50">({interests.length}/10)</span>
               </label>
               <div className="flex flex-wrap gap-2">
                 {INTEREST_OPTIONS.map((tag) => {
@@ -366,10 +375,10 @@ export const Profile = () => {
                       disabled={maxed}
                       className={`px-3 py-1 rounded-full text-xs font-medium border transition-all duration-150 ${
                         active
-                          ? 'bg-[#4F8CFF]/20 text-[#4F8CFF] border-[#4F8CFF]/40 shadow-glow-blue/20'
+                          ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
                           : maxed
-                          ? 'bg-white/[0.03] text-[#F2F4F8]/20 border-white/[0.05] cursor-not-allowed'
-                          : 'bg-white/[0.05] text-[#F2F4F8]/50 border-white/[0.08] hover:bg-white/10 hover:text-[#F2F4F8]/80'
+                          ? 'bg-[#1E1508]/30 text-[#A89070]/20 border-[#3D2B0E]/30 cursor-not-allowed'
+                          : 'bg-[#1E1508]/40 text-[#A89070] border-[#3D2B0E] hover:bg-[#3D2B0E]/60 hover:text-[#F0E0C0]/80'
                       }`}
                     >
                       {tag}
@@ -382,7 +391,7 @@ export const Profile = () => {
             <button
               type="submit"
               disabled={saving}
-              className="w-full py-3 rounded-xl bg-[#4F8CFF] hover:bg-[#3a6fe0] disabled:opacity-50 text-white font-semibold text-sm transition-all hover:shadow-glow-blue active:scale-[0.98] flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] disabled:opacity-50 text-white font-semibold text-sm transition-all hover:shadow-glow-blue active:scale-[0.98] flex items-center justify-center gap-2"
             >
               {saving ? <><Spinner className="w-4 h-4" /> Saving…</> : 'Save Changes'}
             </button>

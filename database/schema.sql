@@ -69,3 +69,42 @@ INSERT INTO interests (name) VALUES
   ('Dancing'),('Hiking'),('Coffee'),('Fashion'),('Yoga'),('Skateboarding'),
   ('Climbing'),('Cycling'),('Running'),('Swimming'),('Surfing'),('Dogs'),('Cats')
 ON CONFLICT (name) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS rooms (
+  id UUID PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  description TEXT,
+  avatar_url TEXT,
+  created_by UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
+  is_location_based BOOLEAN DEFAULT false,
+  location GEOGRAPHY(POINT, 4326),
+  lat DECIMAL(10, 8),
+  lng DECIMAL(11, 8),
+  max_members INT DEFAULT 50,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS room_members (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role VARCHAR(20) NOT NULL DEFAULT 'member',
+  joined_at TIMESTAMP DEFAULT NOW(),
+  last_read_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(room_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS room_messages (
+  id UUID PRIMARY KEY,
+  room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message TEXT NOT NULL,
+  reply_to UUID REFERENCES room_messages(id) ON DELETE SET NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_room_members_room ON room_members(room_id);
+CREATE INDEX IF NOT EXISTS idx_room_members_user ON room_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_room_messages_room ON room_messages(room_id);
+CREATE INDEX IF NOT EXISTS idx_room_messages_created ON room_messages(room_id, created_at);

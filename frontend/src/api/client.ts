@@ -63,4 +63,24 @@ export const messagesAPI = {
   getConversations: () => apiClient.get('/messages/conversations'),
 };
 
+export const roomsAPI = {
+  createRoom: (data: any) => apiClient.post('/rooms', data),
+  getRooms: () => apiClient.get('/rooms'),
+  getRoom: (roomId: string) => apiClient.get(`/rooms/${roomId}`),
+  joinRoom: (roomId: string) => apiClient.post(`/rooms/${roomId}/join`),
+  leaveRoom: (roomId: string) => apiClient.post(`/rooms/${roomId}/leave`),
+  getMessages: (roomId: string, before?: string) =>
+    apiClient.get(`/rooms/${roomId}/messages`, { params: { before } }),
+  sendMessage: (roomId: string, message: string, replyTo?: string) =>
+    apiClient.post(`/rooms/${roomId}/messages`, { message, reply_to: replyTo }),
+};
+
+export const aiAPI = {
+  generateImage: (prompt: string, numberOfImages?: number) =>
+    apiClient.post<{ images: Array<{ imageBase64: string; mimeType: string }> }>(
+      '/ai/generate-image',
+      { prompt, numberOfImages }
+    ),
+};
+
 export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';

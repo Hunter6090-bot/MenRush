@@ -41,7 +41,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   return (
     <div className={`relative flex-shrink-0 ${className}`}>
       <div
-        className={`${s.outer} rounded-full overflow-hidden bg-gradient-to-br from-[#4F8CFF]/30 to-[#4F8CFF]/10 border border-white/10 flex items-center justify-center font-semibold text-[#F2F4F8]`}
+        className={`${s.outer} rounded-full overflow-hidden bg-gradient-to-br from-[#C4832A]/30 to-[#C4832A]/10 border border-[#3D2B0E] flex items-center justify-center font-semibold text-[#F0E0C0]`}
       >
         {fullPhotoUrl ? (
           <img src={fullPhotoUrl} alt={name} className="w-full h-full object-cover" />
@@ -63,6 +63,6 @@ interface StatusDotProps {
 
 export const StatusDot: React.FC<StatusDotProps> = ({ online, className = '' }) => (
   <span
-    className={`rounded-full border-2 border-[#151821] ${online ? 'bg-emerald-400' : 'bg-white/20'} ${className}`}
+    className={`rounded-full border-2 border-[#0D0A06] ${online ? 'bg-emerald-400' : 'bg-[#3D2B0E]'} ${className}`}
   />
 );

@@ -1,30 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
-
-const BG_IMAGES = ['/bg1.png', '/bg2.png'];
-
-const useRandomBgSlideshow = () => {
-  const [index, setIndex] = useState(() => Math.floor(Math.random() * BG_IMAGES.length));
-  const [fade, setFade] = useState(true);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setFade(false);
-      setTimeout(() => {
-        setIndex((i) => {
-          const next = Math.floor(Math.random() * BG_IMAGES.length);
-          return next === i ? (i + 1) % BG_IMAGES.length : next;
-        });
-        setFade(true);
-      }, 600);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  return { src: BG_IMAGES[index], fade };
-};
+import { CoinFlip } from '../components/CoinFlip';
 
 export const Register = () => {
   const [form, setForm] = useState({ name: '', email: '', age: '', password: '' });
@@ -51,36 +29,31 @@ export const Register = () => {
     }
   };
 
-  const { src, fade } = useRandomBgSlideshow();
-
   const inputClass =
-    'w-full bg-white/[0.06] border border-white/[0.08] text-[#F2F4F8] placeholder:text-[#F2F4F8]/25 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#4F8CFF]/50 focus:border-[#4F8CFF]/50 transition-all duration-200';
+    'w-full bg-[#1E1508]/60 border border-[#3D2B0E] text-[#F0E0C0] placeholder:text-[#A89070]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 focus:border-[#C4832A]/50 transition-all duration-200';
 
-  const labelClass = 'block text-xs font-medium text-[#F2F4F8]/50 mb-1.5 uppercase tracking-wide';
+  const labelClass = 'block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide';
 
   return (
-    <div className="min-h-dvh flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background slideshow */}
-      <div
-        className="absolute inset-0 bg-cover bg-center transition-opacity duration-700"
-        style={{ backgroundImage: `url(${src})`, opacity: fade ? 1 : 0 }}
-      />
+    <div
+      className="min-h-dvh flex items-center justify-center p-4 relative overflow-hidden bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: 'url(/bg1.png)' }}
+    >
       {/* Dark overlay for legibility */}
-      <div className="absolute inset-0 bg-black/55" />
+      <div className="absolute inset-0 bg-black/60" />
 
       <div className="w-full max-w-sm relative z-10 animate-slide-up">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-black tracking-tight text-[#F2F4F8]">
-            NearNow
-          </h1>
-          <p className="text-[#F2F4F8]/40 mt-2 text-sm">Join the community</p>
+        <div className="flex justify-center mb-8">
+          <Link to="/" className="hover:opacity-80 transition-opacity">
+            <CoinFlip qrValue="https://nearnow.app" sizeClass="h-40" />
+          </Link>
         </div>
 
-        <div className="bg-[#222632]/80 backdrop-blur-xl border border-white/[0.08] rounded-2xl p-6 shadow-card">
-          <h2 className="text-lg font-bold text-[#F2F4F8] mb-5">Create account</h2>
+        <div className="bg-[#1E1508]/80 backdrop-blur-xl border border-[#3D2B0E] rounded-2xl p-6 shadow-card">
+          <h2 className="text-lg font-bold text-[#F0E0C0] mb-5">Create account</h2>
 
           {error && (
-            <div className="flex items-start gap-2.5 bg-[#FF6B6B]/10 border border-[#FF6B6B]/25 text-[#FF6B6B] px-4 py-3 rounded-xl mb-4 text-sm animate-fade-in">
+            <div className="flex items-start gap-2.5 bg-[#8B4513]/10 border border-[#8B4513]/25 text-[#F0E0C0]/90 px-4 py-3 rounded-xl mb-4 text-sm animate-fade-in">
               <AlertIcon className="w-4 h-4 flex-shrink-0 mt-0.5" />
               {error}
             </div>
@@ -143,15 +116,15 @@ export const Register = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 mt-2 rounded-xl bg-[#4F8CFF] hover:bg-[#3a6fe0] disabled:opacity-50 text-white font-semibold text-sm transition-all duration-200 hover:shadow-glow-blue active:scale-[0.98] flex items-center justify-center gap-2"
+              className="w-full py-3 mt-2 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] disabled:opacity-50 text-white font-semibold text-sm transition-all duration-200 hover:shadow-glow-blue active:scale-[0.98] flex items-center justify-center gap-2"
             >
               {loading ? <><Spinner /> Creating account…</> : 'Create Account'}
             </button>
           </form>
 
-          <p className="text-center mt-5 text-xs text-[#F2F4F8]/35">
+          <p className="text-center mt-5 text-xs text-[#A89070]">
             Already have an account?{' '}
-            <Link to="/login" className="text-[#4F8CFF] hover:text-[#3a6fe0] font-semibold transition-colors">
+            <Link to="/login" className="text-[#C4832A] hover:text-[#D4943B] font-semibold transition-colors">
               Sign In
             </Link>
           </p>

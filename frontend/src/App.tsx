@@ -8,6 +8,9 @@ import { Conversations } from './pages/Conversations';
 import { Matches } from './pages/Matches';
 import { Profile } from './pages/Profile';
 import { Landing } from './pages/Landing';
+import { Rooms } from './pages/Rooms';
+import { RoomChat } from './pages/RoomChat';
+import { VideoCallModal } from './components/VideoCallModal';
 import { useAuthStore } from './hooks/store';
 
 const queryClient = new QueryClient({
@@ -23,6 +26,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <VideoCallModal />
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
@@ -33,6 +37,8 @@ export default function App() {
           <Route path="/conversations" element={<ProtectedRoute><Conversations /></ProtectedRoute>} />
           <Route path="/messages/:otherId" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/rooms" element={<ProtectedRoute><Rooms /></ProtectedRoute>} />
+          <Route path="/rooms/:roomId" element={<ProtectedRoute><RoomChat /></ProtectedRoute>} />
 
           <Route path="*" element={<Navigate to="/discover" replace />} />
         </Routes>

@@ -44,34 +44,34 @@ export const ToastNotifications = () => {
         <div
           key={toast.id}
           onClick={() => handleToastClick(toast)}
-          className="pointer-events-auto cursor-pointer bg-[#222632]/95 backdrop-blur-md border border-white/10 rounded-2xl p-4 shadow-2xl animate-slide-in-right hover:border-[#4F8CFF]/50 transition-all flex items-start gap-3 group"
+          className="pointer-events-auto cursor-pointer bg-[#1E1508]/95 backdrop-blur-md border border-[#3D2B0E] rounded-2xl p-4 shadow-2xl animate-slide-in-right hover:border-[#C4832A]/50 transition-all flex items-start gap-3 group"
         >
           <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-            toast.type === 'match' ? 'bg-[#4F8CFF]/20 text-[#4F8CFF]' : 
-            toast.type === 'like' ? 'bg-[#FF6B6B]/20 text-[#FF6B6B]' : 
+            toast.type === 'match' ? 'bg-[#C4832A]/20 text-[#C4832A]' :
+            toast.type === 'like' ? 'bg-[#8B4513]/20 text-[#C4832A]' :
             'bg-emerald-500/20 text-emerald-400'
           }`}>
             {toast.type === 'match' && <HeartIcon className="w-5 h-5 fill-current" />}
             {toast.type === 'like' && <StarIcon className="w-5 h-5 fill-current" />}
             {toast.type === 'message' && <ChatIcon className="w-5 h-5" />}
           </div>
-          
+
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-[#F2F4F8] leading-tight group-hover:text-[#4F8CFF] transition-colors">
+            <p className="text-sm font-bold text-[#F0E0C0] leading-tight group-hover:text-[#C4832A] transition-colors">
               {toast.message}
             </p>
-            <p className="text-[10px] text-[#F2F4F8]/40 mt-1 uppercase tracking-wider font-semibold">
+            <p className="text-[10px] text-[#A89070] mt-1 uppercase tracking-wider font-semibold">
               {toast.type} · Click to view
             </p>
           </div>
-          
-          <button 
+
+          <button
             onClick={(e) => {
               e.stopPropagation();
               setActiveToasts(current => current.filter(at => at.id !== toast.id));
               markAsRead(toast.id);
             }}
-            className="text-[#F2F4F8]/20 hover:text-[#F2F4F8]/60 transition-colors p-1"
+            className="text-[#A89070]/40 hover:text-[#A89070] transition-colors p-1"
           >
             <CloseIcon className="w-4 h-4" />
           </button>

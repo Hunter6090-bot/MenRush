@@ -4,7 +4,8 @@ import { query } from '../db';
 import { RegisterInput, LoginInput } from '../types/validation';
 import { v4 as uuidv4 } from 'uuid';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable is required');
 const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 type TokenPayload = {

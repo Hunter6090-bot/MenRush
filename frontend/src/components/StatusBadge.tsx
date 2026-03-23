@@ -14,7 +14,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ online, lastSeen, clas
       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
         online
           ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25'
-          : 'bg-white/5 text-[#F2F4F8]/40 border-white/10'
+          : 'bg-[#1E1508]/60 text-[#A89070] border-[#3D2B0E]'
       } ${className}`}
     >
       <span

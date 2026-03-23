@@ -46,27 +46,27 @@ export const Conversations = () => {
   return (
     <Layout>
       <div className="max-w-xl mx-auto px-4 py-6 pb-8">
-        <h2 className="text-xl font-bold text-[#F2F4F8] mb-5">Messages</h2>
+        <h2 className="text-xl font-bold text-[#F0E0C0] mb-5">Messages</h2>
 
         {loading ? (
           <div className="space-y-2">
             {[...Array(5)].map((_, i) => (
               <div
                 key={i}
-                className="h-[70px] bg-[#222632] rounded-2xl border border-white/[0.06] animate-pulse"
+                className="h-[70px] bg-[#1E1508] rounded-2xl border border-[#3D2B0E] animate-pulse"
               />
             ))}
           </div>
         ) : convs.length === 0 ? (
           <div className="text-center py-20 animate-fade-in">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#222632] border border-white/[0.06] flex items-center justify-center">
-              <ChatIcon className="w-8 h-8 text-[#4F8CFF]/50" />
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#1E1508] border border-[#3D2B0E] flex items-center justify-center">
+              <ChatIcon className="w-8 h-8 text-[#C4832A]/50" />
             </div>
-            <p className="text-[#F2F4F8]/60 font-medium mb-1">No conversations yet</p>
-            <p className="text-[#F2F4F8]/30 text-sm mb-5">Find someone nearby and say hi</p>
+            <p className="text-[#F0E0C0]/60 font-medium mb-1">No conversations yet</p>
+            <p className="text-[#A89070] text-sm mb-5">Find someone nearby and say hi</p>
             <button
               onClick={() => navigate('/discover')}
-              className="px-5 py-2.5 rounded-xl bg-[#4F8CFF] hover:bg-[#3a6fe0] text-white text-sm font-semibold transition-all hover:shadow-glow-blue"
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] text-white text-sm font-semibold transition-all hover:shadow-glow-blue"
             >
               Discover People
             </button>

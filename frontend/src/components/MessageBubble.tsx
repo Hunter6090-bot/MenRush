@@ -18,10 +18,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       <div
         className={`max-w-[72%] sm:max-w-[60%] px-4 py-2.5 text-sm leading-relaxed shadow-card ${
           isMine
-            ? `bg-gradient-to-br from-[#4F8CFF] to-[#3a6fe0] text-white ${
+            ? `bg-gradient-to-br from-[#C4832A] to-[#8B4513] text-white ${
                 showTail ? 'rounded-2xl rounded-br-sm' : 'rounded-2xl'
               }`
-            : `bg-[#21252D] text-[#F2F4F8] border border-white/[0.07] ${
+            : `bg-[#1E1508] text-[#F0E0C0] border border-[#3D2B0E] ${
                 showTail ? 'rounded-2xl rounded-bl-sm' : 'rounded-2xl'
               }`
         }`}
@@ -29,7 +29,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         <p>{message}</p>
         {timestamp && (
           <p
-            className={`text-[10px] mt-1.5 ${isMine ? 'text-white/50' : 'text-[#F2F4F8]/30'}`}
+            className={`text-[10px] mt-1.5 ${isMine ? 'text-white/50' : 'text-[#A89070]'}`}
           >
             {formatTime(timestamp)}
           </p>
