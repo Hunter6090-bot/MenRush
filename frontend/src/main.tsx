@@ -14,10 +14,10 @@ class ErrorBoundary extends React.Component<
     if (this.state.error) {
       const err = this.state.error as Error;
       return (
-        <div style={{ background: '#0F1115', color: '#FF6B6B', padding: '2rem', fontFamily: 'monospace', minHeight: '100vh' }}>
+        <div style={{ background: '#0D0A06', color: '#C4832A', padding: '2rem', fontFamily: 'monospace', minHeight: '100vh' }}>
           <h1 style={{ marginBottom: '1rem' }}>Runtime Error</h1>
-          <pre style={{ color: '#F2F4F8', marginBottom: '1rem' }}>{err.message}</pre>
-          <pre style={{ color: '#F2F4F8', fontSize: '0.75rem', opacity: 0.6 }}>{err.stack}</pre>
+          <pre style={{ color: '#F0E0C0', marginBottom: '1rem' }}>{err.message}</pre>
+          <pre style={{ color: '#F0E0C0', fontSize: '0.75rem', opacity: 0.6 }}>{err.stack}</pre>
         </div>
       );
     }
