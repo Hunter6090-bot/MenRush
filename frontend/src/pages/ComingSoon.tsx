@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useForm } from '@formspree/react';
+import { useState, useEffect, useCallback, FormEvent } from 'react';
+import { waitlistAPI } from '../api/client';
 
 const LAUNCH_DATE = new Date('2026-06-01T00:00:00Z');
 
@@ -107,10 +107,31 @@ const premiumFeatures = [
 ];
 
 export const ComingSoon = () => {
-  const [state, handleSubmit] = useForm('maqaerkd');
+  const [email, setEmail] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [succeeded, setSucceeded] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState(getTimeLeft);
   const [copied, setCopied] = useState(false);
   const [bgIndex] = useState(() => Math.floor(Math.random() * IMAGES.length));
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    setErrorMessage(null);
+    try {
+      await waitlistAPI.signup(email.trim());
+      setSucceeded(true);
+    } catch (err: any) {
+      const message =
+        err?.response?.data?.error ||
+        'Something went wrong. Please try again in a moment.';
+      setErrorMessage(message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     const id = setInterval(() => setTimeLeft(getTimeLeft()), 1000);
@@ -199,36 +220,45 @@ export const ComingSoon = () => {
           <p className="mb-4 text-center text-sm font-medium text-[#A89070]">
             Join the waitlist. Get 30 days of Premium free when we launch.
           </p>
-          {state.succeeded ? (
+          {succeeded ? (
             <p className="text-center text-sm font-medium text-[#C4832A]">
               You're on the list. 30 days of Premium are waiting for you at launch.
             </p>
           ) : (
-            <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-3 sm:flex-row">
-              <input
-                type="email"
-                name="email"
-                placeholder="you@example.com"
-                required
-                autoComplete="email"
-                disabled={state.submitting}
-                className="flex-1 rounded-2xl border border-[#3D2B0E] bg-[#1E1508]/40 px-4 py-3.5 text-sm text-[#F0E0C0] placeholder:text-[#A89070]/50 focus:border-[#C4832A]/60 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/25 disabled:opacity-50"
-              />
-              <button
-                type="submit"
-                disabled={state.submitting}
-                className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] px-6 py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:from-[#D4943B] hover:to-[#9B5523] active:scale-[0.98] disabled:opacity-50 sm:whitespace-nowrap"
-              >
-                {state.submitting ? (
-                  <>
-                    <Spinner />
-                    Sending…
-                  </>
-                ) : (
-                  'Get Early Access'
-                )}
-              </button>
-            </form>
+            <>
+              <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-3 sm:flex-row">
+                <input
+                  type="email"
+                  name="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  required
+                  autoComplete="email"
+                  disabled={submitting}
+                  className="flex-1 rounded-2xl border border-[#3D2B0E] bg-[#1E1508]/40 px-4 py-3.5 text-sm text-[#F0E0C0] placeholder:text-[#A89070]/50 focus:border-[#C4832A]/60 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/25 disabled:opacity-50"
+                />
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] px-6 py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:from-[#D4943B] hover:to-[#9B5523] active:scale-[0.98] disabled:opacity-50 sm:whitespace-nowrap"
+                >
+                  {submitting ? (
+                    <>
+                      <Spinner />
+                      Sending…
+                    </>
+                  ) : (
+                    'Get Early Access'
+                  )}
+                </button>
+              </form>
+              {errorMessage && (
+                <p className="mt-3 text-center text-xs font-medium text-red-400">
+                  {errorMessage}
+                </p>
+              )}
+            </>
           )}
           <p className="mt-3 text-center text-xs text-[#A89070]">
             Early members get <span className="text-[#C4832A] font-semibold">30 days Premium free</span> at launch. No card needed.
