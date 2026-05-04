@@ -53,6 +53,10 @@ export const usersAPI = {
   getMatches: () => apiClient.get('/users/matches'),
 };
 
+export const waitlistAPI = {
+  signup: (email: string) => apiClient.post('/waitlist', { email }),
+};
+
 export const messagesAPI = {
   sendMessage: (receiver_id: string, message: string) =>
     apiClient.post('/messages', { receiver_id, message }),

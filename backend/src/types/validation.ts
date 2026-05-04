@@ -28,8 +28,13 @@ export const MessageSchema = z.object({
   message: z.string().min(1).max(1000),
 });
 
+export const WaitlistSchema = z.object({
+  email: z.string().email().max(254),
+});
+
 export type RegisterInput = z.infer<typeof RegisterSchema>;
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type ProfileInput = z.infer<typeof ProfileSchema>;
 export type LocationInput = z.infer<typeof LocationSchema>;
 export type MessageInput = z.infer<typeof MessageSchema>;
+export type WaitlistInput = z.infer<typeof WaitlistSchema>;
