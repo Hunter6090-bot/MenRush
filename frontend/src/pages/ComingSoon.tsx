@@ -3,42 +3,6 @@ import { useForm } from '@formspree/react';
 
 const LAUNCH_DATE = new Date('2026-06-01T00:00:00Z');
 
-const IMAGES = [
-  // Pride parades – USA
-  'https://upload.wikimedia.org/wikipedia/commons/8/87/SF_Pride_1993.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/4/45/1991SFPrideKodak5095Gold100-2Film_0017_-_Queer_Youth_%289852371234%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/a/ae/Los_Angeles_Pride_1995_003.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/5/50/Dallas_Pride_Parade.JPG',
-  'https://upload.wikimedia.org/wikipedia/commons/8/8d/42nd_Baltimore_Gay_Pride_Block_Party.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/3/38/DC_Gay_Pride_-_Parade_-_2010-06-12_-_060_%286250148131%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/2/2d/Capital_Pride_Festival_DC_2014_%2814372375396%29.jpg',
-  // Parties & clubs
-  'https://upload.wikimedia.org/wikipedia/commons/f/fa/2022.06.10_Capital_Pride_RIOT_Official_Opening_Party%2C_Washington%2C_DC_USA_161_234257_%2852144510089%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/4/4a/2022.06.09_Capital_Pride_Rooftop_Pool_Party%2C_Washington%2C_DC_USA_160_155257_%2852137114381%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/2/2e/2021.07.05_Pool_Days%2C_Washington%2C_DC_USA_186_64261-Edit.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/8/8d/Wonderland_Houston_2013_%289164803810%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/e/e7/Milwaukee_August_2024_033_%28DIX_Milwaukee%29.jpg',
-  // Leather & bears
-  'https://upload.wikimedia.org/wikipedia/commons/d/da/WoofCamp_2014_groupshot.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/2/26/DJAAcosta01.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/2/2e/Bear_Dore_Alley.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/c/c9/Dore_Alley_Fair_%28202578729%29.jpg',
-  // Muscle & daddies
-  'https://upload.wikimedia.org/wikipedia/commons/7/70/Alex_Carneiro.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/f/f0/FantasyFest1-125.jpg',
-  // Couples & kisses
-  'https://upload.wikimedia.org/wikipedia/commons/0/04/Kiss_-_Hiro_at_the_Maritime_Hotel.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/c/cd/Gay_Couple_Savv_and_Pueppi_02.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/9/93/Coppia_al_Gay_Pride_di_Milano_2008_4_-_Foto_Giovanni_Dall%27Orto%2C_7-June-2008_3.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/e/ef/Almost_a_waltz_-_Foto_di_Giovanni_Dall%27Orto_-_5_Agosto_2011.jpg',
-  // Your photos – Sitges & events
-  '/images/photo1.png',
-  '/images/photo2.png',
-  // International
-  'https://upload.wikimedia.org/wikipedia/commons/b/be/Amsterdam_Gay_Pride_2004%2C_Canal_parade_-016.JPG',
-  'https://upload.wikimedia.org/wikipedia/commons/e/eb/Christopher_Street_Day_Karlsruhe_03_June_2023_-_036.jpg',
-];
-
 function getTimeLeft() {
   const diff = LAUNCH_DATE.getTime() - Date.now();
   if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
@@ -110,7 +74,6 @@ export const ComingSoon = () => {
   const [state, handleSubmit] = useForm('maqaerkd');
   const [timeLeft, setTimeLeft] = useState(getTimeLeft);
   const [copied, setCopied] = useState(false);
-  const [bgIndex] = useState(() => Math.floor(Math.random() * IMAGES.length));
 
   useEffect(() => {
     const id = setInterval(() => setTimeLeft(getTimeLeft()), 1000);
@@ -131,19 +94,7 @@ export const ComingSoon = () => {
 
   return (
     <div className="relative flex min-h-dvh flex-col items-center overflow-hidden bg-[#0D0A06] text-[#F0E0C0]">
-      {/* Background image slideshow */}
-      <div
-        className="pointer-events-none absolute inset-0 bg-cover bg-center"
-        style={{
-          backgroundImage: `url('${IMAGES[bgIndex]}')`,
-          opacity: 0.6,
-        }}
-      />
-
-      {/* Dark overlay */}
-      <div className="pointer-events-none absolute inset-0 bg-[#0D0A06]/35" />
-
-      {/* Background radial glow */}
+      {/* Background radial glow (brand-only, no photographic imagery) */}
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_40%_at_50%_20%,rgba(196,131,42,0.12),transparent)]" />
 
       <div className="relative z-10 mx-auto flex w-full max-w-2xl flex-col items-center px-5 py-12 sm:py-20">
@@ -151,7 +102,7 @@ export const ComingSoon = () => {
         {/* Logo */}
         <div className="mb-6 flex flex-col items-center gap-3">
           <img
-            src="/images/logo.jpeg"
+            src="https://menrush.com/menrush-logo.png"
             alt="MenRush"
             className="h-36 w-36 rounded-full object-cover sm:h-44 sm:w-44"
             style={{ boxShadow: '0 4px 32px rgba(196,131,42,0.4)' }}
