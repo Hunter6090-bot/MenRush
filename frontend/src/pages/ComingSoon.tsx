@@ -26,7 +26,7 @@ const IMAGES: readonly string[] = [
   '/menrush-bg/bg-34.jpg', '/menrush-bg/bg-35.jpg', '/menrush-bg/bg-36.jpg',
   '/menrush-bg/bg-37.jpg', '/menrush-bg/bg-38.jpg', '/menrush-bg/bg-39.jpg',
   '/menrush-bg/bg-40.jpg', '/menrush-bg/bg-41.jpg', '/menrush-bg/bg-42.jpg',
-  '/menrush-bg/bg-43.jpg', '/menrush-bg/bg-44.jpg', '/menrush-bg/bg-45.jpg',
+  '/menrush-bg/bg-44.jpg', '/menrush-bg/bg-45.jpg',
   '/menrush-bg/bg-46.jpg', '/menrush-bg/bg-47.jpg',
 ];
 
