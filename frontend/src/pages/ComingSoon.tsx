@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useForm } from '@formspree/react';
 
 const LAUNCH_DATE = new Date('2026-06-01T00:00:00Z');
 
@@ -71,7 +70,6 @@ const premiumFeatures = [
 ];
 
 export const ComingSoon = () => {
-  const [state, handleSubmit] = useForm('maqaerkd');
   const [timeLeft, setTimeLeft] = useState(getTimeLeft);
   const [copied, setCopied] = useState(false);
 
@@ -150,37 +148,12 @@ export const ComingSoon = () => {
           <p className="mb-4 text-center text-sm font-medium text-[#A89070]">
             Join the waitlist. Get 30 days of Premium free when we launch.
           </p>
-          {state.succeeded ? (
-            <p className="text-center text-sm font-medium text-[#C4832A]">
-              You're on the list. 30 days of Premium are waiting for you at launch.
-            </p>
-          ) : (
-            <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-3 sm:flex-row">
-              <input
-                type="email"
-                name="email"
-                placeholder="you@example.com"
-                required
-                autoComplete="email"
-                disabled={state.submitting}
-                className="flex-1 rounded-2xl border border-[#3D2B0E] bg-[#1E1508]/40 px-4 py-3.5 text-sm text-[#F0E0C0] placeholder:text-[#A89070]/50 focus:border-[#C4832A]/60 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/25 disabled:opacity-50"
-              />
-              <button
-                type="submit"
-                disabled={state.submitting}
-                className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] px-6 py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:from-[#D4943B] hover:to-[#9B5523] active:scale-[0.98] disabled:opacity-50 sm:whitespace-nowrap"
-              >
-                {state.submitting ? (
-                  <>
-                    <Spinner />
-                    Sending…
-                  </>
-                ) : (
-                  'Get Early Access'
-                )}
-              </button>
-            </form>
-          )}
+          <iframe
+            aria-label="MenRush.com"
+            frameBorder="0"
+            style={{ height: '500px', width: '100%', border: 'none' }}
+            src="https://forms.zoho.com/hellomen1/form/MenRushcom/formema/ridAzzP0GwTafugVKgaUQtHXDojK1z_jZpTDjtAor4"
+          />
           <p className="mt-3 text-center text-xs text-[#A89070]">
             Early members get <span className="text-[#C4832A] font-semibold">30 days Premium free</span> at launch. No card needed.
           </p>
@@ -230,13 +203,6 @@ export const ComingSoon = () => {
     </div>
   );
 };
-
-const Spinner = () => (
-  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-  </svg>
-);
 
 const ShareIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
