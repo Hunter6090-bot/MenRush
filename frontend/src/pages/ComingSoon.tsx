@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type FormEvent } from 'react';
+import { useState, useEffect, useCallback, useMemo, type FormEvent } from 'react';
 
 // Submissions land in the Zoho-hosted "MenRush.com" form (powers the waitlist
 // mailing list + drip workflow). Posted as text/plain to dodge CORS preflight;
@@ -7,6 +7,28 @@ import { useState, useEffect, useCallback, type FormEvent } from 'react';
 // in the commit message that introduced this file.
 const ZOHO_SUBMIT_URL =
   'https://forms.zohopublic.com/hellomen1/form/MenRushcom/formperma/ridAzzP0GwTafugVKgaUQttHXDojK1z_jZpTDjtAor4/records';
+
+// Owned/licensed background photographs served from frontend/public/menrush-bg/.
+// One is picked at random per page mount. Plain string paths (not Vite imports)
+// so files are served as-is from public/ without bundling/hashing.
+const IMAGES: readonly string[] = [
+  '/menrush-bg/bg-01.jpg', '/menrush-bg/bg-02.jpg', '/menrush-bg/bg-03.jpg',
+  '/menrush-bg/bg-04.jpg', '/menrush-bg/bg-05.jpg', '/menrush-bg/bg-06.jpg',
+  '/menrush-bg/bg-07.jpg', '/menrush-bg/bg-08.jpg', '/menrush-bg/bg-09.jpg',
+  '/menrush-bg/bg-10.jpg', '/menrush-bg/bg-11.jpg', '/menrush-bg/bg-12.jpg',
+  '/menrush-bg/bg-13.jpg', '/menrush-bg/bg-14.jpg', '/menrush-bg/bg-15.jpg',
+  '/menrush-bg/bg-16.jpg', '/menrush-bg/bg-17.jpg', '/menrush-bg/bg-18.jpg',
+  '/menrush-bg/bg-19.jpg', '/menrush-bg/bg-20.jpg', '/menrush-bg/bg-21.jpg',
+  '/menrush-bg/bg-22.jpg', '/menrush-bg/bg-23.jpg', '/menrush-bg/bg-24.jpg',
+  '/menrush-bg/bg-25.jpg', '/menrush-bg/bg-26.jpg', '/menrush-bg/bg-27.jpg',
+  '/menrush-bg/bg-28.jpg', '/menrush-bg/bg-29.jpg', '/menrush-bg/bg-30.jpg',
+  '/menrush-bg/bg-31.jpg', '/menrush-bg/bg-32.jpg', '/menrush-bg/bg-33.jpg',
+  '/menrush-bg/bg-34.jpg', '/menrush-bg/bg-35.jpg', '/menrush-bg/bg-36.jpg',
+  '/menrush-bg/bg-37.jpg', '/menrush-bg/bg-38.jpg', '/menrush-bg/bg-39.jpg',
+  '/menrush-bg/bg-40.jpg', '/menrush-bg/bg-41.jpg', '/menrush-bg/bg-42.jpg',
+  '/menrush-bg/bg-43.jpg', '/menrush-bg/bg-44.jpg', '/menrush-bg/bg-45.jpg',
+  '/menrush-bg/bg-46.jpg', '/menrush-bg/bg-47.jpg',
+];
 
 const LAUNCH_DATE = new Date('2026-06-01T00:00:00Z');
 
@@ -84,6 +106,7 @@ export const ComingSoon = () => {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const bgIndex = useMemo(() => Math.floor(Math.random() * IMAGES.length), []);
 
   useEffect(() => {
     const id = setInterval(() => setTimeLeft(getTimeLeft()), 1000);
@@ -135,8 +158,15 @@ export const ComingSoon = () => {
   const pad = (n: number) => String(n).padStart(2, '0');
 
   return (
-    <div className="relative flex min-h-dvh flex-col items-center overflow-hidden bg-[#0D0A06] text-[#F0E0C0]">
-      {/* Background radial glow (brand-only, no photographic imagery) */}
+    <div className="relative flex min-h-dvh flex-col items-center overflow-hidden text-[#F0E0C0]">
+      {/* Random owned/licensed photograph — one per page mount */}
+      <div
+        className="pointer-events-none fixed inset-0 -z-20 bg-cover bg-center"
+        style={{ backgroundImage: `url(${IMAGES[bgIndex]})` }}
+      />
+      {/* Dark overlay so card + text stay readable over the photo */}
+      <div className="pointer-events-none fixed inset-0 -z-10 bg-[#0D0A06]/75" />
+      {/* Background radial glow (brand warmth) — sits on top of the dark overlay */}
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_40%_at_50%_20%,rgba(196,131,42,0.12),transparent)]" />
 
       <div className="relative z-10 mx-auto flex w-full max-w-2xl flex-col items-center px-5 py-12 sm:py-20">
