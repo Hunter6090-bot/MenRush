@@ -1,4 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type FormEvent } from 'react';
+
+// Submissions land in the Zoho-hosted "MenRush.com" form (powers the waitlist
+// mailing list + drip workflow). Posted as text/plain to dodge CORS preflight;
+// Zoho doesn't expose CORS allow-origin headers, so we can't read the response —
+// fire-and-forget, then optimistically show the success state. See investigation
+// in the commit message that introduced this file.
+const ZOHO_SUBMIT_URL =
+  'https://forms.zohopublic.com/hellomen1/form/MenRushcom/formperma/ridAzzP0GwTafugVKgaUQttHXDojK1z_jZpTDjtAor4/records';
 
 const LAUNCH_DATE = new Date('2026-06-01T00:00:00Z');
 
@@ -72,6 +80,10 @@ const premiumFeatures = [
 export const ComingSoon = () => {
   const [timeLeft, setTimeLeft] = useState(getTimeLeft);
   const [copied, setCopied] = useState(false);
+  const [email, setEmail] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const id = setInterval(() => setTimeLeft(getTimeLeft()), 1000);
@@ -87,6 +99,38 @@ export const ComingSoon = () => {
       setCopied(false);
     }
   }, []);
+
+  const handleWaitlistSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (submitting || submitted) return;
+      const trimmed = email.trim();
+      // Light client-side guardrail; real validation lives on Zoho's side.
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+        setErrorMsg('Please enter a valid email.');
+        return;
+      }
+      setErrorMsg(null);
+      setSubmitting(true);
+      try {
+        // text/plain + no-cors keeps this a "simple" CORS request (no preflight),
+        // which Zoho's endpoint accepts. The browser will block reading the
+        // response body — that's fine, we treat the network-success as success.
+        await fetch(ZOHO_SUBMIT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+          body: JSON.stringify({ Email: trimmed }),
+        });
+        setSubmitted(true);
+      } catch {
+        setErrorMsg("Couldn't submit. Check your connection and try again.");
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [email, submitting, submitted]
+  );
 
   const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -148,12 +192,50 @@ export const ComingSoon = () => {
           <p className="mb-4 text-center text-sm font-medium text-[#A89070]">
             Join the waitlist. Get 30 days of Premium free when we launch.
           </p>
-          <iframe
-            aria-label="MenRush.com"
-            frameBorder="0"
-            style={{ height: '500px', width: '100%', border: 'none' }}
-            src="https://forms.zohopublic.com/hellomen1/form/MenRushcom/formperma/ridAzzP0GwTafugVKgaUQttHXDojK1z_jZpTDjtAor4"
-          />
+          {submitted ? (
+            <p className="text-center text-sm font-medium text-[#C4832A]">
+              You're on the list. 30 days of Premium are waiting for you at launch.
+            </p>
+          ) : (
+            <form
+              onSubmit={handleWaitlistSubmit}
+              noValidate
+              className="flex flex-col gap-3 sm:flex-row"
+            >
+              <input
+                type="email"
+                name="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                required
+                autoComplete="email"
+                inputMode="email"
+                aria-label="Email address"
+                disabled={submitting}
+                className="flex-1 rounded-2xl border border-[#3D2B0E] bg-[#1E1508]/40 px-4 py-3.5 text-sm text-[#F0E0C0] placeholder:text-[#A89070]/50 focus:border-[#C4832A]/60 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/25 disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={submitting}
+                className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] px-6 py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:from-[#D4943B] hover:to-[#9B5523] active:scale-[0.98] disabled:opacity-50 sm:whitespace-nowrap"
+              >
+                {submitting ? (
+                  <>
+                    <Spinner />
+                    Sending…
+                  </>
+                ) : (
+                  'Get Early Access'
+                )}
+              </button>
+            </form>
+          )}
+          {errorMsg && !submitted && (
+            <p className="mt-3 text-center text-xs font-medium text-[#E07A5F]" role="alert">
+              {errorMsg}
+            </p>
+          )}
           <p className="mt-3 text-center text-xs text-[#A89070]">
             Early members get <span className="text-[#C4832A] font-semibold">30 days Premium free</span> at launch. No card needed.
           </p>
@@ -207,5 +289,22 @@ export const ComingSoon = () => {
 const ShareIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+  </svg>
+);
+
+const Spinner = () => (
+  <svg
+    className="h-4 w-4 animate-spin"
+    fill="none"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+    <path
+      d="M22 12a10 10 0 0 1-10 10"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+    />
   </svg>
 );
