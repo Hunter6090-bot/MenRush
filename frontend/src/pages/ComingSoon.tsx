@@ -152,7 +152,7 @@ export const ComingSoon = () => {
             aria-label="MenRush.com"
             frameBorder="0"
             style={{ height: '500px', width: '100%', border: 'none' }}
-            src="https://forms.zoho.com/hellomen1/form/MenRushcom/formema/ridAzzP0GwTafugVKgaUQtHXDojK1z_jZpTDjtAor4"
+            src="https://forms.zohopublic.com/hellomen1/form/MenRushcom/formperma/ridAzzP0GwTafugVKgaUQttHXDojK1z_jZpTDjtAor4"
           />
           <p className="mt-3 text-center text-xs text-[#A89070]">
             Early members get <span className="text-[#C4832A] font-semibold">30 days Premium free</span> at launch. No card needed.
