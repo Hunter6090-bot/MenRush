@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { SiteFooter } from '../components/SiteFooter';
 
 const LAUNCH_DATE = new Date('2026-06-01T00:00:00Z');
 
@@ -263,6 +264,8 @@ export const ComingSoon = () => {
           {copied ? 'Link copied!' : 'Share with a friend'}
         </button>
       </div>
+
+      <SiteFooter className="relative z-10 mt-auto w-full shrink-0" />
     </div>
   );
 };

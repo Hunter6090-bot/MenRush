@@ -5,6 +5,7 @@ import { useAuthStore } from '../hooks/store';
 import { CoinFlip } from '../components/CoinFlip';
 import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
+import { SiteFooter } from '../components/SiteFooter';
 
 const cityMoments = [
   { place: 'Shoreditch', detail: '4 people nearby right now' },
@@ -36,13 +37,11 @@ export const Login = () => {
   };
 
   return (
-    <div
-      className="relative min-h-dvh overflow-hidden"
-    >
+    <div className="relative flex min-h-dvh flex-col overflow-hidden">
       <RandomBackground />
       <div className="absolute inset-0 bg-black/60" />
 
-      <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-7xl items-center px-5 py-8 sm:px-8 lg:px-10">
+      <div className="relative z-10 mx-auto flex min-h-0 flex-1 w-full max-w-7xl items-center px-5 py-8 sm:px-8 lg:px-10">
         <div className="grid w-full gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
           <section className="max-w-2xl self-center">
             <Link to="/" className="inline-block hover:opacity-80 transition-opacity">
@@ -129,6 +128,8 @@ export const Login = () => {
           </section>
         </div>
       </div>
+
+      <SiteFooter className="relative z-10 shrink-0" />
     </div>
   );
 };

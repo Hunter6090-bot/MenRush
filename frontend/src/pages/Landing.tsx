@@ -5,6 +5,7 @@ import { authAPI } from '../api/client';
 import { CoinFlip } from '../components/CoinFlip';
 import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
+import { SiteFooter } from '../components/SiteFooter';
 
 const stats = [
   { value: '5km', label: 'Discovery radius' },
@@ -154,6 +155,8 @@ export const Landing = () => {
           </section>
         </div>
       </main>
+
+      <SiteFooter className="relative z-10 shrink-0" />
     </div>
   );
 };

@@ -125,6 +125,8 @@
   /* ---------- LAYOUT ---------- */
 
   --nav-height: 64px;
+  /* Mobile bottom tab bar + iPhone home indicator — use for fixed full-bleed pages */
+  --mobile-tab-bar-height: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
   --content-max-width: 1280px;
   --map-min-height: 60vh;
   --bottom-strip-height: 180px;

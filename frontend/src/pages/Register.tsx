@@ -5,6 +5,7 @@ import { useAuthStore } from '../hooks/store';
 import { CoinFlip } from '../components/CoinFlip';
 import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
+import { SiteFooter } from '../components/SiteFooter';
 
 interface FormState {
   displayName: string;
@@ -118,18 +119,17 @@ export const Register = () => {
   };
 
   return (
-    <div
-      className="min-h-dvh flex items-center justify-center p-4 relative overflow-hidden"
-    >
+    <div className="relative flex min-h-dvh flex-col overflow-hidden">
       <RandomBackground />
       <div className="absolute inset-0 bg-black/60" />
 
-      <div className="w-full max-w-sm relative z-10 animate-slide-up">
-        <div className="flex justify-center mb-6">
-          <Link to="/" className="hover:opacity-80 transition-opacity">
-            <CoinFlip qrValue="https://menrush.com" sizeClass="h-24" />
-          </Link>
-        </div>
+      <div className="relative z-10 flex flex-1 items-center justify-center p-4">
+        <div className="w-full max-w-sm animate-slide-up">
+          <div className="mb-6 flex justify-center">
+            <Link to="/" className="hover:opacity-80 transition-opacity">
+              <CoinFlip qrValue="https://menrush.com" sizeClass="h-24" />
+            </Link>
+          </div>
 
         <div className="bg-[#1E1508]/80 backdrop-blur-xl border border-[#3D2B0E] rounded-2xl p-6 shadow-card">
           <h2 className="text-lg font-bold text-[#F0E0C0] mb-5">Create account</h2>
@@ -258,7 +258,10 @@ export const Register = () => {
             </Link>
           </p>
         </div>
+        </div>
       </div>
+
+      <SiteFooter className="relative z-10 shrink-0" />
     </div>
   );
 };

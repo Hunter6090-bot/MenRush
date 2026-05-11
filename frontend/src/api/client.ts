@@ -83,6 +83,18 @@ export const roomsAPI = {
     apiClient.post(`/rooms/${roomId}/messages`, { message, reply_to: replyTo }),
 };
 
+export type ContactSubmitPayload = {
+  name: string;
+  email: string;
+  enquiryType: 'general' | 'privacy' | 'support' | 'press';
+  message: string;
+};
+
+export const contactAPI = {
+  submit: (data: ContactSubmitPayload) =>
+    apiClient.post<{ success: boolean; message: string }>('/contact', data),
+};
+
 export const aiAPI = {
   generateImage: (prompt: string, numberOfImages?: number) =>
     apiClient.post<{ images: Array<{ imageBase64: string; mimeType: string }> }>(

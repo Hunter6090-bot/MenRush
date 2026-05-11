@@ -5,6 +5,7 @@ import { useSocket } from '../hooks/useSocket';
 import { UserAvatar } from './UserAvatar';
 import { ToastNotifications } from './ToastNotifications';
 import { FEATURES } from '../lib/featureFlags';
+import { SiteFooter } from './SiteFooter';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -66,7 +67,20 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     navLinks.splice(3, 0, { to: '/rooms', label: 'Rooms', icon: RoomsNavIcon, badge: 0 });
   }
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => {
+    if (path === '/conversations') {
+      return (
+        location.pathname === '/conversations' ||
+        location.pathname.startsWith('/conversations/') ||
+        location.pathname.startsWith('/messages/')
+      );
+    }
+    // Only "your" profile — /profile/:id is someone else's view
+    if (path === '/profile') {
+      return location.pathname === '/profile';
+    }
+    return location.pathname === path || location.pathname.startsWith(`${path}/`);
+  };
 
   return (
     <div className="min-h-dvh bg-[#0D0A06] flex flex-col">
@@ -132,12 +146,16 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </header>
 
       {/* ── Page content ── */}
-      <main className="flex-1 pt-16 pb-16 sm:pb-0">
+      <main className="flex-1 pt-16 pb-[var(--mobile-tab-bar-height)] sm:pb-0">
         <div className="page-enter">{children}</div>
       </main>
 
+      <div className="shrink-0 pb-[var(--mobile-tab-bar-height)] sm:pb-0">
+        <SiteFooter />
+      </div>
+
       {/* ── Mobile bottom nav ── */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0D0A06]/90 backdrop-blur-xl border-t border-[#3D2B0E] safe-area-inset-bottom">
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0D0A06]/90 backdrop-blur-xl border-t border-[#3D2B0E] pb-[env(safe-area-inset-bottom,0px)]">
         <div className="flex items-stretch h-16">
           {navLinks.map(({ to, label, icon: Icon, badge }) => (
             <Link

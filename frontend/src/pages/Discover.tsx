@@ -262,12 +262,7 @@ export const Discover = () => {
   return (
     <Layout>
       <div
-        className="fixed left-0 right-0"
-        style={{
-          top: 56,
-          bottom: 0,
-          background: '#0D0A06',
-        }}
+        className="fixed left-0 right-0 top-14 z-0 bottom-[var(--mobile-tab-bar-height)] sm:bottom-0 bg-[#0D0A06]"
       >
         <div ref={mapContainerRef} className="absolute inset-0" />
 

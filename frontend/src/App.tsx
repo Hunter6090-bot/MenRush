@@ -8,6 +8,7 @@ import { ProfileView } from './pages/ProfileView';
 import { Matches } from './pages/Matches';
 import { Terms } from './pages/Terms';
 import { Privacy } from './pages/Privacy';
+import { Contact } from './pages/Contact';
 import { Conversations } from './pages/Conversations';
 import { Messages } from './pages/Messaging';
 import { Rooms } from './pages/Rooms';
@@ -79,6 +80,7 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/privacy" element={<Privacy />} />
+        <Route path="/contact" element={<Contact />} />
         <Route path="/verify" element={<ProtectedRoute><Verify /></ProtectedRoute>} />
         <Route path="/verify/pending" element={<ProtectedRoute><VerifyPending /></ProtectedRoute>} />
         <Route path="/verify/rejected" element={<ProtectedRoute><VerifyRejected /></ProtectedRoute>} />
