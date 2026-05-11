@@ -2,7 +2,9 @@ node_modules/
 dist/
 # Vite production build — built on Vercel; do not commit
 frontend/dist/
-.DS_Store
+**/.DS_Store
+logs/
+pictures/task_*.webp
 *.log
 .env
 .env.local
