@@ -7,23 +7,45 @@ export const userService = {
     lat: number,
     lng: number,
     radiusKm: number = 5,
-    filters?: { minAge?: number; maxAge?: number; interests?: string[] }
+    filters?: { minAge?: number; maxAge?: number; interests?: string[]; onlyPulse?: boolean }
   ) {
     const radiusMeters = radiusKm * 1000;
     const values: any[] = [lat, lng, userId, radiusMeters];
+    // Pulse v1: is_pulsing/pulse_expires_at live on users (per pulse-spec.md).
+    // Computed `is_pulsing_live` AND-checks the expiry so a stale row that hasn't
+    // been cron-swept yet doesn't masquerade as pulsing in the UI.
     let queryStr = `
       SELECT
         u.id, u.name, u.age, u.bio, u.photo_url, u.interests,
+        u.is_verified,
         ROUND(p.lat::numeric, 3) as lat, ROUND(p.lng::numeric, 3) as lng,
-        p.online, p.last_seen,
+        p.online, p.last_seen, p.available_until,
+        (u.is_pulsing AND u.pulse_expires_at IS NOT NULL AND u.pulse_expires_at > NOW()) AS is_pulsing,
+        CASE
+          WHEN u.is_pulsing AND u.pulse_expires_at > NOW() THEN u.pulse_expires_at
+          ELSE NULL
+        END AS pulse_expires_at,
         ST_Distance(p.location, ST_MakePoint($2, $1)::geography) as distance_m
       FROM users u
       JOIN profiles p ON u.id = p.user_id
       WHERE u.id != $3
         AND ST_DWithin(p.location, ST_MakePoint($2, $1)::geography, $4)
         AND p.is_visible = true
+        AND NOT EXISTS (
+          SELECT 1 FROM blocks b
+          WHERE (b.blocker_id = $3 AND b.blocked_id = u.id)
+             OR (b.blocker_id = u.id AND b.blocked_id = $3)
+        )
     `;
 
+    if (filters?.onlyPulse) {
+      // Honour either the new (users.is_pulsing) or legacy (profiles.available_until)
+      // pulse signal so old data still surfaces during the transition.
+      queryStr += ` AND (
+        (u.is_pulsing = TRUE AND u.pulse_expires_at > NOW())
+        OR (p.available_until IS NOT NULL AND p.available_until > NOW())
+      )`;
+    }
     if (filters?.minAge) {
       values.push(filters.minAge);
       queryStr += ` AND u.age >= $${values.length}`;
@@ -37,7 +59,13 @@ export const userService = {
       queryStr += ` AND u.interests && $${values.length}`;
     }
 
-    queryStr += ` ORDER BY p.online DESC, p.last_seen DESC LIMIT 50`;
+    // Spec: pulsing users sort first, then by last_seen DESC.
+    queryStr += ` ORDER BY
+      (u.is_pulsing AND u.pulse_expires_at > NOW()) DESC,
+      (p.available_until IS NOT NULL AND p.available_until > NOW()) DESC,
+      p.online DESC,
+      p.last_seen DESC
+    LIMIT 50`;
 
     const result = await query(queryStr, values);
 
@@ -51,8 +79,10 @@ export const userService = {
     const emailField = includeEmail ? 'u.email, ' : '';
     const result = await query(
       `SELECT
-        u.id, ${emailField}u.name, u.age, u.bio, u.photo_url, u.interests, u.created_at,
-        p.lat, p.lng, p.online, p.last_seen
+        u.id, ${emailField}u.name, u.age, u.bio, u.headline, u.looking_for,
+        u.photo_url, u.interests, u.created_at,
+        u.is_verified, u.verification_status,
+        p.lat, p.lng, p.online, p.last_seen, p.is_visible, p.available_until
        FROM users u
        LEFT JOIN profiles p ON u.id = p.user_id
        WHERE u.id = $1`,
@@ -145,6 +175,47 @@ export const userService = {
     await query(
       `UPDATE profiles SET is_visible = $1, updated_at = NOW() WHERE user_id = $2`,
       [isVisible, userId]
+    );
+  },
+
+  async startPulse(userId: string, minutes: number = 90) {
+    const result = await query(
+      `UPDATE profiles
+       SET available_until = NOW() + ($1 || ' minutes')::interval,
+           updated_at = NOW()
+       WHERE user_id = $2
+       RETURNING available_until`,
+      [minutes, userId]
+    );
+    return (result.rows[0]?.available_until as string | undefined) ?? null;
+  },
+
+  async stopPulse(userId: string) {
+    await query(
+      `UPDATE profiles SET available_until = NULL, updated_at = NOW() WHERE user_id = $1`,
+      [userId]
+    );
+  },
+
+  async blockUser(blockerId: string, blockedId: string) {
+    await query(
+      `INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2)
+       ON CONFLICT (blocker_id, blocked_id) DO NOTHING`,
+      [blockerId, blockedId]
+    );
+  },
+
+  async unblockUser(blockerId: string, blockedId: string) {
+    await query(
+      `DELETE FROM blocks WHERE blocker_id = $1 AND blocked_id = $2`,
+      [blockerId, blockedId]
+    );
+  },
+
+  async reportUser(reporterId: string, reportedId: string, reason: string, details?: string) {
+    await query(
+      `INSERT INTO reports (reporter_id, reported_id, reason, details) VALUES ($1, $2, $3, $4)`,
+      [reporterId, reportedId, reason, details ?? null]
     );
   },
 
