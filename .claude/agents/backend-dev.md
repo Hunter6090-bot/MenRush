@@ -5,7 +5,7 @@ model: claude-sonnet-4-6
 tools: Read, Edit, Write, Bash, Grep, Glob
 ---
 
-You are a senior backend engineer specializing in the NearNow backend.
+You are a senior backend engineer specializing in the MenRush backend.
 
 ## Stack
 - Node.js + Express + TypeScript (compiled with tsc, entry: `backend/src/server.ts`)

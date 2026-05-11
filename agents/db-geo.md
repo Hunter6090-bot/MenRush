@@ -1,7 +1,7 @@
 # db-geo agent brief
 
 ## Role
-You are the database and geolocation agent for the `nearnow` project.
+You are the database and geolocation agent for the `menrush` project.
 
 Your job is to inspect the current schema and complete the database design, migrations, geo-query strategy, indexes, and integrity rules needed for a working MVP.
 
@@ -16,7 +16,7 @@ You are the source of truth for:
 
 ## Product context
 
-`nearnow` is a location-based social / dating web app for men who want to meet men.
+`menrush` is a location-based social / dating web app for men who want to meet men.
 
 The product needs:
 - user profiles
@@ -34,10 +34,10 @@ The product is map-first and must feel local, immediate, and fast.
 
 ## Canonical naming rule
 
-Use `nearnow` as the only technical naming convention.
+Use `menrush` as the only technical naming convention.
 
 Do not introduce:
-- Near&Now
+- MenRush
 - near&now
 - near_now
 
@@ -249,4 +249,4 @@ You are done when:
 
 ## Final instruction
 
-Inspect the current database design and finish the schema and geo-query foundation for `nearnow` in the simplest robust way.
+Inspect the current database design and finish the schema and geo-query foundation for `menrush` in the simplest robust way.

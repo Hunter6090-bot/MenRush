@@ -1,11 +1,11 @@
-# nearnow master agent coordination
+# menrush master agent coordination
 
 ## Project
-Build the `nearnow` MVP to a deployable state.
+Build the `menrush` MVP to a deployable state.
 
 ## Canonical naming
-Use `nearnow` for all technical naming.
-Use `NearNow` only for visible UI branding.
+Use `menrush` for all technical naming.
+Use `MenRush` only for visible UI branding.
 
 ## Primary goal
 Deliver a working MVP for a location-based social / dating web app for men who want to meet men.
@@ -71,4 +71,4 @@ By the end, the project should support:
 - basic privacy/security safeguards
 
 ## Final instruction
-Coordinate all agents to finish the `nearnow` MVP with minimal unnecessary questions.
+Coordinate all agents to finish the `menrush` MVP with minimal unnecessary questions.

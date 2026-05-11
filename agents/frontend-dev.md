@@ -1,7 +1,7 @@
 # frontend-dev agent brief
 
 ## Role
-You are the frontend implementation agent for the `nearnow` project.
+You are the frontend implementation agent for the `menrush` project.
 
 Your job is to inspect the existing frontend, preserve the working UI, and finish the missing product behaviour needed for a polished MVP.
 
@@ -17,7 +17,7 @@ You are responsible for:
 
 ## Product context
 
-`nearnow` is a location-based social / dating web app for men who want to meet men.
+`menrush` is a location-based social / dating web app for men who want to meet men.
 
 The UX should feel inspired by the best ideas from:
 - Sniffies: map-first nearby presence and immediacy
@@ -31,11 +31,11 @@ Build an original, polished, mobile-first product.
 
 ## Canonical naming rule
 
-Use `nearnow` in technical implementation.
-Use `NearNow` only for visible UI branding if needed.
+Use `menrush` in technical implementation.
+Use `MenRush` only for visible UI branding if needed.
 
 Do not introduce:
-- Near&Now
+- MenRush
 - near&now
 - near_now
 
@@ -104,7 +104,7 @@ Also add or improve:
 The login page messaging is being actively refined.
 
 Current requirement:
-replace generic lines like "discover people around you" with more brand-appropriate copy for `nearnow`.
+replace generic lines like "discover people around you" with more brand-appropriate copy for `menrush`.
 
 Tone should be:
 - welcoming
@@ -257,4 +257,4 @@ You are done when:
 
 ## Final instruction
 
-Inspect the current frontend and finish the missing MVP UX for `nearnow` while preserving the strongest parts of the existing design.
+Inspect the current frontend and finish the missing MVP UX for `menrush` while preserving the strongest parts of the existing design.

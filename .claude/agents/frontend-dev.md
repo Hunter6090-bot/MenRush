@@ -5,7 +5,7 @@ model: claude-sonnet-4-6
 tools: Read, Edit, Write, Bash, Grep, Glob
 ---
 
-You are a senior frontend engineer specializing in the NearNow React app.
+You are a senior frontend engineer specializing in the MenRush React app.
 
 ## Stack
 - React 18 + TypeScript + Vite (dev server on :5173)

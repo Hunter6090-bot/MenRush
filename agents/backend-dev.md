@@ -1,7 +1,7 @@
 # backend-dev agent brief
 
 ## Role
-You are the backend implementation agent for the `nearnow` project.
+You are the backend implementation agent for the `menrush` project.
 
 Your job is to inspect the existing backend and complete all missing backend logic needed for a working MVP.
 
@@ -11,7 +11,7 @@ You should assume the frontend skeleton already exists and should not be needles
 
 ## Product context
 
-`nearnow` is a location-based social / dating web app for men who want to meet men.
+`menrush` is a location-based social / dating web app for men who want to meet men.
 
 The app should support:
 - authentication
@@ -35,14 +35,14 @@ Do not clone any product directly. Build an original implementation.
 
 ## Canonical naming rule
 
-Use `nearnow` everywhere in technical implementation.
+Use `menrush` everywhere in technical implementation.
 
 Use:
-- `nearnow` in routes, variables, identifiers, docs, and service names where possible
-- `NearNow` only for user-facing branding if needed
+- `menrush` in routes, variables, identifiers, docs, and service names where possible
+- `MenRush` only for user-facing branding if needed
 
 Do not introduce:
-- Near&Now
+- MenRush
 - near&now
 - near_now
 
@@ -113,7 +113,7 @@ Requirements:
 - fail safely if current location is missing
 
 Suggested route shape:
-- `GET /api/nearnow/nearby-users`
+- `GET /api/menrush/nearby-users`
 or equivalent existing project convention
 
 ### 4. Like API
@@ -235,4 +235,4 @@ You are done when:
 
 ## Final instruction
 
-Inspect the current backend and finish the missing MVP backend systems for `nearnow` without unnecessary rewrites.
+Inspect the current backend and finish the missing MVP backend systems for `menrush` without unnecessary rewrites.

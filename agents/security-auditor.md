@@ -1,7 +1,7 @@
 # security-auditor agent brief
 
 ## Role
-You are the security and privacy agent for the `nearnow` project.
+You are the security and privacy agent for the `menrush` project.
 
 Your job is to inspect the current project and identify security, privacy, permission, and abuse-prevention issues relevant to an MVP social / dating app.
 
@@ -22,7 +22,7 @@ You are responsible for:
 
 ## Product context
 
-`nearnow` is a location-based social / dating web app for men who want to meet men.
+`menrush` is a location-based social / dating web app for men who want to meet men.
 
 The product includes:
 - auth
@@ -41,7 +41,7 @@ So yes, the gremlins will be interested.
 
 ## Canonical naming rule
 
-Use `nearnow` in all technical references.
+Use `menrush` in all technical references.
 
 ---
 
@@ -204,4 +204,4 @@ You are done when:
 
 ## Final instruction
 
-Inspect the `nearnow` project and produce a practical MVP security and privacy audit with clear, prioritised fixes.
+Inspect the `menrush` project and produce a practical MVP security and privacy audit with clear, prioritised fixes.

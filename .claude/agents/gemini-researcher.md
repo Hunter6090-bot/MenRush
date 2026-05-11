@@ -13,7 +13,7 @@ Use the Gemini CLI in headless (non-interactive) mode:
 gemini -p "your research prompt here"
 ```
 
-Always append context to your prompt so results are relevant to the NearNow stack:
+Always append context to your prompt so results are relevant to the MenRush stack:
 - Backend: Node.js, Express, TypeScript, Socket.IO, PostgreSQL, PostGIS
 - Frontend: React 18, Vite, TypeScript, TailwindCSS, Zustand
 
