@@ -12,6 +12,7 @@ import roomRoutes from './routes/rooms';
 import pushRoutes, { webpush } from './routes/push';
 import pulseRoutes from './routes/pulse';
 import verifyRoutes from './routes/verify';
+import contactRoutes from './routes/contact';
 import { startPulseExpiryCron } from './services/pulse.service';
 import { errorHandler } from './middleware/auth';
 import { authService } from './services/auth.service';
@@ -52,6 +53,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/pulse', pulseRoutes);
+app.use('/api/contact', contactRoutes);
 
 // Waitlist
 app.post('/api/waitlist', async (req, res) => {

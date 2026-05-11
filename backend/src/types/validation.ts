@@ -45,6 +45,13 @@ export const RoomMessageSchema = z.object({
   reply_to: z.string().uuid().optional(),
 });
 
+export const ContactFormSchema = z.object({
+  name: z.string().trim().min(2, 'Name must be at least 2 characters').max(120),
+  email: z.string().trim().email('Enter a valid email address'),
+  enquiryType: z.enum(['general', 'privacy', 'support', 'press']),
+  message: z.string().trim().min(10, 'Message must be at least 10 characters').max(8000),
+});
+
 export type RegisterInput = z.infer<typeof RegisterSchema>;
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type ProfileInput = z.infer<typeof ProfileSchema>;
@@ -52,3 +59,4 @@ export type LocationInput = z.infer<typeof LocationSchema>;
 export type MessageInput = z.infer<typeof MessageSchema>;
 export type CreateRoomInput = z.infer<typeof CreateRoomSchema>;
 export type RoomMessageInput = z.infer<typeof RoomMessageSchema>;
+export type ContactFormInput = z.infer<typeof ContactFormSchema>;
