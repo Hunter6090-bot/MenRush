@@ -7,12 +7,15 @@ interface User {
   age?: number;
   bio?: string;
   photo_url?: string;
+  is_verified?: boolean;
+  verification_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
 }
 
 interface AuthState {
   user: User | null;
   token: string | null;
   setAuth: (user: User, token: string) => void;
+  setVerified: (status: NonNullable<User['verification_status']>, isVerified: boolean) => void;
   logout: () => void;
 }
 
@@ -24,6 +27,13 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.setItem('token', token);
     set({ user, token });
   },
+  setVerified: (status, isVerified) =>
+    set((s) => {
+      if (!s.user) return s;
+      const next = { ...s.user, verification_status: status, is_verified: isVerified };
+      localStorage.setItem('user', JSON.stringify(next));
+      return { user: next };
+    }),
   logout: () => {
     localStorage.removeItem('user');
     localStorage.removeItem('token');

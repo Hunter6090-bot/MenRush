@@ -25,7 +25,7 @@ export const usersAPI = {
     lat: number,
     lng: number,
     radius?: number,
-    filters?: { minAge?: number; maxAge?: number; interests?: string[] }
+    filters?: { minAge?: number; maxAge?: number; interests?: string[]; onlyPulse?: boolean }
   ) =>
     apiClient.get('/users/nearby', {
       params: {
@@ -35,6 +35,7 @@ export const usersAPI = {
         minAge: filters?.minAge,
         maxAge: filters?.maxAge,
         interests: filters?.interests?.join(','),
+        onlyPulse: filters?.onlyPulse ? 'true' : undefined,
       },
     }),
   getProfile: (id: string) => apiClient.get(`/users/profile/${id}`),
@@ -53,6 +54,13 @@ export const usersAPI = {
   updateVisibility: (isVisible: boolean) =>
     apiClient.patch('/users/visibility', { is_visible: isVisible }),
   getMatches: () => apiClient.get('/users/matches'),
+  startPulse: (minutes?: number) =>
+    apiClient.post<{ available_until: string }>('/users/pulse/start', minutes ? { minutes } : {}),
+  stopPulse: () => apiClient.post<{ available_until: null }>('/users/pulse/stop'),
+  blockUser: (id: string) => apiClient.post(`/users/block/${id}`),
+  unblockUser: (id: string) => apiClient.delete(`/users/block/${id}`),
+  reportUser: (id: string, reason: string, details?: string) =>
+    apiClient.post(`/users/report/${id}`, { reason, details }),
 };
 
 export const messagesAPI = {
@@ -83,4 +91,5 @@ export const aiAPI = {
     ),
 };
 
+export { apiClient };
 export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';

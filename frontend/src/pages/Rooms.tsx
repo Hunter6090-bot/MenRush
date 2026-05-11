@@ -48,8 +48,11 @@ export const Rooms: React.FC = () => {
   useEffect(() => {
     roomsAPI
       .getRooms()
-      .then((r) => setRooms(r.data))
-      .catch(() => {})
+      .then((r) => {
+        const list = Array.isArray(r.data) ? r.data : (r.data?.rooms ?? []);
+        setRooms(list);
+      })
+      .catch(() => setRooms([]))
       .finally(() => setLoading(false));
   }, []);
 

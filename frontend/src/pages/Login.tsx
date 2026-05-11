@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
 import { CoinFlip } from '../components/CoinFlip';
+import { RandomBackground } from '../components/RandomBackground';
+import { PulseRing } from '../components/PulseRing';
 
 const cityMoments = [
   { place: 'Shoreditch', detail: '4 people nearby right now' },
@@ -35,16 +37,16 @@ export const Login = () => {
 
   return (
     <div
-      className="relative min-h-dvh overflow-hidden bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: 'url(/bg2.png)' }}
+      className="relative min-h-dvh overflow-hidden"
     >
+      <RandomBackground />
       <div className="absolute inset-0 bg-black/60" />
 
       <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-7xl items-center px-5 py-8 sm:px-8 lg:px-10">
         <div className="grid w-full gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
           <section className="max-w-2xl self-center">
             <Link to="/" className="inline-block hover:opacity-80 transition-opacity">
-              <CoinFlip qrValue="https://nearnow.app" sizeClass="h-40" />
+              <CoinFlip qrValue="https://menrush.com" sizeClass="h-24" noFlip />
             </Link>
 
             <h1 className="mt-7 max-w-3xl text-5xl font-black leading-[0.95] tracking-[-0.05em] text-[#F0E0C0] sm:text-6xl lg:text-7xl">
@@ -113,7 +115,7 @@ export const Login = () => {
                   disabled={loading}
                   className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:from-[#D4943B] hover:to-[#9B5523] hover:shadow-glow-blue active:scale-[0.98] disabled:opacity-50"
                 >
-                  {loading ? <><Spinner /> Signing in…</> : 'Sign In'}
+                  {loading ? <><PulseRing size={16} /> Signing in…</> : 'Sign In'}
                 </button>
               </form>
 
@@ -137,9 +139,3 @@ const AlertIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const Spinner = () => (
-  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-  </svg>
-);

@@ -8,30 +8,39 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
 import messageRoutes from './routes/messages';
-import aiRoutes from './routes/ai';
 import roomRoutes from './routes/rooms';
+import pushRoutes, { webpush } from './routes/push';
+import pulseRoutes from './routes/pulse';
+import verifyRoutes from './routes/verify';
+import { startPulseExpiryCron } from './services/pulse.service';
 import { errorHandler } from './middleware/auth';
 import { authService } from './services/auth.service';
 import { userService } from './services/user.service';
 import { roomService } from './services/room.service';
+import { query } from './db';
 
 dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
+
+const allowedOrigins = (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+  if (!origin || /^http:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true);
+  const explicit = process.env.FRONTEND_URL;
+  if (explicit && origin === explicit) return callback(null, true);
+  callback(new Error('Not allowed by CORS'));
+};
+
 const io: any = new SocketIOServer(server, {
-  cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-    credentials: true,
-  },
+  cors: { origin: allowedOrigins, credentials: true },
 });
 
 // Middleware
 app.use(helmet());
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true,
-}));
+app.use(cors({ origin: allowedOrigins, credentials: true }));
+// Stripe Identity webhook needs the RAW request body for signature verification.
+// Mount /api/verify BEFORE express.json() so the inner express.raw() middleware sees the raw bytes.
+app.use('/api/verify', verifyRoutes);
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.set('io', io);
@@ -40,8 +49,27 @@ app.set('io', io);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/messages', messageRoutes);
-app.use('/api/ai', aiRoutes);
 app.use('/api/rooms', roomRoutes);
+app.use('/api/push', pushRoutes);
+app.use('/api/pulse', pulseRoutes);
+
+// Waitlist
+app.post('/api/waitlist', async (req, res) => {
+  const { email } = req.body ?? {};
+  if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    return res.status(400).json({ error: 'A valid email address is required.' });
+  }
+  try {
+    await query(
+      `INSERT INTO waitlist (email) VALUES ($1) ON CONFLICT (email) DO NOTHING`,
+      [email.trim().toLowerCase()],
+    );
+    return res.json({ success: true, message: "You're on the list!" });
+  } catch (err) {
+    console.error('Waitlist insert error:', err);
+    return res.status(500).json({ error: 'Could not save your email. Please try again.' });
+  }
+});
 
 // Health check
 app.get('/health', (req, res) => {
@@ -55,13 +83,57 @@ const socketToUser: Map<string, string> = new Map(); // socketId → userId
 io.on('connection', (socket: Socket) => {
   console.log('User connected:', socket.id);
 
-  socket.on('authenticate', (token: string) => {
+  socket.on('authenticate', async (token: string) => {
     try {
       const decoded = authService.verifyToken(token);
       userSockets.set(decoded.userId, socket.id);
       socketToUser.set(socket.id, decoded.userId);
-      userService.setOnlineStatus(decoded.userId, true);
+      await userService.setOnlineStatus(decoded.userId, true);
       socket.join(`user:${decoded.userId}`);
+
+      // ── Push-notify users within 5 km that someone came online ──────────
+      try {
+        const profileRes = await query(
+          `SELECT lat, lng FROM profiles WHERE user_id = $1 AND lat IS NOT NULL AND lng IS NOT NULL`,
+          [decoded.userId],
+        );
+        if (profileRes.rows.length > 0) {
+          const { lat, lng } = profileRes.rows[0];
+          // Find nearby users (excluding self) who have push subscriptions
+          const nearbyRes = await query(
+            `SELECT ps.endpoint, ps.p256dh, ps.auth,
+                    ST_Distance(p.location::geography,
+                                ST_MakePoint($2, $1)::geography) / 1000 AS distance_km
+             FROM profiles p
+             JOIN push_subscriptions ps ON ps.user_id = p.user_id
+             WHERE p.user_id != $3
+               AND p.location IS NOT NULL
+               AND ST_DWithin(p.location::geography, ST_MakePoint($2, $1)::geography, 5000)`,
+            [lat, lng, decoded.userId],
+          );
+
+          const nameRes = await query(`SELECT name FROM users WHERE id = $1`, [decoded.userId]);
+          const comingUserName: string = nameRes.rows[0]?.name ?? 'Someone';
+
+          for (const row of nearbyRes.rows) {
+            const subscription = {
+              endpoint: row.endpoint,
+              keys: { p256dh: row.p256dh, auth: row.auth },
+            };
+            const dist = parseFloat(row.distance_km).toFixed(1);
+            webpush.sendNotification(
+              subscription,
+              JSON.stringify({
+                title: 'Someone is nearby',
+                body:  `${comingUserName} is ${dist}km away`,
+                icon:  '/logo.png',
+              }),
+            ).catch(() => {}); // best-effort, silently drop failures
+          }
+        }
+      } catch {
+        // push notifications are non-critical
+      }
     } catch (error) {
       socket.emit('error', 'Authentication failed');
     }
@@ -194,4 +266,5 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  startPulseExpiryCron();
 });

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { SilhouetteAvatar } from './SilhouetteAvatar';
 
 interface User {
   id: string;
@@ -27,7 +28,7 @@ export const UserCard: React.FC<UserCardProps> = ({ user }) => {
           <img src={user.photo_url} alt={user.name} className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <span className="text-6xl font-bold text-[#C4832A]/30">{user.name[0]?.toUpperCase()}</span>
+            <SilhouetteAvatar size={120} variant="card" />
           </div>
         )}
         {/* Online badge */}

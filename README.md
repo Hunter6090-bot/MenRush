@@ -1,4 +1,4 @@
-# Near&Now - Location-Based Social Discovery Platform
+# MenRush - Location-Based Social Discovery Platform
 
 A modern, full-stack MVP for discovering and messaging people nearby in real-time.
 
@@ -169,7 +169,7 @@ ORDER BY last_seen DESC
 ### Backend (Railway/Fly.io)
 ```bash
 # Build image
-docker build -t nearnow-backend ./backend
+docker build -t menrush-backend ./backend
 
 # Push to registry and deploy
 ```
@@ -182,7 +182,7 @@ vercel --prod
 ## 📝 Environment Variables
 
 ```
-DATABASE_URL=postgresql://user:pass@host:5432/nearnow
+DATABASE_URL=postgresql://user:pass@host:5432/menrush
 JWT_SECRET=your-secret-key
 PORT=3000
 NODE_ENV=production
@@ -227,7 +227,7 @@ npm run dev
 
 ### Database Migrations
 ```bash
-docker-compose exec postgres psql -U nearnow -d nearnow < database/schema.sql
+docker-compose exec postgres psql -U menrush -d menrush < database/schema.sql
 ```
 
 ## 📚 Project Structure

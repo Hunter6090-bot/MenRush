@@ -61,7 +61,7 @@ export function useWebRTC() {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      socket.emit('call:offer', { to: targetPeerId, offer });
+      socket.emit('call:initiate', { to: targetPeerId, offer });
     },
     [socket, createPC, getLocalMedia]
   );

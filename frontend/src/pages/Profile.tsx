@@ -5,13 +5,14 @@ import { useAuthStore, useLocationStore } from '../hooks/store';
 import { Layout } from '../components/Layout';
 import { UserAvatar } from '../components/UserAvatar';
 import { StatusBadge } from '../components/StatusBadge';
-import { ImageGenerator } from '../components/ImageGenerator';
+import { PulseRing } from '../components/PulseRing';
 
-const INTEREST_OPTIONS = [
-  'Travel', 'Music', 'Food', 'Sports', 'Art', 'Technology',
-  'Gaming', 'Photography', 'Fitness', 'Movies', 'Books', 'Cooking',
-  'Dancing', 'Hiking', 'Coffee', 'Fashion', 'Yoga', 'Skateboarding',
-  'Climbing', 'Cycling',
+const INTEREST_GROUPS: { label: string; tags: string[] }[] = [
+  { label: 'Position', tags: ['Top', 'Vers Top', 'Vers', 'Vers Bottom', 'Bottom', 'Side'] },
+  { label: 'Tribe', tags: ['Twink', 'Twunk', 'Otter', 'Bear', 'Cub', 'Daddy', 'Wolf', 'Jock', 'Leather', 'Rugged', 'Geek'] },
+  { label: 'Body', tags: ['Slim', 'Athletic', 'Muscular', 'Stocky', 'Chubby', 'Hairy', 'Smooth', 'Tatted'] },
+  { label: 'Looking for', tags: ['NSA', 'Hookup', 'Casual', 'Dating', 'FWB', 'Discreet', 'Hosting', 'Can Travel', 'Right Now'] },
+  { label: 'Vibe', tags: ['Kinky', 'Vanilla', 'Open', 'Sober', 'PnP-Free', 'Verified Only'] },
 ];
 
 interface ProfileData {
@@ -28,6 +29,8 @@ interface ProfileData {
   lng?: number;
   online?: boolean;
   last_seen?: string;
+  is_visible?: boolean;
+  available_until?: string | null;
   created_at?: string;
 }
 
@@ -58,6 +61,7 @@ export const Profile = () => {
       setLookingFor(d.looking_for ?? '');
       setPhotoUrl(d.photo_url ?? '');
       setInterests(d.interests ?? []);
+      if (typeof d.is_visible === 'boolean') setIsVisible(d.is_visible);
     });
   }, []);
 
@@ -134,10 +138,7 @@ export const Profile = () => {
     return (
       <Layout>
         <div className="flex items-center justify-center py-24">
-          <svg className="w-8 h-8 text-[#C4832A] animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-          </svg>
+          <PulseRing size={32} label="Loading profile" />
         </div>
       </Layout>
     );
@@ -266,14 +267,6 @@ export const Profile = () => {
           </button>
         </div>
 
-        {/* ── AI Image Generator ── */}
-        <ImageGenerator
-          onSelectImage={(dataUrl) => {
-            setPhotoUrl(dataUrl);
-            showToast('success', 'AI image set as photo — save your profile to apply it.');
-          }}
-        />
-
         {/* ── Edit form ── */}
         <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card">
           <h3 className="text-[#F0E0C0] font-semibold mb-4">Edit Profile</h3>
@@ -320,72 +313,70 @@ export const Profile = () => {
               <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">
                 Profile Photo
               </label>
-              <div className="flex gap-4 items-start">
-                <div className="flex-1">
-                  <input
-                    type="url"
-                    value={photoUrl}
-                    onChange={(e) => setPhotoUrl(e.target.value)}
-                    placeholder="https://example.com/photo.jpg"
-                    className={inputClass}
-                  />
-                  <p className="text-[10px] text-[#A89070]/60 mt-1.5 px-1">
-                    Enter a direct image URL or upload a file
-                  </p>
-                </div>
-                <div className="relative">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handlePhotoUpload}
-                    className="hidden"
-                    id="photo-upload"
-                    disabled={uploading}
-                  />
-                  <label
-                    htmlFor="photo-upload"
-                    className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-[#1E1508]/60 border border-dashed border-[#3D2B0E] hover:border-[#C4832A]/50 hover:bg-[#C4832A]/5 cursor-pointer transition-all ${
-                      uploading ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
-                  >
-                    {uploading ? (
-                      <Spinner className="w-5 h-5 text-[#C4832A]" />
-                    ) : (
-                      <UploadIcon className="w-5 h-5 text-[#A89070]" />
-                    )}
-                  </label>
-                </div>
+              <div className="flex gap-4 items-center">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoUpload}
+                  className="hidden"
+                  id="photo-upload"
+                  disabled={uploading}
+                />
+                <label
+                  htmlFor="photo-upload"
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#C4832A]/10 hover:bg-[#C4832A]/20 text-[#C4832A] text-xs font-semibold border border-[#C4832A]/30 cursor-pointer transition-all ${
+                    uploading ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {uploading ? (
+                    <Spinner className="w-4 h-4 text-[#C4832A]" />
+                  ) : (
+                    <UploadIcon className="w-4 h-4" />
+                  )}
+                  {uploading ? 'Uploading…' : 'Upload Photo'}
+                </label>
+                {photoUrl && !uploading && (
+                  <span className="text-[10px] text-[#A89070]/70">Current photo set</span>
+                )}
               </div>
+              <p className="text-[10px] text-[#A89070]/60 mt-1.5 px-1">
+                JPEG, PNG or WebP. Max 5MB.
+              </p>
             </div>
 
-            {/* Interests */}
-            <div>
-              <label className="block text-xs font-medium text-[#A89070] mb-2 uppercase tracking-wide">
-                Interests <span className="normal-case text-[#A89070]/50">({interests.length}/10)</span>
+            {/* Tags grouped by category */}
+            <div className="space-y-4">
+              <label className="block text-xs font-medium text-[#A89070] uppercase tracking-wide">
+                Your tags <span className="normal-case text-[#A89070]/50">({interests.length}/10)</span>
               </label>
-              <div className="flex flex-wrap gap-2">
-                {INTEREST_OPTIONS.map((tag) => {
-                  const active = interests.includes(tag);
-                  const maxed = interests.length >= 10 && !active;
-                  return (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => toggleInterest(tag)}
-                      disabled={maxed}
-                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-all duration-150 ${
-                        active
-                          ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
-                          : maxed
-                          ? 'bg-[#1E1508]/30 text-[#A89070]/20 border-[#3D2B0E]/30 cursor-not-allowed'
-                          : 'bg-[#1E1508]/40 text-[#A89070] border-[#3D2B0E] hover:bg-[#3D2B0E]/60 hover:text-[#F0E0C0]/80'
-                      }`}
-                    >
-                      {tag}
-                    </button>
-                  );
-                })}
-              </div>
+              {INTEREST_GROUPS.map((group) => (
+                <div key={group.label}>
+                  <p className="text-[10px] font-black text-[#A89070]/60 uppercase tracking-[.18em] mb-2">{group.label}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {group.tags.map((tag) => {
+                      const active = interests.includes(tag);
+                      const maxed = interests.length >= 10 && !active;
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => toggleInterest(tag)}
+                          disabled={maxed}
+                          className={`px-3 py-1 rounded-full text-xs font-medium border transition-all duration-150 ${
+                            active
+                              ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
+                              : maxed
+                              ? 'bg-[#1E1508]/30 text-[#A89070]/20 border-[#3D2B0E]/30 cursor-not-allowed'
+                              : 'bg-[#1E1508]/40 text-[#A89070] border-[#3D2B0E] hover:bg-[#3D2B0E]/60 hover:text-[#F0E0C0]/80'
+                          }`}
+                        >
+                          {tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
 
             <button
@@ -420,9 +411,10 @@ const UploadIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const Spinner = ({ className = '' }: { className?: string }) => (
-  <svg className={`animate-spin ${className}`} fill="none" viewBox="0 0 24 24">
-    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-  </svg>
-);
+// Local Spinner shim — wraps PulseRing so existing className w-N h-N callers still work.
+// PulseRing reads its size prop in pixels; Tailwind w-3.5/h-3.5 ≈ 14px, w-4 ≈ 16px, w-8 ≈ 32px.
+const Spinner = ({ className = '' }: { className?: string }) => {
+  const m = className.match(/w-(\d+(?:\.\d+)?)/);
+  const size = m ? Math.round(parseFloat(m[1]) * 4) : 16;
+  return <PulseRing size={size} className={className} />;
+};

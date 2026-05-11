@@ -193,13 +193,13 @@ export function VideoCallModal() {
           <div className="coin-container w-24">
             <div className="coin-inner">
               <div className="coin-face coin-front">
-                <img src="/logo.png" alt="NearNow" className="w-full h-full object-cover" />
+                <img src="/logo.png" alt="MenRush" className="w-full h-full object-cover" />
               </div>
               <div className="coin-face coin-back">
                 <div className="coin-back-face">
                   <div className="coin-back-ring">
                     <div className="coin-back-inner">
-                      <span className="coin-back-label">NearNow</span>
+                      <span className="coin-back-label">MenRush</span>
                       <div className="coin-back-divider" />
                     </div>
                   </div>

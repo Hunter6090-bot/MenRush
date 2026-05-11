@@ -78,9 +78,9 @@ export const authService = {
 
     try {
       const result = await query(
-        `INSERT INTO users (id, email, password_hash, name, age) 
-         VALUES ($1, $2, $3, $4, $5) 
-         RETURNING id, email, name, age`,
+        `INSERT INTO users (id, email, password_hash, name, age)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, email, name, age, is_verified, verification_status`,
         [id, data.email, hashedPassword, data.name, data.age]
       );
 
@@ -98,7 +98,8 @@ export const authService = {
 
   async login(data: LoginInput) {
     const result = await query(
-      `SELECT id, email, password_hash, name FROM users WHERE email = $1`,
+      `SELECT id, email, password_hash, name, is_verified, verification_status
+         FROM users WHERE email = $1`,
       [data.email]
     );
 
@@ -116,7 +117,13 @@ export const authService = {
     const token = signToken(user.id);
 
     return {
-      user: { id: user.id, email: user.email, name: user.name },
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        is_verified: user.is_verified,
+        verification_status: user.verification_status,
+      },
       token,
     };
   },

@@ -1,4 +1,4 @@
-# Near&Now - Complete Setup Guide
+# MenRush - Complete Setup Guide
 
 ## 📁 Project Structure Generated
 
@@ -86,7 +86,7 @@ npm run build
 docker-compose up -d postgres
 
 # Initialize database
-docker-compose exec postgres psql -U nearnow -d nearnow < ../database/schema.sql
+docker-compose exec postgres psql -U menrush -d menrush < ../database/schema.sql
 ```
 
 ### Start Services

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserAvatar, getPhotoUrl } from './UserAvatar';
 import { StatusBadge } from './StatusBadge';
+import { SilhouetteAvatar } from './SilhouetteAvatar';
 import { usersAPI } from '../api/client';
 
 export interface NearbyUser {
@@ -17,6 +18,7 @@ export interface NearbyUser {
   last_seen?: string;
   lat?: number;
   lng?: number;
+  available_until?: string | null;
 }
 
 interface ProfileCardProps {
@@ -75,9 +77,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <span className="text-7xl font-black text-[#C4832A]/20">
-              {user.name[0]?.toUpperCase()}
-            </span>
+            <SilhouetteAvatar size={120} variant="card" />
           </div>
         )}
 

@@ -5,15 +5,16 @@ interface CoinFlipProps {
   qrValue: string;
   sizeClass?: string;
   qrLabel?: string;
+  noFlip?: boolean;
 }
 
 /**
  * 3-D spinning coin.
- * Front  → NearNow bronze medallion (logo.png)
+ * Front  → MenRush bronze medallion (logo.png)
  * Back   → AI-generated bronze coin back (coin-back-ai.webp)
  *          with a real scannable QR code overlaid on the engraved area.
  */
-export const CoinFlip = ({ qrValue, sizeClass = 'h-40', qrLabel: _qrLabel }: CoinFlipProps) => {
+export const CoinFlip = ({ qrValue, sizeClass = 'h-40', qrLabel: _qrLabel, noFlip = false }: CoinFlipProps) => {
   const qrRef = useRef<HTMLDivElement>(null);
   const qrInstance = useRef<QRCodeStyling | null>(null);
 
@@ -72,45 +73,78 @@ export const CoinFlip = ({ qrValue, sizeClass = 'h-40', qrLabel: _qrLabel }: Coi
     qrInstance.current.append(qrRef.current);
   }, [qrValue]);
 
+  if (noFlip) {
+    return (
+      <div className={`${sizeClass}`} style={{ aspectRatio: '1 / 1' }}>
+        <img
+          src="/logo.png"
+          alt="MenRush"
+          className="h-full w-full object-contain"
+          draggable={false}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={`coin-container ${sizeClass}`} style={{ aspectRatio: '1 / 1' }}>
       <div className="coin-inner">
 
-        {/* ── FRONT — NearNow bronze medallion ── */}
+        {/* ── FRONT — MenRush bronze medallion ── */}
         <div className="coin-face coin-front">
           <img
             src="/logo.png"
-            alt="NearNow"
+            alt="MenRush"
             className="h-full w-full object-contain"
             draggable={false}
           />
         </div>
 
-        {/* ── BACK — AI-generated coin + scannable QR overlay ── */}
+        {/* ── BACK — MenRush engraved coin + scannable QR overlay ── */}
         <div className="coin-face coin-back">
-          {/* AI photo fills the entire face */}
+          {/* Coin photo fills the entire face */}
           <img
-            src="/coin-back-ai.webp"
-            alt="NearNow QR"
+            src="/coin-back-menrush.jpg"
+            alt="MenRush QR"
             className="absolute inset-0 h-full w-full object-cover rounded-full"
             draggable={false}
           />
 
-          {/* Scannable QR overlaid on the engraved square — centred, slightly above midpoint */}
+          {/* Scannable QR overlaid on the engraved square — centred, shifted up above text area */}
           <div
             className="absolute flex items-center justify-center"
             style={{
               inset: 0,
-              paddingBottom: '18%',   // shift up to sit over the engraved QR, above NEARNOW text
+              paddingBottom: '22%',   // shift up to sit over the engraved QR, above MENRUSH text
             }}
           >
             <div
               ref={qrRef}
               style={{
-                opacity: 0.82,        // semi-transparent so the engraving texture shows through
+                opacity: 0.75,
                 mixBlendMode: 'multiply',
               }}
             />
+          </div>
+
+          {/* MENRUSH text overlay — covers the NEARNOW engraving at the bottom */}
+          <div
+            className="absolute bottom-0 left-0 right-0 flex items-center justify-center"
+            style={{ paddingBottom: '10%' }}
+          >
+            <span
+              style={{
+                fontFamily: '"Georgia", "Times New Roman", serif',
+                fontWeight: 900,
+                fontSize: '0.95rem',
+                letterSpacing: '0.28em',
+                color: '#C8924A',
+                textShadow: '0 1px 3px rgba(0,0,0,0.8), 0 -1px 0 rgba(255,210,120,0.3)',
+                textTransform: 'uppercase',
+              }}
+            >
+              MENRUSH
+            </span>
           </div>
         </div>
 

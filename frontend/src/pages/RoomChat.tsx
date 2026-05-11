@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { roomsAPI } from '../api/client';
 import { useSocket } from '../hooks/useSocket';
 import { useAuthStore } from '../hooks/store';
+import { PulseRing } from '../components/PulseRing';
 
 interface RoomMessage {
   id?: string;
@@ -123,23 +124,23 @@ export const RoomChat: React.FC = () => {
     };
 
     const onTyping = ({
-      room_id,
-      user_id,
+      roomId: incomingRoomId,
+      userId,
       user_name,
       typing,
     }: {
-      room_id: string;
-      user_id: string;
+      roomId: string;
+      userId: string;
       user_name: string;
       typing: boolean;
     }) => {
-      if (room_id !== roomId || user_id === user?.id) return;
+      if (incomingRoomId !== roomId || userId === user?.id) return;
       setTypingUsers((prev) => {
         const next = { ...prev };
         if (typing) {
-          next[user_id] = user_name;
+          next[userId] = user_name;
         } else {
-          delete next[user_id];
+          delete next[userId];
         }
         return next;
       });
@@ -161,7 +162,7 @@ export const RoomChat: React.FC = () => {
   // ── Typing emit ──────────────────────────────────────────────────────────
   const emitTyping = useCallback(
     (typing: boolean) => {
-      socket?.emit('room:typing', { room_id: roomId, typing });
+      socket?.emit('room:typing', { roomId, typing });
     },
     [socket, roomId]
   );
@@ -535,10 +536,7 @@ export const RoomChat: React.FC = () => {
             }}
           >
             {sending ? (
-              <svg className="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
+              <PulseRing size={16} label="Sending" />
             ) : (
               <SendIcon className="w-4 h-4 text-white" />
             )}

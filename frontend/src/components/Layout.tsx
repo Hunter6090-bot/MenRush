@@ -4,7 +4,7 @@ import { useAuthStore, useUnreadStore, useNotificationStore } from '../hooks/sto
 import { useSocket } from '../hooks/useSocket';
 import { UserAvatar } from './UserAvatar';
 import { ToastNotifications } from './ToastNotifications';
-import { CoinFlip } from './CoinFlip';
+import { FEATURES } from '../lib/featureFlags';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -60,9 +60,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     { to: '/discover', label: 'Discover', icon: CompassIcon, badge: 0 },
     { to: '/matches', label: 'Matches', icon: HeartIcon, badge: 0 },
     { to: '/conversations', label: 'Messages', icon: ChatIcon, badge: unreadCount },
-    { to: '/rooms', label: 'Rooms', icon: RoomsNavIcon, badge: 0 },
     { to: '/profile', label: 'Profile', icon: PersonIcon, badge: 0 },
   ];
+  if (FEATURES.chatRooms) {
+    navLinks.splice(3, 0, { to: '/rooms', label: 'Rooms', icon: RoomsNavIcon, badge: 0 });
+  }
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -70,16 +72,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     <div className="min-h-dvh bg-[#0D0A06] flex flex-col">
       {/* ── Top header ── */}
       <header className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center relative overflow-visible px-4 bg-[#0D0A06]/85 backdrop-blur-xl border-b border-[#3D2B0E]">
-        {/* Coin pendant — absolutely positioned, hangs below the header bar */}
+        {/* Compact brand mark — small in-bar logo (no oversized pendant on internal pages) */}
         <Link
           to="/discover"
-          className="absolute left-1/2 -translate-x-1/2 top-full -translate-y-1 z-50 hover:opacity-80 transition-opacity"
+          className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-50 hover:opacity-80 transition-opacity"
+          aria-label="MenRush home"
         >
-          <CoinFlip
-            qrValue={`https://nearnow.app/u/${user?.id ?? ''}`}
-            qrLabel={user?.name ?? 'NearNow'}
-            sizeClass="h-40"
-          />
+          <img src="/logo.png" alt="MenRush" className="w-6 h-6 rounded-full" />
         </Link>
 
         <div className="max-w-5xl mx-auto w-full flex items-center justify-between">
@@ -133,8 +132,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </header>
 
       {/* ── Page content ── */}
-      {/* pt-44: header h-14 (56px) + coin h-40 (160px) - 16px overlap = 200px ≈ pt-[200px] */}
-      <main className="flex-1 pt-[200px] pb-16 sm:pb-0">
+      <main className="flex-1 pt-16 pb-16 sm:pb-0">
         <div className="page-enter">{children}</div>
       </main>
 

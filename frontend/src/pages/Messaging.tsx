@@ -2,9 +2,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { messagesAPI, usersAPI } from '../api/client';
 import { useSocket } from '../hooks/useSocket';
-import { useAuthStore } from '../hooks/store';
+import { useAuthStore, useCallStore } from '../hooks/store';
+import { useWebRTC } from '../hooks/useWebRTC';
+import { VideoCallModal } from '../components/VideoCallModal';
 import { UserAvatar } from '../components/UserAvatar';
 import { StatusBadge } from '../components/StatusBadge';
+import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
+import { PulseRing } from '../components/PulseRing';
+import { FEATURES } from '../lib/featureFlags';
 
 interface Message {
   id?: string;
@@ -54,13 +59,15 @@ export const Messages = () => {
   const [sending, setSending] = useState(false);
   const [otherUser, setOtherUser] = useState<OtherUser | null>(null);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
-  const [videoModalOpen, setVideoModalOpen] = useState(false);
   const socket = useSocket();
   const user = useAuthStore((s) => s.user);
+  const { setCalling } = useCallStore();
+  const { startCall } = useWebRTC();
   const navigate = useNavigate();
   const bottomRef = useRef<HTMLDivElement>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const inputValueRef = useRef('');
 
   useEffect(() => {
     if (!otherId) return;
@@ -96,30 +103,33 @@ export const Messages = () => {
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    inputValueRef.current = e.target.value;
     setInput(e.target.value);
     emitTyping(true);
     if (typingTimer.current) clearTimeout(typingTimer.current);
     typingTimer.current = setTimeout(() => emitTyping(false), 2000);
   };
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || !otherId || !user) return;
+  const handleSend = async (e?: React.FormEvent | React.KeyboardEvent) => {
+    e?.preventDefault?.();
+    const current = (inputValueRef.current ?? input).trim();
+    if (!current || !otherId || !user) return;
 
     emitTyping(false);
     if (typingTimer.current) clearTimeout(typingTimer.current);
 
-    const text = input.trim();
+    inputValueRef.current = '';
     setInput('');
     setSending(true);
     inputRef.current?.focus();
 
     try {
-      const res = await messagesAPI.sendMessage(otherId, text);
+      const res = await messagesAPI.sendMessage(otherId, current);
       const saved: Message = res.data;
       setMessages((prev) => [...prev, saved]);
     } catch {
-      setInput(text);
+      inputValueRef.current = current;
+      setInput(current);
     } finally {
       setSending(false);
     }
@@ -128,7 +138,7 @@ export const Messages = () => {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend(e as unknown as React.FormEvent);
+      handleSend(e);
     }
   };
 
@@ -161,8 +171,13 @@ export const Messages = () => {
           <BackIcon className="w-5 h-5" />
         </button>
 
-        {/* Avatar + name block — centered */}
-        <div className="flex-1 flex items-center gap-3 min-w-0">
+        {/* Avatar + name block — centered, tappable to open profile */}
+        <button
+          type="button"
+          onClick={() => otherId && navigate(`/profile/${otherId}`)}
+          aria-label={otherUser ? `Open ${otherUser.name}'s profile` : 'Open profile'}
+          className="flex-1 flex items-center gap-3 min-w-0 text-left rounded-xl px-1 py-1 -mx-1 hover:bg-[#3D2B0E]/40 active:scale-[0.99] transition-all"
+        >
           {otherUser ? (
             <>
               <UserAvatar
@@ -190,28 +205,37 @@ export const Messages = () => {
               Conversation
             </p>
           )}
-        </div>
-
-        {/* Video call button */}
-        <button
-          onClick={() => setVideoModalOpen(true)}
-          aria-label="Start video call"
-          className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 active:scale-95"
-          style={{
-            background: 'linear-gradient(135deg, #C4832A, #8B4513)',
-            boxShadow: '0 2px 12px rgba(196,131,42,0.35)',
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.boxShadow =
-              '0 4px 20px rgba(196,131,42,0.55)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.boxShadow =
-              '0 2px 12px rgba(196,131,42,0.35)';
-          }}
-        >
-          <VideoIcon className="w-4 h-4 text-white" />
         </button>
+
+        {FEATURES.videoCalls && (
+          <>
+            {/* Video call button */}
+            <button
+              onClick={() => {
+                  if (otherId && otherUser?.name) {
+                    setCalling(otherId, otherUser.name);
+                    startCall(otherId, otherUser.name);
+                  }
+                }}
+              aria-label="Start video call"
+              className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 active:scale-95"
+              style={{
+                background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+                boxShadow: '0 2px 12px rgba(196,131,42,0.35)',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.boxShadow =
+                  '0 4px 20px rgba(196,131,42,0.55)';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.boxShadow =
+                  '0 2px 12px rgba(196,131,42,0.35)';
+              }}
+            >
+              <VideoIcon className="w-4 h-4 text-white" />
+            </button>
+          </>
+        )}
       </header>
 
       {/* ── Messages area ─────────────────────────────────────────────────── */}
@@ -275,17 +299,20 @@ export const Messages = () => {
                 {!isMine && (
                   <div className="w-7 flex-shrink-0 mr-2 flex items-end mb-1">
                     {showTail && (
-                      <div
-                        className="w-7 h-7 rounded-full overflow-hidden flex items-center justify-center text-xs font-semibold"
-                        style={{
-                          background: 'linear-gradient(135deg, rgba(196,131,42,0.3), rgba(196,131,42,0.1))',
-                          border: '1px solid #3D2B0E',
-                          color: '#F0E0C0',
-                          flexShrink: 0,
-                        }}
-                      >
-                        {otherUser?.name?.[0]?.toUpperCase() ?? '?'}
-                      </div>
+                      otherUser?.photo_url ? (
+                        <div
+                          className="w-7 h-7 rounded-full overflow-hidden"
+                          style={{ border: '1px solid #3D2B0E', flexShrink: 0 }}
+                        >
+                          <img
+                            src={otherUser.photo_url}
+                            alt={otherUser.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <SilhouetteAvatar size={28} variant="chat" />
+                      )
                     )}
                   </div>
                 )}
@@ -364,18 +391,6 @@ export const Messages = () => {
         }}
       >
         <form onSubmit={handleSend} className="flex items-center gap-2">
-          {/* Attachment icon */}
-          <button
-            type="button"
-            aria-label="Attach file"
-            className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150 hover:bg-[#3D2B0E]/50 active:scale-95"
-            style={{ color: '#6B5035' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#A89070')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#6B5035')}
-          >
-            <AttachIcon className="w-5 h-5" />
-          </button>
-
           {/* Text input */}
           <div className="relative flex-1">
             <input
@@ -404,18 +419,6 @@ export const Messages = () => {
             />
           </div>
 
-          {/* Emoji button */}
-          <button
-            type="button"
-            aria-label="Emoji"
-            className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150 hover:bg-[#3D2B0E]/50 active:scale-95"
-            style={{ color: '#6B5035' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#A89070')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#6B5035')}
-          >
-            <EmojiIcon className="w-5 h-5" />
-          </button>
-
           {/* Send button */}
           <button
             type="submit"
@@ -428,19 +431,7 @@ export const Messages = () => {
             }}
           >
             {sending ? (
-              <svg className="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
-                <circle
-                  className="opacity-25"
-                  cx="12" cy="12" r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8v8H4z"
-                />
-              </svg>
+              <PulseRing size={16} label="Sending" />
             ) : (
               <SendIcon className="w-4 h-4 text-white" />
             )}
@@ -448,71 +439,11 @@ export const Messages = () => {
         </form>
       </div>
 
-      {/* ── Video call modal ───────────────────────────────────────────────── */}
-      {videoModalOpen && (
-        <div
-          className="fixed inset-0 flex items-center justify-center z-50 px-6"
-          style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }}
-          onClick={() => setVideoModalOpen(false)}
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl p-8 flex flex-col items-center gap-6 animate-scale-up"
-            style={{
-              background: '#1E1508',
-              border: '1px solid #3D2B0E',
-              boxShadow: '0 24px 80px rgba(0,0,0,0.7)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Coin logo */}
-            <div className="coin-container w-20">
-              <div className="coin-inner">
-                <div className="coin-face coin-front">
-                  <img src="/logo.png" alt="NearNow" className="w-full h-full object-cover" />
-                </div>
-                <div className="coin-face coin-back">
-                  <div className="coin-back-face">
-                    <div className="coin-back-ring">
-                      <div className="coin-back-inner">
-                        <span className="coin-back-label">NearNow</span>
-                        <div className="coin-back-divider" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Text */}
-            <div className="text-center space-y-2">
-              <p
-                className="text-lg font-bold tracking-wide"
-                style={{ color: '#F0E0C0' }}
-              >
-                Video Call
-              </p>
-              <p
-                className="text-sm"
-                style={{ color: '#A89070' }}
-              >
-                Coming soon — face-to-face connections are on the way.
-              </p>
-            </div>
-
-            {/* Dismiss */}
-            <button
-              onClick={() => setVideoModalOpen(false)}
-              className="w-full py-3 rounded-xl text-sm font-semibold transition-all duration-150 active:scale-95"
-              style={{
-                background: 'linear-gradient(135deg, #C4832A, #8B4513)',
-                color: '#FFF5E6',
-                boxShadow: '0 2px 12px rgba(196,131,42,0.35)',
-              }}
-            >
-              Got it
-            </button>
-          </div>
-        </div>
+      {FEATURES.videoCalls && (
+        <>
+          {/* ── Video call modal ───────────────────────────────────────────── */}
+          <VideoCallModal />
+        </>
       )}
     </div>
   );
@@ -539,27 +470,6 @@ const VideoIcon = ({ className }: { className?: string }) => (
 const SendIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
-  </svg>
-);
-
-const AttachIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-    />
-  </svg>
-);
-
-const EmojiIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-    <circle cx="12" cy="12" r="9" />
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M8.5 14s1.5 2 3.5 2 3.5-2 3.5-2M9 9h.01M15 9h.01"
-    />
   </svg>
 );
 

@@ -1,4 +1,4 @@
-# NearNow Deployment Guide
+# MenRush Deployment Guide
 
 ## Prerequisites
 
@@ -47,8 +47,8 @@ PostgreSQL with PostGIS is included via `postgis/postgis:16-3.4`. Schema is auto
 1. Push repo to GitHub.
 2. New Render Blueprint → connect repo → `render.yaml` auto-configures both services and the database.
 3. After services are created, fill in the sync-false env vars:
-   - On `nearnow-backend`: `FRONTEND_URL`
-   - On `nearnow-frontend`: `VITE_API_URL`, `VITE_SOCKET_URL`
+   - On `menrush-backend`: `FRONTEND_URL`
+   - On `menrush-frontend`: `VITE_API_URL`, `VITE_SOCKET_URL`
 4. **Important:** Render's free PostgreSQL does not include PostGIS. Use **Supabase** or **Neon** for the database and set `DATABASE_URL` manually instead of using `fromDatabase`.
 
 ---

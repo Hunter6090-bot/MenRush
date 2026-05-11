@@ -66,7 +66,7 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
 
 router.get('/nearby', async (req: AuthRequest, res: Response) => {
   try {
-    const { lat, lng, radius, minAge, maxAge, interests } = req.query;
+    const { lat, lng, radius, minAge, maxAge, interests, onlyPulse } = req.query;
 
     const locationData = LocationSchema.parse({
       lat: parseFloat(lat as string),
@@ -77,6 +77,7 @@ router.get('/nearby', async (req: AuthRequest, res: Response) => {
       minAge: minAge ? parseInt(minAge as string) : undefined,
       maxAge: maxAge ? parseInt(maxAge as string) : undefined,
       interests: (interests as string)?.split(',').filter(Boolean),
+      onlyPulse: onlyPulse === 'true' || onlyPulse === '1',
     };
 
     const users = await userService.getNearbyUsers(
@@ -181,6 +182,77 @@ router.patch('/visibility', async (req: AuthRequest, res: Response) => {
     const { is_visible } = parsed.data;
     await userService.updateVisibility(req.userId!, is_visible);
     res.json({ is_visible });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+const PulseStartSchema = z.object({
+  minutes: z.number().int().min(5).max(480).optional(),
+});
+
+router.post('/pulse/start', async (req: AuthRequest, res: Response) => {
+  const parsed = PulseStartSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.errors[0].message });
+  }
+  try {
+    const availableUntil = await userService.startPulse(req.userId!, parsed.data.minutes ?? 90);
+    if (!availableUntil) {
+      return res.status(400).json({ error: 'Share your location before starting Pulse.' });
+    }
+    res.json({ available_until: availableUntil });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/pulse/stop', async (req: AuthRequest, res: Response) => {
+  try {
+    await userService.stopPulse(req.userId!);
+    res.json({ available_until: null });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/block/:id', async (req: AuthRequest, res: Response) => {
+  if (req.params.id === req.userId) {
+    return res.status(400).json({ error: 'Cannot block yourself.' });
+  }
+  try {
+    await userService.blockUser(req.userId!, req.params.id);
+    res.json({ blocked: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete('/block/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    await userService.unblockUser(req.userId!, req.params.id);
+    res.json({ blocked: false });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+const ReportSchema = z.object({
+  reason: z.enum(['spam', 'harassment', 'fake_profile', 'inappropriate_content', 'underage', 'other']),
+  details: z.string().max(1000).optional(),
+});
+
+router.post('/report/:id', async (req: AuthRequest, res: Response) => {
+  if (req.params.id === req.userId) {
+    return res.status(400).json({ error: 'Cannot report yourself.' });
+  }
+  const parsed = ReportSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.errors[0].message });
+  }
+  try {
+    await userService.reportUser(req.userId!, req.params.id, parsed.data.reason, parsed.data.details);
+    res.json({ reported: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
