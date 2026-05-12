@@ -2,7 +2,21 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSocket } from './useSocket';
 import { useCallStore } from './store';
 
-const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+// Default to Google's public STUN. For production reliability behind strict
+// NATs, set VITE_TURN_URL (+ optional username/credential) and we'll add it
+// to the ICE list.
+const ICE_SERVERS: RTCIceServer[] = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  ...(import.meta.env.VITE_TURN_URL
+    ? [
+        {
+          urls: import.meta.env.VITE_TURN_URL as string,
+          username: import.meta.env.VITE_TURN_USERNAME as string | undefined,
+          credential: import.meta.env.VITE_TURN_CREDENTIAL as string | undefined,
+        },
+      ]
+    : []),
+];
 
 export function useWebRTC() {
   const socket = useSocket();

@@ -28,25 +28,36 @@ export const roomService = {
     const id = uuidv4();
     const maxMembers = data.max_members ?? 50;
 
+    const values: any[] = [
+      id,
+      data.name,
+      data.description ?? null,
+      data.avatar_url ?? null,
+      userId,
+      data.is_location_based ?? false,
+      maxMembers,
+    ];
+
+    // Push lat/lng a single time and reuse the same placeholders for both the
+    // PostGIS location column and the raw lat/lng columns. Avoids duplicating
+    // the same values into separate $N slots.
     let locationExpr = 'NULL';
-    const values: any[] = [id, data.name, data.description ?? null, data.avatar_url ?? null, userId, data.is_location_based ?? false, maxMembers];
+    let latPlaceholder: string = 'NULL';
+    let lngPlaceholder: string = 'NULL';
 
     if (data.is_location_based && data.lat !== undefined && data.lng !== undefined) {
-      // lat = $8, lng = $9
       values.push(data.lat, data.lng);
-      locationExpr = `ST_MakePoint($${values.length}, $${values.length - 1})`;
+      const latIdx = values.length - 1;
+      const lngIdx = values.length;
+      latPlaceholder = `$${latIdx}`;
+      lngPlaceholder = `$${lngIdx}`;
+      // ST_MakePoint takes longitude FIRST.
+      locationExpr = `ST_MakePoint(${lngPlaceholder}, ${latPlaceholder})::geography`;
     }
-
-    const latVal = (data.is_location_based && data.lat !== undefined) ? data.lat : null;
-    const lngVal = (data.is_location_based && data.lng !== undefined) ? data.lng : null;
-    values.push(latVal, lngVal);
-
-    const latIdx = values.length - 1;
-    const lngIdx = values.length;
 
     const result = await query(
       `INSERT INTO rooms (id, name, description, avatar_url, created_by, is_location_based, max_members, location, lat, lng, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, ${locationExpr}, $${latIdx}, $${lngIdx}, NOW(), NOW())
+       VALUES ($1, $2, $3, $4, $5, $6, $7, ${locationExpr}, ${latPlaceholder}, ${lngPlaceholder}, NOW(), NOW())
        RETURNING id, name, description, avatar_url, created_by, is_location_based, max_members, lat, lng, created_at`,
       values
     );

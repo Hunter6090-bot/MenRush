@@ -148,7 +148,8 @@ export const Register = () => {
                 type="text"
                 value={form.displayName}
                 onChange={setField('displayName')}
-                placeholder=""
+                placeholder="e.g. Jamie"
+                aria-label="Display name"
                 required
                 minLength={2}
                 maxLength={24}
@@ -165,7 +166,8 @@ export const Register = () => {
                 type="email"
                 value={form.email}
                 onChange={setField('email')}
-                placeholder=""
+                placeholder="you@example.com"
+                aria-label="Email address"
                 required
                 className={inputClass}
               />
@@ -179,6 +181,7 @@ export const Register = () => {
                   type="date"
                   value={form.dob}
                   onChange={setField('dob')}
+                  aria-label="Date of birth"
                   required
                   className={inputClass}
                 />

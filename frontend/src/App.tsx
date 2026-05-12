@@ -3,11 +3,14 @@ import { ComingSoon } from './pages/ComingSoon';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Discover } from './pages/Discover';
+import { Stream } from './pages/Stream';
 import { Profile } from './pages/Profile';
 import { ProfileView } from './pages/ProfileView';
+import { Albums } from './pages/Albums';
 import { Matches } from './pages/Matches';
 import { Terms } from './pages/Terms';
 import { Privacy } from './pages/Privacy';
+import { Cookies } from './pages/Cookies';
 import { Contact } from './pages/Contact';
 import { Conversations } from './pages/Conversations';
 import { Messages } from './pages/Messaging';
@@ -80,13 +83,16 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/privacy" element={<Privacy />} />
+        <Route path="/cookies" element={<Cookies />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/verify" element={<ProtectedRoute><Verify /></ProtectedRoute>} />
         <Route path="/verify/pending" element={<ProtectedRoute><VerifyPending /></ProtectedRoute>} />
         <Route path="/verify/rejected" element={<ProtectedRoute><VerifyRejected /></ProtectedRoute>} />
         <Route path="/discover" element={<RequireVerified><Discover /></RequireVerified>} />
+        <Route path="/stream" element={<RequireVerified><Stream /></RequireVerified>} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         <Route path="/profile/:id" element={<RequireVerified><ProfileView /></RequireVerified>} />
+        <Route path="/albums" element={<ProtectedRoute><Albums /></ProtectedRoute>} />
         <Route path="/matches" element={<RequireVerified><Matches /></RequireVerified>} />
         <Route path="/conversations" element={<RequireVerified><Conversations /></RequireVerified>} />
         <Route path="/messages/:otherId" element={<RequireVerified><Messages /></RequireVerified>} />

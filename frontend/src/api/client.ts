@@ -63,12 +63,59 @@ export const usersAPI = {
     apiClient.post(`/users/report/${id}`, { reason, details }),
 };
 
+export type MediaKind = 'image' | 'audio';
+
+export interface MessageDTO {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  message: string;
+  created_at: string;
+  sender_name?: string;
+  media_type: MediaKind | null;
+  media_url: string | null;
+  audio_duration_ms: number | null;
+  is_disappearing: boolean;
+  expires_at: string | null;
+  viewed_at: string | null;
+  /** Server-side flag — true when a disappearing message's burn window has elapsed. */
+  expired: boolean;
+}
+
+export interface SendMediaOptions {
+  kind: MediaKind;
+  caption?: string;
+  /** Defaults to true for images, ignored for audio. */
+  disappearing?: boolean;
+  /** Duration in ms — required for voice notes. */
+  durationMs?: number;
+}
+
 export const messagesAPI = {
   sendMessage: (receiver_id: string, message: string) =>
-    apiClient.post('/messages', { receiver_id, message }),
+    apiClient.post<MessageDTO>('/messages', { receiver_id, message }),
   getConversation: (otherId: string) =>
-    apiClient.get(`/messages/conversation/${otherId}`),
+    apiClient.get<MessageDTO[]>(`/messages/conversation/${otherId}`),
   getConversations: () => apiClient.get('/messages/conversations'),
+  sendMedia: (receiver_id: string, file: File | Blob, opts: SendMediaOptions) => {
+    const fd = new FormData();
+    fd.append('receiver_id', receiver_id);
+    fd.append('kind', opts.kind);
+    if (opts.caption) fd.append('caption', opts.caption);
+    if (opts.disappearing != null) fd.append('disappearing', String(opts.disappearing));
+    if (opts.durationMs != null) fd.append('duration_ms', String(Math.round(opts.durationMs)));
+    // Blobs from MediaRecorder don't have a filename — give them one so multer is happy.
+    const filename =
+      file instanceof File
+        ? file.name
+        : `${opts.kind}-${Date.now()}.${opts.kind === 'audio' ? 'webm' : 'jpg'}`;
+    fd.append('media', file, filename);
+    return apiClient.post<MessageDTO>('/messages/media', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  markViewed: (messageId: string) =>
+    apiClient.post<MessageDTO>(`/messages/${messageId}/view`),
 };
 
 export const roomsAPI = {
@@ -93,6 +140,108 @@ export type ContactSubmitPayload = {
 export const contactAPI = {
   submit: (data: ContactSubmitPayload) =>
     apiClient.post<{ success: boolean; message: string }>('/contact', data),
+};
+
+// ── Mood ──────────────────────────────────────────────────────────────────
+// Mirrors backend MOOD_VALUES. Auto-expires server-side after 6h.
+export type Mood =
+  | 'roaming'
+  | 'looking'
+  | 'down_to_chat'
+  | 'dont_talk_just_watch'
+  | 'at_a_bar'
+  | 'hosting'
+  | 'travelling';
+
+export const MOOD_LABELS: Record<Mood, string> = {
+  roaming: 'Roaming',
+  looking: 'Looking',
+  down_to_chat: 'Down to Chat',
+  dont_talk_just_watch: "Don't Talk, Just Watch",
+  at_a_bar: 'At a Bar',
+  hosting: 'Hosting',
+  travelling: 'Travelling',
+};
+
+export const profileMetaAPI = {
+  getMood: () =>
+    apiClient.get<{ mood: Mood | null; mood_set_at: string | null }>('/profile-meta/mood'),
+  setMood: (mood: Mood | null) =>
+    apiClient.post<{ mood: Mood | null; mood_set_at: string | null }>('/profile-meta/mood', { mood }),
+  getGhost: () => apiClient.get<{ is_ghost: boolean }>('/profile-meta/ghost'),
+  setGhost: (is_ghost: boolean) =>
+    apiClient.post<{ is_ghost: boolean }>('/profile-meta/ghost', { is_ghost }),
+};
+
+// ── Albums ────────────────────────────────────────────────────────────────
+export interface AlbumDTO {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  is_locked: boolean;
+  cover_url: string | null;
+  photo_count: number;
+  created_at: string;
+  updated_at: string;
+  /** Present only when listing someone else's albums via /albums/user/:id. */
+  unlocked?: boolean;
+}
+
+export interface AlbumPhotoDTO {
+  id: string;
+  photo_url: string;
+  position: number;
+  created_at: string;
+}
+
+export const albumsAPI = {
+  listMine: () =>
+    apiClient.get<{ albums: AlbumDTO[]; photo_total: number; free_cap: number }>('/albums/mine'),
+  create: (data: { name: string; description?: string; is_locked?: boolean }) =>
+    apiClient.post<AlbumDTO>('/albums', data),
+  remove: (albumId: string) => apiClient.delete<{ deleted: true }>(`/albums/${albumId}`),
+  listPhotos: (albumId: string) =>
+    apiClient.get<{ photos: AlbumPhotoDTO[]; unlocked: boolean; locked: boolean }>(
+      `/albums/${albumId}/photos`,
+    ),
+  upload: (albumId: string, file: File) => {
+    const fd = new FormData();
+    fd.append('photo', file);
+    return apiClient.post<{ photo_url: string }>(`/albums/${albumId}/upload`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  listForUser: (userId: string) =>
+    apiClient.get<{ albums: AlbumDTO[] }>(`/albums/user/${userId}`),
+  grant: (albumId: string, viewerId: string) =>
+    apiClient.post<{ granted: true }>(`/albums/${albumId}/grant`, { viewer_id: viewerId }),
+  revoke: (albumId: string, viewerId: string) =>
+    apiClient.delete<{ granted: false }>(`/albums/${albumId}/grant/${viewerId}`),
+};
+
+// ── Events (After Hours) ──────────────────────────────────────────────────
+export interface EventDTO {
+  id: string;
+  name: string;
+  description: string | null;
+  avatar_url: string | null;
+  created_by: string;
+  starts_at: string | null;
+  ends_at: string | null;
+  venue_name: string | null;
+  lat: number | null;
+  lng: number | null;
+  member_count: number;
+  distance_m: number | null;
+  is_live: boolean;
+}
+
+export const eventsAPI = {
+  getNearby: (lat: number, lng: number, radiusKm?: number, limit?: number) =>
+    apiClient.get<EventDTO[]>('/events/nearby', {
+      params: { lat, lng, radius: radiusKm, limit },
+    }),
 };
 
 export const aiAPI = {

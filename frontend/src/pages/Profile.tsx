@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { usersAPI } from '../api/client';
+import { Link, useNavigate } from 'react-router-dom';
+import { usersAPI, profileMetaAPI, Mood } from '../api/client';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { Layout } from '../components/Layout';
 import { UserAvatar } from '../components/UserAvatar';
 import { StatusBadge } from '../components/StatusBadge';
 import { PulseRing } from '../components/PulseRing';
+import { MoodPicker } from '../components/MoodPicker';
+import { GhostToggle } from '../components/GhostToggle';
 
 const INTEREST_GROUPS: { label: string; tags: string[] }[] = [
   { label: 'Position', tags: ['Top', 'Vers Top', 'Vers', 'Vers Bottom', 'Bottom', 'Side'] },
@@ -47,6 +49,8 @@ export const Profile = () => {
   const [photoUrl, setPhotoUrl] = useState('');
   const [interests, setInterests] = useState<string[]>([]);
   const [isVisible, setIsVisible] = useState(true);
+  const [mood, setMood] = useState<Mood | null>(null);
+  const [isGhost, setIsGhost] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [locating, setLocating] = useState(false);
@@ -54,7 +58,7 @@ export const Profile = () => {
 
   useEffect(() => {
     usersAPI.getMe().then((r) => {
-      const d: ProfileData = r.data;
+      const d: ProfileData & { mood?: Mood | null; is_ghost?: boolean } = r.data;
       setProfile(d);
       setBio(d.bio ?? '');
       setHeadline(d.headline ?? '');
@@ -62,8 +66,34 @@ export const Profile = () => {
       setPhotoUrl(d.photo_url ?? '');
       setInterests(d.interests ?? []);
       if (typeof d.is_visible === 'boolean') setIsVisible(d.is_visible);
+      if (d.mood !== undefined) setMood(d.mood ?? null);
+      if (typeof d.is_ghost === 'boolean') setIsGhost(d.is_ghost);
     });
   }, []);
+
+  const handleMood = async (next: Mood | null) => {
+    const previous = mood;
+    setMood(next);
+    try {
+      await profileMetaAPI.setMood(next);
+      showToast('success', next ? 'Mood updated' : 'Mood cleared');
+    } catch {
+      setMood(previous);
+      showToast('error', 'Could not update mood.');
+    }
+  };
+
+  const handleGhost = async (next: boolean) => {
+    const previous = isGhost;
+    setIsGhost(next);
+    try {
+      await profileMetaAPI.setGhost(next);
+      showToast('success', next ? 'Ghost mode on — you are invisible to others.' : 'Ghost mode off.');
+    } catch {
+      setIsGhost(previous);
+      showToast('error', 'Could not toggle ghost mode.');
+    }
+  };
 
   const showToast = (type: Toast['type'], msg: string) => {
     setToast({ type, msg });
@@ -219,6 +249,50 @@ export const Profile = () => {
             {locating ? 'Locating…' : 'Update'}
           </button>
         </div>
+
+        {/* ── Mood card ── */}
+        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card">
+          <div className="flex items-end justify-between mb-3">
+            <div>
+              <p className="text-[#F0E0C0]/80 text-sm font-semibold">Mood</p>
+              <p className="text-[#A89070] text-xs mt-0.5">
+                Auto-clears in 6 hours. Shows on your card.
+              </p>
+            </div>
+            {mood && (
+              <button
+                onClick={() => handleMood(null)}
+                className="text-[10px] font-bold uppercase tracking-wider text-[#A89070] hover:text-[#C4832A] transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <MoodPicker current={mood} onSelect={handleMood} />
+        </div>
+
+        {/* ── Ghost mode card ── */}
+        <GhostToggle isGhost={isGhost} onToggle={handleGhost} premium />
+
+        {/* ── Albums card ── */}
+        <Link
+          to="/albums"
+          className="block rounded-2xl p-5 shadow-card border transition-colors hover:border-[var(--copper)]"
+          style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-default)' }}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--cream)' }}>
+                <PhotoStackIcon className="w-4 h-4" style={{ color: 'var(--copper)' }} />
+                Private albums
+              </p>
+              <p className="text-xs mt-1" style={{ color: 'var(--cream-muted)' }}>
+                6 free photos. Grant per profile. Unlimited on Premium.
+              </p>
+            </div>
+            <span className="text-[var(--copper)] text-lg" aria-hidden>›</span>
+          </div>
+        </Link>
 
         {/* ── Visibility card ── */}
         <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 flex items-center justify-between shadow-card">
@@ -402,6 +476,12 @@ const LogoutIcon = ({ className }: { className?: string }) => (
 const PinIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
     <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z" />
+  </svg>
+);
+
+const PhotoStackIcon = ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+  <svg className={className} style={style} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M4 8h12a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2v-8a2 2 0 012-2zM8 4h12a2 2 0 012 2v10" />
   </svg>
 );
 

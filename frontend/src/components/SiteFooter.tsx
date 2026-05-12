@@ -6,7 +6,7 @@ type SiteFooterProps = {
 };
 
 /**
- * Public-site footer: Contact, Privacy, Terms — MenRush brand colours.
+ * Public-site footer: Contact, Privacy, Cookies, Terms — MenRush brand colours.
  */
 export const SiteFooter: React.FC<SiteFooterProps> = ({ className = '' }) => {
   return (
@@ -30,8 +30,14 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ className = '' }) => {
         <span className="hidden text-[#3D2B0E] sm:inline" aria-hidden>
           ·
         </span>
+        <Link to="/cookies" className="transition-colors hover:text-[#c8861c]">
+          Cookie Policy
+        </Link>
+        <span className="hidden text-[#3D2B0E] sm:inline" aria-hidden>
+          ·
+        </span>
         <Link to="/terms" className="transition-colors hover:text-[#c8861c]">
-          Terms
+          Terms &amp; Conditions
         </Link>
       </nav>
     </footer>

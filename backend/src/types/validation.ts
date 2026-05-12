@@ -30,6 +30,20 @@ export const MessageSchema = z.object({
   message: z.string().min(1).max(1000),
 });
 
+// Media messages (image or audio) accept the same receiver + an optional
+// caption. The file is uploaded as multipart and validated server-side.
+export const MEDIA_KINDS = ['image', 'audio'] as const;
+export const MediaMessageFormSchema = z.object({
+  receiver_id: z.string().uuid(),
+  kind: z.enum(MEDIA_KINDS),
+  /** Optional caption when sending an image. Ignored for audio. */
+  caption: z.string().max(500).optional(),
+  /** Whether the message should burn 10s after the recipient views it. */
+  disappearing: z.coerce.boolean().optional(),
+  /** Duration in ms — required for audio kind. */
+  duration_ms: z.coerce.number().int().min(0).max(180_000).optional(),
+});
+
 export const CreateRoomSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
@@ -52,6 +66,38 @@ export const ContactFormSchema = z.object({
   message: z.string().trim().min(10, 'Message must be at least 10 characters').max(8000),
 });
 
+export const MOOD_VALUES = [
+  'roaming',
+  'looking',
+  'down_to_chat',
+  'dont_talk_just_watch',
+  'at_a_bar',
+  'hosting',
+  'travelling',
+] as const;
+
+export const MoodSchema = z.object({
+  mood: z.enum(MOOD_VALUES).nullable(),
+});
+
+export const GhostSchema = z.object({
+  is_ghost: z.boolean(),
+});
+
+export const CreateAlbumSchema = z.object({
+  name: z.string().trim().min(1, 'Album name is required').max(80),
+  description: z.string().trim().max(500).optional(),
+  is_locked: z.boolean().optional(),
+});
+
+export const AddAlbumPhotoSchema = z.object({
+  photo_url: z.string().min(1, 'Photo URL is required'),
+});
+
+export const GrantAlbumSchema = z.object({
+  viewer_id: z.string().uuid('Invalid viewer id'),
+});
+
 export type RegisterInput = z.infer<typeof RegisterSchema>;
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type ProfileInput = z.infer<typeof ProfileSchema>;
@@ -60,3 +106,11 @@ export type MessageInput = z.infer<typeof MessageSchema>;
 export type CreateRoomInput = z.infer<typeof CreateRoomSchema>;
 export type RoomMessageInput = z.infer<typeof RoomMessageSchema>;
 export type ContactFormInput = z.infer<typeof ContactFormSchema>;
+export type Mood = (typeof MOOD_VALUES)[number];
+export type MoodInput = z.infer<typeof MoodSchema>;
+export type GhostInput = z.infer<typeof GhostSchema>;
+export type CreateAlbumInput = z.infer<typeof CreateAlbumSchema>;
+export type AddAlbumPhotoInput = z.infer<typeof AddAlbumPhotoSchema>;
+export type GrantAlbumInput = z.infer<typeof GrantAlbumSchema>;
+export type MediaKind = (typeof MEDIA_KINDS)[number];
+export type MediaMessageFormInput = z.infer<typeof MediaMessageFormSchema>;

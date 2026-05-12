@@ -15,10 +15,17 @@ export interface NearbyUser {
   interests?: string[];
   online: boolean;
   distance_km: string | number;
+  /** Bucketed/privacy-safe distance label produced by the backend, e.g. "< 300m", "1.5km". */
+  distance_label?: string;
   last_seen?: string;
   lat?: number;
   lng?: number;
   available_until?: string | null;
+  is_verified?: boolean;
+  is_pulsing?: boolean;
+  pulse_expires_at?: string | null;
+  /** Active mood (auto-expires after 6h server-side; null when unset/expired). */
+  mood?: import('../api/client').Mood | null;
 }
 
 interface ProfileCardProps {

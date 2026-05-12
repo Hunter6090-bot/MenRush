@@ -25,12 +25,17 @@ export const userService = {
           WHEN u.is_pulsing AND u.pulse_expires_at > NOW() THEN u.pulse_expires_at
           ELSE NULL
         END AS pulse_expires_at,
+        CASE
+          WHEN p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' THEN p.mood
+          ELSE NULL
+        END AS mood,
         ST_Distance(p.location, ST_MakePoint($2, $1)::geography) as distance_m
       FROM users u
       JOIN profiles p ON u.id = p.user_id
       WHERE u.id != $3
         AND ST_DWithin(p.location, ST_MakePoint($2, $1)::geography, $4)
         AND p.is_visible = true
+        AND p.is_ghost = false
         AND NOT EXISTS (
           SELECT 1 FROM blocks b
           WHERE (b.blocker_id = $3 AND b.blocked_id = u.id)
@@ -69,20 +74,53 @@ export const userService = {
 
     const result = await query(queryStr, values);
 
-    return result.rows.map((row) => ({
-      ...row,
-      distance_km: (row.distance_m / 1000).toFixed(2),
-    }));
+    return result.rows.map((row) => {
+      const km = row.distance_m / 1000;
+      // Distance bucketing — defends against precise-distance triangulation while
+      // keeping the UX feeling alive. The lat/lng fields are already snapped to
+      // 3 decimals (~110m) above; the bucket below caps how precisely a viewer
+      // can read the gap between themselves and a target on the strip card.
+      let bucketed: number;
+      let label: string;
+      if (km < 0.3) {
+        bucketed = 0.2;
+        label = '< 300m';
+      } else if (km < 1) {
+        bucketed = Math.round(km * 10) / 10; // 0.1km steps under 1km
+        label = `${Math.round(bucketed * 1000)}m`;
+      } else if (km < 5) {
+        bucketed = Math.round(km * 2) / 2; // 0.5km steps
+        label = `${bucketed.toFixed(1)}km`;
+      } else {
+        bucketed = Math.round(km); // 1km steps above 5km
+        label = `${bucketed}km`;
+      }
+      return {
+        ...row,
+        distance_km: bucketed.toFixed(2),
+        distance_label: label,
+      };
+    });
   },
 
   async getUserProfile(userId: string, includeEmail: boolean = true) {
     const emailField = includeEmail ? 'u.email, ' : '';
+    const ghostField = includeEmail ? 'p.is_ghost, ' : ''; // only expose own ghost flag
     const result = await query(
       `SELECT
         u.id, ${emailField}u.name, u.age, u.bio, u.headline, u.looking_for,
         u.photo_url, u.interests, u.created_at,
         u.is_verified, u.verification_status,
-        p.lat, p.lng, p.online, p.last_seen, p.is_visible, p.available_until
+        p.lat, p.lng, p.online, p.last_seen, p.is_visible, p.available_until,
+        ${ghostField}
+        CASE
+          WHEN p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' THEN p.mood
+          ELSE NULL
+        END AS mood,
+        CASE
+          WHEN p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' THEN p.mood_set_at
+          ELSE NULL
+        END AS mood_set_at
        FROM users u
        LEFT JOIN profiles p ON u.id = p.user_id
        WHERE u.id = $1`,
