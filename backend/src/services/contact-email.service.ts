@@ -1,5 +1,9 @@
-import nodemailer from 'nodemailer';
 import type { ContactFormInput } from '../types/validation';
+import {
+  getMailer,
+  getMailerFromAddress,
+  MailerNotConfiguredError,
+} from './mailer.service';
 
 const ENQUIRY_LABEL: Record<ContactFormInput['enquiryType'], string> = {
   general: 'General',
@@ -17,26 +21,16 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-export class ContactEmailNotConfiguredError extends Error {
-  constructor() {
-    super('contact_email_not_configured');
-    this.name = 'ContactEmailNotConfiguredError';
-  }
-}
+/**
+ * Re-exported so existing callers (routes/contact.ts) keep working while the
+ * underlying mailer is shared with the drip campaign.
+ */
+export const ContactEmailNotConfiguredError = MailerNotConfiguredError;
 
 export async function sendContactInquiryEmail(data: ContactFormInput): Promise<void> {
-  const host = process.env.ZOHO_SMTP_HOST || 'smtp.zoho.com';
-  const port = parseInt(process.env.ZOHO_SMTP_PORT || '587', 10);
-  const secure = process.env.ZOHO_SMTP_SECURE === 'true' || port === 465;
-  const user = (process.env.ZOHO_SMTP_USER || '').trim();
-  const pass = (process.env.ZOHO_SMTP_PASS || '').trim();
-
-  if (!user || !pass) {
-    throw new ContactEmailNotConfiguredError();
-  }
-
+  const transporter = getMailer();
   const to = (process.env.CONTACT_TO_EMAIL || 'privacy@menrush.com').trim();
-  const from = (process.env.CONTACT_FROM_EMAIL || user).trim();
+  const from = getMailerFromAddress();
   const label = ENQUIRY_LABEL[data.enquiryType];
 
   const textBody = [
@@ -52,13 +46,6 @@ export async function sendContactInquiryEmail(data: ContactFormInput): Promise<v
     <hr style="border:none;border-top:1px solid #ccc;margin:16px 0" />
     <pre style="font-family:system-ui,sans-serif;white-space:pre-wrap">${escapeHtml(data.message)}</pre>
   `.trim();
-
-  const transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: { user, pass },
-  });
 
   await transporter.sendMail({
     from: `"MenRush Contact" <${from}>`,
