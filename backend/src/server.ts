@@ -13,7 +13,12 @@ import pushRoutes, { webpush } from './routes/push';
 import pulseRoutes from './routes/pulse';
 import verifyRoutes from './routes/verify';
 import contactRoutes from './routes/contact';
+import albumRoutes from './routes/albums';
+import eventRoutes from './routes/events';
+import profileMetaRoutes from './routes/profile-meta';
+import dripRoutes from './routes/drip';
 import { startPulseExpiryCron } from './services/pulse.service';
+import { subscribeToWaitlist, startDripWorker } from './services/drip.service';
 import { errorHandler } from './middleware/auth';
 import { authService } from './services/auth.service';
 import { userService } from './services/user.service';
@@ -54,19 +59,29 @@ app.use('/api/rooms', roomRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/pulse', pulseRoutes);
 app.use('/api/contact', contactRoutes);
+app.use('/api/albums', albumRoutes);
+app.use('/api/events', eventRoutes);
+app.use('/api/profile-meta', profileMetaRoutes);
+app.use('/api/waitlist', dripRoutes);
 
-// Waitlist
+// Waitlist signup — POSTs to /api/waitlist land here; the dripRoutes router
+// handles the rest (unsubscribe + admin endpoints). The drip welcome email
+// becomes due as soon as the subscriber is inserted; the worker picks it up
+// on the next batch.
 app.post('/api/waitlist', async (req, res) => {
-  const { email } = req.body ?? {};
+  const { email, source } = req.body ?? {};
   if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
     return res.status(400).json({ error: 'A valid email address is required.' });
   }
   try {
-    await query(
-      `INSERT INTO waitlist (email) VALUES ($1) ON CONFLICT (email) DO NOTHING`,
-      [email.trim().toLowerCase()],
-    );
-    return res.json({ success: true, message: "You're on the list!" });
+    const result = await subscribeToWaitlist(email, typeof source === 'string' ? source : 'menrush.com');
+    return res.json({
+      success: true,
+      already_subscribed: result.alreadySubscribed,
+      message: result.alreadySubscribed
+        ? "You're already on the list."
+        : "You're on the list! Check your inbox shortly.",
+    });
   } catch (err) {
     console.error('Waitlist insert error:', err);
     return res.status(500).json({ error: 'Could not save your email. Please try again.' });
@@ -269,4 +284,11 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   startPulseExpiryCron();
+  // Optional: in-process drip worker. Prefer an external cron in production
+  // (POST /api/waitlist/admin/run); only enable in-process when running a
+  // single backend instance without separate scheduling.
+  if (process.env.DRIP_WORKER_ENABLED === 'true') {
+    const minutes = parseInt(process.env.DRIP_WORKER_INTERVAL_MINUTES || '60', 10);
+    startDripWorker(Number.isFinite(minutes) && minutes > 0 ? minutes : 60);
+  }
 });
