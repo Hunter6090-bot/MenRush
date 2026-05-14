@@ -22,7 +22,14 @@ export const Privacy = () => {
         <h2 className="mt-8 text-lg font-semibold text-[#f0e4cc]">In the meantime</h2>
         <ul className="mt-3 list-disc space-y-2 pl-5 leading-relaxed text-[#f0e4cc]/85 marker:text-[#c8861c]">
           <li>We collect your email address (waitlist signup).</li>
-          <li>We use Zoho Campaigns to send you updates.</li>
+          <li>
+            We use Resend (resend.com), provided by Resend Inc., for transactional and marketing
+            email delivery.
+          </li>
+          <li>
+            We use Zoho Mail for our team inbox (including hello@menrush.com) and for SMTP when
+            you send a message through the contact form on this site.
+          </li>
           <li>You can unsubscribe at any time.</li>
           <li>We don&apos;t sell or share your data.</li>
         </ul>
