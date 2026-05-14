@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 
 // Submissions land in the Zoho-hosted "MenRush.com" form (powers the waitlist
 // mailing list + drip workflow). Posted as text/plain to dodge CORS preflight;
@@ -311,6 +312,16 @@ export const ComingSoon = () => {
           <ShareIcon className="h-4 w-4" />
           {copied ? 'Link copied!' : 'Share with a friend'}
         </button>
+
+        <p className="mt-8 text-center text-[10px] text-[#A89070]/80">
+          <Link to="/privacy" className="underline">
+            Privacy
+          </Link>
+          {' · '}
+          <Link to="/terms" className="underline">
+            Terms
+          </Link>
+        </p>
       </div>
     </div>
   );
