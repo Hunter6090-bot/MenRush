@@ -1,10 +1,10 @@
+import 'dotenv/config';
 import express from 'express';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import http from 'http';
 import path from 'path';
 import cors from 'cors';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
 import messageRoutes from './routes/messages';
@@ -17,6 +17,7 @@ import albumRoutes from './routes/albums';
 import eventRoutes from './routes/events';
 import profileMetaRoutes from './routes/profile-meta';
 import dripRoutes from './routes/drip';
+import adminRoutes from './routes/admin.routes';
 import { startPulseExpiryCron } from './services/pulse.service';
 import { subscribeToWaitlist, startDripWorker } from './services/drip.service';
 import { errorHandler } from './middleware/auth';
@@ -24,8 +25,9 @@ import { authService } from './services/auth.service';
 import { userService } from './services/user.service';
 import { roomService } from './services/room.service';
 import { query } from './db';
+import { assertResendMailerConfigured } from './services/mailer.service';
 
-dotenv.config();
+assertResendMailerConfigured();
 
 const app = express();
 const server = http.createServer(app);
@@ -63,6 +65,7 @@ app.use('/api/albums', albumRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/profile-meta', profileMetaRoutes);
 app.use('/api/waitlist', dripRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Waitlist signup — POSTs to /api/waitlist land here; the dripRoutes router
 // handles the rest (unsubscribe + admin endpoints). The drip welcome email

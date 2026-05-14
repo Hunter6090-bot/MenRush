@@ -1,4 +1,9 @@
 import nodemailer, { Transporter } from 'nodemailer';
+import { Resend } from 'resend';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Zoho SMTP (contact form + waitlist drip) — unchanged transport contract
+// ═══════════════════════════════════════════════════════════════════════════
 
 /**
  * Shared Zoho SMTP transport. Cached after first use so we don't pay TLS
@@ -10,8 +15,6 @@ import nodemailer, { Transporter } from 'nodemailer';
  *   ZOHO_SMTP_SECURE default false (true forces implicit TLS — only with port 465)
  *   ZOHO_SMTP_USER   required — full Zoho mailbox address
  *   ZOHO_SMTP_PASS   required — Zoho app-specific password
- *
- * Verified end-to-end 2026-05-12 via backend/scripts/test-zoho.ts --send.
  */
 
 export class MailerNotConfiguredError extends Error {
@@ -30,7 +33,6 @@ function buildKey(): string {
     process.env.ZOHO_SMTP_PORT,
     process.env.ZOHO_SMTP_SECURE,
     process.env.ZOHO_SMTP_USER,
-    // Hash via length; we don't want the secret in memory keys.
     (process.env.ZOHO_SMTP_PASS || '').length,
   ].join('|');
 }
@@ -52,7 +54,6 @@ export function getMailer(): Transporter {
     port,
     secure,
     auth: { user, pass },
-    // Keep the connection pool small but reusable across drip batches.
     pool: true,
     maxConnections: 3,
     maxMessages: 100,
@@ -70,9 +71,6 @@ export function getMailerFromAddress(): string {
   return from;
 }
 
-/**
- * Reset cached transport (useful in tests or after env hot-reload).
- */
 export function resetMailer(): void {
   if (cached) {
     try {
@@ -83,4 +81,111 @@ export function resetMailer(): void {
   }
   cached = null;
   cachedKey = '';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Resend (transactional — admin smoke test; product flows wired separately)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface SendEmailParams {
+  to: string | string[];
+  subject: string;
+  html: string;
+  text?: string;
+}
+
+export class MailerSendError extends Error {
+  constructor(
+    message: string,
+    public readonly resendMessage?: string,
+    public readonly cause?: unknown,
+  ) {
+    super(message);
+    this.name = 'MailerSendError';
+  }
+}
+
+let resendClient: Resend | null = null;
+
+function getResend(): Resend {
+  const key = process.env.RESEND_API_KEY?.trim();
+  if (!key) {
+    throw new Error(
+      '[mailer] RESEND_API_KEY is required but missing. Set it in backend/.env (see backend/.env.example).',
+    );
+  }
+  if (!resendClient) {
+    resendClient = new Resend(key);
+  }
+  return resendClient;
+}
+
+/**
+ * Call once at process startup (after dotenv) so missing RESEND_API_KEY fails
+ * fast instead of on first send.
+ */
+export function assertResendMailerConfigured(): void {
+  if (!process.env.RESEND_API_KEY?.trim()) {
+    throw new Error(
+      '[mailer] RESEND_API_KEY is required but missing. Set it in backend/.env (see backend/.env.example).',
+    );
+  }
+}
+
+function formatToForLog(to: string | string[]): string {
+  return Array.isArray(to) ? to.join(', ') : to;
+}
+
+/**
+ * Send a transactional email via Resend. Not wired into contact/drip yet —
+ * used by POST /api/admin/test-email and future flows.
+ */
+export async function sendEmail(params: SendEmailParams): Promise<{ id: string }> {
+  const from = process.env.RESEND_FROM_EMAIL?.trim();
+  const replyTo = process.env.RESEND_REPLY_TO?.trim();
+
+  if (!from) {
+    throw new Error('[mailer] RESEND_FROM_EMAIL is not set');
+  }
+  if (!replyTo) {
+    throw new Error('[mailer] RESEND_REPLY_TO is not set');
+  }
+
+  const toLog = formatToForLog(params.to);
+
+  try {
+    const { data, error } = await getResend().emails.send({
+      from,
+      to: params.to,
+      subject: params.subject,
+      html: params.html,
+      text: params.text,
+      replyTo,
+    });
+
+    if (error) {
+      const msg =
+        typeof error.message === 'string' && error.message.length > 0
+          ? error.message
+          : JSON.stringify(error);
+      console.error(`[mailer] FAILED to ${toLog}: ${msg}`);
+      throw new MailerSendError(`Resend API error: ${msg}`, msg, error);
+    }
+
+    if (!data?.id) {
+      const msg = 'Resend returned success but no message id';
+      console.error(`[mailer] FAILED to ${toLog}: ${msg}`);
+      throw new MailerSendError(msg);
+    }
+
+    console.log(`[mailer] sent ${data.id} to ${toLog} subject="${params.subject}"`);
+    return { id: data.id };
+  } catch (err) {
+    if (err instanceof MailerSendError) {
+      throw err;
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[mailer] FAILED to ${toLog}: ${msg}`);
+    throw new MailerSendError(`Resend send failed: ${msg}`, msg, err);
+  }
 }
