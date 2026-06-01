@@ -1,120 +1,112 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback, type FormEvent } from 'react';
 import { SiteFooter } from '../components/SiteFooter';
+import { BRAND_MEDALLION } from '../lib/brand';
+import {
+  IconDiscover,
+  IconMatches,
+  IconChat,
+  IconRooms,
+  IconPulse,
+} from '../components/icons';
+import type { ComponentType, SVGProps } from 'react';
 
-const LAUNCH_DATE = new Date('2026-06-01T00:00:00Z');
+const WAITLIST_API_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/waitlist`;
+const ZOHO_SUBMIT_URL =
+  'https://forms.zohopublic.com/hellomen1/form/MenRushcom/formperma/ridAzzP0GwTafugVKgaUQttHXDojK1z_jZpTDjtAor4/records';
 
 const IMAGES = [
-  // Pride parades – USA
-  'https://upload.wikimedia.org/wikipedia/commons/8/87/SF_Pride_1993.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/4/45/1991SFPrideKodak5095Gold100-2Film_0017_-_Queer_Youth_%289852371234%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/a/ae/Los_Angeles_Pride_1995_003.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/5/50/Dallas_Pride_Parade.JPG',
-  'https://upload.wikimedia.org/wikipedia/commons/8/8d/42nd_Baltimore_Gay_Pride_Block_Party.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/3/38/DC_Gay_Pride_-_Parade_-_2010-06-12_-_060_%286250148131%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/2/2d/Capital_Pride_Festival_DC_2014_%2814372375396%29.jpg',
-  // Parties & clubs
-  'https://upload.wikimedia.org/wikipedia/commons/f/fa/2022.06.10_Capital_Pride_RIOT_Official_Opening_Party%2C_Washington%2C_DC_USA_161_234257_%2852144510089%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/4/4a/2022.06.09_Capital_Pride_Rooftop_Pool_Party%2C_Washington%2C_DC_USA_160_155257_%2852137114381%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/2/2e/2021.07.05_Pool_Days%2C_Washington%2C_DC_USA_186_64261-Edit.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/8/8d/Wonderland_Houston_2013_%289164803810%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/e/e7/Milwaukee_August_2024_033_%28DIX_Milwaukee%29.jpg',
-  // Leather & bears
-  'https://upload.wikimedia.org/wikipedia/commons/d/da/WoofCamp_2014_groupshot.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/2/26/DJAAcosta01.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/2/2e/Bear_Dore_Alley.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/c/c9/Dore_Alley_Fair_%28202578729%29.jpg',
-  // Muscle & daddies
-  'https://upload.wikimedia.org/wikipedia/commons/7/70/Alex_Carneiro.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/f/f0/FantasyFest1-125.jpg',
-  // Couples & kisses
-  'https://upload.wikimedia.org/wikipedia/commons/0/04/Kiss_-_Hiro_at_the_Maritime_Hotel.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/c/cd/Gay_Couple_Savv_and_Pueppi_02.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/9/93/Coppia_al_Gay_Pride_di_Milano_2008_4_-_Foto_Giovanni_Dall%27Orto%2C_7-June-2008_3.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/e/ef/Almost_a_waltz_-_Foto_di_Giovanni_Dall%27Orto_-_5_Agosto_2011.jpg',
-  // Your photos – Sitges & events
-  '/images/photo1.png',
-  '/images/photo2.png',
-  // International
-  'https://upload.wikimedia.org/wikipedia/commons/b/be/Amsterdam_Gay_Pride_2004%2C_Canal_parade_-016.JPG',
-  'https://upload.wikimedia.org/wikipedia/commons/e/eb/Christopher_Street_Day_Karlsruhe_03_June_2023_-_036.jpg',
+  '/images/menrush/01-rooftop-skyline-bears.jpeg',
+  '/images/menrush/02-soho-night-crowd.jpeg',
+  '/images/menrush/04-leather-harness-bears.jpeg',
+  '/images/menrush/16-amsterdam-neon-night.jpeg',
+  '/images/menrush/22-daddy-twink-bar.jpeg',
+  '/images/menrush/31-london-rooftop-dusk.jpeg',
+  '/images/menrush/36-wet-street-bar-line.jpeg',
+  '/images/menrush/41-twink-jock-neon-street.jpeg',
 ];
 
-function getTimeLeft() {
-  const diff = LAUNCH_DATE.getTime() - Date.now();
-  if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
-  return {
-    days: Math.floor(diff / (1000 * 60 * 60 * 24)),
-    hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
-    minutes: Math.floor((diff / (1000 * 60)) % 60),
-    seconds: Math.floor((diff / 1000) % 60),
-  };
+function IconVideo({ size = 24, ...props }: SVGProps<SVGSVGElement> & { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden {...props}>
+      <rect x="3" y="6" width="13" height="12" rx="2" />
+      <path d="M16 10l5-3v10l-5-3z" fill="currentColor" stroke="none" />
+    </svg>
+  );
 }
 
-const features = [
+function IconVerified({ size = 24, ...props }: SVGProps<SVGSVGElement> & { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden {...props}>
+      <path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z" />
+      <polyline points="8.8 12.2 11 14.4 15.6 9.8" />
+    </svg>
+  );
+}
+
+const features: { Icon: ComponentType<SVGProps<SVGSVGElement> & { size?: number }>; title: string; desc: string }[] = [
   {
-    emoji: '📍',
-    title: 'He\'s Right There',
-    desc: 'See who\'s nearby right now. Not miles away. Not "active 3 days ago." Actually near you.',
+    Icon: IconDiscover,
+    title: "See who's near you",
+    desc: 'Live proximity. Default 5 km. Who is active right now — not three days ago.',
   },
   {
-    emoji: '🔥',
-    title: 'Likes & Matches',
-    desc: 'You both liked each other. The chat\'s open. Now stop overthinking it.',
+    Icon: IconMatches,
+    title: 'Matches',
+    desc: 'Mutual like opens chat. No queue. No waiting period.',
   },
   {
-    emoji: '💬',
-    title: 'Real-Time Chat',
-    desc: 'Talk dirty. Talk sweet. Talk now. No delays, no read receipts left on read.',
+    Icon: IconChat,
+    title: 'Real-time chat',
+    desc: 'Direct messages. One-to-one. Say something direct.',
   },
   {
-    emoji: '📹',
-    title: 'Video Calls',
-    desc: 'Face to face before face to... well. You know where this is going.',
+    Icon: IconVideo,
+    title: 'Video calls',
+    desc: 'In-app video. Dark chrome. Copper accents.',
   },
   {
-    emoji: '🎯',
-    title: 'Kink Filters',
-    desc: 'Finally filter by what you actually want. We don\'t judge. We just deliver.',
+    Icon: IconPulse,
+    title: 'Pulse',
+    desc: 'Go visible. Top of nearby lists. The radar rings mean you are live.',
   },
   {
-    emoji: '👥',
-    title: 'Group Rooms',
-    desc: 'Find your tribe. Plan your Saturday night. Or just see who else is out.',
+    Icon: IconRooms,
+    title: 'Group rooms',
+    desc: 'Location and tribe chat. Find your crowd nearby.',
   },
   {
-    emoji: '🔒',
-    title: 'Your Terms',
-    desc: 'Be seen by who you want. Ghost the rest. Zero drama, full control.',
+    Icon: IconDiscover,
+    title: 'Privacy controls',
+    desc: 'Visible or invisible. You choose who sees you.',
   },
   {
-    emoji: '✅',
-    title: 'ID Verified',
-    desc: 'Real men. Real faces. Free for everyone because trust shouldn\'t cost extra.',
+    Icon: IconVerified,
+    title: 'ID verified',
+    desc: 'Trust badge for everyone. Free — not a premium perk.',
   },
 ];
 
 const premiumFeatures = [
-  'See who already liked you',
+  'See who already signalled you',
   'Boost yourself to the top',
-  'Like as many men as you want',
+  'Signal as many men as you want',
   'Browse invisibly like a ghost with good taste',
   'Filter by body type, kinks and more',
   'Send voice notes and spicy media',
   'Full photo gallery and video intro',
-  'Access rooms others can\'t get into',
-  'Find men way beyond 5km',
-  'Know exactly when he\'s read your message',
+  "Access rooms others can't get into",
+  'Find men way beyond 5 km',
+  "Know exactly when he's read your message",
 ];
 
 export const ComingSoon = () => {
-  const [timeLeft, setTimeLeft] = useState(getTimeLeft);
   const [copied, setCopied] = useState(false);
+  const [email, setEmail] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [bgIndex] = useState(() => Math.floor(Math.random() * IMAGES.length));
-
-  useEffect(() => {
-    const id = setInterval(() => setTimeLeft(getTimeLeft()), 1000);
-    return () => clearInterval(id);
-  }, []);
 
   const handleShare = useCallback(async () => {
     try {
@@ -126,144 +118,279 @@ export const ComingSoon = () => {
     }
   }, []);
 
-  const pad = (n: number) => String(n).padStart(2, '0');
+  const handleWaitlistSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (submitting || submitted) return;
+
+      const trimmed = email.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+        setErrorMsg('Please enter a valid email address.');
+        return;
+      }
+
+      setSubmitting(true);
+      setErrorMsg(null);
+      setSuccessMsg(null);
+
+      try {
+        const response = await fetch(WAITLIST_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: trimmed, source: 'menrush.com' }),
+        });
+
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+          const message = data?.error || 'Could not join the waitlist right now. Please try again.';
+          throw new Error(message);
+        }
+
+        setSubmitted(true);
+        setSuccessMsg(
+          data?.already_subscribed
+            ? "You're already on the list. Keep an eye on your inbox."
+            : "You're on the list. Your welcome email is queued.",
+        );
+        setEmail('');
+
+        void fetch(ZOHO_SUBMIT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+          body: JSON.stringify({ Email: trimmed }),
+        }).catch(() => undefined);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Could not join the waitlist right now.';
+        setErrorMsg(message);
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [email, submitted, submitting],
+  );
 
   return (
-    <div className="relative flex min-h-dvh flex-col items-center overflow-hidden bg-[#0D0A06] text-[#F0E0C0]">
-      {/* Background image slideshow */}
+    <div className="relative flex min-h-dvh flex-col overflow-hidden bg-[#0D0A06] text-[#F0E0C0]">
       <div
         className="pointer-events-none absolute inset-0 bg-cover bg-center"
         style={{
           backgroundImage: `url('${IMAGES[bgIndex]}')`,
-          opacity: 0.6,
+          opacity: 0.46,
         }}
       />
 
-      {/* Dark overlay */}
-      <div className="pointer-events-none absolute inset-0 bg-[#0D0A06]/35" />
+      <div className="pointer-events-none absolute inset-0 bg-[#0D0A06]/50" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,#0D0A06_0%,rgba(13,10,6,0.88)_35%,rgba(13,10,6,0.42)_70%,rgba(13,10,6,0.75)_100%)]" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-72 bg-[linear-gradient(0deg,#0D0A06_0%,rgba(13,10,6,0.72)_42%,transparent_100%)]" />
 
-      {/* Background radial glow */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_40%_at_50%_20%,rgba(196,131,42,0.12),transparent)]" />
-
-      <div className="relative z-10 mx-auto flex w-full max-w-2xl flex-col items-center px-5 py-12 sm:py-20">
-
-        {/* Medallion pair — front (existing logo) + reverse (new) */}
-        <div className="mb-6 flex flex-col items-center gap-4">
-          <div className="flex items-center justify-center gap-4">
+      <header className="relative z-20 border-b border-[#3D2B0E]/70 bg-[#0D0A06]/72 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-5 sm:px-8 lg:px-10">
+          <a href="#top" className="flex items-center transition-opacity hover:opacity-85" aria-label="MenRush home">
             <img
-              src="https://menrush.com/menrush-logo.png"
-              alt="MenRush front medallion"
-              className="h-24 w-24 rounded-full object-cover sm:h-32 sm:w-32"
-              style={{ boxShadow: '0 4px 32px rgba(196,131,42,0.4)' }}
+              src={BRAND_MEDALLION}
+              alt="MenRush"
+              className="h-10 w-10 rounded-full object-cover"
+              draggable={false}
             />
-            <img
-              src="/brand/medallion-reverse.png"
-              alt="MenRush reverse medallion"
-              className="h-24 w-24 rounded-full object-cover sm:h-32 sm:w-32 animate-pulse-breathe"
-              style={{ boxShadow: '0 4px 32px rgba(196,131,42,0.55)' }}
-            />
-          </div>
-          <span className="text-xs font-medium uppercase tracking-[0.22em] text-[#A89070]">
-            Coming Soon
-          </span>
+          </a>
+          <nav className="flex items-center gap-2 text-sm font-semibold">
+            <a href="/login" className="rounded-lg border border-[#3D2B0E] bg-[#1E1508]/70 px-3.5 py-2 text-[#F0E0C0] transition-colors hover:border-[#C4832A]/50">
+              Sign in
+            </a>
+            <a href="/register" className="rounded-lg bg-[#C4832A] px-3.5 py-2 font-bold text-[#0D0A06] transition-colors hover:bg-[#D4943B]">
+              Sign up
+            </a>
+          </nav>
         </div>
+      </header>
 
-        {/* Tagline */}
-        <h1 className="mb-2 text-center text-3xl font-black leading-tight tracking-[-0.03em] sm:text-4xl">
-          <span className="bg-gradient-to-r from-[#C4832A] to-[#E8A04A] bg-clip-text text-transparent">
-            Pulse for now.
-          </span>{' '}
-          Match for later.
-        </h1>
-        <p className="mb-1 text-center text-sm font-medium text-[#A89070]">
-          See who's near you right now. No swiping, no waiting.
-        </p>
-        <p
-          className="mb-10 text-center text-[10px] font-medium uppercase tracking-[0.22em]"
-          style={{ color: 'var(--copper-dark, #8C5E1F)', fontFamily: 'var(--font-serif, Georgia)' }}
-        >
-          VIRI · HIC · NVNC — Men. Here. Now.
-        </p>
-
-        {/* Countdown */}
-        <div className="mb-10 grid w-full grid-cols-4 gap-3 sm:gap-4">
-          {[
-            { label: 'Days', value: timeLeft.days },
-            { label: 'Hours', value: timeLeft.hours },
-            { label: 'Mins', value: timeLeft.minutes },
-            { label: 'Secs', value: timeLeft.seconds },
-          ].map(({ label, value }) => (
-            <div
-              key={label}
-              className="flex flex-col items-center rounded-2xl border border-[#3D2B0E] bg-[#1E1508]/60 py-4 backdrop-blur-md"
-            >
-              <span className="text-3xl font-black tabular-nums tracking-tight text-white sm:text-4xl">
-                {pad(value)}
-              </span>
-              <span className="mt-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[#A89070]">
-                {label}
-              </span>
+      <main id="top" className="relative z-10 flex-1">
+        <section className="mx-auto grid min-h-[calc(100dvh-4rem)] w-full max-w-7xl items-center gap-10 px-5 py-10 sm:px-8 lg:grid-cols-[minmax(0,1fr)_420px] lg:px-10 lg:py-14">
+          <div className="max-w-3xl">
+            <div className="mb-8 flex items-center">
+              <img
+                src={BRAND_MEDALLION}
+                alt="MenRush"
+                className="h-20 w-20 rounded-full object-cover sm:h-24 sm:w-24"
+                draggable={false}
+              />
             </div>
-          ))}
-        </div>
 
-        {/* Waitlist form */}
-        <div className="mb-10 w-full rounded-3xl border border-[#3D2B0E] bg-[#1E1508]/60 p-6 backdrop-blur-md sm:p-8">
-          <p className="mb-4 text-center text-sm font-medium text-[#A89070]">
-            Join the waitlist. Get 30 days of Premium free when we launch.
-          </p>
-          <iframe
-            aria-label="MenRush.com"
-            frameBorder="0"
-            style={{ height: '500px', width: '100%', border: 'none' }}
-            src="https://forms.zoho.com/hellomen1/form/MenRushcom/formema/ridAzzP0GwTafugVKgaUQtHXDojK1z_jZpTDjtAor4"
-          />
-          <p className="mt-3 text-center text-xs text-[#A89070]">
-            Early members get <span className="text-[#C4832A] font-semibold">30 days Premium free</span> at launch. No card needed.
-          </p>
-        </div>
-
-        {/* Feature cards */}
-        <div className="mb-10 grid w-full grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-          {features.map(({ emoji, title, desc }) => (
-            <div
-              key={title}
-              className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508]/60 p-4 backdrop-blur-md"
-            >
-              <span className="mb-2 block text-2xl">{emoji}</span>
-              <p className="text-sm font-semibold text-[#F0E0C0]">{title}</p>
-              <p className="mt-1 text-xs leading-relaxed text-[#A89070]">{desc}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Premium section */}
-        <div className="mb-10 w-full rounded-3xl border border-[#C4832A]/30 bg-[#1E1508]/60 p-6 backdrop-blur-md sm:p-8">
-          <div className="mb-4 flex items-center justify-center gap-2">
-            <span className="text-lg">👑</span>
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#C4832A]">
-              Premium — Coming with Launch
+            <h1 className="font-display max-w-4xl text-5xl font-black leading-[0.92] tracking-normal text-[#F0E0C0] sm:text-7xl lg:text-8xl">
+              MenRush
+            </h1>
+            <p className="mt-4 text-xl font-semibold text-[#C4832A] sm:text-2xl">Men. Here. Now.</p>
+            <p className="mt-5 max-w-2xl text-base leading-8 text-[#F0E0C0]/82 sm:text-lg">
+              See who's near you right now. No swiping, no waiting. Pulse live, find rooms nearby,
+              and match when the moment is actually happening.
             </p>
+
+            <div id="waitlist" className="mt-8 max-w-2xl border-y border-[#3D2B0E]/80 bg-[#0D0A06]/42 py-5 backdrop-blur-md">
+              {submitted && successMsg ? (
+                <p className="text-base font-semibold text-[#C4832A]">{successMsg}</p>
+              ) : (
+                <form onSubmit={handleWaitlistSubmit} noValidate className="flex flex-col gap-3 sm:flex-row">
+                  <input
+                    type="email"
+                    name="Email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    required
+                    autoComplete="email"
+                    inputMode="email"
+                    aria-label="Email address"
+                    disabled={submitting}
+                    className="min-h-12 flex-1 rounded-lg border border-[#3D2B0E] bg-[#1E1508]/72 px-4 text-sm text-[#F0E0C0] placeholder:text-[#A89070]/55 focus:border-[#C4832A]/70 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/25 disabled:opacity-50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="min-h-12 rounded-lg bg-[#C4832A] px-6 text-sm font-black uppercase tracking-[0.08em] text-[#0D0A06] transition-all duration-200 hover:bg-[#E0A14A] active:scale-[0.98] disabled:opacity-50 sm:whitespace-nowrap"
+                  >
+                    {submitting ? 'Joining…' : 'Get early access'}
+                  </button>
+                </form>
+              )}
+
+              {errorMsg && <p className="mt-3 text-sm font-medium text-[#f0a07a]">{errorMsg}</p>}
+              <p className="mt-3 text-sm text-[#A89070]">
+                Early members get <span className="font-semibold text-[#C4832A]">30 days Premium free</span> at launch. No card needed.
+              </p>
+            </div>
+
+            <div className="mt-7 max-w-2xl rounded-lg border border-[#C4832A]/45 bg-[#1E1508]/68 p-5 backdrop-blur-md">
+              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#C4832A]">
+                Update · we're nearly there
+              </p>
+              <p className="mt-3 text-base leading-7 text-[#F0E0C0]/88">
+                Thank you for your patience. We're polishing a few last features so when
+                your first MenRush meet happens, it works perfectly. Hold tight — it's
+                worth the wait.
+              </p>
+
+              <div className="mt-5 border-t border-[#3D2B0E]/80 pt-4">
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#C4832A]">
+                  Beta 200 · one year Premium on us
+                </p>
+                <p className="mt-2 text-sm leading-6 text-[#F0E0C0]/82">
+                  Sign up now and you're in the draw — we'll pick{' '}
+                  <span className="font-semibold text-[#C4832A]">200 men at random</span>{' '}
+                  from the waitlist to join our Beta. At the end, Beta members answer a
+                  short feedback survey. Honest, considered answers — not blanks or
+                  keyboard mash — earn a code for{' '}
+                  <span className="font-semibold text-[#C4832A]">
+                    one full year of MenRush Premium
+                  </span>
+                  , attached to your account, to use whenever you're ready.
+                </p>
+              </div>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            {premiumFeatures.map((f) => (
-              <div key={f} className="flex items-center gap-2">
-                <span className="text-[#C4832A]">✦</span>
-                <span className="text-xs text-[#F0E0C0]/80">{f}</span>
+
+          <aside className="w-full max-w-[420px] justify-self-center lg:justify-self-end">
+            <div className="overflow-hidden rounded-[28px] border border-[#3D2B0E] bg-[#120D08]/88 p-3 shadow-[0_22px_80px_rgba(0,0,0,0.72)] backdrop-blur-xl">
+              <div className="rounded-[20px] border border-[#3D2B0E] bg-[#0D0A06]">
+                <div className="flex h-12 items-center justify-between border-b border-[#3D2B0E] px-4">
+                  <span className="text-xs font-black uppercase tracking-[0.16em] text-[#C4832A]">Nearby live</span>
+                  <span className="rounded-full bg-[#6FA85A]/16 px-2.5 py-1 text-[11px] font-bold text-[#92C47F]">24 online</span>
+                </div>
+
+                <div className="relative h-[360px] overflow-hidden bg-[#14100A]">
+                  <div className="absolute inset-0 opacity-50 [background-image:linear-gradient(rgba(196,131,42,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(196,131,42,0.12)_1px,transparent_1px)] [background-size:38px_38px]" />
+                  <div className="absolute left-1/2 top-1/2 h-44 w-44 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#C4832A]/30" />
+                  <div className="absolute left-1/2 top-1/2 h-28 w-28 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#C4832A]/40" />
+                  <span className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#F0E0C0] bg-[#C4832A] shadow-[0_0_0_10px_rgba(196,131,42,0.16)]" />
+
+                  {[
+                    { name: 'Kai', meta: '320m', x: '16%', y: '22%' },
+                    { name: 'Milo', meta: '0.8 km', x: '58%', y: '18%' },
+                    { name: 'Ash', meta: '1.2 km', x: '65%', y: '58%' },
+                    { name: 'Ren', meta: '2 km', x: '22%', y: '68%' },
+                  ].map((person) => (
+                    <div
+                      key={person.name}
+                      className="absolute flex items-center gap-2 rounded-full border border-[#3D2B0E] bg-[#1E1508]/92 py-1 pl-1 pr-3 shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
+                      style={{ left: person.x, top: person.y }}
+                    >
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#C4832A] text-xs font-black text-[#0D0A06]">
+                        {person.name[0]}
+                      </span>
+                      <span>
+                        <span className="block text-xs font-black text-[#F0E0C0]">{person.name}</span>
+                        <span className="block text-[10px] font-bold text-[#C4832A]">{person.meta}</span>
+                      </span>
+                    </div>
+                  ))}
+
+                  <button className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-[#C4832A] px-5 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#0D0A06] shadow-[0_10px_34px_rgba(196,131,42,0.32)]">
+                    <IconPulse size={18} />
+                    Pulse now
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-3 divide-x divide-[#3D2B0E] border-t border-[#3D2B0E]">
+                  {[
+                    ['8', 'Matches'],
+                    ['3', 'Rooms'],
+                    ['12', 'Messages'],
+                  ].map(([value, label]) => (
+                    <div key={label} className="px-3 py-4 text-center">
+                      <span className="block text-xl font-black text-[#F0E0C0]">{value}</span>
+                      <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.16em] text-[#A89070]">{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </aside>
+        </section>
+
+        <section id="features" className="relative z-10 border-y border-[#3D2B0E]/80 bg-[#0D0A06]/88 backdrop-blur-xl">
+          <div className="mx-auto grid w-full max-w-7xl gap-px px-5 py-4 sm:grid-cols-2 sm:px-8 lg:grid-cols-4 lg:px-10">
+            {features.map(({ Icon, title, desc }) => (
+              <div key={title} className="group flex min-h-36 flex-col justify-between border border-[#3D2B0E]/80 bg-[#1E1508]/54 p-4 transition-colors hover:border-[#C4832A]/45">
+                <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-[#C4832A]/12 text-[#C4832A]">
+                  <Icon size={22} />
+                </span>
+                <div>
+                  <p className="text-sm font-black text-[#F0E0C0]">{title}</p>
+                  <p className="mt-2 text-xs leading-relaxed text-[#A89070]">{desc}</p>
+                </div>
               </div>
             ))}
           </div>
-        </div>
+        </section>
 
-        {/* Share button */}
-        <button
-          onClick={handleShare}
-          className="relative flex items-center gap-2 rounded-full border border-[#3D2B0E] bg-[#1E1508]/60 px-5 py-2.5 text-sm font-medium text-[#A89070] backdrop-blur-md transition-all duration-200 hover:border-[#C4832A]/40 hover:text-[#F0E0C0] active:scale-[0.97]"
-        >
-          <ShareIcon className="h-4 w-4" />
-          {copied ? 'Link copied!' : 'Share with a friend'}
-        </button>
-      </div>
+        <section className="relative z-10 bg-[#0D0A06] px-5 py-12 sm:px-8 lg:px-10">
+          <div className="mx-auto grid w-full max-w-7xl gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
+            <div>
+              <p className="font-display text-3xl font-black tracking-normal text-[#F0E0C0] sm:text-4xl">Premium arrives with launch.</p>
+              <p className="mt-4 max-w-lg text-sm leading-7 text-[#A89070]">
+                The free core stays direct: see who's nearby, match, message, and join rooms.
+                Premium adds more reach, control, and signal when you want the room to notice.
+              </p>
+              <button
+                onClick={handleShare}
+                className="mt-6 flex items-center gap-2 rounded-lg border border-[#3D2B0E] bg-[#1E1508]/70 px-4 py-3 text-sm font-semibold text-[#A89070] backdrop-blur-md transition-all duration-200 hover:border-[#C4832A]/50 hover:text-[#F0E0C0] active:scale-[0.98]"
+              >
+                <ShareIcon className="h-4 w-4" />
+                {copied ? 'Link copied' : 'Share with a friend'}
+              </button>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              {premiumFeatures.map((f) => (
+                <div key={f} className="flex min-h-12 items-center gap-3 border border-[#3D2B0E]/80 bg-[#1E1508]/42 px-3 py-2">
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-[#C4832A]" />
+                  <span className="text-sm text-[#F0E0C0]/82">{f}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </main>
 
       <SiteFooter className="relative z-10 mt-auto w-full shrink-0" />
     </div>
