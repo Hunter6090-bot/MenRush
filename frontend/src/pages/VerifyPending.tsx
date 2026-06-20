@@ -4,6 +4,7 @@ import { verifyAPI } from '../api/verify';
 import { useAuthStore } from '../hooks/store';
 import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
+import { trackEventOnce } from '../observability/analytics';
 
 export const VerifyPending: React.FC = () => {
   const navigate = useNavigate();
@@ -20,18 +21,21 @@ export const VerifyPending: React.FC = () => {
         if (cancelled) return;
         const { status, is_verified } = res.data;
         if (is_verified || status === 'verified') {
+          trackEventOnce('verification_transition', { state: 'verified' }, 'verification_verified');
           stoppedRef.current = true;
           setVerified('verified', true);
           navigate('/discover');
           return;
         }
         if (status === 'rejected') {
+          trackEventOnce('verification_transition', { state: 'rejected' }, 'verification_rejected');
           stoppedRef.current = true;
           setVerified('rejected', false);
           navigate('/verify/rejected');
           return;
         }
         if (status === 'unverified') {
+          trackEventOnce('verification_transition', { state: 'reset' }, 'verification_reset');
           stoppedRef.current = true;
           setVerified('unverified', false);
           navigate('/verify');

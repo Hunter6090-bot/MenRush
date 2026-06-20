@@ -4,7 +4,8 @@ import multer from 'multer';
 import path from 'path';
 import { z } from 'zod';
 import { userService } from '../services/user.service';
-import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
+import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
 import { LocationSchema, ProfileSchema } from '../types/validation';
 
 const router = Router();
@@ -18,21 +19,18 @@ const storage = multer.diskStorage({
     cb(null, uploadsDir);
   },
   filename: (req: any, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, `profile-${req.userId}-${uniqueSuffix}${path.extname(file.originalname)}`);
+    try {
+      cb(null, safeUploadFilename('profile', req.userId, file.mimetype));
+    } catch (error) {
+      cb(error as Error, '');
+    }
   },
 });
 
 const upload = multer({ 
   storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only images are allowed'));
-    }
-  }
+  fileFilter: uploadFileFilter('profile'),
 });
 
 router.use(authMiddleware);
@@ -41,6 +39,10 @@ router.post('/photo', upload.single('photo'), async (req: AuthRequest, res: Resp
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
+    }
+    if (!(await validateFileSignature(req.file.path, req.file.mimetype))) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'File content does not match its type' });
     }
 
     const photo_url = `/uploads/profiles/${req.file.filename}`;
@@ -54,7 +56,7 @@ router.post('/photo', upload.single('photo'), async (req: AuthRequest, res: Resp
 
 router.get('/me', async (req: AuthRequest, res: Response) => {
   try {
-    const user = await userService.getUserProfile(req.userId!);
+    const user = await userService.getOwnProfile(req.userId!);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -64,14 +66,13 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.get('/nearby', async (req: AuthRequest, res: Response) => {
+router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { lat, lng, radius, minAge, maxAge, interests, onlyPulse } = req.query;
-
-    const locationData = LocationSchema.parse({
-      lat: parseFloat(lat as string),
-      lng: parseFloat(lng as string),
-    });
+    const { radius, minAge, maxAge, interests, onlyPulse } = req.query;
+    const requestedRadius = radius ? Number.parseInt(radius as string, 10) : 5;
+    if (!Number.isFinite(requestedRadius)) {
+      return res.status(400).json({ error: 'Invalid radius' });
+    }
 
     const filters = {
       minAge: minAge ? parseInt(minAge as string) : undefined,
@@ -82,9 +83,7 @@ router.get('/nearby', async (req: AuthRequest, res: Response) => {
 
     const users = await userService.getNearbyUsers(
       req.userId!,
-      locationData.lat,
-      locationData.lng,
-      radius ? parseInt(radius as string) : 5,
+      Math.min(Math.max(requestedRadius, 1), 50),
       filters
     );
 
@@ -94,9 +93,9 @@ router.get('/nearby', async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.get('/profile/:id', async (req: AuthRequest, res: Response) => {
+router.get('/profile/:id', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const user = await userService.getUserProfile(req.params.id, false);
+    const user = await userService.getPublicProfile(req.userId!, req.params.id);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -106,14 +105,13 @@ router.get('/profile/:id', async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.post('/like/:id', async (req: AuthRequest, res: Response) => {
+router.post('/like/:id', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const isMatch = await userService.likeUser(req.userId!, req.params.id);
     const io = req.app.get('io');
     
     // Get sender's name for notification
-    const sender = await userService.getUserProfile(req.userId!);
-    const senderName = sender?.name || 'Someone';
+    const senderName = await userService.getDisplayName(req.userId!) || 'Someone';
 
     if (isMatch) {
       // Notify both users about the match
@@ -131,7 +129,7 @@ router.post('/like/:id', async (req: AuthRequest, res: Response) => {
       // Notify the liked user that someone liked them
       io.to(`user:${req.params.id}`).emit('notification', {
         type: 'like',
-        message: `${senderName} liked your profile!`,
+        message: `${senderName} sent you a signal!`,
         userId: req.userId,
       });
     }
@@ -142,7 +140,7 @@ router.post('/like/:id', async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.get('/matches', async (req: AuthRequest, res: Response) => {
+router.get('/matches', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const matches = await userService.getMatches(req.userId!);
     res.json(matches);
@@ -191,7 +189,7 @@ const PulseStartSchema = z.object({
   minutes: z.number().int().min(5).max(480).optional(),
 });
 
-router.post('/pulse/start', async (req: AuthRequest, res: Response) => {
+router.post('/pulse/start', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   const parsed = PulseStartSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.errors[0].message });
@@ -207,7 +205,7 @@ router.post('/pulse/start', async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.post('/pulse/stop', async (req: AuthRequest, res: Response) => {
+router.post('/pulse/stop', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     await userService.stopPulse(req.userId!);
     res.json({ available_until: null });

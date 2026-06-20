@@ -1,7 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ComingSoon } from './pages/ComingSoon';
 import { Login } from './pages/Login';
-import { Register } from './pages/Register';
+import { ForgotPassword } from './pages/ForgotPassword';
+import { ResetPassword } from './pages/ResetPassword';
 import { Discover } from './pages/Discover';
 import { Stream } from './pages/Stream';
 import { Profile } from './pages/Profile';
@@ -12,6 +13,9 @@ import { Terms } from './pages/Terms';
 import { Privacy } from './pages/Privacy';
 import { Cookies } from './pages/Cookies';
 import { Contact } from './pages/Contact';
+import { Safety } from './pages/Safety';
+import { CommunityGuidelines } from './pages/CommunityGuidelines';
+import { Help } from './pages/Help';
 import { Conversations } from './pages/Conversations';
 import { Messages } from './pages/Messaging';
 import { Rooms } from './pages/Rooms';
@@ -21,6 +25,7 @@ import { VerifyPending } from './pages/VerifyPending';
 import { VerifyRejected } from './pages/VerifyRejected';
 import { useAuthStore } from './hooks/store';
 import { FEATURES } from './lib/featureFlags';
+import { VideoCallModal } from './components/VideoCallModal';
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
   const token = useAuthStore((s) => s.token);
@@ -41,11 +46,6 @@ function RequireVerified({ children }: { children: JSX.Element }) {
     return <Navigate to="/verify" replace />;
   }
   return children;
-}
-
-function RootRedirect() {
-  const token = useAuthStore((s) => s.token);
-  return <Navigate to={token ? '/discover' : '/login'} replace />;
 }
 
 function NotFound() {
@@ -77,14 +77,19 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<RootRedirect />} />
+        <Route path="/" element={<ComingSoon />} />
         <Route path="/coming-soon" element={<ComingSoon />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        <Route path="/register" element={<Navigate to="/coming-soon" replace />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/cookies" element={<Cookies />} />
         <Route path="/contact" element={<Contact />} />
+        <Route path="/safety" element={<Safety />} />
+        <Route path="/guidelines" element={<CommunityGuidelines />} />
+        <Route path="/help" element={<Help />} />
         <Route path="/verify" element={<ProtectedRoute><Verify /></ProtectedRoute>} />
         <Route path="/verify/pending" element={<ProtectedRoute><VerifyPending /></ProtectedRoute>} />
         <Route path="/verify/rejected" element={<ProtectedRoute><VerifyRejected /></ProtectedRoute>} />
@@ -104,6 +109,7 @@ export default function App() {
         )}
         <Route path="*" element={<NotFound />} />
       </Routes>
+      {FEATURES.videoCalls && <VideoCallModal />}
     </BrowserRouter>
   );
 }

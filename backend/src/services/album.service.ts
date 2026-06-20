@@ -1,5 +1,7 @@
 import { query } from '../db';
 import { v4 as uuidv4 } from 'uuid';
+import { accessControl, SecurityError } from '../security/access';
+import { signedMediaUrl } from '../security/media';
 
 /**
  * Private albums.
@@ -22,6 +24,12 @@ export interface AlbumRow {
   created_at: string;
   updated_at: string;
   photo_count: number;
+}
+
+function presentCover<T extends { cover_url: string | null }>(row: T, viewerId: string): T {
+  return row.cover_url
+    ? { ...row, cover_url: signedMediaUrl(row.cover_url, viewerId) }
+    : row;
 }
 
 export const albumService = {
@@ -51,7 +59,7 @@ export const albumService = {
         ORDER BY a.created_at DESC`,
       [userId]
     );
-    return res.rows;
+    return res.rows.map((row) => presentCover(row, userId));
   },
 
   /**
@@ -60,6 +68,7 @@ export const albumService = {
    * frontend whether to blur the teaser. Photos themselves require addPhoto/listPhotos.
    */
   async listAlbumsForViewer(ownerId: string, viewerId: string): Promise<Array<AlbumRow & { unlocked: boolean }>> {
+    await accessControl.assertProfileView(viewerId, ownerId);
     const res = await query(
       `SELECT a.id, a.user_id, a.name, a.description, a.is_locked, a.cover_url,
               a.created_at, a.updated_at,
@@ -75,25 +84,37 @@ export const albumService = {
         ORDER BY a.created_at DESC`,
       [ownerId, viewerId]
     );
-    return res.rows;
+    return res.rows.map((row) => {
+      if (row.is_locked && !row.unlocked) return { ...row, cover_url: null };
+      return presentCover(row, viewerId);
+    });
   },
 
-  async addPhoto(userId: string, albumId: string, photoUrl: string): Promise<void> {
+  async addPhoto(
+    userId: string,
+    albumId: string,
+    storageKey: string,
+    mimeType: string,
+  ): Promise<{ id: string; photo_url: string }> {
     const ownsRes = await query(`SELECT 1 FROM albums WHERE id = $1 AND user_id = $2`, [albumId, userId]);
     if (ownsRes.rows.length === 0) throw new Error('album_not_owned');
 
     const id = uuidv4();
+    const photoUrl = `/api/albums/media/${id}`;
     await query(
-      `INSERT INTO album_photos (id, album_id, user_id, photo_url, position)
-       VALUES ($1, $2, $3, $4,
+      `INSERT INTO album_photos (
+         id, album_id, user_id, photo_url, storage_key, mime_type, position
+       )
+       VALUES ($1, $2, $3, $4, $5, $6,
          COALESCE((SELECT MAX(position) + 1 FROM album_photos WHERE album_id = $2), 0))`,
-      [id, albumId, userId, photoUrl]
+      [id, albumId, userId, photoUrl, storageKey, mimeType]
     );
 
     await query(`UPDATE albums SET updated_at = NOW(), cover_url = COALESCE(cover_url, $2) WHERE id = $1`, [
       albumId,
       photoUrl,
     ]);
+    return { id, photo_url: signedMediaUrl(photoUrl, userId) };
   },
 
   async listPhotos(
@@ -105,6 +126,11 @@ export const albumService = {
     if (albumRes.rows.length === 0) throw new Error('album_not_found');
 
     const ownerId = albumRes.rows[0].user_id;
+    if (ownerId !== viewerId) {
+      await accessControl.assertProfileView(viewerId, ownerId);
+    } else {
+      await accessControl.requireVerified(viewerId);
+    }
     const locked = !!albumRes.rows[0].is_locked;
     const ownerView = isOwner || ownerId === viewerId;
 
@@ -129,10 +155,18 @@ export const albumService = {
       [albumId]
     );
 
-    return { photos: photosRes.rows, unlocked: true, locked };
+    return {
+      photos: photosRes.rows.map((photo) => ({
+        ...photo,
+        photo_url: signedMediaUrl(photo.photo_url, viewerId),
+      })),
+      unlocked: true,
+      locked,
+    };
   },
 
   async grantAccess(ownerId: string, albumId: string, viewerId: string): Promise<void> {
+    await accessControl.assertInteraction(ownerId, viewerId, { requireMatch: true });
     const ownsRes = await query(`SELECT 1 FROM albums WHERE id = $1 AND user_id = $2`, [albumId, ownerId]);
     if (ownsRes.rows.length === 0) throw new Error('album_not_owned');
     await query(
@@ -155,5 +189,33 @@ export const albumService = {
   async countPhotosForUser(userId: string): Promise<number> {
     const res = await query(`SELECT COUNT(*)::int AS n FROM album_photos WHERE user_id = $1`, [userId]);
     return res.rows[0]?.n ?? 0;
+  },
+
+  async getMedia(viewerId: string, photoId: string) {
+    const result = await query(
+      `SELECT p.storage_key, p.mime_type, a.user_id AS owner_id, a.is_locked,
+              EXISTS (
+                SELECT 1 FROM album_grants g
+                WHERE g.album_id = a.id AND g.viewer_id = $2
+              ) AS granted
+       FROM album_photos p
+       JOIN albums a ON a.id = p.album_id
+       WHERE p.id = $1 AND p.storage_key IS NOT NULL`,
+      [photoId, viewerId],
+    );
+    const row = result.rows[0];
+    if (!row) throw new SecurityError('media_unavailable', 404, 'Media unavailable');
+    if (row.owner_id !== viewerId) {
+      await accessControl.assertProfileView(viewerId, row.owner_id);
+      if (row.is_locked && !row.granted) {
+        throw new SecurityError('media_unavailable', 404, 'Media unavailable');
+      }
+    } else {
+      await accessControl.requireVerified(viewerId);
+    }
+    return {
+      storageKey: row.storage_key as string,
+      mimeType: row.mime_type as string,
+    };
   },
 };

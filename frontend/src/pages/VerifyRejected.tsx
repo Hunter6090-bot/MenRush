@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { verifyAPI } from '../api/verify';
 import { RandomBackground } from '../components/RandomBackground';
+import { trackEventOnce } from '../observability/analytics';
 
 const REASON_COPY: Record<string, string> = {
   document_unverified_other: "We couldn't read your ID clearly. Try again with better lighting.",
@@ -16,6 +17,10 @@ const REASON_COPY: Record<string, string> = {
 export const VerifyRejected: React.FC = () => {
   const navigate = useNavigate();
   const [reason, setReason] = useState<string | null>(null);
+
+  useEffect(() => {
+    trackEventOnce('verification_transition', { state: 'rejected_viewed' }, 'verification_rejected_viewed');
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { usersAPI } from '../api/client';
+import { EventDTO, pulseAPI, usersAPI } from '../api/client';
 import { useLocationStore } from '../hooks/store';
 import { NearbyUser } from '../components/ProfileCard';
 import { Layout } from '../components/Layout';
@@ -13,8 +13,13 @@ import { getPhotoUrl } from '../components/UserAvatar';
 import { TribePillRow } from '../components/TribePillRow';
 import { EventsRail } from '../components/EventsRail';
 import { MoodBadge } from '../components/MoodPicker';
+import { getDistanceLabel, isUserPulsing } from '../lib/discovery';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import {
+  discoveryResultBucket,
+  trackEventOnce,
+} from '../observability/analytics';
 
 const INJECT_ID = '__discover_styles__';
 if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
@@ -26,6 +31,12 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
     .user-strip-card { scroll-snap-align: start; }
     .mapboxgl-popup-content { background: transparent !important; border: none !important; padding: 0 !important; box-shadow: none !important; }
     .mapboxgl-popup-tip { display: none !important; }
+    .mapboxgl-map,
+    .mapboxgl-canvas-container,
+    .mapboxgl-canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
     .map-self-dot {
       width: 18px; height: 18px; border-radius: 50%;
       background: var(--copper);
@@ -37,6 +48,7 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
 }
 
 const RADIUS_OPTIONS = [1, 5, 10, 25, 50] as const;
+const DEFAULT_DISCOVERY_CENTER: [number, number] = [51.5136, -0.1365];
 
 export const Discover = () => {
   const [users, setUsers] = useState<NearbyUser[]>([]);
@@ -46,10 +58,12 @@ export const Discover = () => {
   const [radius, setRadius] = useState<number>(5);
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [pulseUntil, setPulseUntil] = useState<Date | null>(null);
+  const [nextPulseAllowedAt, setNextPulseAllowedAt] = useState<string | null>(null);
   const [pulseError, setPulseError] = useState('');
   const [selectedUser, setSelectedUser] = useState<NearbyUser | null>(null);
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [locationNotice, setLocationNotice] = useState('');
 
   const { lat, lng, setLocation } = useLocationStore();
   const watchIdRef = useRef<number | null>(null);
@@ -74,8 +88,18 @@ export const Discover = () => {
           tags && tags.length > 0 ? { interests: tags } : undefined,
         );
         setUsers(res.data);
+        trackEventOnce(
+          'first_discovery_load',
+          { outcome: 'succeeded', result_bucket: discoveryResultBucket(res.data.length) },
+          'first_discovery_load',
+        );
         setError('');
       } catch {
+        trackEventOnce(
+          'first_discovery_load',
+          { outcome: 'failed', result_bucket: 'unknown' },
+          'first_discovery_load',
+        );
         setError('Could not load nearby users.');
       } finally {
         setLoading(false);
@@ -84,18 +108,47 @@ export const Discover = () => {
     [],
   );
 
+  const useDiscoveryLocation = useCallback(
+    (latitude: number, longitude: number, notice = '', forceRefresh = false) => {
+      setLocation(latitude, longitude);
+      setMapCenter([latitude, longitude]);
+      setLocationNotice(notice);
+      if (forceRefresh || !hasFetchedRef.current) {
+        hasFetchedRef.current = true;
+        fetchNearbyUsers(latitude, longitude, radius, tagFilters);
+      }
+    },
+    [fetchNearbyUsers, radius, setLocation, tagFilters],
+  );
+
   useEffect(() => {
+    pulseAPI
+      .getMe()
+      .then((res) => {
+        const expiresAt = res.data?.pulse_expires_at;
+        setPulseUntil(expiresAt ? new Date(expiresAt) : null);
+        setNextPulseAllowedAt(res.data?.next_pulse_allowed_at ?? null);
+      })
+      .catch(() => {});
+
     usersAPI
       .getMe()
       .then((r) => {
-        const until = r.data?.available_until;
-        if (until) {
+        const until = r.data?.pulse_expires_at || r.data?.available_until;
+        if (until && !pulseUntil) {
           const d = new Date(until);
           if (d.getTime() > Date.now()) setPulseUntil(d);
         }
+        if (r.data?.lat != null && r.data?.lng != null && !hasFetchedRef.current) {
+          useDiscoveryLocation(
+            Number(r.data.lat),
+            Number(r.data.lng),
+            'Using your last saved location.',
+          );
+        }
       })
       .catch(() => {});
-  }, []);
+  }, [pulseUntil, useDiscoveryLocation]);
 
   useEffect(() => {
     if (!pulseUntil) return;
@@ -109,30 +162,49 @@ export const Discover = () => {
 
   useEffect(() => {
     if (!navigator.geolocation) {
+      trackEventOnce(
+        'location_permission_outcome',
+        { outcome: 'unsupported' },
+        'location_permission_outcome',
+      );
       setError('Geolocation is not supported by your browser.');
       setLoading(false);
       return;
     }
     watchIdRef.current = navigator.geolocation.watchPosition(
       ({ coords }) => {
+        trackEventOnce(
+          'location_permission_outcome',
+          { outcome: 'granted' },
+          'location_permission_outcome',
+        );
         const { latitude, longitude } = coords;
-        setLocation(latitude, longitude);
-        setMapCenter([latitude, longitude]);
-        if (!hasFetchedRef.current) {
-          hasFetchedRef.current = true;
-          fetchNearbyUsers(latitude, longitude, radius);
-        }
+        useDiscoveryLocation(latitude, longitude, '', true);
+        usersAPI.updateLocation(latitude, longitude).catch(() => {});
       },
-      () => {
-        setError('Location access denied. Please allow it in your browser settings.');
-        setLoading(false);
+      (positionError) => {
+        trackEventOnce(
+          'location_permission_outcome',
+          {
+            outcome: positionError.code === positionError.PERMISSION_DENIED ? 'denied' : 'unavailable',
+          },
+          'location_permission_outcome',
+        );
+        if (!hasFetchedRef.current) {
+          useDiscoveryLocation(
+            DEFAULT_DISCOVERY_CENTER[0],
+            DEFAULT_DISCOVERY_CENTER[1],
+            'Location off — showing Central London. Enable location for live nearby results.',
+          );
+        }
+        setError('');
       },
       { enableHighAccuracy: true, timeout: 12000 },
     );
     return () => {
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
     };
-  }, []);
+  }, [useDiscoveryLocation]);
 
   // Live proximity: refresh the nearby roster every 20s using the latest location.
   // 20s keeps "who's around right now" feeling current without thrashing the API
@@ -149,14 +221,14 @@ export const Discover = () => {
     const i = RADIUS_OPTIONS.indexOf(radius as any);
     const next = RADIUS_OPTIONS[(i + 1) % RADIUS_OPTIONS.length];
     setRadius(next);
-    if (lat && lng) fetchNearbyUsers(lat, lng, next, tagFilters);
+    if (lat != null && lng != null) fetchNearbyUsers(lat, lng, next, tagFilters);
   };
 
   const toggleTag = useCallback(
     (tag: string) => {
       setTagFilters((prev) => {
         const next = prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag];
-        if (lat && lng) fetchNearbyUsers(lat, lng, radius, next);
+        if (lat != null && lng != null) fetchNearbyUsers(lat, lng, radius, next);
         return next;
       });
     },
@@ -165,18 +237,25 @@ export const Discover = () => {
 
   const clearTags = useCallback(() => {
     setTagFilters([]);
-    if (lat && lng) fetchNearbyUsers(lat, lng, radius, []);
+    if (lat != null && lng != null) fetchNearbyUsers(lat, lng, radius, []);
   }, [lat, lng, radius, fetchNearbyUsers]);
 
   const handleStartPulse = useCallback(
     async (durationMin: 60 | 90 | 120) => {
       try {
-        const res = await usersAPI.startPulse(durationMin);
-        setPulseUntil(new Date(res.data.available_until));
+        const res = await pulseAPI.start(durationMin);
+        setPulseUntil(new Date(res.data.expires_at));
+        setNextPulseAllowedAt(null);
         setPulseError('');
-        if (lat && lng) fetchNearbyUsers(lat, lng, radius, tagFilters);
+        if (lat != null && lng != null) fetchNearbyUsers(lat, lng, radius, tagFilters);
       } catch (err: any) {
-        const msg = err?.response?.data?.error || 'Could not start Pulse.';
+        const cooldownAt = err?.response?.data?.next_pulse_allowed_at;
+        if (cooldownAt) {
+          setNextPulseAllowedAt(cooldownAt);
+        }
+        const msg = err?.response?.data?.error === 'cooldown'
+          ? 'Pulse is cooling down.'
+          : err?.response?.data?.error || 'Could not start Pulse.';
         setPulseError(msg);
         setTimeout(() => setPulseError(''), 4000);
         throw err;
@@ -187,9 +266,11 @@ export const Discover = () => {
 
   const handleStopPulse = useCallback(async () => {
     try {
-      await usersAPI.stopPulse();
+      await pulseAPI.stop();
       setPulseUntil(null);
-      if (lat && lng) fetchNearbyUsers(lat, lng, radius, tagFilters);
+      const state = await pulseAPI.getMe().catch(() => null);
+      setNextPulseAllowedAt(state?.data?.next_pulse_allowed_at ?? null);
+      if (lat != null && lng != null) fetchNearbyUsers(lat, lng, radius, tagFilters);
     } catch {
       // swallow
     }
@@ -212,6 +293,12 @@ export const Discover = () => {
   );
 
   useEffect(() => {
+    if (!selectedUser) return;
+    const fresh = users.find((user) => user.id === selectedUser.id);
+    if (fresh) setSelectedUser(fresh);
+  }, [users, selectedUser]);
+
+  useEffect(() => {
     if (tokenMissing || !mapContainerRef.current || !mapCenter) return;
 
     if (mapRef.current) {
@@ -229,7 +316,15 @@ export const Discover = () => {
       attributionControl: false,
     });
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
-    map.on('load', () => setMapLoaded(true));
+    const resizeMap = () => map.resize();
+    map.on('load', () => {
+      resizeMap();
+      setMapLoaded(true);
+    });
+    window.addEventListener('resize', resizeMap);
+    requestAnimationFrame(resizeMap);
+    window.setTimeout(resizeMap, 100);
+    window.setTimeout(resizeMap, 500);
 
     const selfEl = document.createElement('div');
     selfEl.className = 'map-self-dot';
@@ -239,6 +334,7 @@ export const Discover = () => {
 
     mapRef.current = map;
     return () => {
+      window.removeEventListener('resize', resizeMap);
       map.remove();
       mapRef.current = null;
       selfMarkerRef.current = null;
@@ -258,8 +354,7 @@ export const Discover = () => {
 
     users.forEach((user) => {
       if (user.lat == null || user.lng == null) return;
-      const isPulsing =
-        !!user.available_until && new Date(user.available_until).getTime() > Date.now();
+      const isPulsing = isUserPulsing(user);
 
       const { element, root } = createMapMarkerElement(
         {
@@ -289,42 +384,47 @@ export const Discover = () => {
   const onlineCount = users.filter((u) => u.online).length;
   const nearbyCount = users.length;
   const sortedUsers = [...users].sort((a, b) => {
-    const ap = !!a.available_until && new Date(a.available_until).getTime() > Date.now() ? 1 : 0;
-    const bp = !!b.available_until && new Date(b.available_until).getTime() > Date.now() ? 1 : 0;
+    const ap = isUserPulsing(a) ? 1 : 0;
+    const bp = isUserPulsing(b) ? 1 : 0;
     if (ap !== bp) return bp - ap;
     return parseFloat(String(a.distance_km)) - parseFloat(String(b.distance_km));
   });
 
   return (
     <Layout>
+      <h1 className="sr-only">Nearby discovery map</h1>
       <div
         className="fixed left-0 right-0 top-14 z-0 bottom-[var(--mobile-tab-bar-height)] sm:bottom-0 bg-[#0D0A06]"
       >
-        <div ref={mapContainerRef} className="absolute inset-0" />
-
-        {tokenMissing && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center bg-[#0D0A06]">
-            <div className="w-14 h-14 rounded-full bg-[var(--copper)]/15 border border-[var(--copper)]/40 flex items-center justify-center mb-3">
-              <span className="text-[var(--copper)] text-2xl">·</span>
-            </div>
-            <p className="text-[var(--cream)] text-sm font-bold">Map unavailable</p>
-            <p className="text-[var(--cream-muted)] text-xs mt-1 max-w-xs leading-relaxed">
-              Set <code className="text-[var(--copper)]">VITE_MAPBOX_TOKEN</code> in <code className="text-[var(--copper)]">frontend/.env</code> and restart the dev server.
-            </p>
+        <div className="absolute left-0 right-0 top-[104px] bottom-[188px] z-0 overflow-hidden border-y border-[var(--border-default)] bg-[#11100E]">
+          <div className="absolute inset-0">
+            <div ref={mapContainerRef} className="h-full w-full" />
           </div>
-        )}
 
-        {!tokenMissing && !mapCenter && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0D0A06]/80 backdrop-blur-sm">
-            <div className="relative w-14 h-14 flex items-center justify-center">
-              <span className="absolute inset-0 rounded-full bg-[var(--copper)]/20 animate-pulse-ring" />
-              <span className="w-5 h-5 rounded-full bg-[var(--copper)] border-2 border-[var(--cream)] relative z-10" />
+          {tokenMissing && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center bg-[#0D0A06]">
+              <div className="w-14 h-14 rounded-full bg-[var(--copper)]/15 border border-[var(--copper)]/40 flex items-center justify-center mb-3">
+                <span className="text-[var(--copper)] text-2xl">·</span>
+              </div>
+              <p className="text-[var(--cream)] text-sm font-bold">Map unavailable</p>
+              <p className="text-[var(--cream-muted)] text-xs mt-1 max-w-xs leading-relaxed">
+                Set <code className="text-[var(--copper)]">VITE_MAPBOX_TOKEN</code> in <code className="text-[var(--copper)]">frontend/.env</code> and restart the dev server.
+              </p>
             </div>
-            <p className="text-[var(--cream-muted)] text-xs font-medium tracking-widest uppercase mt-3">
-              {error || 'Acquiring signal'}
-            </p>
-          </div>
-        )}
+          )}
+
+          {!tokenMissing && !mapCenter && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0D0A06]/80 backdrop-blur-sm">
+              <div className="relative w-14 h-14 flex items-center justify-center">
+                <span className="absolute inset-0 rounded-full bg-[var(--copper)]/20 animate-pulse-ring" />
+                <span className="w-5 h-5 rounded-full bg-[var(--copper)] border-2 border-[var(--cream)] relative z-10" />
+              </div>
+              <p className="text-[var(--cream-muted)] text-xs font-medium tracking-widest uppercase mt-3">
+                {error || 'Acquiring signal'}
+              </p>
+            </div>
+          )}
+        </div>
 
         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 px-3 py-1.5 rounded-full bg-[var(--bg-elevated)]/85 backdrop-blur-sm border border-[var(--border-default)] shadow-md">
           <p className="text-[11px] font-bold text-[var(--cream-soft)] tracking-wide whitespace-nowrap">
@@ -343,6 +443,15 @@ export const Discover = () => {
             )}
           </p>
         </div>
+
+        {locationNotice && (
+          <div
+            role="status"
+            className="absolute left-3 top-[116px] z-30 max-w-[280px] rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-3 py-2 text-[11px] font-medium leading-snug text-[var(--cream-soft)] shadow-md backdrop-blur-sm sm:max-w-sm"
+          >
+            {locationNotice}
+          </div>
+        )}
 
         <div className="absolute z-30 right-[var(--fab-offset)] top-3 flex items-center gap-2">
           <div
@@ -385,6 +494,7 @@ export const Discover = () => {
         <PulseFab
           isPulsing={!!pulseUntil}
           pulseExpiresAt={pulseUntil ? pulseUntil.toISOString() : undefined}
+          nextPulseAllowedAt={nextPulseAllowedAt ?? undefined}
           onStartPulse={handleStartPulse}
           onStopPulse={handleStopPulse}
         />
@@ -413,7 +523,7 @@ export const Discover = () => {
             style={{ background: 'linear-gradient(to top, #0D0A06, transparent)' }}
           />
           <div className="pointer-events-auto pb-2 space-y-2">
-            <EventsRail lat={lat} lng={lng} onSelect={(ev) => navigate(`/rooms/${ev.id}`)} />
+            <EventsRail lat={lat} lng={lng} onSelect={(ev: EventDTO) => navigate(`/rooms/${ev.id}`)} />
             <UserStrip
               users={sortedUsers}
               loading={loading}
@@ -488,10 +598,9 @@ interface UserStripCardProps {
 
 const UserStripCard: React.FC<UserStripCardProps> = ({ user, onSelect }) => {
   const distance = parseFloat(String(user.distance_km));
-  const distLabel = distance < 1 ? `${Math.round(distance * 1000)}m` : `${distance.toFixed(1)}km`;
+  const distLabel = getDistanceLabel(user);
   const fullPhotoUrl = getPhotoUrl(user.photo_url);
-  const isPulsing =
-    !!user.available_until && new Date(user.available_until).getTime() > Date.now();
+  const isPulsing = isUserPulsing(user);
 
   return (
     <button
@@ -516,7 +625,7 @@ const UserStripCard: React.FC<UserStripCardProps> = ({ user, onSelect }) => {
           </PulsingAvatar>
         </div>
         {user.online && !isPulsing && (
-          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-emerald-500 border border-[var(--bg-elevated)]" />
+          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-nn-online border border-nn-elevated" />
         )}
       </div>
       <div className="flex-1 px-2 py-1.5 flex flex-col justify-between">

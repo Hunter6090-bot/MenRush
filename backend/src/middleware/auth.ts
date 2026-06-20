@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { authService } from '../services/auth.service';
+import { accessControl, SecurityError } from '../security/access';
 
 export interface AuthRequest extends Request {
   userId?: string;
@@ -21,6 +22,22 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
   }
 };
 
+export const verifiedMiddleware = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    await accessControl.requireVerified(req.userId!);
+    next();
+  } catch (error) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.code });
+    }
+    next(error);
+  }
+};
+
 export const errorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
   console.error(err);
 
@@ -36,7 +53,11 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
     return res.status(400).json({ error: 'File size too large (max 5MB)' });
   }
 
-  if (err.message === 'Only images are allowed') {
+  if (err instanceof SecurityError) {
+    return res.status(err.status).json({ error: err.code });
+  }
+
+  if (err.message === 'Unsupported upload type') {
     return res.status(400).json({ error: err.message });
   }
 

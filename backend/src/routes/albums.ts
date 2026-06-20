@@ -2,12 +2,14 @@ import { Router, Response } from 'express';
 import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
-import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { albumService, FREE_PHOTO_CAP } from '../services/album.service';
-import { CreateAlbumSchema, AddAlbumPhotoSchema, GrantAlbumSchema } from '../types/validation';
+import { SecurityError } from '../security/access';
+import { resolveMediaPath, verifyMediaAccess } from '../security/media';
+import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
+import { CreateAlbumSchema, GrantAlbumSchema } from '../types/validation';
 
 const router = Router();
-router.use(authMiddleware);
 
 const uploadsDir = path.resolve(__dirname, '../../uploads/albums');
 fs.mkdirSync(uploadsDir, { recursive: true });
@@ -16,16 +18,34 @@ const upload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, uploadsDir),
     filename: (req: any, file, cb) => {
-      const suffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-      cb(null, `album-${req.userId}-${suffix}${path.extname(file.originalname)}`);
+      try {
+        cb(null, safeUploadFilename('album', req.userId, file.mimetype));
+      } catch (error) {
+        cb(error as Error, '');
+      }
     },
   }),
   limits: { fileSize: 8 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) cb(null, true);
-    else cb(new Error('Only images are allowed'));
-  },
+  fileFilter: uploadFileFilter('album'),
 });
+
+router.get('/media/:photoId', async (req, res) => {
+  try {
+    const resource = `/api/albums/media/${req.params.photoId}`;
+    const grant = verifyMediaAccess(String(req.query.access || ''), resource);
+    const media = await albumService.getMedia(grant.viewerId, req.params.photoId);
+    res.type(media.mimeType);
+    res.setHeader('Cache-Control', 'private, no-store');
+    return res.sendFile(resolveMediaPath(uploadsDir, media.storageKey));
+  } catch (error) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.code });
+    }
+    return res.status(404).json({ error: 'media_unavailable' });
+  }
+});
+
+router.use(authMiddleware, verifiedMiddleware);
 
 // ── Owner: list my albums ───────────────────────────────────────────────────
 router.get('/mine', async (req: AuthRequest, res: Response) => {
@@ -66,22 +86,32 @@ router.delete('/:albumId', async (req: AuthRequest, res: Response) => {
 // ── Photos ──────────────────────────────────────────────────────────────────
 router.post('/:albumId/upload', upload.single('photo'), async (req: AuthRequest, res: Response) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  if (!(await validateFileSignature(req.file.path, req.file.mimetype))) {
+    try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+    return res.status(400).json({ error: 'File content does not match its type' });
+  }
 
   // Free-tier cap check. If the user is hitting the cap, tell them so they can upgrade.
   // Premium gating is enforced by the frontend until we wire Stripe-backed entitlements.
   const total = await albumService.countPhotosForUser(req.userId!);
   const isPremium = false; // TODO(billing): replace with users.is_premium when added.
   if (!isPremium && total >= FREE_PHOTO_CAP) {
+    try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
     return res
       .status(402)
       .json({ error: `Free tier is capped at ${FREE_PHOTO_CAP} private photos. Upgrade for unlimited.` });
   }
 
-  const photo_url = `/uploads/albums/${req.file.filename}`;
   try {
-    await albumService.addPhoto(req.userId!, req.params.albumId, photo_url);
-    res.json({ photo_url });
+    const photo = await albumService.addPhoto(
+      req.userId!,
+      req.params.albumId,
+      req.file.filename,
+      req.file.mimetype,
+    );
+    res.json(photo);
   } catch (error: any) {
+    try { fs.unlinkSync(req.file!.path); } catch { /* ignore */ }
     if (error.message === 'album_not_owned') {
       return res.status(404).json({ error: 'Album not found.' });
     }
@@ -89,27 +119,8 @@ router.post('/:albumId/upload', upload.single('photo'), async (req: AuthRequest,
   }
 });
 
-router.post('/:albumId/photos', async (req: AuthRequest, res: Response) => {
-  const parsed = AddAlbumPhotoSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
-
-  const total = await albumService.countPhotosForUser(req.userId!);
-  const isPremium = false;
-  if (!isPremium && total >= FREE_PHOTO_CAP) {
-    return res
-      .status(402)
-      .json({ error: `Free tier is capped at ${FREE_PHOTO_CAP} private photos. Upgrade for unlimited.` });
-  }
-
-  try {
-    await albumService.addPhoto(req.userId!, req.params.albumId, parsed.data.photo_url);
-    res.json({ photo_url: parsed.data.photo_url });
-  } catch (error: any) {
-    if (error.message === 'album_not_owned') {
-      return res.status(404).json({ error: 'Album not found.' });
-    }
-    res.status(500).json({ error: error.message });
-  }
+router.post('/:albumId/photos', (_req, res) => {
+  return res.status(410).json({ error: 'Direct media URLs are not accepted' });
 });
 
 router.get('/:albumId/photos', async (req: AuthRequest, res: Response) => {

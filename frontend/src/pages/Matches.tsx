@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { usersAPI } from '../api/client';
 import { Layout } from '../components/Layout';
 import { ConversationItem } from '../components/ConversationItem';
+import { IconMatches } from '../components/icons';
 
 interface Match {
   id: string;
@@ -73,17 +74,17 @@ export const Matches = () => {
         ) : (
           <div className="text-center py-24 bg-[#1E1508] rounded-3xl border border-[#3D2B0E]">
             <div className="w-16 h-16 bg-[#C4832A]/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <HeartIcon className="w-8 h-8 text-[#C4832A]/40" />
+              <IconMatches size={32} className="text-[#C4832A]/40" />
             </div>
-            <h2 className="text-[#F0E0C0] font-bold text-lg">No matches yet</h2>
-            <p className="text-[#A89070] text-sm mt-1 max-w-xs mx-auto">
-              Keep exploring the discovery page and liking people you're interested in!
+            <h2 className="text-nn-text font-bold text-lg">No matches yet</h2>
+            <p className="text-nn-muted text-sm mt-1 max-w-xs mx-auto">
+              Signal people on Nearby. When it's mutual, they show up here.
             </p>
             <button
               onClick={() => navigate('/discover')}
-              className="mt-6 px-6 py-2.5 bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] text-white rounded-xl font-semibold text-sm transition-all"
+              className="mt-6 px-6 py-2.5 bg-nn-copper hover:bg-nn-copper-bright text-[#1A0E03] rounded-full font-semibold text-sm transition-colors active:scale-95"
             >
-              Start Discovering
+              Go to Nearby
             </button>
           </div>
         )}
@@ -91,9 +92,3 @@ export const Matches = () => {
     </Layout>
   );
 };
-
-const HeartIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-  </svg>
-);

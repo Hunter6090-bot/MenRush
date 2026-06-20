@@ -163,7 +163,7 @@ Tables: `users`, `profiles`, `messages`, `likes`, `rooms`, `room_members`, `room
 
 | Var | Default | Notes |
 |-----|---------|-------|
-| `DATABASE_URL` | `postgresql://nearnow:nearnow123@postgres:5432/nearnow` | Backend |
+| `DATABASE_URL` | `postgresql://menrush:menrush123@postgres:5432/menrush` | Backend |
 | `JWT_SECRET` | `your-secret-key` | Change in production |
 | `FRONTEND_URL` | `http://localhost:5173` | Socket.IO CORS |
 | `VITE_API_URL` | `http://localhost:3000/api` | Frontend axios + socket |

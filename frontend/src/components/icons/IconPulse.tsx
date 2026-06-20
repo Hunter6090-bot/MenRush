@@ -4,7 +4,7 @@ import { SVGProps } from "react";
  * MenRush — Pulse icon
  * Concentric pulse rings radiating from a centre point.
  * Add `className="animate-pulse-breathe"` to make it actively pulse on the map.
- * Sonar / heartbeat aesthetic. The headline feature visual.
+ * Sonar aesthetic. The headline feature visual.
  */
 export function IconPulse({ size = 24, ...props }: SVGProps<SVGSVGElement> & { size?: number }) {
   return (

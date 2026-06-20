@@ -2,7 +2,7 @@
  * Self-hosted waitlist drip campaign.
  *
  * Sends a fixed sequence of pre-launch emails to anyone in `waitlist`, using
- * the same Zoho SMTP transport that already powers the contact form.
+ * Resend for outbound delivery.
  *
  * Schedule and templates are defined in DRIP_SCHEDULE below; HTML bodies are
  * loaded from `email-assets/` at the repo root.
@@ -23,11 +23,7 @@ import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { query } from '../db';
-import {
-  getMailer,
-  getMailerFromAddress,
-  MailerNotConfiguredError,
-} from './mailer.service';
+import { sendEmail } from './mailer.service';
 
 // ─── Schedule ──────────────────────────────────────────────────────────────
 
@@ -99,8 +95,14 @@ export const DRIP_SCHEDULE: readonly DripStep[] = [
   },
 ] as const;
 
-// Repo root: backend/src/services/ → ../../.. = repo root
-const EMAIL_ASSETS_DIR = path.resolve(__dirname, '..', '..', '..', 'email-assets');
+const EMAIL_ASSET_DIR_CANDIDATES = [
+  // Local ts-node from backend/src/services -> repo root email-assets
+  path.resolve(__dirname, '..', '..', '..', 'email-assets'),
+  // Built backend or deploy-safe copy -> backend/email-assets
+  path.resolve(__dirname, '..', '..', 'email-assets'),
+  // Fallback when cwd is the backend directory
+  path.resolve(process.cwd(), 'email-assets'),
+];
 
 // ─── Subscriber API ────────────────────────────────────────────────────────
 
@@ -112,8 +114,22 @@ export interface SubscribeResult {
   unsubscribeToken: string;
 }
 
+const NON_DELIVERABLE_EMAIL_PATTERNS = [
+  /@menrush\.test$/i,
+  /@example\.com$/i,
+  /@menrush\.dev$/i,
+  /^healthcheck\+/i,
+  /^smoketest\+/i,
+  /^cors-probe-/i,
+] as const;
+
 function newUnsubscribeToken(): string {
   return crypto.randomBytes(24).toString('base64url');
+}
+
+export function isDeliverableWaitlistEmail(emailRaw: string): boolean {
+  const email = emailRaw.trim().toLowerCase();
+  return !NON_DELIVERABLE_EMAIL_PATTERNS.some((pattern) => pattern.test(email));
 }
 
 /**
@@ -169,10 +185,19 @@ const templateCache = new Map<string, string>();
 async function loadTemplate(filename: string): Promise<string> {
   const cached = templateCache.get(filename);
   if (cached) return cached;
-  const full = path.join(EMAIL_ASSETS_DIR, filename);
-  const html = await fs.readFile(full, 'utf-8');
-  templateCache.set(filename, html);
-  return html;
+  for (const dir of EMAIL_ASSET_DIR_CANDIDATES) {
+    const full = path.join(dir, filename);
+    try {
+      const html = await fs.readFile(full, 'utf-8');
+      templateCache.set(filename, html);
+      return html;
+    } catch (err: any) {
+      if (err?.code !== 'ENOENT') throw err;
+    }
+  }
+  throw new Error(
+    `Email template "${filename}" was not found in any configured asset directory.`,
+  );
 }
 
 function buildUnsubscribeUrl(token: string): string {
@@ -188,6 +213,7 @@ function buildUnsubscribeUrl(token: string): string {
 function renderTemplate(rawHtml: string, ctx: { email: string; unsubscribeUrl: string }): string {
   let html = rawHtml
     .replace(/\{\{\s*unsubscribe_url\s*\}\}/g, ctx.unsubscribeUrl)
+    .replace(/\$\[LI:UNSUBSCRIBE\]\$/g, ctx.unsubscribeUrl)
     .replace(/\{\{\s*email\s*\}\}/g, ctx.email);
 
   if (!/unsubscribe/i.test(html)) {
@@ -203,6 +229,78 @@ function renderTemplate(rawHtml: string, ctx: { email: string; unsubscribeUrl: s
   }
 
   return html;
+}
+
+async function sendDripStep(item: DueSend): Promise<{ messageId: string | null; skipped: boolean }> {
+  if (!isDeliverableWaitlistEmail(item.email)) {
+    return { messageId: null, skipped: true };
+  }
+
+  const rawHtml = await loadTemplate(item.step.filename);
+  const unsubscribeUrl = buildUnsubscribeUrl(item.unsubscribeToken);
+  const html = renderTemplate(rawHtml, { email: item.email, unsubscribeUrl });
+
+  // Best-effort: claim the send row FIRST so a concurrent worker won't
+  // re-pick the same (subscriber, template). If the insert fails on the
+  // unique constraint, another worker beat us — skip cleanly.
+  const claim = await query(
+    `INSERT INTO waitlist_drip_sends (subscriber_id, template_key, sent_at)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (subscriber_id, template_key) DO NOTHING
+     RETURNING id`,
+    [item.subscriberId, item.step.key],
+  );
+  if ((claim.rowCount ?? 0) === 0) {
+    return { messageId: null, skipped: true };
+  }
+  const claimId = claim.rows[0].id;
+
+  try {
+    const info = await sendEmail({
+      to: item.email,
+      subject: item.step.subject,
+      html,
+    });
+
+    await query(
+      `UPDATE waitlist_drip_sends SET smtp_message_id = $2 WHERE id = $1`,
+      [claimId, info.id || null],
+    );
+    return { messageId: info.id || null, skipped: false };
+  } catch (err) {
+    try {
+      await query(
+        `DELETE FROM waitlist_drip_sends
+          WHERE subscriber_id = $1 AND template_key = $2 AND smtp_message_id IS NULL`,
+        [item.subscriberId, item.step.key],
+      );
+    } catch {
+      /* swallow — best effort */
+    }
+    throw err;
+  }
+}
+
+export async function sendWelcomeEmailNow(
+  subscriber: Pick<SubscribeResult, 'id' | 'email' | 'unsubscribeToken'>,
+): Promise<{ sent: boolean; skipped: boolean; messageId: string | null }> {
+  if (!isDeliverableWaitlistEmail(subscriber.email)) {
+    return { sent: false, skipped: true, messageId: null };
+  }
+
+  const welcomeStep = DRIP_SCHEDULE[0];
+  const result = await sendDripStep({
+    subscriberId: subscriber.id,
+    email: subscriber.email,
+    unsubscribeToken: subscriber.unsubscribeToken,
+    step: welcomeStep,
+  });
+
+  return {
+    sent: !result.skipped,
+    skipped: result.skipped,
+    messageId: result.messageId,
+  };
 }
 
 // ─── Worker / batch loop ───────────────────────────────────────────────────
@@ -289,72 +387,18 @@ export async function runDripBatch(limit = 50): Promise<DripBatchResult> {
     errors: [],
   };
 
-  let transporter;
-  try {
-    transporter = getMailer();
-  } catch (err) {
-    if (err instanceof MailerNotConfiguredError) {
-      // SMTP isn't configured — nothing to do, but don't crash the process.
-      return result;
-    }
-    throw err;
-  }
-
-  const from = getMailerFromAddress();
   const due = await findDueSends(limit);
   result.attempted = due.length;
 
   for (const item of due) {
     try {
-      const rawHtml = await loadTemplate(item.step.filename);
-      const unsubscribeUrl = buildUnsubscribeUrl(item.unsubscribeToken);
-      const html = renderTemplate(rawHtml, { email: item.email, unsubscribeUrl });
-
-      // Best-effort: claim the send row FIRST so a concurrent worker won't
-      // re-pick the same (subscriber, template). If the insert fails on the
-      // unique constraint, another worker beat us — skip cleanly.
-      const claim = await query(
-        `INSERT INTO waitlist_drip_sends (subscriber_id, template_key, sent_at)
-         VALUES ($1, $2, NOW())
-         ON CONFLICT (subscriber_id, template_key) DO NOTHING
-         RETURNING id`,
-        [item.subscriberId, item.step.key],
-      );
-      if ((claim.rowCount ?? 0) === 0) {
+      const sendResult = await sendDripStep(item);
+      if (sendResult.skipped) {
         result.skipped += 1;
         continue;
       }
-      const claimId = claim.rows[0].id;
-
-      const info = await transporter.sendMail({
-        from: `"MenRush" <${from}>`,
-        to: item.email,
-        subject: item.step.subject,
-        html,
-        headers: {
-          'List-Unsubscribe': `<${unsubscribeUrl}>`,
-          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-          // Helps Gmail/Yahoo group/threading and traceability.
-          'X-MenRush-Template': item.step.key,
-        },
-      });
-
-      await query(
-        `UPDATE waitlist_drip_sends SET smtp_message_id = $2 WHERE id = $1`,
-        [claimId, info.messageId || null],
-      );
       result.sent += 1;
     } catch (err: any) {
-      // Roll back the claim so the next batch retries this step.
-      try {
-        await query(
-          `DELETE FROM waitlist_drip_sends
-            WHERE subscriber_id = $1 AND template_key = $2 AND smtp_message_id IS NULL`,
-          [item.subscriberId, item.step.key],
-        );
-      } catch {
-        /* swallow — best effort */
-      }
       result.errors.push({
         email: item.email,
         templateKey: item.step.key,

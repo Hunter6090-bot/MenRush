@@ -2,7 +2,7 @@ import { SVGProps } from "react";
 
 /**
  * MenRush — Matches icon
- * Two interlocking signet rings. Connection without saccharine hearts.
+ * Two interlocking signet rings.
  * Heritage / classical / masculine vocabulary.
  */
 export function IconMatches({ size = 24, ...props }: SVGProps<SVGSVGElement> & { size?: number }) {

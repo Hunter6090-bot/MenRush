@@ -23,7 +23,7 @@ CREATE INDEX IF NOT EXISTS idx_waitlist_status_created
 
 CREATE TABLE IF NOT EXISTS waitlist_drip_sends (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  subscriber_id   UUID NOT NULL REFERENCES waitlist(id) ON DELETE CASCADE,
+  subscriber_id   INTEGER NOT NULL REFERENCES waitlist(id) ON DELETE CASCADE,
   template_key    TEXT NOT NULL,
   sent_at         TIMESTAMP NOT NULL DEFAULT NOW(),
   smtp_message_id TEXT,

@@ -1,10 +1,10 @@
 import { Router, Response } from 'express';
-import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { profileMetaService } from '../services/profile-meta.service';
 import { MoodSchema, GhostSchema } from '../types/validation';
 
 const router = Router();
-router.use(authMiddleware);
+router.use(authMiddleware, verifiedMiddleware);
 
 router.get('/mood', async (req: AuthRequest, res: Response) => {
   try {

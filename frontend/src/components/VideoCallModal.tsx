@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useCallStore } from '../hooks/store';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { useSocket } from '../hooks/useSocket';
+import { BRAND_MEDALLION } from '../lib/brand';
 
 export function VideoCallModal() {
   const socket = useSocket();
@@ -11,7 +12,6 @@ export function VideoCallModal() {
     peerName,
     incomingOffer,
     setIncoming,
-    setCalling,
     resetCall,
   } = useCallStore();
 
@@ -20,6 +20,8 @@ export function VideoCallModal() {
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const outgoingPeerRef = useRef<string | null>(null);
+  const [setupError, setSetupError] = useState('');
 
   // Attach streams to video elements
   useEffect(() => {
@@ -47,6 +49,7 @@ export function VideoCallModal() {
       fromName: string;
       offer: RTCSessionDescriptionInit;
     }) => {
+      setSetupError('');
       setIncoming(from, fromName, offer);
     };
 
@@ -56,14 +59,47 @@ export function VideoCallModal() {
     };
   }, [socket, setIncoming]);
 
+  // A single, app-level call controller owns media and peer-connection state.
+  // Message pages only place the call intent in the store; this controller
+  // performs setup once and remains mounted while either user navigates.
+  useEffect(() => {
+    if (callStatus !== 'calling' || !peerId) {
+      if (callStatus === 'idle') outgoingPeerRef.current = null;
+      return;
+    }
+    if (outgoingPeerRef.current === peerId) return;
+
+    outgoingPeerRef.current = peerId;
+    setSetupError('');
+    startCall(peerId, peerName ?? '').catch((error: any) => {
+      outgoingPeerRef.current = null;
+      resetCall();
+      setSetupError(
+        error?.message === 'insecure_media_context'
+          ? 'Video calls need HTTPS'
+          : error?.name === 'NotAllowedError'
+            ? 'Camera and microphone access was blocked'
+            : 'Could not start the video call',
+      );
+    });
+  }, [callStatus, peerId, peerName, resetCall, startCall]);
+
   const handleAccept = async () => {
     if (!incomingOffer || !peerId) return;
-    const answer = await answerCall(incomingOffer);
-    socket?.emit('call:answer', { to: peerId, answer });
-    setCalling(peerId, peerName ?? '');
-    // status will be set to connected once call:answered fires back,
-    // but for the answerer we transition immediately
-    useCallStore.getState().setConnected();
+    try {
+      const answer = await answerCall(incomingOffer);
+      socket?.emit('call:answer', { to: peerId, answer });
+      useCallStore.getState().setConnected();
+    } catch (error: any) {
+      resetCall();
+      setSetupError(
+        error?.message === 'insecure_media_context'
+          ? 'Video calls need HTTPS'
+          : error?.name === 'NotAllowedError'
+            ? 'Camera and microphone access was blocked'
+            : 'Could not answer the video call',
+      );
+    }
   };
 
   const handleReject = () => {
@@ -71,13 +107,32 @@ export function VideoCallModal() {
     resetCall();
   };
 
-  const handleStartCall = (targetId: string, targetName: string) => {
-    setCalling(targetId, targetName);
-    startCall(targetId, targetName);
-  };
-
-  // Expose handleStartCall for external use via the store — not needed here
-  // (callers invoke startCall through VideoCallModal trigger in Messaging.tsx)
+  if (setupError) {
+    return (
+      <div
+        className="fixed inset-0 z-[200] flex items-center justify-center px-6"
+        style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(16px)' }}
+      >
+        <div
+          className="w-full max-w-sm rounded-3xl p-8 text-center"
+          style={{ background: '#1E1508', border: '1px solid #3D2B0E' }}
+        >
+          <h2 className="text-xl font-bold" style={{ color: '#F0E0C0' }}>{setupError}</h2>
+          <p className="mt-3 text-sm leading-relaxed" style={{ color: '#A89070' }}>
+            Open MenRush from its secure HTTPS address, then allow camera and microphone access.
+          </p>
+          <button
+            type="button"
+            onClick={() => setSetupError('')}
+            className="mt-6 w-full h-12 rounded-2xl text-sm font-semibold"
+            style={{ background: '#C4832A', color: '#0D0A06' }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (callStatus === 'idle' || callStatus === 'ended') return null;
 
@@ -193,7 +248,7 @@ export function VideoCallModal() {
           <div className="coin-container w-24">
             <div className="coin-inner">
               <div className="coin-face coin-front">
-                <img src="/logo.png" alt="MenRush" className="w-full h-full object-cover" />
+                <img src={BRAND_MEDALLION} alt="MenRush" className="w-full h-full object-cover" />
               </div>
               <div className="coin-face coin-back">
                 <div className="coin-back-face">

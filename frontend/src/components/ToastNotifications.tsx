@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNotificationStore, Notification } from '../hooks/store';
 import { useNavigate } from 'react-router-dom';
+import { IconChat, IconMatches } from './icons';
 
 export const ToastNotifications = () => {
   const { notifications, markAsRead } = useNotificationStore();
@@ -49,11 +50,11 @@ export const ToastNotifications = () => {
           <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
             toast.type === 'match' ? 'bg-[#C4832A]/20 text-[#C4832A]' :
             toast.type === 'like' ? 'bg-[#8B4513]/20 text-[#C4832A]' :
-            'bg-emerald-500/20 text-emerald-400'
+            'bg-nn-online/20 text-[#8FC773]'
           }`}>
-            {toast.type === 'match' && <HeartIcon className="w-5 h-5 fill-current" />}
+            {toast.type === 'match' && <IconMatches size={20} />}
             {toast.type === 'like' && <StarIcon className="w-5 h-5 fill-current" />}
-            {toast.type === 'message' && <ChatIcon className="w-5 h-5" />}
+            {toast.type === 'message' && <IconChat size={20} />}
           </div>
 
           <div className="flex-1 min-w-0">
@@ -81,21 +82,9 @@ export const ToastNotifications = () => {
   );
 };
 
-const HeartIcon = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-    <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-  </svg>
-);
-
 const StarIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
     <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.921-.755 1.688-1.54 1.118l-3.976-2.888a1 1 0 00-1.175 0l-3.976 2.888c-.784.57-1.838-.197-1.539-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.382-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-  </svg>
-);
-
-const ChatIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
   </svg>
 );
 

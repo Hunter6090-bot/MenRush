@@ -116,7 +116,7 @@ export const Profile = () => {
       setPhotoUrl(res.data.photo_url);
       setProfile((p) => p ? { ...p, photo_url: res.data.photo_url } : p);
       if (user && token) setAuth({ ...user, photo_url: res.data.photo_url }, token);
-      showToast('success', 'Photo uploaded!');
+      showToast('success', 'Photo uploaded');
     } catch (err: any) {
       showToast('error', err.response?.data?.error || 'Upload failed');
     } finally {
@@ -131,7 +131,7 @@ export const Profile = () => {
       const res = await usersAPI.updateProfile({ bio, headline, looking_for: lookingFor, photo_url: photoUrl || undefined, interests });
       setProfile((p) => p ? { ...p, ...res.data } : p);
       if (user && token) setAuth({ ...user, bio, photo_url: photoUrl || undefined }, token);
-      showToast('success', 'Profile saved!');
+      showToast('success', 'Profile saved');
     } catch {
       showToast('error', 'Failed to save. Please try again.');
     } finally {
@@ -147,7 +147,7 @@ export const Profile = () => {
         try {
           await usersAPI.updateLocation(coords.latitude, coords.longitude);
           setLocation(coords.latitude, coords.longitude);
-          showToast('success', 'Location updated!');
+          showToast('success', 'Location updated');
         } catch {
           showToast('error', 'Could not update location.');
         } finally {
@@ -176,12 +176,13 @@ export const Profile = () => {
 
   return (
     <Layout>
+      <h1 className="sr-only">Your MenRush profile</h1>
       {/* Toast */}
       {toast && (
         <div
           className={`fixed top-16 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-xl text-sm font-medium shadow-card border animate-slide-up ${
             toast.type === 'success'
-              ? 'bg-emerald-500/15 border-emerald-500/25 text-emerald-400'
+              ? 'bg-nn-online/15 border-nn-online/25 text-[#8FC773]'
               : 'bg-[#8B4513]/15 border-[#8B4513]/25 text-[#F0E0C0]/80'
           }`}
         >

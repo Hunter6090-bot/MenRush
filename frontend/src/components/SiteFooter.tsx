@@ -24,6 +24,24 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ className = '' }) => {
         <span className="hidden text-[#3D2B0E] sm:inline" aria-hidden>
           ·
         </span>
+        <Link to="/safety" className="transition-colors hover:text-[#c8861c]">
+          Safety
+        </Link>
+        <span className="hidden text-[#3D2B0E] sm:inline" aria-hidden>
+          ·
+        </span>
+        <Link to="/guidelines" className="transition-colors hover:text-[#c8861c]">
+          Guidelines
+        </Link>
+        <span className="hidden text-[#3D2B0E] sm:inline" aria-hidden>
+          ·
+        </span>
+        <Link to="/help" className="transition-colors hover:text-[#c8861c]">
+          Help
+        </Link>
+        <span className="hidden text-[#3D2B0E] sm:inline" aria-hidden>
+          ·
+        </span>
         <Link to="/privacy" className="transition-colors hover:text-[#c8861c]">
           Privacy
         </Link>

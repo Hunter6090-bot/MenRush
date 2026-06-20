@@ -3,7 +3,7 @@
 ## 📁 Project Structure Generated
 
 ```
-NearNow/
+MenRush/
 ├── backend/                    # Node.js Express API
 │   ├── src/
 │   │   ├── server.ts          # Main Express + Socket.io server
@@ -53,7 +53,7 @@ NearNow/
 
 ### Step 1: Setup
 ```bash
-cd NearNow
+cd MenRush
 bash setup.sh
 ```
 

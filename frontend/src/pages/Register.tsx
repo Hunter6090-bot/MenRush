@@ -132,7 +132,7 @@ export const Register = () => {
           </div>
 
         <div className="bg-[#1E1508]/80 backdrop-blur-xl border border-[#3D2B0E] rounded-2xl p-6 shadow-card">
-          <h2 className="text-lg font-bold text-[#F0E0C0] mb-5">Create account</h2>
+          <h1 className="text-lg font-bold text-[#F0E0C0] mb-5">Create account</h1>
 
           {error && (
             <div className="flex items-start gap-2.5 bg-[#8B4513]/10 border border-[#8B4513]/25 text-[#F0E0C0]/90 px-4 py-3 rounded-xl mb-4 text-sm animate-fade-in">
@@ -274,4 +274,3 @@ const AlertIcon = ({ className }: { className?: string }) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
   </svg>
 );
-

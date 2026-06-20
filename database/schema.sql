@@ -153,6 +153,8 @@ CREATE TABLE IF NOT EXISTS album_photos (
   album_id   UUID NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
   user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   photo_url  TEXT NOT NULL,
+  storage_key TEXT,
+  mime_type  TEXT,
   position   INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT NOW()
 );
@@ -178,6 +180,8 @@ CREATE INDEX IF NOT EXISTS idx_rooms_kind_time ON rooms(kind, starts_at, ends_at
 
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_type TEXT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_url TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_storage_key TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_mime_type TEXT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS audio_duration_ms INT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMP;
@@ -218,4 +222,3 @@ CREATE TABLE IF NOT EXISTS waitlist_drip_sends (
 
 CREATE INDEX IF NOT EXISTS idx_drip_sends_subscriber
   ON waitlist_drip_sends(subscriber_id);
-

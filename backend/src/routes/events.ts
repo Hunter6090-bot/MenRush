@@ -1,10 +1,10 @@
 import { Router, Response } from 'express';
-import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { eventService } from '../services/event.service';
 import { LocationSchema } from '../types/validation';
 
 const router = Router();
-router.use(authMiddleware);
+router.use(authMiddleware, verifiedMiddleware);
 
 router.get('/nearby', async (req: AuthRequest, res: Response) => {
   try {

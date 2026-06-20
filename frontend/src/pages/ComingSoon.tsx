@@ -1,4 +1,5 @@
-import { useState, useCallback, type FormEvent } from 'react';
+import { useState, useCallback, useEffect, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { SiteFooter } from '../components/SiteFooter';
 import { BRAND_MEDALLION } from '../lib/brand';
 import {
@@ -9,8 +10,13 @@ import {
   IconPulse,
 } from '../components/icons';
 import type { ComponentType, SVGProps } from 'react';
+import { trackEvent, trackEventOnce } from '../observability/analytics';
 
-const WAITLIST_API_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/waitlist`;
+const API_BASE_URL = String(import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+const IS_LOCAL_API = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(API_BASE_URL);
+const WAITLIST_API_URL = API_BASE_URL && (!IS_LOCAL_API || import.meta.env.DEV)
+  ? `${API_BASE_URL}/waitlist`
+  : null;
 const ZOHO_SUBMIT_URL =
   'https://forms.zohopublic.com/hellomen1/form/MenRushcom/formperma/ridAzzP0GwTafugVKgaUQttHXDojK1z_jZpTDjtAor4/records';
 
@@ -108,6 +114,10 @@ export const ComingSoon = () => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [bgIndex] = useState(() => Math.floor(Math.random() * IMAGES.length));
 
+  useEffect(() => {
+    trackEventOnce('landing_viewed', { surface: 'coming_soon' });
+  }, []);
+
   const handleShare = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -125,32 +135,44 @@ export const ComingSoon = () => {
 
       const trimmed = email.trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+        trackEvent('waitlist_failed', { stage: 'validation', transport: 'none' });
         setErrorMsg('Please enter a valid email address.');
         return;
       }
 
+      trackEvent('waitlist_attempted', {
+        transport: WAITLIST_API_URL ? 'backend' : 'zoho_fallback',
+      });
       setSubmitting(true);
       setErrorMsg(null);
       setSuccessMsg(null);
 
       try {
-        const response = await fetch(WAITLIST_API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: trimmed, source: 'menrush.com' }),
-        });
+        let alreadySubscribed = false;
+        if (WAITLIST_API_URL) {
+          const response = await fetch(WAITLIST_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: trimmed, source: 'menrush.com' }),
+          });
 
-        const data = await response.json().catch(() => null);
-        if (!response.ok) {
-          const message = data?.error || 'Could not join the waitlist right now. Please try again.';
-          throw new Error(message);
+          const data = await response.json().catch(() => null);
+          if (!response.ok) {
+            const message = data?.error || 'Could not join the waitlist right now. Please try again.';
+            throw new Error(message);
+          }
+          alreadySubscribed = Boolean(data?.already_subscribed);
         }
 
         setSubmitted(true);
+        trackEvent('waitlist_succeeded', {
+          transport: WAITLIST_API_URL ? 'backend' : 'zoho_fallback',
+          already_subscribed: alreadySubscribed,
+        });
         setSuccessMsg(
-          data?.already_subscribed
+          alreadySubscribed
             ? "You're already on the list. Keep an eye on your inbox."
-            : "You're on the list. Your welcome email is queued.",
+            : "You're on the list. Keep an eye on your inbox.",
         );
         setEmail('');
 
@@ -161,6 +183,7 @@ export const ComingSoon = () => {
           body: JSON.stringify({ Email: trimmed }),
         }).catch(() => undefined);
       } catch (error) {
+        trackEvent('waitlist_failed', { stage: 'request', transport: 'backend' });
         const message = error instanceof Error ? error.message : 'Could not join the waitlist right now.';
         setErrorMsg(message);
       } finally {
@@ -184,37 +207,22 @@ export const ComingSoon = () => {
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,#0D0A06_0%,rgba(13,10,6,0.88)_35%,rgba(13,10,6,0.42)_70%,rgba(13,10,6,0.75)_100%)]" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-72 bg-[linear-gradient(0deg,#0D0A06_0%,rgba(13,10,6,0.72)_42%,transparent_100%)]" />
 
-      <header className="relative z-20 border-b border-[#3D2B0E]/70 bg-[#0D0A06]/72 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-5 sm:px-8 lg:px-10">
-          <a href="#top" className="flex items-center transition-opacity hover:opacity-85" aria-label="MenRush home">
-            <img
-              src={BRAND_MEDALLION}
-              alt="MenRush"
-              className="h-10 w-10 rounded-full object-cover"
-              draggable={false}
-            />
-          </a>
-          <nav className="flex items-center gap-2 text-sm font-semibold">
-            <a href="/login" className="rounded-lg border border-[#3D2B0E] bg-[#1E1508]/70 px-3.5 py-2 text-[#F0E0C0] transition-colors hover:border-[#C4832A]/50">
-              Sign in
-            </a>
-            <a href="/register" className="rounded-lg bg-[#C4832A] px-3.5 py-2 font-bold text-[#0D0A06] transition-colors hover:bg-[#D4943B]">
-              Sign up
-            </a>
-          </nav>
-        </div>
-      </header>
-
       <main id="top" className="relative z-10 flex-1">
-        <section className="mx-auto grid min-h-[calc(100dvh-4rem)] w-full max-w-7xl items-center gap-10 px-5 py-10 sm:px-8 lg:grid-cols-[minmax(0,1fr)_420px] lg:px-10 lg:py-14">
+        <section className="mx-auto flex min-h-dvh w-full max-w-7xl items-center px-5 py-10 sm:px-8 lg:px-10 lg:py-14">
           <div className="max-w-3xl">
-            <div className="mb-8 flex items-center">
+            <div className="mb-8 flex items-center justify-between gap-4">
               <img
                 src={BRAND_MEDALLION}
                 alt="MenRush"
                 className="h-20 w-20 rounded-full object-cover sm:h-24 sm:w-24"
                 draggable={false}
               />
+              <Link
+                to="/login"
+                className="rounded-full border border-[#3D2B0E] bg-[#1E1508]/78 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-[#A89070] transition-colors hover:border-[#C4832A]/45 hover:text-[#F0E0C0]"
+              >
+                Already have an invite? Sign in
+              </Link>
             </div>
 
             <h1 className="font-display max-w-4xl text-5xl font-black leading-[0.92] tracking-normal text-[#F0E0C0] sm:text-7xl lg:text-8xl">
@@ -225,6 +233,21 @@ export const ComingSoon = () => {
               See who's near you right now. No swiping, no waiting. Pulse live, find rooms nearby,
               and match when the moment is actually happening.
             </p>
+
+            <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+              <a
+                href="#waitlist"
+                className="inline-flex min-h-12 items-center justify-center rounded-lg bg-[#C4832A] px-6 text-sm font-black uppercase tracking-[0.08em] text-[#0D0A06] transition-all duration-200 hover:bg-[#E0A14A] active:scale-[0.98]"
+              >
+                Join the waitlist
+              </a>
+              <Link
+                to="/login"
+                className="inline-flex min-h-12 items-center justify-center rounded-lg border border-[#3D2B0E] bg-[#1E1508]/60 px-5 text-sm font-semibold text-[#A89070] transition-colors hover:border-[#C4832A]/45 hover:text-[#F0E0C0]"
+              >
+                Already have an invite? Sign in
+              </Link>
+            </div>
 
             <div id="waitlist" className="mt-8 max-w-2xl border-y border-[#3D2B0E]/80 bg-[#0D0A06]/42 py-5 backdrop-blur-md">
               {submitted && successMsg ? (
@@ -258,6 +281,9 @@ export const ComingSoon = () => {
               <p className="mt-3 text-sm text-[#A89070]">
                 Early members get <span className="font-semibold text-[#C4832A]">30 days Premium free</span> at launch. No card needed.
               </p>
+              <p className="mt-2 text-xs text-[#A89070]/85">
+                Already have a private invite? <Link to="/login" className="font-semibold text-[#C4832A] hover:text-[#E0A14A]">Sign in here</Link>.
+              </p>
             </div>
 
             <div className="mt-7 max-w-2xl rounded-lg border border-[#C4832A]/45 bg-[#1E1508]/68 p-5 backdrop-blur-md">
@@ -275,7 +301,7 @@ export const ComingSoon = () => {
                   Beta 200 · one year Premium on us
                 </p>
                 <p className="mt-2 text-sm leading-6 text-[#F0E0C0]/82">
-                  Sign up now and you're in the draw — we'll pick{' '}
+                  Join the waitlist now and you're in the draw — we'll pick{' '}
                   <span className="font-semibold text-[#C4832A]">200 men at random</span>{' '}
                   from the waitlist to join our Beta. At the end, Beta members answer a
                   short feedback survey. Honest, considered answers — not blanks or
@@ -288,63 +314,6 @@ export const ComingSoon = () => {
               </div>
             </div>
           </div>
-
-          <aside className="w-full max-w-[420px] justify-self-center lg:justify-self-end">
-            <div className="overflow-hidden rounded-[28px] border border-[#3D2B0E] bg-[#120D08]/88 p-3 shadow-[0_22px_80px_rgba(0,0,0,0.72)] backdrop-blur-xl">
-              <div className="rounded-[20px] border border-[#3D2B0E] bg-[#0D0A06]">
-                <div className="flex h-12 items-center justify-between border-b border-[#3D2B0E] px-4">
-                  <span className="text-xs font-black uppercase tracking-[0.16em] text-[#C4832A]">Nearby live</span>
-                  <span className="rounded-full bg-[#6FA85A]/16 px-2.5 py-1 text-[11px] font-bold text-[#92C47F]">24 online</span>
-                </div>
-
-                <div className="relative h-[360px] overflow-hidden bg-[#14100A]">
-                  <div className="absolute inset-0 opacity-50 [background-image:linear-gradient(rgba(196,131,42,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(196,131,42,0.12)_1px,transparent_1px)] [background-size:38px_38px]" />
-                  <div className="absolute left-1/2 top-1/2 h-44 w-44 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#C4832A]/30" />
-                  <div className="absolute left-1/2 top-1/2 h-28 w-28 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#C4832A]/40" />
-                  <span className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#F0E0C0] bg-[#C4832A] shadow-[0_0_0_10px_rgba(196,131,42,0.16)]" />
-
-                  {[
-                    { name: 'Kai', meta: '320m', x: '16%', y: '22%' },
-                    { name: 'Milo', meta: '0.8 km', x: '58%', y: '18%' },
-                    { name: 'Ash', meta: '1.2 km', x: '65%', y: '58%' },
-                    { name: 'Ren', meta: '2 km', x: '22%', y: '68%' },
-                  ].map((person) => (
-                    <div
-                      key={person.name}
-                      className="absolute flex items-center gap-2 rounded-full border border-[#3D2B0E] bg-[#1E1508]/92 py-1 pl-1 pr-3 shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
-                      style={{ left: person.x, top: person.y }}
-                    >
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#C4832A] text-xs font-black text-[#0D0A06]">
-                        {person.name[0]}
-                      </span>
-                      <span>
-                        <span className="block text-xs font-black text-[#F0E0C0]">{person.name}</span>
-                        <span className="block text-[10px] font-bold text-[#C4832A]">{person.meta}</span>
-                      </span>
-                    </div>
-                  ))}
-
-                  <button className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-[#C4832A] px-5 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#0D0A06] shadow-[0_10px_34px_rgba(196,131,42,0.32)]">
-                    <IconPulse size={18} />
-                    Pulse now
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-3 divide-x divide-[#3D2B0E] border-t border-[#3D2B0E]">
-                  {[
-                    ['8', 'Matches'],
-                    ['3', 'Rooms'],
-                    ['12', 'Messages'],
-                  ].map(([value, label]) => (
-                    <div key={label} className="px-3 py-4 text-center">
-                      <span className="block text-xl font-black text-[#F0E0C0]">{value}</span>
-                      <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.16em] text-[#A89070]">{label}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </aside>
         </section>
 
         <section id="features" className="relative z-10 border-y border-[#3D2B0E]/80 bg-[#0D0A06]/88 backdrop-blur-xl">

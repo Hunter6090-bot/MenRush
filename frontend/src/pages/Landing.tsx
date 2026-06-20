@@ -8,7 +8,7 @@ import { PulseRing } from '../components/PulseRing';
 import { SiteFooter } from '../components/SiteFooter';
 
 const stats = [
-  { value: '5km', label: 'Discovery radius' },
+  { value: '5 km', label: 'Discovery radius' },
   { value: '1 tap', label: 'Match to message' },
   { value: 'Live', label: 'Real-time presence' },
 ];
@@ -69,11 +69,12 @@ export const Landing = () => {
           {/* Left: Hero */}
           <section className="text-center lg:text-left">
             <h1 className="text-5xl font-black leading-[0.92] tracking-[-0.04em] sm:text-6xl lg:text-7xl">
-              Like-minded guys nearby.
+              Guys nearby now.
             </h1>
 
-            <p className="mt-5 max-w-md text-base leading-7 text-[#F0E0C0]/65 sm:text-lg lg:max-w-none">
-              Every profile verified. Every person real. Every connection close.
+            <p className="mt-5 max-w-md text-base leading-7 text-[#F0E0C0]/72 sm:text-lg lg:max-w-none">
+              A real-time discovery app for gay, bi, trans, discreet and curious men.
+              Verified profiles, live proximity, direct chat.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center justify-center gap-4 lg:justify-start">
@@ -116,7 +117,7 @@ export const Landing = () => {
                     placeholder="you@example.com"
                     required
                     autoComplete="email"
-                    className="w-full rounded-2xl border border-[#3D2B0E] bg-[#1E1508]/40 px-4 py-3.5 text-sm text-[#F0E0C0] placeholder:text-[#A89070]/50 focus:border-[#C4832A]/60 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/25"
+                    className="w-full rounded-2xl border border-[#C4832A]/26 bg-[#F7EFE0] px-4 py-3.5 text-sm font-semibold text-[#2A1C0A] placeholder:text-[#8B6B42]/70 focus:border-[#C4832A]/70 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/30"
                   />
                 </div>
 
@@ -132,7 +133,7 @@ export const Landing = () => {
                     placeholder="••••••••"
                     required
                     autoComplete="current-password"
-                    className="w-full rounded-2xl border border-[#3D2B0E] bg-[#1E1508]/40 px-4 py-3.5 text-sm text-[#F0E0C0] placeholder:text-[#A89070]/50 focus:border-[#C4832A]/60 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/25"
+                    className="w-full rounded-2xl border border-[#C4832A]/26 bg-[#F7EFE0] px-4 py-3.5 text-sm font-semibold text-[#2A1C0A] placeholder:text-[#8B6B42]/70 focus:border-[#C4832A]/70 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/30"
                   />
                 </div>
 
@@ -166,4 +167,3 @@ const AlertIcon = ({ className }: { className?: string }) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
   </svg>
 );
-

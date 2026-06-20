@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { IconPulse } from "./icons";
+import { IconPulse, IconClose } from "./icons";
 
 interface PulseFabProps {
   isPulsing: boolean;
@@ -67,7 +67,7 @@ export function PulseFab({
       <button
         onClick={() => setSheetOpen(true)}
         disabled={onCooldown}
-        aria-label={isPulsing ? `Pulsing — ${minutesLeft} minutes left` : "Start a Pulse"}
+        aria-label={isPulsing ? `Pulsing — ${minutesLeft} min left` : "Go visible"}
         className={`
           fixed bottom-[calc(var(--fab-offset)+88px)] right-[var(--fab-offset)] z-40
           flex items-center justify-center
@@ -90,7 +90,7 @@ export function PulseFab({
 
       {sheetOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-[var(--bg-overlay)] backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
           onClick={() => !submitting && setSheetOpen(false)}
         >
           <div
@@ -105,8 +105,8 @@ export function PulseFab({
           >
             <div className="flex items-center gap-3 mb-2">
               <IconPulse size={28} className="text-[var(--copper)]" />
-              <h2 className="text-2xl font-bold tracking-[var(--tracking-wider)] text-[var(--cream)]">
-                PULSE
+              <h2 className="font-display text-2xl font-bold tracking-wide uppercase text-nn-text">
+                Pulse
               </h2>
             </div>
 
@@ -115,8 +115,8 @@ export function PulseFab({
                 <p className="text-[var(--cream-soft)] mb-6">
                   You're pulsing. {minutesLeft} {minutesLeft === 1 ? "minute" : "minutes"} left.
                 </p>
-                <p className="text-[var(--cream-muted)] text-sm mb-6 leading-relaxed">
-                  Your avatar is pulsing on the map. You're at the top of nearby lists. Other men can see you're available right now.
+                <p className="text-nn-muted text-sm mb-6 leading-relaxed">
+                  Your avatar pulses on the map. You sit at the top of nearby lists.
                 </p>
                 {onStopPulse && (
                   <button
@@ -133,16 +133,16 @@ export function PulseFab({
                 <p className="text-[var(--cream-soft)] mb-6">
                   Pulse cooldown.
                 </p>
-                <p className="text-[var(--cream-muted)] text-sm leading-relaxed">
-                  You can pulse again in {cooldownMinutesLeft} {cooldownMinutesLeft === 1 ? "minute" : "minutes"}.
+                <p className="text-nn-muted text-sm leading-relaxed">
+                  Pulse again in {cooldownMinutesLeft} min.
                   <br /><br />
-                  <span className="text-[var(--copper)]">MenRush Premium</span> reduces cooldown to 90 minutes.
+                  <span className="text-nn-copper">MenRush Premium</span> cuts cooldown to 90 min.
                 </p>
               </>
             ) : (
               <>
-                <p className="text-[var(--cream-soft)] mb-6 leading-relaxed">
-                  Broadcast you're available <span className="text-[var(--copper)] font-semibold">right now</span>.
+                <p className="text-nn-muted mb-6 leading-relaxed">
+                  Go visible. <span className="text-nn-copper font-semibold">5 km radius.</span>
                 </p>
 
                 <div className="grid grid-cols-3 gap-3 mb-6">
@@ -183,17 +183,17 @@ export function PulseFab({
                     disabled:opacity-50
                   "
                 >
-                  {submitting ? "Starting…" : "→ START PULSE"}
+                  {submitting ? "Starting…" : "Start pulse"}
                 </button>
               </>
             )}
 
             <button
               onClick={() => !submitting && setSheetOpen(false)}
-              className="absolute top-4 right-4 text-[var(--cream-muted)] hover:text-[var(--cream)] transition-colors"
+              className="absolute top-4 right-4 text-nn-muted hover:text-nn-text transition-colors"
               aria-label="Close"
             >
-              ✕
+              <IconClose size={20} />
             </button>
           </div>
         </div>

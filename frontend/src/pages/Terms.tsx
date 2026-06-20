@@ -235,9 +235,9 @@ export const Terms = () => {
               {sectionHeading(SECTIONS[2])}
               {para(
                 <>
-                  <Strong>3.1</Strong> MenRush offers an optional ID Verified badge. Users who
-                  choose to verify their identity must submit a government-issued identification
-                  document.
+                  <Strong>3.1</Strong> MenRush may require identity and age verification before
+                  users can access discovery, matches, rooms or chat. Verification helps reduce
+                  fake profiles, underage access and platform abuse.
                 </>,
               )}
               {para(

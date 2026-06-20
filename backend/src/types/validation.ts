@@ -12,6 +12,15 @@ export const LoginSchema = z.object({
   password: z.string(),
 });
 
+export const ForgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+export const ResetPasswordSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8),
+});
+
 export const ProfileSchema = z.object({
   bio: z.string().max(500).optional(),
   headline: z.string().max(100).optional(),
@@ -100,6 +109,8 @@ export const GrantAlbumSchema = z.object({
 
 export type RegisterInput = z.infer<typeof RegisterSchema>;
 export type LoginInput = z.infer<typeof LoginSchema>;
+export type ForgotPasswordInput = z.infer<typeof ForgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
 export type ProfileInput = z.infer<typeof ProfileSchema>;
 export type LocationInput = z.infer<typeof LocationSchema>;
 export type MessageInput = z.infer<typeof MessageSchema>;

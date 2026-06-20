@@ -310,7 +310,7 @@ export const Rooms: React.FC = () => {
                   type="text"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  placeholder="e.g. Coffee lovers"
+                  placeholder="e.g. Coffee crowd"
                   required
                   maxLength={60}
                   className="w-full text-sm px-4 py-3 rounded-xl focus:outline-none transition-all duration-200"

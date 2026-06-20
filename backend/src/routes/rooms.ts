@@ -1,11 +1,11 @@
 import { Router, Response } from 'express';
 import { roomService } from '../services/room.service';
-import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { CreateRoomSchema, RoomMessageSchema } from '../types/validation';
 
 const router = Router();
 
-router.use(authMiddleware);
+router.use(authMiddleware, verifiedMiddleware);
 
 // POST / — create a room
 router.post('/', async (req: AuthRequest, res: Response) => {

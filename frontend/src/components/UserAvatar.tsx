@@ -22,7 +22,8 @@ const sizes: Record<Size, { outer: string; text: string; dot: string; dotPos: st
 export const getPhotoUrl = (url?: string) => {
   if (!url) return undefined;
   if (url.startsWith('http')) return url;
-  const baseUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
+  const baseUrl =
+    import.meta.env.VITE_SOCKET_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '');
   return `${baseUrl}${url}`;
 };
 
@@ -63,6 +64,6 @@ interface StatusDotProps {
 
 export const StatusDot: React.FC<StatusDotProps> = ({ online, className = '' }) => (
   <span
-    className={`rounded-full border-2 border-[#0D0A06] ${online ? 'bg-emerald-400' : 'bg-[#3D2B0E]'} ${className}`}
+    className={`rounded-full border-2 border-nn-bg ${online ? 'bg-nn-online' : 'bg-nn-border'} ${className}`}
   />
 );

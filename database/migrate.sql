@@ -5,7 +5,7 @@
 --          row that was introduced after the initial schema was deployed.
 --
 -- When to run:
---   - Run this file against any existing NearNow database to bring it up to
+--   - Run this file against any existing MenRush database to bring it up to
 --     date with the current schema.sql without dropping or recreating anything.
 --   - Do NOT run this on a brand-new database. For fresh installs, apply
 --     schema.sql directly via `npm run db:migrate` (from backend/) instead.

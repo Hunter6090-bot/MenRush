@@ -61,7 +61,7 @@ After installation, run `docker compose version` (or `docker-compose version`) t
 ### 1. Clone & Setup
 
 ```bash
-cd NearNow
+cd MenRush
 cp .env.example .env
 ```
 
@@ -233,7 +233,7 @@ docker-compose exec postgres psql -U menrush -d menrush < database/schema.sql
 ## 📚 Project Structure
 
 ```
-NearNow/
+MenRush/
 ├── backend/
 │   ├── src/
 │   │   ├── server.ts (Main app)

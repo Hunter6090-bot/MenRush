@@ -8,9 +8,12 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "db:migrate": "ts-node src/scripts/migrate.ts",
+    "waitlist:import": "ts-node src/scripts/import-waitlist.ts",
+    "test:security": "ts-node scripts/security-checks.ts",
     "audit:safety": "bash ../scripts/audit-safety.sh"
   },
   "dependencies": {
+    "@sentry/node": "^10.57.0",
     "@types/multer": "^2.1.0",
     "@types/web-push": "^3.6.4",
     "bcryptjs": "^2.4.3",

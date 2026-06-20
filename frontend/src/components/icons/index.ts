@@ -13,3 +13,4 @@ export { IconMatches } from "./IconMatches";
 export { IconChat } from "./IconChat";
 export { IconRooms } from "./IconRooms";
 export { IconProfile } from "./IconProfile";
+export { IconClose } from "./IconClose";

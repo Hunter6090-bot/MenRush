@@ -3,7 +3,11 @@ import { NearbyUser } from "./ProfileCard";
 import { SilhouetteAvatar } from "./SilhouetteAvatar";
 import { PulsingAvatar } from "./PulsingAvatar";
 import { getPhotoUrl } from "./UserAvatar";
-import { IconPulse } from "./icons";
+import { IconPulse, IconClose } from "./icons";
+import { StatusBadge } from "./StatusBadge";
+import { DistancePill } from "./DistancePill";
+import { VerifiedBadge } from "./VerifiedBadge";
+import { getDistanceLabel, isUserPulsing } from "../lib/discovery";
 
 interface ProfileDrawerProps {
   user: NearbyUser | null;
@@ -48,17 +52,16 @@ export function ProfileDrawer({
 
   const photo = getPhotoUrl(user.photo_url);
   const distance = parseFloat(String(user.distance_km));
-  const distLabel = distance < 1 ? `${Math.round(distance * 1000)}m` : `${distance.toFixed(1)}km`;
-  const isPulsing = !!user.available_until && new Date(user.available_until).getTime() > Date.now();
+  const distLabel = getDistanceLabel(user);
+  const isPulsing = isUserPulsing(user);
 
   return (
     <div
       className="fixed inset-0 z-[60] flex justify-center items-end sm:items-stretch sm:justify-end"
       onClick={onClose}
       style={{
-        background: mounted ? "rgba(13,10,6,0.55)" : "rgba(13,10,6,0)",
-        backdropFilter: mounted ? "blur(6px)" : "blur(0px)",
-        transition: "background 220ms ease, backdrop-filter 220ms ease",
+        background: mounted ? "rgba(13,10,6,0.60)" : "rgba(13,10,6,0)",
+        transition: "background var(--nn-dur-base) var(--nn-ease-out)",
       }}
     >
       <div
@@ -84,10 +87,10 @@ export function ProfileDrawer({
 
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-[var(--bg-card)]/80 backdrop-blur-sm border border-[var(--border-default)] text-[var(--cream-soft)] hover:text-[var(--cream)] flex items-center justify-center"
+          className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-nn-bg/70 border border-nn-border text-nn-text hover:border-nn-copper/40 flex items-center justify-center transition-colors"
           aria-label="Close"
         >
-          ✕
+          <IconClose size={18} />
         </button>
 
         <div
@@ -108,15 +111,18 @@ export function ProfileDrawer({
             className="absolute inset-0 pointer-events-none"
             style={{ background: "linear-gradient(to top, var(--bg-elevated) 0%, transparent 60%)" }}
           />
-          {isPulsing && (
-            <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--copper)] text-[var(--bg-primary)] text-[10px] font-black tracking-widest uppercase">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--bg-primary)] opacity-70" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--bg-primary)]" />
-              </span>
-              Pulsing
+          {isPulsing ? (
+            <div className="absolute top-3 left-3">
+              <StatusBadge online={false} pulsing />
             </div>
-          )}
+          ) : user.online ? (
+            <div className="absolute top-3 left-3">
+              <StatusBadge online lastSeen={user.last_seen} size="xs" />
+            </div>
+          ) : null}
+          <div className="absolute bottom-3 left-3">
+            <DistancePill km={distance} label={distLabel} />
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
@@ -138,13 +144,16 @@ export function ProfileDrawer({
             </PulsingAvatar>
           </div>
 
-          <div className="flex items-center gap-2 mb-1">
-            <h2 className="text-xl font-black text-[var(--cream)] truncate">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <h2 className="font-display text-2xl font-bold tracking-wide uppercase text-nn-text truncate">
               {user.name}
-              {user.age ? <span className="text-[var(--cream-soft)] font-bold">, {user.age}</span> : null}
             </h2>
+            {user.age ? <span className="text-nn-muted text-lg">{user.age}</span> : null}
+            {(user as { is_verified?: boolean }).is_verified && <VerifiedBadge />}
           </div>
-          <p className="text-xs text-[var(--copper)] font-bold tracking-wide">{distLabel} away{user.online ? " · Online" : ""}</p>
+          <p className="text-xs text-nn-muted">
+            {user.online ? 'Active now' : 'Offline'} · {distLabel} away
+          </p>
 
           {user.headline && (
             <p className="mt-3 text-sm text-[var(--cream-soft)] leading-relaxed italic">"{user.headline}"</p>
@@ -192,7 +201,7 @@ export function ProfileDrawer({
             onClick={() => (liked ? onMessage() : onLike())}
             className="flex-1 py-3 rounded-[var(--radius-md)] bg-[var(--copper)] text-[var(--bg-primary)] font-black text-sm tracking-wide hover:bg-[var(--copper-light)] active:scale-[0.98] transition-all"
           >
-            {liked ? "Message" : "Like"}
+            {liked ? "Open chat" : "Signal"}
           </button>
           {onPulseBack && isPulsing && (
             <button

@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
-import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { pulseService } from '../services/pulse.service';
 
 // Pulse v1 — see specs/pulse-spec.md.
@@ -11,7 +11,7 @@ import { pulseService } from '../services/pulse.service';
 // the older profiles.available_until column. Those are intentionally left
 // in place so existing frontend code keeps working until it migrates.
 const router = Router();
-router.use(authMiddleware);
+router.use(authMiddleware, verifiedMiddleware);
 
 const StartSchema = z.object({
   duration_min: z.union([z.literal(60), z.literal(90), z.literal(120)]),

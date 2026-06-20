@@ -1,5 +1,7 @@
 import { query } from '../db';
 import { v4 as uuidv4 } from 'uuid';
+import { accessControl, SecurityError } from '../security/access';
+import { isExpiredMedia, signedMediaUrl } from '../security/media';
 import type { MediaKind } from '../types/validation';
 
 /**
@@ -18,6 +20,8 @@ interface ConversationRow {
   created_at: string;
   media_type: MediaKind | null;
   media_url: string | null;
+  media_storage_key?: string | null;
+  media_mime_type?: string | null;
   audio_duration_ms: number | null;
   is_disappearing: boolean;
   expires_at: string | null;
@@ -38,16 +42,18 @@ function scrubExpired<T extends ConversationRow>(row: T): T {
   };
 }
 
-async function assertMatched(senderId: string, receiverId: string): Promise<void> {
-  const matchCheck = await query(
-    `SELECT 1 FROM likes l1
-     JOIN likes l2 ON l1.liker_id = l2.liked_id AND l1.liked_id = l2.liker_id
-     WHERE l1.liker_id = $1 AND l1.liked_id = $2`,
-    [senderId, receiverId]
-  );
-  if (matchCheck.rows.length === 0) {
-    throw new Error('You can only message people you have matched with');
+function presentMessage<T extends ConversationRow>(row: T, viewerId: string): T {
+  const scrubbed = scrubExpired(row);
+  if (scrubbed.media_url) {
+    const mediaPath = scrubbed.media_url.split('?', 1)[0];
+    return {
+      ...scrubbed,
+      media_url: signedMediaUrl(mediaPath, viewerId),
+      media_storage_key: undefined,
+      media_mime_type: undefined,
+    };
   }
+  return { ...scrubbed, media_storage_key: undefined, media_mime_type: undefined };
 }
 
 async function attachSenderName<T extends { sender_id: string }>(
@@ -59,8 +65,12 @@ async function attachSenderName<T extends { sender_id: string }>(
 }
 
 export const messageService = {
+  forViewer<T extends ConversationRow>(message: T, viewerId: string): T {
+    return presentMessage(message, viewerId);
+  },
+
   async sendMessage(senderId: string, receiverId: string, message: string) {
-    await assertMatched(senderId, receiverId);
+    await accessControl.assertInteraction(senderId, receiverId, { requireMatch: true });
 
     const id = uuidv4();
     const sanitized = message.replace(/<script[^>]*>.*?<\/script>/gi, '').trim();
@@ -74,7 +84,7 @@ export const messageService = {
       [id, senderId, receiverId, sanitized]
     );
 
-    return attachSenderName(scrubExpired(result.rows[0] as ConversationRow));
+    return attachSenderName(presentMessage(result.rows[0] as ConversationRow, senderId));
   },
 
   async sendMediaMessage(
@@ -82,13 +92,14 @@ export const messageService = {
     receiverId: string,
     opts: {
       mediaType: MediaKind;
-      mediaUrl: string;
+      storageKey: string;
+      mimeType: string;
       caption?: string;
       disappearing?: boolean;
       audioDurationMs?: number;
     }
   ) {
-    await assertMatched(senderId, receiverId);
+    await accessControl.assertInteraction(senderId, receiverId, { requireMatch: true });
 
     const id = uuidv4();
     const caption = (opts.caption ?? '').replace(/<script[^>]*>.*?<\/script>/gi, '').trim();
@@ -99,9 +110,10 @@ export const messageService = {
     const result = await query(
       `INSERT INTO messages (
          id, sender_id, receiver_id, message, created_at,
-         media_type, media_url, audio_duration_ms, is_disappearing
+         media_type, media_url, media_storage_key, media_mime_type,
+         audio_duration_ms, is_disappearing
        )
-       VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7, $8)
+       VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7, $8, $9, $10)
        RETURNING id, sender_id, receiver_id, message, created_at,
                  media_type, media_url, audio_duration_ms,
                  is_disappearing, expires_at, viewed_at`,
@@ -111,13 +123,15 @@ export const messageService = {
         receiverId,
         fallbackBody,
         opts.mediaType,
-        opts.mediaUrl,
+        `/api/messages/${id}/media`,
+        opts.storageKey,
+        opts.mimeType,
         opts.mediaType === 'audio' ? opts.audioDurationMs ?? null : null,
         isDisappearing,
       ]
     );
 
-    return attachSenderName(scrubExpired(result.rows[0] as ConversationRow));
+    return attachSenderName(presentMessage(result.rows[0] as ConversationRow, senderId));
   },
 
   /**
@@ -126,6 +140,13 @@ export const messageService = {
    * Returns the updated message row (scrubbed if already expired).
    */
   async markMessageViewed(viewerId: string, messageId: string) {
+    const message = await query(
+      `SELECT sender_id FROM messages WHERE id = $1 AND receiver_id = $2`,
+      [messageId, viewerId],
+    );
+    if (!message.rows[0]) throw new Error('message_not_found_or_not_recipient');
+    await accessControl.assertInteraction(viewerId, message.rows[0].sender_id, { requireMatch: true });
+
     const result = await query(
       `UPDATE messages
           SET viewed_at = COALESCE(viewed_at, NOW()),
@@ -144,10 +165,11 @@ export const messageService = {
     if (result.rows.length === 0) {
       throw new Error('message_not_found_or_not_recipient');
     }
-    return scrubExpired(result.rows[0] as ConversationRow);
+    return presentMessage(result.rows[0] as ConversationRow, viewerId);
   },
 
   async getConversation(userId: string, otherId: string, limit: number = 50) {
+    await accessControl.assertInteraction(userId, otherId, { requireMatch: true });
     const result = await query(
       `SELECT id, sender_id, receiver_id, message, created_at,
               media_type, media_url, audio_duration_ms,
@@ -160,10 +182,11 @@ export const messageService = {
       [userId, otherId, limit]
     );
 
-    return result.rows.reverse().map((r) => scrubExpired(r as ConversationRow));
+    return result.rows.reverse().map((r) => presentMessage(r as ConversationRow, userId));
   },
 
   async getConversations(userId: string) {
+    await accessControl.requireVerified(userId);
     const result = await query(
       `SELECT
         other_user_id,
@@ -185,7 +208,13 @@ export const messageService = {
          FROM messages m
          JOIN users u ON u.id = CASE WHEN m.sender_id = $1 THEN m.receiver_id ELSE m.sender_id END
          LEFT JOIN profiles p ON p.user_id = u.id
-         WHERE m.sender_id = $1 OR m.receiver_id = $1
+         WHERE (m.sender_id = $1 OR m.receiver_id = $1)
+           AND u.is_verified = TRUE
+           AND NOT EXISTS (
+             SELECT 1 FROM blocks b
+             WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+                OR (b.blocker_id = u.id AND b.blocked_id = $1)
+           )
          ORDER BY
            CASE WHEN m.sender_id = $1 THEN m.receiver_id ELSE m.sender_id END,
            m.created_at DESC
@@ -195,5 +224,28 @@ export const messageService = {
     );
 
     return result.rows;
+  },
+
+  async getMedia(viewerId: string, messageId: string) {
+    const result = await query(
+      `SELECT id, sender_id, receiver_id, media_storage_key, media_mime_type,
+              is_disappearing, expires_at
+       FROM messages
+       WHERE id = $1 AND media_storage_key IS NOT NULL`,
+      [messageId],
+    );
+    const row = result.rows[0];
+    if (!row || (row.sender_id !== viewerId && row.receiver_id !== viewerId)) {
+      throw new SecurityError('media_unavailable', 404, 'Media unavailable');
+    }
+    const otherId = row.sender_id === viewerId ? row.receiver_id : row.sender_id;
+    await accessControl.assertInteraction(viewerId, otherId, { requireMatch: true });
+    if (isExpiredMedia(row.is_disappearing, row.expires_at)) {
+      throw new SecurityError('media_expired', 410, 'Media expired');
+    }
+    return {
+      storageKey: row.media_storage_key as string,
+      mimeType: row.media_mime_type as string,
+    };
   },
 };

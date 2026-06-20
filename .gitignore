@@ -8,3 +8,6 @@ pictures/task_*.webp
 *.log
 .env
 .env.local
+.vercel
+frontend/playwright-report/
+frontend/test-results/

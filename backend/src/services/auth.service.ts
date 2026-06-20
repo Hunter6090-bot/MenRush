@@ -1,7 +1,12 @@
 import bcryptjs from 'bcryptjs';
 import crypto from 'crypto';
 import { query } from '../db';
-import { RegisterInput, LoginInput } from '../types/validation';
+import { RegisterInput, LoginInput, ResetPasswordInput } from '../types/validation';
+import { sendEmail } from './mailer.service';
+import {
+  buildTransactionalEmail,
+  transactionalParagraph,
+} from './transactional-email.template';
 import { v4 as uuidv4 } from 'uuid';
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -131,5 +136,90 @@ export const authService = {
   verifyToken(token: string) {
     const payload = verifyTokenInternal(token);
     return { userId: payload.userId };
+  },
+
+  async requestPasswordReset(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const result = await query(
+      `SELECT id, email FROM users WHERE LOWER(email) = $1`,
+      [normalizedEmail],
+    );
+
+    if (result.rows.length === 0) {
+      return { ok: true };
+    }
+
+    const userId = result.rows[0].id as string;
+    const deliverTo = result.rows[0].email as string;
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    await query(
+      `UPDATE password_reset_tokens SET used_at = NOW()
+       WHERE user_id = $1 AND used_at IS NULL`,
+      [userId],
+    );
+
+    await query(
+      `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+       VALUES ($1, $2, $3)`,
+      [userId, tokenHash, expiresAt],
+    );
+
+    const frontendUrl = (process.env.FRONTEND_URL || 'https://menrush.com').replace(/\/$/, '');
+    const resetUrl = `${frontendUrl}/reset-password?token=${rawToken}`;
+
+    const html = buildTransactionalEmail({
+      title: 'Reset your MenRush password',
+      preheader: 'Choose a new password — link valid for 1 hour.',
+      eyebrow: 'Account Security',
+      headlineHtml: 'Reset your<br/><span style="color:#C4832A;">password</span>',
+      subheadline: 'We received a request to reset the password for your MenRush account.',
+      bodyHtml: [
+        transactionalParagraph(
+          'Tap the button below to choose a new password. This link expires in <strong style="color:#F0E0C0;">1 hour</strong> and can only be used once.',
+        ),
+        transactionalParagraph(
+          'If you didn&apos;t request this, you can safely ignore this email — your password won&apos;t change.',
+        ),
+      ].join(''),
+      ctaUrl: resetUrl,
+      ctaLabel: 'Choose a new password',
+      footerNote: 'You received this because a password reset was requested for your MenRush account.',
+    });
+
+    await sendEmail({
+      to: deliverTo,
+      subject: 'Reset your MenRush password',
+      text: `We received a request to reset your MenRush password.\n\nOpen this link to choose a new password (valid for 1 hour):\n${resetUrl}\n\nIf you did not request this, you can ignore this email.`,
+      html,
+    });
+
+    return { ok: true };
+  },
+
+  async resetPassword(data: ResetPasswordInput) {
+    const tokenHash = crypto.createHash('sha256').update(data.token).digest('hex');
+    const result = await query(
+      `SELECT id, user_id FROM password_reset_tokens
+       WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW()`,
+      [tokenHash],
+    );
+
+    if (result.rows.length === 0) {
+      throw new Error('Invalid or expired reset link');
+    }
+
+    const { id: tokenId, user_id: userId } = result.rows[0];
+    const hashedPassword = await bcryptjs.hash(data.password, 10);
+
+    await query(
+      `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
+      [hashedPassword, userId],
+    );
+    await query(`UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1`, [tokenId]);
+
+    return { ok: true };
   },
 };

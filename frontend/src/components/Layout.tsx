@@ -5,7 +5,8 @@ import { useSocket } from '../hooks/useSocket';
 import { UserAvatar } from './UserAvatar';
 import { ToastNotifications } from './ToastNotifications';
 import { FEATURES } from '../lib/featureFlags';
-import { SiteFooter } from './SiteFooter';
+import { IconChat, IconDiscover, IconMatches, IconProfile, IconRooms } from './icons';
+import { BRAND_LOGO_ORIGINAL } from '../lib/brand';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -58,13 +59,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   const navLinks = [
-    { to: '/discover', label: 'Discover', icon: CompassIcon, badge: 0 },
-    { to: '/matches', label: 'Matches', icon: HeartIcon, badge: 0 },
-    { to: '/conversations', label: 'Messages', icon: ChatIcon, badge: unreadCount },
-    { to: '/profile', label: 'Profile', icon: PersonIcon, badge: 0 },
+    { to: '/discover', label: 'Nearby', Icon: IconDiscover, badge: 0 },
+    { to: '/matches', label: 'Matches', Icon: IconMatches, badge: 0 },
+    { to: '/conversations', label: 'Messages', Icon: IconChat, badge: unreadCount },
+    { to: '/profile', label: 'Profile', Icon: IconProfile, badge: 0 },
   ];
   if (FEATURES.chatRooms) {
-    navLinks.splice(3, 0, { to: '/rooms', label: 'Rooms', icon: RoomsNavIcon, badge: 0 });
+    navLinks.splice(3, 0, { to: '/rooms', label: 'Rooms', Icon: IconRooms, badge: 0 });
   }
 
   const isActive = (path: string) => {
@@ -85,23 +86,25 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <div className="min-h-dvh bg-[#0D0A06] flex flex-col">
       {/* ── Top header ── */}
-      <header className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center relative overflow-visible px-4 bg-[#0D0A06]/85 backdrop-blur-xl border-b border-[#3D2B0E]">
-        {/* Compact brand mark — small in-bar logo (no oversized pendant on internal pages) */}
-        <Link
-          to="/discover"
-          className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-50 hover:opacity-80 transition-opacity"
-          aria-label="MenRush home"
-        >
-          <img src="/logo.png" alt="MenRush" className="w-6 h-6 rounded-full" />
-        </Link>
+      <header className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center px-4 bg-[#0D0A06]/85 backdrop-blur-xl border-b border-[#3D2B0E]">
+        <div className="max-w-5xl mx-auto w-full flex items-center justify-between gap-3">
+          {/* Original brand medallion — home */}
+          <Link
+            to="/discover"
+            className="flex shrink-0 items-center hover:opacity-85 transition-opacity"
+            aria-label="MenRush home"
+          >
+            <img
+              src={BRAND_LOGO_ORIGINAL}
+              alt="MenRush"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover ring-1 ring-[#C4832A]/25 shadow-[0_2px_14px_rgba(196,131,42,0.22)]"
+              draggable={false}
+            />
+          </Link>
 
-        <div className="max-w-5xl mx-auto w-full flex items-center justify-between">
-          {/* Left spacer to balance the coin (desktop) */}
-          <div className="hidden sm:block w-10" />
-
-          {/* Desktop nav links */}
-          <nav className="hidden sm:flex items-center gap-1">
-            {navLinks.map(({ to, label, icon: Icon, badge }) => (
+          {/* Desktop nav — centered in remaining space */}
+          <nav className="hidden sm:flex flex-1 items-center justify-center gap-1 min-w-0">
+            {navLinks.map(({ to, label, Icon, badge }) => (
               <Link
                 key={to}
                 to={to}
@@ -112,13 +115,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 }`}
               >
                 <span className="relative">
-                  <Icon className="w-4 h-4" />
+                  <Icon size={16} />
                   {badge > 0 && (
                     <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-[#8B4513] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
                       {badge > 9 ? '9+' : badge}
                     </span>
                   )}
                 </span>
+                <span className="hidden md:inline">{label}</span>
               </Link>
             ))}
           </nav>
@@ -150,14 +154,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="page-enter">{children}</div>
       </main>
 
-      <div className="shrink-0 pb-[var(--mobile-tab-bar-height)] sm:pb-0">
-        <SiteFooter />
-      </div>
-
       {/* ── Mobile bottom nav ── */}
       <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0D0A06]/90 backdrop-blur-xl border-t border-[#3D2B0E] pb-[env(safe-area-inset-bottom,0px)]">
         <div className="flex items-stretch h-16">
-          {navLinks.map(({ to, label, icon: Icon, badge }) => (
+          {navLinks.map(({ to, label, Icon, badge }) => (
             <Link
               key={to}
               to={to}
@@ -168,13 +168,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               }`}
             >
               <span className="relative">
-                <Icon className={`w-6 h-6 transition-transform duration-200 ${isActive(to) ? 'scale-110' : ''}`} />
+                <Icon size={24} className={`transition-transform duration-200 ${isActive(to) ? 'scale-110' : ''}`} />
                 {badge > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-[#8B4513] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
                     {badge > 9 ? '9+' : badge}
                   </span>
                 )}
               </span>
+              <span className="mt-1 text-[10px] font-bold leading-none">{label}</span>
             </Link>
           ))}
         </div>
@@ -184,44 +185,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   );
 };
 
-/* ── Icons ── */
-const CompassIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <circle cx="12" cy="12" r="10" />
-    <polygon points="16.24,7.76 14.12,14.12 7.76,16.24 9.88,9.88" />
-  </svg>
-);
-
-const HeartIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-  </svg>
-);
-
-const ChatIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-  </svg>
-);
-
-const PersonIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-  </svg>
-);
-
 const LogoutIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-  </svg>
-);
-
-const RoomsNavIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
-    />
   </svg>
 );

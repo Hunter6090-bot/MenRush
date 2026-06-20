@@ -5,6 +5,7 @@ import { verifyAPI } from '../api/verify';
 import { useAuthStore } from '../hooks/store';
 import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
+import { trackEvent } from '../observability/analytics';
 
 let _stripePromise: Promise<Stripe | null> | null = null;
 function getStripePromise(): Promise<Stripe | null> {
@@ -25,6 +26,7 @@ export const Verify: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const handleStart = async () => {
+    trackEvent('verification_transition', { state: 'start_requested' });
     setError(null);
     setLoading(true);
     try {
@@ -33,6 +35,7 @@ export const Verify: React.FC = () => {
 
       const stripe = await getStripePromise();
       if (!stripe) {
+        trackEvent('verification_transition', { state: 'client_not_configured' });
         setError(
           'Identity verification is not yet configured for this environment. Set VITE_STRIPE_PUBLISHABLE_KEY in frontend/.env to enable.',
         );
@@ -47,23 +50,28 @@ export const Verify: React.FC = () => {
 
       const result = await verifyIdentity(clientSecret);
       if (result.error) {
+        trackEvent('verification_transition', { state: 'provider_cancelled_or_failed' });
         setError(result.error.message ?? 'Verification was cancelled.');
         setLoading(false);
         return;
       }
 
       setVerified('pending', false);
+      trackEvent('verification_transition', { state: 'submitted' });
       navigate('/verify/pending');
     } catch (err: any) {
       const code = err?.response?.data?.error;
       if (code === 'stripe_not_configured') {
+        trackEvent('verification_transition', { state: 'server_not_configured' });
         setError(
           'Identity verification is not yet configured on the server. STRIPE_SECRET_KEY is missing.',
         );
       } else if (code === 'already_verified') {
+        trackEvent('verification_transition', { state: 'already_verified' });
         setVerified('verified', true);
         navigate('/discover');
       } else {
+        trackEvent('verification_transition', { state: 'start_failed' });
         setError(err?.response?.data?.error || 'Could not start verification.');
       }
     } finally {

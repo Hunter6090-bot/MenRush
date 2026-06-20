@@ -1,16 +1,38 @@
+import crypto from 'crypto';
 import { query } from '../db';
+import { accessControl } from '../security/access';
 import { ProfileInput } from '../types/validation';
+
+function privateMapPoint(originLat: number, originLng: number, distanceKm: number) {
+  const bearing = crypto.randomInt(0, 360) * (Math.PI / 180);
+  const latitudeOffset = (distanceKm / 111) * Math.cos(bearing);
+  const longitudeScale = Math.max(Math.cos(originLat * (Math.PI / 180)), 0.2);
+  const longitudeOffset = (distanceKm / (111 * longitudeScale)) * Math.sin(bearing);
+  return {
+    lat: Number((originLat + latitudeOffset).toFixed(6)),
+    lng: Number((originLng + longitudeOffset).toFixed(6)),
+  };
+}
 
 export const userService = {
   async getNearbyUsers(
     userId: string,
-    lat: number,
-    lng: number,
     radiusKm: number = 5,
     filters?: { minAge?: number; maxAge?: number; interests?: string[]; onlyPulse?: boolean }
   ) {
+    await accessControl.requireVerified(userId);
+    const locationResult = await query(
+      `SELECT lat, lng
+       FROM profiles
+       WHERE user_id = $1 AND location IS NOT NULL AND lat IS NOT NULL AND lng IS NOT NULL`,
+      [userId],
+    );
+    if (!locationResult.rows[0]) return [];
+
+    const originLat = Number(locationResult.rows[0].lat);
+    const originLng = Number(locationResult.rows[0].lng);
     const radiusMeters = radiusKm * 1000;
-    const values: any[] = [lat, lng, userId, radiusMeters];
+    const values: any[] = [originLat, originLng, userId, radiusMeters];
     // Pulse v1: is_pulsing/pulse_expires_at live on users (per pulse-spec.md).
     // Computed `is_pulsing_live` AND-checks the expiry so a stale row that hasn't
     // been cron-swept yet doesn't masquerade as pulsing in the UI.
@@ -18,7 +40,6 @@ export const userService = {
       SELECT
         u.id, u.name, u.age, u.bio, u.photo_url, u.interests,
         u.is_verified,
-        ROUND(p.lat::numeric, 3) as lat, ROUND(p.lng::numeric, 3) as lng,
         p.online, p.last_seen, p.available_until,
         (u.is_pulsing AND u.pulse_expires_at IS NOT NULL AND u.pulse_expires_at > NOW()) AS is_pulsing,
         CASE
@@ -33,6 +54,7 @@ export const userService = {
       FROM users u
       JOIN profiles p ON u.id = p.user_id
       WHERE u.id != $3
+        AND u.is_verified = TRUE
         AND ST_DWithin(p.location, ST_MakePoint($2, $1)::geography, $4)
         AND p.is_visible = true
         AND p.is_ghost = false
@@ -76,43 +98,40 @@ export const userService = {
 
     return result.rows.map((row) => {
       const km = row.distance_m / 1000;
-      // Distance bucketing — defends against precise-distance triangulation while
-      // keeping the UX feeling alive. The lat/lng fields are already snapped to
-      // 3 decimals (~110m) above; the bucket below caps how precisely a viewer
-      // can read the gap between themselves and a target on the strip card.
+      // Distance bucketing and randomized bearings prevent triangulation while
+      // preserving an approximate map/list experience.
       let bucketed: number;
       let label: string;
       if (km < 0.3) {
         bucketed = 0.2;
-        label = '< 300m';
+        label = '< 300 m';
       } else if (km < 1) {
         bucketed = Math.round(km * 10) / 10; // 0.1km steps under 1km
-        label = `${Math.round(bucketed * 1000)}m`;
+        label = `${Math.round(bucketed * 1000)} m`;
       } else if (km < 5) {
         bucketed = Math.round(km * 2) / 2; // 0.5km steps
-        label = `${bucketed.toFixed(1)}km`;
+        label = `${bucketed.toFixed(1)} km`;
       } else {
         bucketed = Math.round(km); // 1km steps above 5km
-        label = `${bucketed}km`;
+        label = `${bucketed} km`;
       }
       return {
         ...row,
+        ...privateMapPoint(originLat, originLng, bucketed),
         distance_km: bucketed.toFixed(2),
         distance_label: label,
       };
     });
   },
 
-  async getUserProfile(userId: string, includeEmail: boolean = true) {
-    const emailField = includeEmail ? 'u.email, ' : '';
-    const ghostField = includeEmail ? 'p.is_ghost, ' : ''; // only expose own ghost flag
+  async getOwnProfile(userId: string) {
     const result = await query(
       `SELECT
-        u.id, ${emailField}u.name, u.age, u.bio, u.headline, u.looking_for,
+        u.id, u.email, u.name, u.age, u.bio, u.headline, u.looking_for,
         u.photo_url, u.interests, u.created_at,
         u.is_verified, u.verification_status,
         p.lat, p.lng, p.online, p.last_seen, p.is_visible, p.available_until,
-        ${ghostField}
+        p.is_ghost,
         CASE
           WHEN p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' THEN p.mood
           ELSE NULL
@@ -127,6 +146,30 @@ export const userService = {
       [userId]
     );
     return result.rows[0];
+  },
+
+  async getPublicProfile(viewerId: string, targetId: string) {
+    await accessControl.assertProfileView(viewerId, targetId);
+    const result = await query(
+      `SELECT
+        u.id, u.name, u.age, u.bio, u.headline, u.looking_for,
+        u.photo_url, u.interests, u.created_at, u.is_verified,
+        p.online, p.last_seen, p.available_until,
+        CASE
+          WHEN p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' THEN p.mood
+          ELSE NULL
+        END AS mood
+       FROM users u
+       JOIN profiles p ON p.user_id = u.id
+       WHERE u.id = $1`,
+      [targetId],
+    );
+    return result.rows[0];
+  },
+
+  async getDisplayName(userId: string) {
+    const result = await query(`SELECT name FROM users WHERE id = $1`, [userId]);
+    return result.rows[0]?.name as string | undefined;
   },
 
   async updateLocation(userId: string, lat: number, lng: number) {
@@ -194,6 +237,8 @@ export const userService = {
   },
 
   async likeUser(likerId: string, likedId: string) {
+    await accessControl.assertProfileView(likerId, likedId);
+    await accessControl.assertInteraction(likerId, likedId);
     // Record the like
     await query(
       `INSERT INTO likes (liker_id, liked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
@@ -279,6 +324,12 @@ export const userService = {
          FROM likes l1
          JOIN likes l2 ON l1.liker_id = l2.liked_id AND l1.liked_id = l2.liker_id
          WHERE l1.liker_id = $1
+       )
+       AND u.is_verified = TRUE
+       AND NOT EXISTS (
+         SELECT 1 FROM blocks b
+         WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+            OR (b.blocker_id = u.id AND b.blocked_id = $1)
        )
        ORDER BY p.online DESC, COALESCE(msg.created_at, p.last_seen) DESC`,
       [userId]

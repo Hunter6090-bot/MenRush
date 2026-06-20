@@ -41,19 +41,34 @@ export const Login = () => {
       <RandomBackground />
       <div className="absolute inset-0 bg-black/60" />
 
-      <div className="relative z-10 mx-auto flex min-h-0 flex-1 w-full max-w-7xl items-center px-5 py-8 sm:px-8 lg:px-10">
+      <header className="relative z-20 flex h-16 shrink-0 items-center justify-end px-5 sm:px-8 lg:px-10">
+        <nav className="flex items-center gap-2 text-sm font-semibold">
+          <Link
+            to="/coming-soon#waitlist"
+            className="rounded-lg border border-[#3D2B0E] bg-[#1E1508]/68 px-3.5 py-2 font-bold text-[#A89070] transition-colors hover:border-[#C4832A]/45 hover:text-[#F0E0C0]"
+          >
+            Join the waitlist
+          </Link>
+        </nav>
+      </header>
+
+      <div className="relative z-10 mx-auto flex min-h-0 flex-1 w-full max-w-7xl items-center px-5 py-6 sm:px-8 lg:px-10">
         <div className="grid w-full gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
           <section className="max-w-2xl self-center">
-            <Link to="/" className="inline-block hover:opacity-80 transition-opacity">
+            <Link to="/login" className="inline-block hover:opacity-80 transition-opacity">
               <CoinFlip qrValue="https://menrush.com" sizeClass="h-24" noFlip />
             </Link>
 
             <h1 className="mt-7 max-w-3xl text-5xl font-black leading-[0.95] tracking-[-0.05em] text-[#F0E0C0] sm:text-6xl lg:text-7xl">
-              Sign in and step back into
+              Invite holders can sign in and step back into
               <span className="block bg-gradient-to-r from-[#F0E0C0] via-[#C4832A] to-[#8B4513] bg-clip-text text-transparent">
                 location-based user discovery.
               </span>
             </h1>
+
+            <p className="mt-5 max-w-2xl text-base leading-7 text-[#F0E0C0]/74">
+              MenRush is still in prelaunch. If you do not already have access, join the waitlist from the homepage and we will invite you when the product is ready.
+            </p>
 
 
             <div className="mt-10 grid max-w-xl gap-3 sm:grid-cols-3">
@@ -72,7 +87,7 @@ export const Login = () => {
           </section>
 
           <section className="w-full max-w-md lg:justify-self-end">
-            <div className="bg-transparent p-1 sm:p-2">
+            <div className="rounded-[1.25rem] border border-[#C4832A]/22 bg-[#0D0A06]/72 p-5 shadow-[0_18px_70px_rgba(0,0,0,0.55)] backdrop-blur-xl sm:p-6">
               {error && (
                 <div className="mb-4 flex items-start gap-2.5 rounded-2xl border border-[#8B4513]/30 bg-[#8B4513]/12 px-4 py-3 text-sm text-[#F0E0C0]/90 backdrop-blur-md animate-fade-in">
                   <AlertIcon className="mt-0.5 h-4 w-4 flex-shrink-0" />
@@ -82,7 +97,7 @@ export const Login = () => {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[#A89070]">
+                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-[#F0E0C0]/82">
                     Username / Email
                   </label>
                   <input
@@ -91,12 +106,12 @@ export const Login = () => {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
                     required
-                    className="w-full rounded-2xl border border-[#3D2B0E] bg-[#1E1508]/40 px-4 py-3.5 text-sm text-[#F0E0C0] placeholder:text-[#A89070]/50 focus:border-[#C4832A]/60 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/25"
+                    className="w-full rounded-2xl border border-[#C4832A]/26 bg-[#F7EFE0] px-4 py-3.5 text-sm font-semibold text-[#2A1C0A] placeholder:text-[#8B6B42]/70 focus:border-[#C4832A]/70 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/30"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[#A89070]">
+                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-[#F0E0C0]/82">
                     Password
                   </label>
                   <input
@@ -105,7 +120,7 @@ export const Login = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     required
-                    className="w-full rounded-2xl border border-[#3D2B0E] bg-[#1E1508]/40 px-4 py-3.5 text-sm text-[#F0E0C0] placeholder:text-[#A89070]/50 focus:border-[#C4832A]/60 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/25"
+                    className="w-full rounded-2xl border border-[#C4832A]/26 bg-[#F7EFE0] px-4 py-3.5 text-sm font-semibold text-[#2A1C0A] placeholder:text-[#8B6B42]/70 focus:border-[#C4832A]/70 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/30"
                   />
                 </div>
 
@@ -118,12 +133,20 @@ export const Login = () => {
                 </button>
               </form>
 
-              <p className="mt-5 text-sm text-[#A89070]">
-                No account yet?{' '}
-                <Link to="/register" className="font-semibold text-[#C4832A] transition-colors hover:text-[#D4943B]">
-                  Create one
+              <div className="mt-5 flex items-center justify-between gap-4 text-sm text-[#F0E0C0]/72">
+                <p>
+                  Need access?{' '}
+                  <Link to="/coming-soon#waitlist" className="font-semibold text-[#C4832A] transition-colors hover:text-[#D4943B]">
+                    Join the waitlist
+                  </Link>
+                </p>
+                <Link
+                  to="/forgot-password"
+                  className="shrink-0 font-medium text-[#C4832A] transition-colors hover:text-[#D4943B]"
+                >
+                  Forgot password?
                 </Link>
-              </p>
+              </div>
             </div>
           </section>
         </div>
@@ -139,4 +162,3 @@ const AlertIcon = ({ className }: { className?: string }) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
   </svg>
 );
-

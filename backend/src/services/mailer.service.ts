@@ -94,6 +94,27 @@ export interface SendEmailParams {
   text?: string;
 }
 
+export interface EmailStatus {
+  id: string;
+  createdAt: string;
+  from: string;
+  to: string[];
+  subject: string;
+  lastEvent:
+    | 'bounced'
+    | 'canceled'
+    | 'clicked'
+    | 'complained'
+    | 'delivered'
+    | 'delivery_delayed'
+    | 'failed'
+    | 'opened'
+    | 'queued'
+    | 'scheduled'
+    | 'sent'
+    | 'suppressed';
+}
+
 export class MailerSendError extends Error {
   constructor(
     message: string,
@@ -121,15 +142,18 @@ function getResend(): Resend {
 }
 
 /**
- * Call once at process startup (after dotenv) so missing RESEND_API_KEY fails
- * fast instead of on first send.
+ * Log Resend availability at startup without blocking the rest of the app.
+ * Contact + waitlist drip still use Zoho SMTP, so the backend should boot
+ * even if Resend has not been configured yet.
  */
-export function assertResendMailerConfigured(): void {
+export function logResendMailerStatus(): void {
   if (!process.env.RESEND_API_KEY?.trim()) {
-    throw new Error(
-      '[mailer] RESEND_API_KEY is required but missing. Set it in backend/.env (see backend/.env.example).',
+    console.warn(
+      '[mailer] RESEND_API_KEY is not set. Resend-powered admin test email is disabled until configured.',
     );
+    return;
   }
+  console.log('[mailer] Resend API key detected. Transactional mail smoke tests are available.');
 }
 
 function formatToForLog(to: string | string[]): string {
@@ -187,5 +211,36 @@ export async function sendEmail(params: SendEmailParams): Promise<{ id: string }
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[mailer] FAILED to ${toLog}: ${msg}`);
     throw new MailerSendError(`Resend send failed: ${msg}`, msg, err);
+  }
+}
+
+export async function getEmailStatus(id: string): Promise<EmailStatus> {
+  try {
+    const { data, error } = await getResend().emails.get(id);
+    if (error) {
+      const msg =
+        typeof error.message === 'string' && error.message.length > 0
+          ? error.message
+          : JSON.stringify(error);
+      throw new MailerSendError(`Resend email lookup failed: ${msg}`, msg, error);
+    }
+    if (!data) {
+      throw new MailerSendError('Resend email lookup returned no data');
+    }
+
+    return {
+      id: data.id,
+      createdAt: data.created_at,
+      from: data.from,
+      to: data.to,
+      subject: data.subject,
+      lastEvent: data.last_event,
+    };
+  } catch (err) {
+    if (err instanceof MailerSendError) {
+      throw err;
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new MailerSendError(`Resend email lookup failed: ${msg}`, msg, err);
   }
 }

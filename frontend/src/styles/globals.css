@@ -22,11 +22,19 @@ body {
   min-height: 100dvh;
 }
 
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #2A1C0A;
+  box-shadow: 0 0 0 1000px #F7EFE0 inset;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
 /* ── Scrollbar ──────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+::-webkit-scrollbar-thumb { background: rgba(196,131,42,0.18); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(196,131,42,0.28); }
 
 /* ── Selection ──────────────────────────────────── */
 ::selection { background: rgba(196,131,42,0.35); color: #F0E0C0; }
@@ -131,6 +139,7 @@ body {
 
 /* ── Shadow Glows ──────────────────────────────── */
 .shadow-glow-blue { box-shadow: 0 0 20px rgba(196, 131, 42, 0.5); }
+.shadow-glow-copper { box-shadow: 0 0 20px rgba(196, 131, 42, 0.5); }
 .shadow-glow-red { box-shadow: 0 0 20px rgba(139, 69, 19, 0.5); }
 
 /* ── Coin flip animation ────────────────────────── */

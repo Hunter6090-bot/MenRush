@@ -55,6 +55,9 @@ export function useWebRTC() {
   }, [socket, peerId]);
 
   const getLocalMedia = useCallback(async () => {
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      throw new Error('insecure_media_context');
+    }
     const stream = await navigator.mediaDevices.getUserMedia({
       video: true,
       audio: true,

@@ -3,12 +3,13 @@ import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
 import { messageService } from '../services/message.service';
-import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
+import { SecurityError } from '../security/access';
+import { resolveMediaPath, verifyMediaAccess } from '../security/media';
+import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
 import { MessageSchema, MediaMessageFormSchema } from '../types/validation';
 
 const router = Router();
-
-router.use(authMiddleware);
 
 // ── Multer storage for message media (images + voice notes) ──────────────
 const mediaDir = path.resolve(__dirname, '../../uploads/messages');
@@ -18,23 +19,34 @@ const mediaUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, mediaDir),
     filename: (req: any, file, cb) => {
-      const suffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-      // Best-effort extension — multer's file.originalname can be browser-junk
-      // for MediaRecorder blobs ("blob"), so fall back to a sensible default.
-      let ext = path.extname(file.originalname || '');
-      if (!ext) {
-        if (file.mimetype.startsWith('audio/')) ext = '.webm';
-        else if (file.mimetype.startsWith('image/')) ext = '.jpg';
+      try {
+        cb(null, safeUploadFilename('message', req.userId, file.mimetype));
+      } catch (error) {
+        cb(error as Error, '');
       }
-      cb(null, `msg-${req.userId}-${suffix}${ext}`);
     },
   }),
   limits: { fileSize: 12 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('audio/')) cb(null, true);
-    else cb(new Error('Only images or audio are allowed'));
-  },
+  fileFilter: uploadFileFilter('message'),
 });
+
+router.get('/:messageId/media', async (req, res) => {
+  try {
+    const resource = `/api/messages/${req.params.messageId}/media`;
+    const grant = verifyMediaAccess(String(req.query.access || ''), resource);
+    const media = await messageService.getMedia(grant.viewerId, req.params.messageId);
+    res.type(media.mimeType);
+    res.setHeader('Cache-Control', 'private, no-store');
+    return res.sendFile(resolveMediaPath(mediaDir, media.storageKey));
+  } catch (error) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.code });
+    }
+    return res.status(404).json({ error: 'media_unavailable' });
+  }
+});
+
+router.use(authMiddleware, verifiedMiddleware);
 
 router.post('/', async (req: AuthRequest, res: Response) => {
   try {
@@ -62,6 +74,10 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
   }
 
   const { receiver_id, kind, caption, disappearing, duration_ms } = parsed.data;
+  if (!(await validateFileSignature(req.file.path, req.file.mimetype))) {
+    try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+    return res.status(400).json({ error: 'File content does not match its type' });
+  }
   // Server-side guard: don't allow mime/kind mismatch (frontend could lie).
   if (kind === 'image' && !req.file.mimetype.startsWith('image/')) {
     try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
@@ -72,18 +88,21 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
     return res.status(400).json({ error: 'Expected an audio upload' });
   }
 
-  const media_url = `/uploads/messages/${req.file.filename}`;
   try {
     const message = await messageService.sendMediaMessage(req.userId!, receiver_id, {
       mediaType: kind,
-      mediaUrl: media_url,
+      storageKey: req.file.filename,
+      mimeType: req.file.mimetype,
       caption,
       disappearing,
       audioDurationMs: duration_ms,
     });
 
     const io = req.app.get('io');
-    io.to(`user:${receiver_id}`).emit('message', message);
+    io.to(`user:${receiver_id}`).emit(
+      'message',
+      messageService.forViewer(message, receiver_id),
+    );
 
     res.status(201).json(message);
   } catch (error: any) {

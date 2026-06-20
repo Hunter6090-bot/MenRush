@@ -3,7 +3,7 @@ self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
 self.addEventListener('push', (event) => {
-  let data = { title: 'MenRush', body: 'Someone is nearby!', icon: '/logo.png' };
+  let data = { title: 'MenRush', body: 'Someone is nearby!', icon: '/brand/icon-192.png' };
   try {
     if (event.data) data = { ...data, ...event.data.json() };
   } catch {}
@@ -12,7 +12,7 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(data.title, {
       body: data.body,
       icon: data.icon,
-      badge: '/logo.png',
+      badge: '/brand/icon-48.png',
       tag: 'menrush-nearby',
       renotify: true,
       data: { url: '/discover' },

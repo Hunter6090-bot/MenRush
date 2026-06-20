@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import webpush from 'web-push';
 import { query } from '../db';
-import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 
 const router = Router();
 
@@ -27,7 +27,7 @@ const SubscribeSchema = z.object({
 });
 
 // POST /api/push/subscribe  — save or update a push subscription
-router.post('/subscribe', authMiddleware, async (req: AuthRequest, res) => {
+router.post('/subscribe', authMiddleware, verifiedMiddleware, async (req: AuthRequest, res) => {
   const parsed = SubscribeSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Invalid subscription object' });
 

@@ -1,10 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { messagesAPI, usersAPI, MediaKind, MessageDTO } from '../api/client';
+import { trackEventOnce } from '../observability/analytics';
 import { useSocket } from '../hooks/useSocket';
 import { useAuthStore, useCallStore } from '../hooks/store';
-import { useWebRTC } from '../hooks/useWebRTC';
-import { VideoCallModal } from '../components/VideoCallModal';
 import { UserAvatar } from '../components/UserAvatar';
 import { StatusBadge } from '../components/StatusBadge';
 import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
@@ -77,7 +76,6 @@ export const Messages = () => {
   const socket = useSocket();
   const user = useAuthStore((s) => s.user);
   const { setCalling } = useCallStore();
-  const { startCall } = useWebRTC();
   const navigate = useNavigate();
   const bottomRef = useRef<HTMLDivElement>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -273,6 +271,11 @@ export const Messages = () => {
       const res = await messagesAPI.sendMessage(otherId, current);
       const saved: Message = res.data;
       setMessages((prev) => [...prev, saved]);
+      trackEventOnce(
+        'first_message_success',
+        { kind: 'text', surface: 'direct_message' },
+        'first_message_success',
+      );
     } catch {
       inputValueRef.current = current;
       setInput(current);
@@ -360,7 +363,6 @@ export const Messages = () => {
               onClick={() => {
                   if (otherId && otherUser?.name) {
                     setCalling(otherId, otherUser.name);
-                    startCall(otherId, otherUser.name);
                   }
                 }}
               aria-label="Start video call"
@@ -691,12 +693,6 @@ export const Messages = () => {
         )}
       </div>
 
-      {FEATURES.videoCalls && (
-        <>
-          {/* ── Video call modal ───────────────────────────────────────────── */}
-          <VideoCallModal />
-        </>
-      )}
     </div>
   );
 };

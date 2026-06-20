@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3000/api' : '/api');
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -17,6 +18,8 @@ apiClient.interceptors.request.use((config) => {
 export const authAPI = {
   register: (data: unknown) => apiClient.post('/auth/register', data),
   login: (data: unknown) => apiClient.post('/auth/login', data),
+  forgotPassword: (data: { email: string }) => apiClient.post('/auth/forgot-password', data),
+  resetPassword: (data: { token: string; password: string }) => apiClient.post('/auth/reset-password', data),
 };
 
 export const usersAPI = {
@@ -61,6 +64,19 @@ export const usersAPI = {
   unblockUser: (id: string) => apiClient.delete(`/users/block/${id}`),
   reportUser: (id: string, reason: string, details?: string) =>
     apiClient.post(`/users/report/${id}`, { reason, details }),
+};
+
+export interface PulseStateDTO {
+  is_pulsing: boolean;
+  pulse_expires_at: string | null;
+  next_pulse_allowed_at: string | null;
+}
+
+export const pulseAPI = {
+  getMe: () => apiClient.get<PulseStateDTO>('/pulse/me'),
+  start: (durationMin: 60 | 90 | 120) =>
+    apiClient.post<{ ok: true; expires_at: string }>('/pulse/start', { duration_min: durationMin }),
+  stop: () => apiClient.post<{ ok: true }>('/pulse/stop'),
 };
 
 export type MediaKind = 'image' | 'audio';
@@ -253,4 +269,7 @@ export const aiAPI = {
 };
 
 export { apiClient };
-export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
+// Keep signalling on the same origin as the app. This works for localhost,
+// LAN development proxies, preview tunnels, and production without mixed
+// content or accidentally resolving `localhost` on a user's phone.
+export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
