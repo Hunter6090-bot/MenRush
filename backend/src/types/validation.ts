@@ -47,8 +47,14 @@ export const MediaMessageFormSchema = z.object({
   kind: z.enum(MEDIA_KINDS),
   /** Optional caption when sending an image. Ignored for audio. */
   caption: z.string().max(500).optional(),
-  /** Whether the message should burn 10s after the recipient views it. */
+  /** Whether the image is disappearing (view-limited) vs. kept permanently. */
   disappearing: z.coerce.boolean().optional(),
+  /**
+   * For disappearing images: how many times the recipient may view it.
+   * 1 = view once, 2 = view twice, N = limited views. Ignored (NULL) when
+   * the image is permanent. Capped to keep "disappearing" meaningful.
+   */
+  max_views: z.coerce.number().int().min(1).max(99).optional(),
   /** Duration in ms — required for audio kind. */
   duration_ms: z.coerce.number().int().min(0).max(180_000).optional(),
 });

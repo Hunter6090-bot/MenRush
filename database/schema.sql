@@ -186,6 +186,10 @@ ALTER TABLE messages ADD COLUMN IF NOT EXISTS audio_duration_ms INT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMP;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_disappearing BOOLEAN NOT NULL DEFAULT false;
+-- Disappearing media view-count model (see migration 010): max_views NULL = permanent,
+-- N>=1 = allows N recipient views; view_count tracks consumed views.
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS max_views INT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS view_count INT NOT NULL DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS idx_messages_expires ON messages(expires_at) WHERE expires_at IS NOT NULL;
 

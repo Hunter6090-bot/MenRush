@@ -1,9 +1,7 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuthStore, useUnreadStore, useNotificationStore } from '../hooks/store';
-import { useSocket } from '../hooks/useSocket';
+import { useAuthStore, useUnreadStore } from '../hooks/store';
 import { UserAvatar } from './UserAvatar';
-import { ToastNotifications } from './ToastNotifications';
 import { FEATURES } from '../lib/featureFlags';
 import { IconChat, IconDiscover, IconMatches, IconProfile, IconRooms } from './icons';
 import { BRAND_LOGO_ORIGINAL } from '../lib/brand';
@@ -14,44 +12,9 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, logout } = useAuthStore();
-  const { count: unreadCount, addUnread } = useUnreadStore();
-  const { addNotification } = useNotificationStore();
+  const unreadCount = useUnreadStore((s) => s.count);
   const location = useLocation();
   const navigate = useNavigate();
-  const socket = useSocket();
-
-  // Listen for incoming messages and notifications
-  useEffect(() => {
-    if (!socket) return;
-
-    const onMessage = (data: any) => {
-      const isViewingConversation = location.pathname === `/messages/${data.sender_id}`;
-      if (!isViewingConversation) {
-        addUnread(data.sender_id);
-        addNotification({
-          type: 'message',
-          message: `New message from ${data.sender_name || 'someone'}`,
-          userId: data.sender_id,
-        });
-      }
-    };
-
-    const onNotification = (data: any) => {
-      addNotification({
-        type: data.type,
-        message: data.message,
-        userId: data.userId,
-      });
-    };
-
-    socket.on('message', onMessage);
-    socket.on('notification', onNotification);
-
-    return () => {
-      socket.off('message', onMessage);
-      socket.off('notification', onNotification);
-    };
-  }, [socket, location.pathname, addUnread, addNotification]);
 
   const handleLogout = () => {
     logout();
@@ -117,7 +80,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <span className="relative">
                   <Icon size={16} />
                   {badge > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-[#8B4513] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
+                    <span
+                      data-testid={`badge-${to.replace(/\//g, '')}`}
+                      className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-[#8B4513] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5"
+                    >
                       {badge > 9 ? '9+' : badge}
                     </span>
                   )}
@@ -170,7 +136,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               <span className="relative">
                 <Icon size={24} className={`transition-transform duration-200 ${isActive(to) ? 'scale-110' : ''}`} />
                 {badge > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-[#8B4513] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
+                  <span
+                    data-testid={`badge-mobile-${to.replace(/\//g, '')}`}
+                    className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-[#8B4513] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5"
+                  >
                     {badge > 9 ? '9+' : badge}
                   </span>
                 )}
@@ -180,7 +149,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           ))}
         </div>
       </nav>
-      <ToastNotifications />
     </div>
   );
 };

@@ -1,22 +1,40 @@
-// MenRush Service Worker — handles push notifications
+// MenRush Service Worker — handles background push notifications.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
 self.addEventListener('push', (event) => {
-  let data = { title: 'MenRush', body: 'Someone is nearby!', icon: '/brand/icon-192.png' };
+  let data = {};
   try {
-    if (event.data) data = { ...data, ...event.data.json() };
+    if (event.data) data = event.data.json();
   } catch {}
 
+  const title = data.title || 'MenRush';
+  const url = data.url || '/discover';
+  const options = {
+    body: data.body || 'New activity on MenRush',
+    icon: data.icon || '/brand/menrush-logo-192.png',
+    badge: '/brand/menrush-logo-48.png',
+    // Per-conversation tag collapses repeats so a chat doesn't spam the tray.
+    tag: data.tag || 'menrush',
+    renotify: true,
+    data: { url },
+  };
+
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: data.icon,
-      badge: '/brand/icon-48.png',
-      tag: 'menrush-nearby',
-      renotify: true,
-      data: { url: '/discover' },
-    }),
+    (async () => {
+      // Dedupe with the foreground app: skip push only when a visible, focused tab
+      // is already on the target conversation — not for every focused tab.
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const active = windows.find((c) => c.visibilityState === 'visible' && c.focused);
+      if (active) {
+        try {
+          if (new URL(active.url).pathname === url) return;
+        } catch {
+          /* compare failed — show the notification */
+        }
+      }
+      await self.registration.showNotification(title, options);
+    })(),
   );
 });
 
@@ -24,10 +42,20 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const url = event.notification.data?.url || '/discover';
   event.waitUntil(
-    self.clients.matchAll({ type: 'window' }).then((clients) => {
-      const existing = clients.find((c) => c.url.includes(self.location.origin));
-      if (existing) return existing.focus();
-      return self.clients.openWindow(url);
-    }),
+    (async () => {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const client of windows) {
+        if (client.url.includes(self.location.origin)) {
+          await client.focus();
+          if ('navigate' in client) {
+            try {
+              await client.navigate(url);
+            } catch {}
+          }
+          return;
+        }
+      }
+      await self.clients.openWindow(url);
+    })(),
   );
 });

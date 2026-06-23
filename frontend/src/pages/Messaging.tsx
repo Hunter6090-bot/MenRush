@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { messagesAPI, usersAPI, MediaKind, MessageDTO } from '../api/client';
 import { trackEventOnce } from '../observability/analytics';
 import { useSocket } from '../hooks/useSocket';
-import { useAuthStore, useCallStore } from '../hooks/store';
+import { useAuthStore, useCallStore, useUnreadStore } from '../hooks/store';
 import { UserAvatar } from '../components/UserAvatar';
 import { StatusBadge } from '../components/StatusBadge';
 import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
@@ -24,7 +24,49 @@ interface Message extends Partial<MessageDTO> {
   is_disappearing?: boolean;
   expires_at?: string | null;
   viewed_at?: string | null;
+  max_views?: number | null;
+  view_count?: number;
+  remaining_views?: number | null;
   expired?: boolean;
+}
+
+/** Sender's chosen viewing rule for an outgoing image. */
+type ViewRule = 'permanent' | 'once' | 'twice' | 'custom';
+
+const VIEW_RULE_LABELS: Record<ViewRule, string> = {
+  permanent: 'Keep in chat',
+  once: 'View once',
+  twice: 'View twice',
+  custom: 'Limited views',
+};
+
+/** Map the chosen rule to the upload options understood by the API. */
+function ruleToSendOptions(
+  rule: ViewRule,
+  customViews: number,
+): { disappearing: boolean; maxViews?: number } {
+  switch (rule) {
+    case 'permanent':
+      return { disappearing: false };
+    case 'once':
+      return { disappearing: true, maxViews: 1 };
+    case 'twice':
+      return { disappearing: true, maxViews: 2 };
+    case 'custom':
+      return { disappearing: true, maxViews: Math.min(20, Math.max(2, Math.round(customViews))) };
+  }
+}
+
+/** Human label for how many views a recipient has left. */
+function remainingViewsLabel(remaining: number | null | undefined, maxViews?: number | null): string {
+  if (maxViews == null) return '';
+  if (remaining == null) {
+    if (maxViews === 1) return 'View once';
+    return `${maxViews} views`;
+  }
+  if (remaining <= 0) return 'No views left';
+  if (remaining === 1) return '1 view left';
+  return `${remaining} views left`;
 }
 
 interface OtherUser {
@@ -71,6 +113,14 @@ export const Messages = () => {
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [mediaError, setMediaError] = useState('');
+  // Image composer: hold the selected file for preview + view-rule choice
+  // before sending (instead of sending immediately on pick).
+  const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
+  const [viewRule, setViewRule] = useState<ViewRule>('once');
+  const [customViews, setCustomViews] = useState(3);
+  // Recipient image viewer (transient full-screen view of a disappearing image).
+  const [viewerMsg, setViewerMsg] = useState<Message | null>(null);
   // Ticks once a second so disappearing countdowns and burned states update.
   const [, setBurnTick] = useState(0);
   const socket = useSocket();
@@ -92,6 +142,7 @@ export const Messages = () => {
     if (!otherId) return;
     messagesAPI.getConversation(otherId).then((r) => setMessages(r.data)).catch(() => {});
     usersAPI.getProfile(otherId).then((r) => setOtherUser(r.data)).catch(() => {});
+    useUnreadStore.getState().clearUnreadFrom(otherId);
   }, [otherId]);
 
   useEffect(() => {
@@ -107,11 +158,17 @@ export const Messages = () => {
       }
     };
     const onTyping = ({ typing }: { typing: boolean }) => setIsOtherTyping(typing);
-    const onViewed = (data: { id: string; viewed_at: string; expires_at: string | null }) => {
+    const onViewed = (data: {
+      id: string;
+      viewed_at: string;
+      expires_at: string | null;
+      max_views?: number | null;
+      view_count?: number;
+      remaining_views?: number | null;
+      expired?: boolean;
+    }) => {
       setMessages((prev) =>
-        prev.map((m) =>
-          m.id === data.id ? { ...m, viewed_at: data.viewed_at, expires_at: data.expires_at } : m,
-        ),
+        prev.map((m) => (m.id === data.id ? { ...m, ...data } : m)),
       );
     };
 
@@ -140,6 +197,14 @@ export const Messages = () => {
     return () => window.clearTimeout(id);
   }, [mediaError]);
 
+  // Revoke any staged preview object URL when the component unmounts.
+  useEffect(() => {
+    return () => {
+      if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const emitTyping = (typing: boolean) => {
     socket?.emit('typing', { receiver_id: otherId, typing });
   };
@@ -155,12 +220,14 @@ export const Messages = () => {
   // ── Media: image attach (disappearing by default) ─────────────────────
   const handleAttachClick = () => fileInputRef.current?.click();
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !otherId) return;
-    if (!file.type.startsWith('image/')) {
-      setMediaError('Only images can be attached.');
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      setMediaError('Only JPEG, PNG or WebP images can be attached.');
       return;
     }
     if (file.size > 12 * 1024 * 1024) {
@@ -168,10 +235,42 @@ export const Messages = () => {
       return;
     }
     setMediaError('');
+    // Stage the image for preview; the user picks a view rule then taps Send.
+    setPendingPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+    setPendingImage(file);
+    setViewRule('once');
+  };
+
+  const clearPendingImage = useCallback(() => {
+    setPendingImage(null);
+    setPendingPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  }, []);
+
+  const handleSendPendingImage = async () => {
+    if (!pendingImage || !otherId || uploadingMedia) return;
+    const file = pendingImage;
+    const { disappearing, maxViews } = ruleToSendOptions(viewRule, customViews);
+    setMediaError('');
     setUploadingMedia(true);
     try {
-      const res = await messagesAPI.sendMedia(otherId, file, { kind: 'image', disappearing: true });
+      const res = await messagesAPI.sendMedia(otherId, file, {
+        kind: 'image',
+        disappearing,
+        maxViews,
+      });
       setMessages((prev) => [...prev, res.data]);
+      clearPendingImage();
+      trackEventOnce(
+        'first_message_success',
+        { kind: 'image', surface: 'direct_message' },
+        'first_message_success',
+      );
     } catch (err: any) {
       setMediaError(err?.response?.data?.error || 'Failed to send photo');
     } finally {
@@ -244,15 +343,19 @@ export const Messages = () => {
     if (mr && mr.state === 'recording') mr.stop();
   }, []);
 
-  // ── Mark a disappearing message as viewed (recipient side) ────────────
-  const handleMarkViewed = async (id: string) => {
+  // ── Consume one view of a disappearing image (recipient side) ─────────
+  // Called by the viewer only after the image has loaded & become visible,
+  // so a mere tap or a failed load never burns a view.
+  const handleConsumeView = useCallback(async (id: string): Promise<Message | null> => {
     try {
       const res = await messagesAPI.markViewed(id);
       setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...res.data } : m)));
+      return res.data as Message;
     } catch {
       // Server already replies with the canonical row; silently ignore conflicts.
+      return null;
     }
-  };
+  }, []);
 
   const handleSend = async (e?: React.FormEvent | React.KeyboardEvent) => {
     e?.preventDefault?.();
@@ -473,7 +576,7 @@ export const Messages = () => {
                       msg={msg}
                       isMine={isMine}
                       showTail={showTail}
-                      onReveal={handleMarkViewed}
+                      onOpen={setViewerMsg}
                     />
                   ) : msg.media_type === 'audio' ? (
                     <AudioBubble msg={msg} isMine={isMine} showTail={showTail} />
@@ -566,11 +669,25 @@ export const Messages = () => {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
-          aria-label="Attach disappearing photo"
+          accept="image/jpeg,image/png,image/webp"
+          aria-label="Attach photo"
           className="hidden"
           onChange={handleFileChange}
         />
+
+        {/* Image composer — preview + view-rule choice before sending */}
+        {pendingImage && pendingPreviewUrl && (
+          <ImageComposer
+            previewUrl={pendingPreviewUrl}
+            rule={viewRule}
+            customViews={customViews}
+            uploading={uploadingMedia}
+            onRuleChange={setViewRule}
+            onCustomViewsChange={setCustomViews}
+            onCancel={clearPendingImage}
+            onSend={handleSendPendingImage}
+          />
+        )}
 
         {recording ? (
           // Recording-only bar — Stop sends, Cancel discards.
@@ -618,9 +735,9 @@ export const Messages = () => {
             <button
               type="button"
               onClick={handleAttachClick}
-              disabled={uploadingMedia}
-              aria-label="Send disappearing photo"
-              title="Send disappearing photo"
+              disabled={uploadingMedia || !!pendingImage}
+              aria-label="Attach photo"
+              title="Attach photo"
               className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40"
               style={{ background: '#1E1508', border: '1px solid #3D2B0E', color: '#C4832A' }}
             >
@@ -692,6 +809,15 @@ export const Messages = () => {
           </form>
         )}
       </div>
+
+      {/* Full-screen viewer for disappearing images (recipient) */}
+      {viewerMsg && (
+        <ImageViewer
+          msg={viewerMsg}
+          onConsume={handleConsumeView}
+          onClose={() => setViewerMsg(null)}
+        />
+      )}
 
     </div>
   );
@@ -796,125 +922,430 @@ function formatDuration(ms?: number | null): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+// ── ImageComposer ────────────────────────────────────────────────────────────
+// Shown after the sender picks an image: a preview plus Telegram-style view-rule
+// chips (keep / view once / view twice / limited) and Send / Cancel controls.
+
+interface ImageComposerProps {
+  previewUrl: string;
+  rule: ViewRule;
+  customViews: number;
+  uploading: boolean;
+  onRuleChange: (rule: ViewRule) => void;
+  onCustomViewsChange: (n: number) => void;
+  onCancel: () => void;
+  onSend: () => void;
+}
+
+const ImageComposer: React.FC<ImageComposerProps> = ({
+  previewUrl,
+  rule,
+  customViews,
+  uploading,
+  onRuleChange,
+  onCustomViewsChange,
+  onCancel,
+  onSend,
+}) => {
+  const rules: ViewRule[] = ['permanent', 'once', 'twice', 'custom'];
+  const ruleSummary =
+    rule === 'permanent'
+      ? 'Stays in the conversation'
+      : rule === 'once'
+        ? 'Disappears after 1 view'
+        : rule === 'twice'
+          ? 'Disappears after 2 views'
+          : `Disappears after ${customViews} views`;
+
+  return (
+    <div
+      className="mb-3 p-3 rounded-2xl"
+      data-testid="image-composer"
+      style={{ background: '#1E1508', border: '1px solid #3D2B0E' }}
+    >
+      <div className="flex gap-3">
+        <img
+          src={previewUrl}
+          alt="Selected photo preview"
+          data-testid="image-composer-preview"
+          className="w-20 h-20 rounded-xl object-cover flex-shrink-0"
+          style={{ border: '1px solid #3D2B0E' }}
+        />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold mb-2" style={{ color: '#F0E0C0' }}>
+            Photo · <span data-testid="image-composer-rule">{VIEW_RULE_LABELS[rule]}</span>
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {rules.map((r) => {
+              const active = r === rule;
+              return (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => onRuleChange(r)}
+                  data-testid={`rule-${r}`}
+                  aria-pressed={active}
+                  className="text-[11px] px-2.5 py-1 rounded-full transition-all active:scale-95"
+                  style={{
+                    background: active ? 'rgba(196,131,42,0.22)' : '#0D0A06',
+                    border: `1px solid ${active ? '#C4832A' : '#3D2B0E'}`,
+                    color: active ? '#F0E0C0' : '#A89070',
+                  }}
+                >
+                  {VIEW_RULE_LABELS[r]}
+                </button>
+              );
+            })}
+          </div>
+          {rule === 'custom' && (
+            <div className="flex items-center gap-2 mt-2" data-testid="custom-views">
+              <button
+                type="button"
+                aria-label="Fewer views"
+                onClick={() => onCustomViewsChange(Math.max(2, customViews - 1))}
+                className="w-6 h-6 rounded-full flex items-center justify-center"
+                style={{ background: '#0D0A06', border: '1px solid #3D2B0E', color: '#C4832A' }}
+              >
+                −
+              </button>
+              <span className="text-xs tabular-nums" style={{ color: '#F0E0C0' }}>
+                {customViews} views
+              </span>
+              <button
+                type="button"
+                aria-label="More views"
+                onClick={() => onCustomViewsChange(Math.min(20, customViews + 1))}
+                className="w-6 h-6 rounded-full flex items-center justify-center"
+                style={{ background: '#0D0A06', border: '1px solid #3D2B0E', color: '#C4832A' }}
+              >
+                +
+              </button>
+            </div>
+          )}
+          <p className="text-[10px] mt-2" style={{ color: '#6B5035' }}>
+            {ruleSummary}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center justify-end gap-2 mt-3">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={uploading}
+          data-testid="image-composer-cancel"
+          className="text-xs px-4 py-2 rounded-full disabled:opacity-40"
+          style={{ background: '#0D0A06', border: '1px solid #3D2B0E', color: '#A89070' }}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={onSend}
+          disabled={uploading}
+          data-testid="image-composer-send"
+          className="text-xs font-semibold px-5 py-2 rounded-full disabled:opacity-50 active:scale-95"
+          style={{
+            background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+            color: '#FFF5E6',
+            boxShadow: '0 2px 12px rgba(196,131,42,0.4)',
+          }}
+        >
+          {uploading ? 'Sending…' : 'Send'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // ── ImageBubble ──────────────────────────────────────────────────────────────
-// Renders disappearing and persistent image messages. Disappearing-not-yet-viewed
-// images on the recipient side show a locked card; tapping reveals the photo
-// and starts the server-tracked 10s burn.
+// Permanent images render inline. Disappearing images render as a tappable
+// card (recipient) or a status card (sender); tapping opens the viewer, which
+// is the only place the photo is actually shown. Once views are exhausted both
+// sides see a "No longer available" tombstone.
 
 interface ImageBubbleProps {
   msg: Message;
   isMine: boolean;
   showTail: boolean;
-  onReveal: (id: string) => void;
+  onOpen: (msg: Message) => void;
 }
 
-const ImageBubble: React.FC<ImageBubbleProps> = ({ msg, isMine, showTail, onReveal }) => {
+const ImageBubble: React.FC<ImageBubbleProps> = ({ msg, isMine, showTail, onOpen }) => {
   const radius = showTail
     ? isMine
       ? '18px 18px 4px 18px'
       : '18px 18px 18px 4px'
     : '18px';
 
-  // Compute live "expired" — server expired flag OR client-side derived.
-  const expiresMs = msg.expires_at ? Date.parse(msg.expires_at) : null;
-  const isExpired = !!msg.expired || (expiresMs != null && expiresMs <= Date.now());
-  const secondsLeft = expiresMs ? Math.max(0, Math.ceil((expiresMs - Date.now()) / 1000)) : null;
+  const isDisappearing = !!msg.is_disappearing;
+  const isExhausted = !!msg.expired || (!isDisappearing ? false : !msg.media_url);
   const url = getPhotoUrl(msg.media_url || undefined);
 
-  // Burned tombstone — both sides see this once the window has elapsed.
-  if (isExpired || !url) {
+  // Exhausted disappearing media → "No longer available" tombstone (both sides).
+  if (isDisappearing && isExhausted) {
     return (
       <div
         className="px-4 py-3 flex items-center gap-2 text-xs"
+        data-testid="image-unavailable"
         style={{
           background: '#1E1508',
           border: '1px solid #3D2B0E',
           color: '#A89070',
           borderRadius: radius,
-          minWidth: 180,
+          minWidth: 200,
         }}
       >
         <FlameIcon className="w-4 h-4" />
-        <span>Photo burned</span>
+        <span>Photo no longer available</span>
       </div>
     );
   }
 
-  // Recipient + disappearing + not yet opened → locked teaser.
-  const lockedForRecipient = !isMine && msg.is_disappearing && !msg.viewed_at;
-  if (lockedForRecipient) {
+  // Permanent image → inline, always available.
+  if (!isDisappearing) {
+    if (!url) return null;
     return (
-      <button
-        type="button"
-        onClick={() => msg.id && onReveal(msg.id)}
-        className="relative overflow-hidden flex items-center justify-center active:scale-[0.98] transition-transform"
+      <div
+        className="relative overflow-hidden"
+        data-testid="image-permanent"
         style={{
-          width: 220,
-          height: 220,
-          background: 'linear-gradient(135deg, #1E1508 0%, #0D0A06 100%)',
-          border: '1px solid #3D2B0E',
+          background: '#1E1508',
+          border: isMine ? 'none' : '1px solid #3D2B0E',
           borderRadius: radius,
+          boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
         }}
-        aria-label="Tap to view disappearing photo"
       >
-        <div className="flex flex-col items-center gap-2 px-4 text-center">
-          <div
-            className="w-12 h-12 rounded-full flex items-center justify-center"
-            style={{ background: 'rgba(196,131,42,0.15)', border: '1px solid rgba(196,131,42,0.4)' }}
-          >
-            <FlameIcon className="w-5 h-5" style={{ color: '#C4832A' }} />
-          </div>
-          <p className="text-xs font-semibold" style={{ color: '#F0E0C0' }}>
-            Tap to view
-          </p>
-          <p className="text-[10px]" style={{ color: '#A89070' }}>
-            Burns 10s after you open it
-          </p>
-        </div>
-      </button>
+        <img
+          src={url}
+          alt={msg.message || 'photo'}
+          className="block max-w-[260px] max-h-[340px] object-cover cursor-zoom-in"
+          onClick={() => onOpen(msg)}
+        />
+      </div>
     );
   }
 
-  // Photo visible. If disappearing + already viewed, show a countdown overlay.
+  const remainingLabel = remainingViewsLabel(msg.remaining_views, msg.max_views);
+
+  // Sender's own disappearing image → status card (not re-openable).
+  if (isMine) {
+    const opened = !!msg.viewed_at;
+    const status = !opened
+      ? 'Awaiting view'
+      : msg.remaining_views != null && msg.remaining_views <= 0
+        ? 'Viewed'
+        : `Opened · ${remainingLabel}`;
+    return (
+      <div
+        className="px-4 py-3 flex items-center gap-3 text-xs"
+        data-testid="image-sent-status"
+        style={{
+          background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+          color: '#FFF5E6',
+          borderRadius: radius,
+          minWidth: 200,
+          boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
+        }}
+      >
+        <FlameIcon className="w-4 h-4" />
+        <div className="flex flex-col">
+          <span className="font-semibold">Photo · {remainingViewsLabel(null, msg.max_views)}</span>
+          <span style={{ color: 'rgba(255,245,230,0.8)' }}>{status}</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Recipient + disappearing + views remaining → tappable card. Tapping opens
+  // the viewer; it does NOT consume a view until the image actually loads.
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(msg)}
+      data-testid="image-locked"
+      className="relative overflow-hidden flex items-center justify-center active:scale-[0.98] transition-transform"
+      style={{
+        width: 220,
+        height: 220,
+        background: 'linear-gradient(135deg, #1E1508 0%, #0D0A06 100%)',
+        border: '1px solid #3D2B0E',
+        borderRadius: radius,
+      }}
+      aria-label={`Tap to view photo (${remainingLabel})`}
+    >
+      <div className="flex flex-col items-center gap-2 px-4 text-center">
+        <div
+          className="w-12 h-12 rounded-full flex items-center justify-center"
+          style={{ background: 'rgba(196,131,42,0.15)', border: '1px solid rgba(196,131,42,0.4)' }}
+        >
+          <FlameIcon className="w-5 h-5" style={{ color: '#C4832A' }} />
+        </div>
+        <p className="text-xs font-semibold" style={{ color: '#F0E0C0' }}>
+          Tap to view
+        </p>
+        <p className="text-[10px]" style={{ color: '#A89070' }} data-testid="image-remaining">
+          {remainingLabel}
+        </p>
+      </div>
+    </button>
+  );
+};
+
+// ── ImageViewer ──────────────────────────────────────────────────────────────
+// Full-screen transient viewer for a disappearing image. A view is consumed
+// only after the image has loaded and become visible (onLoad). A failed load
+// shows a retry and never burns a view. After loading, the photo stays up for a
+// viewing window so "view once" is actually viewable.
+
+const VIEW_WINDOW_MS = 10_000;
+
+interface ImageViewerProps {
+  msg: Message;
+  onConsume: (id: string) => Promise<Message | null>;
+  onClose: () => void;
+}
+
+const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) => {
+  const isPermanent = !msg.is_disappearing || msg.max_views == null;
+  const [status, setStatus] = useState<'loading' | 'shown' | 'error'>('loading');
+  const [secondsLeft, setSecondsLeft] = useState(Math.round(VIEW_WINDOW_MS / 1000));
+  const [meta, setMeta] = useState<{ remaining: number | null | undefined; max: number | null | undefined }>(
+    { remaining: msg.remaining_views, max: msg.max_views },
+  );
+  const [imgAttempt, setImgAttempt] = useState(0);
+  const consumedRef = useRef(false);
+  const baseUrl = getPhotoUrl(msg.media_url || undefined);
+  const url =
+    baseUrl && imgAttempt > 0
+      ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}_retry=${imgAttempt}`
+      : baseUrl;
+
+  // Disappearing images auto-close after the viewing window. Permanent images
+  // stay open until the user closes them.
+  useEffect(() => {
+    if (status !== 'shown' || isPermanent) return;
+    setSecondsLeft(Math.round(VIEW_WINDOW_MS / 1000));
+    const tick = window.setInterval(() => {
+      setSecondsLeft((s) => Math.max(0, s - 1));
+    }, 1000);
+    const closer = window.setTimeout(onClose, VIEW_WINDOW_MS);
+    return () => {
+      window.clearInterval(tick);
+      window.clearTimeout(closer);
+    };
+  }, [status, isPermanent, onClose]);
+
+  const handleLoad = async () => {
+    if (consumedRef.current) {
+      setStatus('shown');
+      return;
+    }
+    setStatus('shown');
+    // Permanent images don't consume a view.
+    if (isPermanent || !msg.id) {
+      consumedRef.current = true;
+      return;
+    }
+    consumedRef.current = true;
+    const updated = await onConsume(msg.id);
+    if (updated) {
+      setMeta({ remaining: updated.remaining_views, max: updated.max_views });
+    } else {
+      // Server rejected the consume — allow retry without burning a view locally.
+      consumedRef.current = false;
+    }
+  };
+
+  const handleError = () => {
+    // Loading failed — do NOT consume a view; let the user retry or close.
+    consumedRef.current = false;
+    setStatus('error');
+  };
+
+  const handleRetry = () => {
+    consumedRef.current = false;
+    setStatus('loading');
+    setImgAttempt((n) => n + 1);
+  };
+
   return (
     <div
-      className="relative overflow-hidden"
-      style={{
-        background: '#1E1508',
-        border: isMine ? 'none' : '1px solid #3D2B0E',
-        borderRadius: radius,
-        boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
-      }}
+      className="fixed inset-0 z-[100] flex flex-col items-center justify-center"
+      data-testid="image-viewer"
+      style={{ background: 'rgba(5,3,1,0.96)' }}
+      onContextMenu={(e) => e.preventDefault()}
     >
-      <img
-        src={url}
-        alt={msg.message || 'photo'}
-        className="block max-w-[260px] max-h-[340px] object-cover"
-      />
-      {msg.is_disappearing && (
-        <div
-          className="absolute top-2 left-2 right-2 flex items-center justify-between px-2.5 py-1 rounded-full"
-          style={{
-            background: 'rgba(13,10,6,0.75)',
-            border: '1px solid rgba(196,131,42,0.45)',
-            backdropFilter: 'blur(6px)',
-            WebkitBackdropFilter: 'blur(6px)',
-          }}
-        >
-          <span className="flex items-center gap-1 text-[10px]" style={{ color: '#F0E0C0' }}>
-            <FlameIcon className="w-3 h-3" style={{ color: '#C4832A' }} />
-            <span>Disappearing</span>
-          </span>
-          {secondsLeft != null ? (
-            <span className="text-[10px] tabular-nums" style={{ color: '#F0E0C0' }}>
-              {secondsLeft}s
-            </span>
-          ) : isMine ? (
-            <span className="text-[10px]" style={{ color: '#A89070' }}>
-              Awaiting view
-            </span>
-          ) : null}
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close photo"
+        data-testid="image-viewer-close"
+        className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center"
+        style={{ background: 'rgba(30,21,8,0.9)', border: '1px solid #3D2B0E', color: '#F0E0C0' }}
+      >
+        <CloseIcon className="w-5 h-5" />
+      </button>
+
+      {status === 'error' ? (
+        <div className="flex flex-col items-center gap-3 text-center px-8">
+          <FlameIcon className="w-8 h-8" style={{ color: '#C4832A' }} />
+          <p className="text-sm" style={{ color: '#F0E0C0' }}>
+            Couldn’t load this photo.
+          </p>
+          <p className="text-xs" style={{ color: '#A89070' }}>
+            No view was used. Check your connection and try again.
+          </p>
+          <button
+            type="button"
+            data-testid="image-viewer-retry"
+            onClick={handleRetry}
+            className="text-xs font-semibold px-5 py-2 rounded-full mt-1"
+            style={{ background: 'linear-gradient(135deg, #C4832A, #8B4513)', color: '#FFF5E6' }}
+          >
+            Retry
+          </button>
         </div>
+      ) : (
+        <>
+          {status === 'loading' && (
+            <div className="absolute" data-testid="image-viewer-loading">
+              <PulseRing size={28} label="Loading photo" />
+            </div>
+          )}
+          {url && (
+            <img
+              key={imgAttempt}
+              src={url}
+              alt={msg.message || 'photo'}
+              data-testid="image-viewer-img"
+              draggable={false}
+              onLoad={handleLoad}
+              onError={handleError}
+              className="max-w-[92vw] max-h-[78vh] object-contain select-none"
+              style={{ opacity: status === 'shown' ? 1 : 0 }}
+            />
+          )}
+          {status === 'shown' && !isPermanent && (
+            <div
+              className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1"
+              data-testid="image-viewer-meta"
+            >
+              <span
+                className="text-[11px] px-3 py-1 rounded-full"
+                style={{
+                  background: 'rgba(30,21,8,0.9)',
+                  border: '1px solid rgba(196,131,42,0.45)',
+                  color: '#F0E0C0',
+                }}
+              >
+                {remainingViewsLabel(meta.remaining, meta.max)} · closes in {secondsLeft}s
+              </span>
+              <span className="text-[10px]" style={{ color: '#6B5035' }}>
+                Screenshots can’t be fully blocked on the web — view with trust.
+              </span>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

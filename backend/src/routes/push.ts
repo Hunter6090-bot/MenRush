@@ -47,9 +47,26 @@ router.post('/subscribe', authMiddleware, verifiedMiddleware, async (req: AuthRe
   }
 });
 
+// POST /api/push/unsubscribe — remove a push subscription (user turned it off)
+const UnsubscribeSchema = z.object({ endpoint: z.string().url() });
+router.post('/unsubscribe', authMiddleware, verifiedMiddleware, async (req: AuthRequest, res) => {
+  const parsed = UnsubscribeSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid subscription object' });
+  try {
+    await query(`DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = $2`, [
+      req.userId,
+      parsed.data.endpoint,
+    ]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('push unsubscribe error', err);
+    res.status(500).json({ error: 'Failed to remove subscription' });
+  }
+});
+
 // GET /api/push/vapid-public  — expose VAPID public key to the frontend
 router.get('/vapid-public', (_req, res) => {
-  res.json({ publicKey: VAPID_PUBLIC });
+  res.json({ publicKey: VAPID_PUBLIC, configured: Boolean(VAPID_PUBLIC && VAPID_PRIVATE) });
 });
 
 export { webpush };

@@ -3,6 +3,7 @@ import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
 import { messageService } from '../services/message.service';
+import { sendPushToUser } from '../services/push.service';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { SecurityError } from '../security/access';
 import { resolveMediaPath, verifyMediaAccess } from '../security/media';
@@ -10,6 +11,21 @@ import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../
 import { MessageSchema, MediaMessageFormSchema } from '../types/validation';
 
 const router = Router();
+
+/**
+ * Fire-and-forget background push to the recipient. The sender is never the
+ * recipient here (we only ever push to `receiver_id`), so this never notifies
+ * the sender. The service worker dedupes against any foreground tab, so an
+ * active in-app session won't double-notify.
+ */
+function pushNewMessage(receiverId: string, senderName: string, senderId: string, body: string) {
+  void sendPushToUser(receiverId, {
+    title: senderName || 'New message',
+    body,
+    url: `/messages/${senderId}`,
+    tag: `msg-${senderId}`,
+  }).catch(() => undefined);
+}
 
 // ── Multer storage for message media (images + voice notes) ──────────────
 const mediaDir = path.resolve(__dirname, '../../uploads/messages');
@@ -55,6 +71,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 
     const io = req.app.get('io');
     io.to(`user:${data.receiver_id}`).emit('message', message);
+    pushNewMessage(data.receiver_id, message.sender_name ?? '', req.userId!, message.message);
 
     res.status(201).json(message);
   } catch (error: any) {
@@ -73,7 +90,7 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
     return res.status(400).json({ error: parsed.error.errors[0].message });
   }
 
-  const { receiver_id, kind, caption, disappearing, duration_ms } = parsed.data;
+  const { receiver_id, kind, caption, disappearing, max_views, duration_ms } = parsed.data;
   if (!(await validateFileSignature(req.file.path, req.file.mimetype))) {
     try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
     return res.status(400).json({ error: 'File content does not match its type' });
@@ -95,6 +112,7 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
       mimeType: req.file.mimetype,
       caption,
       disappearing,
+      maxViews: max_views,
       audioDurationMs: duration_ms,
     });
 
@@ -102,6 +120,12 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
     io.to(`user:${receiver_id}`).emit(
       'message',
       messageService.forViewer(message, receiver_id),
+    );
+    pushNewMessage(
+      receiver_id,
+      message.sender_name ?? '',
+      req.userId!,
+      kind === 'image' ? '\u{1F4F7} Photo' : '\u{1F3A4} Voice note',
     );
 
     res.status(201).json(message);
@@ -112,16 +136,21 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
   }
 });
 
-// Mark a disappearing message as viewed — starts the 10s burn timer.
+// Mark a disappearing message as viewed — consumes one recipient view after
+// the image has loaded and become visible on the client.
 router.post('/:messageId/view', async (req: AuthRequest, res: Response) => {
   try {
     const updated = await messageService.markMessageViewed(req.userId!, req.params.messageId);
-    // Let the sender know the recipient opened it (sender UI shows "Opened").
+    // Let the sender know the recipient opened it (sender UI shows remaining views).
     const io = req.app.get('io');
     io.to(`user:${updated.sender_id}`).emit('message:viewed', {
       id: updated.id,
       viewed_at: updated.viewed_at,
       expires_at: updated.expires_at,
+      max_views: updated.max_views,
+      view_count: updated.view_count,
+      remaining_views: updated.remaining_views ?? null,
+      expired: updated.expired,
     });
     res.json(updated);
   } catch (error: any) {

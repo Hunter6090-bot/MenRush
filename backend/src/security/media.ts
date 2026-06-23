@@ -80,3 +80,17 @@ export function resolveMediaPath(root: string, storageKey: string): string {
 export function isExpiredMedia(isDisappearing: boolean, expiresAt: string | null): boolean {
   return Boolean(isDisappearing && expiresAt && Date.parse(expiresAt) <= Date.now());
 }
+
+/**
+ * View-count exhaustion for disappearing media. A disappearing image is
+ * exhausted once the recipient has consumed all allowed views. Permanent
+ * media (maxViews null) is never exhausted.
+ */
+export function isExhaustedMedia(
+  isDisappearing: boolean,
+  maxViews: number | null,
+  viewCount: number | null,
+): boolean {
+  if (!isDisappearing || maxViews == null) return false;
+  return (viewCount ?? 0) >= maxViews;
+}

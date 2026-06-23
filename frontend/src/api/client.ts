@@ -94,15 +94,23 @@ export interface MessageDTO {
   is_disappearing: boolean;
   expires_at: string | null;
   viewed_at: string | null;
-  /** Server-side flag — true when a disappearing message's burn window has elapsed. */
+  /** Disappearing images: total views allowed (null = permanent). */
+  max_views?: number | null;
+  /** Disappearing images: views the recipient has consumed so far. */
+  view_count?: number;
+  /** Disappearing images: views still remaining (null = permanent). */
+  remaining_views?: number | null;
+  /** Server-side flag — true when a disappearing image's views are exhausted. */
   expired: boolean;
 }
 
 export interface SendMediaOptions {
   kind: MediaKind;
   caption?: string;
-  /** Defaults to true for images, ignored for audio. */
+  /** Images only: true = view-limited (disappearing), false/undefined = permanent. */
   disappearing?: boolean;
+  /** Disappearing images: how many times the recipient may view it (default 1). */
+  maxViews?: number;
   /** Duration in ms — required for voice notes. */
   durationMs?: number;
 }
@@ -119,6 +127,7 @@ export const messagesAPI = {
     fd.append('kind', opts.kind);
     if (opts.caption) fd.append('caption', opts.caption);
     if (opts.disappearing != null) fd.append('disappearing', String(opts.disappearing));
+    if (opts.maxViews != null) fd.append('max_views', String(Math.round(opts.maxViews)));
     if (opts.durationMs != null) fd.append('duration_ms', String(Math.round(opts.durationMs)));
     // Blobs from MediaRecorder don't have a filename — give them one so multer is happy.
     const filename =

@@ -25,6 +25,7 @@ import { errorHandler } from './middleware/auth';
 import { authService } from './services/auth.service';
 import { userService } from './services/user.service';
 import { roomService } from './services/room.service';
+import { sendPushToUser } from './services/push.service';
 import { accessControl } from './security/access';
 import { logResendMailerStatus } from './services/mailer.service';
 import { Sentry } from './observability/sentry';
@@ -174,6 +175,16 @@ io.on('connection', (socket: Socket) => {
         fromName,
         offer: data.offer,
       });
+      // Best-effort heads-up when the recipient's app is backgrounded/locked.
+      // The service worker suppresses this if a foreground tab is focused, so
+      // an in-app session won't double-alert. Web push cannot wake a live
+      // WebRTC answer on a locked phone — this only surfaces the missed call.
+      void sendPushToUser(authorized.targetId, {
+        title: fromName || 'MenRush',
+        body: 'Incoming video call',
+        url: `/messages/${authorized.actorId}`,
+        tag: `call-${authorized.actorId}`,
+      }).catch(() => undefined);
     } catch {
       socket.emit('authorization:error', { error: 'target_not_authorized' });
     }

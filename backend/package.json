@@ -10,6 +10,7 @@
     "db:migrate": "ts-node src/scripts/migrate.ts",
     "waitlist:import": "ts-node src/scripts/import-waitlist.ts",
     "test:security": "ts-node scripts/security-checks.ts",
+    "test:push": "ts-node scripts/test-push.ts",
     "audit:safety": "bash ../scripts/audit-safety.sh"
   },
   "dependencies": {

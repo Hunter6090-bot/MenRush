@@ -121,6 +121,21 @@ export const Discover = () => {
     [fetchNearbyUsers, radius, setLocation, tagFilters],
   );
 
+  // Customer-facing "enable location" action for the fallback notice.
+  const handleEnableLocation = useCallback(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        useDiscoveryLocation(coords.latitude, coords.longitude, '', true);
+        usersAPI.updateLocation(coords.latitude, coords.longitude).catch(() => {});
+      },
+      () => {
+        // Still blocked — keep the friendly fallback notice in place.
+      },
+      { enableHighAccuracy: true, timeout: 12000 },
+    );
+  }, [useDiscoveryLocation]);
+
   useEffect(() => {
     pulseAPI
       .getMe()
@@ -194,7 +209,7 @@ export const Discover = () => {
           useDiscoveryLocation(
             DEFAULT_DISCOVERY_CENTER[0],
             DEFAULT_DISCOVERY_CENTER[1],
-            'Location off — showing Central London. Enable location for live nearby results.',
+            'Location access is off. Showing people near central London for now.',
           );
         }
         setError('');
@@ -406,10 +421,16 @@ export const Discover = () => {
               <div className="w-14 h-14 rounded-full bg-[var(--copper)]/15 border border-[var(--copper)]/40 flex items-center justify-center mb-3">
                 <span className="text-[var(--copper)] text-2xl">·</span>
               </div>
-              <p className="text-[var(--cream)] text-sm font-bold">Map unavailable</p>
+              <p className="text-[var(--cream)] text-sm font-bold">Map is taking a break</p>
               <p className="text-[var(--cream-muted)] text-xs mt-1 max-w-xs leading-relaxed">
-                Set <code className="text-[var(--copper)]">VITE_MAPBOX_TOKEN</code> in <code className="text-[var(--copper)]">frontend/.env</code> and restart the dev server.
+                We can’t load the map right now. You can still browse who’s nearby below.
               </p>
+              {import.meta.env.DEV && (
+                <p className="text-[var(--cream-muted)]/70 text-[10px] mt-2 max-w-xs leading-relaxed">
+                  Dev note: set <code className="text-[var(--copper)]">VITE_MAPBOX_TOKEN</code> in{' '}
+                  <code className="text-[var(--copper)]">frontend/.env</code> and restart the dev server.
+                </p>
+              )}
             </div>
           )}
 
@@ -426,7 +447,10 @@ export const Discover = () => {
           )}
         </div>
 
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 px-3 py-1.5 rounded-full bg-[var(--bg-elevated)]/85 backdrop-blur-sm border border-[var(--border-default)] shadow-md">
+        <div
+          data-testid="nearby-counts"
+          className="absolute top-[112px] left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-full bg-[var(--bg-elevated)]/85 backdrop-blur-sm border border-[var(--border-default)] shadow-md"
+        >
           <p className="text-[11px] font-bold text-[var(--cream-soft)] tracking-wide whitespace-nowrap">
             {loading ? (
               <span className="text-[var(--cream-muted)]">Scanning…</span>
@@ -447,9 +471,18 @@ export const Discover = () => {
         {locationNotice && (
           <div
             role="status"
-            className="absolute left-3 top-[116px] z-30 max-w-[280px] rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-3 py-2 text-[11px] font-medium leading-snug text-[var(--cream-soft)] shadow-md backdrop-blur-sm sm:max-w-sm"
+            data-testid="location-notice"
+            className="absolute left-3 right-3 top-[152px] z-20 max-w-[340px] rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-3 py-2 text-[11px] font-medium leading-snug text-[var(--cream-soft)] shadow-md backdrop-blur-sm sm:max-w-sm"
           >
-            {locationNotice}
+            <p>{locationNotice}</p>
+            <button
+              type="button"
+              onClick={handleEnableLocation}
+              data-testid="enable-location"
+              className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[var(--copper)]/15 px-2.5 py-1 text-[11px] font-bold text-[var(--copper)] transition-colors hover:bg-[var(--copper)]/25"
+            >
+              Enable location
+            </button>
           </div>
         )}
 

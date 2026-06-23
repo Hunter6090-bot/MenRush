@@ -1,16 +1,19 @@
 import { query } from '../db';
 import { v4 as uuidv4 } from 'uuid';
 import { accessControl, SecurityError } from '../security/access';
-import { isExpiredMedia, signedMediaUrl } from '../security/media';
+import { isExhaustedMedia, signedMediaUrl } from '../security/media';
 import type { MediaKind } from '../types/validation';
 
 /**
- * Disappearing messages burn 10s after the recipient first views them
- * (image opened, audio played). `viewed_at` is set on view; `expires_at`
- * is set to viewed_at + DISAPPEAR_WINDOW_MS. After that, the read path
- * scrubs media_url and replaces the message body with a tombstone.
+ * Disappearing images use a view-count model (see migration 010):
+ *   max_views  NULL  -> permanent (kept in the conversation)
+ *              N>=1  -> disappearing, allows N recipient views
+ *   view_count       -> views the recipient has actually consumed. A view is
+ *                       only consumed once the image has loaded and been shown
+ *                       (the client calls `markMessageViewed` after onload).
+ * Once view_count >= max_views the image is "exhausted": the media endpoint
+ * stops serving it and the read path scrubs it to a tombstone.
  */
-const DISAPPEAR_WINDOW_MS = 10_000;
 
 interface ConversationRow {
   id: string;
@@ -26,18 +29,33 @@ interface ConversationRow {
   is_disappearing: boolean;
   expires_at: string | null;
   viewed_at: string | null;
+  max_views: number | null;
+  view_count: number;
+  remaining_views?: number | null;
   expired: boolean;
 }
 
-/** Strip burned media from a row before sending to the client. */
+/** Columns returned for every message row sent to the client. */
+const MESSAGE_COLUMNS = `id, sender_id, receiver_id, message, created_at,
+                 media_type, media_url, audio_duration_ms,
+                 is_disappearing, expires_at, viewed_at, max_views, view_count`;
+
+/** Strip exhausted disappearing media from a row before sending to the client. */
 function scrubExpired<T extends ConversationRow>(row: T): T {
-  if (!row.is_disappearing || !row.expires_at) return { ...row, expired: false };
-  const expired = Date.parse(row.expires_at) <= Date.now();
-  if (!expired) return { ...row, expired: false };
+  const remaining =
+    row.is_disappearing && row.max_views != null
+      ? Math.max(0, row.max_views - (row.view_count ?? 0))
+      : null;
+  if (!isExhaustedMedia(row.is_disappearing, row.max_views, row.view_count)) {
+    return { ...row, remaining_views: remaining, expired: false };
+  }
   return {
     ...row,
     media_url: null,
-    message: row.media_type ? `(${row.media_type === 'image' ? 'photo' : 'voice note'} burned)` : '(message expired)',
+    message: row.media_type
+      ? `(${row.media_type === 'image' ? 'photo' : 'voice note'} no longer available)`
+      : '(message expired)',
+    remaining_views: 0,
     expired: true,
   };
 }
@@ -78,9 +96,7 @@ export const messageService = {
     const result = await query(
       `INSERT INTO messages (id, sender_id, receiver_id, message, created_at)
        VALUES ($1, $2, $3, $4, NOW())
-       RETURNING id, sender_id, receiver_id, message, created_at,
-                 media_type, media_url, audio_duration_ms,
-                 is_disappearing, expires_at, viewed_at`,
+       RETURNING ${MESSAGE_COLUMNS}`,
       [id, senderId, receiverId, sanitized]
     );
 
@@ -96,6 +112,7 @@ export const messageService = {
       mimeType: string;
       caption?: string;
       disappearing?: boolean;
+      maxViews?: number;
       audioDurationMs?: number;
     }
   ) {
@@ -105,18 +122,21 @@ export const messageService = {
     const caption = (opts.caption ?? '').replace(/<script[^>]*>.*?<\/script>/gi, '').trim();
     // Default body — UI uses this if media fails to load.
     const fallbackBody = caption || (opts.mediaType === 'image' ? '📷 Photo' : '🎤 Voice note');
-    const isDisappearing = opts.mediaType === 'image' ? opts.disappearing !== false : false;
+    // Only images can be disappearing. A disappearing image is view-limited:
+    // max_views defaults to 1 ("view once") when the sender didn't specify.
+    const isDisappearing = opts.mediaType === 'image' && opts.disappearing === true;
+    const maxViews = isDisappearing
+      ? Math.min(99, Math.max(1, Math.floor(opts.maxViews ?? 1)))
+      : null;
 
     const result = await query(
       `INSERT INTO messages (
          id, sender_id, receiver_id, message, created_at,
          media_type, media_url, media_storage_key, media_mime_type,
-         audio_duration_ms, is_disappearing
+         audio_duration_ms, is_disappearing, max_views, view_count
        )
-       VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7, $8, $9, $10)
-       RETURNING id, sender_id, receiver_id, message, created_at,
-                 media_type, media_url, audio_duration_ms,
-                 is_disappearing, expires_at, viewed_at`,
+       VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7, $8, $9, $10, $11, 0)
+       RETURNING ${MESSAGE_COLUMNS}`,
       [
         id,
         senderId,
@@ -128,6 +148,7 @@ export const messageService = {
         opts.mimeType,
         opts.mediaType === 'audio' ? opts.audioDurationMs ?? null : null,
         isDisappearing,
+        maxViews,
       ]
     );
 
@@ -135,31 +156,36 @@ export const messageService = {
   },
 
   /**
-   * Recipient marks a disappearing message as viewed. Starts the 10s burn
-   * window. Idempotent — subsequent views won't extend the window.
-   * Returns the updated message row (scrubbed if already expired).
+   * Recipient consumes one view of a disappearing image. Called by the client
+   * only AFTER the image has loaded and become visible — so a failed load or a
+   * mere tap never burns a view. The increment is atomic and capped at
+   * max_views, which keeps duplicate taps, refreshes, reconnects and multiple
+   * devices from over-counting. Idempotent for already-exhausted media.
+   * Returns the updated (and scrubbed-if-exhausted) message row.
    */
   async markMessageViewed(viewerId: string, messageId: string) {
-    const message = await query(
-      `SELECT sender_id FROM messages WHERE id = $1 AND receiver_id = $2`,
+    const existing = await query(
+      `SELECT sender_id, is_disappearing, max_views, view_count
+         FROM messages WHERE id = $1 AND receiver_id = $2`,
       [messageId, viewerId],
     );
-    if (!message.rows[0]) throw new Error('message_not_found_or_not_recipient');
-    await accessControl.assertInteraction(viewerId, message.rows[0].sender_id, { requireMatch: true });
+    if (!existing.rows[0]) throw new Error('message_not_found_or_not_recipient');
+    await accessControl.assertInteraction(viewerId, existing.rows[0].sender_id, { requireMatch: true });
 
+    // Atomically consume a view, but never exceed max_views. Permanent or
+    // non-image media isn't view-limited, so we only stamp viewed_at.
     const result = await query(
       `UPDATE messages
           SET viewed_at = COALESCE(viewed_at, NOW()),
-              expires_at = COALESCE(
-                expires_at,
-                CASE WHEN is_disappearing THEN NOW() + ($3 || ' milliseconds')::interval ELSE NULL END
-              )
+              view_count = CASE
+                WHEN is_disappearing AND max_views IS NOT NULL AND view_count < max_views
+                  THEN view_count + 1
+                ELSE view_count
+              END
         WHERE id = $1
           AND receiver_id = $2
-        RETURNING id, sender_id, receiver_id, message, created_at,
-                  media_type, media_url, audio_duration_ms,
-                  is_disappearing, expires_at, viewed_at`,
-      [messageId, viewerId, DISAPPEAR_WINDOW_MS]
+        RETURNING ${MESSAGE_COLUMNS}`,
+      [messageId, viewerId]
     );
 
     if (result.rows.length === 0) {
@@ -171,9 +197,7 @@ export const messageService = {
   async getConversation(userId: string, otherId: string, limit: number = 50) {
     await accessControl.assertInteraction(userId, otherId, { requireMatch: true });
     const result = await query(
-      `SELECT id, sender_id, receiver_id, message, created_at,
-              media_type, media_url, audio_duration_ms,
-              is_disappearing, expires_at, viewed_at
+      `SELECT ${MESSAGE_COLUMNS}
        FROM messages
        WHERE (sender_id = $1 AND receiver_id = $2)
           OR (sender_id = $2 AND receiver_id = $1)
@@ -229,7 +253,7 @@ export const messageService = {
   async getMedia(viewerId: string, messageId: string) {
     const result = await query(
       `SELECT id, sender_id, receiver_id, media_storage_key, media_mime_type,
-              is_disappearing, expires_at
+              is_disappearing, max_views, view_count
        FROM messages
        WHERE id = $1 AND media_storage_key IS NOT NULL`,
       [messageId],
@@ -240,7 +264,7 @@ export const messageService = {
     }
     const otherId = row.sender_id === viewerId ? row.receiver_id : row.sender_id;
     await accessControl.assertInteraction(viewerId, otherId, { requireMatch: true });
-    if (isExpiredMedia(row.is_disappearing, row.expires_at)) {
+    if (isExhaustedMedia(row.is_disappearing, row.max_views, row.view_count)) {
       throw new SecurityError('media_expired', 410, 'Media expired');
     }
     return {

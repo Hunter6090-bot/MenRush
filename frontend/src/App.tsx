@@ -24,8 +24,11 @@ import { Verify } from './pages/Verify';
 import { VerifyPending } from './pages/VerifyPending';
 import { VerifyRejected } from './pages/VerifyRejected';
 import { useAuthStore } from './hooks/store';
+import { usePushNotifications } from './hooks/usePushNotifications';
+import { useGlobalMessageNotifications } from './hooks/useGlobalMessageNotifications';
 import { FEATURES } from './lib/featureFlags';
 import { VideoCallModal } from './components/VideoCallModal';
+import { ToastNotifications } from './components/ToastNotifications';
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
   const token = useAuthStore((s) => s.token);
@@ -73,9 +76,14 @@ function NotFound() {
   );
 }
 
-export default function App() {
+function AppShell() {
+  const token = useAuthStore((s) => s.token);
+  usePushNotifications(!!token);
+  useGlobalMessageNotifications();
+
   return (
-    <BrowserRouter>
+    <>
+      <ToastNotifications />
       <Routes>
         <Route path="/" element={<ComingSoon />} />
         <Route path="/coming-soon" element={<ComingSoon />} />
@@ -110,6 +118,14 @@ export default function App() {
         <Route path="*" element={<NotFound />} />
       </Routes>
       {FEATURES.videoCalls && <VideoCallModal />}
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppShell />
     </BrowserRouter>
   );
 }

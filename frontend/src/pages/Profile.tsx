@@ -8,6 +8,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { PulseRing } from '../components/PulseRing';
 import { MoodPicker } from '../components/MoodPicker';
 import { GhostToggle } from '../components/GhostToggle';
+import { NotificationSettings } from '../components/NotificationSettings';
 
 const INTEREST_GROUPS: { label: string; tags: string[] }[] = [
   { label: 'Position', tags: ['Top', 'Vers Top', 'Vers', 'Vers Bottom', 'Bottom', 'Side'] },
@@ -326,6 +327,9 @@ export const Profile = () => {
             />
           </button>
         </div>
+
+        {/* ── Notifications card ── */}
+        <NotificationSettings />
 
         {/* ── Danger zone ── */}
         <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card flex items-center justify-between">

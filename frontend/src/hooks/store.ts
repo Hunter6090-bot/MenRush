@@ -56,19 +56,39 @@ export const useLocationStore = create<LocationState>((set) => ({
 interface UnreadState {
   count: number;
   senderIds: string[];
+  /** Per-sender unread tally so opening one thread clears only that sender. */
+  unreadBySender: Record<string, number>;
   addUnread: (senderId: string) => void;
   clearUnread: () => void;
+  clearUnreadFrom: (senderId: string) => void;
 }
 
 export const useUnreadStore = create<UnreadState>((set) => ({
   count: 0,
   senderIds: [],
+  unreadBySender: {},
   addUnread: (senderId) =>
     set((s) => ({
       count: s.count + 1,
       senderIds: s.senderIds.includes(senderId) ? s.senderIds : [...s.senderIds, senderId],
+      unreadBySender: {
+        ...s.unreadBySender,
+        [senderId]: (s.unreadBySender[senderId] ?? 0) + 1,
+      },
     })),
-  clearUnread: () => set({ count: 0, senderIds: [] }),
+  clearUnread: () => set({ count: 0, senderIds: [], unreadBySender: {} }),
+  clearUnreadFrom: (senderId) =>
+    set((s) => {
+      const n = s.unreadBySender[senderId] ?? 0;
+      if (n === 0) return s;
+      const unreadBySender = { ...s.unreadBySender };
+      delete unreadBySender[senderId];
+      return {
+        count: Math.max(0, s.count - n),
+        senderIds: s.senderIds.filter((id) => id !== senderId),
+        unreadBySender,
+      };
+    }),
 }));
 
 export interface Notification {

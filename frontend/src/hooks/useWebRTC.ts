@@ -70,7 +70,9 @@ export function useWebRTC() {
   // ── Initiate call ────────────────────────────────────────────────────────
   const startCall = useCallback(
     async (targetPeerId: string, _peerName: string) => {
-      if (!socket) return;
+      if (!socket) {
+        throw new Error('signalling_unavailable');
+      }
       const pc = createPC();
       const stream = await getLocalMedia();
       stream.getTracks().forEach((t) => pc.addTrack(t, stream));
