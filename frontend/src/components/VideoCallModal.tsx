@@ -2,7 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useCallStore } from '../hooks/store';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { useSocket } from '../hooks/useSocket';
-import { BRAND_MEDALLION } from '../lib/brand';
+import { createCallTone, type CallToneKind } from '../lib/callTones';
+
+// Unanswered calls end cleanly after this long. Overridable in tests so the
+// timeout path can be exercised without waiting the full 30s.
+const CALL_TIMEOUT_MS =
+  (typeof window !== 'undefined' &&
+    (window as unknown as { __MENRUSH_CALL_TIMEOUT_MS__?: number }).__MENRUSH_CALL_TIMEOUT_MS__) ||
+  30_000;
 
 export function VideoCallModal() {
   const socket = useSocket();
@@ -23,18 +30,56 @@ export function VideoCallModal() {
   const outgoingPeerRef = useRef<string | null>(null);
   const [setupError, setSetupError] = useState('');
 
-  // Attach streams to video elements
+  // Attach streams to video elements. The local <video> moves between the
+  // outgoing-preview surface and the in-call PiP, so we also re-run on
+  // callStatus to re-bind srcObject to whichever element is now mounted.
   useEffect(() => {
     if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream;
+      // Guard the assignment: a malformed/revoked stream must not crash the
+      // whole call surface (and leave a fake ringing state).
+      try {
+        localVideoRef.current.srcObject = localStream;
+      } catch {
+        /* ignore — preview falls back to the avatar */
+      }
     }
-  }, [localStream]);
+  }, [localStream, callStatus]);
 
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
-      remoteVideoRef.current.srcObject = remoteStream;
+      try {
+        remoteVideoRef.current.srcObject = remoteStream;
+      } catch {
+        /* ignore — remote falls back to the avatar */
+      }
     }
-  }, [remoteStream]);
+  }, [remoteStream, callStatus]);
+
+  // ── Ring tones ───────────────────────────────────────────────────────────
+  // Caller hears the outgoing ringback while 'calling'; recipient hears the
+  // incoming ringtone while 'ringing'. Leaving either state (answer, reject,
+  // cancel, error, disconnect, timeout) or unmounting stops the tone.
+  const desiredTone: CallToneKind | null =
+    callStatus === 'calling' ? 'outgoing' : callStatus === 'ringing' ? 'incoming' : null;
+
+  useEffect(() => {
+    if (!desiredTone) return;
+    const player = createCallTone(desiredTone);
+    void player.start();
+    return () => player.stop();
+  }, [desiredTone]);
+
+  // ── Unanswered-call timeout ────────────────────────────────────────────────
+  // Applies to both the waiting caller ('calling') and a never-answered
+  // recipient ('ringing'). endCall() signals the peer and tears down locally,
+  // so the call ends cleanly on both devices.
+  useEffect(() => {
+    if (callStatus !== 'calling' && callStatus !== 'ringing') return;
+    const timer = setTimeout(() => {
+      endCall();
+    }, CALL_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [callStatus, endCall]);
 
   // Listen for incoming call offers
   useEffect(() => {
@@ -151,6 +196,7 @@ export function VideoCallModal() {
         className="fixed inset-0 z-[200] flex items-center justify-center px-6"
         style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(16px)' }}
       >
+        <span data-testid="call-tone" data-tone="incoming" className="sr-only" aria-hidden="true" />
         <div
           className="w-full max-w-xs rounded-3xl p-8 flex flex-col items-center gap-6 animate-scale-up"
           style={{
@@ -230,59 +276,106 @@ export function VideoCallModal() {
   }
 
   // ── Calling (outgoing, waiting) ──────────────────────────────────────────
+  // Full-screen surface with the caller's own live camera preview, the callee
+  // name/status overlaid, and cancel / mute / camera controls available while
+  // it rings.
   if (callStatus === 'calling') {
     return (
       <div
-        className="fixed inset-0 z-[200] flex items-center justify-center px-6"
-        style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(16px)' }}
+        className="fixed inset-0 z-[200] bg-black flex items-center justify-center"
+        data-testid="outgoing-call"
       >
-        <div
-          className="w-full max-w-xs rounded-3xl p-8 flex flex-col items-center gap-6 animate-scale-up"
-          style={{
-            background: '#1E1508',
-            border: '1px solid #3D2B0E',
-            boxShadow: '0 32px 80px rgba(0,0,0,0.8)',
-          }}
-        >
-          {/* Spinning coin */}
-          <div className="coin-container w-24">
-            <div className="coin-inner">
-              <div className="coin-face coin-front">
-                <img src={BRAND_MEDALLION} alt="MenRush" className="w-full h-full object-cover" />
-              </div>
-              <div className="coin-face coin-back">
-                <div className="coin-back-face">
-                  <div className="coin-back-ring">
-                    <div className="coin-back-inner">
-                      <span className="coin-back-label">MenRush</span>
-                      <div className="coin-back-divider" />
-                    </div>
-                  </div>
-                </div>
-              </div>
+        <span data-testid="call-tone" data-tone="outgoing" className="sr-only" aria-hidden="true" />
+
+        {/* Caller's own camera, full screen and mirrored */}
+        <video
+          ref={localVideoRef}
+          autoPlay
+          playsInline
+          muted
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ transform: 'scaleX(-1)', background: '#0D0A06' }}
+        />
+
+        {/* Fallback while the camera spins up or is turned off */}
+        {(!localStream || isCameraOff) && (
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+            style={{ background: '#0D0A06' }}
+          >
+            <div
+              className="w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold"
+              style={{
+                background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+                color: '#FFF5E6',
+                boxShadow: '0 4px 24px rgba(196,131,42,0.45)',
+              }}
+            >
+              {peerName ? initials(peerName) : '?'}
             </div>
           </div>
+        )}
 
-          <div className="text-center space-y-1">
-            <p className="text-xl font-bold" style={{ color: '#F0E0C0' }}>
-              Calling {peerName ?? '...'}
-            </p>
-            <p className="text-sm" style={{ color: '#A89070' }}>
-              Waiting for them to answer
-            </p>
-          </div>
+        {/* Top scrim with callee name + ringing status */}
+        <div
+          className="absolute top-0 left-0 right-0 px-6 pt-10 pb-12 text-center"
+          style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.7), transparent)', zIndex: 10 }}
+        >
+          <p className="text-2xl font-bold" style={{ color: '#F0E0C0' }}>
+            {peerName ?? 'Someone'}
+          </p>
+          <p className="mt-1 text-sm tracking-wide" style={{ color: '#E0B878' }}>
+            Ringing&hellip;
+          </p>
+        </div>
 
+        {/* Controls bar */}
+        <div
+          className="absolute bottom-8 left-0 right-0 flex items-center justify-center gap-4 px-8"
+          style={{ zIndex: 10 }}
+        >
+          {/* Mute */}
           <button
-            onClick={endCall}
-            className="w-full h-12 rounded-2xl text-sm font-semibold transition-all duration-150 active:scale-95 flex items-center justify-center gap-2"
+            onClick={toggleMute}
+            aria-label={isMuted ? 'Unmute' : 'Mute'}
+            className="w-14 h-14 rounded-full flex items-center justify-center transition-all duration-150 active:scale-95"
             style={{
-              background: 'rgba(220,38,38,0.15)',
-              border: '1px solid rgba(220,38,38,0.3)',
-              color: '#EF4444',
+              background: isMuted ? 'rgba(239,68,68,0.2)' : 'rgba(30,21,8,0.85)',
+              border: isMuted ? '1px solid rgba(239,68,68,0.5)' : '1px solid #3D2B0E',
+              backdropFilter: 'blur(8px)',
+              color: isMuted ? '#EF4444' : '#F0E0C0',
             }}
           >
-            <PhoneOffIcon className="w-5 h-5" />
-            Cancel
+            {isMuted ? <MicOffIcon className="w-6 h-6" /> : <MicIcon className="w-6 h-6" />}
+          </button>
+
+          {/* Cancel */}
+          <button
+            onClick={endCall}
+            aria-label="Cancel call"
+            className="w-16 h-16 rounded-full flex items-center justify-center transition-all duration-150 active:scale-95"
+            style={{
+              background: 'linear-gradient(135deg, #dc2626, #b91c1c)',
+              boxShadow: '0 4px 20px rgba(220,38,38,0.5)',
+              color: '#fff',
+            }}
+          >
+            <PhoneOffIcon className="w-7 h-7" />
+          </button>
+
+          {/* Camera toggle */}
+          <button
+            onClick={toggleCamera}
+            aria-label={isCameraOff ? 'Turn camera on' : 'Turn camera off'}
+            className="w-14 h-14 rounded-full flex items-center justify-center transition-all duration-150 active:scale-95"
+            style={{
+              background: isCameraOff ? 'rgba(239,68,68,0.2)' : 'rgba(30,21,8,0.85)',
+              border: isCameraOff ? '1px solid rgba(239,68,68,0.5)' : '1px solid #3D2B0E',
+              backdropFilter: 'blur(8px)',
+              color: isCameraOff ? '#EF4444' : '#F0E0C0',
+            }}
+          >
+            {isCameraOff ? <CameraOffIcon className="w-6 h-6" /> : <CameraIcon className="w-6 h-6" />}
           </button>
         </div>
       </div>
