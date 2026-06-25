@@ -28,7 +28,13 @@ export const Login = () => {
     try {
       const res = await authAPI.login({ email, password });
       setAuth(res.data.user, res.data.token);
-      navigate('/discover');
+      if (res.data.user?.is_verified) {
+        navigate('/discover');
+      } else if (res.data.user?.verification_status === 'pending') {
+        navigate('/verify/pending');
+      } else {
+        navigate('/verify');
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Login failed. Please try again.');
     } finally {
@@ -44,10 +50,16 @@ export const Login = () => {
       <header className="relative z-20 flex h-16 shrink-0 items-center justify-end px-5 sm:px-8 lg:px-10">
         <nav className="flex items-center gap-2 text-sm font-semibold">
           <Link
+            to="/register"
+            className="rounded-lg border border-[#C4832A]/45 bg-[#C4832A]/15 px-3.5 py-2 font-bold text-[#F0E0C0] transition-colors hover:bg-[#C4832A]/25"
+          >
+            Sign up
+          </Link>
+          <Link
             to="/coming-soon#waitlist"
             className="rounded-lg border border-[#3D2B0E] bg-[#1E1508]/68 px-3.5 py-2 font-bold text-[#A89070] transition-colors hover:border-[#C4832A]/45 hover:text-[#F0E0C0]"
           >
-            Join the waitlist
+            Waitlist
           </Link>
         </nav>
       </header>
@@ -60,14 +72,14 @@ export const Login = () => {
             </Link>
 
             <h1 className="mt-7 max-w-3xl text-5xl font-black leading-[0.95] tracking-[-0.05em] text-[#F0E0C0] sm:text-6xl lg:text-7xl">
-              Invite holders can sign in and step back into
+              Sign in and see who&apos;s
               <span className="block bg-gradient-to-r from-[#F0E0C0] via-[#C4832A] to-[#8B4513] bg-clip-text text-transparent">
-                location-based user discovery.
+                near you right now.
               </span>
             </h1>
 
             <p className="mt-5 max-w-2xl text-base leading-7 text-[#F0E0C0]/74">
-              MenRush is still in prelaunch. If you do not already have access, join the waitlist from the homepage and we will invite you when the product is ready.
+              New here? Create an account to try discovery, messaging, and video calls on your local build.
             </p>
 
 
@@ -133,11 +145,11 @@ export const Login = () => {
                 </button>
               </form>
 
-              <div className="mt-5 flex items-center justify-between gap-4 text-sm text-[#F0E0C0]/72">
+              <div className="mt-5 flex flex-col gap-3 text-sm text-[#F0E0C0]/72 sm:flex-row sm:items-center sm:justify-between">
                 <p>
-                  Need access?{' '}
-                  <Link to="/coming-soon#waitlist" className="font-semibold text-[#C4832A] transition-colors hover:text-[#D4943B]">
-                    Join the waitlist
+                  New here?{' '}
+                  <Link to="/register" className="font-semibold text-[#C4832A] transition-colors hover:text-[#D4943B]">
+                    Create an account
                   </Link>
                 </p>
                 <Link

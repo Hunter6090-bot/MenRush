@@ -66,6 +66,16 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
   }
 });
 
+router.get('/search', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q : '';
+    const users = await userService.searchProfiles(req.userId!, q);
+    res.json(users);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { radius, minAge, maxAge, interests, onlyPulse } = req.query;

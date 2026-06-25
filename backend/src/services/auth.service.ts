@@ -81,12 +81,23 @@ export const authService = {
     const id = uuidv4();
     const hashedPassword = await bcryptjs.hash(data.password, 10);
 
+    const autoVerify =
+      process.env.NODE_ENV === 'development' && process.env.DEV_AUTO_VERIFY === 'true';
+
     try {
       const result = await query(
-        `INSERT INTO users (id, email, password_hash, name, age)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO users (id, email, password_hash, name, age, is_verified, verification_status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING id, email, name, age, is_verified, verification_status`,
-        [id, data.email, hashedPassword, data.name, data.age]
+        [
+          id,
+          data.email,
+          hashedPassword,
+          data.name,
+          data.age,
+          autoVerify,
+          autoVerify ? 'verified' : 'unverified',
+        ],
       );
 
       const user = result.rows[0];

@@ -29,27 +29,23 @@ import { sendPushToUser } from './services/push.service';
 import { accessControl } from './security/access';
 import { logResendMailerStatus } from './services/mailer.service';
 import { Sentry } from './observability/sentry';
+import { corsOrigin } from './security/cors';
+import { query } from './db';
 
 logResendMailerStatus();
 
 const app = express();
 const server = http.createServer(app);
-
-const allowedOrigins = (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-  if (!origin || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return callback(null, true);
-  const explicit = process.env.FRONTEND_URL;
-  if (explicit && origin === explicit) return callback(null, true);
-  callback(new Error('Not allowed by CORS'));
-};
+app.set('trust proxy', 1);
 
 const io: any = new SocketIOServer(server, {
-  cors: { origin: allowedOrigins, credentials: true },
+  cors: { origin: corsOrigin, credentials: true },
   maxHttpBufferSize: 1_000_000,
 });
 
 // Middleware
-app.use(helmet());
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+app.use(cors({ origin: corsOrigin, credentials: true }));
 // Stripe Identity webhook needs the RAW request body for signature verification.
 // Mount /api/verify BEFORE express.json() so the inner express.raw() middleware sees the raw bytes.
 app.use('/api/verify', verifyRoutes);
@@ -222,21 +218,72 @@ io.on('connection', (socket: Socket) => {
 
   // Room Socket.IO handlers
 
-  socket.on('room:join', async (data: { roomId: string }) => {
+  const resolveRoomId = (data: { roomId?: string; room_id?: string }) =>
+    data?.roomId || data?.room_id;
+
+  socket.on('room:join', async (data: { roomId?: string; room_id?: string }) => {
+    const roomId = resolveRoomId(data);
     const userId = socketToUser.get(socket.id);
-    if (!userId) return;
+    if (!userId || !roomId) return;
     try {
-      const member = await roomService.isMember(userId, data.roomId);
-      if (member) {
-        socket.join(`room:${data.roomId}`);
-      }
+      const member = await roomService.isMember(userId, roomId);
+      if (!member) return;
+
+      socket.join(`room:${roomId}`);
+
+      const profile = await query(
+        `SELECT name, photo_url FROM users WHERE id = $1`,
+        [userId],
+      );
+      const name = profile.rows[0]?.name ?? 'Member';
+      const photo_url = profile.rows[0]?.photo_url ?? null;
+
+      socket.to(`room:${roomId}`).emit('room:presence', {
+        room_id: roomId,
+        type: 'join',
+        user_id: userId,
+        name,
+        photo_url,
+      });
+
+      const peers = await io.in(`room:${roomId}`).fetchSockets();
+      const roster = peers
+        .map((peer) => {
+          const peerUserId = socketToUser.get(peer.id);
+          if (!peerUserId) return null;
+          return { socket_id: peer.id, user_id: peerUserId };
+        })
+        .filter(Boolean);
+
+      const rosterDetails = await Promise.all(
+        roster.map(async (entry: any) => {
+          const r = await query(`SELECT name, photo_url FROM users WHERE id = $1`, [entry.user_id]);
+          return {
+            user_id: entry.user_id,
+            name: r.rows[0]?.name ?? 'Member',
+            photo_url: r.rows[0]?.photo_url ?? null,
+          };
+        }),
+      );
+
+      socket.emit('room:presence-sync', { room_id: roomId, participants: rosterDetails });
     } catch {
       // silently ignore invalid rooms
     }
   });
 
-  socket.on('room:leave', (data: { roomId: string }) => {
-    socket.leave(`room:${data.roomId}`);
+  socket.on('room:leave', async (data: { roomId?: string; room_id?: string }) => {
+    const roomId = resolveRoomId(data);
+    const userId = socketToUser.get(socket.id);
+    if (!roomId) return;
+    socket.leave(`room:${roomId}`);
+    if (userId) {
+      socket.to(`room:${roomId}`).emit('room:presence', {
+        room_id: roomId,
+        type: 'leave',
+        user_id: userId,
+      });
+    }
   });
 
   socket.on('room:message', async (data: { roomId: string; message: string; replyTo?: string }) => {
@@ -252,12 +299,17 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
-  socket.on('room:typing', (data: { roomId: string; typing: boolean }) => {
+  socket.on('room:typing', async (data: { roomId?: string; room_id?: string; typing?: boolean }) => {
     const userId = socketToUser.get(socket.id);
-    if (!userId) return;
-    socket.to(`room:${data.roomId}`).emit('room:typing', {
-      roomId: data.roomId,
+    const roomId = resolveRoomId(data);
+    if (!userId || !roomId || typeof data.typing !== 'boolean') return;
+    const name = (await userService.getDisplayName(userId)) ?? 'Member';
+    socket.to(`room:${roomId}`).emit('room:typing', {
+      roomId,
+      room_id: roomId,
       userId,
+      user_id: userId,
+      user_name: name,
       typing: data.typing,
     });
   });
@@ -268,6 +320,17 @@ io.on('connection', (socket: Socket) => {
       userSockets.delete(userId);
       socketToUser.delete(socket.id);
       userService.setOnlineStatus(userId, false);
+      // Notify any group rooms this socket was in.
+      for (const roomName of socket.rooms) {
+        if (roomName.startsWith('room:')) {
+          const roomId = roomName.slice('room:'.length);
+          socket.to(roomName).emit('room:presence', {
+            room_id: roomId,
+            type: 'leave',
+            user_id: userId,
+          });
+        }
+      }
     }
     console.log('User disconnected:', socket.id);
   });

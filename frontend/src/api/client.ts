@@ -42,6 +42,11 @@ export const usersAPI = {
       },
     }),
   getProfile: (id: string) => apiClient.get(`/users/profile/${id}`),
+  searchProfiles: (q: string) =>
+    apiClient.get<Array<{ id: string; name: string; age?: number; photo_url?: string; bio?: string; headline?: string }>>(
+      '/users/search',
+      { params: { q } },
+    ),
   updateLocation: (lat: number, lng: number) =>
     apiClient.post('/users/location', { lat, lng }),
   updateProfile: (data: { bio?: string; headline?: string; looking_for?: string; photo_url?: string; interests?: string[] }) =>
@@ -126,7 +131,7 @@ export const messagesAPI = {
     fd.append('receiver_id', receiver_id);
     fd.append('kind', opts.kind);
     if (opts.caption) fd.append('caption', opts.caption);
-    if (opts.disappearing != null) fd.append('disappearing', String(opts.disappearing));
+    if (opts.disappearing === true) fd.append('disappearing', 'true');
     if (opts.maxViews != null) fd.append('max_views', String(Math.round(opts.maxViews)));
     if (opts.durationMs != null) fd.append('duration_ms', String(Math.round(opts.durationMs)));
     // Blobs from MediaRecorder don't have a filename — give them one so multer is happy.
@@ -147,6 +152,10 @@ export const roomsAPI = {
   createRoom: (data: any) => apiClient.post('/rooms', data),
   getRooms: () => apiClient.get('/rooms'),
   getRoom: (roomId: string) => apiClient.get(`/rooms/${roomId}`),
+  getMembers: (roomId: string) =>
+    apiClient.get<Array<{ id: string; name: string; photo_url?: string; role?: string }>>(
+      `/rooms/${roomId}/members`,
+    ),
   joinRoom: (roomId: string) => apiClient.post(`/rooms/${roomId}/join`),
   leaveRoom: (roomId: string) => apiClient.post(`/rooms/${roomId}/leave`),
   getMessages: (roomId: string, before?: string) =>

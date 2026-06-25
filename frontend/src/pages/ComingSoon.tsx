@@ -217,12 +217,20 @@ export const ComingSoon = () => {
                 className="h-20 w-20 rounded-full object-cover sm:h-24 sm:w-24"
                 draggable={false}
               />
-              <Link
-                to="/login"
-                className="rounded-full border border-[#3D2B0E] bg-[#1E1508]/78 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-[#A89070] transition-colors hover:border-[#C4832A]/45 hover:text-[#F0E0C0]"
-              >
-                Already have an invite? Sign in
-              </Link>
+              <nav className="flex items-center gap-2 text-sm font-semibold">
+                <Link
+                  to="/login"
+                  className="rounded-lg px-3.5 py-2 text-[#A89070] transition-colors hover:text-[#F0E0C0]"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  to="/register"
+                  className="rounded-lg border border-[#C4832A]/45 bg-[#C4832A]/15 px-3.5 py-2 text-[#F0E0C0] transition-colors hover:bg-[#C4832A]/25"
+                >
+                  Sign up
+                </Link>
+              </nav>
             </div>
 
             <h1 className="font-display max-w-4xl text-5xl font-black leading-[0.92] tracking-normal text-[#F0E0C0] sm:text-7xl lg:text-8xl">
@@ -233,21 +241,6 @@ export const ComingSoon = () => {
               See who's near you right now. No swiping, no waiting. Pulse live, find rooms nearby,
               and match when the moment is actually happening.
             </p>
-
-            <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-              <a
-                href="#waitlist"
-                className="inline-flex min-h-12 items-center justify-center rounded-lg bg-[#C4832A] px-6 text-sm font-black uppercase tracking-[0.08em] text-[#0D0A06] transition-all duration-200 hover:bg-[#E0A14A] active:scale-[0.98]"
-              >
-                Join the waitlist
-              </a>
-              <Link
-                to="/login"
-                className="inline-flex min-h-12 items-center justify-center rounded-lg border border-[#3D2B0E] bg-[#1E1508]/60 px-5 text-sm font-semibold text-[#A89070] transition-colors hover:border-[#C4832A]/45 hover:text-[#F0E0C0]"
-              >
-                Already have an invite? Sign in
-              </Link>
-            </div>
 
             <div id="waitlist" className="mt-8 max-w-2xl border-y border-[#3D2B0E]/80 bg-[#0D0A06]/42 py-5 backdrop-blur-md">
               {submitted && successMsg ? (
@@ -272,7 +265,7 @@ export const ComingSoon = () => {
                     disabled={submitting}
                     className="min-h-12 rounded-lg bg-[#C4832A] px-6 text-sm font-black uppercase tracking-[0.08em] text-[#0D0A06] transition-all duration-200 hover:bg-[#E0A14A] active:scale-[0.98] disabled:opacity-50 sm:whitespace-nowrap"
                   >
-                    {submitting ? 'Joining…' : 'Get early access'}
+                    {submitting ? 'Joining…' : 'Join waitlist'}
                   </button>
                 </form>
               )}
@@ -280,9 +273,6 @@ export const ComingSoon = () => {
               {errorMsg && <p className="mt-3 text-sm font-medium text-[#f0a07a]">{errorMsg}</p>}
               <p className="mt-3 text-sm text-[#A89070]">
                 Early members get <span className="font-semibold text-[#C4832A]">30 days Premium free</span> at launch. No card needed.
-              </p>
-              <p className="mt-2 text-xs text-[#A89070]/85">
-                Already have a private invite? <Link to="/login" className="font-semibold text-[#C4832A] hover:text-[#E0A14A]">Sign in here</Link>.
               </p>
             </div>
 

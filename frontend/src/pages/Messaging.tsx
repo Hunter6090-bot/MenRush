@@ -10,6 +10,7 @@ import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
 import { PulseRing } from '../components/PulseRing';
 import { getPhotoUrl } from '../components/UserAvatar';
 import { FEATURES } from '../lib/featureFlags';
+import { SelfieCaptureModal } from '../components/SelfieCaptureModal';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
 interface Message extends Partial<MessageDTO> {
@@ -121,6 +122,7 @@ export const Messages = () => {
   const [customViews, setCustomViews] = useState(3);
   // Recipient image viewer (transient full-screen view of a disappearing image).
   const [viewerMsg, setViewerMsg] = useState<Message | null>(null);
+  const [selfieOpen, setSelfieOpen] = useState(false);
   // Ticks once a second so disappearing countdowns and burned states update.
   const [, setBurnTick] = useState(0);
   const socket = useSocket();
@@ -217,31 +219,56 @@ export const Messages = () => {
     typingTimer.current = setTimeout(() => emitTyping(false), 2000);
   };
 
-  // ── Media: image attach (disappearing by default) ─────────────────────
-  const handleAttachClick = () => fileInputRef.current?.click();
-
   const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+  const normalizeImageFile = (file: File): File | null => {
+    let type = file.type;
+    if (!type) {
+      const ext = file.name.split('.').pop()?.toLowerCase();
+      if (ext === 'jpg' || ext === 'jpeg') type = 'image/jpeg';
+      else if (ext === 'png') type = 'image/png';
+      else if (ext === 'webp') type = 'image/webp';
+    }
+    if (type === 'image/heic' || type === 'image/heif') {
+      setMediaError(
+        'HEIC photos are not supported here. Use Attach from gallery, or set iPhone Camera → Formats → Most Compatible.',
+      );
+      return null;
+    }
+    if (!type || !ACCEPTED_IMAGE_TYPES.includes(type)) {
+      setMediaError('Only JPEG, PNG or WebP images can be attached.');
+      return null;
+    }
+    if (file.size > 12 * 1024 * 1024) {
+      setMediaError('Image is too large (max 12 MB).');
+      return null;
+    }
+    if (type === file.type && file.name) return file;
+    const ext = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg';
+    return new File([file], file.name || `photo.${ext}`, { type });
+  };
+
+  const stageImageFile = (file: File) => {
+    const normalized = normalizeImageFile(file);
+    if (!normalized || !otherId) return;
+    setMediaError('');
+    setPendingPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(normalized);
+    });
+    setPendingImage(normalized);
+    setViewRule('once');
+  };
+
+  // ── Media: gallery attach + in-app selfie camera ─────────────────────────
+  const handleAttachClick = () => fileInputRef.current?.click();
+  const handleCameraClick = () => setSelfieOpen(true);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file || !otherId) return;
-    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-      setMediaError('Only JPEG, PNG or WebP images can be attached.');
-      return;
-    }
-    if (file.size > 12 * 1024 * 1024) {
-      setMediaError('Image is too large (max 12 MB).');
-      return;
-    }
-    setMediaError('');
-    // Stage the image for preview; the user picks a view rule then taps Send.
-    setPendingPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(file);
-    });
-    setPendingImage(file);
-    setViewRule('once');
+    if (!file) return;
+    stageImageFile(file);
   };
 
   const clearPendingImage = useCallback(() => {
@@ -272,7 +299,12 @@ export const Messages = () => {
         'first_message_success',
       );
     } catch (err: any) {
-      setMediaError(err?.response?.data?.error || 'Failed to send photo');
+      const code = err?.response?.data?.error;
+      setMediaError(
+        code === 'match_required' || code === 'A mutual match is required'
+          ? 'You need a mutual match before sending photos.'
+          : code || 'Failed to send photo',
+      );
     } finally {
       setUploadingMedia(false);
     }
@@ -665,12 +697,12 @@ export const Messages = () => {
           </div>
         )}
 
-        {/* Hidden file input — triggered by the attach button */}
+        {/* Hidden inputs — gallery picker vs front-camera capture */}
         <input
           ref={fileInputRef}
           type="file"
           accept="image/jpeg,image/png,image/webp"
-          aria-label="Attach photo"
+          aria-label="Choose from gallery"
           className="hidden"
           onChange={handleFileChange}
         />
@@ -731,17 +763,30 @@ export const Messages = () => {
           </div>
         ) : (
           <form onSubmit={handleSend} className="flex items-center gap-2">
-            {/* Attach image */}
+            {/* Selfie — opens front camera on mobile */}
             <button
               type="button"
-              onClick={handleAttachClick}
+              onClick={handleCameraClick}
               disabled={uploadingMedia || !!pendingImage}
-              aria-label="Attach photo"
-              title="Attach photo"
+              aria-label="Take selfie"
+              title="Take selfie"
               className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40"
               style={{ background: '#1E1508', border: '1px solid #3D2B0E', color: '#C4832A' }}
             >
               <CameraIcon className="w-4 h-4" />
+            </button>
+
+            {/* Gallery / attachments */}
+            <button
+              type="button"
+              onClick={handleAttachClick}
+              disabled={uploadingMedia || !!pendingImage}
+              aria-label="Attach from gallery"
+              title="Attach from gallery"
+              className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40"
+              style={{ background: '#1E1508', border: '1px solid #3D2B0E', color: '#A89070' }}
+            >
+              <AttachIcon className="w-4 h-4" />
             </button>
 
             {/* Text input */}
@@ -819,6 +864,13 @@ export const Messages = () => {
         />
       )}
 
+      <SelfieCaptureModal
+        open={selfieOpen}
+        onClose={() => setSelfieOpen(false)}
+        onCapture={stageImageFile}
+        onError={setMediaError}
+      />
+
     </div>
   );
 };
@@ -874,6 +926,16 @@ const CameraIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h2l1.5-2h7L17 7h2a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
     <circle cx="12" cy="13" r="3.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const AttachIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"
+    />
   </svg>
 );
 

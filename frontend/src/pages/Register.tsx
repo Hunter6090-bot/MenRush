@@ -97,7 +97,7 @@ export const Register = () => {
         password: form.password,
       });
       setAuth(res.data.user, res.data.token);
-      navigate('/discover');
+      navigate(res.data.user?.is_verified ? '/discover' : '/verify');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed. Please try again.');
     } finally {

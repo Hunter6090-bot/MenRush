@@ -1,6 +1,5 @@
 import { expect, test, request as apiRequest, type BrowserContext, type Page } from '@playwright/test';
-
-test.describe.configure({ mode: 'serial' });
+import { TEST_PASSWORD, ALICE, BOB } from './test-accounts';
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
 
@@ -15,9 +14,11 @@ type LoginResult = {
   user: { id: string; email: string; name: string; is_verified: boolean; verification_status: string };
 };
 
+test.describe.configure({ mode: 'serial' });
+
 async function login(request: any, email: string): Promise<LoginResult> {
   const response = await request.post('/api/auth/login', {
-    data: { email, password: 'password123' },
+    data: { email, password: TEST_PASSWORD },
   });
   expect(response.ok()).toBeTruthy();
   return response.json();
@@ -30,8 +31,8 @@ let bob: LoginResult;
 test.beforeAll(async () => {
   const api = await apiRequest.newContext({ baseURL: BASE_URL });
   try {
-    alice = await login(api, 'alice@example.com');
-    bob = await login(api, 'bob@example.com');
+    alice = await login(api, ALICE.email);
+    bob = await login(api, BOB.email);
   } finally {
     await api.dispose();
   }
@@ -46,7 +47,7 @@ async function authenticate(context: BrowserContext, result: LoginResult) {
 
 async function attachImage(page: Page) {
   await page
-    .locator('input[type="file"][aria-label="Attach photo"]')
+    .locator('input[type="file"][aria-label="Choose from gallery"]')
     .setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: PNG_BUFFER });
 }
 
@@ -253,7 +254,7 @@ test('oversized / wrong-type files are rejected before sending', async ({ browse
 
   // A non-image file is rejected with a useful error and never staged.
   await page
-    .locator('input[type="file"][aria-label="Attach photo"]')
+    .locator('input[type="file"][aria-label="Choose from gallery"]')
     .setInputFiles({ name: 'note.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') });
   await expect(page.getByText(/Only JPEG, PNG or WebP/i)).toBeVisible();
   await expect(page.getByTestId('image-composer')).toHaveCount(0);
@@ -261,7 +262,7 @@ test('oversized / wrong-type files are rejected before sending', async ({ browse
   // An oversized image is rejected before the composer opens.
   const huge = Buffer.alloc(13 * 1024 * 1024, 0xff);
   await page
-    .locator('input[type="file"][aria-label="Attach photo"]')
+    .locator('input[type="file"][aria-label="Choose from gallery"]')
     .setInputFiles({ name: 'big.png', mimeType: 'image/png', buffer: huge });
   await expect(page.getByText(/too large/i)).toBeVisible();
   await expect(page.getByTestId('image-composer')).toHaveCount(0);

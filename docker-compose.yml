@@ -32,6 +32,7 @@ services:
       PORT: 3000
       NODE_ENV: development
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      DEV_AUTO_VERIFY: ${DEV_AUTO_VERIFY:-true}
     ports:
       - '3000:3000'
     depends_on:

@@ -1,4 +1,5 @@
 import { expect, test, request as apiRequest, type BrowserContext } from '@playwright/test';
+import { TEST_PASSWORD, ALICE } from './test-accounts';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -10,7 +11,7 @@ type LoginResult = {
 };
 
 async function login(request: any, email: string): Promise<LoginResult> {
-  const response = await request.post('/api/auth/login', { data: { email, password: 'password123' } });
+  const response = await request.post('/api/auth/login', { data: { email, password: TEST_PASSWORD } });
   expect(response.ok()).toBeTruthy();
   return response.json();
 }
@@ -20,7 +21,7 @@ let alice: LoginResult;
 test.beforeAll(async () => {
   const api = await apiRequest.newContext({ baseURL: BASE_URL });
   try {
-    alice = await login(api, 'alice@example.com');
+    alice = await login(api, ALICE.email);
   } finally {
     await api.dispose();
   }

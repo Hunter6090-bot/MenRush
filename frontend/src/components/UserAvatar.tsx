@@ -1,4 +1,5 @@
 import React from 'react';
+import { resolveAssetUrl } from '../lib/assetUrl';
 
 type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
@@ -19,13 +20,7 @@ const sizes: Record<Size, { outer: string; text: string; dot: string; dotPos: st
   xl: { outer: 'w-24 h-24', text: 'text-3xl',  dot: 'w-4 h-4',  dotPos: 'bottom-1 right-1' },
 };
 
-export const getPhotoUrl = (url?: string) => {
-  if (!url) return undefined;
-  if (url.startsWith('http')) return url;
-  const baseUrl =
-    import.meta.env.VITE_SOCKET_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '');
-  return `${baseUrl}${url}`;
-};
+export const getPhotoUrl = (url?: string) => resolveAssetUrl(url);
 
 export const UserAvatar: React.FC<UserAvatarProps> = ({
   name,

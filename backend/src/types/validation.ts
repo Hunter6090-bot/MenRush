@@ -48,7 +48,14 @@ export const MediaMessageFormSchema = z.object({
   /** Optional caption when sending an image. Ignored for audio. */
   caption: z.string().max(500).optional(),
   /** Whether the image is disappearing (view-limited) vs. kept permanently. */
-  disappearing: z.coerce.boolean().optional(),
+  disappearing: z
+    .preprocess((val) => {
+      if (val === undefined || val === null || val === '') return undefined;
+      if (typeof val === 'boolean') return val;
+      if (val === 'true' || val === '1') return true;
+      if (val === 'false' || val === '0') return false;
+      return val;
+    }, z.boolean().optional()),
   /**
    * For disappearing images: how many times the recipient may view it.
    * 1 = view once, 2 = view twice, N = limited views. Ignored (NULL) when

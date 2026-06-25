@@ -3,8 +3,13 @@ import { query } from '../db';
 import { accessControl } from '../security/access';
 import { ProfileInput } from '../types/validation';
 
-function privateMapPoint(originLat: number, originLng: number, distanceKm: number) {
-  const bearing = crypto.randomInt(0, 360) * (Math.PI / 180);
+function stableBearing(seed: string) {
+  const hash = crypto.createHash('sha256').update(seed).digest();
+  return hash.readUInt32BE(0) % 360;
+}
+
+function privateMapPoint(originLat: number, originLng: number, distanceKm: number, seed: string) {
+  const bearing = stableBearing(seed) * (Math.PI / 180);
   const latitudeOffset = (distanceKm / 111) * Math.cos(bearing);
   const longitudeScale = Math.max(Math.cos(originLat * (Math.PI / 180)), 0.2);
   const longitudeOffset = (distanceKm / (111 * longitudeScale)) * Math.sin(bearing);
@@ -117,7 +122,12 @@ export const userService = {
       }
       return {
         ...row,
-        ...privateMapPoint(originLat, originLng, bucketed),
+        ...privateMapPoint(
+          originLat,
+          originLng,
+          bucketed,
+          `${userId}:${row.id}:${originLat.toFixed(3)}:${originLng.toFixed(3)}:${bucketed}`,
+        ),
         distance_km: bucketed.toFixed(2),
         distance_label: label,
       };
@@ -300,6 +310,31 @@ export const userService = {
       `INSERT INTO reports (reporter_id, reported_id, reason, details) VALUES ($1, $2, $3, $4)`,
       [reporterId, reportedId, reason, details ?? null]
     );
+  },
+
+  async searchProfiles(viewerId: string, q: string) {
+    await accessControl.requireVerified(viewerId);
+    const term = q.trim();
+    if (term.length < 2) return [];
+
+    const result = await query(
+      `SELECT u.id, u.name, u.age, u.photo_url, u.bio, u.headline
+       FROM users u
+       JOIN profiles p ON p.user_id = u.id
+       WHERE u.id != $1
+         AND u.is_verified = TRUE
+         AND p.is_visible = true
+         AND u.name ILIKE $2
+         AND NOT EXISTS (
+           SELECT 1 FROM blocks b
+           WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+              OR (b.blocker_id = u.id AND b.blocked_id = $1)
+         )
+       ORDER BY u.name ASC
+       LIMIT 20`,
+      [viewerId, `%${term}%`],
+    );
+    return result.rows;
   },
 
   async getMatches(userId: string) {
