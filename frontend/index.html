@@ -16,15 +16,15 @@
     <meta property="og:url" content="https://menrush.com/" />
     <meta property="og:title" content="MenRush — Pulse for now. Match for later." />
     <meta property="og:description" content="See who's near you right now. Pulse for now. Match for later." />
-    <meta property="og:image" content="https://menrush.com/brand/social-x.png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
+    <meta property="og:image" content="/brand/medallion-480.png" />
+    <meta property="og:image:width" content="480" />
+    <meta property="og:image:height" content="480" />
     <meta property="og:image:alt" content="MenRush — Pulse for now. Match for later." />
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="MenRush — Pulse for now. Match for later." />
     <meta name="twitter:description" content="See who's near you right now. Pulse for now. Match for later." />
-    <meta name="twitter:image" content="https://menrush.com/brand/social-x.png" />
+    <meta name="twitter:image" content="/brand/medallion-480.png" />
     <meta name="twitter:image:alt" content="MenRush — Pulse for now. Match for later." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -32,6 +32,22 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
       rel="stylesheet"
     />
+    <script>
+      (function () {
+        var origin = location.origin;
+        if (!origin || origin === 'null') return;
+        var image = origin + '/brand/medallion-480.png';
+        var url = origin + '/';
+        [
+          ['meta[property="og:url"]', 'content', url],
+          ['meta[property="og:image"]', 'content', image],
+          ['meta[name="twitter:image"]', 'content', image],
+        ].forEach(function (entry) {
+          var el = document.querySelector(entry[0]);
+          if (el) el.setAttribute(entry[1], entry[2]);
+        });
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

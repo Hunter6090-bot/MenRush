@@ -118,7 +118,7 @@ export function VideoCallModal() {
     setSetupError('');
     startCall(peerId, peerName ?? '').catch((error: any) => {
       outgoingPeerRef.current = null;
-      resetCall();
+      endCall();
       setSetupError(
         error?.message === 'insecure_media_context'
           ? 'Video calls need HTTPS'
@@ -127,7 +127,7 @@ export function VideoCallModal() {
             : 'Could not start the video call',
       );
     });
-  }, [callStatus, peerId, peerName, resetCall, startCall]);
+  }, [callStatus, peerId, peerName, endCall, startCall]);
 
   const handleAccept = async () => {
     if (!incomingOffer || !peerId) return;
@@ -136,7 +136,7 @@ export function VideoCallModal() {
       socket?.emit('call:answer', { to: peerId, answer });
       useCallStore.getState().setConnected();
     } catch (error: any) {
-      resetCall();
+      endCall();
       setSetupError(
         error?.message === 'insecure_media_context'
           ? 'Video calls need HTTPS'
@@ -148,8 +148,7 @@ export function VideoCallModal() {
   };
 
   const handleReject = () => {
-    if (peerId) socket?.emit('call:end', { to: peerId });
-    resetCall();
+    endCall();
   };
 
   if (setupError) {

@@ -10,7 +10,16 @@ interface SelfieCaptureModalProps {
 export function SelfieCaptureModal({ open, onClose, onCapture, onError }: SelfieCaptureModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const onCloseRef = useRef(onClose);
+  const onErrorRef = useRef(onError);
+  const onCaptureRef = useRef(onCapture);
   const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+    onErrorRef.current = onError;
+    onCaptureRef.current = onCapture;
+  }, [onClose, onCapture, onError]);
 
   useEffect(() => {
     if (!open) {
@@ -19,8 +28,8 @@ export function SelfieCaptureModal({ open, onClose, onCapture, onError }: Selfie
     }
 
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
-      onError('Selfies need HTTPS and camera access.');
-      onClose();
+      onErrorRef.current('Selfies need HTTPS and camera access.');
+      onCloseRef.current();
       return;
     }
 
@@ -37,36 +46,37 @@ export function SelfieCaptureModal({ open, onClose, onCapture, onError }: Selfie
         if (video) {
           video.srcObject = stream;
           void video.play().then(() => setReady(true)).catch(() => {
-            onError('Could not start the camera preview.');
-            onClose();
+            onErrorRef.current('Could not start the camera preview.');
+            onCloseRef.current();
           });
         }
       })
       .catch((error: DOMException) => {
-        onError(
+        onErrorRef.current(
           error?.name === 'NotAllowedError'
             ? 'Camera access was blocked.'
             : 'Could not open the camera.',
         );
-        onClose();
+        onCloseRef.current();
       });
 
     return () => {
       cancelled = true;
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
-      if (videoRef.current) videoRef.current.srcObject = null;
+      const video = videoRef.current;
+      if (video) video.srcObject = null;
     };
-  }, [open, onClose, onError]);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
+  }, [open]);
 
   const handleCapture = () => {
     const video = videoRef.current;
@@ -77,18 +87,18 @@ export function SelfieCaptureModal({ open, onClose, onCapture, onError }: Selfie
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
     if (!ctx) {
-      onError('Could not capture the photo.');
+      onErrorRef.current('Could not capture the photo.');
       return;
     }
     ctx.drawImage(video, 0, 0);
     canvas.toBlob(
       (blob) => {
         if (!blob) {
-          onError('Could not capture the photo.');
+          onErrorRef.current('Could not capture the photo.');
           return;
         }
-        onCapture(new File([blob], `selfie-${Date.now()}.jpg`, { type: 'image/jpeg' }));
-        onClose();
+        onCaptureRef.current(new File([blob], `selfie-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+        onCloseRef.current();
       },
       'image/jpeg',
       0.92,
@@ -101,7 +111,7 @@ export function SelfieCaptureModal({ open, onClose, onCapture, onError }: Selfie
     <div
       className="fixed inset-0 z-[110] flex items-center justify-center px-4"
       style={{ background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(12px)' }}
-      onClick={onClose}
+      onClick={() => onCloseRef.current()}
       role="presentation"
     >
       <div
@@ -129,7 +139,7 @@ export function SelfieCaptureModal({ open, onClose, onCapture, onError }: Selfie
         <div className="flex items-center justify-center gap-4 px-4 py-4">
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => onCloseRef.current()}
             className="rounded-xl border border-[#3D2B0E] px-4 py-2 text-sm font-semibold text-[#A89070]"
           >
             Cancel

@@ -70,20 +70,40 @@ async function upsertUser(user: SeedUser, passwordHash: string): Promise<string>
     [user.id, email, passwordHash, user.name, user.age],
   );
 
-  await query(
-    `INSERT INTO profiles (user_id, location, lat, lng, online, last_seen, is_visible, is_ghost)
-     VALUES ($1, ST_MakePoint($3, $2)::geography, $2, $3, TRUE, NOW(), TRUE, FALSE)
-     ON CONFLICT (user_id) DO UPDATE SET
-       location = EXCLUDED.location,
-       lat = EXCLUDED.lat,
-       lng = EXCLUDED.lng,
-       online = TRUE,
-       last_seen = NOW(),
-       is_visible = TRUE,
-       is_ghost = FALSE,
-       updated_at = NOW()`,
-    [user.id, TEST_LAT, TEST_LNG],
-  );
+  const isE2eFixture = user.email.endsWith('@example.com');
+
+  if (isE2eFixture) {
+    await query(
+      `INSERT INTO profiles (user_id, location, lat, lng, online, last_seen, is_visible, is_ghost)
+       VALUES ($1, ST_MakePoint($3, $2)::geography, $2, $3, TRUE, NOW(), TRUE, FALSE)
+       ON CONFLICT (user_id) DO UPDATE SET
+         location = EXCLUDED.location,
+         lat = EXCLUDED.lat,
+         lng = EXCLUDED.lng,
+         online = TRUE,
+         last_seen = NOW(),
+         is_visible = TRUE,
+         is_ghost = FALSE,
+         updated_at = NOW()`,
+      [user.id, TEST_LAT, TEST_LNG],
+    );
+  } else {
+    // Real team accounts: no fake map pin — location comes from live GPS on device.
+    await query(
+      `INSERT INTO profiles (user_id, online, last_seen, is_visible, is_ghost)
+       VALUES ($1, TRUE, NOW(), TRUE, FALSE)
+       ON CONFLICT (user_id) DO UPDATE SET
+         location = NULL,
+         lat = NULL,
+         lng = NULL,
+         online = TRUE,
+         last_seen = NOW(),
+         is_visible = TRUE,
+         is_ghost = FALSE,
+         updated_at = NOW()`,
+      [user.id],
+    );
+  }
 
   return user.id;
 }

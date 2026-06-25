@@ -54,7 +54,17 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
         .then((res) => setResults(res.data))
         .catch((err) => {
           setResults([]);
-          setError(err?.response?.data?.error || 'Search failed.');
+          const status = err?.response?.status;
+          const code = err?.response?.data?.error;
+          if (!err?.response) {
+            setError('Could not reach the server. Check your connection.');
+          } else if (status === 403 && code === 'verification_required') {
+            setError('Verify your account to search profiles.');
+          } else if (status === 404) {
+            setError('Search is unavailable — the server may need updating.');
+          } else {
+            setError(typeof code === 'string' ? code.replace(/_/g, ' ') : 'Search failed.');
+          }
         })
         .finally(() => setLoading(false));
     }, 300);

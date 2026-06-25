@@ -90,16 +90,16 @@ export function PulseFab({
 
       {sheetOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
           onClick={() => !submitting && setSheetOpen(false)}
         >
           <div
             onClick={(e) => e.stopPropagation()}
             className="
-              relative w-full sm:max-w-md
+              relative w-full sm:max-w-md max-h-[min(88vh,640px)] overflow-y-auto
               bg-[var(--bg-elevated)] border border-[var(--border-default)]
               rounded-t-2xl sm:rounded-2xl
-              p-6 sm:p-8
+              px-6 pt-6 pb-[calc(var(--mobile-tab-bar-height)+1.25rem)] sm:pb-8
               shadow-[var(--shadow-lg)]
             "
           >
@@ -122,7 +122,7 @@ export function PulseFab({
                   <button
                     onClick={handleStop}
                     disabled={submitting}
-                    className="w-full py-4 rounded-[var(--radius-md)] bg-[var(--bg-card)] border border-[var(--border-default)] text-[var(--cream)] hover:border-[var(--copper)] transition-colors"
+                    className="sticky bottom-0 w-full py-4 rounded-[var(--radius-md)] bg-[var(--copper)] text-[var(--bg-primary)] font-bold shadow-[var(--shadow-glow)] hover:bg-[var(--copper-light)] transition-colors disabled:opacity-50"
                   >
                     {submitting ? "Stopping…" : "End Pulse early"}
                   </button>

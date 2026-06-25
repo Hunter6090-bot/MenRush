@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import type { Root } from 'react-dom/client';
 import { Link, useNavigate } from 'react-router-dom';
 import { EventDTO, pulseAPI, usersAPI } from '../api/client';
 import { useLocationStore } from '../hooks/store';
@@ -8,12 +9,12 @@ import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
 import { PulsingAvatar } from '../components/PulsingAvatar';
 import { PulseFab } from '../components/PulseFab';
 import { ProfileDrawer } from '../components/ProfileDrawer';
-import { createMapMarkerElement } from '../components/MapMarker';
+import { createMapMarkerElement, MapMarker } from '../components/MapMarker';
 import { getPhotoUrl } from '../components/UserAvatar';
 import { TribePillRow } from '../components/TribePillRow';
 import { EventsRail } from '../components/EventsRail';
 import { MoodBadge } from '../components/MoodPicker';
-import { getDistanceLabel, isUserPulsing } from '../lib/discovery';
+import { getDistanceLabel, isUserPulsing, distanceMeters } from '../lib/discovery';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import {
@@ -49,6 +50,15 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
 
 const RADIUS_OPTIONS = [1, 5, 10, 25, 50] as const;
 const DEFAULT_DISCOVERY_CENTER: [number, number] = [51.5136, -0.1365];
+const INSECURE_GPS_NOTICE =
+  'Live location on your phone needs a secure (HTTPS) link. Open the team tunnel URL — not the plain IP address — then allow location.';
+
+/** Min interval between nearby roster API calls during live GPS. */
+const NEARBY_FETCH_MIN_MS = 20_000;
+/** Min movement before panning the map (avoids constant easeTo flicker). */
+const MAP_PAN_MIN_METERS = 50;
+/** Min movement before re-querying nearby users on GPS drift. */
+const NEARBY_REFETCH_MIN_METERS = 80;
 
 export const Discover = () => {
   const [users, setUsers] = useState<NearbyUser[]>([]);
@@ -68,9 +78,13 @@ export const Discover = () => {
   const { lat, lng, setLocation } = useLocationStore();
   const watchIdRef = useRef<number | null>(null);
   const hasFetchedRef = useRef(false);
+  const savedProfileLocationRef = useRef<{ lat: number; lng: number } | null>(null);
+  const lastGpsFetchRef = useRef<{ lat: number; lng: number; at: number } | null>(null);
+  const lastMapPanRef = useRef<{ lat: number; lng: number } | null>(null);
+  const fallbackTimerRef = useRef<number | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
-  const markersRef = useRef<{ marker: mapboxgl.Marker; cleanup: () => void }[]>([]);
+  const markersRef = useRef<Map<string, { marker: mapboxgl.Marker; root: Root; user: NearbyUser }>>(new Map());
   const selfMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const navigate = useNavigate();
 
@@ -78,9 +92,16 @@ export const Discover = () => {
   const tokenMissing = !mapboxToken || mapboxToken === '__SET_ME__';
 
   const fetchNearbyUsers = useCallback(
-    async (latitude: number, longitude: number, r: number, tags?: string[]) => {
-      setLoading(true);
+    async (
+      latitude: number,
+      longitude: number,
+      r: number,
+      tags?: string[],
+      options?: { background?: boolean },
+    ) => {
+      if (!options?.background) setLoading(true);
       try {
+        await usersAPI.updateLocation(latitude, longitude).catch(() => {});
         const res = await usersAPI.getNearby(
           latitude,
           longitude,
@@ -121,19 +142,81 @@ export const Discover = () => {
     [fetchNearbyUsers, radius, setLocation, tagFilters],
   );
 
+  const applyLiveGps = useCallback(
+    (latitude: number, longitude: number, options?: { force?: boolean }) => {
+      setLocation(latitude, longitude);
+      setLocationNotice('');
+
+      if (!mapCenter && !mapRef.current) {
+        setMapCenter([latitude, longitude]);
+      } else {
+        selfMarkerRef.current?.setLngLat([longitude, latitude]);
+        const lastPan = lastMapPanRef.current;
+        if (
+          !lastPan ||
+          distanceMeters(lastPan.lat, lastPan.lng, latitude, longitude) >= MAP_PAN_MIN_METERS
+        ) {
+          lastMapPanRef.current = { lat: latitude, lng: longitude };
+          mapRef.current?.easeTo({ center: [longitude, latitude], duration: 700 });
+        }
+      }
+
+      const now = Date.now();
+      const lastFetch = lastGpsFetchRef.current;
+      const movedEnough =
+        !lastFetch ||
+        distanceMeters(lastFetch.lat, lastFetch.lng, latitude, longitude) >= NEARBY_REFETCH_MIN_METERS;
+      const waitedEnough = !lastFetch || now - lastFetch.at >= NEARBY_FETCH_MIN_MS;
+      const shouldFetch = options?.force || !hasFetchedRef.current || (movedEnough && waitedEnough);
+
+      if (!shouldFetch) return;
+
+      const isBackground = lastFetch != null;
+      hasFetchedRef.current = true;
+      lastGpsFetchRef.current = { lat: latitude, lng: longitude, at: now };
+      fetchNearbyUsers(latitude, longitude, radius, tagFilters, { background: isBackground });
+    },
+    [fetchNearbyUsers, mapCenter, radius, setLocation, tagFilters],
+  );
+
   // Customer-facing "enable location" action for the fallback notice.
   const handleEnableLocation = useCallback(() => {
     if (!navigator.geolocation) return;
+    if (!window.isSecureContext) {
+      setLocationNotice(INSECURE_GPS_NOTICE);
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         useDiscoveryLocation(coords.latitude, coords.longitude, '', true);
-        usersAPI.updateLocation(coords.latitude, coords.longitude).catch(() => {});
       },
       () => {
         // Still blocked — keep the friendly fallback notice in place.
       },
       { enableHighAccuracy: true, timeout: 12000 },
     );
+  }, [useDiscoveryLocation]);
+
+  const applyLocationFallback = useCallback(() => {
+    if (hasFetchedRef.current) return;
+
+    const saved = savedProfileLocationRef.current;
+    if (saved && window.isSecureContext) {
+      useDiscoveryLocation(saved.lat, saved.lng, 'Using your last saved location.', true);
+      return;
+    }
+
+    if (window.isSecureContext) {
+      useDiscoveryLocation(
+        DEFAULT_DISCOVERY_CENTER[0],
+        DEFAULT_DISCOVERY_CENTER[1],
+        'Location access is off. Showing people near central London for now.',
+      );
+      return;
+    }
+
+    setLocationNotice(INSECURE_GPS_NOTICE);
+    setLoading(false);
   }, [useDiscoveryLocation]);
 
   useEffect(() => {
@@ -154,16 +237,21 @@ export const Discover = () => {
           const d = new Date(until);
           if (d.getTime() > Date.now()) setPulseUntil(d);
         }
-        if (r.data?.lat != null && r.data?.lng != null && !hasFetchedRef.current) {
-          useDiscoveryLocation(
-            Number(r.data.lat),
-            Number(r.data.lng),
-            'Using your last saved location.',
-          );
+        if (r.data?.lat != null && r.data?.lng != null) {
+          savedProfileLocationRef.current = {
+            lat: Number(r.data.lat),
+            lng: Number(r.data.lng),
+          };
         }
       })
       .catch(() => {});
   }, [pulseUntil, useDiscoveryLocation]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
+      setLocationNotice(INSECURE_GPS_NOTICE);
+    }
+  }, []);
 
   useEffect(() => {
     if (!pulseUntil) return;
@@ -194,8 +282,7 @@ export const Discover = () => {
           'location_permission_outcome',
         );
         const { latitude, longitude } = coords;
-        useDiscoveryLocation(latitude, longitude, '', true);
-        usersAPI.updateLocation(latitude, longitude).catch(() => {});
+        applyLiveGps(latitude, longitude);
       },
       (positionError) => {
         trackEventOnce(
@@ -206,11 +293,10 @@ export const Discover = () => {
           'location_permission_outcome',
         );
         if (!hasFetchedRef.current) {
-          useDiscoveryLocation(
-            DEFAULT_DISCOVERY_CENTER[0],
-            DEFAULT_DISCOVERY_CENTER[1],
-            'Location access is off. Showing people near central London for now.',
-          );
+          if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
+          fallbackTimerRef.current = window.setTimeout(() => {
+            applyLocationFallback();
+          }, 900);
         }
         setError('');
       },
@@ -218,17 +304,16 @@ export const Discover = () => {
     );
     return () => {
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+      if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
     };
-  }, [useDiscoveryLocation]);
+  }, [applyLiveGps, applyLocationFallback]);
 
   // Live proximity: refresh the nearby roster every 20s using the latest location.
-  // 20s keeps "who's around right now" feeling current without thrashing the API
-  // (server-side distance bucketing means small GPS drift won't reshuffle the list).
   useEffect(() => {
     if (lat == null || lng == null) return;
     const id = window.setInterval(() => {
-      fetchNearbyUsers(lat, lng, radius, tagFilters);
-    }, 20_000);
+      fetchNearbyUsers(lat, lng, radius, tagFilters, { background: true });
+    }, NEARBY_FETCH_MIN_MS);
     return () => window.clearInterval(id);
   }, [lat, lng, radius, tagFilters, fetchNearbyUsers]);
 
@@ -316,11 +401,7 @@ export const Discover = () => {
   useEffect(() => {
     if (tokenMissing || !mapContainerRef.current || !mapCenter) return;
 
-    if (mapRef.current) {
-      mapRef.current.easeTo({ center: [mapCenter[1], mapCenter[0]] });
-      selfMarkerRef.current?.setLngLat([mapCenter[1], mapCenter[0]]);
-      return;
-    }
+    if (mapRef.current) return;
 
     mapboxgl.accessToken = mapboxToken!;
     const map = new mapboxgl.Map({
@@ -350,6 +431,11 @@ export const Discover = () => {
     mapRef.current = map;
     return () => {
       window.removeEventListener('resize', resizeMap);
+      markersRef.current.forEach(({ marker, root }) => {
+        marker.remove();
+        setTimeout(() => root.unmount(), 0);
+      });
+      markersRef.current.clear();
       map.remove();
       mapRef.current = null;
       selfMarkerRef.current = null;
@@ -361,38 +447,65 @@ export const Discover = () => {
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
 
-    markersRef.current.forEach(({ marker, cleanup }) => {
-      marker.remove();
-      cleanup();
-    });
-    markersRef.current = [];
+    const visibleIds = new Set<string>();
 
     users.forEach((user) => {
       if (user.lat == null || user.lng == null) return;
+      visibleIds.add(user.id);
       const isPulsing = isUserPulsing(user);
+      const markerUser = {
+        id: user.id,
+        name: user.name,
+        photo_url: user.photo_url,
+        isPulsing,
+        isVerified: !!(user as any).is_verified,
+      };
+      const lngLat: [number, number] = [Number(user.lng), Number(user.lat)];
+      const existing = markersRef.current.get(user.id);
+
+      if (existing) {
+        const prevLat = Number(existing.user.lat);
+        const prevLng = Number(existing.user.lng);
+        const nextLat = Number(user.lat);
+        const nextLng = Number(user.lng);
+        if (
+          Number.isFinite(prevLat) &&
+          Number.isFinite(prevLng) &&
+          (prevLat !== nextLat || prevLng !== nextLng)
+        ) {
+          existing.marker.setLngLat(lngLat);
+        }
+        const prev = existing.user;
+        const visualChanged =
+          prev.name !== user.name ||
+          prev.photo_url !== user.photo_url ||
+          isUserPulsing(prev) !== isPulsing ||
+          !!(prev as any).is_verified !== !!(user as any).is_verified;
+        if (visualChanged) {
+          existing.root.render(<MapMarker user={markerUser} size={44} />);
+        }
+        existing.user = user;
+        return;
+      }
 
       const { element, root } = createMapMarkerElement(
-        {
-          id: user.id,
-          name: user.name,
-          photo_url: user.photo_url,
-          isPulsing,
-          isVerified: !!(user as any).is_verified,
-        },
+        markerUser,
         () => setSelectedUser(user),
         44,
       );
 
       const marker = new mapboxgl.Marker({ element })
-        .setLngLat([Number(user.lng), Number(user.lat)])
+        .setLngLat(lngLat)
         .addTo(map);
 
-      markersRef.current.push({
-        marker,
-        cleanup: () => {
-          setTimeout(() => root.unmount(), 0);
-        },
-      });
+      markersRef.current.set(user.id, { marker, root, user });
+    });
+
+    markersRef.current.forEach(({ marker, root }, userId) => {
+      if (visibleIds.has(userId)) return;
+      marker.remove();
+      setTimeout(() => root.unmount(), 0);
+      markersRef.current.delete(userId);
     });
   }, [users, mapLoaded]);
 
@@ -481,7 +594,10 @@ export const Discover = () => {
               data-testid="enable-location"
               className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[var(--copper)]/15 px-2.5 py-1 text-[11px] font-bold text-[var(--copper)] transition-colors hover:bg-[var(--copper)]/25"
             >
-              Enable location
+              {locationNotice === 'Using your last saved location.' ||
+              locationNotice === INSECURE_GPS_NOTICE
+                ? 'Refresh location'
+                : 'Enable location'}
             </button>
           </div>
         )}

@@ -19,13 +19,22 @@ function privateMapPoint(originLat: number, originLng: number, distanceKm: numbe
   };
 }
 
+const includeE2eFixtures = () =>
+  process.env.INCLUDE_E2E_FIXTURES === 'true' || process.env.INCLUDE_E2E_FIXTURES === '1';
+
 export const userService = {
   async getNearbyUsers(
     userId: string,
     radiusKm: number = 5,
-    filters?: { minAge?: number; maxAge?: number; interests?: string[]; onlyPulse?: boolean }
+    filters?: { minAge?: number; maxAge?: number; interests?: string[]; onlyPulse?: boolean },
+    clientLocation?: { lat: number; lng: number },
   ) {
     await accessControl.requireVerified(userId);
+
+    if (clientLocation) {
+      await this.updateLocation(userId, clientLocation.lat, clientLocation.lng);
+    }
+
     const locationResult = await query(
       `SELECT lat, lng
        FROM profiles
@@ -69,6 +78,10 @@ export const userService = {
              OR (b.blocker_id = u.id AND b.blocked_id = $3)
         )
     `;
+
+    if (!includeE2eFixtures()) {
+      queryStr += ` AND u.email NOT LIKE '%@example.com'`;
+    }
 
     if (filters?.onlyPulse) {
       // Honour either the new (users.is_pulsing) or legacy (profiles.available_until)
@@ -126,7 +139,7 @@ export const userService = {
           originLat,
           originLng,
           bucketed,
-          `${userId}:${row.id}:${originLat.toFixed(3)}:${originLng.toFixed(3)}:${bucketed}`,
+          `${userId}:${row.id}:${originLat.toFixed(2)}:${originLng.toFixed(2)}:${bucketed}`,
         ),
         distance_km: bucketed.toFixed(2),
         distance_label: label,

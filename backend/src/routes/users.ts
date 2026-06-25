@@ -91,10 +91,18 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
       onlyPulse: onlyPulse === 'true' || onlyPulse === '1',
     };
 
+    const queryLat = typeof req.query.lat === 'string' ? Number.parseFloat(req.query.lat) : NaN;
+    const queryLng = typeof req.query.lng === 'string' ? Number.parseFloat(req.query.lng) : NaN;
+    const clientLocation =
+      Number.isFinite(queryLat) && Number.isFinite(queryLng)
+        ? { lat: queryLat, lng: queryLng }
+        : undefined;
+
     const users = await userService.getNearbyUsers(
       req.userId!,
       Math.min(Math.max(requestedRadius, 1), 50),
-      filters
+      filters,
+      clientLocation,
     );
 
     res.json(users);

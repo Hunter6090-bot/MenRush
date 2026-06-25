@@ -24,6 +24,7 @@ export function useWebRTC() {
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
 
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -34,11 +35,14 @@ export function useWebRTC() {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
     const rs = new MediaStream();
+    remoteStreamRef.current = rs;
     setRemoteStream(rs);
 
     pc.ontrack = (ev) => {
       ev.streams[0]?.getTracks().forEach((t) => rs.addTrack(t));
-      setRemoteStream(new MediaStream(rs.getTracks()));
+      const next = new MediaStream(rs.getTracks());
+      remoteStreamRef.current = next;
+      setRemoteStream(next);
     };
 
     pc.onicecandidate = (ev) => {
@@ -106,16 +110,9 @@ export function useWebRTC() {
     if (peerId && socket) {
       socket.emit('call:end', { to: peerId });
     }
-    localStreamRef.current?.getTracks().forEach((t) => t.stop());
-    pcRef.current?.close();
-    pcRef.current = null;
-    localStreamRef.current = null;
-    setLocalStream(null);
-    setRemoteStream(null);
-    setIsMuted(false);
-    setIsCameraOff(false);
+    releaseMedia();
     resetCall();
-  }, [peerId, socket, resetCall]);
+  }, [peerId, socket, resetCall, releaseMedia]);
 
   // ── Media toggles ────────────────────────────────────────────────────────
   const toggleMute = useCallback(() => {
@@ -134,6 +131,19 @@ export function useWebRTC() {
       t.enabled = !t.enabled;
     });
     setIsCameraOff((v) => !v);
+  }, []);
+
+  const releaseMedia = useCallback(() => {
+    localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    remoteStreamRef.current?.getTracks().forEach((t) => t.stop());
+    pcRef.current?.close();
+    pcRef.current = null;
+    localStreamRef.current = null;
+    remoteStreamRef.current = null;
+    setLocalStream(null);
+    setRemoteStream(null);
+    setIsMuted(false);
+    setIsCameraOff(false);
   }, []);
 
   // ── Socket event listeners ───────────────────────────────────────────────
@@ -166,14 +176,7 @@ export function useWebRTC() {
     };
 
     const onEnded = () => {
-      localStreamRef.current?.getTracks().forEach((t) => t.stop());
-      pcRef.current?.close();
-      pcRef.current = null;
-      localStreamRef.current = null;
-      setLocalStream(null);
-      setRemoteStream(null);
-      setIsMuted(false);
-      setIsCameraOff(false);
+      releaseMedia();
       resetCall();
     };
 
@@ -186,23 +189,15 @@ export function useWebRTC() {
       socket.off('call:ice-candidate', onIceCandidate);
       socket.off('call:ended', onEnded);
     };
-  }, [socket, setConnected, resetCall]);
+  }, [socket, setConnected, resetCall, releaseMedia]);
 
-  // Cleanup streams if callStatus transitions to ended/idle externally
+  // Always release camera/mic when the call store returns to idle — covers
+  // reject/cancel paths that only call resetCall().
   useEffect(() => {
     if (callStatus === 'idle' || callStatus === 'ended') {
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach((t) => t.stop());
-        localStreamRef.current = null;
-        setLocalStream(null);
-      }
-      if (pcRef.current) {
-        pcRef.current.close();
-        pcRef.current = null;
-      }
-      setRemoteStream(null);
+      releaseMedia();
     }
-  }, [callStatus]);
+  }, [callStatus, releaseMedia]);
 
   return {
     localStream,
