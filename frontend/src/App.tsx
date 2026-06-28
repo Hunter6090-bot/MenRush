@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ComingSoon } from './pages/ComingSoon';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
@@ -31,10 +31,15 @@ import { useGlobalMessageNotifications } from './hooks/useGlobalMessageNotificat
 import { FEATURES } from './lib/featureFlags';
 import { VideoCallModal } from './components/VideoCallModal';
 import { ToastNotifications } from './components/ToastNotifications';
+import { savePostAuthRedirect } from './lib/profileLinks';
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
   const token = useAuthStore((s) => s.token);
-  if (!token) return <Navigate to="/login" replace />;
+  const location = useLocation();
+  if (!token) {
+    const next = encodeURIComponent(`${location.pathname}${location.search}`);
+    return <Navigate to={`/login?next=${next}`} replace />;
+  }
   return children;
 }
 
@@ -44,8 +49,14 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
 function RequireVerified({ children }: { children: JSX.Element }) {
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
-  if (!token) return <Navigate to="/login" replace />;
+  const location = useLocation();
+  const returnPath = `${location.pathname}${location.search}`;
+
+  if (!token) {
+    return <Navigate to={`/login?next=${encodeURIComponent(returnPath)}`} replace />;
+  }
   if (!user?.is_verified) {
+    savePostAuthRedirect(returnPath);
     if (user?.verification_status === 'pending') return <Navigate to="/verify/pending" replace />;
     if (user?.verification_status === 'rejected') return <Navigate to="/verify/rejected" replace />;
     return <Navigate to="/verify" replace />;

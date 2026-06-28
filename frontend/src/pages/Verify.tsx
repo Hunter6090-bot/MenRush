@@ -5,6 +5,7 @@ import { useAuthStore } from '../hooks/store';
 import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
 import { SelfieCaptureModal } from '../components/SelfieCaptureModal';
+import { consumePostAuthRedirect } from '../lib/profileLinks';
 import { trackEvent } from '../observability/analytics';
 
 type Step = 'intro' | 'id' | 'selfie';
@@ -52,7 +53,7 @@ export const Verify: React.FC = () => {
       if (status === 'verified') {
         setVerified('verified', true);
         trackEvent('verification_transition', { state: 'verified' });
-        navigate('/discover');
+        navigate(consumePostAuthRedirect('/discover'));
         return;
       }
 
@@ -70,7 +71,7 @@ export const Verify: React.FC = () => {
       const code = err?.response?.data?.error;
       if (code === 'already_verified') {
         setVerified('verified', true);
-        navigate('/discover');
+        navigate(consumePostAuthRedirect('/discover'));
       } else if (code === 'document_already_used') {
         setError('This government ID is already linked to another MenRush account.');
       } else if (code === 'invalid_file_signature') {

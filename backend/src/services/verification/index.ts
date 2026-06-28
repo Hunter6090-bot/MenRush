@@ -1,7 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { query } from '../../db';
-import { faceMatchService } from './face-match.service';
 import {
   DocumentAlreadyUsedError,
   SubmitVerificationResult,
@@ -65,6 +64,7 @@ export const verificationService = {
       await removeSubmissionFiles(previous.id_front_key, previous.selfie_key);
     }
 
+    const { faceMatchService } = await import('./face-match.service');
     const faceResult = await faceMatchService.compare(files.idFrontPath, files.selfiePath);
 
     type SubmissionStatus = 'pending' | 'approved' | 'rejected';

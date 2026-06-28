@@ -19,7 +19,12 @@ interface MapMarkerProps {
 export function MapMarker({ user, size = 44 }: MapMarkerProps) {
   const photo = getPhotoUrl(user.photo_url);
   return (
-    <div className="cursor-pointer transition-transform duration-150 hover:scale-110">
+    <div
+      className={`cursor-pointer transition-transform duration-150 hover:scale-110 ${
+        user.isPulsing ? "animate-pulse-breathe" : ""
+      }`}
+      style={{ width: size, height: size }}
+    >
       <PulsingAvatar
         isPulsing={user.isPulsing}
         size={size}
@@ -30,8 +35,10 @@ export function MapMarker({ user, size = 44 }: MapMarkerProps) {
           className="w-full h-full rounded-full overflow-hidden flex items-center justify-center"
           style={{
             background: "linear-gradient(135deg,#2A1C0A,#1E1508)",
-            border: "2px solid var(--copper)",
-            boxShadow: "0 3px 10px rgba(196,131,42,0.45)",
+            border: user.isPulsing ? "3px solid var(--copper-light)" : "2px solid var(--copper)",
+            boxShadow: user.isPulsing
+              ? "0 0 20px rgba(196,131,42,0.75), 0 4px 14px rgba(196,131,42,0.55)"
+              : "0 3px 10px rgba(196,131,42,0.45)",
           }}
         >
           {photo ? (

@@ -4,6 +4,7 @@ import { verifyAPI } from '../api/verify';
 import { useAuthStore } from '../hooks/store';
 import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
+import { consumePostAuthRedirect } from '../lib/profileLinks';
 import { trackEventOnce } from '../observability/analytics';
 import { VerifySignOut } from '../components/VerifySignOut';
 
@@ -25,7 +26,7 @@ export const VerifyPending: React.FC = () => {
           trackEventOnce('verification_transition', { state: 'verified' }, 'verification_verified');
           stoppedRef.current = true;
           setVerified('verified', true);
-          navigate('/discover');
+          navigate(consumePostAuthRedirect('/discover'));
           return;
         }
         if (status === 'rejected') {

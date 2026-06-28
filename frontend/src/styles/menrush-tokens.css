@@ -200,6 +200,24 @@
 .nn-fade-in { animation: nn-fade-in 0.35s var(--nn-ease-out); }
 .nn-slide-up { animation: nn-slide-up 0.4s var(--nn-ease-out); }
 
+@keyframes pulse-ring {
+  0%   { transform: scale(1);   opacity: 0.75; }
+  100% { transform: scale(2.4); opacity: 0;   }
+}
+.animate-pulse-ring { animation: pulse-ring 2s var(--ease-out) infinite; }
+
+@keyframes pulse-ring-slow {
+  0%   { transform: scale(1);   opacity: 0.55; }
+  100% { transform: scale(3.2); opacity: 0;   }
+}
+.animate-pulse-ring-slow { animation: pulse-ring-slow 2.4s var(--ease-out) infinite; }
+
+@keyframes pulse-label-glow {
+  0%, 100% { opacity: 0.35; text-shadow: 0 0 24px var(--copper-glow-strong); }
+  50%      { opacity: 0.65; text-shadow: 0 0 40px var(--copper-glow-strong), 0 0 8px var(--copper); }
+}
+.animate-pulse-label { animation: pulse-label-glow 2s ease-in-out infinite; }
+
 @keyframes pulse-breathe {
   0%   { transform: scale(1);    opacity: 1;   }
   50%  { transform: scale(1.08); opacity: 0.85; }

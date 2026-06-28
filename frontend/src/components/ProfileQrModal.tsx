@@ -1,18 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuthStore } from '../hooks/store';
+import { ProfileQrScanner } from './ProfileQrScanner';
+import { parseProfileId, profileUrl as buildProfileUrl } from '../lib/profileLinks';
 
 interface ProfileQrModalProps {
   open: boolean;
   onClose: () => void;
-}
-
-const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-
-function parseProfileId(input: string): string | null {
-  const match = input.trim().match(UUID_RE);
-  return match?.[0] ?? null;
 }
 
 export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
@@ -20,16 +15,29 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
   const user = useAuthStore((s) => s.user);
   const [pasteValue, setPasteValue] = useState('');
   const [copied, setCopied] = useState(false);
+  const [scanning, setScanning] = useState(false);
 
-  const profileUrl = useMemo(() => {
-    if (!user?.id || typeof window === 'undefined') return '';
-    return `${window.location.origin}/profile/${user.id}`;
+  const shareUrl = useMemo(() => {
+    if (!user?.id) return '';
+    return buildProfileUrl(user.id);
   }, [user?.id]);
+
+  const openProfile = useCallback(
+    (raw: string) => {
+      const id = parseProfileId(raw);
+      if (!id) return;
+      setScanning(false);
+      onClose();
+      navigate(`/profile/${id}`);
+    },
+    [navigate, onClose],
+  );
 
   useEffect(() => {
     if (!open) {
       setPasteValue('');
       setCopied(false);
+      setScanning(false);
     }
   }, [open]);
 
@@ -45,9 +53,9 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
   if (!open) return null;
 
   const handleCopy = async () => {
-    if (!profileUrl) return;
+    if (!shareUrl) return;
     try {
-      await navigator.clipboard.writeText(profileUrl);
+      await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -55,12 +63,7 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
     }
   };
 
-  const handleOpenPasted = () => {
-    const id = parseProfileId(pasteValue);
-    if (!id) return;
-    onClose();
-    navigate(`/profile/${id}`);
-  };
+  const handleOpenPasted = () => openProfile(pasteValue);
 
   return (
     <div
@@ -91,16 +94,16 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
           <div className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-4 text-center">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#A89070]">Your code</p>
             <p className="mt-1 text-sm font-bold text-[#F0E0C0]">{user?.name ?? 'Your profile'}</p>
-            {profileUrl ? (
+            {shareUrl ? (
               <div className="mx-auto mt-4 inline-flex rounded-2xl bg-white p-3">
-                <QRCodeSVG value={profileUrl} size={168} level="M" includeMargin={false} />
+                <QRCodeSVG value={shareUrl} size={168} level="M" includeMargin={false} />
               </div>
             ) : (
               <p className="mt-4 text-sm text-[#A89070]">Sign in to show your QR code.</p>
             )}
-            {profileUrl && (
+            {shareUrl && (
               <>
-                <p className="mt-3 break-all text-[11px] leading-relaxed text-[#A89070]">{profileUrl}</p>
+                <p className="mt-3 break-all text-[11px] leading-relaxed text-[#A89070]">{shareUrl}</p>
                 <button
                   type="button"
                   onClick={handleCopy}
@@ -113,25 +116,47 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
           </div>
 
           <div className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#A89070]">Open a profile</p>
-            <p className="mt-1 text-xs leading-relaxed text-[#A89070]">
-              Paste a MenRush profile link or profile ID.
-            </p>
-            <input
-              type="text"
-              value={pasteValue}
-              onChange={(event) => setPasteValue(event.target.value)}
-              placeholder="Profile link or ID"
-              className="mt-3 w-full rounded-xl border border-[#3D2B0E] bg-[#0D0A06] px-3 py-2.5 text-sm text-[#F0E0C0] placeholder:text-[#A89070]/70 focus:border-[#C4832A]/50 focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={handleOpenPasted}
-              disabled={!parseProfileId(pasteValue)}
-              className="mt-3 w-full rounded-xl border border-[#3D2B0E] px-4 py-2.5 text-sm font-semibold text-[#F0E0C0] transition-colors enabled:hover:border-[#C4832A]/50 enabled:hover:bg-[#3D2B0E]/40 disabled:opacity-40"
-            >
-              Open profile
-            </button>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#A89070]">Open a profile</p>
+              <button
+                type="button"
+                onClick={() => setScanning((value) => !value)}
+                className="rounded-lg border border-[#3D2B0E] px-2.5 py-1 text-[11px] font-semibold text-[#F0E0C0] transition-colors hover:border-[#C4832A]/50"
+              >
+                {scanning ? 'Paste link' : 'Scan QR'}
+              </button>
+            </div>
+            {scanning ? (
+              <>
+                <p className="mt-1 text-xs leading-relaxed text-[#A89070]">
+                  Point your camera at a MenRush profile QR code.
+                </p>
+                <div className="mt-3">
+                  <ProfileQrScanner active={open && scanning} onScan={openProfile} />
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="mt-1 text-xs leading-relaxed text-[#A89070]">
+                  Paste a MenRush profile link or profile ID.
+                </p>
+                <input
+                  type="text"
+                  value={pasteValue}
+                  onChange={(event) => setPasteValue(event.target.value)}
+                  placeholder="Profile link or ID"
+                  className="mt-3 w-full rounded-xl border border-[#3D2B0E] bg-[#0D0A06] px-3 py-2.5 text-sm text-[#F0E0C0] placeholder:text-[#A89070]/70 focus:border-[#C4832A]/50 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleOpenPasted}
+                  disabled={!parseProfileId(pasteValue)}
+                  className="mt-3 w-full rounded-xl border border-[#3D2B0E] px-4 py-2.5 text-sm font-semibold text-[#F0E0C0] transition-colors enabled:hover:border-[#C4832A]/50 enabled:hover:bg-[#3D2B0E]/40 disabled:opacity-40"
+                >
+                  Open profile
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

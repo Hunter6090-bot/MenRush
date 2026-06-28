@@ -43,7 +43,24 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
       background: var(--copper);
       border: 3px solid var(--cream);
       box-shadow: 0 0 0 6px rgba(196,131,42,0.18), 0 2px 10px rgba(196,131,42,0.55);
+      position: relative;
     }
+    .map-self-dot--pulsing {
+      width: 22px; height: 22px;
+      box-shadow: 0 0 0 8px rgba(196,131,42,0.28), 0 0 24px rgba(196,131,42,0.75);
+      animation: pulse-breathe 2s ease-in-out infinite;
+    }
+    .map-self-dot--pulsing::before,
+    .map-self-dot--pulsing::after {
+      content: '';
+      position: absolute;
+      inset: -10px;
+      border-radius: 50%;
+      border: 2px solid rgba(196,131,42,0.65);
+      pointer-events: none;
+    }
+    .map-self-dot--pulsing::before { animation: pulse-ring 2s ease-out infinite; }
+    .map-self-dot--pulsing::after { animation: pulse-ring 2s ease-out 1s infinite; }
   `;
   document.head.appendChild(s);
 }
@@ -83,10 +100,13 @@ export const Discover = () => {
   const lastGpsFetchRef = useRef<{ lat: number; lng: number; at: number } | null>(null);
   const lastMapPanRef = useRef<{ lat: number; lng: number } | null>(null);
   const fallbackTimerRef = useRef<number | null>(null);
+  const usingFallbackLocationRef = useRef(false);
+  const hasLiveGpsRef = useRef(false);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<Map<string, { marker: mapboxgl.Marker; root: Root; user: NearbyUser }>>(new Map());
   const selfMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const selfDotRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
 
   const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
@@ -145,20 +165,30 @@ export const Discover = () => {
 
   const applyLiveGps = useCallback(
     (latitude: number, longitude: number, options?: { force?: boolean }) => {
+      const recoveringFromFallback = usingFallbackLocationRef.current;
+      if (recoveringFromFallback) {
+        usingFallbackLocationRef.current = false;
+      }
+      hasLiveGpsRef.current = true;
+
       setLocation(latitude, longitude);
       setLocationNotice('');
 
-      if (!mapCenter && !mapRef.current) {
+      const farFromPin =
+        mapCenter != null &&
+        distanceMeters(mapCenter[0], mapCenter[1], latitude, longitude) >= MAP_PAN_MIN_METERS;
+      const shouldRecenter =
+        !mapRef.current || recoveringFromFallback || options?.force || farFromPin;
+
+      if (!mapCenter || shouldRecenter) {
         setMapCenter([latitude, longitude]);
-      } else {
+      }
+
+      if (mapRef.current) {
         selfMarkerRef.current?.setLngLat([longitude, latitude]);
-        const lastPan = lastMapPanRef.current;
-        if (
-          !lastPan ||
-          distanceMeters(lastPan.lat, lastPan.lng, latitude, longitude) >= MAP_PAN_MIN_METERS
-        ) {
+        if (shouldRecenter) {
           lastMapPanRef.current = { lat: latitude, lng: longitude };
-          mapRef.current?.easeTo({ center: [longitude, latitude], duration: 700 });
+          mapRef.current.easeTo({ center: [longitude, latitude], duration: 700 });
         }
       }
 
@@ -168,11 +198,15 @@ export const Discover = () => {
         !lastFetch ||
         distanceMeters(lastFetch.lat, lastFetch.lng, latitude, longitude) >= NEARBY_REFETCH_MIN_METERS;
       const waitedEnough = !lastFetch || now - lastFetch.at >= NEARBY_FETCH_MIN_MS;
-      const shouldFetch = options?.force || !hasFetchedRef.current || (movedEnough && waitedEnough);
+      const shouldFetch =
+        options?.force ||
+        recoveringFromFallback ||
+        !hasFetchedRef.current ||
+        (movedEnough && waitedEnough);
 
       if (!shouldFetch) return;
 
-      const isBackground = lastFetch != null;
+      const isBackground = lastFetch != null && !recoveringFromFallback;
       hasFetchedRef.current = true;
       lastGpsFetchRef.current = { lat: latitude, lng: longitude, at: now };
       fetchNearbyUsers(latitude, longitude, radius, tagFilters, { background: isBackground });
@@ -199,25 +233,30 @@ export const Discover = () => {
   }, [useDiscoveryLocation]);
 
   const applyLocationFallback = useCallback(() => {
-    if (hasFetchedRef.current) return;
+    if (hasFetchedRef.current || hasLiveGpsRef.current) return;
+
+    usingFallbackLocationRef.current = true;
 
     const saved = savedProfileLocationRef.current;
-    if (saved && window.isSecureContext) {
-      useDiscoveryLocation(saved.lat, saved.lng, 'Using your last saved location.', true);
-      return;
-    }
-
-    if (window.isSecureContext) {
+    if (saved) {
       useDiscoveryLocation(
-        DEFAULT_DISCOVERY_CENTER[0],
-        DEFAULT_DISCOVERY_CENTER[1],
-        'Location access is off. Showing people near central London for now.',
+        saved.lat,
+        saved.lng,
+        window.isSecureContext
+          ? 'Using your last saved location.'
+          : INSECURE_GPS_NOTICE,
+        true,
       );
       return;
     }
 
-    setLocationNotice(INSECURE_GPS_NOTICE);
-    setLoading(false);
+    useDiscoveryLocation(
+      DEFAULT_DISCOVERY_CENTER[0],
+      DEFAULT_DISCOVERY_CENTER[1],
+      window.isSecureContext
+        ? 'Location access is off. Showing people near central London for now.'
+        : INSECURE_GPS_NOTICE,
+    );
   }, [useDiscoveryLocation]);
 
   useEffect(() => {
@@ -252,8 +291,12 @@ export const Discover = () => {
   useEffect(() => {
     if (typeof window !== 'undefined' && !window.isSecureContext) {
       setLocationNotice(INSECURE_GPS_NOTICE);
+      if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
+      fallbackTimerRef.current = window.setTimeout(() => {
+        applyLocationFallback();
+      }, 2500);
     }
-  }, []);
+  }, [applyLocationFallback]);
 
   useEffect(() => {
     if (!pulseUntil) return;
@@ -294,11 +337,11 @@ export const Discover = () => {
           },
           'location_permission_outcome',
         );
-        if (!hasFetchedRef.current) {
+        if (!hasFetchedRef.current && !hasLiveGpsRef.current) {
           if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
           fallbackTimerRef.current = window.setTimeout(() => {
             applyLocationFallback();
-          }, 900);
+          }, window.isSecureContext ? 8000 : 2500);
         }
         setError('');
       },
@@ -414,6 +457,14 @@ export const Discover = () => {
       attributionControl: false,
     });
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
+    map.addControl(
+      new mapboxgl.GeolocateControl({
+        positionOptions: { enableHighAccuracy: true },
+        trackUserLocation: true,
+        showUserHeading: true,
+      }),
+      'bottom-right',
+    );
     const resizeMap = () => map.resize();
     map.on('load', () => {
       resizeMap();
@@ -426,6 +477,7 @@ export const Discover = () => {
 
     const selfEl = document.createElement('div');
     selfEl.className = 'map-self-dot';
+    selfDotRef.current = selfEl;
     selfMarkerRef.current = new mapboxgl.Marker({ element: selfEl })
       .setLngLat([mapCenter[1], mapCenter[0]])
       .addTo(map);
@@ -441,6 +493,7 @@ export const Discover = () => {
       map.remove();
       mapRef.current = null;
       selfMarkerRef.current = null;
+      selfDotRef.current = null;
       setMapLoaded(false);
     };
   }, [mapCenter, mapboxToken, tokenMissing]);
@@ -484,7 +537,11 @@ export const Discover = () => {
           isUserPulsing(prev) !== isPulsing ||
           !!(prev as any).is_verified !== !!(user as any).is_verified;
         if (visualChanged) {
-          existing.root.render(<MapMarker user={markerUser} size={44} />);
+          const markerSize = isPulsing ? 52 : 44;
+          existing.root.render(<MapMarker user={markerUser} size={markerSize} />);
+          const el = existing.marker.getElement();
+          el.style.width = `${markerSize}px`;
+          el.style.height = `${markerSize}px`;
         }
         existing.user = user;
         return;
@@ -493,7 +550,7 @@ export const Discover = () => {
       const { element, root } = createMapMarkerElement(
         markerUser,
         () => setSelectedUser(user),
-        44,
+        isPulsing ? 52 : 44,
       );
 
       const marker = new mapboxgl.Marker({ element })
@@ -510,6 +567,17 @@ export const Discover = () => {
       markersRef.current.delete(userId);
     });
   }, [users, mapLoaded]);
+
+  useEffect(() => {
+    if (!mapLoaded || lat == null || lng == null) return;
+    selfMarkerRef.current?.setLngLat([lng, lat]);
+  }, [mapLoaded, lat, lng]);
+
+  useEffect(() => {
+    const dot = selfDotRef.current;
+    if (!dot) return;
+    dot.className = pulseUntil ? 'map-self-dot map-self-dot--pulsing' : 'map-self-dot';
+  }, [pulseUntil]);
 
   const onlineCount = users.filter((u) => u.online).length;
   const nearbyCount = users.length;
@@ -769,7 +837,7 @@ const UserStripCard: React.FC<UserStripCardProps> = ({ user, onSelect }) => {
           </div>
         )}
         <div className="absolute bottom-1 left-1">
-          <PulsingAvatar isPulsing={isPulsing} size={24} intensity="subtle">
+          <PulsingAvatar isPulsing={isPulsing} size={24} intensity={isPulsing ? "live" : "subtle"}>
             <div
               className="w-full h-full rounded-full"
               style={{ background: isPulsing ? 'var(--copper)' : 'transparent' }}

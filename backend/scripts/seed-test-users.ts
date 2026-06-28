@@ -67,7 +67,7 @@ export const SEED_USERS: SeedUser[] = [
 async function upsertUser(user: SeedUser, passwordHash: string): Promise<string> {
   const email = user.email.toLowerCase();
 
-  await query(
+  const userRes = await query(
     `INSERT INTO users (id, email, password_hash, name, age, is_verified, verification_status)
      VALUES ($1, $2, $3, $4, $5, TRUE, 'verified')
      ON CONFLICT (email) DO UPDATE SET
@@ -76,9 +76,11 @@ async function upsertUser(user: SeedUser, passwordHash: string): Promise<string>
        age = EXCLUDED.age,
        is_verified = TRUE,
        verification_status = 'verified',
-       updated_at = NOW()`,
+       updated_at = NOW()
+     RETURNING id`,
     [user.id, email, passwordHash, user.name, user.age],
   );
+  const userId = userRes.rows[0].id as string;
 
   const isE2eFixture = user.email.endsWith('@example.com');
 
@@ -95,7 +97,7 @@ async function upsertUser(user: SeedUser, passwordHash: string): Promise<string>
          is_visible = TRUE,
          is_ghost = FALSE,
          updated_at = NOW()`,
-      [user.id, TEST_LAT, TEST_LNG],
+      [userId, TEST_LAT, TEST_LNG],
     );
   } else {
     // Real team accounts: no fake map pin — location comes from live GPS on device.
@@ -103,19 +105,16 @@ async function upsertUser(user: SeedUser, passwordHash: string): Promise<string>
       `INSERT INTO profiles (user_id, online, last_seen, is_visible, is_ghost)
        VALUES ($1, TRUE, NOW(), TRUE, FALSE)
        ON CONFLICT (user_id) DO UPDATE SET
-         location = NULL,
-         lat = NULL,
-         lng = NULL,
          online = TRUE,
          last_seen = NOW(),
          is_visible = TRUE,
          is_ghost = FALSE,
          updated_at = NOW()`,
-      [user.id],
+      [userId],
     );
   }
 
-  return user.id;
+  return userId;
 }
 
 async function ensureMutualMatch(a: string, b: string) {

@@ -17,13 +17,47 @@ export function PulsingAvatar({
   className = "",
   isVerified = false,
 }: PulsingAvatarProps) {
-  // Badge scales with avatar; clamp so it stays legible on tiny markers.
   const badgeSize = Math.max(14, Math.round(size * 0.32));
+  const isLive = isPulsing && intensity === "live";
+  const ringInset = Math.round(size * -0.35);
+
   return (
     <div
       className={`relative inline-block ${className}`}
       style={{ width: size, height: size }}
     >
+      {isLive && (
+        <>
+          <div
+            className="pointer-events-none absolute rounded-full nn-radar-1"
+            style={{
+              inset: ringInset,
+              border: "2px solid var(--copper)",
+              opacity: 0.85,
+            }}
+            aria-hidden
+          />
+          <div
+            className="pointer-events-none absolute rounded-full nn-radar-2"
+            style={{
+              inset: ringInset,
+              border: "2px solid var(--copper-light)",
+              opacity: 0.65,
+            }}
+            aria-hidden
+          />
+          <div
+            className="pointer-events-none absolute rounded-full nn-radar-3"
+            style={{
+              inset: ringInset,
+              border: "2px solid var(--copper)",
+              opacity: 0.45,
+            }}
+            aria-hidden
+          />
+        </>
+      )}
+
       <div className="relative z-10 w-full h-full rounded-full overflow-hidden">
         {children}
       </div>
@@ -31,28 +65,32 @@ export function PulsingAvatar({
       {isPulsing && (
         <>
           <div
-            className="absolute inset-0 rounded-full pointer-events-none animate-pulse-breathe"
+            className={`absolute inset-0 rounded-full pointer-events-none ${
+              isLive ? "animate-pulse-breathe" : ""
+            }`}
             style={{
-              boxShadow: `0 0 0 2px var(--copper), 0 0 14px var(--copper-glow-strong)`,
+              boxShadow: isLive
+                ? `0 0 0 3px var(--copper), 0 0 22px var(--copper-glow-strong), 0 0 40px rgba(196,131,42,0.35)`
+                : `0 0 0 2px var(--copper), 0 0 14px var(--copper-glow-strong)`,
             }}
             aria-hidden
           />
 
-          {intensity === "live" && (
+          {isLive && (
             <>
               <div
                 className="absolute inset-0 rounded-full pointer-events-none animate-pulse-ring"
                 style={{
-                  border: `2px solid var(--copper)`,
+                  border: `2px solid var(--copper-light)`,
                   animationDelay: "0s",
                 }}
                 aria-hidden
               />
               <div
-                className="absolute inset-0 rounded-full pointer-events-none animate-pulse-ring"
+                className="absolute inset-0 rounded-full pointer-events-none animate-pulse-ring-slow"
                 style={{
                   border: `2px solid var(--copper)`,
-                  animationDelay: "1s",
+                  animationDelay: "0.6s",
                 }}
                 aria-hidden
               />

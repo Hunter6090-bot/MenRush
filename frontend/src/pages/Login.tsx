@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
+import { consumePostAuthRedirect, safeNextPath, savePostAuthRedirect } from '../lib/profileLinks';
 import { CoinFlip } from '../components/CoinFlip';
 import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
@@ -19,7 +20,9 @@ export const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const setAuth = useAuthStore((s) => s.setAuth);
+  const nextPath = safeNextPath(searchParams.get('next'));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,8 +31,9 @@ export const Login = () => {
     try {
       const res = await authAPI.login({ email, password });
       setAuth(res.data.user, res.data.token);
+      if (nextPath) savePostAuthRedirect(nextPath);
       if (res.data.user?.is_verified) {
-        navigate('/discover');
+        navigate(consumePostAuthRedirect('/discover'));
       } else if (res.data.user?.verification_status === 'pending') {
         navigate('/verify/pending');
       } else {
