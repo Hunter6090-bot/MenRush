@@ -5,6 +5,7 @@ interface PulseFabProps {
   isPulsing: boolean;
   pulseExpiresAt?: string;
   nextPulseAllowedAt?: string;
+  isPremium?: boolean;
   onStartPulse: (durationMin: 60 | 90 | 120) => Promise<void>;
   onStopPulse?: () => Promise<void>;
 }
@@ -16,6 +17,7 @@ export function PulseFab({
   isPulsing,
   pulseExpiresAt,
   nextPulseAllowedAt,
+  isPremium = false,
   onStartPulse,
   onStopPulse,
 }: PulseFabProps) {
@@ -37,7 +39,8 @@ export function PulseFab({
     ? Math.max(0, Math.ceil((new Date(nextPulseAllowedAt).getTime() - now) / 60000))
     : 0;
 
-  const onCooldown = !isPulsing && cooldownMinutesLeft > 0;
+  const cooldownHoursLeft = cooldownMinutesLeft > 0 ? Math.ceil(cooldownMinutesLeft / 60) : 0;
+  const onCooldown = !isPulsing && !isPremium && cooldownMinutesLeft > 0;
 
   const handleStart = useCallback(async () => {
     setSubmitting(true);
@@ -131,12 +134,13 @@ export function PulseFab({
             ) : onCooldown ? (
               <>
                 <p className="text-[var(--cream-soft)] mb-6">
-                  Pulse cooldown.
+                  Pulse cooldown — free members get one pulse every 24 hours.
                 </p>
                 <p className="text-nn-muted text-sm leading-relaxed">
-                  Pulse again in {cooldownMinutesLeft} min.
+                  Pulse again in about {cooldownHoursLeft}{' '}
+                  {cooldownHoursLeft === 1 ? 'hour' : 'hours'} ({cooldownMinutesLeft} min).
                   <br /><br />
-                  <span className="text-nn-copper">MenRush Premium</span> cuts cooldown to 90 min.
+                  <span className="text-nn-copper">MenRush Premium</span> unlocks unlimited pulses.
                 </p>
               </>
             ) : (
@@ -166,7 +170,12 @@ export function PulseFab({
                 </div>
 
                 <p className="text-[var(--cream-muted)] text-xs leading-relaxed mb-6">
-                  Pulsing puts you at the top of nearby lists. Your avatar pulses on the map. <strong>Cooldown: 4 hours.</strong>
+                  Pulsing puts you at the top of nearby lists. Your avatar pulses on the map.
+                  {isPremium ? (
+                    <> <strong>Premium: unlimited pulses.</strong></>
+                  ) : (
+                    <> <strong>Free: once every 24 hours.</strong></>
+                  )}
                 </p>
 
                 <button

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { messagesAPI, usersAPI, MediaKind, MessageDTO } from '../api/client';
+import { messagesAPI, usersAPI, meetAPI, MediaKind, MessageDTO, MeetAgreementState } from '../api/client';
 import { trackEventOnce } from '../observability/analytics';
 import { useSocket } from '../hooks/useSocket';
 import { useAuthStore, useCallStore, useUnreadStore } from '../hooks/store';
@@ -101,6 +101,20 @@ function isSameDay(a?: string, b?: string): boolean {
   return new Date(a).toDateString() === new Date(b).toDateString();
 }
 
+function isWithdrawnMedia(msg: Message): boolean {
+  return !!msg.withdrawn_at || (!!msg.expired && /withdrawn/i.test(msg.message || ''));
+}
+
+function canWithdrawMedia(msg: Message, userId?: string): boolean {
+  return (
+    !!msg.id &&
+    msg.sender_id === userId &&
+    !!msg.media_type &&
+    !isWithdrawnMedia(msg) &&
+    (!!msg.media_url || !!msg.is_disappearing)
+  );
+}
+
 // ── Main component ───────────────────────────────────────────────────────────
 
 export const Messages = () => {
@@ -123,6 +137,9 @@ export const Messages = () => {
   // Recipient image viewer (transient full-screen view of a disappearing image).
   const [viewerMsg, setViewerMsg] = useState<Message | null>(null);
   const [selfieOpen, setSelfieOpen] = useState(false);
+  const [meetState, setMeetState] = useState<MeetAgreementState | null>(null);
+  const [meetSubmitting, setMeetSubmitting] = useState(false);
+  const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
   // Ticks once a second so disappearing countdowns and burned states update.
   const [, setBurnTick] = useState(0);
   const socket = useSocket();
@@ -144,6 +161,7 @@ export const Messages = () => {
     if (!otherId) return;
     messagesAPI.getConversation(otherId).then((r) => setMessages(r.data)).catch(() => {});
     usersAPI.getProfile(otherId).then((r) => setOtherUser(r.data)).catch(() => {});
+    meetAPI.getState(otherId).then((r) => setMeetState(r.data)).catch(() => setMeetState(null));
     useUnreadStore.getState().clearUnreadFrom(otherId);
   }, [otherId]);
 
@@ -173,15 +191,35 @@ export const Messages = () => {
         prev.map((m) => (m.id === data.id ? { ...m, ...data } : m)),
       );
     };
+    const onWithdrawn = (data: Message) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === data.id ? { ...m, ...data } : m)),
+      );
+    };
+    const onMeetUpdated = (data: MeetAgreementState & { peer_id?: string }) => {
+      if (data.peer_id === otherId || !data.peer_id) {
+        setMeetState({
+          my_confirmed: data.my_confirmed,
+          peer_confirmed: data.peer_confirmed,
+          mutual: data.mutual,
+          my_confirmed_at: data.my_confirmed_at,
+          peer_confirmed_at: data.peer_confirmed_at,
+        });
+      }
+    };
 
     socket.on('message', onMessage);
     socket.on('typing', onTyping);
     socket.on('message:viewed', onViewed);
+    socket.on('message:withdrawn', onWithdrawn);
+    socket.on('meet:updated', onMeetUpdated);
 
     return () => {
       socket.off('message', onMessage);
       socket.off('typing', onTyping);
       socket.off('message:viewed', onViewed);
+      socket.off('message:withdrawn', onWithdrawn);
+      socket.off('meet:updated', onMeetUpdated);
     };
   }, [socket, otherId]);
 
@@ -426,6 +464,45 @@ export const Messages = () => {
     }
   };
 
+  const handleWithdrawMedia = async (messageId: string) => {
+    if (withdrawingId) return;
+    setWithdrawingId(messageId);
+    try {
+      const res = await messagesAPI.withdrawMedia(messageId);
+      setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, ...res.data } : m)));
+    } catch {
+      setMediaError('Could not withdraw that media.');
+    } finally {
+      setWithdrawingId(null);
+    }
+  };
+
+  const handleMeetConfirm = async () => {
+    if (!otherId || meetSubmitting) return;
+    setMeetSubmitting(true);
+    try {
+      const res = await meetAPI.confirm(otherId);
+      setMeetState(res.data);
+    } catch {
+      setMediaError('Could not confirm meet readiness.');
+    } finally {
+      setMeetSubmitting(false);
+    }
+  };
+
+  const handleMeetRevoke = async () => {
+    if (!otherId || meetSubmitting) return;
+    setMeetSubmitting(true);
+    try {
+      const res = await meetAPI.revoke(otherId);
+      setMeetState(res.data);
+    } catch {
+      setMediaError('Could not update meet readiness.');
+    } finally {
+      setMeetSubmitting(false);
+    }
+  };
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -521,6 +598,16 @@ export const Messages = () => {
         )}
       </header>
 
+      {otherId && meetState && (
+        <MeetConsentBar
+          state={meetState}
+          peerName={otherUser?.name ?? 'them'}
+          submitting={meetSubmitting}
+          onConfirm={handleMeetConfirm}
+          onRevoke={handleMeetRevoke}
+        />
+      )}
+
       {/* ── Messages area ─────────────────────────────────────────────────── */}
       <div
         className="flex-1 overflow-y-auto px-4 py-4"
@@ -609,9 +696,25 @@ export const Messages = () => {
                       isMine={isMine}
                       showTail={showTail}
                       onOpen={setViewerMsg}
+                      onWithdraw={
+                        canWithdrawMedia(msg, user?.id)
+                          ? () => msg.id && handleWithdrawMedia(msg.id)
+                          : undefined
+                      }
+                      withdrawing={withdrawingId === msg.id}
                     />
                   ) : msg.media_type === 'audio' ? (
-                    <AudioBubble msg={msg} isMine={isMine} showTail={showTail} />
+                    <AudioBubble
+                      msg={msg}
+                      isMine={isMine}
+                      showTail={showTail}
+                      onWithdraw={
+                        canWithdrawMedia(msg, user?.id)
+                          ? () => msg.id && handleWithdrawMedia(msg.id)
+                          : undefined
+                      }
+                      withdrawing={withdrawingId === msg.id}
+                    />
                   ) : (
                     <div
                       className="relative px-4 py-2.5 text-sm leading-relaxed"
@@ -877,6 +980,102 @@ export const Messages = () => {
 
 // ── SVG Icons ────────────────────────────────────────────────────────────────
 
+interface MeetConsentBarProps {
+  state: MeetAgreementState;
+  peerName: string;
+  submitting: boolean;
+  onConfirm: () => void;
+  onRevoke: () => void;
+}
+
+const MeetConsentBar: React.FC<MeetConsentBarProps> = ({
+  state,
+  peerName,
+  submitting,
+  onConfirm,
+  onRevoke,
+}) => {
+  if (state.mutual) {
+    return (
+      <div
+        className="flex-shrink-0 px-4 py-2.5 border-b text-center"
+        style={{ borderColor: '#3D2B0E', background: 'rgba(22,163,74,0.12)' }}
+        data-testid="meet-consent-mutual"
+      >
+        <p className="text-xs font-semibold" style={{ color: '#86EFAC' }}>
+          You both confirmed you&apos;re ready to meet — coordinate safely in public.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="flex-shrink-0 px-4 py-3 border-b"
+      style={{ borderColor: '#3D2B0E', background: 'rgba(30,21,8,0.95)' }}
+      data-testid="meet-consent-bar"
+    >
+      <p className="text-xs font-semibold" style={{ color: '#F0E0C0' }}>
+        Ready to meet?
+      </p>
+      <p className="text-[11px] mt-1 leading-relaxed" style={{ color: '#A89070' }}>
+        Confirm only when you&apos;re happy to arrange a meet-up with {peerName}. Both of you must
+        agree before this shows as mutual.
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {state.my_confirmed ? (
+          <>
+            <span className="text-[11px] font-medium" style={{ color: '#C4832A' }}>
+              You confirmed · waiting for {peerName}
+              {state.peer_confirmed ? '' : '…'}
+            </span>
+            <button
+              type="button"
+              onClick={onRevoke}
+              disabled={submitting}
+              className="text-[11px] font-semibold underline disabled:opacity-50"
+              style={{ color: '#A89070' }}
+            >
+              Undo
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={submitting}
+            className="rounded-xl px-3 py-2 text-[11px] font-bold disabled:opacity-50"
+            style={{ background: '#C4832A', color: '#0D0A06' }}
+          >
+            {submitting ? 'Saving…' : "I'm ready to meet"}
+          </button>
+        )}
+        {state.peer_confirmed && !state.my_confirmed && (
+          <span className="text-[11px]" style={{ color: '#86EFAC' }}>
+            {peerName} is ready — your turn
+          </span>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const WithdrawMediaButton: React.FC<{ onClick: () => void; loading?: boolean }> = ({
+  onClick,
+  loading,
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={loading}
+    data-testid="withdraw-media"
+    className="text-[10px] font-semibold underline disabled:opacity-50"
+    style={{ color: '#A89070' }}
+  >
+    {loading ? 'Withdrawing…' : 'Withdraw media'}
+  </button>
+);
+
 const BackIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -1130,14 +1329,44 @@ interface ImageBubbleProps {
   isMine: boolean;
   showTail: boolean;
   onOpen: (msg: Message) => void;
+  onWithdraw?: () => void;
+  withdrawing?: boolean;
 }
 
-const ImageBubble: React.FC<ImageBubbleProps> = ({ msg, isMine, showTail, onOpen }) => {
+const ImageBubble: React.FC<ImageBubbleProps> = ({
+  msg,
+  isMine,
+  showTail,
+  onOpen,
+  onWithdraw,
+  withdrawing,
+}) => {
   const radius = showTail
     ? isMine
       ? '18px 18px 4px 18px'
       : '18px 18px 18px 4px'
     : '18px';
+
+  if (isWithdrawnMedia(msg)) {
+    return (
+      <div className="flex flex-col items-end gap-1">
+        <div
+          className="px-4 py-3 flex items-center gap-2 text-xs"
+          data-testid="media-withdrawn"
+          style={{
+            background: '#1E1508',
+            border: '1px solid #3D2B0E',
+            color: '#A89070',
+            borderRadius: radius,
+            minWidth: 200,
+          }}
+        >
+          <FlameIcon className="w-4 h-4" />
+          <span>{msg.message || 'Photo withdrawn'}</span>
+        </div>
+      </div>
+    );
+  }
 
   const isDisappearing = !!msg.is_disappearing;
   const isExhausted = !!msg.expired || (!isDisappearing ? false : !msg.media_url);
@@ -1167,22 +1396,27 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({ msg, isMine, showTail, onOpen
   if (!isDisappearing) {
     if (!url) return null;
     return (
-      <div
-        className="relative overflow-hidden"
-        data-testid="image-permanent"
-        style={{
-          background: '#1E1508',
-          border: isMine ? 'none' : '1px solid #3D2B0E',
-          borderRadius: radius,
-          boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
-        }}
-      >
-        <img
-          src={url}
-          alt={msg.message || 'photo'}
-          className="block max-w-[260px] max-h-[340px] object-cover cursor-zoom-in"
-          onClick={() => onOpen(msg)}
-        />
+      <div className="flex flex-col items-end gap-1">
+        <div
+          className="relative overflow-hidden"
+          data-testid="image-permanent"
+          style={{
+            background: '#1E1508',
+            border: isMine ? 'none' : '1px solid #3D2B0E',
+            borderRadius: radius,
+            boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
+          }}
+        >
+          <img
+            src={url}
+            alt={msg.message || 'photo'}
+            className="block max-w-[260px] max-h-[340px] object-cover cursor-zoom-in"
+            onClick={() => onOpen(msg)}
+          />
+        </div>
+        {onWithdraw && (
+          <WithdrawMediaButton onClick={onWithdraw} loading={withdrawing} />
+        )}
       </div>
     );
   }
@@ -1198,22 +1432,27 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({ msg, isMine, showTail, onOpen
         ? 'Viewed'
         : `Opened · ${remainingLabel}`;
     return (
-      <div
-        className="px-4 py-3 flex items-center gap-3 text-xs"
-        data-testid="image-sent-status"
-        style={{
-          background: 'linear-gradient(135deg, #C4832A, #8B4513)',
-          color: '#FFF5E6',
-          borderRadius: radius,
-          minWidth: 200,
-          boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
-        }}
-      >
-        <FlameIcon className="w-4 h-4" />
-        <div className="flex flex-col">
-          <span className="font-semibold">Photo · {remainingViewsLabel(null, msg.max_views)}</span>
-          <span style={{ color: 'rgba(255,245,230,0.8)' }}>{status}</span>
+      <div className="flex flex-col items-end gap-1">
+        <div
+          className="px-4 py-3 flex items-center gap-3 text-xs"
+          data-testid="image-sent-status"
+          style={{
+            background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+            color: '#FFF5E6',
+            borderRadius: radius,
+            minWidth: 200,
+            boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
+          }}
+        >
+          <FlameIcon className="w-4 h-4" />
+          <div className="flex flex-col">
+            <span className="font-semibold">Photo · {remainingViewsLabel(null, msg.max_views)}</span>
+            <span style={{ color: 'rgba(255,245,230,0.8)' }}>{status}</span>
+          </div>
         </div>
+        {onWithdraw && (
+          <WithdrawMediaButton onClick={onWithdraw} loading={withdrawing} />
+        )}
       </div>
     );
   }
@@ -1420,16 +1659,20 @@ interface AudioBubbleProps {
   msg: Message;
   isMine: boolean;
   showTail: boolean;
+  onWithdraw?: () => void;
+  withdrawing?: boolean;
 }
 
-const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail }) => {
+const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail, onWithdraw, withdrawing }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const url = getPhotoUrl(msg.media_url || undefined);
   const duration = msg.audio_duration_ms ?? 0;
+  const withdrawn = isWithdrawnMedia(msg);
 
   useEffect(() => {
+    if (withdrawn) return;
     const el = audioRef.current;
     if (!el) return;
     const onTime = () => setPosition(el.currentTime * 1000);
@@ -1443,7 +1686,30 @@ const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail }) => {
       el.removeEventListener('timeupdate', onTime);
       el.removeEventListener('ended', onEnded);
     };
-  }, [url]);
+  }, [url, withdrawn]);
+
+  const radius = showTail
+    ? isMine
+      ? '18px 18px 4px 18px'
+      : '18px 18px 18px 4px'
+    : '18px';
+
+  if (withdrawn) {
+    return (
+      <div
+        className="px-4 py-3 text-xs"
+        data-testid="media-withdrawn"
+        style={{
+          background: '#1E1508',
+          border: '1px solid #3D2B0E',
+          color: '#A89070',
+          borderRadius: radius,
+        }}
+      >
+        {msg.message || 'Voice note withdrawn'}
+      </div>
+    );
+  }
 
   const togglePlay = () => {
     const el = audioRef.current;
@@ -1456,17 +1722,12 @@ const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail }) => {
     }
   };
 
-  const radius = showTail
-    ? isMine
-      ? '18px 18px 4px 18px'
-      : '18px 18px 18px 4px'
-    : '18px';
-
   const progressPct = duration > 0 ? Math.min(100, (position / duration) * 100) : 0;
 
   return (
-    <div
-      className="flex items-center gap-3 px-3 py-2.5"
+    <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
+      <div
+        className="flex items-center gap-3 px-3 py-2.5"
       style={{
         background: isMine ? 'linear-gradient(135deg, #C4832A, #8B4513)' : '#1E1508',
         border: isMine ? 'none' : '1px solid #3D2B0E',
@@ -1510,6 +1771,10 @@ const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail }) => {
         </span>
       </div>
       {url && <audio ref={audioRef} src={url} preload="metadata" />}
+      </div>
+      {onWithdraw && isMine && (
+        <WithdrawMediaButton onClick={onWithdraw} loading={withdrawing} />
+      )}
     </div>
   );
 };

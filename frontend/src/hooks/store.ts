@@ -9,6 +9,8 @@ interface User {
   photo_url?: string;
   is_verified?: boolean;
   verification_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
+  is_premium?: boolean;
+  premium_tier?: 'free' | 'premium' | 'premium_plus';
 }
 
 interface AuthState {
@@ -16,11 +18,22 @@ interface AuthState {
   token: string | null;
   setAuth: (user: User, token: string) => void;
   setVerified: (status: NonNullable<User['verification_status']>, isVerified: boolean) => void;
+  setPremium: (tier: NonNullable<User['premium_tier']>, isPremium: boolean) => void;
   logout: () => void;
 }
 
+function readStoredUser(): User | null {
+  try {
+    const raw = localStorage.getItem('user');
+    return raw ? (JSON.parse(raw) as User) : null;
+  } catch {
+    localStorage.removeItem('user');
+    return null;
+  }
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
-  user: JSON.parse(localStorage.getItem('user') || 'null'),
+  user: readStoredUser(),
   token: localStorage.getItem('token'),
   setAuth: (user, token) => {
     localStorage.setItem('user', JSON.stringify(user));
@@ -31,6 +44,13 @@ export const useAuthStore = create<AuthState>((set) => ({
     set((s) => {
       if (!s.user) return s;
       const next = { ...s.user, verification_status: status, is_verified: isVerified };
+      localStorage.setItem('user', JSON.stringify(next));
+      return { user: next };
+    }),
+  setPremium: (tier, isPremium) =>
+    set((s) => {
+      if (!s.user) return s;
+      const next = { ...s.user, premium_tier: tier, is_premium: isPremium };
       localStorage.setItem('user', JSON.stringify(next));
       return { user: next };
     }),

@@ -233,11 +233,11 @@ export const ComingSoon = () => {
               </nav>
             </div>
 
-            <h1 className="font-display max-w-4xl text-5xl font-black leading-[0.92] tracking-normal text-[#F0E0C0] sm:text-7xl lg:text-8xl">
+            <h1 className="mr-hero-heading">
               MenRush
+              <span className="mr-hero-accent">Men. Here. Now.</span>
             </h1>
-            <p className="mt-4 text-xl font-semibold text-[#C4832A] sm:text-2xl">Men. Here. Now.</p>
-            <p className="mt-5 max-w-2xl text-base leading-8 text-[#F0E0C0]/82 sm:text-lg">
+            <p className="mr-copy mt-5 max-w-2xl">
               See who's near you right now. No swiping, no waiting. Pulse live, find rooms nearby,
               and match when the moment is actually happening.
             </p>
@@ -325,7 +325,7 @@ export const ComingSoon = () => {
         <section className="relative z-10 bg-[#0D0A06] px-5 py-12 sm:px-8 lg:px-10">
           <div className="mx-auto grid w-full max-w-7xl gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
             <div>
-              <p className="font-display text-3xl font-black tracking-normal text-[#F0E0C0] sm:text-4xl">Premium arrives with launch.</p>
+              <p className="mr-page-heading max-w-xl">Premium arrives with launch.</p>
               <p className="mt-4 max-w-lg text-sm leading-7 text-[#A89070]">
                 The free core stays direct: see who's nearby, match, message, and join rooms.
                 Premium adds more reach, control, and signal when you want the room to notice.

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { getEmailStatus, sendEmail } from '../services/mailer.service';
+import { verificationService } from '../services/verification.service';
 import {
   buildTransactionalEmail,
   transactionalParagraph,
@@ -104,6 +105,69 @@ router.get('/test-email/:id', async (req: Request, res: Response) => {
     console.error('[admin] test-email lookup failed', err);
     const message = err instanceof Error ? err.message : 'lookup failed';
     return res.status(502).json({ error: message });
+  }
+});
+
+router.get('/verification/pending', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const submissions = await verificationService.listPendingSubmissions();
+    return res.json({ submissions });
+  } catch (err) {
+    console.error('[admin] verification pending error:', err);
+    return res.status(500).json({ error: 'verification_list_failed' });
+  }
+});
+
+router.get('/verification/:id/:asset', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+
+  const asset = req.params.asset === 'id-front' ? 'id_front' : req.params.asset === 'selfie' ? 'selfie' : null;
+  if (!asset) return res.status(400).json({ error: 'invalid_asset' });
+
+  try {
+    const filePath = await verificationService.getSubmissionAssetPath(req.params.id, asset);
+    if (!filePath) return res.status(404).json({ error: 'submission_not_found' });
+    return res.sendFile(filePath);
+  } catch (err) {
+    console.error('[admin] verification asset error:', err);
+    return res.status(500).json({ error: 'verification_asset_failed' });
+  }
+});
+
+const RejectBodySchema = z.object({
+  reason: z.string().min(1).max(500).default('manual_review_rejected'),
+});
+
+router.post('/verification/:id/approve', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    await verificationService.approveSubmission(req.params.id);
+    return res.json({ ok: true });
+  } catch (err: any) {
+    if (err?.code === 'submission_not_found') {
+      return res.status(404).json({ error: 'submission_not_found' });
+    }
+    console.error('[admin] verification approve error:', err);
+    return res.status(500).json({ error: 'verification_approve_failed' });
+  }
+});
+
+router.post('/verification/:id/reject', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const parsed = RejectBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'validation_error' });
+  }
+  try {
+    await verificationService.rejectSubmission(req.params.id, parsed.data.reason);
+    return res.json({ ok: true });
+  } catch (err: any) {
+    if (err?.code === 'submission_not_found') {
+      return res.status(404).json({ error: 'submission_not_found' });
+    }
+    console.error('[admin] verification reject error:', err);
+    return res.status(500).json({ error: 'verification_reject_failed' });
   }
 });
 

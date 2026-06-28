@@ -20,8 +20,8 @@ export const CommunityGuidelines = () => {
             Back
           </Link>
           <p className="mt-8 text-xs font-black uppercase tracking-[0.18em] text-[#C4832A]">Community guidelines</p>
-          <h1 className="mt-3 text-4xl font-black tracking-tight">Direct does not mean disrespectful.</h1>
-          <p className="mt-4 text-sm leading-7 text-[#A89070]">
+          <h1 className="mr-page-heading mt-3">Direct does not mean disrespectful.</h1>
+          <p className="mr-copy mt-4">
             MenRush is built for confident adult connection. These rules keep the room real,
             consensual and safe enough for discreet users to trust it.
           </p>

@@ -26,6 +26,7 @@ export const ProfileSchema = z.object({
   headline: z.string().max(100).optional(),
   looking_for: z.string().max(100).optional(),
   photo_url: z.string().optional(),
+  cover_url: z.string().optional(),
   interests: z.array(z.string().max(30)).max(10).optional(),
 });
 

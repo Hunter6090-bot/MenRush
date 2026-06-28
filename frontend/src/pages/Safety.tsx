@@ -32,8 +32,8 @@ export const Safety = () => {
           <header className="mt-8 grid gap-8 rounded-2xl border border-[#3D2B0E] bg-[#1A1410] p-6 sm:p-8 md:grid-cols-[1fr_180px] md:items-center">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-[#C4832A]">Safety center</p>
-              <h1 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Real men. Clear boundaries.</h1>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-[#A89070] sm:text-base">
+              <h1 className="mr-page-heading mt-3">Real men. Clear boundaries.</h1>
+              <p className="mr-copy mt-4 max-w-2xl">
                 MenRush is for adult gay, bi, trans, discreet and curious men. The product is direct,
                 but safety and consent are not optional. Verification, blocking, reporting, ghost mode
                 and privacy controls are built into the experience.

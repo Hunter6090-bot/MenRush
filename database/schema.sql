@@ -9,6 +9,7 @@ CREATE TABLE users (
   age INT NOT NULL,
   bio TEXT,
   photo_url TEXT,
+  cover_url TEXT,
   interests TEXT[] DEFAULT '{}',
   headline TEXT,
   looking_for TEXT,

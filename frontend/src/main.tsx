@@ -14,6 +14,11 @@ const errorFallback = (
   <div style={{ background: '#0D0A06', color: '#C4832A', padding: '2rem', fontFamily: 'monospace', minHeight: '100vh' }}>
     <h1 style={{ marginBottom: '1rem' }}>Something went wrong</h1>
     <p style={{ color: '#F0E0C0' }}>Please reload and try again.</p>
+    {import.meta.env.DEV && (
+      <p style={{ color: '#A89070', fontSize: '0.75rem', marginTop: '1rem' }}>
+        Check the browser console for details.
+      </p>
+    )}
   </div>
 );
 

@@ -8,10 +8,10 @@ test.describe('authenticated smoke placeholders', () => {
     );
   });
 
-  test('member can enter the Stripe Identity flow', async () => {
+  test('member can submit native ID + selfie verification', async () => {
     test.skip(
       true,
-      'Requires Stripe test-mode keys, webhook handling, and a disposable unverified seeded user.',
+      'Requires a disposable unverified seeded user and deterministic ID/selfie fixtures.',
     );
   });
 

@@ -39,10 +39,10 @@ export const ForgotPassword = () => {
             <CoinFlip qrValue="https://menrush.com" sizeClass="h-20" noFlip />
           </Link>
 
-          <h1 className="mt-6 text-4xl font-black leading-tight tracking-[-0.04em] text-[#F0E0C0]">
+          <h1 className="mr-page-heading mt-6">
             Forgot your password?
           </h1>
-          <p className="mt-3 text-sm leading-6 text-[#A89070]">
+          <p className="mr-copy mt-3">
             Enter the email on your account and we&apos;ll send a reset link if it&apos;s registered.
           </p>
 

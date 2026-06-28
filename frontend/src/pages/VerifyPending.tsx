@@ -5,6 +5,7 @@ import { useAuthStore } from '../hooks/store';
 import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
 import { trackEventOnce } from '../observability/analytics';
+import { VerifySignOut } from '../components/VerifySignOut';
 
 export const VerifyPending: React.FC = () => {
   const navigate = useNavigate();
@@ -70,13 +71,14 @@ export const VerifyPending: React.FC = () => {
             Reviewing your ID
           </h1>
           <p className="text-sm text-[#A89070] leading-relaxed mb-5">
-            Stripe is checking your document and selfie. This usually takes
-            under a minute. You can leave this screen — we will notify you
-            when it is done.
+            We are reviewing your document and selfie match. Clear matches are
+            usually approved within a minute. Borderline cases may need a manual
+            check — you can leave this screen and come back.
           </p>
           <div className="text-[11px] text-[#A89070]/70">
             Last checked {tick * 5}s ago
           </div>
+          <VerifySignOut />
         </div>
       </div>
     </div>

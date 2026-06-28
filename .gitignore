@@ -8,6 +8,13 @@ pictures/task_*.webp
 *.log
 .env
 .env.local
+**/.env
 .vercel
 frontend/playwright-report/
 frontend/test-results/
+
+# Python agent layer (agents/python)
+.venv/
+**/.venv/
+__pycache__/
+*.pyc

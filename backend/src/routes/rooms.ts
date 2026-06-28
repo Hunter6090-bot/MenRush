@@ -76,6 +76,16 @@ router.post('/:roomId/leave', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// GET /:roomId/members — roster for gallery view
+router.get('/:roomId/members', async (req: AuthRequest, res: Response) => {
+  try {
+    const members = await roomService.getMembers(req.params.roomId, req.userId!);
+    res.json(members);
+  } catch (error: any) {
+    res.status(error.message.includes('not a member') ? 403 : 500).json({ error: error.message });
+  }
+});
+
 // GET /:roomId/messages — paginated message history
 router.get('/:roomId/messages', async (req: AuthRequest, res: Response) => {
   try {

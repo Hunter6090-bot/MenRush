@@ -40,10 +40,10 @@ export const Cookies = () => (
           <span className="inline-block rounded-full border border-[#c8861c]/30 bg-[#c8861c]/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#c8861c]">
             Last updated: 19 May 2026
           </span>
-          <h1 className="mt-4 text-[2.35rem] font-bold leading-tight tracking-tight text-[#f0e4cc] sm:text-[2.7rem]">
+          <h1 className="mr-page-heading mt-4">
             Cookies
           </h1>
-          <p className="mt-3 text-sm leading-relaxed text-[#a89070]">
+          <p className="mr-copy mt-3">
             This short policy explains how MenRush uses cookies and similar browser storage on the public site and app.
           </p>
 

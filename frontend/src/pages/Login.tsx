@@ -71,15 +71,14 @@ export const Login = () => {
               <CoinFlip qrValue="https://menrush.com" sizeClass="h-24" noFlip />
             </Link>
 
-            <h1 className="mt-7 max-w-3xl text-5xl font-black leading-[0.95] tracking-[-0.05em] text-[#F0E0C0] sm:text-6xl lg:text-7xl">
+            <h1 className="mr-hero-heading mt-7">
               Sign in and see who&apos;s
-              <span className="block bg-gradient-to-r from-[#F0E0C0] via-[#C4832A] to-[#8B4513] bg-clip-text text-transparent">
-                near you right now.
-              </span>
+              <span className="mr-hero-accent">near you right now.</span>
             </h1>
 
-            <p className="mt-5 max-w-2xl text-base leading-7 text-[#F0E0C0]/74">
-              New here? Create an account to try discovery, messaging, and video calls on your local build.
+            <p className="mr-copy mt-5 max-w-2xl">
+              New here? Create an account, then verify with a government ID and matching selfie
+              before you can discover or chat.
             </p>
 
 

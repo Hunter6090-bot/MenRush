@@ -39,6 +39,57 @@ input:-webkit-autofill:focus {
 /* ── Selection ──────────────────────────────────── */
 ::selection { background: rgba(196,131,42,0.35); color: #F0E0C0; }
 
+/* ── MenRush public typography ──────────────────── */
+.mr-hero-heading {
+  max-width: 52rem;
+  color: #F0E0C0;
+  font-size: clamp(3.35rem, 7.6vw, 6.9rem);
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: -0.05em;
+}
+
+.mr-hero-accent {
+  display: block;
+  background: linear-gradient(90deg, #F0E0C0 0%, #C4832A 58%, #8B4513 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.mr-page-heading {
+  color: #F0E0C0;
+  font-size: clamp(2.7rem, 6vw, 4.8rem);
+  font-weight: 900;
+  line-height: 0.96;
+  letter-spacing: -0.05em;
+}
+
+.mr-form-heading {
+  color: #F0E0C0;
+  font-size: clamp(2rem, 8vw, 2.85rem);
+  font-weight: 900;
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+}
+
+.mr-copy {
+  color: rgba(240, 224, 192, 0.78);
+  font-size: clamp(1rem, 1.4vw, 1.18rem);
+  line-height: 1.72;
+}
+
+@media (max-width: 520px) {
+  .mr-hero-heading {
+    font-size: clamp(3rem, 16vw, 4.7rem);
+    letter-spacing: -0.055em;
+  }
+
+  .mr-page-heading {
+    font-size: clamp(2.45rem, 12vw, 3.55rem);
+  }
+}
+
 /* ── Leaflet map overrides ──────────────────────── */
 .leaflet-container {
   background: #1E1508 !important;

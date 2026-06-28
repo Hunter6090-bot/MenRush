@@ -49,12 +49,19 @@ export const usersAPI = {
     ),
   updateLocation: (lat: number, lng: number) =>
     apiClient.post('/users/location', { lat, lng }),
-  updateProfile: (data: { bio?: string; headline?: string; looking_for?: string; photo_url?: string; interests?: string[] }) =>
+  updateProfile: (data: { bio?: string; headline?: string; looking_for?: string; photo_url?: string; cover_url?: string; interests?: string[] }) =>
     apiClient.post('/users/profile', data),
   uploadPhoto: (file: File) => {
     const formData = new FormData();
     formData.append('photo', file);
     return apiClient.post('/users/photo', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  uploadCover: (file: File) => {
+    const formData = new FormData();
+    formData.append('cover', file);
+    return apiClient.post('/users/cover', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
@@ -75,6 +82,7 @@ export interface PulseStateDTO {
   is_pulsing: boolean;
   pulse_expires_at: string | null;
   next_pulse_allowed_at: string | null;
+  is_premium?: boolean;
 }
 
 export const pulseAPI = {
@@ -107,6 +115,8 @@ export interface MessageDTO {
   remaining_views?: number | null;
   /** Server-side flag — true when a disappearing image's views are exhausted. */
   expired: boolean;
+  /** Set when the sender withdraws media from the chat. */
+  withdrawn_at?: string | null;
 }
 
 export interface SendMediaOptions {
@@ -146,6 +156,22 @@ export const messagesAPI = {
   },
   markViewed: (messageId: string) =>
     apiClient.post<MessageDTO>(`/messages/${messageId}/view`),
+  withdrawMedia: (messageId: string) =>
+    apiClient.post<MessageDTO>(`/messages/${messageId}/withdraw`),
+};
+
+export interface MeetAgreementState {
+  my_confirmed: boolean;
+  peer_confirmed: boolean;
+  mutual: boolean;
+  my_confirmed_at: string | null;
+  peer_confirmed_at: string | null;
+}
+
+export const meetAPI = {
+  getState: (peerId: string) => apiClient.get<MeetAgreementState>(`/meet/${peerId}`),
+  confirm: (peerId: string) => apiClient.post<MeetAgreementState>(`/meet/${peerId}/confirm`),
+  revoke: (peerId: string) => apiClient.post<MeetAgreementState>(`/meet/${peerId}/revoke`),
 };
 
 export const roomsAPI = {

@@ -105,6 +105,19 @@ export function useWebRTC() {
     [createPC, getLocalMedia]
   );
 
+  const releaseMedia = useCallback(() => {
+    localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    remoteStreamRef.current?.getTracks().forEach((t) => t.stop());
+    pcRef.current?.close();
+    pcRef.current = null;
+    localStreamRef.current = null;
+    remoteStreamRef.current = null;
+    setLocalStream(null);
+    setRemoteStream(null);
+    setIsMuted(false);
+    setIsCameraOff(false);
+  }, []);
+
   // ── End / cleanup ────────────────────────────────────────────────────────
   const endCall = useCallback(() => {
     if (peerId && socket) {
@@ -131,19 +144,6 @@ export function useWebRTC() {
       t.enabled = !t.enabled;
     });
     setIsCameraOff((v) => !v);
-  }, []);
-
-  const releaseMedia = useCallback(() => {
-    localStreamRef.current?.getTracks().forEach((t) => t.stop());
-    remoteStreamRef.current?.getTracks().forEach((t) => t.stop());
-    pcRef.current?.close();
-    pcRef.current = null;
-    localStreamRef.current = null;
-    remoteStreamRef.current = null;
-    setLocalStream(null);
-    setRemoteStream(null);
-    setIsMuted(false);
-    setIsCameraOff(false);
   }, []);
 
   // ── Socket event listeners ───────────────────────────────────────────────

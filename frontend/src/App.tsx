@@ -24,6 +24,7 @@ import { RoomChat } from './pages/RoomChat';
 import { Verify } from './pages/Verify';
 import { VerifyPending } from './pages/VerifyPending';
 import { VerifyRejected } from './pages/VerifyRejected';
+import { Premium } from './pages/Premium';
 import { useAuthStore } from './hooks/store';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import { useGlobalMessageNotifications } from './hooks/useGlobalMessageNotifications';
@@ -38,8 +39,8 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
 }
 
 // Gate any route that surfaces other users (Discover, Matches, Chat, Rooms).
-// Per `agents/stripe-identity-spec.md`, unverified users are redirected to
-// the verification flow; pending/rejected get a status-specific landing.
+// Unverified users are redirected to ID + selfie verification;
+// pending/rejected get a status-specific landing.
 function RequireVerified({ children }: { children: JSX.Element }) {
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
@@ -102,11 +103,12 @@ function AppShell() {
         <Route path="/verify" element={<ProtectedRoute><Verify /></ProtectedRoute>} />
         <Route path="/verify/pending" element={<ProtectedRoute><VerifyPending /></ProtectedRoute>} />
         <Route path="/verify/rejected" element={<ProtectedRoute><VerifyRejected /></ProtectedRoute>} />
+        <Route path="/premium" element={<RequireVerified><Premium /></RequireVerified>} />
         <Route path="/discover" element={<RequireVerified><Discover /></RequireVerified>} />
         <Route path="/stream" element={<RequireVerified><Stream /></RequireVerified>} />
-        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        <Route path="/profile" element={<RequireVerified><Profile /></RequireVerified>} />
         <Route path="/profile/:id" element={<RequireVerified><ProfileView /></RequireVerified>} />
-        <Route path="/albums" element={<ProtectedRoute><Albums /></ProtectedRoute>} />
+        <Route path="/albums" element={<RequireVerified><Albums /></RequireVerified>} />
         <Route path="/matches" element={<RequireVerified><Matches /></RequireVerified>} />
         <Route path="/conversations" element={<RequireVerified><Conversations /></RequireVerified>} />
         <Route path="/messages/:otherId" element={<RequireVerified><Messages /></RequireVerified>} />

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { authService } from '../services/auth.service';
 import { accessControl, SecurityError } from '../security/access';
+import { PremiumRequiredError } from '../services/premium.service';
 
 export interface AuthRequest extends Request {
   userId?: string;
@@ -55,6 +56,10 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
 
   if (err instanceof SecurityError) {
     return res.status(err.status).json({ error: err.code });
+  }
+
+  if (err instanceof PremiumRequiredError) {
+    return res.status(402).json({ error: err.code, feature: err.feature });
   }
 
   if (err.message === 'Unsupported upload type') {

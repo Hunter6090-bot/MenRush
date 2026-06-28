@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { verifyAPI } from '../api/verify';
 import { RandomBackground } from '../components/RandomBackground';
 import { trackEventOnce } from '../observability/analytics';
+import { VerifySignOut } from '../components/VerifySignOut';
 
 const REASON_COPY: Record<string, string> = {
   document_unverified_other: "We couldn't read your ID clearly. Try again with better lighting.",
@@ -38,9 +39,10 @@ export const VerifyRejected: React.FC = () => {
     };
   }, []);
 
-  const friendly =
-    (reason && REASON_COPY[reason]) ||
-    "We couldn't verify your ID. The image may have been blurry or didn't match your selfie.";
+  const friendly = reason?.includes('already linked')
+    ? 'This government ID is already linked to another MenRush account. One ID, one account — no exceptions.'
+    : (reason && REASON_COPY[reason]) ||
+      "We couldn't verify your ID. The image may have been blurry or didn't match your selfie.";
 
   return (
     <div className="relative min-h-dvh overflow-hidden flex items-center justify-center p-4">
@@ -73,12 +75,7 @@ export const VerifyRejected: React.FC = () => {
             Try again
           </button>
 
-          <Link
-            to="/profile"
-            className="block text-center text-xs text-[#A89070] hover:text-[#C4832A] mt-4"
-          >
-            Back to profile
-          </Link>
+          <VerifySignOut />
         </div>
       </div>
     </div>

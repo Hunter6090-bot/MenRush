@@ -45,8 +45,8 @@ export const Privacy = () => {
           <p className="mt-8 text-xs font-black uppercase tracking-[0.18em] text-[#C4832A]">
             Privacy policy
           </p>
-          <h1 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Private by design, clear by default.</h1>
-          <p className="mt-4 max-w-3xl text-sm leading-7 text-[#A89070]">
+          <h1 className="mr-page-heading mt-3">Private by design, clear by default.</h1>
+          <p className="mr-copy mt-4 max-w-3xl">
             MenRush handles sensitive adult, identity and location data. This policy explains the
             practical data use behind the product in direct language so members know what is collected,
             why it is needed, and how to control it.

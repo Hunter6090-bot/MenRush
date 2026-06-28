@@ -69,6 +69,7 @@ export const Discover = () => {
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [pulseUntil, setPulseUntil] = useState<Date | null>(null);
   const [nextPulseAllowedAt, setNextPulseAllowedAt] = useState<string | null>(null);
+  const [pulseIsPremium, setPulseIsPremium] = useState(false);
   const [pulseError, setPulseError] = useState('');
   const [selectedUser, setSelectedUser] = useState<NearbyUser | null>(null);
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
@@ -226,6 +227,7 @@ export const Discover = () => {
         const expiresAt = res.data?.pulse_expires_at;
         setPulseUntil(expiresAt ? new Date(expiresAt) : null);
         setNextPulseAllowedAt(res.data?.next_pulse_allowed_at ?? null);
+        setPulseIsPremium(!!res.data?.is_premium);
       })
       .catch(() => {});
 
@@ -644,6 +646,7 @@ export const Discover = () => {
           isPulsing={!!pulseUntil}
           pulseExpiresAt={pulseUntil ? pulseUntil.toISOString() : undefined}
           nextPulseAllowedAt={nextPulseAllowedAt ?? undefined}
+          isPremium={pulseIsPremium}
           onStartPulse={handleStartPulse}
           onStopPulse={handleStopPulse}
         />

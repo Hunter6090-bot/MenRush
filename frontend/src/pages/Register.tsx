@@ -13,6 +13,7 @@ interface FormState {
   dob: string;
   password: string;
   ageConsent: boolean;
+  idConsent: boolean;
   legalConsent: boolean;
 }
 
@@ -47,6 +48,7 @@ export const Register = () => {
     dob: '',
     password: '',
     ageConsent: false,
+    idConsent: false,
     legalConsent: false,
   });
   const [error, setError] = useState('');
@@ -83,8 +85,8 @@ export const Register = () => {
       setError('Password must be at least 12 chars with mixed case and a number.');
       return;
     }
-    if (!form.ageConsent || !form.legalConsent) {
-      setError('Please confirm both consent checkboxes.');
+    if (!form.ageConsent || !form.idConsent || !form.legalConsent) {
+      setError('Please confirm all consent checkboxes.');
       return;
     }
 
@@ -97,7 +99,7 @@ export const Register = () => {
         password: form.password,
       });
       setAuth(res.data.user, res.data.token);
-      navigate(res.data.user?.is_verified ? '/discover' : '/verify');
+      navigate('/verify');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed. Please try again.');
     } finally {
@@ -132,7 +134,7 @@ export const Register = () => {
           </div>
 
         <div className="bg-[#1E1508]/80 backdrop-blur-xl border border-[#3D2B0E] rounded-2xl p-6 shadow-card">
-          <h1 className="text-lg font-bold text-[#F0E0C0] mb-5">Create account</h1>
+          <h1 className="mr-form-heading mb-5">Create account</h1>
 
           {error && (
             <div className="flex items-start gap-2.5 bg-[#8B4513]/10 border border-[#8B4513]/25 text-[#F0E0C0]/90 px-4 py-3 rounded-xl mb-4 text-sm animate-fade-in">
@@ -171,7 +173,7 @@ export const Register = () => {
                 required
                 className={inputClass}
               />
-              <p className={helperClass}>Verification link sent here. We never share it.</p>
+              <p className={helperClass}>Used for login and account recovery. We never share it.</p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -185,7 +187,7 @@ export const Register = () => {
                   required
                   className={inputClass}
                 />
-                <p className={helperClass}>18+ verified via ID after sign-up.</p>
+                <p className={helperClass}>Must match the date on your government ID.</p>
               </div>
               <div>
                 <label className={labelClass}>Password</label>
@@ -224,6 +226,21 @@ export const Register = () => {
             <label className="flex items-start gap-2.5 text-xs text-[#F0E0C0]/85 leading-snug cursor-pointer">
               <input
                 type="checkbox"
+                checked={form.idConsent}
+                onChange={setField('idConsent')}
+                required
+                className="mt-0.5 w-4 h-4 rounded border-[#3D2B0E] bg-[#1E1508] accent-[#C4832A]"
+              />
+              <span>
+                I understand MenRush requires a government-issued photo ID (passport, driving
+                licence, or national ID for my country) plus a live selfie that matches that ID
+                before I can use the app.
+              </span>
+            </label>
+
+            <label className="flex items-start gap-2.5 text-xs text-[#F0E0C0]/85 leading-snug cursor-pointer">
+              <input
+                type="checkbox"
                 checked={form.legalConsent}
                 onChange={setField('legalConsent')}
                 required
@@ -250,7 +267,7 @@ export const Register = () => {
               {loading ? <><PulseRing size={16} /> Creating account…</> : '→ CREATE ACCOUNT'}
             </button>
             <p className="text-[11px] text-[#A89070]/80 text-center mt-2">
-              Next: verify your email, then your ID. Takes 3 minutes.
+              Next: government ID + matching selfie. Usually under 3 minutes.
             </p>
           </form>
 

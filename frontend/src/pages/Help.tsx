@@ -38,7 +38,7 @@ export const Help = () => {
           </Link>
           <header className="mt-8">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-[#C4832A]">Help</p>
-            <h1 className="mt-3 text-4xl font-black tracking-tight">Fast answers before you dive in.</h1>
+            <h1 className="mr-page-heading mt-3">Fast answers before you dive in.</h1>
           </header>
           <div className="mt-8 divide-y divide-[#3D2B0E] rounded-2xl border border-[#3D2B0E] bg-[#1A1410]">
             {faqs.map((item) => (

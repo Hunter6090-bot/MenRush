@@ -1,55 +1,82 @@
-import { Router, Request, Response } from 'express';
-import express from 'express';
+import { Router, Response } from 'express';
+import fs from 'fs';
+import fsPromises from 'fs/promises';
+import path from 'path';
+import multer from 'multer';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
-import {
-  verificationService,
-  StripeNotConfiguredError,
-} from '../services/verification.service';
+import { verificationService, DocumentAlreadyUsedError } from '../services/verification.service';
+import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
 
 const router = Router();
+const verificationDir = path.resolve(__dirname, '../../uploads/verification');
+fs.mkdirSync(verificationDir, { recursive: true });
 
-// IMPORTANT: webhook MUST be mounted BEFORE the auth middleware and BEFORE
-// any JSON parser, because Stripe signs the raw bytes. The route below uses
-// express.raw() to preserve them.
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, verificationDir),
+    filename: (req, file, cb) => {
+      try {
+        const userId = (req as AuthRequest).userId!;
+        cb(null, safeUploadFilename('verification', userId, file.mimetype));
+      } catch (err) {
+        cb(err as Error, '');
+      }
+    },
+  }),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: uploadFileFilter('verification'),
+});
+
+router.use(authMiddleware);
+
 router.post(
-  '/webhook',
-  express.raw({ type: 'application/json' }),
-  async (req: Request, res: Response) => {
-    const sig = req.headers['stripe-signature'] as string | undefined;
+  '/submit',
+  upload.fields([
+    { name: 'id_front', maxCount: 1 },
+    { name: 'selfie', maxCount: 1 },
+  ]),
+  async (req: AuthRequest, res: Response) => {
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    const idFront = files?.id_front?.[0];
+    const selfie = files?.selfie?.[0];
+
+    if (!idFront || !selfie) {
+      return res.status(400).json({ error: 'missing_files' });
+    }
+
     try {
-      const result = await verificationService.handleWebhook(req.body as Buffer, sig);
+      const [idValid, selfieValid] = await Promise.all([
+        validateFileSignature(idFront.path, idFront.mimetype),
+        validateFileSignature(selfie.path, selfie.mimetype),
+      ]);
+
+      if (!idValid || !selfieValid) {
+        await Promise.allSettled([fsPromises.unlink(idFront.path), fsPromises.unlink(selfie.path)]);
+        return res.status(400).json({ error: 'invalid_file_signature' });
+      }
+
+      const result = await verificationService.submitVerification(req.userId!, {
+        idFrontPath: idFront.path,
+        idFrontKey: idFront.filename,
+        selfiePath: selfie.path,
+        selfieKey: selfie.filename,
+      });
+
       res.json(result);
     } catch (err: any) {
-      if (err instanceof StripeNotConfiguredError) {
-        return res.status(503).json({ error: 'stripe_not_configured' });
+      await Promise.allSettled([fsPromises.unlink(idFront.path), fsPromises.unlink(selfie.path)]);
+
+      if (err?.code === 'already_verified') {
+        return res.status(400).json({ error: 'already_verified' });
       }
-      if (err?.code === 'invalid_signature') {
-        return res.status(400).json({ error: 'invalid_signature' });
+      if (err instanceof DocumentAlreadyUsedError) {
+        return res.status(409).json({ error: 'document_already_used' });
       }
-      console.error('[verify] webhook error:', err);
-      return res.status(500).json({ error: 'webhook_failed' });
+      console.error('[verify] submit error:', err);
+      return res.status(500).json({ error: 'verification_submit_failed' });
     }
   },
 );
-
-// Everything below requires auth.
-router.use(authMiddleware);
-
-router.post('/start', async (req: AuthRequest, res: Response) => {
-  try {
-    const result = await verificationService.startSession(req.userId!);
-    res.json(result);
-  } catch (err: any) {
-    if (err instanceof StripeNotConfiguredError) {
-      return res.status(503).json({ error: 'stripe_not_configured' });
-    }
-    if (err?.code === 'already_verified') {
-      return res.status(400).json({ error: 'already_verified' });
-    }
-    console.error('[verify] start error:', err);
-    res.status(502).json({ error: 'stripe_error' });
-  }
-});
 
 router.get('/status', async (req: AuthRequest, res: Response) => {
   try {
@@ -57,10 +84,11 @@ router.get('/status', async (req: AuthRequest, res: Response) => {
     res.json({
       is_verified: state.is_verified,
       status: state.verification_status,
+      provider: state.verification_provider,
       verified_at: state.verified_at,
       rejection_reason: state.rejection_reason,
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[verify] status error:', err);
     res.status(500).json({ error: 'verify_status_failed' });
   }

@@ -86,10 +86,10 @@ export const Contact = () => {
             ← Back
           </Link>
 
-          <h1 className="mt-6 text-3xl font-bold tracking-tight text-[#f0e4cc] sm:text-4xl">
+          <h1 className="mr-page-heading mt-6">
             Get in touch
           </h1>
-          <p className="mt-2 text-sm leading-relaxed text-[#a89070] sm:text-base">
+          <p className="mr-copy mt-2">
             We&apos;ll get back to you within 48 hours.
           </p>
 

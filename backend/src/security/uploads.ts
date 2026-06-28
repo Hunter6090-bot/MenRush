@@ -3,7 +3,7 @@ import fs from 'fs/promises';
 import type { Request } from 'express';
 import type { FileFilterCallback } from 'multer';
 
-export type UploadContext = 'profile' | 'album' | 'message';
+export type UploadContext = 'profile' | 'cover' | 'album' | 'message' | 'verification';
 
 const MIME_EXTENSIONS: Record<string, string> = {
   'image/jpeg': '.jpg',
@@ -17,8 +17,10 @@ const MIME_EXTENSIONS: Record<string, string> = {
 
 const CONTEXT_MIMES: Record<UploadContext, Set<string>> = {
   profile: new Set(['image/jpeg', 'image/png', 'image/webp']),
+  cover: new Set(['image/jpeg', 'image/png', 'image/webp']),
   album: new Set(['image/jpeg', 'image/png', 'image/webp']),
   message: new Set(Object.keys(MIME_EXTENSIONS)),
+  verification: new Set(['image/jpeg', 'image/png', 'image/webp']),
 };
 
 export function allowedUpload(mimetype: string, context: UploadContext): boolean {

@@ -81,8 +81,9 @@ export const authService = {
     const id = uuidv4();
     const hashedPassword = await bcryptjs.hash(data.password, 10);
 
-    const autoVerify =
-      process.env.NODE_ENV === 'development' && process.env.DEV_AUTO_VERIFY === 'true';
+    // Signup always creates an unverified account. ID + matching selfie verification
+    // is the only path to access the app. Set DEV_AUTO_VERIFY=true only for local dev.
+    const autoVerify = process.env.DEV_AUTO_VERIFY === 'true';
 
     try {
       const result = await query(
@@ -114,7 +115,9 @@ export const authService = {
 
   async login(data: LoginInput) {
     const result = await query(
-      `SELECT id, email, password_hash, name, is_verified, verification_status
+      `SELECT id, email, password_hash, name, is_verified, verification_status,
+              COALESCE(is_premium, FALSE) AS is_premium,
+              COALESCE(premium_tier, 'free') AS premium_tier
          FROM users WHERE email = $1`,
       [data.email]
     );
@@ -139,6 +142,8 @@ export const authService = {
         name: user.name,
         is_verified: user.is_verified,
         verification_status: user.verification_status,
+        is_premium: user.is_premium ?? false,
+        premium_tier: user.premium_tier ?? 'free',
       },
       token,
     };

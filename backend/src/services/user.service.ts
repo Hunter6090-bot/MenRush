@@ -151,8 +151,9 @@ export const userService = {
     const result = await query(
       `SELECT
         u.id, u.email, u.name, u.age, u.bio, u.headline, u.looking_for,
-        u.photo_url, u.interests, u.created_at,
+        u.photo_url, u.cover_url, u.interests, u.created_at,
         u.is_verified, u.verification_status,
+        u.is_premium, u.premium_tier, u.premium_until,
         p.lat, p.lng, p.online, p.last_seen, p.is_visible, p.available_until,
         p.is_ghost,
         CASE
@@ -176,7 +177,7 @@ export const userService = {
     const result = await query(
       `SELECT
         u.id, u.name, u.age, u.bio, u.headline, u.looking_for,
-        u.photo_url, u.interests, u.created_at, u.is_verified,
+        u.photo_url, u.cover_url, u.interests, u.created_at, u.is_verified,
         p.online, p.last_seen, p.available_until,
         CASE
           WHEN p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' THEN p.mood
@@ -236,6 +237,10 @@ export const userService = {
       updates.push(`photo_url = $${values.length + 1}`);
       values.push(data.photo_url || null);
     }
+    if (data.cover_url !== undefined) {
+      updates.push(`cover_url = $${values.length + 1}`);
+      values.push(data.cover_url || null);
+    }
     if (data.interests !== undefined) {
       updates.push(`interests = $${values.length + 1}`);
       values.push(data.interests);
@@ -243,7 +248,7 @@ export const userService = {
 
     if (updates.length === 0) {
       const res = await query(
-        `SELECT id, name, age, bio, headline, looking_for, photo_url, interests FROM users WHERE id = $1`,
+        `SELECT id, name, age, bio, headline, looking_for, photo_url, cover_url, interests FROM users WHERE id = $1`,
         [userId]
       );
       return res.rows[0];
@@ -253,7 +258,7 @@ export const userService = {
 
     const result = await query(
       `UPDATE users SET ${updates.join(', ')} WHERE id = $1
-       RETURNING id, name, age, bio, headline, looking_for, photo_url, interests`,
+       RETURNING id, name, age, bio, headline, looking_for, photo_url, cover_url, interests`,
       values
     );
     return result.rows[0];

@@ -3,7 +3,8 @@
  *
  *   cd backend && npm run db:seed-test-users
  *
- * Password for all seeded accounts: MenRushTest2026!
+ * Password for most seeded accounts: MenRushTest2026!
+ * Individual testers may override with a custom password in SEED_USERS.
  */
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
@@ -21,6 +22,7 @@ type SeedUser = {
   name: string;
   age: number;
   label: string;
+  password?: string;
 };
 
 export const SEED_USERS: SeedUser[] = [
@@ -37,6 +39,14 @@ export const SEED_USERS: SeedUser[] = [
     name: 'Pete',
     age: 32,
     label: 'Marketing manager',
+  },
+  {
+    id: 'd4a8f2c1-9b3e-4d7a-8e5f-1c2b3a4d5e6f',
+    email: 'attrelladam@gmail.com',
+    name: 'Attrell',
+    age: 30,
+    label: 'Tester',
+    password: 'LegalHead-7ydy1bkyp8!7',
   },
   {
     id: 'a1000001-0001-4001-8001-000000000001',
@@ -124,21 +134,24 @@ async function main() {
     throw new Error('DATABASE_URL is required');
   }
 
-  const passwordHash = await bcrypt.hash(TEST_PASSWORD, 10);
   const ids: Record<string, string> = {};
 
   for (const user of SEED_USERS) {
+    const password = user.password ?? TEST_PASSWORD;
+    const passwordHash = await bcrypt.hash(password, 10);
     ids[user.email.toLowerCase()] = await upsertUser(user, passwordHash);
   }
 
   // E2E fixtures stay pre-matched; team accounts start unmatched for map/discovery testing.
   await ensureMutualMatch(ids['alice@example.com'], ids['bob@example.com']);
 
-  console.log(`Seeded test accounts (password: ${TEST_PASSWORD}):\n`);
+  console.log('Seeded test accounts:\n');
   for (const user of SEED_USERS) {
+    const password = user.password ?? TEST_PASSWORD;
     console.log(`  ${user.label}`);
-    console.log(`    email: ${user.email.toLowerCase()}`);
-    console.log(`    id:    ${user.id}\n`);
+    console.log(`    email:    ${user.email.toLowerCase()}`);
+    console.log(`    password: ${password}`);
+    console.log(`    id:       ${user.id}\n`);
   }
 }
 

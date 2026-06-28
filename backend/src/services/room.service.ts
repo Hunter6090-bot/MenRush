@@ -287,6 +287,23 @@ export const roomService = {
     );
   },
 
+  async getMembers(roomId: string, requestingUserId: string) {
+    const member = await this.isMember(requestingUserId, roomId);
+    if (!member) {
+      throw new Error('You are not a member of this room');
+    }
+
+    const result = await query(
+      `SELECT u.id, u.name, u.photo_url, rm.role
+       FROM room_members rm
+       JOIN users u ON u.id = rm.user_id
+       WHERE rm.room_id = $1
+       ORDER BY u.name ASC`,
+      [roomId],
+    );
+    return result.rows;
+  },
+
   async deleteRoom(userId: string, roomId: string) {
     const role = await this.getRole(userId, roomId);
     if (role !== 'owner') {

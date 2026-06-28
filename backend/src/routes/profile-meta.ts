@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { profileMetaService } from '../services/profile-meta.service';
+import { premiumService } from '../services/premium.service';
 import { MoodSchema, GhostSchema } from '../types/validation';
 
 const router = Router();
@@ -46,6 +47,12 @@ router.post('/ghost', async (req: AuthRequest, res: Response) => {
     return res.status(400).json({ error: parsed.error.errors[0].message });
   }
   try {
+    if (parsed.data.is_ghost) {
+      const allowed = await premiumService.hasFeature(req.userId!, 'incognito');
+      if (!allowed) {
+        return res.status(402).json({ error: 'premium_required', feature: 'incognito' });
+      }
+    }
     await profileMetaService.setGhost(req.userId!, parsed.data.is_ghost);
     res.json({ is_ghost: parsed.data.is_ghost });
   } catch (error: any) {

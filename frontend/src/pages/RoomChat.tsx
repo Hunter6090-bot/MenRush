@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { roomsAPI } from '../api/client';
 import { useSocket } from '../hooks/useSocket';
 import { useAuthStore } from '../hooks/store';
+import { useRoomVideo } from '../hooks/useRoomVideo';
+import { RoomGalleryGrid } from '../components/RoomGalleryGrid';
 import { PulseRing } from '../components/PulseRing';
 
 interface RoomMessage {
@@ -87,6 +89,24 @@ export const RoomChat: React.FC = () => {
   const [sending, setSending] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({}); // userId → name
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+
+  const {
+    participants,
+    pinnedId,
+    setPinnedId,
+    cameraOn,
+    micMuted,
+    mediaError: videoError,
+    loadMembers,
+    applyPresenceSync,
+    upsertParticipant,
+    markOffline,
+    getStreamFor,
+    toggleCamera,
+    toggleMic,
+    photoUrl,
+  } = useRoomVideo({ roomId, userId: user?.id, enabled: !!roomId });
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -97,14 +117,18 @@ export const RoomChat: React.FC = () => {
     if (!roomId) return;
     roomsAPI.getRoom(roomId).then((r) => setRoom(r.data)).catch(() => {});
     roomsAPI.getMessages(roomId).then((r) => setMessages(r.data)).catch(() => {});
-  }, [roomId]);
+    roomsAPI
+      .getMembers(roomId)
+      .then((r) => loadMembers(r.data.map((m) => ({ id: m.id, name: m.name, photo_url: m.photo_url }))))
+      .catch(() => {});
+  }, [roomId, loadMembers]);
 
   // ── Socket: join/leave ───────────────────────────────────────────────────
   useEffect(() => {
     if (!socket || !roomId) return;
-    socket.emit('room:join', { room_id: roomId });
+    socket.emit('room:join', { roomId });
     return () => {
-      socket.emit('room:leave', { room_id: roomId });
+      socket.emit('room:leave', { roomId });
     };
   }, [socket, roomId]);
 
@@ -115,7 +139,6 @@ export const RoomChat: React.FC = () => {
     const onMessage = (data: RoomMessage) => {
       if (data.room_id !== roomId) return;
       setMessages((prev) => [...prev, data]);
-      // Clear typing for that sender
       setTypingUsers((prev) => {
         const next = { ...prev };
         delete next[data.sender_id];
@@ -123,36 +146,75 @@ export const RoomChat: React.FC = () => {
       });
     };
 
+    const onPresence = (data: {
+      room_id: string;
+      type: 'join' | 'leave';
+      user_id: string;
+      name?: string;
+      photo_url?: string | null;
+    }) => {
+      if (data.room_id !== roomId) return;
+      if (data.type === 'leave') {
+        markOffline(data.user_id);
+        return;
+      }
+      upsertParticipant({
+        user_id: data.user_id,
+        name: data.name ?? 'Member',
+        photo_url: data.photo_url,
+        isLive: true,
+        isSelf: data.user_id === user?.id,
+      });
+    };
+
+    const onPresenceSync = (data: {
+      room_id: string;
+      participants: Array<{ user_id: string; name: string; photo_url?: string | null }>;
+    }) => {
+      if (data.room_id !== roomId) return;
+      applyPresenceSync(data.participants);
+    };
+
     const onTyping = ({
       roomId: incomingRoomId,
+      room_id: incomingRoomIdSnake,
       userId,
+      user_id: userIdSnake,
       user_name,
       typing,
     }: {
-      roomId: string;
-      userId: string;
-      user_name: string;
+      roomId?: string;
+      room_id?: string;
+      userId?: string;
+      user_id?: string;
+      user_name?: string;
       typing: boolean;
     }) => {
-      if (incomingRoomId !== roomId || userId === user?.id) return;
+      const rid = incomingRoomId || incomingRoomIdSnake;
+      const uid = userId || userIdSnake;
+      if (!rid || rid !== roomId || !uid || uid === user?.id) return;
       setTypingUsers((prev) => {
         const next = { ...prev };
-        if (typing) {
-          next[userId] = user_name;
+        if (typing && user_name) {
+          next[uid] = user_name;
         } else {
-          delete next[userId];
+          delete next[uid];
         }
         return next;
       });
     };
 
     socket.on('room:message', onMessage);
+    socket.on('room:presence', onPresence);
+    socket.on('room:presence-sync', onPresenceSync);
     socket.on('room:typing', onTyping);
     return () => {
       socket.off('room:message', onMessage);
+      socket.off('room:presence', onPresence);
+      socket.off('room:presence-sync', onPresenceSync);
       socket.off('room:typing', onTyping);
     };
-  }, [socket, roomId, user?.id]);
+  }, [socket, roomId, user?.id, upsertParticipant, markOffline, applyPresenceSync]);
 
   // ── Scroll to bottom ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -213,10 +275,16 @@ export const RoomChat: React.FC = () => {
     return `${names[0]} and ${names.length - 1} others are typing...`;
   })();
 
+  const liveCount = participants.filter((p) => p.isLive).length;
+
+  const galleryParticipants = participants.map((p) =>
+    p.isSelf ? { ...p, isMuted: micMuted } : p,
+  );
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="fixed inset-0 flex flex-col" style={{ background: '#0D0A06' }}>
+    <div className="fixed inset-0 flex flex-col" style={{ background: '#050403' }}>
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header
         className="flex-shrink-0 flex items-center gap-3 px-4 border-b"
@@ -260,9 +328,37 @@ export const RoomChat: React.FC = () => {
           </p>
           <p className="text-[10px] mt-0.5" style={{ color: '#6B5035' }}>
             <GroupIcon className="w-3 h-3 inline mr-0.5" />
-            {room?.member_count ?? '—'} members
+            {liveCount > 0 ? `${liveCount} live` : `${room?.member_count ?? '—'} members`}
           </p>
         </div>
+
+        <button
+          type="button"
+          onClick={toggleMic}
+          aria-label={micMuted ? 'Unmute microphone' : 'Mute microphone'}
+          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[#3D2B0E]/50 active:scale-95"
+          style={{ color: micMuted ? '#EF4444' : '#A89070' }}
+        >
+          {micMuted ? <MicOffIcon className="w-5 h-5" /> : <MicIcon className="w-5 h-5" />}
+        </button>
+        <button
+          type="button"
+          onClick={toggleCamera}
+          aria-label={cameraOn ? 'Turn camera off' : 'Turn camera on'}
+          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[#3D2B0E]/50 active:scale-95"
+          style={{ color: cameraOn ? '#C4832A' : '#EF4444' }}
+        >
+          <CamIcon className="w-5 h-5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setChatOpen((v) => !v)}
+          aria-label={chatOpen ? 'Hide chat' : 'Show chat'}
+          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[#3D2B0E]/50 active:scale-95"
+          style={{ color: chatOpen ? '#C4832A' : '#A89070' }}
+        >
+          <BubbleIcon className="w-5 h-5" />
+        </button>
 
         {/* Settings */}
         <button
@@ -320,8 +416,35 @@ export const RoomChat: React.FC = () => {
         </div>
       )}
 
-      {/* ── Messages area ─────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-4 py-4" style={{ scrollbarWidth: 'thin' }}>
+      {videoError && (
+        <div
+          className="mx-3 mt-2 rounded-xl border px-3 py-2 text-xs"
+          style={{ borderColor: 'rgba(196,131,42,0.35)', background: 'rgba(196,131,42,0.1)', color: '#F0E0C0' }}
+        >
+          {videoError}
+        </div>
+      )}
+
+      {/* ── Video gallery (primary surface) ─────────────────────────────── */}
+      <div className="min-h-0 flex-1">
+        <RoomGalleryGrid
+          participants={galleryParticipants}
+          pinnedId={pinnedId}
+          onPin={setPinnedId}
+          getStreamFor={getStreamFor}
+          photoUrl={photoUrl}
+          cameraOnForSelf={cameraOn}
+        />
+      </div>
+
+      {/* ── Chat drawer ───────────────────────────────────────────────── */}
+      <div
+        className={`flex shrink-0 flex-col border-t transition-[height] duration-300 ease-out ${
+          chatOpen ? 'h-[42vh] min-h-[220px]' : 'h-0 overflow-hidden border-transparent'
+        }`}
+        style={{ borderColor: '#3D2B0E', background: '#0D0A06' }}
+      >
+        <div className="flex-1 overflow-y-auto px-4 py-3" style={{ scrollbarWidth: 'thin' }}>
         {messages.length === 0 && !sending && (
           <div className="flex flex-col items-center justify-center h-full select-none">
             <div
@@ -461,7 +584,7 @@ export const RoomChat: React.FC = () => {
         )}
 
         <div ref={bottomRef} />
-      </div>
+        </div>
 
       {/* ── Input bar ─────────────────────────────────────────────────────── */}
       <div
@@ -543,6 +666,7 @@ export const RoomChat: React.FC = () => {
           </button>
         </form>
       </div>
+      </div>
     </div>
   );
 };
@@ -623,5 +747,23 @@ const BubbleIcon = ({
       strokeLinejoin="round"
       d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
     />
+  </svg>
+);
+
+const MicIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3zM5 12a7 7 0 0014 0M12 19v3" />
+  </svg>
+);
+
+const MicOffIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M5 12a7 7 0 0014 0M12 19v3M9 9v3a3 3 0 015.12 2.12M15 9.34V4a3 3 0 00-5.94-.6" />
+  </svg>
+);
+
+const CamIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M4 8h8a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4a2 2 0 012-2z" />
   </svg>
 );

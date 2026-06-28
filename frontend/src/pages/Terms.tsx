@@ -100,7 +100,7 @@ export const Terms = () => {
               <span className="inline-block rounded-full border border-[#c8861c]/30 bg-[#c8861c]/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#c8861c]">
                 Last updated: 06 May 2026
               </span>
-              <h1 className="mt-4 text-[2.5rem] font-bold leading-tight tracking-tight text-[#f0e4cc] sm:text-[2.75rem]">
+              <h1 className="mr-page-heading mt-4">
                 Terms and Conditions
               </h1>
               <p className="mt-2 text-sm text-[#a89070]">
@@ -391,7 +391,7 @@ export const Terms = () => {
                 <>
                   <Strong>7.3</Strong> After any free trial period, Premium subscriptions are
                   billed on a recurring basis (monthly or annually) through our payment processor,
-                  Stripe.
+                  CCBill.
                 </>,
               )}
               {para(

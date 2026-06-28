@@ -33,9 +33,28 @@ const upload = multer({
   fileFilter: uploadFileFilter('profile'),
 });
 
+const coverStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (req: any, file, cb) => {
+    try {
+      cb(null, safeUploadFilename('cover', req.userId, file.mimetype));
+    } catch (error) {
+      cb(error as Error, '');
+    }
+  },
+});
+
+const uploadCover = multer({
+  storage: coverStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: uploadFileFilter('cover'),
+});
+
 router.use(authMiddleware);
 
-router.post('/photo', upload.single('photo'), async (req: AuthRequest, res: Response) => {
+router.post('/photo', verifiedMiddleware, upload.single('photo'), async (req: AuthRequest, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -48,6 +67,25 @@ router.post('/photo', upload.single('photo'), async (req: AuthRequest, res: Resp
     const photo_url = `/uploads/profiles/${req.file.filename}`;
     const user = await userService.updateProfile(req.userId!, { photo_url });
     
+    res.json(user);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/cover', verifiedMiddleware, uploadCover.single('cover'), async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    if (!(await validateFileSignature(req.file.path, req.file.mimetype))) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'File content does not match its type' });
+    }
+
+    const cover_url = `/uploads/profiles/${req.file.filename}`;
+    const user = await userService.updateProfile(req.userId!, { cover_url });
+
     res.json(user);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -167,7 +205,7 @@ router.get('/matches', verifiedMiddleware, async (req: AuthRequest, res: Respons
   }
 });
 
-router.post('/location', async (req: AuthRequest, res: Response) => {
+router.post('/location', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const data = LocationSchema.parse(req.body);
     await userService.updateLocation(req.userId!, data.lat, data.lng);
@@ -177,7 +215,7 @@ router.post('/location', async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.post('/profile', async (req: AuthRequest, res: Response) => {
+router.post('/profile', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const data = ProfileSchema.parse(req.body);
     const user = await userService.updateProfile(req.userId!, data);
@@ -189,7 +227,7 @@ router.post('/profile', async (req: AuthRequest, res: Response) => {
 
 const VisibilitySchema = z.object({ is_visible: z.boolean() });
 
-router.patch('/visibility', async (req: AuthRequest, res: Response) => {
+router.patch('/visibility', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   const parsed = VisibilitySchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.errors[0].message });

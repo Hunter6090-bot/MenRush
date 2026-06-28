@@ -13,10 +13,13 @@ import roomRoutes from './routes/rooms';
 import pushRoutes from './routes/push';
 import pulseRoutes from './routes/pulse';
 import verifyRoutes from './routes/verify';
+import premiumRoutes from './routes/premium';
+import premiumWebhookRoutes from './routes/premium-webhook';
 import contactRoutes from './routes/contact';
 import albumRoutes from './routes/albums';
 import eventRoutes from './routes/events';
 import profileMetaRoutes from './routes/profile-meta';
+import meetRoutes from './routes/meet';
 import dripRoutes from './routes/drip';
 import adminRoutes from './routes/admin.routes';
 import { startPulseExpiryCron } from './services/pulse.service';
@@ -46,10 +49,9 @@ const io: any = new SocketIOServer(server, {
 // Middleware
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: corsOrigin, credentials: true }));
-// Stripe Identity webhook needs the RAW request body for signature verification.
-// Mount /api/verify BEFORE express.json() so the inner express.raw() middleware sees the raw bytes.
-app.use('/api/verify', verifyRoutes);
+app.use('/api/premium/webhook', premiumWebhookRoutes);
 app.use(express.json());
+app.use('/api/verify', verifyRoutes);
 app.use(
   '/uploads/profiles',
   express.static(path.join(__dirname, '../uploads/profiles'), {
@@ -68,10 +70,12 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/pulse', pulseRoutes);
+app.use('/api/premium', premiumRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/albums', albumRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/profile-meta', profileMetaRoutes);
+app.use('/api/meet', meetRoutes);
 app.use('/api/waitlist', dripRoutes);
 app.use('/api/admin', adminRoutes);
 
@@ -248,7 +252,7 @@ io.on('connection', (socket: Socket) => {
 
       const peers = await io.in(`room:${roomId}`).fetchSockets();
       const roster = peers
-        .map((peer) => {
+        .map((peer: { id: string }) => {
           const peerUserId = socketToUser.get(peer.id);
           if (!peerUserId) return null;
           return { socket_id: peer.id, user_id: peerUserId };

@@ -4,6 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { albumService, FREE_PHOTO_CAP } from '../services/album.service';
+import { premiumService } from '../services/premium.service';
 import { SecurityError } from '../security/access';
 import { resolveMediaPath, verifyMediaAccess } from '../security/media';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
@@ -92,9 +93,9 @@ router.post('/:albumId/upload', upload.single('photo'), async (req: AuthRequest,
   }
 
   // Free-tier cap check. If the user is hitting the cap, tell them so they can upgrade.
-  // Premium gating is enforced by the frontend until we wire Stripe-backed entitlements.
+  // Premium gating is enforced by the frontend until CCBill entitlements are fully wired.
   const total = await albumService.countPhotosForUser(req.userId!);
-  const isPremium = false; // TODO(billing): replace with users.is_premium when added.
+  const isPremium = await premiumService.isPremium(req.userId!);
   if (!isPremium && total >= FREE_PHOTO_CAP) {
     try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
     return res

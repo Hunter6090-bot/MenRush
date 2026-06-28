@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { usersAPI } from '../api/client';
 import { Layout } from '../components/Layout';
-import { UserAvatar } from '../components/UserAvatar';
+import { UserAvatar, getPhotoUrl } from '../components/UserAvatar';
 import { StatusBadge } from '../components/StatusBadge';
 
 interface ViewableUser {
@@ -13,6 +13,7 @@ interface ViewableUser {
   headline?: string;
   looking_for?: string;
   photo_url?: string;
+  cover_url?: string;
   interests?: string[];
   online?: boolean;
   last_seen?: string;
@@ -80,7 +81,17 @@ export const ProfileView = () => {
         </button>
 
         <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl overflow-hidden shadow-card">
-          <div className="h-24 bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#8B4513]/10" />
+          {user.cover_url ? (
+            <div className="h-32">
+              <img
+                src={getPhotoUrl(user.cover_url)}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            </div>
+          ) : (
+            <div className="h-32 bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#8B4513]/10" />
+          )}
           <div className="px-5 pb-5">
             <div className="-mt-10 mb-3 flex items-end justify-between">
               <UserAvatar

@@ -1,7 +1,9 @@
 import { query } from '../db';
 import { v4 as uuidv4 } from 'uuid';
+import fs from 'fs';
+import path from 'path';
 import { accessControl, SecurityError } from '../security/access';
-import { isExhaustedMedia, signedMediaUrl } from '../security/media';
+import { isExhaustedMedia, resolveMediaPath, signedMediaUrl } from '../security/media';
 import type { MediaKind } from '../types/validation';
 
 /**
@@ -33,15 +35,29 @@ interface ConversationRow {
   view_count: number;
   remaining_views?: number | null;
   expired: boolean;
+  withdrawn_at?: string | null;
 }
+
+const mediaDir = path.resolve(__dirname, '../../uploads/messages');
 
 /** Columns returned for every message row sent to the client. */
 const MESSAGE_COLUMNS = `id, sender_id, receiver_id, message, created_at,
                  media_type, media_url, audio_duration_ms,
-                 is_disappearing, expires_at, viewed_at, max_views, view_count`;
+                 is_disappearing, expires_at, viewed_at, max_views, view_count, withdrawn_at`;
 
 /** Strip exhausted disappearing media from a row before sending to the client. */
 function scrubExpired<T extends ConversationRow>(row: T): T {
+  if (row.withdrawn_at) {
+    const label =
+      row.media_type === 'audio' ? 'Voice note withdrawn' : 'Photo withdrawn';
+    return {
+      ...row,
+      media_url: null,
+      message: label,
+      remaining_views: 0,
+      expired: true,
+    };
+  }
   const remaining =
     row.is_disappearing && row.max_views != null
       ? Math.max(0, row.max_views - (row.view_count ?? 0))
@@ -194,6 +210,49 @@ export const messageService = {
     return presentMessage(result.rows[0] as ConversationRow, viewerId);
   },
 
+  /** Sender withdraws media from the chat — scrubs for both parties. */
+  async withdrawMedia(senderId: string, messageId: string) {
+    const existing = await query(
+      `SELECT sender_id, receiver_id, media_storage_key, media_type, withdrawn_at
+       FROM messages WHERE id = $1`,
+      [messageId],
+    );
+    const row = existing.rows[0];
+    if (!row || row.sender_id !== senderId) {
+      throw new Error('not_sender_or_not_found');
+    }
+    if (row.withdrawn_at) {
+      throw new Error('already_withdrawn');
+    }
+    if (!row.media_storage_key) {
+      throw new Error('not_media');
+    }
+
+    try {
+      fs.unlinkSync(resolveMediaPath(mediaDir, row.media_storage_key as string));
+    } catch {
+      /* file may already be gone */
+    }
+
+    const label = row.media_type === 'audio' ? 'Voice note withdrawn' : 'Photo withdrawn';
+    const result = await query(
+      `UPDATE messages SET
+         media_url = NULL,
+         media_storage_key = NULL,
+         media_mime_type = NULL,
+         withdrawn_at = NOW(),
+         message = $3
+       WHERE id = $1 AND sender_id = $2
+       RETURNING ${MESSAGE_COLUMNS}`,
+      [messageId, senderId, label],
+    );
+
+    const updated = result.rows[0] as ConversationRow;
+    const forSender = presentMessage(updated, senderId);
+    const forReceiver = presentMessage(updated, row.receiver_id as string);
+    return { forSender, forReceiver, receiverId: row.receiver_id as string };
+  },
+
   async getConversation(userId: string, otherId: string, limit: number = 50) {
     await accessControl.assertInteraction(userId, otherId, { requireMatch: true });
     const result = await query(
@@ -253,7 +312,7 @@ export const messageService = {
   async getMedia(viewerId: string, messageId: string) {
     const result = await query(
       `SELECT id, sender_id, receiver_id, media_storage_key, media_mime_type,
-              is_disappearing, max_views, view_count
+              is_disappearing, max_views, view_count, withdrawn_at
        FROM messages
        WHERE id = $1 AND media_storage_key IS NOT NULL`,
       [messageId],
@@ -261,6 +320,9 @@ export const messageService = {
     const row = result.rows[0];
     if (!row || (row.sender_id !== viewerId && row.receiver_id !== viewerId)) {
       throw new SecurityError('media_unavailable', 404, 'Media unavailable');
+    }
+    if (row.withdrawn_at) {
+      throw new SecurityError('media_withdrawn', 410, 'Media withdrawn');
     }
     const otherId = row.sender_id === viewerId ? row.receiver_id : row.sender_id;
     await accessControl.assertInteraction(viewerId, otherId, { requireMatch: true });

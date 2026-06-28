@@ -136,8 +136,6 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
   }
 });
 
-// Mark a disappearing message as viewed — consumes one recipient view after
-// the image has loaded and become visible on the client.
 router.post('/:messageId/view', async (req: AuthRequest, res: Response) => {
   try {
     const updated = await messageService.markMessageViewed(req.userId!, req.params.messageId);
@@ -156,6 +154,28 @@ router.post('/:messageId/view', async (req: AuthRequest, res: Response) => {
   } catch (error: any) {
     if (error.message === 'message_not_found_or_not_recipient') {
       return res.status(404).json({ error: 'Message not found' });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/:messageId/withdraw', async (req: AuthRequest, res: Response) => {
+  try {
+    const { forSender, forReceiver, receiverId } = await messageService.withdrawMedia(
+      req.userId!,
+      req.params.messageId,
+    );
+    const io = req.app.get('io');
+    io.to(`user:${receiverId}`).emit('message:withdrawn', forReceiver);
+    io.to(`user:${req.userId}`).emit('message:withdrawn', forSender);
+    res.json(forSender);
+  } catch (error: any) {
+    const code = error.message;
+    if (code === 'not_sender_or_not_found') {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+    if (code === 'already_withdrawn' || code === 'not_media') {
+      return res.status(400).json({ error: code });
     }
     res.status(500).json({ error: error.message });
   }

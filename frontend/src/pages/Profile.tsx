@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { usersAPI, profileMetaAPI, Mood } from '../api/client';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { Layout } from '../components/Layout';
-import { UserAvatar } from '../components/UserAvatar';
+import { UserAvatar, getPhotoUrl } from '../components/UserAvatar';
 import { StatusBadge } from '../components/StatusBadge';
 import { PulseRing } from '../components/PulseRing';
 import { MoodPicker } from '../components/MoodPicker';
@@ -27,12 +27,14 @@ interface ProfileData {
   headline?: string;
   looking_for?: string;
   photo_url?: string;
+  cover_url?: string;
   interests?: string[];
   lat?: number;
   lng?: number;
   online?: boolean;
   last_seen?: string;
   is_visible?: boolean;
+  is_premium?: boolean;
   available_until?: string | null;
   created_at?: string;
 }
@@ -48,14 +50,18 @@ export const Profile = () => {
   const [headline, setHeadline] = useState('');
   const [lookingFor, setLookingFor] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
+  const [coverUrl, setCoverUrl] = useState('');
   const [interests, setInterests] = useState<string[]>([]);
   const [isVisible, setIsVisible] = useState(true);
   const [mood, setMood] = useState<Mood | null>(null);
   const [isGhost, setIsGhost] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [locating, setLocating] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     usersAPI.getMe().then((r) => {
@@ -65,6 +71,7 @@ export const Profile = () => {
       setHeadline(d.headline ?? '');
       setLookingFor(d.looking_for ?? '');
       setPhotoUrl(d.photo_url ?? '');
+      setCoverUrl(d.cover_url ?? '');
       setInterests(d.interests ?? []);
       if (typeof d.is_visible === 'boolean') setIsVisible(d.is_visible);
       if (d.mood !== undefined) setMood(d.mood ?? null);
@@ -85,13 +92,22 @@ export const Profile = () => {
   };
 
   const handleGhost = async (next: boolean) => {
+    if (next && !profile?.is_premium) {
+      navigate('/premium');
+      return;
+    }
     const previous = isGhost;
     setIsGhost(next);
     try {
       await profileMetaAPI.setGhost(next);
       showToast('success', next ? 'Ghost mode on — you are invisible to others.' : 'Ghost mode off.');
-    } catch {
+    } catch (err: unknown) {
       setIsGhost(previous);
+      const code = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      if (code === 'premium_required') {
+        navigate('/premium');
+        return;
+      }
       showToast('error', 'Could not toggle ghost mode.');
     }
   };
@@ -110,6 +126,7 @@ export const Profile = () => {
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
 
     setUploading(true);
     try {
@@ -122,6 +139,24 @@ export const Profile = () => {
       showToast('error', err.response?.data?.error || 'Upload failed');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    setUploadingCover(true);
+    try {
+      const res = await usersAPI.uploadCover(file);
+      setCoverUrl(res.data.cover_url);
+      setProfile((p) => p ? { ...p, cover_url: res.data.cover_url } : p);
+      showToast('success', 'Cover photo updated');
+    } catch (err: any) {
+      showToast('error', err.response?.data?.error || 'Cover upload failed');
+    } finally {
+      setUploadingCover(false);
     }
   };
 
@@ -192,20 +227,100 @@ export const Profile = () => {
       )}
 
       <div className="max-w-xl mx-auto px-4 py-6 pb-10 space-y-4">
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handlePhotoUpload}
+          className="hidden"
+          id="photo-upload"
+          disabled={uploading}
+        />
+
+        <input
+          ref={coverInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleCoverUpload}
+          className="hidden"
+          disabled={uploadingCover}
+        />
+
         {/* ── Profile hero ── */}
         <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl overflow-hidden shadow-card">
-          {/* Cover gradient */}
-          <div className="h-24 bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#8B4513]/10" />
+          <button
+            type="button"
+            aria-label="Upload cover photo"
+            onClick={() => coverInputRef.current?.click()}
+            disabled={uploadingCover}
+            className={`group relative block h-32 w-full overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#C4832A]/50 ${
+              uploadingCover ? 'pointer-events-none opacity-80' : ''
+            }`}
+          >
+            {coverUrl ? (
+              <img
+                src={getPhotoUrl(coverUrl)}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+              />
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#8B4513]/10" />
+            )}
+            <span className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/25 group-active:bg-black/35" />
+            <span className="absolute inset-x-0 top-3 flex justify-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#1E1508]/40 bg-[#0D0A06]/55 px-3 py-1.5 text-[11px] font-semibold text-[#F0E0C0] backdrop-blur-sm">
+                {uploadingCover ? (
+                  <>
+                    <Spinner className="w-3.5 h-3.5" />
+                    Uploading cover…
+                  </>
+                ) : (
+                  <>
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    {coverUrl ? 'Change cover photo' : 'Add cover photo'}
+                  </>
+                )}
+              </span>
+            </span>
+            <span className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#1E1508] bg-[#C4832A] text-[#0D0A06] shadow-lg transition-transform group-hover:scale-105 group-active:scale-95">
+              {uploadingCover ? (
+                <Spinner className="w-4 h-4 text-[#0D0A06]" />
+              ) : (
+                <ImageIcon className="w-4 h-4" />
+              )}
+            </span>
+          </button>
           {/* Avatar overlapping cover */}
           <div className="px-5 pb-5">
             <div className="-mt-10 mb-3 flex items-end justify-between">
-              <UserAvatar
-                name={profile.name}
-                photoUrl={profile.photo_url}
-                online={profile.online}
-                size="xl"
-                className="ring-4 ring-[#1E1508]"
-              />
+              <div className="relative">
+                <button
+                  type="button"
+                  aria-label="Upload profile photo"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={uploading}
+                  className={`group relative block cursor-pointer rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C4832A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1E1508] ${
+                    uploading ? 'pointer-events-none opacity-70' : ''
+                  }`}
+                >
+                  <UserAvatar
+                    name={profile.name}
+                    photoUrl={profile.photo_url}
+                    online={profile.online}
+                    size="xl"
+                    showStatus={false}
+                    className="ring-4 ring-[#1E1508] transition-opacity group-hover:opacity-90 group-active:opacity-80"
+                  />
+                  <span className="absolute inset-0 rounded-full bg-black/0 transition-colors group-hover:bg-black/20 group-active:bg-black/30" />
+                  <span className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#1E1508] bg-[#C4832A] text-[#0D0A06] shadow-lg transition-transform group-hover:scale-105 group-active:scale-95">
+                    {uploading ? (
+                      <Spinner className="w-4 h-4 text-[#0D0A06]" />
+                    ) : (
+                      <CameraIcon className="w-4 h-4" />
+                    )}
+                  </span>
+                </button>
+              </div>
               <StatusBadge online={!!profile.online} lastSeen={profile.last_seen} />
             </div>
             <h2 className="text-xl font-bold text-[#F0E0C0]">{profile.name}</h2>
@@ -274,7 +389,11 @@ export const Profile = () => {
         </div>
 
         {/* ── Ghost mode card ── */}
-        <GhostToggle isGhost={isGhost} onToggle={handleGhost} premium />
+        <GhostToggle
+          isGhost={isGhost}
+          isPremium={Boolean(profile?.is_premium)}
+          onToggle={handleGhost}
+        />
 
         {/* ── Albums card ── */}
         <Link
@@ -331,15 +450,13 @@ export const Profile = () => {
         {/* ── Notifications card ── */}
         <NotificationSettings />
 
-        {/* ── Danger zone ── */}
-        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card flex items-center justify-between">
-          <div>
-            <p className="text-[#F0E0C0]/80 text-sm font-semibold">Sign out</p>
-            <p className="text-[#A89070] text-xs mt-0.5">You'll need to log back in</p>
-          </div>
+        {/* ── Sign out ── */}
+        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card">
+          <p className="text-[#F0E0C0]/80 text-sm font-semibold">Sign out</p>
+          <p className="text-[#A89070] text-xs mt-0.5">You'll need to log back in</p>
           <button
             onClick={() => { logout(); navigate('/login'); }}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#8B4513]/10 hover:bg-[#8B4513]/20 text-[#F0E0C0]/80 text-xs font-semibold border border-[#8B4513]/20 transition-all"
+            className="mt-4 flex w-full items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#8B4513]/10 hover:bg-[#8B4513]/20 text-[#F0E0C0]/80 text-xs font-semibold border border-[#8B4513]/20 transition-all"
           >
             <LogoutIcon className="w-3.5 h-3.5" />
             Sign out
@@ -393,16 +510,10 @@ export const Profile = () => {
                 Profile Photo
               </label>
               <div className="flex gap-4 items-center">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handlePhotoUpload}
-                  className="hidden"
-                  id="photo-upload"
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
                   disabled={uploading}
-                />
-                <label
-                  htmlFor="photo-upload"
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#C4832A]/10 hover:bg-[#C4832A]/20 text-[#C4832A] text-xs font-semibold border border-[#C4832A]/30 cursor-pointer transition-all ${
                     uploading ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
@@ -413,7 +524,7 @@ export const Profile = () => {
                     <UploadIcon className="w-4 h-4" />
                   )}
                   {uploading ? 'Uploading…' : 'Upload Photo'}
-                </label>
+                </button>
                 {photoUrl && !uploading && (
                   <span className="text-[10px] text-[#A89070]/70">Current photo set</span>
                 )}
@@ -493,6 +604,27 @@ const PhotoStackIcon = ({ className, style }: { className?: string; style?: Reac
 const UploadIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0l-4 4m4-4v12" />
+  </svg>
+);
+
+const CameraIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+    />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+  </svg>
+);
+
+const ImageIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+    />
   </svg>
 );
 

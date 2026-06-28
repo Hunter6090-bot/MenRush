@@ -68,11 +68,12 @@ export const Landing = () => {
 
           {/* Left: Hero */}
           <section className="text-center lg:text-left">
-            <h1 className="text-5xl font-black leading-[0.92] tracking-[-0.04em] sm:text-6xl lg:text-7xl">
-              Guys nearby now.
+            <h1 className="mr-hero-heading">
+              Guys nearby
+              <span className="mr-hero-accent">right now.</span>
             </h1>
 
-            <p className="mt-5 max-w-md text-base leading-7 text-[#F0E0C0]/72 sm:text-lg lg:max-w-none">
+            <p className="mr-copy mt-5 max-w-md lg:max-w-none">
               A real-time discovery app for gay, bi, trans, discreet and curious men.
               Verified profiles, live proximity, direct chat.
             </p>
