@@ -27,6 +27,9 @@ export const ProfileSchema = z.object({
   looking_for: z.string().max(100).optional(),
   photo_url: z.string().optional(),
   cover_url: z.string().optional(),
+  cover_position_x: z.number().min(0).max(100).optional(),
+  cover_position_y: z.number().min(0).max(100).optional(),
+  cover_zoom: z.number().min(1).max(3).optional(),
   interests: z.array(z.string().max(30)).max(10).optional(),
 });
 
@@ -80,6 +83,10 @@ export const CreateRoomSchema = z.object({
 export const RoomMessageSchema = z.object({
   message: z.string().min(1).max(2000),
   reply_to: z.string().uuid().optional(),
+});
+
+export const AddRoomMemberSchema = z.object({
+  user_id: z.string().uuid(),
 });
 
 export const ContactFormSchema = z.object({

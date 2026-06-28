@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { roomsAPI } from '../api/client';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { messagesAPI, roomsAPI, usersAPI } from '../api/client';
 import { useSocket } from '../hooks/useSocket';
 import { useAuthStore } from '../hooks/store';
 import { useRoomVideo } from '../hooks/useRoomVideo';
 import { RoomGalleryGrid } from '../components/RoomGalleryGrid';
 import { PulseRing } from '../components/PulseRing';
+import { MobileBackButton } from '../components/MobileBackButton';
+import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 
 interface RoomMessage {
   id?: string;
@@ -22,6 +24,15 @@ interface RoomInfo {
   name: string;
   description?: string;
   member_count: number;
+  user_role?: string | null;
+  is_location_based?: boolean;
+}
+
+interface RoomMember {
+  id: string;
+  name: string;
+  photo_url?: string;
+  role?: string;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -80,10 +91,18 @@ function senderColor(senderId: string): string {
 export const RoomChat: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const socket = useSocket();
   const user = useAuthStore((s) => s.user);
 
   const [room, setRoom] = useState<RoomInfo | null>(null);
+  const [members, setMembers] = useState<RoomMember[]>([]);
+  const [addPanelOpen, setAddPanelOpen] = useState(false);
+  const [addCandidates, setAddCandidates] = useState<RoomMember[]>([]);
+  const [addingMemberId, setAddingMemberId] = useState<string | null>(null);
+  const [settingsNotice, setSettingsNotice] = useState<string | null>(
+    (location.state as { groupNotice?: string } | null)?.groupNotice ?? null,
+  );
   const [messages, setMessages] = useState<RoomMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -122,6 +141,41 @@ export const RoomChat: React.FC = () => {
       .then((r) => loadMembers(r.data.map((m) => ({ id: m.id, name: m.name, photo_url: m.photo_url }))))
       .catch(() => {});
   }, [roomId, loadMembers]);
+
+  useEffect(() => {
+    if (!roomId || !settingsOpen) return;
+    roomsAPI
+      .getMembers(roomId)
+      .then((r) => setMembers(r.data))
+      .catch(() => setMembers([]));
+  }, [roomId, settingsOpen]);
+
+  useEffect(() => {
+    if (!addPanelOpen) return;
+    Promise.all([usersAPI.getMatches(), messagesAPI.getConversations()])
+      .then(([matchesRes, convsRes]) => {
+        const byId = new Map<string, RoomMember>();
+        for (const match of matchesRes.data ?? []) {
+          byId.set(match.id, { id: match.id, name: match.name, photo_url: match.photo_url });
+        }
+        for (const conv of convsRes.data ?? []) {
+          if (!byId.has(conv.other_user_id)) {
+            byId.set(conv.other_user_id, {
+              id: conv.other_user_id,
+              name: conv.other_user_name,
+              photo_url: conv.photo_url,
+            });
+          }
+        }
+        const existing = new Set(members.map((m) => m.id));
+        setAddCandidates(
+          Array.from(byId.values())
+            .filter((c) => !existing.has(c.id) && c.id !== user?.id)
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        );
+      })
+      .catch(() => setAddCandidates([]));
+  }, [addPanelOpen, members, user?.id]);
 
   // ── Socket: join/leave ───────────────────────────────────────────────────
   useEffect(() => {
@@ -276,6 +330,33 @@ export const RoomChat: React.FC = () => {
   })();
 
   const liveCount = participants.filter((p) => p.isLive).length;
+  const isOwner = room?.user_role === 'owner';
+  const isPrivateGroup = room?.is_location_based === false;
+
+  const handleAddMember = async (targetId: string, targetName: string) => {
+    if (!roomId || addingMemberId) return;
+    setAddingMemberId(targetId);
+    try {
+      await roomsAPI.addMember(roomId, targetId);
+      setSettingsNotice(`${targetName} was added to the group.`);
+      const res = await roomsAPI.getMembers(roomId);
+      setMembers(res.data);
+      setAddCandidates((prev) => prev.filter((c) => c.id !== targetId));
+      roomsAPI.getRoom(roomId).then((r) => setRoom(r.data)).catch(() => {});
+    } catch (err: unknown) {
+      const code = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      if (code === 'member_premium_required') {
+        setSettingsNotice(`${targetName} needs Premium to join groups.`);
+      } else {
+        setSettingsNotice(
+          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+            `Could not add ${targetName}.`,
+        );
+      }
+    } finally {
+      setAddingMemberId(null);
+    }
+  };
 
   const galleryParticipants = participants.map((p) =>
     p.isSelf ? { ...p, isMuted: micMuted } : p,
@@ -287,9 +368,9 @@ export const RoomChat: React.FC = () => {
     <div className="fixed inset-0 flex flex-col" style={{ background: '#050403' }}>
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header
-        className="flex-shrink-0 flex items-center gap-3 px-4 border-b"
+        className="flex-shrink-0 flex items-center gap-2 px-3 sm:px-4 border-b pt-[env(safe-area-inset-top,0px)]"
         style={{
-          height: '64px',
+          minHeight: 'calc(4rem + env(safe-area-inset-top, 0px))',
           background: 'rgba(13,10,6,0.94)',
           borderColor: '#3D2B0E',
           backdropFilter: 'blur(20px)',
@@ -297,17 +378,11 @@ export const RoomChat: React.FC = () => {
           zIndex: 20,
         }}
       >
-        {/* Back */}
-        <button
+        <MobileBackButton
+          fallback="/rooms"
           onClick={() => navigate('/rooms')}
-          aria-label="Back to rooms"
-          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[#3D2B0E]/50 active:scale-95"
-          style={{ color: '#A89070' }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#F0E0C0')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = '#A89070')}
-        >
-          <BackIcon className="w-5 h-5" />
-        </button>
+          className="-ml-1"
+        />
 
         {/* Room avatar */}
         <div
@@ -378,10 +453,13 @@ export const RoomChat: React.FC = () => {
         <div
           className="fixed inset-0 z-40"
           style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
-          onClick={() => setSettingsOpen(false)}
+          onClick={() => {
+            setSettingsOpen(false);
+            setAddPanelOpen(false);
+          }}
         >
           <div
-            className="absolute right-4 top-16 w-52 rounded-2xl overflow-hidden animate-scale-up"
+            className="absolute right-4 top-16 w-72 max-h-[70vh] overflow-y-auto rounded-2xl overflow-hidden animate-scale-up"
             style={{
               background: '#1E1508',
               border: '1px solid #3D2B0E',
@@ -397,6 +475,78 @@ export const RoomChat: React.FC = () => {
                 {room.description}
               </div>
             )}
+
+            {settingsNotice && (
+              <div
+                className="px-4 py-2 text-xs border-b"
+                style={{ color: '#F0E0C0', borderColor: '#3D2B0E', background: 'rgba(196,131,42,0.08)' }}
+              >
+                {settingsNotice}
+              </div>
+            )}
+
+            <div className="px-4 py-3 border-b" style={{ borderColor: '#3D2B0E' }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: '#6B5035' }}>
+                Members
+              </p>
+              <div className="space-y-1">
+                {members.map((member) => (
+                  <div key={member.id} className="flex items-center gap-2">
+                    <span className="flex-1 text-sm truncate" style={{ color: '#F0E0C0' }}>
+                      {member.name}
+                      {member.role === 'owner' ? (
+                        <span className="ml-1 text-[10px]" style={{ color: '#C4832A' }}>
+                          · owner
+                        </span>
+                      ) : null}
+                    </span>
+                    {member.id !== user?.id && (
+                      <ChatSafetyMenu
+                        peerId={member.id}
+                        peerName={member.name}
+                        onNotice={(msg) => setSettingsNotice(msg)}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {isOwner && isPrivateGroup && (
+              <div className="border-b" style={{ borderColor: '#3D2B0E' }}>
+                <button
+                  type="button"
+                  onClick={() => setAddPanelOpen((v) => !v)}
+                  className="w-full px-4 py-3 text-sm text-left transition-all duration-150 hover:bg-[#3D2B0E]/50"
+                  style={{ color: '#C4832A' }}
+                >
+                  {addPanelOpen ? 'Hide add member' : 'Add Premium member'}
+                </button>
+                {addPanelOpen && (
+                  <div className="px-4 pb-3 space-y-1 max-h-40 overflow-y-auto">
+                    {addCandidates.length === 0 ? (
+                      <p className="text-xs py-2" style={{ color: '#6B5035' }}>
+                        No one else to add right now.
+                      </p>
+                    ) : (
+                      addCandidates.map((candidate) => (
+                        <button
+                          key={candidate.id}
+                          type="button"
+                          disabled={addingMemberId === candidate.id}
+                          onClick={() => void handleAddMember(candidate.id, candidate.name)}
+                          className="w-full text-left px-2 py-2 rounded-lg text-sm hover:bg-[#3D2B0E]/40 disabled:opacity-50"
+                          style={{ color: '#F0E0C0' }}
+                        >
+                          {addingMemberId === candidate.id ? 'Adding…' : candidate.name}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <button
               onClick={async () => {
                 if (!roomId) return;
@@ -672,12 +822,6 @@ export const RoomChat: React.FC = () => {
 };
 
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
-
-const BackIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-  </svg>
-);
 
 const GearIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

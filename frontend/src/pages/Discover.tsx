@@ -8,6 +8,7 @@ import { Layout } from '../components/Layout';
 import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
 import { PulsingAvatar } from '../components/PulsingAvatar';
 import { PulseFab } from '../components/PulseFab';
+import { ProximitySlider, RADIUS_OPTIONS } from '../components/ProximitySlider';
 import { ProfileDrawer } from '../components/ProfileDrawer';
 import { createMapMarkerElement, MapMarker } from '../components/MapMarker';
 import { getPhotoUrl } from '../components/UserAvatar';
@@ -21,6 +22,7 @@ import {
   discoveryResultBucket,
   trackEventOnce,
 } from '../observability/analytics';
+
 
 const INJECT_ID = '__discover_styles__';
 if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
@@ -65,7 +67,6 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
   document.head.appendChild(s);
 }
 
-const RADIUS_OPTIONS = [1, 5, 10, 25, 50] as const;
 const DEFAULT_DISCOVERY_CENTER: [number, number] = [51.5136, -0.1365];
 const INSECURE_GPS_NOTICE =
   'Live location on your phone needs a secure (HTTPS) link. Open the team tunnel URL — not the plain IP address — then allow location.';
@@ -362,11 +363,18 @@ export const Discover = () => {
     return () => window.clearInterval(id);
   }, [lat, lng, radius, tagFilters, fetchNearbyUsers]);
 
+  const handleRadiusChange = useCallback(
+    (next: (typeof RADIUS_OPTIONS)[number]) => {
+      setRadius(next);
+      if (lat != null && lng != null) fetchNearbyUsers(lat, lng, next, tagFilters);
+    },
+    [lat, lng, tagFilters, fetchNearbyUsers],
+  );
+
   const handleRadiusCycle = () => {
-    const i = RADIUS_OPTIONS.indexOf(radius as any);
+    const i = RADIUS_OPTIONS.indexOf(radius as (typeof RADIUS_OPTIONS)[number]);
     const next = RADIUS_OPTIONS[(i + 1) % RADIUS_OPTIONS.length];
-    setRadius(next);
-    if (lat != null && lng != null) fetchNearbyUsers(lat, lng, next, tagFilters);
+    handleRadiusChange(next);
   };
 
   const toggleTag = useCallback(
@@ -624,7 +632,7 @@ export const Discover = () => {
                 <span className="w-5 h-5 rounded-full bg-[var(--copper)] border-2 border-[var(--cream)] relative z-10" />
               </div>
               <p className="text-[var(--cream-muted)] text-xs font-medium tracking-widest uppercase mt-3">
-                {error || 'Acquiring signal'}
+                {error || 'Finding nearby matches'}
               </p>
             </div>
           )}
@@ -690,18 +698,15 @@ export const Discover = () => {
               to="/stream"
               className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] transition-colors hover:text-[var(--copper)]"
               style={{ color: 'var(--cream-soft)' }}
-              aria-label="Switch to stream view"
+              aria-label="Switch to live profile list"
             >
-              Stream
+              Live profile list
             </Link>
           </div>
-          <button
-            onClick={handleRadiusCycle}
-            className="px-3 py-1.5 rounded-full bg-[var(--bg-elevated)]/85 backdrop-blur-sm border border-[var(--border-default)] text-[var(--cream)] text-xs font-bold hover:border-[var(--copper)] transition-colors"
-            title="Search radius"
-          >
-            ▼ {radius} km
-          </button>
+        </div>
+
+        <div className="absolute bottom-[calc(188px+0.75rem)] left-3 z-30 pointer-events-auto">
+          <ProximitySlider value={radius} onChange={handleRadiusChange} variant="map" />
         </div>
 
         {pulseError && (

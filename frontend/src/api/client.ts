@@ -49,7 +49,17 @@ export const usersAPI = {
     ),
   updateLocation: (lat: number, lng: number) =>
     apiClient.post('/users/location', { lat, lng }),
-  updateProfile: (data: { bio?: string; headline?: string; looking_for?: string; photo_url?: string; cover_url?: string; interests?: string[] }) =>
+  updateProfile: (data: {
+    bio?: string;
+    headline?: string;
+    looking_for?: string;
+    photo_url?: string;
+    cover_url?: string;
+    cover_position_x?: number;
+    cover_position_y?: number;
+    cover_zoom?: number;
+    interests?: string[];
+  }) =>
     apiClient.post('/users/profile', data),
   uploadPhoto: (file: File) => {
     const formData = new FormData();
@@ -69,6 +79,22 @@ export const usersAPI = {
   updateVisibility: (isVisible: boolean) =>
     apiClient.patch('/users/visibility', { is_visible: isVisible }),
   getMatches: () => apiClient.get('/users/matches'),
+  getProfileViews: () =>
+    apiClient.get<{
+      viewers: Array<{
+        id: string;
+        name: string;
+        age: number;
+        photo_url?: string | null;
+        online?: boolean;
+        viewed_at: string;
+      }>;
+      total: number;
+      limit: number;
+      is_premium: boolean;
+      has_more: boolean;
+      hidden_count: number;
+    }>('/users/profile-views'),
   startPulse: (minutes?: number) =>
     apiClient.post<{ available_until: string }>('/users/pulse/start', minutes ? { minutes } : {}),
   stopPulse: () => apiClient.post<{ available_until: null }>('/users/pulse/stop'),
@@ -76,6 +102,28 @@ export const usersAPI = {
   unblockUser: (id: string) => apiClient.delete(`/users/block/${id}`),
   reportUser: (id: string, reason: string, details?: string) =>
     apiClient.post(`/users/report/${id}`, { reason, details }),
+};
+
+export const notificationsAPI = {
+  list: () =>
+    apiClient.get<{
+      notifications: Array<{
+        id: string;
+        type: 'message' | 'photo' | 'voice' | 'like' | 'match' | 'profile_view' | 'system' | 'missed_call';
+        title: string;
+        body?: string | null;
+        link_path?: string | null;
+        read: boolean;
+        created_at: string;
+        actor_id?: string | null;
+        actor_name?: string | null;
+        actor_photo_url?: string | null;
+      }>;
+      unread_count: number;
+    }>('/notifications'),
+  markRead: (id: string) =>
+    apiClient.patch<{ ok: boolean; unread_count: number }>(`/notifications/${id}/read`),
+  markAllRead: () => apiClient.post<{ ok: boolean; unread_count: number }>('/notifications/read-all'),
 };
 
 export interface PulseStateDTO {
@@ -136,6 +184,8 @@ export const messagesAPI = {
   getConversation: (otherId: string) =>
     apiClient.get<MessageDTO[]>(`/messages/conversation/${otherId}`),
   getConversations: () => apiClient.get('/messages/conversations'),
+  getUnreadSummary: () =>
+    apiClient.get<{ total: number; bySender: Record<string, number> }>('/messages/unread'),
   sendMedia: (receiver_id: string, file: File | Blob, opts: SendMediaOptions) => {
     const fd = new FormData();
     fd.append('receiver_id', receiver_id);
@@ -182,6 +232,8 @@ export const roomsAPI = {
     apiClient.get<Array<{ id: string; name: string; photo_url?: string; role?: string }>>(
       `/rooms/${roomId}/members`,
     ),
+  addMember: (roomId: string, userId: string) =>
+    apiClient.post(`/rooms/${roomId}/members`, { user_id: userId }),
   joinRoom: (roomId: string) => apiClient.post(`/rooms/${roomId}/join`),
   leaveRoom: (roomId: string) => apiClient.post(`/rooms/${roomId}/leave`),
   getMessages: (roomId: string, before?: string) =>
@@ -261,6 +313,8 @@ export const albumsAPI = {
   create: (data: { name: string; description?: string; is_locked?: boolean }) =>
     apiClient.post<AlbumDTO>('/albums', data),
   remove: (albumId: string) => apiClient.delete<{ deleted: true }>(`/albums/${albumId}`),
+  removePhoto: (albumId: string, photoId: string) =>
+    apiClient.delete<{ deleted: true }>(`/albums/${albumId}/photos/${photoId}`),
   listPhotos: (albumId: string) =>
     apiClient.get<{ photos: AlbumPhotoDTO[]; unlocked: boolean; locked: boolean }>(
       `/albums/${albumId}/photos`,
@@ -313,7 +367,18 @@ export const aiAPI = {
 };
 
 export { apiClient };
-// Keep signalling on the same origin as the app. This works for localhost,
-// LAN development proxies, preview tunnels, and production without mixed
-// content or accidentally resolving `localhost` on a user's phone.
-export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
+
+function resolveSocketUrl(): string {
+  if (import.meta.env.VITE_SOCKET_URL) {
+    return import.meta.env.VITE_SOCKET_URL;
+  }
+  const apiUrl = import.meta.env.VITE_API_URL;
+  if (apiUrl) {
+    return apiUrl.replace(/\/api\/?$/, '');
+  }
+  return window.location.origin;
+}
+
+// Keep signalling on the same host as the API when deployed separately from
+// the static frontend (e.g. Railway backend + Vercel frontend).
+export const SOCKET_URL = resolveSocketUrl();

@@ -2,7 +2,9 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { messagesAPI } from '../api/client';
 import { ConversationItem } from '../components/ConversationItem';
+import { CreateGroupModal } from '../components/CreateGroupModal';
 import { Layout } from '../components/Layout';
+import { FEATURES } from '../lib/featureFlags';
 import { useUnreadStore } from '../hooks/store';
 import { useSocket } from '../hooks/useSocket';
 
@@ -13,13 +15,15 @@ interface Conversation {
   last_message?: string;
   photo_url?: string;
   online?: boolean;
+  unread_count?: number;
 }
 
 export const Conversations = () => {
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [groupOpen, setGroupOpen] = useState(false);
   const navigate = useNavigate();
-  const clearUnread = useUnreadStore((s) => s.clearUnread);
+  const unreadBySender = useUnreadStore((s) => s.unreadBySender);
   const socket = useSocket();
 
   const fetchConversations = useCallback(() => {
@@ -32,8 +36,7 @@ export const Conversations = () => {
 
   useEffect(() => {
     fetchConversations();
-    clearUnread();
-  }, []);
+  }, [fetchConversations]);
 
   // Real-time: refresh conversation list when a new message arrives
   useEffect(() => {
@@ -46,7 +49,24 @@ export const Conversations = () => {
   return (
     <Layout>
       <div className="max-w-xl mx-auto px-4 py-6 pb-8">
-        <h2 className="text-xl font-bold text-[#F0E0C0] mb-5">Messages</h2>
+        <div className="flex items-center justify-between gap-3 mb-5">
+          <h2 className="text-xl font-bold text-[#F0E0C0]">Messages</h2>
+          {FEATURES.chatRooms && (
+            <button
+              type="button"
+              onClick={() => setGroupOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95"
+              style={{
+                background: 'linear-gradient(135deg, rgba(196,131,42,0.2), rgba(139,69,19,0.15))',
+                border: '1px solid rgba(196,131,42,0.35)',
+                color: '#F0E0C0',
+              }}
+            >
+              <GroupPlusIcon className="w-4 h-4" />
+              New group
+            </button>
+          )}
+        </div>
 
         {loading ? (
           <div className="space-y-2">
@@ -82,14 +102,27 @@ export const Conversations = () => {
                 online={c.online}
                 lastMessageTime={c.last_message_time}
                 lastMessage={c.last_message}
+                unreadCount={c.unread_count ?? unreadBySender[c.other_user_id] ?? 0}
+                onBlocked={fetchConversations}
               />
             ))}
           </div>
         )}
       </div>
+
+      {FEATURES.chatRooms && (
+        <CreateGroupModal open={groupOpen} onClose={() => setGroupOpen(false)} />
+      )}
     </Layout>
   );
 };
+
+const GroupPlusIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+  </svg>
+);
 
 const ChatIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

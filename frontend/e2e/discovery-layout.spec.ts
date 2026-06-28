@@ -44,23 +44,28 @@ test('nearby counts never cover the top category controls and controls stay clic
   const page = await ctx.newPage();
   await page.goto('/discover');
 
-  // The "Nearby / Online now" counts overlay renders…
   const counts = page.getByTestId('nearby-counts');
   await expect(counts).toBeVisible();
 
-  // …and sits clearly BELOW the radius / Map-Stream control band, so it can't
-  // cover the category controls.
-  const radius = page.getByRole('button', { name: /km/ });
-  await expect(radius).toBeVisible();
-  const countsBox = await counts.boundingBox();
-  const radiusBox = await radius.boundingBox();
-  expect(countsBox).not.toBeNull();
-  expect(radiusBox).not.toBeNull();
-  expect(countsBox!.y).toBeGreaterThan(radiusBox!.y + radiusBox!.height);
+  // Tribe category pills (Top, Twink, Daddy, …) stay unobstructed at the top.
+  const twink = page.getByRole('button', { name: 'Twink', exact: true });
+  await expect(twink).toBeVisible();
 
-  // Category controls remain clickable (Playwright throws if an overlay
-  // intercepts the click). Cycling the radius is a no-op-safe interaction.
-  await radius.click();
+  const slider = page.getByTestId('proximity-slider');
+  await expect(slider).toBeVisible();
+
+  const countsBox = await counts.boundingBox();
+  const twinkBox = await twink.boundingBox();
+  const sliderBox = await slider.boundingBox();
+  expect(countsBox).not.toBeNull();
+  expect(twinkBox).not.toBeNull();
+  expect(sliderBox).not.toBeNull();
+  expect(countsBox!.y).toBeGreaterThan(twinkBox!.y);
+  expect(sliderBox!.y).toBeGreaterThan(countsBox!.y);
+
+  // Category and radius controls remain clickable (Playwright throws if an overlay intercepts).
+  await twink.click();
+  await page.getByRole('button', { name: 'Increase search radius' }).click();
 
   await ctx.close();
 });

@@ -25,9 +25,13 @@ import { Verify } from './pages/Verify';
 import { VerifyPending } from './pages/VerifyPending';
 import { VerifyRejected } from './pages/VerifyRejected';
 import { Premium } from './pages/Premium';
+import { Notifications } from './pages/Notifications';
 import { useAuthStore } from './hooks/store';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import { useGlobalMessageNotifications } from './hooks/useGlobalMessageNotifications';
+import { useUnreadSync } from './hooks/useUnreadSync';
+import { useNotificationSync } from './hooks/useNotificationSync';
+import { useAuthProfileSync } from './hooks/useAuthProfileSync';
 import { FEATURES } from './lib/featureFlags';
 import { VideoCallModal } from './components/VideoCallModal';
 import { ToastNotifications } from './components/ToastNotifications';
@@ -93,6 +97,9 @@ function AppShell() {
   const token = useAuthStore((s) => s.token);
   usePushNotifications(!!token);
   useGlobalMessageNotifications();
+  useUnreadSync();
+  useNotificationSync();
+  useAuthProfileSync();
 
   return (
     <>
@@ -117,6 +124,7 @@ function AppShell() {
         <Route path="/premium" element={<RequireVerified><Premium /></RequireVerified>} />
         <Route path="/discover" element={<RequireVerified><Discover /></RequireVerified>} />
         <Route path="/stream" element={<RequireVerified><Stream /></RequireVerified>} />
+        <Route path="/notifications" element={<RequireVerified><Notifications /></RequireVerified>} />
         <Route path="/profile" element={<RequireVerified><Profile /></RequireVerified>} />
         <Route path="/profile/:id" element={<RequireVerified><ProfileView /></RequireVerified>} />
         <Route path="/albums" element={<RequireVerified><Albums /></RequireVerified>} />
@@ -131,7 +139,7 @@ function AppShell() {
         )}
         <Route path="*" element={<NotFound />} />
       </Routes>
-      {FEATURES.videoCalls && <VideoCallModal />}
+      {token && FEATURES.videoCalls && <VideoCallModal />}
     </>
   );
 }

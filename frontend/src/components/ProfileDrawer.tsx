@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { NearbyUser } from "./ProfileCard";
 import { SilhouetteAvatar } from "./SilhouetteAvatar";
 import { PulsingAvatar } from "./PulsingAvatar";
@@ -28,6 +29,7 @@ export function ProfileDrawer({
   onMessage,
   onPulseBack,
 }: ProfileDrawerProps) {
+  const navigate = useNavigate();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -51,6 +53,7 @@ export function ProfileDrawer({
   if (!user) return null;
 
   const photo = getPhotoUrl(user.photo_url);
+  const cover = getPhotoUrl(user.cover_url);
   const distance = parseFloat(String(user.distance_km));
   const distLabel = getDistanceLabel(user);
   const isPulsing = isUserPulsing(user);
@@ -100,7 +103,9 @@ export function ProfileDrawer({
             background: "linear-gradient(135deg,#2A1C0A,#1E1508)",
           }}
         >
-          {photo ? (
+          {cover ? (
+            <img src={cover} alt="" className="w-full h-full object-cover" />
+          ) : photo ? (
             <img src={photo} alt={user.name} className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
@@ -188,7 +193,18 @@ export function ProfileDrawer({
           )}
         </div>
 
-        <div className="border-t border-[var(--border-default)] p-4 flex gap-2 bg-[var(--bg-elevated)]">
+        <div className="border-t border-[var(--border-default)] p-4 flex flex-col gap-2 bg-[var(--bg-elevated)]">
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              navigate(`/profile/${user.id}`);
+            }}
+            className="w-full py-2.5 rounded-[var(--radius-md)] border border-[var(--border-default)] text-[var(--cream-soft)] font-bold text-sm hover:border-[var(--copper)] hover:text-[var(--copper)] transition-colors"
+          >
+            View full profile
+          </button>
+          <div className="flex gap-2">
           {onPass && (
             <button
               onClick={onPass}
@@ -201,7 +217,7 @@ export function ProfileDrawer({
             onClick={() => (liked ? onMessage() : onLike())}
             className="flex-1 py-3 rounded-[var(--radius-md)] bg-[var(--copper)] text-[var(--bg-primary)] font-black text-sm tracking-wide hover:bg-[var(--copper-light)] active:scale-[0.98] transition-all"
           >
-            {liked ? "Open chat" : "Signal"}
+            {liked ? "Open chat" : "Match"}
           </button>
           {onPulseBack && isPulsing && (
             <button
@@ -213,6 +229,7 @@ export function ProfileDrawer({
               Back
             </button>
           )}
+          </div>
         </div>
       </div>
     </div>

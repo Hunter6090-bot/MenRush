@@ -186,6 +186,45 @@ export const albumService = {
     if (res.rowCount === 0) throw new Error('album_not_owned');
   },
 
+  async deletePhoto(
+    userId: string,
+    albumId: string,
+    photoId: string,
+  ): Promise<{ storage_key: string | null }> {
+    const res = await query(
+      `SELECT p.storage_key, p.photo_url, a.cover_url
+         FROM album_photos p
+         JOIN albums a ON a.id = p.album_id
+        WHERE p.id = $1 AND p.album_id = $2 AND a.user_id = $3`,
+      [photoId, albumId, userId],
+    );
+    if (res.rows.length === 0) throw new Error('photo_not_found');
+
+    const row = res.rows[0];
+    const photoUrl = row.photo_url as string;
+    const coverUrl = row.cover_url as string | null;
+
+    await query(`DELETE FROM album_photos WHERE id = $1`, [photoId]);
+
+    if (coverUrl === photoUrl) {
+      const nextCover = await query(
+        `SELECT photo_url FROM album_photos
+          WHERE album_id = $1
+          ORDER BY position ASC, created_at ASC
+          LIMIT 1`,
+        [albumId],
+      );
+      await query(`UPDATE albums SET cover_url = $2, updated_at = NOW() WHERE id = $1`, [
+        albumId,
+        nextCover.rows[0]?.photo_url ?? null,
+      ]);
+    } else {
+      await query(`UPDATE albums SET updated_at = NOW() WHERE id = $1`, [albumId]);
+    }
+
+    return { storage_key: (row.storage_key as string | null) ?? null };
+  },
+
   async countPhotosForUser(userId: string): Promise<number> {
     const res = await query(`SELECT COUNT(*)::int AS n FROM album_photos WHERE user_id = $1`, [userId]);
     return res.rows[0]?.n ?? 0;

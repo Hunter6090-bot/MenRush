@@ -11,6 +11,12 @@ import { PulseRing } from '../components/PulseRing';
 import { getPhotoUrl } from '../components/UserAvatar';
 import { FEATURES } from '../lib/featureFlags';
 import { SelfieCaptureModal } from '../components/SelfieCaptureModal';
+import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
+import { placeOutgoingCall } from '../lib/callBridge';
+import { mapCallMediaError } from '../lib/callMedia';
+import { MobileBackButton } from '../components/MobileBackButton';
+import { MissedCallIcon } from '../components/MissedCallIcon';
+import { isMissedCallMessage, MISSED_CALL_PREVIEW } from '../lib/missedCall';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
 interface Message extends Partial<MessageDTO> {
@@ -140,11 +146,12 @@ export const Messages = () => {
   const [meetState, setMeetState] = useState<MeetAgreementState | null>(null);
   const [meetSubmitting, setMeetSubmitting] = useState(false);
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
+  const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
   // Ticks once a second so disappearing countdowns and burned states update.
   const [, setBurnTick] = useState(0);
   const socket = useSocket();
   const user = useAuthStore((s) => s.user);
-  const { setCalling } = useCallStore();
+  const { setCalling, setCallSetupError, resetCall } = useCallStore();
   const navigate = useNavigate();
   const bottomRef = useRef<HTMLDivElement>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -236,6 +243,12 @@ export const Messages = () => {
     const id = window.setTimeout(() => setMediaError(''), 4000);
     return () => window.clearTimeout(id);
   }, [mediaError]);
+
+  useEffect(() => {
+    if (!safetyNotice) return;
+    const id = window.setTimeout(() => setSafetyNotice(null), 4000);
+    return () => window.clearTimeout(id);
+  }, [safetyNotice]);
 
   // Revoke any staged preview object URL when the component unmounts.
   useEffect(() => {
@@ -503,6 +516,19 @@ export const Messages = () => {
     }
   };
 
+  const handleStartVideoCall = async () => {
+    if (!otherId) return;
+    const peerName = otherUser?.name ?? 'Someone';
+    setCallSetupError(null);
+    setCalling(otherId, peerName);
+    try {
+      await placeOutgoingCall(otherId, peerName);
+    } catch (error: unknown) {
+      resetCall();
+      setCallSetupError(mapCallMediaError(error));
+    }
+  };
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -510,9 +536,9 @@ export const Messages = () => {
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <header
-        className="flex-shrink-0 flex items-center gap-3 px-4 border-b"
+        className="flex-shrink-0 flex items-center gap-2 px-3 sm:px-4 border-b pt-[env(safe-area-inset-top,0px)]"
         style={{
-          height: '64px',
+          minHeight: 'calc(4rem + env(safe-area-inset-top, 0px))',
           background: 'rgba(13,10,6,0.94)',
           borderColor: '#3D2B0E',
           backdropFilter: 'blur(20px)',
@@ -520,17 +546,11 @@ export const Messages = () => {
           zIndex: 20,
         }}
       >
-        {/* Back */}
-        <button
+        <MobileBackButton
+          fallback="/conversations"
           onClick={() => navigate('/conversations')}
-          aria-label="Go back"
-          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[#3D2B0E]/50 active:scale-95"
-          style={{ color: '#A89070' }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#F0E0C0')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = '#A89070')}
-        >
-          <BackIcon className="w-5 h-5" />
-        </button>
+          className="-ml-1"
+        />
 
         {/* Avatar + name block — centered, tappable to open profile */}
         <button
@@ -572,11 +592,7 @@ export const Messages = () => {
           <>
             {/* Video call button */}
             <button
-              onClick={() => {
-                  if (otherId && otherUser?.name) {
-                    setCalling(otherId, otherUser.name);
-                  }
-                }}
+              onClick={() => void handleStartVideoCall()}
               aria-label="Start video call"
               className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 active:scale-95"
               style={{
@@ -596,7 +612,30 @@ export const Messages = () => {
             </button>
           </>
         )}
+
+        {otherId && (
+          <ChatSafetyMenu
+            peerId={otherId}
+            peerName={otherUser?.name ?? 'this user'}
+            onNotice={(msg, tone = 'success') => setSafetyNotice({ msg, tone })}
+            onBlocked={() => navigate('/conversations')}
+          />
+        )}
       </header>
+
+      {safetyNotice && (
+        <div
+          className="flex-shrink-0 px-4 py-2 text-center text-xs font-medium border-b"
+          style={{
+            background:
+              safetyNotice.tone === 'success' ? 'rgba(143,199,115,0.12)' : 'rgba(139,69,19,0.15)',
+            borderColor: '#3D2B0E',
+            color: safetyNotice.tone === 'success' ? '#8FC773' : '#F0E0C0',
+          }}
+        >
+          {safetyNotice.msg}
+        </div>
+      )}
 
       {otherId && meetState && (
         <MeetConsentBar
@@ -637,6 +676,46 @@ export const Messages = () => {
           const showDateSep = !isSameDay(prevMsg?.created_at, msg.created_at);
           const showTail = !nextMsg || nextMsg.sender_id !== msg.sender_id;
           const isGrouped = prevMsg && prevMsg.sender_id === msg.sender_id && !showDateSep;
+
+          if (isMissedCallMessage(msg)) {
+            return (
+              <React.Fragment key={msg.id ?? i}>
+                {showDateSep && (
+                  <div className="flex items-center gap-3 my-5">
+                    <div className="flex-1 h-px" style={{ background: '#3D2B0E' }} />
+                    <span
+                      className="text-[10px] font-semibold px-3 py-1 rounded-full"
+                      style={{
+                        background: '#1E1508',
+                        border: '1px solid #3D2B0E',
+                        color: '#A89070',
+                        letterSpacing: '0.06em',
+                      }}
+                    >
+                      {formatDateLabel(msg.created_at)}
+                    </span>
+                    <div className="flex-1 h-px" style={{ background: '#3D2B0E' }} />
+                  </div>
+                )}
+                <div className="flex justify-center my-4" data-testid="missed-call-log">
+                  <div
+                    className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
+                    style={{
+                      background: 'rgba(239,68,68,0.08)',
+                      border: '1px solid rgba(239,68,68,0.25)',
+                      color: '#F87171',
+                    }}
+                  >
+                    <MissedCallIcon size={14} className="shrink-0" />
+                    <span className="text-xs font-semibold">{MISSED_CALL_PREVIEW}</span>
+                    {msg.created_at && (
+                      <span className="text-[10px] opacity-80">{formatTime(msg.created_at)}</span>
+                    )}
+                  </div>
+                </div>
+              </React.Fragment>
+            );
+          }
 
           return (
             <React.Fragment key={msg.id ?? i}>
@@ -1074,12 +1153,6 @@ const WithdrawMediaButton: React.FC<{ onClick: () => void; loading?: boolean }> 
   >
     {loading ? 'Withdrawing…' : 'Withdraw media'}
   </button>
-);
-
-const BackIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-  </svg>
 );
 
 const VideoIcon = ({ className }: { className?: string }) => (

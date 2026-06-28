@@ -58,7 +58,7 @@ test('notification permission is requested only by a clear user action', async (
   });
 
   const page = await ctx.newPage();
-  await page.goto('/profile');
+  await page.goto('/notifications');
 
   const card = page.getByTestId('notification-settings');
   await expect(card).toBeVisible();
@@ -87,7 +87,7 @@ test('unsupported browsers show an honest, disabled state', async ({ browser }) 
   });
 
   const page = await ctx.newPage();
-  await page.goto('/profile');
+  await page.goto('/notifications');
 
   await expect(page.getByTestId('notification-settings-status')).toContainText(/doesn’t support|does not support/i);
   await expect(page.getByTestId('notification-settings-toggle')).toBeDisabled();
@@ -123,8 +123,13 @@ test('a new message raises the unread badge and opening the chat clears it', asy
   // The Messages tab badge reflects the unread message in real time.
   await expect(bobPage.getByTestId('badge-conversations')).toHaveText('1', { timeout: 10_000 });
 
-  // Opening the conversations list clears the unread state.
+  // Opening the conversations list keeps the badge until the thread is read.
   await bobPage.goto('/conversations');
+  await expect(bobPage.getByTestId('badge-conversations')).toHaveText('1');
+
+  await bobPage.goto(`/messages/${alice.user.id}`);
+  await expect(bobPage.getByRole('button', { name: /Open .*profile/i })).toBeVisible();
+  await bobPage.goto('/discover');
   await expect(bobPage.getByTestId('badge-conversations')).toHaveCount(0);
 
   await bobCtx.close();

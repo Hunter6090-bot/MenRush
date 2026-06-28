@@ -52,7 +52,7 @@ export const userService = {
     // been cron-swept yet doesn't masquerade as pulsing in the UI.
     let queryStr = `
       SELECT
-        u.id, u.name, u.age, u.bio, u.photo_url, u.interests,
+        u.id, u.name, u.age, u.bio, u.headline, u.photo_url, u.cover_url, u.interests,
         u.is_verified,
         p.online, p.last_seen, p.available_until,
         (u.is_pulsing AND u.pulse_expires_at IS NOT NULL AND u.pulse_expires_at > NOW()) AS is_pulsing,
@@ -147,11 +147,21 @@ export const userService = {
     });
   },
 
+  async ensureProfileRow(userId: string) {
+    await query(
+      `INSERT INTO profiles (user_id, online, last_seen)
+       VALUES ($1, false, NOW())
+       ON CONFLICT (user_id) DO NOTHING`,
+      [userId],
+    );
+  },
+
   async getOwnProfile(userId: string) {
+    await this.ensureProfileRow(userId);
     const result = await query(
       `SELECT
         u.id, u.email, u.name, u.age, u.bio, u.headline, u.looking_for,
-        u.photo_url, u.cover_url, u.interests, u.created_at,
+        u.photo_url, u.cover_url, u.cover_position_x, u.cover_position_y, u.cover_zoom, u.interests, u.created_at,
         u.is_verified, u.verification_status,
         u.is_premium, u.premium_tier, u.premium_until,
         p.lat, p.lng, p.online, p.last_seen, p.is_visible, p.available_until,
@@ -177,14 +187,14 @@ export const userService = {
     const result = await query(
       `SELECT
         u.id, u.name, u.age, u.bio, u.headline, u.looking_for,
-        u.photo_url, u.cover_url, u.interests, u.created_at, u.is_verified,
+        u.photo_url, u.cover_url, u.cover_position_x, u.cover_position_y, u.cover_zoom, u.interests, u.created_at, u.is_verified,
         p.online, p.last_seen, p.available_until,
         CASE
           WHEN p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' THEN p.mood
           ELSE NULL
         END AS mood
        FROM users u
-       JOIN profiles p ON p.user_id = u.id
+       LEFT JOIN profiles p ON p.user_id = u.id
        WHERE u.id = $1`,
       [targetId],
     );
@@ -241,6 +251,18 @@ export const userService = {
       updates.push(`cover_url = $${values.length + 1}`);
       values.push(data.cover_url || null);
     }
+    if (data.cover_position_x !== undefined) {
+      updates.push(`cover_position_x = $${values.length + 1}`);
+      values.push(data.cover_position_x);
+    }
+    if (data.cover_position_y !== undefined) {
+      updates.push(`cover_position_y = $${values.length + 1}`);
+      values.push(data.cover_position_y);
+    }
+    if (data.cover_zoom !== undefined) {
+      updates.push(`cover_zoom = $${values.length + 1}`);
+      values.push(data.cover_zoom);
+    }
     if (data.interests !== undefined) {
       updates.push(`interests = $${values.length + 1}`);
       values.push(data.interests);
@@ -248,7 +270,7 @@ export const userService = {
 
     if (updates.length === 0) {
       const res = await query(
-        `SELECT id, name, age, bio, headline, looking_for, photo_url, cover_url, interests FROM users WHERE id = $1`,
+        `SELECT id, name, age, bio, headline, looking_for, photo_url, cover_url, cover_position_x, cover_position_y, cover_zoom, interests FROM users WHERE id = $1`,
         [userId]
       );
       return res.rows[0];
@@ -258,7 +280,7 @@ export const userService = {
 
     const result = await query(
       `UPDATE users SET ${updates.join(', ')} WHERE id = $1
-       RETURNING id, name, age, bio, headline, looking_for, photo_url, cover_url, interests`,
+       RETURNING id, name, age, bio, headline, looking_for, photo_url, cover_url, cover_position_x, cover_position_y, cover_zoom, interests`,
       values
     );
     return result.rows[0];
@@ -280,6 +302,30 @@ export const userService = {
     );
 
     return result.rows.length > 0;
+  },
+
+  /** Video calls allowed for mutual matches or anyone you've already messaged. */
+  async canVideoCall(userId: string, peerId: string): Promise<boolean> {
+    if (!peerId || userId === peerId) return false;
+    try {
+      await accessControl.assertInteraction(userId, peerId, { requireMatch: true });
+      return true;
+    } catch {
+      /* fall through */
+    }
+    try {
+      await accessControl.assertInteraction(userId, peerId, { requireMatch: false });
+      const thread = await query(
+        `SELECT 1 FROM messages
+         WHERE (sender_id = $1 AND receiver_id = $2)
+            OR (sender_id = $2 AND receiver_id = $1)
+         LIMIT 1`,
+        [userId, peerId],
+      );
+      return thread.rows.length > 0;
+    } catch {
+      return false;
+    }
   },
 
   async updateVisibility(userId: string, isVisible: boolean) {

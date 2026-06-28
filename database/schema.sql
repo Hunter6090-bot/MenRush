@@ -10,6 +10,9 @@ CREATE TABLE users (
   bio TEXT,
   photo_url TEXT,
   cover_url TEXT,
+  cover_position_x REAL NOT NULL DEFAULT 50,
+  cover_position_y REAL NOT NULL DEFAULT 50,
+  cover_zoom REAL NOT NULL DEFAULT 1,
   interests TEXT[] DEFAULT '{}',
   headline TEXT,
   looking_for TEXT,
@@ -227,3 +230,39 @@ CREATE TABLE IF NOT EXISTS waitlist_drip_sends (
 
 CREATE INDEX IF NOT EXISTS idx_drip_sends_subscriber
   ON waitlist_drip_sends(subscriber_id);
+
+-- ─── Profile views ("Who viewed you") ─────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS profile_views (
+  viewer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  viewed_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  viewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (viewer_id, viewed_user_id),
+  CHECK (viewer_id <> viewed_user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_profile_views_viewed_user
+  ON profile_views (viewed_user_id, viewed_at DESC);
+
+-- ─── In-app notifications ─────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  type TEXT NOT NULL CHECK (
+    type IN ('message', 'photo', 'voice', 'like', 'match', 'profile_view', 'system', 'missed_call')
+  ),
+  title TEXT NOT NULL,
+  body TEXT,
+  link_path TEXT,
+  read BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created
+  ON notifications(user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+  ON notifications(user_id)
+  WHERE read = FALSE;

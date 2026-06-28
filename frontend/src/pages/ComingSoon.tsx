@@ -93,9 +93,9 @@ const features: { Icon: ComponentType<SVGProps<SVGSVGElement> & { size?: number 
 ];
 
 const premiumFeatures = [
-  'See who already signalled you',
+  'See who already matched you',
   'Boost yourself to the top',
-  'Signal as many men as you want',
+  'Match as many men as you want',
   'Browse invisibly like a ghost with good taste',
   'Filter by body type, kinks and more',
   'Send voice notes and spicy media',
@@ -328,7 +328,7 @@ export const ComingSoon = () => {
               <p className="mr-page-heading max-w-xl">Premium arrives with launch.</p>
               <p className="mt-4 max-w-lg text-sm leading-7 text-[#A89070]">
                 The free core stays direct: see who's nearby, match, message, and join rooms.
-                Premium adds more reach, control, and signal when you want the room to notice.
+                Premium adds more reach, control, and visibility when you want the room to notice.
               </p>
               <button
                 onClick={handleShare}

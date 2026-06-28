@@ -15,6 +15,7 @@ export interface NearbyUser {
   bio?: string;
   headline?: string;
   photo_url?: string;
+  cover_url?: string;
   interests?: string[];
   online: boolean;
   distance_km: string | number;
@@ -69,7 +70,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
             <IconMatches size={32} className="text-[#C4832A]" />
           </div>
           <h3 className="font-display text-xl font-black tracking-wide uppercase mb-1">Match made.</h3>
-          <p className="text-xs font-medium opacity-90 mb-4">You and {user.name} signalled each other.</p>
+          <p className="text-xs font-medium opacity-90 mb-4">You and {user.name} matched.</p>
           <button
             onClick={() => navigate(`/messages/${user.id}`)}
             className="px-6 py-2 bg-[#1A0E03] text-[#C4832A] rounded-full font-bold text-xs shadow-lg active:scale-95 transition-transform"
@@ -109,7 +110,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
           </span>
         </div>
 
-        {/* Signal button overlay */}
+        {/* Match button overlay */}
         <button
           onClick={handleLike}
           className={`absolute bottom-3 right-3 w-10 h-10 rounded-full flex items-center justify-center transition-all ${
@@ -163,7 +164,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
           onClick={liked ? () => navigate(`/messages/${user.id}`) : handleLike}
           className="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] text-white text-sm font-semibold transition-all duration-200 hover:shadow-glow-blue active:scale-95"
         >
-          {liked ? 'Open chat' : 'Signal'}
+          {liked ? 'Open chat' : 'Match'}
         </button>
       </div>
     </div>

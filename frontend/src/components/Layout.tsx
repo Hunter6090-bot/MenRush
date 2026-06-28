@@ -1,12 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuthStore, useUnreadStore } from '../hooks/store';
+import { useAuthStore, useNotificationStore, useUnreadStore } from '../hooks/store';
 import { UserAvatar } from './UserAvatar';
 import { FEATURES } from '../lib/featureFlags';
-import { IconChat, IconDiscover, IconMatches, IconProfile, IconRooms } from './icons';
+import { mobileBackFallback, shouldShowMobileBack } from '../lib/mobileBack';
+import { MobileBackButton } from './MobileBackButton';
+import { IconChat, IconDiscover, IconMatches, IconNotifications, IconProfile, IconRooms } from './icons';
 import { BRAND_LOGO_ORIGINAL } from '../lib/brand';
 import { ProfileSearchModal } from './ProfileSearchModal';
 import { ProfileQrModal } from './ProfileQrModal';
+import { NotificationDot } from './NotificationDot';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -15,6 +18,7 @@ interface LayoutProps {
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, logout } = useAuthStore();
   const unreadCount = useUnreadStore((s) => s.count);
+  const notificationUnread = useNotificationStore((s) => s.unreadCount);
   const location = useLocation();
   const navigate = useNavigate();
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
@@ -31,7 +35,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     { to: '/discover', label: 'Nearby', Icon: IconDiscover, badge: 0 },
     { to: '/matches', label: 'Matches', Icon: IconMatches, badge: 0 },
     { to: '/conversations', label: 'Messages', Icon: IconChat, badge: unreadCount },
-    { to: '/profile', label: 'Profile', Icon: IconProfile, badge: 0 },
+    { to: '/notifications', label: 'Alerts', Icon: IconNotifications, badge: notificationUnread },
   ];
   if (FEATURES.chatRooms) {
     navLinks.splice(3, 0, { to: '/rooms', label: 'Rooms', Icon: IconRooms, badge: 0 });
@@ -67,20 +71,31 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       );
     }
     // Only "your" profile — /profile/:id is someone else's view
+    if (path === '/notifications') {
+      return location.pathname === '/notifications';
+    }
     if (path === '/profile') {
-      return location.pathname === '/profile';
+      return location.pathname === '/profile' || location.pathname.startsWith('/profile/');
     }
     return location.pathname === path || location.pathname.startsWith(`${path}/`);
   };
 
+  const showMobileBack = shouldShowMobileBack(location.pathname);
+  const mobileBackTarget = mobileBackFallback(location.pathname);
+
   return (
     <div className="min-h-dvh bg-[#0D0A06] flex flex-col">
       {/* ── Top header ── */}
-      <header className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center px-4 bg-[#0D0A06]/85 backdrop-blur-xl border-b border-[#3D2B0E]">
-        <div className="max-w-5xl mx-auto w-full flex items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-[#0D0A06]/85 backdrop-blur-xl border-b border-[#3D2B0E] pt-[env(safe-area-inset-top,0px)]">
+        <div className="max-w-5xl mx-auto w-full flex items-center justify-between gap-2 sm:gap-3 h-14 px-3 sm:px-4">
+          <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-3">
+          {showMobileBack ? (
+            <div className="sm:hidden shrink-0">
+              <MobileBackButton fallback={mobileBackTarget} />
+            </div>
+          ) : null}
           {/* Original brand medallion — quick menu */}
-          <div ref={brandMenuRef} className="relative flex shrink-0 items-center">
+          <div ref={brandMenuRef} className={`relative flex shrink-0 items-center ${showMobileBack ? 'hidden sm:flex' : 'flex'}`}>
             <button
               type="button"
               onClick={() => setBrandMenuOpen((open) => !open)}
@@ -119,6 +134,15 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 >
                   <IconDiscover size={16} />
                   Nearby
+                </Link>
+                <Link
+                  to="/notifications"
+                  role="menuitem"
+                  onClick={() => setBrandMenuOpen(false)}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-[#F0E0C0]/78 transition-colors hover:bg-[#3D2B0E]/55 hover:text-[#F0E0C0]"
+                >
+                  <IconNotifications size={16} />
+                  Notifications
                 </Link>
                 <Link
                   to="/profile"
@@ -167,16 +191,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     : 'text-[#F0E0C0]/55 hover:text-[#F0E0C0] hover:bg-[#3D2B0E]/40'
                 }`}
               >
-                <span className="relative">
+                <span className="relative inline-flex">
                   <Icon size={16} />
-                  {badge > 0 && (
-                    <span
-                      data-testid={`badge-${to.replace(/\//g, '')}`}
-                      className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-[#8B4513] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5"
-                    >
-                      {badge > 9 ? '9+' : badge}
-                    </span>
-                  )}
+                  <NotificationDot
+                    count={badge}
+                    visible={badge > 0}
+                    data-testid={`badge-${to.replace(/\//g, '')}`}
+                    className="-top-2 -right-2 min-w-[16px] h-4 text-[9px] bg-[var(--copper)] border-[var(--bg-primary)]"
+                  />
                 </span>
                 <span className="hidden md:inline">{label}</span>
               </Link>
@@ -185,7 +207,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
           {/* Avatar + logout */}
           <div className="flex items-center gap-3">
-            <Link to="/profile" className="flex items-center gap-2 group">
+            <Link to="/profile" className="flex items-center gap-2 group" aria-label="Your profile">
               <UserAvatar
                 name={user?.name ?? '?'}
                 photoUrl={user?.photo_url}
@@ -206,7 +228,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </header>
 
       {/* ── Page content ── */}
-      <main className="flex-1 pt-16 pb-[var(--mobile-tab-bar-height)] sm:pb-0">
+      <main className="flex-1 pt-[calc(3.5rem+env(safe-area-inset-top,0px))] pb-[var(--mobile-tab-bar-height)] sm:pb-0">
         <div className="page-enter">{children}</div>
       </main>
 
@@ -223,16 +245,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   : 'text-[#F0E0C0]/35 hover:text-[#F0E0C0]/70'
               }`}
             >
-              <span className="relative">
+              <span className="relative inline-flex">
                 <Icon size={24} className={`transition-transform duration-200 ${isActive(to) ? 'scale-110' : ''}`} />
-                {badge > 0 && (
-                  <span
-                    data-testid={`badge-mobile-${to.replace(/\//g, '')}`}
-                    className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-[#8B4513] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5"
-                  >
-                    {badge > 9 ? '9+' : badge}
-                  </span>
-                )}
+                <NotificationDot
+                  count={badge}
+                  visible={badge > 0}
+                  data-testid={`badge-mobile-${to.replace(/\//g, '')}`}
+                  className="-top-2 -right-2.5 min-w-[18px] h-[18px] text-[10px] bg-[var(--copper)] border-[var(--bg-primary)]"
+                />
               </span>
               <span className="mt-1 text-[10px] font-bold leading-none">{label}</span>
             </Link>

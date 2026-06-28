@@ -78,7 +78,7 @@ export const Matches = () => {
             </div>
             <h2 className="text-nn-text font-bold text-lg">No matches yet</h2>
             <p className="text-nn-muted text-sm mt-1 max-w-xs mx-auto">
-              Signal people on Nearby. When it's mutual, they show up here.
+              Match people on Nearby. When it&apos;s mutual, they show up here.
             </p>
             <button
               onClick={() => navigate('/discover')}

@@ -136,6 +136,29 @@ router.get('/:albumId/photos', async (req: AuthRequest, res: Response) => {
   }
 });
 
+router.delete('/:albumId/photos/:photoId', async (req: AuthRequest, res: Response) => {
+  try {
+    const { storage_key } = await albumService.deletePhoto(
+      req.userId!,
+      req.params.albumId,
+      req.params.photoId,
+    );
+    if (storage_key) {
+      try {
+        fs.unlinkSync(path.join(uploadsDir, storage_key));
+      } catch {
+        /* file may already be gone */
+      }
+    }
+    res.json({ deleted: true });
+  } catch (error: any) {
+    if (error.message === 'photo_not_found') {
+      return res.status(404).json({ error: 'Photo not found.' });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ── Viewer: list someone else's albums ──────────────────────────────────────
 router.get('/user/:userId', async (req: AuthRequest, res: Response) => {
   try {

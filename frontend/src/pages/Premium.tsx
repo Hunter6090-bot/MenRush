@@ -4,10 +4,12 @@ import { premiumAPI, PremiumPlan } from '../api/premium';
 import { useAuthStore } from '../hooks/store';
 import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
+import { MobileBackButton } from '../components/MobileBackButton';
 const FEATURES = [
-  'See who already signalled you',
+  'See who already matched you',
+  'See everyone who viewed your profile',
   'Boost to the top of nearby',
-  'Unlimited signals — no daily cap',
+  'Unlimited matches — no daily cap',
   'Ghost browse invisibly',
   'Full photo gallery',
   'Expanded discovery radius',
@@ -55,9 +57,13 @@ export const Premium: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-dvh overflow-hidden flex items-center justify-center p-4">
+    <div className="relative min-h-dvh overflow-hidden flex items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))]">
       <RandomBackground />
       <div className="absolute inset-0 bg-black/75" />
+
+      <div className="fixed left-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 sm:absolute">
+        <MobileBackButton fallback="/profile" onClick={() => navigate('/profile')} />
+      </div>
 
       <div className="relative z-10 w-full max-w-lg animate-slide-up">
         <div className="bg-[#1E1508]/90 backdrop-blur-xl border border-[#3D2B0E] rounded-2xl p-7 shadow-card text-[#F0E0C0]">

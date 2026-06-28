@@ -309,3 +309,34 @@ input:-webkit-autofill:focus {
   flex-shrink: 0;
   line-height: 1;
 }
+
+.proximity-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, rgba(196, 131, 42, 0.25), rgba(196, 131, 42, 0.85));
+  outline: none;
+}
+
+.proximity-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #f0e0c0;
+  background: #c4832a;
+  box-shadow: 0 0 0 4px rgba(196, 131, 42, 0.25);
+  cursor: pointer;
+}
+
+.proximity-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #f0e0c0;
+  background: #c4832a;
+  box-shadow: 0 0 0 4px rgba(196, 131, 42, 0.25);
+  cursor: pointer;
+}

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { roomsAPI } from '../api/client';
+import { CreateGroupModal } from '../components/CreateGroupModal';
 import { useSocket } from '../hooks/useSocket';
 import { Layout } from '../components/Layout';
 
@@ -41,9 +42,6 @@ export const Rooms: React.FC = () => {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newDesc, setNewDesc] = useState('');
-  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     roomsAPI
@@ -86,25 +84,6 @@ export const Rooms: React.FC = () => {
     };
   }, [socket]);
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newName.trim()) return;
-    setCreating(true);
-    try {
-      const res = await roomsAPI.createRoom({ name: newName.trim(), description: newDesc.trim() });
-      const room: Room = res.data;
-      setRooms((prev) => [room, ...prev]);
-      setCreateOpen(false);
-      setNewName('');
-      setNewDesc('');
-      navigate(`/rooms/${room.id}`);
-    } catch {
-      // silently ignore
-    } finally {
-      setCreating(false);
-    }
-  };
-
   const filtered = rooms.filter((r) =>
     r.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -128,7 +107,7 @@ export const Rooms: React.FC = () => {
           </h1>
           <button
             onClick={() => setCreateOpen(true)}
-            aria-label="Create room"
+            aria-label="Create group"
             className="w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-150 active:scale-95"
             style={{
               background: 'linear-gradient(135deg, #C4832A, #8B4513)',
@@ -201,7 +180,7 @@ export const Rooms: React.FC = () => {
                   boxShadow: '0 2px 12px rgba(196,131,42,0.35)',
                 }}
               >
-                Create a Room
+                Create a Group
               </button>
             )}
           </div>
@@ -282,112 +261,19 @@ export const Rooms: React.FC = () => {
         )}
       </div>
 
-      {/* ── Create Room modal ─────────────────────────────────────────────── */}
-      {createOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-4 pb-4 sm:pb-0"
-          style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
-          onClick={() => setCreateOpen(false)}
-        >
-          <div
-            className="w-full max-w-sm rounded-3xl p-6 animate-scale-up"
-            style={{
-              background: '#1E1508',
-              border: '1px solid #3D2B0E',
-              boxShadow: '0 24px 80px rgba(0,0,0,0.7)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-bold mb-5" style={{ color: '#F0E0C0' }}>
-              Create Room
-            </h2>
-            <form onSubmit={handleCreate} className="flex flex-col gap-3">
-              <div>
-                <label className="block text-xs font-semibold mb-1.5" style={{ color: '#A89070' }}>
-                  Room Name
-                </label>
-                <input
-                  type="text"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="e.g. Coffee crowd"
-                  required
-                  maxLength={60}
-                  className="w-full text-sm px-4 py-3 rounded-xl focus:outline-none transition-all duration-200"
-                  style={{
-                    background: '#0D0A06',
-                    border: '1px solid #3D2B0E',
-                    color: '#F0E0C0',
-                    caretColor: '#C4832A',
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.border = '1px solid rgba(196,131,42,0.5)';
-                    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(196,131,42,0.1)';
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.border = '1px solid #3D2B0E';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold mb-1.5" style={{ color: '#A89070' }}>
-                  Description{' '}
-                  <span style={{ color: '#6B5035', fontWeight: 400 }}>(optional)</span>
-                </label>
-                <textarea
-                  value={newDesc}
-                  onChange={(e) => setNewDesc(e.target.value)}
-                  placeholder="What's this room about?"
-                  rows={2}
-                  maxLength={200}
-                  className="w-full text-sm px-4 py-3 rounded-xl focus:outline-none transition-all duration-200 resize-none"
-                  style={{
-                    background: '#0D0A06',
-                    border: '1px solid #3D2B0E',
-                    color: '#F0E0C0',
-                    caretColor: '#C4832A',
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.border = '1px solid rgba(196,131,42,0.5)';
-                    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(196,131,42,0.1)';
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.border = '1px solid #3D2B0E';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                />
-              </div>
-              <div className="flex gap-3 mt-2">
-                <button
-                  type="button"
-                  onClick={() => setCreateOpen(false)}
-                  className="flex-1 py-3 rounded-xl text-sm font-semibold transition-all duration-150 active:scale-95"
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid #3D2B0E',
-                    color: '#A89070',
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={!newName.trim() || creating}
-                  className="flex-1 py-3 rounded-xl text-sm font-semibold transition-all duration-150 active:scale-95 disabled:opacity-40"
-                  style={{
-                    background: 'linear-gradient(135deg, #C4832A, #8B4513)',
-                    color: '#FFF5E6',
-                    boxShadow: newName.trim() ? '0 2px 12px rgba(196,131,42,0.35)' : 'none',
-                  }}
-                >
-                  {creating ? 'Creating...' : 'Create'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <CreateGroupModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => {
+          roomsAPI
+            .getRooms()
+            .then((r) => {
+              const list = Array.isArray(r.data) ? r.data : (r.data?.member_rooms ?? r.data?.rooms ?? []);
+              setRooms(list);
+            })
+            .catch(() => {});
+        }}
+      />
     </Layout>
   );
 };

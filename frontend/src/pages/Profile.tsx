@@ -3,12 +3,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import { usersAPI, profileMetaAPI, Mood } from '../api/client';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { Layout } from '../components/Layout';
-import { UserAvatar, getPhotoUrl } from '../components/UserAvatar';
+import { UserAvatar } from '../components/UserAvatar';
 import { StatusBadge } from '../components/StatusBadge';
 import { PulseRing } from '../components/PulseRing';
 import { MoodPicker } from '../components/MoodPicker';
 import { GhostToggle } from '../components/GhostToggle';
-import { NotificationSettings } from '../components/NotificationSettings';
+import { ProfileViewersCard, ProfileViewer } from '../components/ProfileViewersCard';
+import { normalizeProfileImageFile } from '../lib/imageUpload';
+import { CoverBanner, DEFAULT_COVER_FRAME, normalizeCoverFrame, type CoverFrame } from '../components/CoverBanner';
+import { CoverPhotoEditor } from '../components/CoverPhotoEditor';
 
 const INTEREST_GROUPS: { label: string; tags: string[] }[] = [
   { label: 'Position', tags: ['Top', 'Vers Top', 'Vers', 'Vers Bottom', 'Bottom', 'Side'] },
@@ -21,13 +24,15 @@ const INTEREST_GROUPS: { label: string; tags: string[] }[] = [
 interface ProfileData {
   id: string;
   name: string;
-  email: string;
   age: number;
   bio?: string;
   headline?: string;
   looking_for?: string;
   photo_url?: string;
   cover_url?: string;
+  cover_position_x?: number;
+  cover_position_y?: number;
+  cover_zoom?: number;
   interests?: string[];
   lat?: number;
   lng?: number;
@@ -42,7 +47,7 @@ interface ProfileData {
 type Toast = { type: 'success' | 'error'; msg: string };
 
 export const Profile = () => {
-  const { user, token, setAuth, logout } = useAuthStore();
+  const { user, token, setAuth, patchUser, logout } = useAuthStore();
   const { lat, lng, setLocation } = useLocationStore();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<ProfileData | null>(null);
@@ -51,6 +56,8 @@ export const Profile = () => {
   const [lookingFor, setLookingFor] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
   const [coverUrl, setCoverUrl] = useState('');
+  const [coverFrame, setCoverFrame] = useState<CoverFrame>(DEFAULT_COVER_FRAME);
+  const [coverEditorOpen, setCoverEditorOpen] = useState(false);
   const [interests, setInterests] = useState<string[]>([]);
   const [isVisible, setIsVisible] = useState(true);
   const [mood, setMood] = useState<Mood | null>(null);
@@ -60,23 +67,58 @@ export const Profile = () => {
   const [uploadingCover, setUploadingCover] = useState(false);
   const [locating, setLocating] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [profileViewers, setProfileViewers] = useState<ProfileViewer[]>([]);
+  const [profileViewsTotal, setProfileViewsTotal] = useState(0);
+  const [profileViewsHasMore, setProfileViewsHasMore] = useState(false);
+  const [profileViewsHidden, setProfileViewsHidden] = useState(0);
+  const [profileViewsLoading, setProfileViewsLoading] = useState(true);
+  const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    usersAPI.getMe().then((r) => {
-      const d: ProfileData & { mood?: Mood | null; is_ghost?: boolean } = r.data;
-      setProfile(d);
-      setBio(d.bio ?? '');
-      setHeadline(d.headline ?? '');
-      setLookingFor(d.looking_for ?? '');
-      setPhotoUrl(d.photo_url ?? '');
-      setCoverUrl(d.cover_url ?? '');
-      setInterests(d.interests ?? []);
-      if (typeof d.is_visible === 'boolean') setIsVisible(d.is_visible);
-      if (d.mood !== undefined) setMood(d.mood ?? null);
-      if (typeof d.is_ghost === 'boolean') setIsGhost(d.is_ghost);
-    });
+    setProfileLoadError(null);
+    usersAPI
+      .getMe()
+      .then((r) => {
+        const d: ProfileData & { mood?: Mood | null; is_ghost?: boolean } = r.data;
+        setProfile(d);
+        setBio(d.bio ?? '');
+        setHeadline(d.headline ?? '');
+        setLookingFor(d.looking_for ?? '');
+        setPhotoUrl(d.photo_url ?? '');
+        setCoverUrl(d.cover_url ?? '');
+        setCoverFrame(
+          normalizeCoverFrame(d.cover_position_x, d.cover_position_y, d.cover_zoom),
+        );
+        setInterests(d.interests ?? []);
+        if (typeof d.is_visible === 'boolean') setIsVisible(d.is_visible);
+        if (d.mood !== undefined) setMood(d.mood ?? null);
+        if (typeof d.is_ghost === 'boolean') setIsGhost(d.is_ghost);
+        patchUser({ name: d.name, photo_url: d.photo_url ?? undefined });
+      })
+      .catch((err) => {
+        setProfileLoadError(err?.response?.data?.error || 'Could not load your profile.');
+      });
+  }, []);
+
+  useEffect(() => {
+    setProfileViewsLoading(true);
+    usersAPI
+      .getProfileViews()
+      .then((res) => {
+        setProfileViewers(res.data.viewers ?? []);
+        setProfileViewsTotal(res.data.total ?? 0);
+        setProfileViewsHasMore(Boolean(res.data.has_more));
+        setProfileViewsHidden(res.data.hidden_count ?? 0);
+      })
+      .catch(() => {
+        setProfileViewers([]);
+        setProfileViewsTotal(0);
+        setProfileViewsHasMore(false);
+        setProfileViewsHidden(0);
+      })
+      .finally(() => setProfileViewsLoading(false));
   }, []);
 
   const handleMood = async (next: Mood | null) => {
@@ -124,16 +166,24 @@ export const Profile = () => {
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const raw = e.target.files?.[0];
+    if (!raw) return;
     e.target.value = '';
+
+    const { file, error } = normalizeProfileImageFile(raw);
+    if (!file) {
+      showToast('error', error || 'Upload failed');
+      return;
+    }
 
     setUploading(true);
     try {
       const res = await usersAPI.uploadPhoto(file);
       setPhotoUrl(res.data.photo_url);
       setProfile((p) => p ? { ...p, photo_url: res.data.photo_url } : p);
-      if (user && token) setAuth({ ...user, photo_url: res.data.photo_url }, token);
+      if (user && token) {
+        patchUser({ photo_url: res.data.photo_url });
+      }
       showToast('success', 'Photo uploaded');
     } catch (err: any) {
       showToast('error', err.response?.data?.error || 'Upload failed');
@@ -143,20 +193,55 @@ export const Profile = () => {
   };
 
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const raw = e.target.files?.[0];
+    if (!raw) return;
     e.target.value = '';
+
+    const { file, error } = normalizeProfileImageFile(raw);
+    if (!file) {
+      showToast('error', error || 'Cover upload failed');
+      return;
+    }
 
     setUploadingCover(true);
     try {
       const res = await usersAPI.uploadCover(file);
       setCoverUrl(res.data.cover_url);
-      setProfile((p) => p ? { ...p, cover_url: res.data.cover_url } : p);
-      showToast('success', 'Cover photo updated');
+      setCoverFrame(DEFAULT_COVER_FRAME);
+      setProfile((p) =>
+        p
+          ? {
+              ...p,
+              cover_url: res.data.cover_url,
+              cover_position_x: 50,
+              cover_position_y: 50,
+              cover_zoom: 1,
+            }
+          : p,
+      );
+      setCoverEditorOpen(true);
+      showToast('success', 'Cover uploaded — adjust framing');
     } catch (err: any) {
       showToast('error', err.response?.data?.error || 'Cover upload failed');
     } finally {
       setUploadingCover(false);
+    }
+  };
+
+  const saveCoverFrame = async (frame: CoverFrame) => {
+    try {
+      const res = await usersAPI.updateProfile({
+        cover_position_x: frame.x,
+        cover_position_y: frame.y,
+        cover_zoom: frame.zoom,
+      });
+      setCoverFrame(frame);
+      setProfile((p) => (p ? { ...p, ...res.data } : p));
+      setCoverEditorOpen(false);
+      showToast('success', 'Cover framing saved');
+    } catch {
+      showToast('error', 'Could not save cover framing');
+      throw new Error('cover_frame_save_failed');
     }
   };
 
@@ -203,8 +288,21 @@ export const Profile = () => {
   if (!profile) {
     return (
       <Layout>
-        <div className="flex items-center justify-center py-24">
-          <PulseRing size={32} label="Loading profile" />
+        <div className="flex flex-col items-center justify-center py-24 px-4 text-center gap-4">
+          {profileLoadError ? (
+            <>
+              <p className="text-[#F0E0C0]/80 text-sm">{profileLoadError}</p>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 rounded-xl bg-[#C4832A]/10 hover:bg-[#C4832A]/20 text-[#C4832A] text-xs font-semibold border border-[#C4832A]/30"
+              >
+                Try again
+              </button>
+            </>
+          ) : (
+            <PulseRing size={32} label="Loading profile" />
+          )}
         </div>
       </Layout>
     );
@@ -248,50 +346,88 @@ export const Profile = () => {
 
         {/* ── Profile hero ── */}
         <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl overflow-hidden shadow-card">
-          <button
-            type="button"
-            aria-label="Upload cover photo"
-            onClick={() => coverInputRef.current?.click()}
-            disabled={uploadingCover}
-            className={`group relative block h-32 w-full overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#C4832A]/50 ${
-              uploadingCover ? 'pointer-events-none opacity-80' : ''
-            }`}
-          >
+          <div className="group relative">
             {coverUrl ? (
-              <img
-                src={getPhotoUrl(coverUrl)}
-                alt=""
-                className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-              />
+              <CoverBanner coverUrl={coverUrl} frame={coverFrame} />
             ) : (
-              <div className="absolute inset-0 bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#8B4513]/10" />
+              <button
+                type="button"
+                aria-label="Upload cover photo"
+                onClick={() => coverInputRef.current?.click()}
+                disabled={uploadingCover}
+                className={`relative block h-40 sm:h-32 w-full overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#C4832A]/50 ${
+                  uploadingCover ? 'pointer-events-none opacity-80' : ''
+                }`}
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#8B4513]/10" />
+              </button>
             )}
-            <span className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/25 group-active:bg-black/35" />
-            <span className="absolute inset-x-0 top-3 flex justify-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#1E1508]/40 bg-[#0D0A06]/55 px-3 py-1.5 text-[11px] font-semibold text-[#F0E0C0] backdrop-blur-sm">
+
+            {coverUrl && (
+              <div className="absolute inset-x-0 top-3 flex justify-center gap-2 px-3 opacity-100 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                <button
+                  type="button"
+                  onClick={() => setCoverEditorOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[#1E1508]/40 bg-[#0D0A06]/55 px-3 py-1.5 text-[11px] font-semibold text-[#F0E0C0] backdrop-blur-sm hover:border-[#C4832A]/40"
+                >
+                  Adjust cover
+                </button>
+                <button
+                  type="button"
+                  onClick={() => coverInputRef.current?.click()}
+                  disabled={uploadingCover}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[#1E1508]/40 bg-[#0D0A06]/55 px-3 py-1.5 text-[11px] font-semibold text-[#F0E0C0] backdrop-blur-sm hover:border-[#C4832A]/40 disabled:opacity-60"
+                >
+                  {uploadingCover ? 'Uploading…' : 'Change photo'}
+                </button>
+              </div>
+            )}
+
+            {!coverUrl && (
+              <button
+                type="button"
+                aria-label="Upload cover photo"
+                onClick={() => coverInputRef.current?.click()}
+                disabled={uploadingCover}
+                className="absolute inset-0 flex items-start justify-center pt-3"
+              >
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#1E1508]/40 bg-[#0D0A06]/55 px-3 py-1.5 text-[11px] font-semibold text-[#F0E0C0] backdrop-blur-sm">
+                  {uploadingCover ? (
+                    <>
+                      <Spinner className="w-3.5 h-3.5" />
+                      Uploading cover…
+                    </>
+                  ) : (
+                    <>
+                      <ImageIcon className="w-3.5 h-3.5" />
+                      Add cover photo
+                    </>
+                  )}
+                </span>
+              </button>
+            )}
+
+            {coverUrl && (
+              <button
+                type="button"
+                aria-label="Change cover photo"
+                onClick={() => coverInputRef.current?.click()}
+                disabled={uploadingCover}
+                className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#1E1508] bg-[#C4832A] text-[#0D0A06] shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-60"
+              >
                 {uploadingCover ? (
-                  <>
-                    <Spinner className="w-3.5 h-3.5" />
-                    Uploading cover…
-                  </>
+                  <Spinner className="w-4 h-4 text-[#0D0A06]" />
                 ) : (
-                  <>
-                    <ImageIcon className="w-3.5 h-3.5" />
-                    {coverUrl ? 'Change cover photo' : 'Add cover photo'}
-                  </>
+                  <ImageIcon className="w-4 h-4" />
                 )}
-              </span>
-            </span>
-            <span className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#1E1508] bg-[#C4832A] text-[#0D0A06] shadow-lg transition-transform group-hover:scale-105 group-active:scale-95">
-              {uploadingCover ? (
-                <Spinner className="w-4 h-4 text-[#0D0A06]" />
-              ) : (
-                <ImageIcon className="w-4 h-4" />
-              )}
-            </span>
-          </button>
+              </button>
+            )}
+          </div>
           {/* Avatar overlapping cover */}
           <div className="px-5 pb-5">
+            <p className="pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[#A89070] sm:hidden">
+              Tap Adjust cover to move or zoom your banner
+            </p>
             <div className="-mt-10 mb-3 flex items-end justify-between">
               <div className="relative">
                 <button
@@ -324,9 +460,7 @@ export const Profile = () => {
               <StatusBadge online={!!profile.online} lastSeen={profile.last_seen} />
             </div>
             <h2 className="text-xl font-bold text-[#F0E0C0]">{profile.name}</h2>
-            <p className="text-[#A89070] text-sm mt-0.5">
-              {profile.email} · Age {profile.age}
-            </p>
+            <p className="text-[#A89070] text-sm mt-0.5">Age {profile.age}</p>
             {profile.bio && (
               <p className="text-[#F0E0C0]/65 text-sm mt-3 leading-relaxed">{profile.bio}</p>
             )}
@@ -344,6 +478,15 @@ export const Profile = () => {
             )}
           </div>
         </div>
+
+        <ProfileViewersCard
+          viewers={profileViewers}
+          total={profileViewsTotal}
+          isPremium={Boolean(profile.is_premium)}
+          hasMore={profileViewsHasMore}
+          hiddenCount={profileViewsHidden}
+          loading={profileViewsLoading}
+        />
 
         {/* ── Location card ── */}
         <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 flex items-center justify-between shadow-card">
@@ -446,9 +589,6 @@ export const Profile = () => {
             />
           </button>
         </div>
-
-        {/* ── Notifications card ── */}
-        <NotificationSettings />
 
         {/* ── Sign out ── */}
         <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card">
@@ -579,6 +719,15 @@ export const Profile = () => {
           </form>
         </div>
       </div>
+
+      {coverEditorOpen && coverUrl && (
+        <CoverPhotoEditor
+          coverUrl={coverUrl}
+          initialFrame={coverFrame}
+          onSave={saveCoverFrame}
+          onCancel={() => setCoverEditorOpen(false)}
+        />
+      )}
     </Layout>
   );
 };

@@ -44,11 +44,23 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        if (scanning) setScanning(false);
+        else onClose();
+      }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
+  }, [open, onClose, scanning]);
+
+  useEffect(() => {
+    if (!open || !scanning) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open, scanning]);
 
   if (!open) return null;
 
@@ -65,9 +77,53 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
 
   const handleOpenPasted = () => openProfile(pasteValue);
 
+  if (scanning) {
+    return (
+      <div
+        className="fixed inset-0 z-[130] flex flex-col bg-[#0D0A06]"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Scan profile QR code"
+        data-testid="profile-qr-scan-screen"
+      >
+        <div
+          className="flex shrink-0 items-center justify-between gap-3 border-b border-[#3D2B0E] px-4 py-3"
+          style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+        >
+          <button
+            type="button"
+            onClick={() => setScanning(false)}
+            className="rounded-lg px-2 py-1.5 text-xs font-semibold text-[#C4832A]"
+          >
+            ← Paste link
+          </button>
+          <h2 className="text-sm font-bold text-[#F0E0C0]">Scan profile QR</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg px-2 py-1 text-xs font-semibold text-[#A89070]"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="relative min-h-0 flex-1 bg-black">
+          <ProfileQrScanner active layout="fullscreen" onScan={openProfile} />
+        </div>
+
+        <p
+          className="shrink-0 px-4 py-3 text-center text-xs leading-relaxed text-[#A89070]"
+          style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+        >
+          Line up the QR code inside the frame. Scanning stops automatically when a profile is found.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-start justify-center px-4 pt-20 sm:pt-24"
+      className="fixed inset-0 z-[120] flex items-end justify-center sm:items-start sm:justify-center sm:px-4 sm:pt-24"
       style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(10px)' }}
       onClick={onClose}
       role="presentation"
@@ -76,7 +132,8 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
         role="dialog"
         aria-modal="true"
         aria-label="Profile QR code"
-        className="w-full max-w-sm overflow-hidden rounded-2xl border border-[#3D2B0E] bg-[#0D0A06] shadow-[0_24px_60px_rgba(0,0,0,0.55)]"
+        className="max-h-[min(92dvh,720px)] w-full max-w-sm overflow-y-auto rounded-t-2xl border border-[#3D2B0E] bg-[#0D0A06] shadow-[0_24px_60px_rgba(0,0,0,0.55)] sm:rounded-2xl"
+        style={{ paddingBottom: 'max(0px, env(safe-area-inset-bottom))' }}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[#3D2B0E] px-4 py-3">
@@ -120,43 +177,31 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#A89070]">Open a profile</p>
               <button
                 type="button"
-                onClick={() => setScanning((value) => !value)}
-                className="rounded-lg border border-[#3D2B0E] px-2.5 py-1 text-[11px] font-semibold text-[#F0E0C0] transition-colors hover:border-[#C4832A]/50"
+                onClick={() => setScanning(true)}
+                className="rounded-lg border border-[#C4832A]/50 bg-[#C4832A]/15 px-3 py-1.5 text-[11px] font-bold text-[#C4832A]"
+                data-testid="profile-qr-scan-open"
               >
-                {scanning ? 'Paste link' : 'Scan QR'}
+                Scan QR
               </button>
             </div>
-            {scanning ? (
-              <>
-                <p className="mt-1 text-xs leading-relaxed text-[#A89070]">
-                  Point your camera at a MenRush profile QR code.
-                </p>
-                <div className="mt-3">
-                  <ProfileQrScanner active={open && scanning} onScan={openProfile} />
-                </div>
-              </>
-            ) : (
-              <>
-                <p className="mt-1 text-xs leading-relaxed text-[#A89070]">
-                  Paste a MenRush profile link or profile ID.
-                </p>
-                <input
-                  type="text"
-                  value={pasteValue}
-                  onChange={(event) => setPasteValue(event.target.value)}
-                  placeholder="Profile link or ID"
-                  className="mt-3 w-full rounded-xl border border-[#3D2B0E] bg-[#0D0A06] px-3 py-2.5 text-sm text-[#F0E0C0] placeholder:text-[#A89070]/70 focus:border-[#C4832A]/50 focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={handleOpenPasted}
-                  disabled={!parseProfileId(pasteValue)}
-                  className="mt-3 w-full rounded-xl border border-[#3D2B0E] px-4 py-2.5 text-sm font-semibold text-[#F0E0C0] transition-colors enabled:hover:border-[#C4832A]/50 enabled:hover:bg-[#3D2B0E]/40 disabled:opacity-40"
-                >
-                  Open profile
-                </button>
-              </>
-            )}
+            <p className="mt-2 text-xs leading-relaxed text-[#A89070]">
+              Paste a MenRush profile link or profile ID.
+            </p>
+            <input
+              type="text"
+              value={pasteValue}
+              onChange={(event) => setPasteValue(event.target.value)}
+              placeholder="Profile link or ID"
+              className="mt-3 w-full rounded-xl border border-[#3D2B0E] bg-[#0D0A06] px-3 py-2.5 text-sm text-[#F0E0C0] placeholder:text-[#A89070]/70 focus:border-[#C4832A]/50 focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={handleOpenPasted}
+              disabled={!parseProfileId(pasteValue)}
+              className="mt-3 w-full rounded-xl border border-[#3D2B0E] px-4 py-2.5 text-sm font-semibold text-[#F0E0C0] transition-colors enabled:hover:border-[#C4832A]/50 enabled:hover:bg-[#3D2B0E]/40 disabled:opacity-40"
+            >
+              Open profile
+            </button>
           </div>
         </div>
       </div>

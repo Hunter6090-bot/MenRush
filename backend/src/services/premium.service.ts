@@ -22,6 +22,7 @@ export const FREE_LIMITS = {
   likesPerDay: 20,
   radiusKm: 5,
   photos: 6,
+  profileViews: 5,
 } as const;
 
 const PREMIUM_FEATURES: PremiumFeature[] = [

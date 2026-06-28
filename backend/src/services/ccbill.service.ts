@@ -83,7 +83,7 @@ export const ccbillService = {
       {
         id: 'premium' as const,
         name: 'MenRush Premium',
-        tagline: 'See who signalled you. Boost. Ghost browse. No caps.',
+        tagline: 'See who matched you. Boost. Ghost browse. No caps.',
         price: TIER_PRICING.recurringPrice,
         period_days: TIER_PRICING.recurringPeriod,
       },

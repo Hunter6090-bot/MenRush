@@ -1,11 +1,24 @@
 import { Router, Response } from 'express';
 import { roomService } from '../services/room.service';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
-import { CreateRoomSchema, RoomMessageSchema } from '../types/validation';
+import { SecurityError } from '../security/access';
+import { AddRoomMemberSchema, CreateRoomSchema, RoomMessageSchema } from '../types/validation';
+import { PremiumRequiredError } from '../services/premium.service';
 
 const router = Router();
 
 router.use(authMiddleware, verifiedMiddleware);
+
+function handleRoomError(res: Response, error: unknown) {
+  if (error instanceof PremiumRequiredError) {
+    return res.status(402).json({ error: error.code, feature: error.feature });
+  }
+  if (error instanceof SecurityError) {
+    return res.status(error.status).json({ error: error.code });
+  }
+  const message = error instanceof Error ? error.message : 'Request failed';
+  return res.status(400).json({ error: message });
+}
 
 // POST / — create a room
 router.post('/', async (req: AuthRequest, res: Response) => {
@@ -13,8 +26,12 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     const data = CreateRoomSchema.parse(req.body);
     const room = await roomService.createRoom(req.userId!, data);
     res.status(201).json(room);
-  } catch (error: any) {
-    res.status(400).json({ error: error.message });
+  } catch (error: unknown) {
+    if (error instanceof PremiumRequiredError) {
+      return res.status(402).json({ error: error.code, feature: error.feature });
+    }
+    const message = error instanceof Error ? error.message : 'Request failed';
+    res.status(400).json({ error: message });
   }
 });
 
@@ -61,8 +78,19 @@ router.post('/:roomId/join', async (req: AuthRequest, res: Response) => {
   try {
     await roomService.joinRoom(req.userId!, req.params.roomId);
     res.status(200).json({ message: 'Joined room' });
-  } catch (error: any) {
-    res.status(400).json({ error: error.message });
+  } catch (error: unknown) {
+    handleRoomError(res, error);
+  }
+});
+
+// POST /:roomId/members — add a member to a premium group (owner only)
+router.post('/:roomId/members', async (req: AuthRequest, res: Response) => {
+  try {
+    const data = AddRoomMemberSchema.parse(req.body);
+    await roomService.addMember(req.userId!, req.params.roomId, data.user_id);
+    res.status(201).json({ message: 'Member added' });
+  } catch (error: unknown) {
+    handleRoomError(res, error);
   }
 });
 

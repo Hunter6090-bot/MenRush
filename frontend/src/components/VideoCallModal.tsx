@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useCallStore } from '../hooks/store';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { useSocket } from '../hooks/useSocket';
 import { createCallTone, type CallToneKind } from '../lib/callTones';
+import { registerOutgoingCallHandler } from '../lib/callBridge';
+import { attachStreamToVideo, mapCallMediaError } from '../lib/callMedia';
 
 // Unanswered calls end cleanly after this long. Overridable in tests so the
 // timeout path can be exercised without waiting the full 30s.
@@ -18,42 +20,45 @@ export function VideoCallModal() {
     peerId,
     peerName,
     incomingOffer,
+    callSetupError,
     setIncoming,
     resetCall,
+    setCallSetupError,
   } = useCallStore();
 
-  const { localStream, remoteStream, startCall, answerCall, endCall, toggleMute, toggleCamera, isMuted, isCameraOff } =
-    useWebRTC();
+  const {
+    localStream,
+    remoteStream,
+    startCall,
+    answerCall,
+    endCall,
+    toggleMute,
+    toggleCamera,
+    switchCamera,
+    isMuted,
+    isCameraOff,
+    facingMode,
+    canSwitchCamera,
+    isSwitchingCamera,
+  } = useWebRTC();
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  const outgoingPeerRef = useRef<string | null>(null);
-  const [setupError, setSetupError] = useState('');
 
-  // Attach streams to video elements. The local <video> moves between the
-  // outgoing-preview surface and the in-call PiP, so we also re-run on
-  // callStatus to re-bind srcObject to whichever element is now mounted.
   useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      // Guard the assignment: a malformed/revoked stream must not crash the
-      // whole call surface (and leave a fake ringing state).
-      try {
-        localVideoRef.current.srcObject = localStream;
-      } catch {
-        /* ignore — preview falls back to the avatar */
-      }
-    }
+    void attachStreamToVideo(localVideoRef.current, localStream);
   }, [localStream, callStatus]);
 
   useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) {
-      try {
-        remoteVideoRef.current.srcObject = remoteStream;
-      } catch {
-        /* ignore — remote falls back to the avatar */
-      }
-    }
+    void attachStreamToVideo(remoteVideoRef.current, remoteStream);
   }, [remoteStream, callStatus]);
+
+  useEffect(() => {
+    registerOutgoingCallHandler(async (targetPeerId, _targetName) => {
+      await startCall(targetPeerId, _targetName);
+    });
+    return () => registerOutgoingCallHandler(null);
+  }, [startCall]);
 
   // ── Ring tones ───────────────────────────────────────────────────────────
   // Caller hears the outgoing ringback while 'calling'; recipient hears the
@@ -94,7 +99,7 @@ export function VideoCallModal() {
       fromName: string;
       offer: RTCSessionDescriptionInit;
     }) => {
-      setSetupError('');
+      setCallSetupError(null);
       setIncoming(from, fromName, offer);
     };
 
@@ -102,56 +107,28 @@ export function VideoCallModal() {
     return () => {
       socket.off('call:incoming', onIncoming);
     };
-  }, [socket, setIncoming]);
-
-  // A single, app-level call controller owns media and peer-connection state.
-  // Message pages only place the call intent in the store; this controller
-  // performs setup once and remains mounted while either user navigates.
-  useEffect(() => {
-    if (callStatus !== 'calling' || !peerId) {
-      if (callStatus === 'idle') outgoingPeerRef.current = null;
-      return;
-    }
-    if (outgoingPeerRef.current === peerId) return;
-
-    outgoingPeerRef.current = peerId;
-    setSetupError('');
-    startCall(peerId, peerName ?? '').catch((error: any) => {
-      outgoingPeerRef.current = null;
-      endCall();
-      setSetupError(
-        error?.message === 'insecure_media_context'
-          ? 'Video calls need HTTPS'
-          : error?.name === 'NotAllowedError'
-            ? 'Camera and microphone access was blocked'
-            : 'Could not start the video call',
-      );
-    });
-  }, [callStatus, peerId, peerName, endCall, startCall]);
+  }, [socket, setIncoming, setCallSetupError]);
 
   const handleAccept = async () => {
     if (!incomingOffer || !peerId) return;
     try {
-      const answer = await answerCall(incomingOffer);
+      const answer = await answerCall(incomingOffer, peerId);
       socket?.emit('call:answer', { to: peerId, answer });
       useCallStore.getState().setConnected();
-    } catch (error: any) {
+    } catch (error: unknown) {
       endCall();
-      setSetupError(
-        error?.message === 'insecure_media_context'
-          ? 'Video calls need HTTPS'
-          : error?.name === 'NotAllowedError'
-            ? 'Camera and microphone access was blocked'
-            : 'Could not answer the video call',
-      );
+      setCallSetupError(mapCallMediaError(error));
     }
   };
 
   const handleReject = () => {
+    if (peerId && socket) {
+      socket.emit('call:reject', { to: peerId });
+    }
     endCall();
   };
 
-  if (setupError) {
+  if (callSetupError) {
     return (
       <div
         className="fixed inset-0 z-[200] flex items-center justify-center px-6"
@@ -161,13 +138,13 @@ export function VideoCallModal() {
           className="w-full max-w-sm rounded-3xl p-8 text-center"
           style={{ background: '#1E1508', border: '1px solid #3D2B0E' }}
         >
-          <h2 className="text-xl font-bold" style={{ color: '#F0E0C0' }}>{setupError}</h2>
+          <h2 className="text-xl font-bold" style={{ color: '#F0E0C0' }}>{callSetupError}</h2>
           <p className="mt-3 text-sm leading-relaxed" style={{ color: '#A89070' }}>
             Open MenRush from its secure HTTPS address, then allow camera and microphone access.
           </p>
           <button
             type="button"
-            onClick={() => setSetupError('')}
+            onClick={() => setCallSetupError(null)}
             className="mt-6 w-full h-12 rounded-2xl text-sm font-semibold"
             style={{ background: '#C4832A', color: '#0D0A06' }}
           >
@@ -179,6 +156,9 @@ export function VideoCallModal() {
   }
 
   if (callStatus === 'idle' || callStatus === 'ended') return null;
+
+  const mirrorLocalVideo = facingMode === 'user';
+  const localVideoMirrorStyle = mirrorLocalVideo ? { transform: 'scaleX(-1)' } : undefined;
 
   const initials = (name: string) =>
     name
@@ -293,7 +273,7 @@ export function VideoCallModal() {
           playsInline
           muted
           className="absolute inset-0 w-full h-full object-cover"
-          style={{ transform: 'scaleX(-1)', background: '#0D0A06' }}
+          style={{ ...localVideoMirrorStyle, background: '#0D0A06' }}
         />
 
         {/* Fallback while the camera spins up or is turned off */}
@@ -330,7 +310,7 @@ export function VideoCallModal() {
 
         {/* Controls bar */}
         <div
-          className="absolute bottom-8 left-0 right-0 flex items-center justify-center gap-4 px-8"
+          className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-2 sm:gap-4 px-4 sm:px-8 pb-[max(2rem,env(safe-area-inset-bottom))] pt-4"
           style={{ zIndex: 10 }}
         >
           {/* Mute */}
@@ -376,6 +356,24 @@ export function VideoCallModal() {
           >
             {isCameraOff ? <CameraOffIcon className="w-6 h-6" /> : <CameraIcon className="w-6 h-6" />}
           </button>
+
+          {canSwitchCamera && (
+            <button
+              type="button"
+              onClick={() => void switchCamera()}
+              disabled={isSwitchingCamera}
+              aria-label={facingMode === 'user' ? 'Switch to back camera' : 'Switch to front camera'}
+              className="w-14 h-14 rounded-full flex items-center justify-center transition-all duration-150 active:scale-95 disabled:opacity-50"
+              style={{
+                background: 'rgba(30,21,8,0.85)',
+                border: '1px solid #3D2B0E',
+                backdropFilter: 'blur(8px)',
+                color: '#F0E0C0',
+              }}
+            >
+              <FlipCameraIcon className="w-6 h-6" />
+            </button>
+          )}
         </div>
       </div>
     );
@@ -429,7 +427,7 @@ export function VideoCallModal() {
             playsInline
             muted
             className="w-full h-full object-cover"
-            style={{ transform: 'scaleX(-1)' }}
+            style={localVideoMirrorStyle}
           />
           {isCameraOff && (
             <div
@@ -443,7 +441,7 @@ export function VideoCallModal() {
 
         {/* Controls bar */}
         <div
-          className="absolute bottom-8 left-0 right-0 flex items-center justify-center gap-4 px-8"
+          className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-2 sm:gap-4 px-4 sm:px-8 pb-[max(2rem,env(safe-area-inset-bottom))] pt-4"
           style={{ zIndex: 10 }}
         >
           {/* Mute */}
@@ -493,6 +491,24 @@ export function VideoCallModal() {
               <CameraIcon className="w-6 h-6" />
             )}
           </button>
+
+          {canSwitchCamera && (
+            <button
+              type="button"
+              onClick={() => void switchCamera()}
+              disabled={isSwitchingCamera}
+              aria-label={facingMode === 'user' ? 'Switch to back camera' : 'Switch to front camera'}
+              className="w-14 h-14 rounded-full flex items-center justify-center transition-all duration-150 active:scale-95 disabled:opacity-50"
+              style={{
+                background: 'rgba(30,21,8,0.85)',
+                border: '1px solid #3D2B0E',
+                backdropFilter: 'blur(8px)',
+                color: '#F0E0C0',
+              }}
+            >
+              <FlipCameraIcon className="w-6 h-6" />
+            </button>
+          )}
         </div>
       </div>
     );
@@ -578,5 +594,17 @@ const CameraOffIcon = ({
       strokeLinejoin="round"
       d="M21 21H4a2 2 0 01-2-2V8a2 2 0 012-2h3m3-3h6l2 3h3a2 2 0 012 2v9.34M15 13a3 3 0 11-5.12-2.12"
     />
+  </svg>
+);
+
+const FlipCameraIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M4 8h8a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4a2 2 0 012-2z"
+    />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M16 8l4-2v12l-4-2" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l2 2-2 2M19 17l2-2-2-2" />
   </svg>
 );

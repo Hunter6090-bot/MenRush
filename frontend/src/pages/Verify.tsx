@@ -19,6 +19,7 @@ export const Verify: React.FC = () => {
   const [idFront, setIdFront] = useState<File | null>(null);
   const [idPreview, setIdPreview] = useState<string | null>(null);
   const [selfie, setSelfie] = useState<File | null>(null);
+  const [idCameraOpen, setIdCameraOpen] = useState(false);
   const [selfieOpen, setSelfieOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -135,13 +136,22 @@ export const Verify: React.FC = () => {
                 className="hidden"
                 onChange={(e) => handleIdSelect(e.target.files?.[0] ?? null)}
               />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full py-3 rounded-xl border border-[#3D2B0E] bg-[#0D0A06]/80 hover:border-[#C4832A]/60 text-[#F0E0C0] font-semibold text-sm"
-              >
-                Upload ID photo
-              </button>
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => setIdCameraOpen(true)}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] text-white font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98]"
+                >
+                  Take photo with camera
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full py-3 rounded-xl border border-[#3D2B0E] bg-[#0D0A06]/80 hover:border-[#C4832A]/60 text-[#F0E0C0] font-semibold text-sm"
+                >
+                  Upload from gallery
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={() => setStep('intro')}
@@ -212,6 +222,19 @@ export const Verify: React.FC = () => {
           </p>
         </div>
       </div>
+
+      <SelfieCaptureModal
+        open={idCameraOpen}
+        onClose={() => setIdCameraOpen(false)}
+        onCapture={handleIdSelect}
+        onError={setError}
+        facingMode="environment"
+        mirror={false}
+        ariaLabel="Photograph your ID"
+        filePrefix="id-front"
+        captureLabel="Capture ID"
+        aspectClassName="aspect-[4/3]"
+      />
 
       <SelfieCaptureModal
         open={selfieOpen}

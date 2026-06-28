@@ -2,6 +2,9 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserAvatar } from './UserAvatar';
 import { NotificationDot } from './NotificationDot';
+import { MissedCallIcon } from './MissedCallIcon';
+import { ChatSafetyMenu } from './ChatSafetyMenu';
+import { MISSED_CALL_PREVIEW } from '../lib/missedCall';
 
 interface ConversationItemProps {
   userId: string;
@@ -11,6 +14,7 @@ interface ConversationItemProps {
   lastMessageTime?: string;
   lastMessage?: string;
   unreadCount?: number;
+  onBlocked?: () => void;
 }
 
 export const ConversationItem: React.FC<ConversationItemProps> = ({
@@ -21,14 +25,17 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   lastMessageTime,
   lastMessage,
   unreadCount,
+  onBlocked,
 }) => {
   const navigate = useNavigate();
+  const isMissedCall = lastMessage === MISSED_CALL_PREVIEW;
 
   return (
-    <button
-      onClick={() => navigate(`/messages/${userId}`)}
-      className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-[#1E1508] border border-[#3D2B0E] hover:border-[#C4832A]/30 hover:bg-[#2A1C0A] transition-all duration-200 text-left group"
-    >
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => navigate(`/messages/${userId}`)}
+        className="flex-1 min-w-0 flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-[#1E1508] border border-[#3D2B0E] hover:border-[#C4832A]/30 hover:bg-[#2A1C0A] transition-all duration-200 text-left group"
+      >
       <div className="relative">
         <UserAvatar name={name} photoUrl={photoUrl} online={online} size="md" />
         {unreadCount ? <NotificationDot count={unreadCount} /> : null}
@@ -45,13 +52,25 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
             </span>
           )}
         </div>
-        <p className={`text-xs mt-0.5 truncate ${unreadCount ? 'text-[#F0E0C0]/70 font-medium' : 'text-[#A89070]'}`}>
+        <p
+          className={`text-xs mt-0.5 truncate flex items-center gap-1 ${
+            isMissedCall
+              ? 'text-[#F87171] font-semibold'
+              : unreadCount
+                ? 'text-[#F0E0C0]/70 font-medium'
+                : 'text-[#A89070]'
+          }`}
+        >
+          {isMissedCall && <MissedCallIcon size={12} className="shrink-0" />}
           {lastMessage ?? (online ? 'Active now' : 'Say hello!')}
         </p>
       </div>
 
       <ChevronIcon className="w-4 h-4 text-[#A89070]/40 group-hover:text-[#C4832A]/60 transition-colors flex-shrink-0" />
-    </button>
+      </button>
+
+      <ChatSafetyMenu peerId={userId} peerName={name} onBlocked={onBlocked} />
+    </div>
   );
 };
 

@@ -5,9 +5,28 @@ interface SelfieCaptureModalProps {
   onClose: () => void;
   onCapture: (file: File) => void;
   onError: (message: string) => void;
+  /** Front camera for selfies; rear/environment for documents. */
+  facingMode?: 'user' | 'environment';
+  /** Mirror the preview (typical for front-camera selfies). */
+  mirror?: boolean;
+  ariaLabel?: string;
+  filePrefix?: string;
+  captureLabel?: string;
+  aspectClassName?: string;
 }
 
-export function SelfieCaptureModal({ open, onClose, onCapture, onError }: SelfieCaptureModalProps) {
+export function SelfieCaptureModal({
+  open,
+  onClose,
+  onCapture,
+  onError,
+  facingMode = 'user',
+  mirror = facingMode === 'user',
+  ariaLabel = 'Take a selfie',
+  filePrefix = 'selfie',
+  captureLabel = 'Capture',
+  aspectClassName = 'aspect-[3/4]',
+}: SelfieCaptureModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const onCloseRef = useRef(onClose);
@@ -28,14 +47,14 @@ export function SelfieCaptureModal({ open, onClose, onCapture, onError }: Selfie
     }
 
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
-      onErrorRef.current('Selfies need HTTPS and camera access.');
+      onErrorRef.current('Photos need HTTPS and camera access.');
       onCloseRef.current();
       return;
     }
 
     let cancelled = false;
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: 'user' }, audio: false })
+      .getUserMedia({ video: { facingMode }, audio: false })
       .then((stream) => {
         if (cancelled) {
           stream.getTracks().forEach((track) => track.stop());
@@ -67,7 +86,7 @@ export function SelfieCaptureModal({ open, onClose, onCapture, onError }: Selfie
       const video = videoRef.current;
       if (video) video.srcObject = null;
     };
-  }, [open]);
+  }, [open, facingMode]);
 
   useEffect(() => {
     if (!open) return;
@@ -97,7 +116,7 @@ export function SelfieCaptureModal({ open, onClose, onCapture, onError }: Selfie
           onErrorRef.current('Could not capture the photo.');
           return;
         }
-        onCaptureRef.current(new File([blob], `selfie-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+        onCaptureRef.current(new File([blob], `${filePrefix}-${Date.now()}.jpg`, { type: 'image/jpeg' }));
         onCloseRef.current();
       },
       'image/jpeg',
@@ -117,18 +136,18 @@ export function SelfieCaptureModal({ open, onClose, onCapture, onError }: Selfie
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Take a selfie"
+        aria-label={ariaLabel}
         className="w-full max-w-sm overflow-hidden rounded-3xl border border-[#3D2B0E] bg-[#0D0A06] shadow-[0_24px_60px_rgba(0,0,0,0.55)]"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="relative aspect-[3/4] bg-black">
+        <div className={`relative ${aspectClassName} bg-black`}>
           <video
             ref={videoRef}
             autoPlay
             playsInline
             muted
             className="absolute inset-0 h-full w-full object-cover"
-            style={{ transform: 'scaleX(-1)' }}
+            style={mirror ? { transform: 'scaleX(-1)' } : undefined}
           />
           {!ready && (
             <div className="absolute inset-0 flex items-center justify-center text-sm text-[#A89070]">
@@ -151,7 +170,7 @@ export function SelfieCaptureModal({ open, onClose, onCapture, onError }: Selfie
             data-testid="selfie-capture"
             className="rounded-xl bg-[#C4832A] px-5 py-2 text-sm font-bold text-[#0D0A06] disabled:opacity-40"
           >
-            Capture
+            {captureLabel}
           </button>
         </div>
       </div>

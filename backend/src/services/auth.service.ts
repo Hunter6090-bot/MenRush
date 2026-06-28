@@ -115,7 +115,7 @@ export const authService = {
 
   async login(data: LoginInput) {
     const result = await query(
-      `SELECT id, email, password_hash, name, is_verified, verification_status,
+      `SELECT id, email, password_hash, name, photo_url, is_verified, verification_status,
               COALESCE(is_premium, FALSE) AS is_premium,
               COALESCE(premium_tier, 'free') AS premium_tier
          FROM users WHERE email = $1`,
@@ -140,6 +140,7 @@ export const authService = {
         id: user.id,
         email: user.email,
         name: user.name,
+        photo_url: user.photo_url ?? undefined,
         is_verified: user.is_verified,
         verification_status: user.verification_status,
         is_premium: user.is_premium ?? false,

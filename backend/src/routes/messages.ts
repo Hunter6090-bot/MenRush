@@ -4,6 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import { messageService } from '../services/message.service';
 import { sendPushToUser } from '../services/push.service';
+import { notificationService } from '../services/notification.service';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { SecurityError } from '../security/access';
 import { resolveMediaPath, verifyMediaAccess } from '../security/media';
@@ -73,6 +74,21 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     io.to(`user:${data.receiver_id}`).emit('message', message);
     pushNewMessage(data.receiver_id, message.sender_name ?? '', req.userId!, message.message);
 
+    const preview =
+      message.message.length > 80 ? `${message.message.slice(0, 77)}…` : message.message;
+    try {
+      await notificationService.notify(io, {
+        userId: data.receiver_id,
+        actorId: req.userId!,
+        type: 'message',
+        title: `New message from ${message.sender_name ?? 'someone'}`,
+        body: preview,
+        linkPath: `/messages/${req.userId}`,
+      });
+    } catch (notifyErr) {
+      console.error('[notification:message]', notifyErr);
+    }
+
     res.status(201).json(message);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -127,6 +143,22 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
       req.userId!,
       kind === 'image' ? '\u{1F4F7} Photo' : '\u{1F3A4} Voice note',
     );
+
+    try {
+      await notificationService.notify(io, {
+        userId: receiver_id,
+        actorId: req.userId!,
+        type: kind === 'image' ? 'photo' : 'voice',
+        title:
+          kind === 'image'
+            ? `${message.sender_name ?? 'Someone'} sent a photo`
+            : `${message.sender_name ?? 'Someone'} sent a voice note`,
+        body: caption || undefined,
+        linkPath: `/messages/${req.userId}`,
+      });
+    } catch (notifyErr) {
+      console.error('[notification:media]', notifyErr);
+    }
 
     res.status(201).json(message);
   } catch (error: any) {
@@ -194,6 +226,15 @@ router.get('/conversations', async (req: AuthRequest, res: Response) => {
   try {
     const conversations = await messageService.getConversations(req.userId!);
     res.json(conversations);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/unread', async (req: AuthRequest, res: Response) => {
+  try {
+    const summary = await messageService.getUnreadSummary(req.userId!);
+    res.json(summary);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

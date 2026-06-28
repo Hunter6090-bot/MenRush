@@ -20,6 +20,8 @@ import albumRoutes from './routes/albums';
 import eventRoutes from './routes/events';
 import profileMetaRoutes from './routes/profile-meta';
 import meetRoutes from './routes/meet';
+import notificationRoutes from './routes/notifications';
+import webrtcRoutes from './routes/webrtc';
 import dripRoutes from './routes/drip';
 import adminRoutes from './routes/admin.routes';
 import { startPulseExpiryCron } from './services/pulse.service';
@@ -29,6 +31,8 @@ import { authService } from './services/auth.service';
 import { userService } from './services/user.service';
 import { roomService } from './services/room.service';
 import { sendPushToUser } from './services/push.service';
+import { notificationService } from './services/notification.service';
+import { messageService } from './services/message.service';
 import { accessControl } from './security/access';
 import { logResendMailerStatus } from './services/mailer.service';
 import { Sentry } from './observability/sentry';
@@ -76,6 +80,8 @@ app.use('/api/albums', albumRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/profile-meta', profileMetaRoutes);
 app.use('/api/meet', meetRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/webrtc', webrtcRoutes);
 app.use('/api/waitlist', dripRoutes);
 app.use('/api/admin', adminRoutes);
 
@@ -119,7 +125,73 @@ app.get('/health', (req, res) => {
 const userSockets: Map<string, string> = new Map(); // userId → socketId
 const socketToUser: Map<string, string> = new Map(); // socketId → userId
 
+interface PendingCall {
+  callerId: string;
+  calleeId: string;
+  answered: boolean;
+}
+const pendingCalls = new Map<string, PendingCall>();
+
+function pendingCallKey(callerId: string, calleeId: string) {
+  return `${callerId}:${calleeId}`;
+}
+
+function findPendingCall(actorId: string, targetId: string): PendingCall | undefined {
+  return pendingCalls.get(pendingCallKey(actorId, targetId))
+    ?? pendingCalls.get(pendingCallKey(targetId, actorId));
+}
+
+function clearPendingCall(callerId: string, calleeId: string) {
+  pendingCalls.delete(pendingCallKey(callerId, calleeId));
+}
+
+async function recordMissedCall(callerId: string, calleeId: string) {
+  try {
+    const callerName = (await userService.getDisplayName(callerId)) ?? 'Someone';
+    const row = await messageService.recordMissedCall(callerId, calleeId);
+    const forCallee = messageService.forViewer(row, calleeId);
+    const forCaller = messageService.forViewer(row, callerId);
+    io.to(`user:${calleeId}`).emit('message', forCallee);
+    io.to(`user:${callerId}`).emit('message', forCaller);
+
+    await notificationService.notify(io, {
+      userId: calleeId,
+      actorId: callerId,
+      type: 'missed_call',
+      title: 'Missed video call',
+      body: `${callerName} tried to reach you`,
+      linkPath: `/messages/${callerId}`,
+    });
+
+    void sendPushToUser(calleeId, {
+      title: callerName || 'MenRush',
+      body: 'Missed video call',
+      url: `/messages/${callerId}`,
+      tag: `missed-call-${callerId}`,
+    }).catch(() => undefined);
+  } catch (err) {
+    console.error('recordMissedCall failed:', err);
+  }
+}
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function authorizeCallTarget(
+  socket: Socket,
+  targetId: unknown,
+): Promise<{ actorId: string; targetId: string } | null> {
+  const actorId = socketToUser.get(socket.id);
+  if (!actorId || typeof targetId !== 'string' || !UUID_PATTERN.test(targetId)) {
+    socket.emit('call:error', { error: 'invalid_target' });
+    return null;
+  }
+  const allowed = await userService.canVideoCall(actorId, targetId);
+  if (!allowed) {
+    socket.emit('call:error', { error: 'call_not_allowed' });
+    return null;
+  }
+  return { actorId, targetId };
+}
 
 async function authorizeSocketTarget(
   socket: Socket,
@@ -149,6 +221,7 @@ io.on('connection', (socket: Socket) => {
       socketToUser.set(socket.id, decoded.userId);
       await userService.setOnlineStatus(decoded.userId, true);
       socket.join(`user:${decoded.userId}`);
+      socket.emit('authenticated', { userId: decoded.userId });
     } catch (error) {
       socket.emit('authentication:error', { error: 'authentication_failed' });
     }
@@ -166,10 +239,15 @@ io.on('connection', (socket: Socket) => {
   // Video call signaling
 
   socket.on('call:initiate', async (data: { to: string; offer: any }) => {
-    const authorized = await authorizeSocketTarget(socket, data?.to);
+    const authorized = await authorizeCallTarget(socket, data?.to);
     if (!authorized || !data.offer) return;
     try {
       const fromName = await userService.getDisplayName(authorized.actorId) ?? '';
+      pendingCalls.set(pendingCallKey(authorized.actorId, authorized.targetId), {
+        callerId: authorized.actorId,
+        calleeId: authorized.targetId,
+        answered: false,
+      });
       io.to(`user:${authorized.targetId}`).emit('call:incoming', {
         from: authorized.actorId,
         fromName,
@@ -186,13 +264,15 @@ io.on('connection', (socket: Socket) => {
         tag: `call-${authorized.actorId}`,
       }).catch(() => undefined);
     } catch {
-      socket.emit('authorization:error', { error: 'target_not_authorized' });
+      socket.emit('call:error', { error: 'target_not_authorized' });
     }
   });
 
   socket.on('call:answer', async (data: { to: string; answer: any }) => {
-    const authorized = await authorizeSocketTarget(socket, data?.to);
+    const authorized = await authorizeCallTarget(socket, data?.to);
     if (!authorized || !data.answer) return;
+    const pending = findPendingCall(authorized.actorId, authorized.targetId);
+    if (pending) pending.answered = true;
     io.to(`user:${authorized.targetId}`).emit('call:answered', {
       from: authorized.actorId,
       answer: data.answer,
@@ -200,13 +280,15 @@ io.on('connection', (socket: Socket) => {
   });
 
   socket.on('call:reject', async (data: { to: string }) => {
-    const authorized = await authorizeSocketTarget(socket, data?.to);
+    const authorized = await authorizeCallTarget(socket, data?.to);
     if (!authorized) return;
+    const pending = findPendingCall(authorized.actorId, authorized.targetId);
+    if (pending) clearPendingCall(pending.callerId, pending.calleeId);
     io.to(`user:${authorized.targetId}`).emit('call:rejected', { from: authorized.actorId });
   });
 
   socket.on('call:ice-candidate', async (data: { to: string; candidate: any }) => {
-    const authorized = await authorizeSocketTarget(socket, data?.to);
+    const authorized = await authorizeCallTarget(socket, data?.to);
     if (!authorized || !data.candidate) return;
     io.to(`user:${authorized.targetId}`).emit('call:ice-candidate', {
       from: authorized.actorId,
@@ -215,8 +297,15 @@ io.on('connection', (socket: Socket) => {
   });
 
   socket.on('call:end', async (data: { to: string }) => {
-    const authorized = await authorizeSocketTarget(socket, data?.to);
+    const authorized = await authorizeCallTarget(socket, data?.to);
     if (!authorized) return;
+    const pending = findPendingCall(authorized.actorId, authorized.targetId);
+    if (pending && !pending.answered) {
+      clearPendingCall(pending.callerId, pending.calleeId);
+      void recordMissedCall(pending.callerId, pending.calleeId);
+    } else if (pending) {
+      clearPendingCall(pending.callerId, pending.calleeId);
+    }
     io.to(`user:${authorized.targetId}`).emit('call:ended', { from: authorized.actorId });
   });
 

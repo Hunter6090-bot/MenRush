@@ -1,5 +1,7 @@
 import { query } from '../db';
 import { v4 as uuidv4 } from 'uuid';
+import { premiumService, PremiumRequiredError } from './premium.service';
+import { accessControl } from '../security/access';
 
 interface CreateRoomData {
   name: string;
@@ -23,8 +25,27 @@ interface GetMessagesOptions {
   limit?: number;
 }
 
+async function assertPremiumGroupCreator(userId: string, isLocationBased: boolean) {
+  if (isLocationBased) return;
+  await premiumService.requireFeature(userId, 'premium_rooms');
+}
+
+async function assertPremiumGroupMember(userId: string) {
+  const isPremium = await premiumService.isPremium(userId);
+  if (!isPremium) {
+    throw new PremiumRequiredError(
+      'member_premium_required',
+      'premium_rooms',
+      'Only Premium members can be added to groups',
+    );
+  }
+}
+
 export const roomService = {
   async createRoom(userId: string, data: CreateRoomData) {
+    const isLocationBased = data.is_location_based ?? false;
+    await assertPremiumGroupCreator(userId, isLocationBased);
+
     const id = uuidv4();
     const maxMembers = data.max_members ?? 50;
 
@@ -65,12 +86,7 @@ export const roomService = {
     const room = result.rows[0];
 
     // Add creator as 'owner' member
-    const memberId = uuidv4();
-    await query(
-      `INSERT INTO room_members (id, room_id, user_id, role, joined_at, last_read_at)
-       VALUES ($1, $2, $3, 'owner', NOW(), NOW())`,
-      [memberId, id, userId]
-    );
+    await this.insertRoomMember(id, userId, 'owner');
 
     return room;
   },
@@ -154,13 +170,12 @@ export const roomService = {
   },
 
   async joinRoom(userId: string, roomId: string) {
-    // Check room exists and has capacity
     const roomResult = await query(
-      `SELECT r.max_members, COUNT(rm.id)::int AS member_count
+      `SELECT r.max_members, r.is_location_based, COUNT(rm.id)::int AS member_count
        FROM rooms r
        LEFT JOIN room_members rm ON rm.room_id = r.id
        WHERE r.id = $1
-       GROUP BY r.max_members`,
+       GROUP BY r.max_members, r.is_location_based`,
       [roomId]
     );
 
@@ -169,16 +184,65 @@ export const roomService = {
     }
 
     const room = roomResult.rows[0];
+    if (!room.is_location_based) {
+      throw new Error('This group is invite-only. Ask the owner to add you.');
+    }
+
     if (room.member_count >= room.max_members) {
       throw new Error('Room is full');
     }
 
+    await this.insertRoomMember(roomId, userId, 'member');
+  },
+
+  async addMember(requesterId: string, roomId: string, targetUserId: string) {
+    if (requesterId === targetUserId) {
+      throw new Error('You are already in this group');
+    }
+
+    const roomResult = await query(
+      `SELECT r.max_members, r.is_location_based, COUNT(rm.id)::int AS member_count
+       FROM rooms r
+       LEFT JOIN room_members rm ON rm.room_id = r.id
+       WHERE r.id = $1
+       GROUP BY r.max_members, r.is_location_based`,
+      [roomId]
+    );
+
+    if (roomResult.rows.length === 0) {
+      throw new Error('Room not found');
+    }
+
+    const room = roomResult.rows[0];
+    if (room.is_location_based) {
+      throw new Error('Use join to enter location-based rooms');
+    }
+
+    const roleResult = await query(
+      `SELECT role FROM room_members WHERE room_id = $1 AND user_id = $2`,
+      [roomId, requesterId]
+    );
+    if (roleResult.rows.length === 0 || roleResult.rows[0].role !== 'owner') {
+      throw new Error('Only the group owner can add members');
+    }
+
+    if (room.member_count >= room.max_members) {
+      throw new Error('Group is full');
+    }
+
+    await accessControl.assertInteraction(requesterId, targetUserId);
+    await assertPremiumGroupMember(targetUserId);
+
+    await this.insertRoomMember(roomId, targetUserId, 'member');
+  },
+
+  async insertRoomMember(roomId: string, userId: string, role: 'owner' | 'member') {
     const memberId = uuidv4();
     await query(
       `INSERT INTO room_members (id, room_id, user_id, role, joined_at, last_read_at)
-       VALUES ($1, $2, $3, 'member', NOW(), NOW())
+       VALUES ($1, $2, $3, $4, NOW(), NOW())
        ON CONFLICT (room_id, user_id) DO NOTHING`,
-      [memberId, roomId, userId]
+      [memberId, roomId, userId, role]
     );
   },
 

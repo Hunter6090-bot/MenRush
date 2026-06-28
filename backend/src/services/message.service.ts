@@ -5,6 +5,7 @@ import path from 'path';
 import { accessControl, SecurityError } from '../security/access';
 import { isExhaustedMedia, resolveMediaPath, signedMediaUrl } from '../security/media';
 import type { MediaKind } from '../types/validation';
+import { MISSED_CALL_MESSAGE, MISSED_CALL_PREVIEW } from '../constants/missedCall';
 
 /**
  * Disappearing images use a view-count model (see migration 010):
@@ -117,6 +118,21 @@ export const messageService = {
     );
 
     return attachSenderName(presentMessage(result.rows[0] as ConversationRow, senderId));
+  },
+
+  /** Call log row when a video call rings out without being answered. */
+  async recordMissedCall(callerId: string, calleeId: string) {
+    await accessControl.assertInteraction(callerId, calleeId, { requireMatch: true });
+
+    const id = uuidv4();
+    const result = await query(
+      `INSERT INTO messages (id, sender_id, receiver_id, message, created_at, read)
+       VALUES ($1, $2, $3, $4, NOW(), false)
+       RETURNING ${MESSAGE_COLUMNS}`,
+      [id, callerId, calleeId, MISSED_CALL_MESSAGE],
+    );
+
+    return attachSenderName(result.rows[0] as ConversationRow);
   },
 
   async sendMediaMessage(
@@ -265,7 +281,31 @@ export const messageService = {
       [userId, otherId, limit]
     );
 
+    await query(
+      `UPDATE messages SET read = true
+       WHERE receiver_id = $1 AND sender_id = $2 AND read = false`,
+      [userId, otherId],
+    );
+
     return result.rows.reverse().map((r) => presentMessage(r as ConversationRow, userId));
+  },
+
+  async getUnreadSummary(userId: string) {
+    await accessControl.requireVerified(userId);
+    const result = await query(
+      `SELECT sender_id, COUNT(*)::int AS count
+       FROM messages
+       WHERE receiver_id = $1 AND read = false
+       GROUP BY sender_id`,
+      [userId],
+    );
+    const bySender: Record<string, number> = {};
+    let total = 0;
+    for (const row of result.rows) {
+      bySender[row.sender_id as string] = row.count as number;
+      total += row.count as number;
+    }
+    return { total, bySender };
   },
 
   async getConversations(userId: string) {
@@ -277,7 +317,8 @@ export const messageService = {
         last_message_time,
         last_message,
         photo_url,
-        online
+        online,
+        unread_count
        FROM (
          SELECT DISTINCT ON (
            CASE WHEN m.sender_id = $1 THEN m.receiver_id ELSE m.sender_id END
@@ -285,9 +326,16 @@ export const messageService = {
            CASE WHEN m.sender_id = $1 THEN m.receiver_id ELSE m.sender_id END AS other_user_id,
            u.name AS other_user_name,
            m.created_at AS last_message_time,
-           m.message AS last_message,
+           CASE WHEN m.message = $2 THEN $3 ELSE m.message END AS last_message,
            u.photo_url,
-           COALESCE(p.online, false) AS online
+           COALESCE(p.online, false) AS online,
+           (
+             SELECT COUNT(*)::int
+             FROM messages um
+             WHERE um.receiver_id = $1
+               AND um.sender_id = CASE WHEN m.sender_id = $1 THEN m.receiver_id ELSE m.sender_id END
+               AND um.read = false
+           ) AS unread_count
          FROM messages m
          JOIN users u ON u.id = CASE WHEN m.sender_id = $1 THEN m.receiver_id ELSE m.sender_id END
          LEFT JOIN profiles p ON p.user_id = u.id
@@ -303,7 +351,7 @@ export const messageService = {
            m.created_at DESC
        ) sub
        ORDER BY last_message_time DESC`,
-      [userId]
+      [userId, MISSED_CALL_MESSAGE, MISSED_CALL_PREVIEW]
     );
 
     return result.rows;

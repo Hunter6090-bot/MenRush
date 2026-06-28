@@ -11,10 +11,10 @@ interface PremiumGateProps {
 
 /** Premium upsell — copper on near-black, no fake scarcity. */
 export function PremiumGate({
-  headline = '3 men signalled you.',
+  headline = '3 men matched you.',
   subline = 'See them. Open chat. Skip the queue.',
   perks = [
-    'See who signalled you',
+    'See who matched you',
     'Expand radius to 50 km',
     'Message without matching',
     'Boost — top of nearby for 30 min',

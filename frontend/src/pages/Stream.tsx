@@ -20,7 +20,7 @@ export const Stream = () => {
     const fallback: [number, number] = [51.5136, -0.1365];
     if (!navigator.geolocation) {
       loadNearby(fallback[0], fallback[1])
-        .catch(() => setError('Could not load the stream right now.'))
+        .catch(() => setError('Could not load the live profile list right now.'))
         .finally(() => setLoading(false));
       return;
     }
@@ -31,7 +31,7 @@ export const Stream = () => {
           await usersAPI.updateLocation(coords.latitude, coords.longitude).catch(() => {});
           await loadNearby(coords.latitude, coords.longitude);
         } catch {
-          setError('Could not load the stream right now.');
+          setError('Could not load the live profile list right now.');
         } finally {
           setLoading(false);
         }
@@ -41,7 +41,7 @@ export const Stream = () => {
           await loadNearby(fallback[0], fallback[1]);
           setError('');
         } catch {
-          setError('Could not load the stream right now.');
+          setError('Could not load the live profile list right now.');
         }
         setLoading(false);
       },
@@ -55,7 +55,7 @@ export const Stream = () => {
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#C4832A]">Live view</p>
-            <h1 className="text-2xl font-bold text-[#F0E0C0]">Nearby stream</h1>
+            <h1 className="text-2xl font-bold text-[#F0E0C0]">Live profile list</h1>
             <p className="text-sm text-[#A89070] mt-1">
               A clean list view of who is around right now.
             </p>
@@ -70,7 +70,7 @@ export const Stream = () => {
 
         {loading ? (
           <div className="flex min-h-[260px] items-center justify-center">
-            <PulseRing size={32} label="Loading stream" />
+            <PulseRing size={32} label="Loading live profiles" />
           </div>
         ) : error ? (
           <div className="rounded-2xl border border-[#8B4513]/40 bg-[#1E1508] p-5 text-sm text-[#F0E0C0]">

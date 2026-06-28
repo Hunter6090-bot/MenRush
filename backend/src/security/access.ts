@@ -116,14 +116,35 @@ export function createAccessControl(runQuery: QueryFn) {
           'Identity verification is required',
         );
       }
-      if (
-        !state.target_verified ||
-        state.blocked ||
-        !state.target_visible ||
-        state.target_ghost
-      ) {
-        throw new SecurityError('profile_unavailable', 404, 'Profile unavailable');
+      if (!state.target_verified) {
+        throw new SecurityError('target_unavailable', 404, 'User unavailable');
       }
+      if (state.blocked) {
+        throw new SecurityError('interaction_blocked', 403, 'Interaction is blocked');
+      }
+
+      if (state.target_visible && !state.target_ghost) {
+        return;
+      }
+      if (state.matched) {
+        return;
+      }
+
+      const relationship = await runQuery(
+        `SELECT EXISTS (
+           SELECT 1 FROM likes
+           WHERE (liker_id = $1 AND liked_id = $2) OR (liker_id = $2 AND liked_id = $1)
+         ) OR EXISTS (
+           SELECT 1 FROM messages
+           WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)
+         ) AS allowed`,
+        [actorId, targetId],
+      );
+      if (relationship.rows[0]?.allowed) {
+        return;
+      }
+
+      throw new SecurityError('profile_unavailable', 404, 'Profile unavailable');
     },
   };
 }

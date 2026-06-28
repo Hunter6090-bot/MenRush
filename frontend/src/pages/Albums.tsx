@@ -1,33 +1,29 @@
 import React, { useEffect, useState } from 'react';
-import { albumsAPI, AlbumDTO, AlbumPhotoDTO } from '../api/client';
+import { albumsAPI, AlbumDTO } from '../api/client';
 import { Layout } from '../components/Layout';
-import { getPhotoUrl } from '../components/UserAvatar';
+import { AlbumCard, AlbumViewerSheet } from '../components/AlbumViewerSheet';
+import { useAuthStore } from '../hooks/store';
 
 export const Albums = () => {
+  const userId = useAuthStore((s) => s.user?.id);
+  const userName = useAuthStore((s) => s.user?.name) ?? 'You';
   const [albums, setAlbums] = useState<AlbumDTO[]>([]);
-  const [photosByAlbum, setPhotosByAlbum] = useState<Record<string, AlbumPhotoDTO[]>>({});
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingAlbumId, setUploadingAlbumId] = useState<string | null>(null);
   const [error, setError] = useState('');
-
-  const loadAlbumPhotos = async (albumId: string) => {
-    const res = await albumsAPI.listPhotos(albumId);
-    setPhotosByAlbum((prev) => ({ ...prev, [albumId]: res.data.photos }));
-  };
+  const [notice, setNotice] = useState('');
+  const [selected, setSelected] = useState<AlbumDTO | null>(null);
+  const [photoTotal, setPhotoTotal] = useState(0);
+  const [freeCap, setFreeCap] = useState(6);
 
   const loadAlbums = async () => {
     try {
       const res = await albumsAPI.listMine();
       setAlbums(res.data.albums);
-      const photoEntries = await Promise.all(
-        res.data.albums.map(async (album) => {
-          const photos = await albumsAPI.listPhotos(album.id);
-          return [album.id, photos.data.photos] as const;
-        }),
-      );
-      setPhotosByAlbum(Object.fromEntries(photoEntries));
+      setPhotoTotal(res.data.photo_total);
+      setFreeCap(res.data.free_cap);
       setError('');
     } catch {
       setError('Could not load your albums.');
@@ -39,6 +35,12 @@ export const Albums = () => {
   useEffect(() => {
     void loadAlbums();
   }, []);
+
+  useEffect(() => {
+    if (!notice) return;
+    const id = window.setTimeout(() => setNotice(''), 3500);
+    return () => window.clearTimeout(id);
+  }, [notice]);
 
   const handleCreate = async (ev: React.FormEvent) => {
     ev.preventDefault();
@@ -61,11 +63,35 @@ export const Albums = () => {
     setError('');
     try {
       await albumsAPI.upload(albumId, file);
-      await Promise.all([loadAlbums(), loadAlbumPhotos(albumId)]);
-    } catch (err: any) {
-      setError(err?.response?.data?.error || 'Could not upload that photo.');
+      await loadAlbums();
+    } catch (err: unknown) {
+      setError(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+          'Could not upload that photo.',
+      );
     } finally {
       setUploadingAlbumId(null);
+    }
+  };
+
+  const handleDeleteAlbum = async (album: AlbumDTO) => {
+    if (
+      !window.confirm(
+        `Delete "${album.name}" and all ${album.photo_count} photo${album.photo_count === 1 ? '' : 's'}? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await albumsAPI.remove(album.id);
+      if (selected?.id === album.id) setSelected(null);
+      setNotice('Album deleted.');
+      await loadAlbums();
+    } catch (err: unknown) {
+      setError(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+          'Could not delete album.',
+      );
     }
   };
 
@@ -76,7 +102,7 @@ export const Albums = () => {
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#C4832A]">Private sharing</p>
           <h1 className="text-2xl font-bold text-[#F0E0C0]">Albums</h1>
           <p className="mt-1 text-sm text-[#A89070]">
-            Keep photos grouped and share access profile by profile.
+            {photoTotal}/{freeCap} free photos used. Tap an album to view photos and grant access.
           </p>
         </div>
 
@@ -109,6 +135,11 @@ export const Albums = () => {
             {error}
           </div>
         )}
+        {notice && (
+          <div className="rounded-2xl border border-[#8FC773]/30 bg-[#8FC773]/10 p-4 text-sm text-[#8FC773]">
+            {notice}
+          </div>
+        )}
 
         {loading ? (
           <div className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-5 text-sm text-[#A89070]">
@@ -121,35 +152,13 @@ export const Albums = () => {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {albums.map((album) => (
-              <div
-                key={album.id}
-                className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-5 shadow-card"
-              >
-                {album.cover_url && (
-                  <div className="mb-4 aspect-[4/3] overflow-hidden rounded-2xl border border-[#3D2B0E] bg-[#0D0A06]">
-                    <img
-                      src={getPhotoUrl(album.cover_url)}
-                      alt={`${album.name} cover`}
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                )}
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg font-semibold text-[#F0E0C0]">{album.name}</h2>
-                    <p className="mt-1 text-sm text-[#A89070]">
-                      {album.photo_count} {album.photo_count === 1 ? 'photo' : 'photos'}
-                    </p>
-                  </div>
-                  <span className="rounded-full border border-[#C4832A]/25 bg-[#C4832A]/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[#C4832A]">
-                    {album.is_locked ? 'Locked' : 'Open'}
-                  </span>
-                </div>
-                {album.description && (
-                  <p className="mt-3 text-sm text-[#F0E0C0]/75">{album.description}</p>
-                )}
-
-                <div className="mt-4">
+              <div key={album.id} className="space-y-3">
+                <AlbumCard
+                  album={album}
+                  onOpen={() => setSelected(album)}
+                  onDelete={() => void handleDeleteAlbum(album)}
+                />
+                <div>
                   <input
                     id={`album-upload-${album.id}`}
                     type="file"
@@ -171,33 +180,30 @@ export const Albums = () => {
                     {uploadingAlbumId === album.id ? 'Uploading...' : 'Upload photo'}
                   </label>
                 </div>
-
-                {(photosByAlbum[album.id]?.length ?? 0) > 0 ? (
-                  <div className="mt-4 grid grid-cols-3 gap-2">
-                    {photosByAlbum[album.id].map((photo) => (
-                      <div
-                        key={photo.id}
-                        className="aspect-square overflow-hidden rounded-xl border border-[#3D2B0E] bg-[#0D0A06]"
-                      >
-                        <img
-                          src={getPhotoUrl(photo.photo_url)}
-                          alt={`${album.name} photo`}
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-4 rounded-xl border border-dashed border-[#3D2B0E] px-3 py-3 text-sm text-[#A89070]">
-                    No photos in this album yet.
-                  </p>
-                )}
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {selected && userId && (
+        <AlbumViewerSheet
+          album={selected}
+          mode="owner"
+          ownerId={userId}
+          ownerName={userName}
+          onClose={() => {
+            setSelected(null);
+            void loadAlbums();
+          }}
+          onNotice={(msg) => setNotice(msg)}
+          onAlbumDeleted={() => {
+            setSelected(null);
+            void loadAlbums();
+          }}
+          onPhotosChanged={() => void loadAlbums()}
+        />
+      )}
     </Layout>
   );
 };

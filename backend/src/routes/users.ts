@@ -4,7 +4,10 @@ import multer from 'multer';
 import path from 'path';
 import { z } from 'zod';
 import { userService } from '../services/user.service';
+import { profileViewsService } from '../services/profile-views.service';
+import { notificationService } from '../services/notification.service';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
+import { SecurityError } from '../security/access';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
 import { LocationSchema, ProfileSchema } from '../types/validation';
 
@@ -98,7 +101,8 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    res.json(user);
+    const { email: _omit, ...profile } = user;
+    res.json(profile);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -149,15 +153,51 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
   }
 });
 
-router.get('/profile/:id', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/profile-views', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const user = await userService.getPublicProfile(req.userId!, req.params.id);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    res.json(user);
+    const summary = await profileViewsService.getViewersForUser(req.userId!);
+    res.json(summary);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/profile/:id', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const viewerId = req.userId!;
+    const targetId = req.params.id;
+    const user = await userService.getPublicProfile(viewerId, targetId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found', code: 'user_not_found' });
+    }
+    res.json(user);
+
+    if (viewerId !== targetId) {
+      void (async () => {
+        try {
+          const { notify } = await profileViewsService.recordView(viewerId, targetId);
+          if (!notify) return;
+          const viewerName = (await userService.getDisplayName(viewerId)) || 'Someone';
+          const io = req.app.get('io');
+          await notificationService.notify(io, {
+            userId: targetId,
+            actorId: viewerId,
+            type: 'profile_view',
+            title: `${viewerName} viewed your profile`,
+            body: 'See who checked you out.',
+            linkPath: '/profile',
+          });
+        } catch (sideEffectError) {
+          console.error('[profile-view-side-effect]', sideEffectError);
+        }
+      })();
+    }
+  } catch (error: unknown) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
+    console.error('[profile-view]', error);
+    res.status(500).json({ error: 'Could not load profile' });
   }
 });
 
@@ -165,28 +205,34 @@ router.post('/like/:id', verifiedMiddleware, async (req: AuthRequest, res: Respo
   try {
     const isMatch = await userService.likeUser(req.userId!, req.params.id);
     const io = req.app.get('io');
-    
-    // Get sender's name for notification
-    const senderName = await userService.getDisplayName(req.userId!) || 'Someone';
+    const senderName = (await userService.getDisplayName(req.userId!)) || 'Someone';
+    const likedName = (await userService.getDisplayName(req.params.id)) || 'Someone';
 
     if (isMatch) {
-      // Notify both users about the match
-      io.to(`user:${req.userId}`).emit('notification', {
+      await notificationService.notify(io, {
+        userId: req.userId!,
+        actorId: req.params.id,
         type: 'match',
-        message: 'New Match!',
-        userId: req.params.id,
+        title: `You matched with ${likedName}`,
+        body: 'Say hello while you are both online.',
+        linkPath: `/messages/${req.params.id}`,
       });
-      io.to(`user:${req.params.id}`).emit('notification', {
+      await notificationService.notify(io, {
+        userId: req.params.id,
+        actorId: req.userId!,
         type: 'match',
-        message: `New Match with ${senderName}!`,
-        userId: req.userId,
+        title: `You matched with ${senderName}`,
+        body: 'Say hello while you are both online.',
+        linkPath: `/messages/${req.userId}`,
       });
     } else {
-      // Notify the liked user that someone liked them
-      io.to(`user:${req.params.id}`).emit('notification', {
+      await notificationService.notify(io, {
+        userId: req.params.id,
+        actorId: req.userId!,
         type: 'like',
-        message: `${senderName} sent you a signal!`,
-        userId: req.userId,
+        title: `${senderName} sent you a match`,
+        body: 'They are interested in connecting.',
+        linkPath: `/profile/${req.userId}`,
       });
     }
 
