@@ -17,6 +17,7 @@
   "dependencies": {
     "@napi-rs/canvas": "^1.0.1",
     "@sentry/node": "^10.57.0",
+    "@tensorflow/tfjs": "^4.22.0",
     "@types/multer": "^2.1.0",
     "@types/web-push": "^3.6.4",
     "@vladmandic/face-api": "^1.7.15",

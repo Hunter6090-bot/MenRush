@@ -136,7 +136,10 @@
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
 
   --nav-height: 64px;
+  --mobile-header-height: calc(3.25rem + env(safe-area-inset-top, 0px));
   --mobile-tab-bar-height: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
+  --desktop-sidebar-width: 272px;
+  --desktop-workspace-header: 4.25rem;
   --content-max-width: 1280px;
   --map-min-height: 60vh;
   --bottom-strip-height: 180px;

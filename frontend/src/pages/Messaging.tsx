@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { messagesAPI, usersAPI, meetAPI, MediaKind, MessageDTO, MeetAgreementState } from '../api/client';
+import { messagesAPI, usersAPI, meetAPI, MediaKind, MessageMediaKind, MessageDTO, MeetAgreementState } from '../api/client';
 import { trackEventOnce } from '../observability/analytics';
 import { useSocket } from '../hooks/useSocket';
 import { useAuthStore, useCallStore, useUnreadStore } from '../hooks/store';
@@ -17,6 +17,8 @@ import { mapCallMediaError } from '../lib/callMedia';
 import { MobileBackButton } from '../components/MobileBackButton';
 import { MissedCallIcon } from '../components/MissedCallIcon';
 import { isMissedCallMessage, MISSED_CALL_PREVIEW } from '../lib/missedCall';
+import { openMapsDirections } from '../lib/maps';
+import { parseLocationPayload } from '../lib/locationMessage';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
 interface Message extends Partial<MessageDTO> {
@@ -25,7 +27,7 @@ interface Message extends Partial<MessageDTO> {
   receiver_id: string;
   message: string;
   created_at?: string;
-  media_type?: MediaKind | null;
+  media_type?: MessageMediaKind | null;
   media_url?: string | null;
   audio_duration_ms?: number | null;
   is_disappearing?: boolean;
@@ -123,7 +125,7 @@ function canWithdrawMedia(msg: Message, userId?: string): boolean {
 
 // ── Main component ───────────────────────────────────────────────────────────
 
-export const Messages = () => {
+export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const { otherId } = useParams<{ otherId: string }>();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -133,6 +135,7 @@ export const Messages = () => {
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [sharingLocation, setSharingLocation] = useState(false);
   const [mediaError, setMediaError] = useState('');
   // Image composer: hold the selected file for preview + view-rule choice
   // before sending (instead of sending immediately on pick).
@@ -490,6 +493,46 @@ export const Messages = () => {
     }
   };
 
+  const handleShareLocation = () => {
+    if (!otherId || sharingLocation || uploadingMedia) return;
+
+    const peer = otherUser?.name ?? 'your match';
+    const confirmed = window.confirm(
+      `Share your current location with ${peer}? They can open directions in their maps app.`,
+    );
+    if (!confirmed) return;
+
+    if (!window.isSecureContext || !navigator.geolocation) {
+      setMediaError('Location sharing needs HTTPS and a device with GPS.');
+      return;
+    }
+
+    setSharingLocation(true);
+    setMediaError('');
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const res = await messagesAPI.sendLocation(
+            otherId,
+            position.coords.latitude,
+            position.coords.longitude,
+          );
+          setMessages((prev) => [...prev, res.data]);
+        } catch {
+          setMediaError('Could not share your location.');
+        } finally {
+          setSharingLocation(false);
+        }
+      },
+      () => {
+        setMediaError('Location permission was denied.');
+        setSharingLocation(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+  };
+
   const handleMeetConfirm = async () => {
     if (!otherId || meetSubmitting) return;
     setMeetSubmitting(true);
@@ -532,13 +575,24 @@ export const Messages = () => {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="fixed inset-0 flex flex-col" style={{ background: '#0D0A06' }}>
+    <div
+      className={
+        embedded
+          ? 'flex h-full min-h-0 flex-col'
+          : 'fixed inset-0 flex flex-col'
+      }
+      style={{ background: '#0D0A06' }}
+    >
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <header
-        className="flex-shrink-0 flex items-center gap-2 px-3 sm:px-4 border-b pt-[env(safe-area-inset-top,0px)]"
+        className={`flex-shrink-0 flex items-center gap-2 border-b px-3 sm:px-4 ${
+          embedded ? '' : 'pt-[env(safe-area-inset-top,0px)]'
+        }`}
         style={{
-          minHeight: 'calc(4rem + env(safe-area-inset-top, 0px))',
+          minHeight: embedded
+            ? '4rem'
+            : 'calc(4rem + env(safe-area-inset-top, 0px))',
           background: 'rgba(13,10,6,0.94)',
           borderColor: '#3D2B0E',
           backdropFilter: 'blur(20px)',
@@ -546,11 +600,13 @@ export const Messages = () => {
           zIndex: 20,
         }}
       >
-        <MobileBackButton
-          fallback="/conversations"
-          onClick={() => navigate('/conversations')}
-          className="-ml-1"
-        />
+        {!embedded ? (
+          <MobileBackButton
+            fallback="/conversations"
+            onClick={() => navigate('/conversations')}
+            className="-ml-1"
+          />
+        ) : null}
 
         {/* Avatar + name block — centered, tappable to open profile */}
         <button
@@ -794,6 +850,13 @@ export const Messages = () => {
                       }
                       withdrawing={withdrawingId === msg.id}
                     />
+                  ) : msg.media_type === 'location' ? (
+                    <LocationBubble
+                      msg={msg}
+                      isMine={isMine}
+                      showTail={showTail}
+                      peerName={otherUser?.name}
+                    />
                   ) : (
                     <div
                       className="relative px-4 py-2.5 text-sm leading-relaxed"
@@ -945,6 +1008,18 @@ export const Messages = () => {
           </div>
         ) : (
           <form onSubmit={handleSend} className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleShareLocation}
+              disabled={uploadingMedia || sharingLocation || !!pendingImage}
+              aria-label="Share location"
+              title="Share location"
+              className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40"
+              style={{ background: '#1E1508', border: '1px solid #3D2B0E', color: '#C4832A' }}
+            >
+              <LocationPinIcon className="w-4 h-4" />
+            </button>
+
             {/* Selfie — opens front camera on mobile */}
             <button
               type="button"
@@ -1047,12 +1122,73 @@ export const Messages = () => {
       )}
 
       <SelfieCaptureModal
+        variant="compact"
         open={selfieOpen}
         onClose={() => setSelfieOpen(false)}
         onCapture={stageImageFile}
         onError={setMediaError}
       />
 
+    </div>
+  );
+};
+
+// ── Location share bubble ────────────────────────────────────────────────────
+
+interface LocationBubbleProps {
+  msg: Message;
+  isMine: boolean;
+  showTail: boolean;
+  peerName?: string;
+}
+
+const LocationBubble: React.FC<LocationBubbleProps> = ({ msg, isMine, showTail, peerName }) => {
+  const coords = parseLocationPayload(msg.media_type, msg.message);
+  const label = isMine ? 'Shared location' : `${peerName ?? 'Match'}'s location`;
+
+  const bubbleStyle = isMine
+    ? {
+        background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+        color: '#FFF5E6',
+        borderRadius: showTail ? '18px 18px 4px 18px' : '18px',
+        boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
+      }
+    : {
+        background: '#1E1508',
+        border: '1px solid #3D2B0E',
+        color: '#F0E0C0',
+        borderRadius: showTail ? '18px 18px 18px 4px' : '18px',
+      };
+
+  return (
+    <div className="relative px-4 py-3 text-sm leading-relaxed max-w-[240px]" style={bubbleStyle}>
+      <div className="flex items-start gap-2">
+        <LocationPinIcon className="w-5 h-5 shrink-0 mt-0.5" />
+        <div>
+          <p className="font-semibold">📍 {label}</p>
+          {coords ? (
+            <p className="mt-1 text-[11px] opacity-80">
+              {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
+            </p>
+          ) : null}
+        </div>
+      </div>
+      {coords ? (
+        <button
+          type="button"
+          onClick={() => openMapsDirections(coords.lat, coords.lng, label)}
+          className="mt-3 w-full rounded-lg px-3 py-2 text-xs font-bold"
+          style={
+            isMine
+              ? { background: 'rgba(13,10,6,0.22)', color: '#FFF5E6' }
+              : { background: 'rgba(196,131,42,0.16)', color: '#C4832A', border: '1px solid rgba(196,131,42,0.35)' }
+          }
+        >
+          Get directions
+        </button>
+      ) : (
+        <p className="mt-2 text-[11px] opacity-70">Location unavailable</p>
+      )}
     </div>
   );
 };
@@ -1191,6 +1327,17 @@ const BubbleIcon = ({
       strokeLinejoin="round"
       d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
     />
+  </svg>
+);
+
+const LocationPinIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M12 21s7-4.35 7-11a7 7 0 10-14 0c0 6.65 7 11 7 11z"
+    />
+    <circle cx="12" cy="10" r="2.5" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 

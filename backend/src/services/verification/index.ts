@@ -16,16 +16,21 @@ function autoApproveEnabled(): boolean {
   return process.env.VERIFICATION_AUTO_APPROVE !== 'false';
 }
 
-async function removeSubmissionFiles(idFrontKey: string, selfieKey: string): Promise<void> {
+async function removeSubmissionFiles(
+  idFrontKey: string,
+  selfieKey: string,
+  idBackKey?: string | null,
+): Promise<void> {
   await Promise.allSettled([
     fs.unlink(path.join(verificationDir, idFrontKey)),
     fs.unlink(path.join(verificationDir, selfieKey)),
+    idBackKey ? fs.unlink(path.join(verificationDir, idBackKey)) : Promise.resolve(),
   ]);
 }
 
 async function latestSubmission(userId: string) {
   const res = await query(
-    `SELECT id, id_front_key, selfie_key, status
+    `SELECT id, id_front_key, id_back_key, selfie_key, status
        FROM verification_submissions
       WHERE user_id = $1
       ORDER BY created_at DESC
@@ -50,7 +55,16 @@ export const verificationService = {
 
   async submitVerification(
     userId: string,
-    files: { idFrontPath: string; idFrontKey: string; selfiePath: string; selfieKey: string },
+    files: {
+      idFrontPath: string;
+      idFrontKey: string;
+      idBackPath?: string | null;
+      idBackKey?: string | null;
+      selfiePath: string;
+      selfieKey: string;
+      idType: 'passport' | 'driving_license';
+      nationality?: string | null;
+    },
   ): Promise<SubmitVerificationResult> {
     const state = await this.getState(userId);
     if (state.is_verified) {
@@ -61,7 +75,7 @@ export const verificationService = {
 
     const previous = await latestSubmission(userId);
     if (previous) {
-      await removeSubmissionFiles(previous.id_front_key, previous.selfie_key);
+      await removeSubmissionFiles(previous.id_front_key, previous.selfie_key, previous.id_back_key);
     }
 
     const { faceMatchService } = await import('./face-match.service');
@@ -74,7 +88,10 @@ export const verificationService = {
     let reviewedBy: string | null = null;
     let reviewedAt: Date | null = null;
 
-    if (!faceResult.idFaceFound) {
+    if (!faceResult.engineAvailable) {
+      submissionStatus = 'pending';
+      userStatus = 'pending';
+    } else if (!faceResult.idFaceFound) {
       submissionStatus = 'rejected';
       userStatus = 'rejected';
       rejectionReason = 'document_unverified_other';
@@ -106,15 +123,19 @@ export const verificationService = {
 
     const submissionRes = await query(
       `INSERT INTO verification_submissions (
-         user_id, id_front_key, selfie_key,
+         user_id, id_front_key, id_back_key, selfie_key,
+         id_type, nationality,
          face_match_distance, face_match_passed,
          status, rejection_reason, reviewed_by, reviewed_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING id`,
       [
         userId,
         files.idFrontKey,
+        files.idBackKey ?? null,
         files.selfieKey,
+        files.idType,
+        files.nationality ?? null,
         faceResult.distance,
         faceResult.match,
         submissionStatus,
@@ -233,8 +254,12 @@ export const verificationService = {
     return res.rows;
   },
 
-  async getSubmissionAssetPath(submissionId: string, kind: 'id_front' | 'selfie'): Promise<string | null> {
-    const column = kind === 'id_front' ? 'id_front_key' : 'selfie_key';
+  async getSubmissionAssetPath(
+    submissionId: string,
+    kind: 'id_front' | 'id_back' | 'selfie',
+  ): Promise<string | null> {
+    const column =
+      kind === 'id_front' ? 'id_front_key' : kind === 'id_back' ? 'id_back_key' : 'selfie_key';
     const res = await query(
       `SELECT ${column} AS storage_key
          FROM verification_submissions

@@ -9,7 +9,7 @@ import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/a
 import { SecurityError } from '../security/access';
 import { resolveMediaPath, verifyMediaAccess } from '../security/media';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
-import { MessageSchema, MediaMessageFormSchema } from '../types/validation';
+import { MessageSchema, MediaMessageFormSchema, LocationMessageSchema } from '../types/validation';
 
 const router = Router();
 
@@ -87,6 +87,37 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       });
     } catch (notifyErr) {
       console.error('[notification:message]', notifyErr);
+    }
+
+    res.status(201).json(message);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/location', async (req: AuthRequest, res: Response) => {
+  try {
+    const data = LocationMessageSchema.parse(req.body);
+    const message = await messageService.sendLocationMessage(req.userId!, data.receiver_id, {
+      lat: data.lat,
+      lng: data.lng,
+    });
+
+    const io = req.app.get('io');
+    io.to(`user:${data.receiver_id}`).emit('message', message);
+    pushNewMessage(data.receiver_id, message.sender_name ?? '', req.userId!, '📍 Shared location');
+
+    try {
+      await notificationService.notify(io, {
+        userId: data.receiver_id,
+        actorId: req.userId!,
+        type: 'message',
+        title: `${message.sender_name ?? 'Someone'} shared their location`,
+        body: 'Tap to open directions in your maps app',
+        linkPath: `/messages/${req.userId}`,
+      });
+    } catch (notifyErr) {
+      console.error('[notification:location]', notifyErr);
     }
 
     res.status(201).json(message);

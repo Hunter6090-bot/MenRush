@@ -1,7 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3000/api' : '/api');
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -141,6 +140,7 @@ export const pulseAPI = {
 };
 
 export type MediaKind = 'image' | 'audio';
+export type MessageMediaKind = MediaKind | 'location';
 
 export interface MessageDTO {
   id: string;
@@ -149,7 +149,7 @@ export interface MessageDTO {
   message: string;
   created_at: string;
   sender_name?: string;
-  media_type: MediaKind | null;
+  media_type: MessageMediaKind | null;
   media_url: string | null;
   audio_duration_ms: number | null;
   is_disappearing: boolean;
@@ -181,6 +181,8 @@ export interface SendMediaOptions {
 export const messagesAPI = {
   sendMessage: (receiver_id: string, message: string) =>
     apiClient.post<MessageDTO>('/messages', { receiver_id, message }),
+  sendLocation: (receiver_id: string, lat: number, lng: number) =>
+    apiClient.post<MessageDTO>('/messages/location', { receiver_id, lat, lng }),
   getConversation: (otherId: string) =>
     apiClient.get<MessageDTO[]>(`/messages/conversation/${otherId}`),
   getConversations: () => apiClient.get('/messages/conversations'),
@@ -373,10 +375,13 @@ function resolveSocketUrl(): string {
     return import.meta.env.VITE_SOCKET_URL;
   }
   const apiUrl = import.meta.env.VITE_API_URL;
-  if (apiUrl) {
+  if (apiUrl && /^https?:\/\//.test(apiUrl)) {
     return apiUrl.replace(/\/api\/?$/, '');
   }
-  return window.location.origin;
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  return '';
 }
 
 // Keep signalling on the same host as the API when deployed separately from

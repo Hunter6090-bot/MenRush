@@ -1,51 +1,23 @@
 import path from 'path';
-import * as faceapi from '@vladmandic/face-api';
-import { Canvas, Image, ImageData } from '@napi-rs/canvas';
 import sharp from 'sharp';
-
-faceapi.env.monkeyPatch({ Canvas: Canvas as any, Image: Image as any, ImageData: ImageData as any });
 
 const MODEL_DIR = path.join(
   __dirname,
   '../../../node_modules/@vladmandic/face-api/model',
 );
 
-let modelsReady: Promise<void> | null = null;
-
-function loadModels(): Promise<void> {
-  if (!modelsReady) {
-    modelsReady = (async () => {
-      await faceapi.nets.ssdMobilenetv1.loadFromDisk(MODEL_DIR);
-      await faceapi.nets.faceLandmark68Net.loadFromDisk(MODEL_DIR);
-      await faceapi.nets.faceRecognitionNet.loadFromDisk(MODEL_DIR);
-    })();
-  }
-  return modelsReady;
-}
-
-async function loadFaceImage(filePath: string): Promise<any> {
-  const buffer = await sharp(filePath).rotate().jpeg({ quality: 92 }).toBuffer();
-  const image = new Image();
-  image.src = buffer;
-  return image;
-}
-
-async function extractDescriptor(filePath: string): Promise<Float32Array | null> {
-  const image = await loadFaceImage(filePath);
-  const detection = await faceapi
-    .detectSingleFace(image)
-    .withFaceLandmarks()
-    .withFaceDescriptor();
-  return detection?.descriptor ?? null;
-}
-
 export type FaceMatchResult = {
+  engineAvailable: boolean;
   idFaceFound: boolean;
   selfieFaceFound: boolean;
   distance: number | null;
   match: boolean;
   review: boolean;
 };
+
+type FaceApiModule = typeof import('@vladmandic/face-api');
+
+let engineReady: Promise<FaceApiModule | null> | null = null;
 
 function thresholds() {
   const pass = Number(process.env.VERIFICATION_FACE_PASS_THRESHOLD || '0.55');
@@ -56,34 +28,114 @@ function thresholds() {
   };
 }
 
+function manualReviewFallback(): FaceMatchResult {
+  return {
+    engineAvailable: false,
+    idFaceFound: false,
+    selfieFaceFound: false,
+    distance: null,
+    match: false,
+    review: true,
+  };
+}
+
+async function loadEngine(): Promise<FaceApiModule | null> {
+  if (!engineReady) {
+    engineReady = (async () => {
+      try {
+        const [{ Canvas, Image, ImageData }, faceapi] = await Promise.all([
+          import('@napi-rs/canvas'),
+          import('@vladmandic/face-api'),
+        ]);
+        faceapi.env.monkeyPatch({
+          Canvas: Canvas as any,
+          Image: Image as any,
+          ImageData: ImageData as any,
+        });
+        await faceapi.nets.ssdMobilenetv1.loadFromDisk(MODEL_DIR);
+        await faceapi.nets.faceLandmark68Net.loadFromDisk(MODEL_DIR);
+        await faceapi.nets.faceRecognitionNet.loadFromDisk(MODEL_DIR);
+        return faceapi;
+      } catch (err) {
+        console.warn(
+          '[verify] face-match engine unavailable — submissions will queue for manual review:',
+          err instanceof Error ? err.message : err,
+        );
+        return null;
+      }
+    })();
+  }
+  return engineReady;
+}
+
+async function loadFaceImage(ImageCtor: any, filePath: string): Promise<any> {
+  const buffer = await sharp(filePath).rotate().jpeg({ quality: 92 }).toBuffer();
+  const image = new ImageCtor();
+  image.src = buffer;
+  return image;
+}
+
+async function extractDescriptor(
+  faceapi: FaceApiModule,
+  ImageCtor: any,
+  filePath: string,
+): Promise<Float32Array | null> {
+  const image = await loadFaceImage(ImageCtor, filePath);
+  const detection = await faceapi
+    .detectSingleFace(image)
+    .withFaceLandmarks()
+    .withFaceDescriptor();
+  return detection?.descriptor ?? null;
+}
+
 export const faceMatchService = {
   async compare(idFrontPath: string, selfiePath: string): Promise<FaceMatchResult> {
-    await loadModels();
-
-    const [idDescriptor, selfieDescriptor] = await Promise.all([
-      extractDescriptor(idFrontPath),
-      extractDescriptor(selfiePath),
-    ]);
-
-    if (!idDescriptor || !selfieDescriptor) {
-      return {
-        idFaceFound: Boolean(idDescriptor),
-        selfieFaceFound: Boolean(selfieDescriptor),
-        distance: null,
-        match: false,
-        review: false,
-      };
+    let faceapi: FaceApiModule | null;
+    try {
+      faceapi = await loadEngine();
+    } catch {
+      return manualReviewFallback();
     }
 
-    const distance = faceapi.euclideanDistance(idDescriptor, selfieDescriptor);
-    const { pass, reject } = thresholds();
+    if (!faceapi) {
+      return manualReviewFallback();
+    }
 
-    return {
-      idFaceFound: true,
-      selfieFaceFound: true,
-      distance,
-      match: distance < pass,
-      review: distance >= pass && distance < reject,
-    };
+    try {
+      const { Image } = await import('@napi-rs/canvas');
+      const [idDescriptor, selfieDescriptor] = await Promise.all([
+        extractDescriptor(faceapi, Image, idFrontPath),
+        extractDescriptor(faceapi, Image, selfiePath),
+      ]);
+
+      if (!idDescriptor || !selfieDescriptor) {
+        return {
+          engineAvailable: true,
+          idFaceFound: Boolean(idDescriptor),
+          selfieFaceFound: Boolean(selfieDescriptor),
+          distance: null,
+          match: false,
+          review: false,
+        };
+      }
+
+      const distance = faceapi.euclideanDistance(idDescriptor, selfieDescriptor);
+      const { pass, reject } = thresholds();
+
+      return {
+        engineAvailable: true,
+        idFaceFound: true,
+        selfieFaceFound: true,
+        distance,
+        match: distance < pass,
+        review: distance >= pass && distance < reject,
+      };
+    } catch (err) {
+      console.warn(
+        '[verify] face-match compare failed — queuing manual review:',
+        err instanceof Error ? err.message : err,
+      );
+      return manualReviewFallback();
+    }
   },
 };

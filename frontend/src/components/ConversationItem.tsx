@@ -15,6 +15,8 @@ interface ConversationItemProps {
   lastMessage?: string;
   unreadCount?: number;
   onBlocked?: () => void;
+  isActive?: boolean;
+  variant?: 'default' | 'sidebar';
 }
 
 export const ConversationItem: React.FC<ConversationItemProps> = ({
@@ -26,15 +28,26 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   lastMessage,
   unreadCount,
   onBlocked,
+  isActive = false,
+  variant = 'default',
 }) => {
   const navigate = useNavigate();
   const isMissedCall = lastMessage === MISSED_CALL_PREVIEW;
+  const isSidebar = variant === 'sidebar';
 
   return (
     <div className="flex items-center gap-1">
       <button
         onClick={() => navigate(`/messages/${userId}`)}
-        className="flex-1 min-w-0 flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-[#1E1508] border border-[#3D2B0E] hover:border-[#C4832A]/30 hover:bg-[#2A1C0A] transition-all duration-200 text-left group"
+        className={`group flex min-w-0 flex-1 items-center gap-3 text-left transition-all duration-200 ${
+          isSidebar
+            ? `rounded-xl px-3 py-3 border ${
+                isActive
+                  ? 'border-[var(--copper)]/40 bg-[var(--copper)]/12 shadow-[inset_3px_0_0_var(--copper)]'
+                  : 'border-transparent hover:border-[var(--border-default)] hover:bg-[var(--bg-card)]/70'
+              }`
+            : 'rounded-2xl border border-[#3D2B0E] bg-[#1E1508] px-4 py-3.5 hover:border-[#C4832A]/30 hover:bg-[#2A1C0A]'
+        }`}
       >
       <div className="relative">
         <UserAvatar name={name} photoUrl={photoUrl} online={online} size="md" />
@@ -66,7 +79,15 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
         </p>
       </div>
 
-      <ChevronIcon className="w-4 h-4 text-[#A89070]/40 group-hover:text-[#C4832A]/60 transition-colors flex-shrink-0" />
+      <ChevronIcon
+        className={`h-4 w-4 flex-shrink-0 transition-colors ${
+          isSidebar
+            ? isActive
+              ? 'text-[var(--copper)]/70'
+              : 'text-[#A89070]/30 group-hover:text-[#C4832A]/50'
+            : 'text-[#A89070]/40 group-hover:text-[#C4832A]/60'
+        }`}
+      />
       </button>
 
       <ChatSafetyMenu peerId={userId} peerName={name} onBlocked={onBlocked} />

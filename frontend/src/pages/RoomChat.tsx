@@ -88,7 +88,7 @@ function senderColor(senderId: string): string {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export const RoomChat: React.FC = () => {
+export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -365,12 +365,17 @@ export const RoomChat: React.FC = () => {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="fixed inset-0 flex flex-col" style={{ background: '#050403' }}>
+    <div
+      className={embedded ? 'flex h-full min-h-0 flex-col' : 'fixed inset-0 flex flex-col'}
+      style={{ background: '#050403' }}
+    >
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header
-        className="flex-shrink-0 flex items-center gap-2 px-3 sm:px-4 border-b pt-[env(safe-area-inset-top,0px)]"
+        className={`flex-shrink-0 flex items-center gap-2 border-b px-3 sm:px-4 ${
+          embedded ? '' : 'pt-[env(safe-area-inset-top,0px)]'
+        }`}
         style={{
-          minHeight: 'calc(4rem + env(safe-area-inset-top, 0px))',
+          minHeight: embedded ? '4rem' : 'calc(4rem + env(safe-area-inset-top, 0px))',
           background: 'rgba(13,10,6,0.94)',
           borderColor: '#3D2B0E',
           backdropFilter: 'blur(20px)',
@@ -378,11 +383,13 @@ export const RoomChat: React.FC = () => {
           zIndex: 20,
         }}
       >
-        <MobileBackButton
-          fallback="/rooms"
-          onClick={() => navigate('/rooms')}
-          className="-ml-1"
-        />
+        {!embedded ? (
+          <MobileBackButton
+            fallback="/rooms"
+            onClick={() => navigate('/rooms')}
+            className="-ml-1"
+          />
+        ) : null}
 
         {/* Room avatar */}
         <div

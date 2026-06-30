@@ -314,7 +314,7 @@ export const Profile = () => {
       {/* Toast */}
       {toast && (
         <div
-          className={`fixed top-16 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-xl text-sm font-medium shadow-card border animate-slide-up ${
+          className={`fixed top-[calc(var(--mobile-header-height)+0.5rem)] left-1/2 z-50 -translate-x-1/2 px-5 py-2.5 rounded-xl text-sm font-medium shadow-card border animate-slide-up lg:top-6 ${
             toast.type === 'success'
               ? 'bg-nn-online/15 border-nn-online/25 text-[#8FC773]'
               : 'bg-[#8B4513]/15 border-[#8B4513]/25 text-[#F0E0C0]/80'
@@ -324,7 +324,7 @@ export const Profile = () => {
         </div>
       )}
 
-      <div className="max-w-xl mx-auto px-4 py-6 pb-10 space-y-4">
+      <div className="mx-auto max-w-xl space-y-4 px-4 py-4 pb-28 lg:max-w-6xl lg:space-y-8 lg:px-8 lg:py-8 lg:pb-12">
         <input
           ref={photoInputRef}
           type="file"
@@ -345,7 +345,7 @@ export const Profile = () => {
         />
 
         {/* ── Profile hero ── */}
-        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl overflow-hidden shadow-card">
+        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl overflow-hidden shadow-card lg:rounded-3xl">
           <div className="group relative">
             {coverUrl ? (
               <CoverBanner coverUrl={coverUrl} frame={coverFrame} />
@@ -461,23 +461,138 @@ export const Profile = () => {
             </div>
             <h2 className="text-xl font-bold text-[#F0E0C0]">{profile.name}</h2>
             <p className="text-[#A89070] text-sm mt-0.5">Age {profile.age}</p>
-            {profile.bio && (
-              <p className="text-[#F0E0C0]/65 text-sm mt-3 leading-relaxed">{profile.bio}</p>
-            )}
-            {profile.interests && profile.interests.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-3">
-                {profile.interests.map((tag) => (
-                  <span
-                    key={tag}
-                    className="px-2.5 py-1 rounded-full bg-[#C4832A]/10 text-[#C4832A] text-xs font-medium border border-[#C4832A]/20"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
         </div>
+
+        <div className="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-8">
+          {/* ── Left: Edit profile ── */}
+          <div className="space-y-4">
+        {/* ── Edit form ── */}
+        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card lg:rounded-3xl">
+          <h3 className="text-[#F0E0C0] font-semibold mb-4">Edit Profile</h3>
+
+          <form onSubmit={handleSave} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">Bio</label>
+              <textarea
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                placeholder="Tell people about yourself…"
+                rows={3}
+                maxLength={500}
+                className="w-full bg-[#1E1508]/60 border border-[#3D2B0E] text-[#F0E0C0] placeholder:text-[#A89070]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all resize-none"
+              />
+              <p className="text-[10px] text-[#A89070]/60 mt-1 text-right">{bio.length}/500</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">Headline</label>
+              <input
+                type="text"
+                value={headline}
+                onChange={(e) => setHeadline(e.target.value)}
+                placeholder="One line about you…"
+                maxLength={100}
+                className={inputClass}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">Looking For</label>
+              <input
+                type="text"
+                value={lookingFor}
+                onChange={(e) => setLookingFor(e.target.value)}
+                placeholder="Dating, friends, fun, exploring…"
+                maxLength={100}
+                className={inputClass}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">
+                Profile Photo
+              </label>
+              <div className="flex gap-4 items-center">
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={uploading}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#C4832A]/10 hover:bg-[#C4832A]/20 text-[#C4832A] text-xs font-semibold border border-[#C4832A]/30 cursor-pointer transition-all ${
+                    uploading ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {uploading ? (
+                    <Spinner className="w-4 h-4 text-[#C4832A]" />
+                  ) : (
+                    <UploadIcon className="w-4 h-4" />
+                  )}
+                  {uploading ? 'Uploading…' : 'Upload Photo'}
+                </button>
+                {photoUrl && !uploading && (
+                  <span className="text-[10px] text-[#A89070]/70">Current photo set</span>
+                )}
+              </div>
+              <p className="text-[10px] text-[#A89070]/60 mt-1.5 px-1">
+                JPEG, PNG or WebP. Max 5MB.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block text-xs font-medium text-[#A89070] uppercase tracking-wide">
+                Your tags <span className="normal-case text-[#A89070]/50">({interests.length}/10)</span>
+              </label>
+              {INTEREST_GROUPS.map((group) => (
+                <div key={group.label}>
+                  <p className="text-[10px] font-black text-[#A89070]/60 uppercase tracking-[.18em] mb-2">{group.label}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {group.tags.map((tag) => {
+                      const active = interests.includes(tag);
+                      const maxed = interests.length >= 10 && !active;
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => toggleInterest(tag)}
+                          disabled={maxed}
+                          className={`px-3 py-1 rounded-full text-xs font-medium border transition-all duration-150 ${
+                            active
+                              ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
+                              : maxed
+                              ? 'bg-[#1E1508]/30 text-[#A89070]/20 border-[#3D2B0E]/30 cursor-not-allowed'
+                              : 'bg-[#1E1508]/40 text-[#A89070] border-[#3D2B0E] hover:bg-[#3D2B0E]/60 hover:text-[#F0E0C0]/80'
+                          }`}
+                        >
+                          {tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] disabled:opacity-50 text-white font-semibold text-sm transition-all hover:shadow-glow-blue active:scale-[0.98] flex items-center justify-center gap-2"
+            >
+              {saving ? <><Spinner className="w-4 h-4" /> Saving…</> : 'Save Changes'}
+            </button>
+          </form>
+        </div>
+          </div>
+
+          {/* ── Right: Settings & privacy ── */}
+          <div className="space-y-4 lg:sticky lg:top-6">
+            <div className="hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/40 px-4 py-3 lg:block">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)]">
+                Account settings
+              </p>
+              <p className="mt-1 text-sm text-[var(--cream-soft)]">
+                Privacy, visibility, and how you show up nearby.
+              </p>
+            </div>
 
         <ProfileViewersCard
           viewers={profileViewers}
@@ -589,9 +704,11 @@ export const Profile = () => {
             />
           </button>
         </div>
+          </div>
+        </div>
 
-        {/* ── Sign out ── */}
-        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card">
+        {/* ── Sign out (mobile only — desktop uses sidebar) ── */}
+        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card lg:hidden">
           <p className="text-[#F0E0C0]/80 text-sm font-semibold">Sign out</p>
           <p className="text-[#A89070] text-xs mt-0.5">You'll need to log back in</p>
           <button
@@ -601,122 +718,6 @@ export const Profile = () => {
             <LogoutIcon className="w-3.5 h-3.5" />
             Sign out
           </button>
-        </div>
-
-        {/* ── Edit form ── */}
-        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card">
-          <h3 className="text-[#F0E0C0] font-semibold mb-4">Edit Profile</h3>
-
-          <form onSubmit={handleSave} className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">Bio</label>
-              <textarea
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                placeholder="Tell people about yourself…"
-                rows={3}
-                maxLength={500}
-                className="w-full bg-[#1E1508]/60 border border-[#3D2B0E] text-[#F0E0C0] placeholder:text-[#A89070]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all resize-none"
-              />
-              <p className="text-[10px] text-[#A89070]/60 mt-1 text-right">{bio.length}/500</p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">Headline</label>
-              <input
-                type="text"
-                value={headline}
-                onChange={(e) => setHeadline(e.target.value)}
-                placeholder="One line about you…"
-                maxLength={100}
-                className={inputClass}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">Looking For</label>
-              <input
-                type="text"
-                value={lookingFor}
-                onChange={(e) => setLookingFor(e.target.value)}
-                placeholder="Dating, friends, fun, exploring…"
-                maxLength={100}
-                className={inputClass}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">
-                Profile Photo
-              </label>
-              <div className="flex gap-4 items-center">
-                <button
-                  type="button"
-                  onClick={() => photoInputRef.current?.click()}
-                  disabled={uploading}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#C4832A]/10 hover:bg-[#C4832A]/20 text-[#C4832A] text-xs font-semibold border border-[#C4832A]/30 cursor-pointer transition-all ${
-                    uploading ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                >
-                  {uploading ? (
-                    <Spinner className="w-4 h-4 text-[#C4832A]" />
-                  ) : (
-                    <UploadIcon className="w-4 h-4" />
-                  )}
-                  {uploading ? 'Uploading…' : 'Upload Photo'}
-                </button>
-                {photoUrl && !uploading && (
-                  <span className="text-[10px] text-[#A89070]/70">Current photo set</span>
-                )}
-              </div>
-              <p className="text-[10px] text-[#A89070]/60 mt-1.5 px-1">
-                JPEG, PNG or WebP. Max 5MB.
-              </p>
-            </div>
-
-            {/* Tags grouped by category */}
-            <div className="space-y-4">
-              <label className="block text-xs font-medium text-[#A89070] uppercase tracking-wide">
-                Your tags <span className="normal-case text-[#A89070]/50">({interests.length}/10)</span>
-              </label>
-              {INTEREST_GROUPS.map((group) => (
-                <div key={group.label}>
-                  <p className="text-[10px] font-black text-[#A89070]/60 uppercase tracking-[.18em] mb-2">{group.label}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {group.tags.map((tag) => {
-                      const active = interests.includes(tag);
-                      const maxed = interests.length >= 10 && !active;
-                      return (
-                        <button
-                          key={tag}
-                          type="button"
-                          onClick={() => toggleInterest(tag)}
-                          disabled={maxed}
-                          className={`px-3 py-1 rounded-full text-xs font-medium border transition-all duration-150 ${
-                            active
-                              ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
-                              : maxed
-                              ? 'bg-[#1E1508]/30 text-[#A89070]/20 border-[#3D2B0E]/30 cursor-not-allowed'
-                              : 'bg-[#1E1508]/40 text-[#A89070] border-[#3D2B0E] hover:bg-[#3D2B0E]/60 hover:text-[#F0E0C0]/80'
-                          }`}
-                        >
-                          {tag}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <button
-              type="submit"
-              disabled={saving}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] disabled:opacity-50 text-white font-semibold text-sm transition-all hover:shadow-glow-blue active:scale-[0.98] flex items-center justify-center gap-2"
-            >
-              {saving ? <><Spinner className="w-4 h-4" /> Saving…</> : 'Save Changes'}
-            </button>
-          </form>
         </div>
       </div>
 

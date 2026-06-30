@@ -122,7 +122,14 @@ router.get('/verification/pending', async (req: Request, res: Response) => {
 router.get('/verification/:id/:asset', async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
 
-  const asset = req.params.asset === 'id-front' ? 'id_front' : req.params.asset === 'selfie' ? 'selfie' : null;
+  const asset =
+    req.params.asset === 'id-front'
+      ? 'id_front'
+      : req.params.asset === 'id-back'
+        ? 'id_back'
+        : req.params.asset === 'selfie'
+          ? 'selfie'
+          : null;
   if (!asset) return res.status(400).json({ error: 'invalid_asset' });
 
   try {

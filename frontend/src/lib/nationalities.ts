@@ -1,0 +1,33 @@
+/** Common nationalities for driving licence verification — UK first. */
+export const NATIONALITIES = [
+  'United Kingdom',
+  'Ireland',
+  'United States',
+  'Canada',
+  'Australia',
+  'France',
+  'Germany',
+  'Spain',
+  'Italy',
+  'Netherlands',
+  'Belgium',
+  'Portugal',
+  'Poland',
+  'Romania',
+  'Sweden',
+  'Norway',
+  'Denmark',
+  'Switzerland',
+  'Austria',
+  'Greece',
+  'Turkey',
+  'India',
+  'Pakistan',
+  'Nigeria',
+  'South Africa',
+  'Brazil',
+  'Mexico',
+  'Other',
+] as const;
+
+export type Nationality = (typeof NATIONALITIES)[number];

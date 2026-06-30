@@ -17,10 +17,8 @@ import { Contact } from './pages/Contact';
 import { Safety } from './pages/Safety';
 import { CommunityGuidelines } from './pages/CommunityGuidelines';
 import { Help } from './pages/Help';
-import { Conversations } from './pages/Conversations';
-import { Messages } from './pages/Messaging';
-import { Rooms } from './pages/Rooms';
-import { RoomChat } from './pages/RoomChat';
+import { MessagingRoute } from './components/MessagingRoute';
+import { RoomsRoute } from './components/RoomsRoute';
 import { Verify } from './pages/Verify';
 import { VerifyPending } from './pages/VerifyPending';
 import { VerifyRejected } from './pages/VerifyRejected';
@@ -93,6 +91,21 @@ function NotFound() {
   );
 }
 
+function AppEntry() {
+  const token = useAuthStore((s) => s.token);
+  const user = useAuthStore((s) => s.user);
+
+  if (!token) {
+    return <Navigate to="/login?next=/discover" replace />;
+  }
+  if (!user?.is_verified) {
+    if (user?.verification_status === 'pending') return <Navigate to="/verify/pending" replace />;
+    if (user?.verification_status === 'rejected') return <Navigate to="/verify/rejected" replace />;
+    return <Navigate to="/verify" replace />;
+  }
+  return <Navigate to="/discover" replace />;
+}
+
 function AppShell() {
   const token = useAuthStore((s) => s.token);
   usePushNotifications(!!token);
@@ -106,6 +119,7 @@ function AppShell() {
       <ToastNotifications />
       <Routes>
         <Route path="/" element={<ComingSoon />} />
+        <Route path="/app" element={<AppEntry />} />
         <Route path="/coming-soon" element={<ComingSoon />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -129,12 +143,12 @@ function AppShell() {
         <Route path="/profile/:id" element={<RequireVerified><ProfileView /></RequireVerified>} />
         <Route path="/albums" element={<RequireVerified><Albums /></RequireVerified>} />
         <Route path="/matches" element={<RequireVerified><Matches /></RequireVerified>} />
-        <Route path="/conversations" element={<RequireVerified><Conversations /></RequireVerified>} />
-        <Route path="/messages/:otherId" element={<RequireVerified><Messages /></RequireVerified>} />
+        <Route path="/conversations" element={<RequireVerified><MessagingRoute /></RequireVerified>} />
+        <Route path="/messages/:otherId" element={<RequireVerified><MessagingRoute /></RequireVerified>} />
         {FEATURES.chatRooms && (
           <>
-            <Route path="/rooms" element={<RequireVerified><Rooms /></RequireVerified>} />
-            <Route path="/rooms/:roomId" element={<RequireVerified><RoomChat /></RequireVerified>} />
+            <Route path="/rooms" element={<RequireVerified><RoomsRoute /></RequireVerified>} />
+            <Route path="/rooms/:roomId" element={<RequireVerified><RoomsRoute /></RequireVerified>} />
           </>
         )}
         <Route path="*" element={<NotFound />} />

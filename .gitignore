@@ -12,6 +12,18 @@ pictures/task_*.webp
 .vercel
 frontend/playwright-report/
 frontend/test-results/
+.auto-memory/
+.codex-write-test
+.playwright-cli/
+frontend/.playwright-cli/
+.vscode/
+backend/uploads/
+legal/*.zip
+menrush-media/
+old-waitlist-import.csv
+waitlist-recipients.csv
+email-assets/*.csv
+email-assets/send-log.md
 
 # Python agent layer (agents/python)
 .venv/

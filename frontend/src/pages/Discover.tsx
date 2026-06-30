@@ -11,7 +11,7 @@ import { PulseFab } from '../components/PulseFab';
 import { ProximitySlider, RADIUS_OPTIONS } from '../components/ProximitySlider';
 import { ProfileDrawer } from '../components/ProfileDrawer';
 import { createMapMarkerElement, MapMarker } from '../components/MapMarker';
-import { getPhotoUrl } from '../components/UserAvatar';
+import { getPhotoUrl, UserAvatar } from '../components/UserAvatar';
 import { TribePillRow } from '../components/TribePillRow';
 import { EventsRail } from '../components/EventsRail';
 import { MoodBadge } from '../components/MoodPicker';
@@ -280,14 +280,22 @@ export const Discover = () => {
           if (d.getTime() > Date.now()) setPulseUntil(d);
         }
         if (r.data?.lat != null && r.data?.lng != null) {
-          savedProfileLocationRef.current = {
-            lat: Number(r.data.lat),
-            lng: Number(r.data.lng),
-          };
+          const savedLat = Number(r.data.lat);
+          const savedLng = Number(r.data.lng);
+          savedProfileLocationRef.current = { lat: savedLat, lng: savedLng };
+          if (!hasLiveGpsRef.current && !hasFetchedRef.current) {
+            useDiscoveryLocation(savedLat, savedLng, '', true);
+          }
         }
       })
       .catch(() => {});
   }, [pulseUntil, useDiscoveryLocation]);
+
+  // Render map tiles immediately while GPS resolves; saved profile / GPS recentre later.
+  useEffect(() => {
+    if (tokenMissing) return;
+    setMapCenter((current) => current ?? DEFAULT_DISCOVERY_CENTER);
+  }, [tokenMissing]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && !window.isSecureContext) {
@@ -600,9 +608,9 @@ export const Discover = () => {
     <Layout>
       <h1 className="sr-only">Nearby discovery map</h1>
       <div
-        className="fixed left-0 right-0 top-14 z-0 bottom-[var(--mobile-tab-bar-height)] sm:bottom-0 bg-[#0D0A06]"
+        className="fixed left-0 right-0 top-[var(--mobile-header-height)] z-0 bottom-[var(--mobile-tab-bar-height)] bg-[#0D0A06] lg:left-[var(--desktop-sidebar-width)] lg:top-[var(--desktop-workspace-header)] lg:bottom-0"
       >
-        <div className="absolute left-0 right-0 top-[104px] bottom-[188px] z-0 overflow-hidden border-y border-[var(--border-default)] bg-[#11100E]">
+        <div className="absolute left-0 right-0 top-[104px] bottom-[188px] z-0 overflow-hidden border-y border-[var(--border-default)] bg-[#11100E] lg:top-0 lg:bottom-0 lg:right-[360px] lg:border-y-0 lg:border-r">
           <div className="absolute inset-0">
             <div ref={mapContainerRef} className="h-full w-full" />
           </div>
@@ -636,6 +644,10 @@ export const Discover = () => {
               </p>
             </div>
           )}
+
+          <div className="absolute top-3 left-3 z-30 pointer-events-auto">
+            <ProximitySlider value={radius} onChange={handleRadiusChange} variant="map" />
+          </div>
         </div>
 
         <div
@@ -705,10 +717,6 @@ export const Discover = () => {
           </div>
         </div>
 
-        <div className="absolute bottom-[calc(188px+0.75rem)] left-3 z-30 pointer-events-auto">
-          <ProximitySlider value={radius} onChange={handleRadiusChange} variant="map" />
-        </div>
-
         {pulseError && (
           <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 px-3 py-2 rounded-md bg-[#3D1A1A] border border-[#8B4513] text-[var(--cream)] text-xs">
             {pulseError}
@@ -740,20 +748,36 @@ export const Discover = () => {
         </div>
 
         <div
-          className="absolute left-0 right-0 z-20 pointer-events-none"
-          style={{ bottom: 0 }}
+          className="absolute left-0 right-0 z-20 pointer-events-none max-lg:bottom-0 lg:bottom-auto lg:right-0 lg:top-0 lg:w-[360px] lg:pointer-events-auto lg:border-l lg:border-[var(--border-default)] lg:bg-[#0A0806]/95 lg:backdrop-blur-sm"
         >
           <div
-            className="h-12 pointer-events-none"
+            className="h-12 pointer-events-none max-lg:block lg:hidden"
             style={{ background: 'linear-gradient(to top, #0D0A06, transparent)' }}
           />
-          <div className="pointer-events-auto pb-2 space-y-2">
-            <EventsRail lat={lat} lng={lng} onSelect={(ev: EventDTO) => navigate(`/rooms/${ev.id}`)} />
-            <UserStrip
-              users={sortedUsers}
-              loading={loading}
-              onSelect={setSelectedUser}
-            />
+          <div className="pointer-events-auto space-y-2 pb-2 max-lg:pb-2 lg:flex lg:h-full lg:flex-col lg:overflow-hidden lg:pb-0">
+            <div className="hidden shrink-0 border-b border-[var(--border-default)] px-5 py-4 lg:block">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)]">
+                Nearby now
+              </p>
+              <p className="mt-1 text-sm font-semibold text-[var(--cream)]">
+                {loading ? 'Scanning…' : `${nearbyCount} in range`}
+              </p>
+            </div>
+            <div className="hidden min-h-0 flex-1 overflow-y-auto lg:block">
+              <DesktopNearbyList
+                users={sortedUsers}
+                loading={loading}
+                onSelect={setSelectedUser}
+              />
+            </div>
+            <div className="lg:hidden">
+              <EventsRail lat={lat} lng={lng} onSelect={(ev: EventDTO) => navigate(`/rooms/${ev.id}`)} />
+              <UserStrip
+                users={sortedUsers}
+                loading={loading}
+                onSelect={setSelectedUser}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -812,6 +836,62 @@ const UserStrip: React.FC<UserStripProps> = ({ users, loading, onSelect }) => {
       {users.map((user) => (
         <UserStripCard key={user.id} user={user} onSelect={() => onSelect(user)} />
       ))}
+    </div>
+  );
+};
+
+const DesktopNearbyList: React.FC<UserStripProps> = ({ users, loading, onSelect }) => {
+  if (loading && users.length === 0) {
+    return (
+      <div className="space-y-2 px-3 py-3">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="h-16 animate-pulse rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]" />
+        ))}
+      </div>
+    );
+  }
+
+  if (users.length === 0) {
+    return (
+      <div className="px-5 py-16 text-center">
+        <p className="text-sm font-bold text-[var(--cream)]">No one nearby</p>
+        <p className="mt-1 text-xs text-[var(--cream-muted)]">Pulse on the map to refresh discovery.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1 px-2 py-2">
+      {users.map((user) => {
+        const distLabel = getDistanceLabel(user);
+        const isPulsing = isUserPulsing(user);
+        return (
+          <button
+            key={user.id}
+            type="button"
+            onClick={() => onSelect(user)}
+            className="flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-3 text-left transition-colors hover:border-[var(--border-default)] hover:bg-[var(--bg-card)]/80"
+          >
+            <UserAvatar name={user.name} photoUrl={user.photo_url} online={user.online} size="md" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="truncate text-sm font-semibold text-[var(--cream)]">{user.name}</p>
+                {isPulsing ? (
+                  <span className="rounded-full bg-[var(--copper)]/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[var(--copper)]">
+                    Live
+                  </span>
+                ) : null}
+              </div>
+              <p className="truncate text-xs text-[var(--cream-muted)]">
+                {user.headline || user.mood || `${user.age} · nearby`}
+              </p>
+            </div>
+            <span className="shrink-0 text-xs font-bold text-[var(--copper)]">
+              {user.distance_label ?? distLabel}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 };

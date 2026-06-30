@@ -33,38 +33,83 @@ router.post(
   '/submit',
   upload.fields([
     { name: 'id_front', maxCount: 1 },
+    { name: 'id_back', maxCount: 1 },
     { name: 'selfie', maxCount: 1 },
   ]),
   async (req: AuthRequest, res: Response) => {
     const files = req.files as Record<string, Express.Multer.File[]> | undefined;
     const idFront = files?.id_front?.[0];
+    const idBack = files?.id_back?.[0];
     const selfie = files?.selfie?.[0];
+    const idType = String(req.body?.id_type || '').trim();
+    const nationality = String(req.body?.nationality || '').trim() || null;
 
     if (!idFront || !selfie) {
       return res.status(400).json({ error: 'missing_files' });
     }
 
+    if (idType !== 'passport' && idType !== 'driving_license') {
+      await Promise.allSettled([
+        fsPromises.unlink(idFront.path),
+        idBack ? fsPromises.unlink(idBack.path) : Promise.resolve(),
+        fsPromises.unlink(selfie.path),
+      ]);
+      return res.status(400).json({ error: 'invalid_id_type' });
+    }
+
+    if (idType === 'driving_license' && (!idBack || !nationality)) {
+      await Promise.allSettled([
+        fsPromises.unlink(idFront.path),
+        idBack ? fsPromises.unlink(idBack.path) : Promise.resolve(),
+        fsPromises.unlink(selfie.path),
+      ]);
+      return res.status(400).json({ error: 'missing_license_fields' });
+    }
+
+    if (!nationality) {
+      await Promise.allSettled([
+        fsPromises.unlink(idFront.path),
+        idBack ? fsPromises.unlink(idBack.path) : Promise.resolve(),
+        fsPromises.unlink(selfie.path),
+      ]);
+      return res.status(400).json({ error: 'missing_nationality' });
+    }
+
     try {
-      const [idValid, selfieValid] = await Promise.all([
+      const validations = [
         validateFileSignature(idFront.path, idFront.mimetype),
         validateFileSignature(selfie.path, selfie.mimetype),
-      ]);
+      ];
+      if (idBack) validations.push(validateFileSignature(idBack.path, idBack.mimetype));
 
-      if (!idValid || !selfieValid) {
-        await Promise.allSettled([fsPromises.unlink(idFront.path), fsPromises.unlink(selfie.path)]);
+      const results = await Promise.all(validations);
+      if (results.some((valid) => !valid)) {
+        await Promise.allSettled([
+          fsPromises.unlink(idFront.path),
+          idBack ? fsPromises.unlink(idBack.path) : Promise.resolve(),
+          fsPromises.unlink(selfie.path),
+        ]);
         return res.status(400).json({ error: 'invalid_file_signature' });
       }
 
       const result = await verificationService.submitVerification(req.userId!, {
         idFrontPath: idFront.path,
         idFrontKey: idFront.filename,
+        idBackPath: idBack?.path ?? null,
+        idBackKey: idBack?.filename ?? null,
         selfiePath: selfie.path,
         selfieKey: selfie.filename,
+        idType,
+        nationality,
       });
 
       res.json(result);
     } catch (err: any) {
-      await Promise.allSettled([fsPromises.unlink(idFront.path), fsPromises.unlink(selfie.path)]);
+      await Promise.allSettled([
+        fsPromises.unlink(idFront.path),
+        idBack ? fsPromises.unlink(idBack.path) : Promise.resolve(),
+        fsPromises.unlink(selfie.path),
+      ]);
 
       if (err?.code === 'already_verified') {
         return res.status(400).json({ error: 'already_verified' });

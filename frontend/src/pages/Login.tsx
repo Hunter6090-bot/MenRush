@@ -8,12 +8,6 @@ import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
 import { SiteFooter } from '../components/SiteFooter';
 
-const cityMoments = [
-  { place: 'Shoreditch', detail: '4 people nearby right now' },
-  { place: 'Camden', detail: '2 new matches in motion' },
-  { place: 'Soho', detail: 'Location filters narrowing the crowd' },
-];
-
 export const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -71,8 +65,8 @@ export const Login = () => {
       <div className="relative z-10 mx-auto flex min-h-0 flex-1 w-full max-w-7xl items-center px-5 py-6 sm:px-8 lg:px-10">
         <div className="grid w-full gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
           <section className="max-w-2xl self-center">
-            <Link to="/login" className="inline-block hover:opacity-80 transition-opacity">
-              <CoinFlip qrValue="https://menrush.com" sizeClass="h-24" noFlip />
+            <Link to="/" className="inline-block hover:opacity-80 transition-opacity">
+              <CoinFlip qrValue="https://menrush.com" sizeClass="h-28 sm:h-32" noFlip />
             </Link>
 
             <h1 className="mr-hero-heading mt-7">
@@ -84,21 +78,6 @@ export const Login = () => {
               New here? Create an account, then verify with a government ID and matching selfie
               before you can discover or chat.
             </p>
-
-
-            <div className="mt-10 grid max-w-xl gap-3 sm:grid-cols-3">
-              {cityMoments.map((moment) => (
-                <article
-                  key={moment.place}
-                  className="rounded-[1.4rem] border border-[#3D2B0E] bg-[#1E1508]/50 p-4 backdrop-blur-md"
-                >
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#C4832A]">
-                    {moment.place}
-                  </p>
-                  <p className="mt-3 text-sm leading-6 text-[#F0E0C0]/78">{moment.detail}</p>
-                </article>
-              ))}
-            </div>
           </section>
 
           <section className="w-full max-w-md lg:justify-self-end">

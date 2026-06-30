@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { accessControl, SecurityError } from '../security/access';
 import { isExhaustedMedia, resolveMediaPath, signedMediaUrl } from '../security/media';
-import type { MediaKind } from '../types/validation';
+import type { MediaKind, MessageMediaKind } from '../types/validation';
 import { MISSED_CALL_MESSAGE, MISSED_CALL_PREVIEW } from '../constants/missedCall';
 
 /**
@@ -24,7 +24,7 @@ interface ConversationRow {
   receiver_id: string;
   message: string;
   created_at: string;
-  media_type: MediaKind | null;
+  media_type: MessageMediaKind | null;
   media_url: string | null;
   media_storage_key?: string | null;
   media_mime_type?: string | null;
@@ -133,6 +133,29 @@ export const messageService = {
     );
 
     return attachSenderName(result.rows[0] as ConversationRow);
+  },
+
+  async sendLocationMessage(
+    senderId: string,
+    receiverId: string,
+    coords: { lat: number; lng: number },
+  ) {
+    await accessControl.assertInteraction(senderId, receiverId, { requireMatch: true });
+
+    const id = uuidv4();
+    const payload = JSON.stringify({
+      lat: coords.lat,
+      lng: coords.lng,
+    });
+
+    const result = await query(
+      `INSERT INTO messages (id, sender_id, receiver_id, message, created_at, media_type)
+       VALUES ($1, $2, $3, $4, NOW(), 'location')
+       RETURNING ${MESSAGE_COLUMNS}`,
+      [id, senderId, receiverId, payload],
+    );
+
+    return attachSenderName(presentMessage(result.rows[0] as ConversationRow, senderId));
   },
 
   async sendMediaMessage(

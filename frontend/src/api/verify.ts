@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 
 export type VerificationStatus = 'unverified' | 'pending' | 'verified' | 'rejected';
+export type IdDocumentType = 'passport' | 'driving_license';
 
 export interface VerifyStatus {
   is_verified: boolean;
@@ -17,14 +18,23 @@ export interface VerifySubmitResult {
   face_match_distance?: number | null;
 }
 
+export interface VerifySubmitPayload {
+  idFront: File;
+  selfie: File;
+  idType: IdDocumentType;
+  nationality?: string;
+  idBack?: File;
+}
+
 export const verifyAPI = {
-  submit: (idFront: File, selfie: File) => {
+  submit: ({ idFront, selfie, idType, nationality, idBack }: VerifySubmitPayload) => {
     const form = new FormData();
     form.append('id_front', idFront);
     form.append('selfie', selfie);
-    return apiClient.post<VerifySubmitResult>('/verify/submit', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    form.append('id_type', idType);
+    if (nationality) form.append('nationality', nationality);
+    if (idBack) form.append('id_back', idBack);
+    return apiClient.post<VerifySubmitResult>('/verify/submit', form);
   },
   status: () => apiClient.get<VerifyStatus>('/verify/status'),
 };

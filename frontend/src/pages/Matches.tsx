@@ -39,36 +39,42 @@ export const Matches = () => {
 
   return (
     <Layout>
-      <div className="max-w-5xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
+      <div className="mx-auto max-w-5xl px-4 py-4 pb-8 lg:px-8 lg:py-8">
+        <div className="mb-6 hidden lg:block">
+          <p className="nn-overline mb-1">Connections</p>
+          <p className="text-sm text-[var(--cream-muted)]">Mutual likes — message anyone here directly.</p>
+        </div>
+
+        <div className="mb-5 flex items-center justify-between lg:hidden">
           <div>
-            <h1 className="text-2xl font-black text-[#F0E0C0] tracking-tight">Your Matches</h1>
-            <p className="text-[#A89070] text-sm mt-1">Your mutual connections</p>
+            <h1 className="text-2xl font-black tracking-tight text-[#F0E0C0]">Your Matches</h1>
+            <p className="mt-1 text-sm text-[#A89070]">Your mutual connections</p>
           </div>
         </div>
 
         {loading ? (
-          <div className="flex flex-col gap-3">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-[72px] bg-[#1E1508] rounded-2xl border border-[#3D2B0E] animate-pulse" />
+          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-[88px] animate-pulse rounded-2xl border border-[#3D2B0E] bg-[#1E1508] lg:h-[220px]" />
             ))}
           </div>
         ) : error ? (
-          <div className="text-center py-12">
-            <p className="text-[#F0E0C0]/70 text-sm">{error}</p>
+          <div className="py-12 text-center">
+            <p className="text-sm text-[#F0E0C0]/70">{error}</p>
           </div>
         ) : matches.length > 0 ? (
-          <div className="flex flex-col gap-3 animate-fade-in">
+          <div className="animate-fade-in flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:gap-4 xl:grid-cols-3">
             {matches.map((match) => (
-              <ConversationItem
-                key={match.id}
-                userId={match.id}
-                name={match.name}
-                photoUrl={match.photo_url}
-                online={match.online}
-                lastMessageTime={match.last_message_at}
-                lastMessage={match.last_message ?? (match.online ? 'Active now — say hi!' : 'Say hello!')}
-              />
+              <div key={match.id} className="lg:rounded-2xl lg:border lg:border-[#3D2B0E] lg:bg-[#12100C]/80 lg:p-1 lg:shadow-card">
+                <ConversationItem
+                  userId={match.id}
+                  name={match.name}
+                  photoUrl={match.photo_url}
+                  online={match.online}
+                  lastMessageTime={match.last_message_at}
+                  lastMessage={match.last_message ?? (match.online ? 'Active now — say hi!' : 'Say hello!')}
+                />
+              </div>
             ))}
           </div>
         ) : (

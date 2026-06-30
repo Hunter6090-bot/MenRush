@@ -128,9 +128,7 @@ export const Register = () => {
       <div className="relative z-10 flex flex-1 items-center justify-center p-4">
         <div className="w-full max-w-sm animate-slide-up">
           <div className="mb-6 flex justify-center">
-            <Link to="/" className="hover:opacity-80 transition-opacity">
-              <CoinFlip qrValue="https://menrush.com" sizeClass="h-24" />
-            </Link>
+            <CoinFlip qrValue="https://menrush.com" sizeClass="h-28 sm:h-32" />
           </div>
 
         <div className="bg-[#1E1508]/80 backdrop-blur-xl border border-[#3D2B0E] rounded-2xl p-6 shadow-card">

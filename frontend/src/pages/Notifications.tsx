@@ -54,11 +54,11 @@ export const Notifications = () => {
 
   return (
     <Layout>
-      <div className="max-w-xl mx-auto px-4 py-6 pb-10 space-y-4">
-        <div className="flex items-start justify-between gap-3">
+      <div className="mx-auto flex min-h-0 max-w-xl flex-col gap-4 px-4 py-4 pb-10 lg:max-w-6xl lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] lg:items-start lg:gap-8 lg:px-8 lg:py-8">
+        <div className="flex items-start justify-between gap-3 lg:col-span-2 lg:hidden">
           <div>
             <h1 className="text-2xl font-bold text-[#F0E0C0]">Notifications</h1>
-            <p className="text-[#A89070] text-sm mt-1">
+            <p className="mt-1 text-sm text-[#A89070]">
               Messages, matches, profile views and more.
             </p>
           </div>
@@ -66,12 +66,29 @@ export const Notifications = () => {
             <button
               type="button"
               onClick={() => void handleMarkAllRead()}
-              className="shrink-0 rounded-xl border border-[#3D2B0E] px-3 py-2 text-[11px] font-bold text-[#C4832A] hover:bg-[#C4832A]/10 transition-colors"
+              className="shrink-0 rounded-xl border border-[#3D2B0E] px-3 py-2 text-[11px] font-bold text-[#C4832A] transition-colors hover:bg-[#C4832A]/10"
             >
               Mark all read
             </button>
           )}
         </div>
+
+        <div className="space-y-4 lg:col-start-1 lg:row-start-1">
+          <div className="hidden items-center justify-between gap-3 lg:flex">
+            <div>
+              <p className="nn-overline mb-1">Activity</p>
+              <p className="text-sm text-[var(--cream-muted)]">Recent alerts from your network.</p>
+            </div>
+            {unreadCount > 0 && (
+              <button
+                type="button"
+                onClick={() => void handleMarkAllRead()}
+                className="shrink-0 rounded-xl border border-[#3D2B0E] px-3 py-2 text-[11px] font-bold text-[#C4832A] transition-colors hover:bg-[#C4832A]/10"
+              >
+                Mark all read
+              </button>
+            )}
+          </div>
 
         {loadError && (
           <div
@@ -157,7 +174,11 @@ export const Notifications = () => {
           </ul>
         )}
 
-        <NotificationSettings />
+        </div>
+
+        <aside className="lg:col-start-2 lg:row-start-1 lg:sticky lg:top-6">
+          <NotificationSettings />
+        </aside>
       </div>
     </Layout>
   );

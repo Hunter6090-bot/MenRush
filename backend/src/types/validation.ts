@@ -45,7 +45,14 @@ export const MessageSchema = z.object({
 
 // Media messages (image or audio) accept the same receiver + an optional
 // caption. The file is uploaded as multipart and validated server-side.
+export const LocationMessageSchema = z.object({
+  receiver_id: z.string().uuid(),
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+});
+
 export const MEDIA_KINDS = ['image', 'audio'] as const;
+export const MESSAGE_MEDIA_KINDS = ['image', 'audio', 'location'] as const;
 export const MediaMessageFormSchema = z.object({
   receiver_id: z.string().uuid(),
   kind: z.enum(MEDIA_KINDS),
@@ -145,4 +152,6 @@ export type CreateAlbumInput = z.infer<typeof CreateAlbumSchema>;
 export type AddAlbumPhotoInput = z.infer<typeof AddAlbumPhotoSchema>;
 export type GrantAlbumInput = z.infer<typeof GrantAlbumSchema>;
 export type MediaKind = (typeof MEDIA_KINDS)[number];
+export type MessageMediaKind = (typeof MESSAGE_MEDIA_KINDS)[number];
+export type LocationMessageInput = z.infer<typeof LocationMessageSchema>;
 export type MediaMessageFormInput = z.infer<typeof MediaMessageFormSchema>;
