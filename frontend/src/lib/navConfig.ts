@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { FEATURES } from './featureFlags';
+import { ROUTE_LABELS } from './routeLabels';
 import { IconChat, IconDiscover, IconMatches, IconNotifications, IconProfile, IconRooms } from '../components/icons';
 
 export type NavIcon = ComponentType<{ size?: number; className?: string }>;
@@ -18,21 +19,21 @@ export function getNavItems(): NavItem[] {
   const items: NavItem[] = [
     {
       to: '/discover',
-      label: 'Nearby',
+      label: ROUTE_LABELS.nearby,
       Icon: IconDiscover,
       mobileTab: true,
       desktopNav: true,
     },
     {
       to: '/matches',
-      label: 'Matches',
+      label: ROUTE_LABELS.matches,
       Icon: IconMatches,
       mobileTab: true,
       desktopNav: true,
     },
     {
       to: '/conversations',
-      label: 'Messages',
+      label: ROUTE_LABELS.messages,
       shortLabel: 'Chat',
       Icon: IconChat,
       badgeKey: 'messages',
@@ -44,7 +45,7 @@ export function getNavItems(): NavItem[] {
   if (FEATURES.chatRooms) {
     items.push({
       to: '/rooms',
-      label: 'Rooms',
+      label: ROUTE_LABELS.rooms,
       Icon: IconRooms,
       desktopNav: true,
     });
@@ -53,7 +54,7 @@ export function getNavItems(): NavItem[] {
   items.push(
     {
       to: '/notifications',
-      label: 'Alerts',
+      label: ROUTE_LABELS.alerts,
       Icon: IconNotifications,
       badgeKey: 'notifications',
       mobileTab: true,
@@ -61,7 +62,7 @@ export function getNavItems(): NavItem[] {
     },
     {
       to: '/profile',
-      label: 'Profile',
+      label: ROUTE_LABELS.profile,
       Icon: IconProfile,
       mobileTab: true,
       desktopNav: true,
@@ -99,6 +100,6 @@ export function mobilePageTitle(pathname: string): string {
 
   if (pathname === '/albums') return 'Albums';
   if (pathname === '/premium') return 'Premium';
-  if (pathname === '/stream') return 'Live list';
+  if (pathname === '/stream') return ROUTE_LABELS.liveProfileList;
   return 'MenRush';
 }

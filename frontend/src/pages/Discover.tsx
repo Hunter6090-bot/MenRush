@@ -22,6 +22,7 @@ import {
   discoveryResultBucket,
   trackEventOnce,
 } from '../observability/analytics';
+import { ROUTE_LABELS } from '../lib/routeLabels';
 
 
 const INJECT_ID = '__discover_styles__';
@@ -275,9 +276,11 @@ export const Discover = () => {
       .getMe()
       .then((r) => {
         const until = r.data?.pulse_expires_at || r.data?.available_until;
-        if (until && !pulseUntil) {
+        if (until) {
           const d = new Date(until);
-          if (d.getTime() > Date.now()) setPulseUntil(d);
+          if (d.getTime() > Date.now()) {
+            setPulseUntil((current) => current ?? d);
+          }
         }
         if (r.data?.lat != null && r.data?.lng != null) {
           const savedLat = Number(r.data.lat);
@@ -289,7 +292,7 @@ export const Discover = () => {
         }
       })
       .catch(() => {});
-  }, [pulseUntil, useDiscoveryLocation]);
+  }, [useDiscoveryLocation]);
 
   // Render map tiles immediately while GPS resolves; saved profile / GPS recentre later.
   useEffect(() => {
@@ -460,15 +463,16 @@ export const Discover = () => {
   }, [users, selectedUser]);
 
   useEffect(() => {
-    if (tokenMissing || !mapContainerRef.current || !mapCenter) return;
+    if (tokenMissing || !mapContainerRef.current) return;
 
     if (mapRef.current) return;
 
+    const startCenter = mapCenter ?? DEFAULT_DISCOVERY_CENTER;
     mapboxgl.accessToken = mapboxToken!;
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
       style: 'mapbox://styles/mapbox/dark-v11',
-      center: [mapCenter[1], mapCenter[0]],
+      center: [startCenter[1], startCenter[0]],
       zoom: 14,
       attributionControl: false,
     });
@@ -476,8 +480,8 @@ export const Discover = () => {
     map.addControl(
       new mapboxgl.GeolocateControl({
         positionOptions: { enableHighAccuracy: true },
-        trackUserLocation: true,
-        showUserHeading: true,
+        trackUserLocation: false,
+        showUserHeading: false,
       }),
       'bottom-right',
     );
@@ -495,7 +499,7 @@ export const Discover = () => {
     selfEl.className = 'map-self-dot';
     selfDotRef.current = selfEl;
     selfMarkerRef.current = new mapboxgl.Marker({ element: selfEl })
-      .setLngLat([mapCenter[1], mapCenter[0]])
+      .setLngLat([startCenter[1], startCenter[0]])
       .addTo(map);
 
     mapRef.current = map;
@@ -512,7 +516,8 @@ export const Discover = () => {
       selfDotRef.current = null;
       setMapLoaded(false);
     };
-  }, [mapCenter, mapboxToken, tokenMissing]);
+    // mapCenter excluded — GPS updates recenter via applyLiveGps/easeTo, not map teardown.
+  }, [mapboxToken, tokenMissing]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -655,7 +660,7 @@ export const Discover = () => {
           className="absolute top-[112px] left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-full bg-[var(--bg-elevated)]/85 backdrop-blur-sm border border-[var(--border-default)] shadow-md"
         >
           <p className="text-[11px] font-bold text-[var(--cream-soft)] tracking-wide whitespace-nowrap">
-            {loading ? (
+            {loading && nearbyCount === 0 ? (
               <span className="text-[var(--cream-muted)]">Scanning…</span>
             ) : nearbyCount === 0 ? (
               <button onClick={handleRadiusCycle} className="text-[var(--copper)]">
@@ -704,15 +709,15 @@ export const Discover = () => {
               style={{ background: 'var(--copper)', color: 'var(--bg-primary)' }}
               aria-current="page"
             >
-              Map
+              {ROUTE_LABELS.map}
             </span>
             <Link
               to="/stream"
               className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] transition-colors hover:text-[var(--copper)]"
               style={{ color: 'var(--cream-soft)' }}
-              aria-label="Switch to live profile list"
+              aria-label={`Switch to ${ROUTE_LABELS.liveProfileList}`}
             >
-              Live profile list
+              {ROUTE_LABELS.liveProfileList}
             </Link>
           </div>
         </div>
@@ -760,7 +765,7 @@ export const Discover = () => {
                 Nearby now
               </p>
               <p className="mt-1 text-sm font-semibold text-[var(--cream)]">
-                {loading ? 'Scanning…' : `${nearbyCount} in range`}
+                {loading && nearbyCount === 0 ? 'Scanning…' : `${nearbyCount} in range`}
               </p>
             </div>
             <div className="hidden min-h-0 flex-1 overflow-y-auto lg:block">

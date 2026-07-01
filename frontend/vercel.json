@@ -3,6 +3,18 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://backend-production-d587.up.railway.app/api/:path*"
+    },
+    {
+      "source": "/uploads/:path*",
+      "destination": "https://backend-production-d587.up.railway.app/uploads/:path*"
+    },
+    {
+      "source": "/socket.io/:path*",
+      "destination": "https://backend-production-d587.up.railway.app/socket.io/:path*"
+    },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

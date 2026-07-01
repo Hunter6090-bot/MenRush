@@ -89,6 +89,31 @@ async function extractDescriptor(
 }
 
 export const faceMatchService = {
+  async detectFace(filePath: string): Promise<{ found: boolean; engineAvailable: boolean }> {
+    let faceapi: FaceApiModule | null;
+    try {
+      faceapi = await loadEngine();
+    } catch {
+      return { found: false, engineAvailable: false };
+    }
+
+    if (!faceapi) {
+      return { found: false, engineAvailable: false };
+    }
+
+    try {
+      const { Image } = await import('@napi-rs/canvas');
+      const descriptor = await extractDescriptor(faceapi, Image, filePath);
+      return { found: Boolean(descriptor), engineAvailable: true };
+    } catch (err) {
+      console.warn(
+        '[verify] face detect failed:',
+        err instanceof Error ? err.message : err,
+      );
+      return { found: false, engineAvailable: false };
+    }
+  },
+
   async compare(idFrontPath: string, selfiePath: string): Promise<FaceMatchResult> {
     let faceapi: FaceApiModule | null;
     try {

@@ -26,7 +26,33 @@ export interface VerifySubmitPayload {
   idBack?: File;
 }
 
+export type IdPrecheckTemplate =
+  | 'passport'
+  | 'driving_license_front'
+  | 'driving_license_back';
+
+export interface IdPrecheckCheck {
+  id: string;
+  label: string;
+  passed: boolean;
+  detail?: string;
+}
+
+export interface IdPrecheckResult {
+  acceptable: boolean;
+  source: 'huggingface' | 'local';
+  checks: IdPrecheckCheck[];
+  message: string;
+  rejectionReasons: string[];
+}
+
 export const verifyAPI = {
+  precheck: (idImage: File, template: IdPrecheckTemplate) => {
+    const form = new FormData();
+    form.append('id_image', idImage);
+    form.append('template', template);
+    return apiClient.post<IdPrecheckResult>('/verify/precheck', form);
+  },
   submit: ({ idFront, selfie, idType, nationality, idBack }: VerifySubmitPayload) => {
     const form = new FormData();
     form.append('id_front', idFront);

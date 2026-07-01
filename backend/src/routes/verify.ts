@@ -5,7 +5,17 @@ import path from 'path';
 import multer from 'multer';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { verificationService, DocumentAlreadyUsedError } from '../services/verification.service';
+import {
+  idPrecheckService,
+  type IdPrecheckTemplate,
+} from '../services/verification/id-precheck.service';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
+
+const PRECHECK_TEMPLATES = new Set<IdPrecheckTemplate>([
+  'passport',
+  'driving_license_front',
+  'driving_license_back',
+]);
 
 const router = Router();
 const verificationDir = path.resolve(__dirname, '../../uploads/verification');
@@ -28,6 +38,36 @@ const upload = multer({
 });
 
 router.use(authMiddleware);
+
+router.post('/precheck', upload.single('id_image'), async (req: AuthRequest, res: Response) => {
+  const file = req.file;
+  const template = String(req.body?.template || '').trim() as IdPrecheckTemplate;
+
+  if (!file) {
+    return res.status(400).json({ error: 'missing_file' });
+  }
+
+  if (!PRECHECK_TEMPLATES.has(template)) {
+    await fsPromises.unlink(file.path).catch(() => undefined);
+    return res.status(400).json({ error: 'invalid_template' });
+  }
+
+  try {
+    const validSignature = await validateFileSignature(file.path, file.mimetype);
+    if (!validSignature) {
+      await fsPromises.unlink(file.path).catch(() => undefined);
+      return res.status(400).json({ error: 'invalid_file_signature' });
+    }
+
+    const result = await idPrecheckService.check(file.path, template);
+    res.json(result);
+  } catch (err) {
+    console.error('[verify] precheck error:', err);
+    res.status(500).json({ error: 'id_precheck_failed' });
+  } finally {
+    await fsPromises.unlink(file.path).catch(() => undefined);
+  }
+});
 
 router.post(
   '/submit',

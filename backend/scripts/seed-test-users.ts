@@ -23,6 +23,8 @@ type SeedUser = {
   age: number;
   label: string;
   password?: string;
+  /** Pin to Shoreditch test coords (for remote testers who should appear in London). */
+  seedLondonLocation?: boolean;
 };
 
 export const SEED_USERS: SeedUser[] = [
@@ -32,6 +34,7 @@ export const SEED_USERS: SeedUser[] = [
     name: 'Al',
     age: 30,
     label: 'Founder (Boss)',
+    seedLondonLocation: true,
   },
   {
     id: '6ba7b810-9dad-11d1-80b4-00c04fd430c8',
@@ -39,6 +42,7 @@ export const SEED_USERS: SeedUser[] = [
     name: 'Pete',
     age: 32,
     label: 'Marketing manager',
+    seedLondonLocation: true,
   },
   {
     id: 'd4a8f2c1-9b3e-4d7a-8e5f-1c2b3a4d5e6f',
@@ -47,6 +51,14 @@ export const SEED_USERS: SeedUser[] = [
     age: 30,
     label: 'Tester',
     password: 'LegalHead-7ydy1bkyp8!7',
+  },
+  {
+    id: 'b2000003-0003-4003-8003-000000000003',
+    email: 'rfell30@hotmail.com',
+    name: 'RFell',
+    age: 30,
+    label: 'Tester',
+    seedLondonLocation: true,
   },
   {
     id: 'a1000001-0001-4001-8001-000000000001',
@@ -83,8 +95,9 @@ async function upsertUser(user: SeedUser, passwordHash: string): Promise<string>
   const userId = userRes.rows[0].id as string;
 
   const isE2eFixture = user.email.endsWith('@example.com');
+  const useLondonPin = isE2eFixture || user.seedLondonLocation === true;
 
-  if (isE2eFixture) {
+  if (useLondonPin) {
     await query(
       `INSERT INTO profiles (user_id, location, lat, lng, online, last_seen, is_visible, is_ghost)
        VALUES ($1, ST_MakePoint($3, $2)::geography, $2, $3, TRUE, NOW(), TRUE, FALSE)

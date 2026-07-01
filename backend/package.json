@@ -15,6 +15,7 @@
     "audit:safety": "bash ../scripts/audit-safety.sh"
   },
   "dependencies": {
+    "@huggingface/inference": "^4.13.21",
     "@napi-rs/canvas": "^1.0.1",
     "@sentry/node": "^10.57.0",
     "@tensorflow/tfjs": "^4.22.0",

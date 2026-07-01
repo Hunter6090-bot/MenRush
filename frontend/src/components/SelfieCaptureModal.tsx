@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { assessFrameQuality } from '../lib/captureQuality';
 import { DocumentScannerOverlay } from './DocumentScannerOverlay';
 
-const STEADY_MS = 1200;
+const ALIGNED_FRAMES_TO_CAPTURE = 3;
 
 interface SelfieCaptureModalProps {
   open: boolean;
@@ -141,7 +141,7 @@ function VerificationSelfieCapture({
 }: SelfieCaptureModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const steadySinceRef = useRef<number | null>(null);
+  const alignedFramesRef = useRef(0);
   const onCloseRef = useRef(onClose);
   const onErrorRef = useRef(onError);
   const onCaptureRef = useRef(onCapture);
@@ -153,7 +153,6 @@ function VerificationSelfieCapture({
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [qualityMsg, setQualityMsg] = useState('Starting camera…');
   const [qualityOk, setQualityOk] = useState(false);
-  const [steadyProgress, setSteadyProgress] = useState(0);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -169,8 +168,7 @@ function VerificationSelfieCapture({
       setPreviewFile(null);
       setQualityMsg('Starting camera…');
       setQualityOk(false);
-      setSteadyProgress(0);
-      steadySinceRef.current = null;
+      alignedFramesRef.current = 0;
     }
   }, [open]);
 
@@ -283,8 +281,7 @@ function VerificationSelfieCapture({
         setPreviewFile(file);
         setPreviewUrl(URL.createObjectURL(blob));
         setPhase('preview');
-        steadySinceRef.current = null;
-        setSteadyProgress(0);
+        alignedFramesRef.current = 0;
       },
       'image/jpeg',
       0.94,
@@ -307,16 +304,14 @@ function VerificationSelfieCapture({
       setQualityOk(q.ok);
 
       if (!q.ok) {
-        steadySinceRef.current = null;
-        setSteadyProgress(0);
+        alignedFramesRef.current = 0;
         return;
       }
 
-      const now = Date.now();
-      if (steadySinceRef.current === null) steadySinceRef.current = now;
-      const elapsed = now - steadySinceRef.current;
-      setSteadyProgress(Math.min(1, elapsed / STEADY_MS));
-      if (elapsed >= STEADY_MS) captureFrameRef.current();
+      alignedFramesRef.current += 1;
+      if (alignedFramesRef.current >= ALIGNED_FRAMES_TO_CAPTURE) {
+        captureFrameRef.current();
+      }
     }, 120);
 
     return () => window.clearInterval(tick);
@@ -335,8 +330,7 @@ function VerificationSelfieCapture({
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
     setPreviewFile(null);
-    steadySinceRef.current = null;
-    setSteadyProgress(0);
+    alignedFramesRef.current = 0;
     setPhase('camera');
   };
 
@@ -380,7 +374,7 @@ function VerificationSelfieCapture({
                 className="absolute inset-0 h-full w-full object-cover"
                 style={mirror ? { transform: 'scaleX(-1)' } : undefined}
               />
-              <DocumentScannerOverlay mode="selfie" scanning={qualityOk} />
+              <DocumentScannerOverlay mode="selfie" aligned={qualityOk} />
               {!ready && (
                 <div className="absolute inset-0 flex items-center justify-center text-sm text-[#A89070]">
                   Initialising camera…
@@ -391,20 +385,12 @@ function VerificationSelfieCapture({
                   <span
                     className={`rounded-full px-4 py-1.5 text-xs font-semibold ${
                       qualityOk
-                        ? 'bg-[#C4832A]/20 text-[#C4832A] border border-[#C4832A]/40'
-                        : 'bg-[#0D0A06]/85 text-[#F0E0C0] border border-[#3D2B0E]'
+                        ? 'bg-[#22C55E]/15 text-[#22C55E] border border-[#22C55E]/50'
+                        : 'bg-[#EF4444]/15 text-[#FCA5A5] border border-[#EF4444]/45'
                     }`}
                   >
                     {qualityMsg}
                   </span>
-                  {qualityOk ? (
-                    <div className="h-1 w-40 overflow-hidden rounded-full bg-[#3D2B0E]">
-                      <div
-                        className="h-full bg-[#C4832A] transition-all duration-100"
-                        style={{ width: `${steadyProgress * 100}%` }}
-                      />
-                    </div>
-                  ) : null}
                 </div>
               ) : null}
             </>

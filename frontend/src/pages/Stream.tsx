@@ -4,6 +4,7 @@ import { usersAPI } from '../api/client';
 import { Layout } from '../components/Layout';
 import { NearbyUser, ProfileCard } from '../components/ProfileCard';
 import { PulseRing } from '../components/PulseRing';
+import { ROUTE_LABELS } from '../lib/routeLabels';
 
 export const Stream = () => {
   const [users, setUsers] = useState<NearbyUser[]>([]);
@@ -55,7 +56,7 @@ export const Stream = () => {
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#C4832A]">Live view</p>
-            <h1 className="text-2xl font-bold text-[#F0E0C0]">Live profile list</h1>
+            <h1 className="text-2xl font-bold text-[#F0E0C0]">{ROUTE_LABELS.liveProfileList}</h1>
             <p className="text-sm text-[#A89070] mt-1">
               A clean list view of who is around right now.
             </p>
