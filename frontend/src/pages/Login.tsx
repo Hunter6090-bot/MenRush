@@ -4,9 +4,17 @@ import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
 import { consumePostAuthRedirect, safeNextPath, savePostAuthRedirect } from '../lib/profileLinks';
 import { CoinFlip } from '../components/CoinFlip';
-import { RandomBackground } from '../components/RandomBackground';
+import { PublicHeroBlock, PublicMarketingShell } from '../components/PublicMarketingShell';
 import { PulseRing } from '../components/PulseRing';
-import { SiteFooter } from '../components/SiteFooter';
+import {
+  publicHeroLogoClass,
+  publicInputClass,
+  publicLabelClass,
+  publicNavLinkPrimary,
+  publicNavLinkSecondary,
+  publicPanelClass,
+  publicPrimaryButtonClass,
+} from '../lib/publicStyles';
 
 export const Login = () => {
   const [email, setEmail] = useState('');
@@ -41,113 +49,97 @@ export const Login = () => {
   };
 
   return (
-    <div className="relative flex min-h-dvh flex-col overflow-hidden">
-      <RandomBackground />
-      <div className="absolute inset-0 bg-black/60" />
-
-      <header className="relative z-20 flex h-16 shrink-0 items-center justify-end px-5 sm:px-8 lg:px-10">
+    <PublicMarketingShell
+      header={
         <nav className="flex items-center gap-2 text-sm font-semibold">
-          <Link
-            to="/register"
-            className="rounded-lg border border-[#C4832A]/45 bg-[#C4832A]/15 px-3.5 py-2 font-bold text-[#F0E0C0] transition-colors hover:bg-[#C4832A]/25"
-          >
+          <Link to="/register" className={publicNavLinkPrimary}>
             Sign up
           </Link>
-          <Link
-            to="/coming-soon#waitlist"
-            className="rounded-lg border border-[#3D2B0E] bg-[#1E1508]/68 px-3.5 py-2 font-bold text-[#A89070] transition-colors hover:border-[#C4832A]/45 hover:text-[#F0E0C0]"
-          >
+          <Link to="/coming-soon#waitlist" className={publicNavLinkSecondary}>
             Waitlist
           </Link>
         </nav>
-      </header>
-
-      <div className="relative z-10 mx-auto flex min-h-0 flex-1 w-full max-w-7xl items-center px-5 py-6 sm:px-8 lg:px-10">
-        <div className="grid w-full gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
-          <section className="max-w-2xl self-center">
-            <Link to="/" className="inline-block hover:opacity-80 transition-opacity">
-              <CoinFlip qrValue="https://menrush.com" sizeClass="h-28 sm:h-32" noFlip />
-            </Link>
-
-            <h1 className="mr-hero-heading mt-7">
-              Sign in and see who&apos;s
-              <span className="mr-hero-accent">near you right now.</span>
-            </h1>
-
-            <p className="mr-copy mt-5 max-w-2xl">
-              New here? Create an account, then verify with a government ID and matching selfie
-              before you can discover or chat.
-            </p>
-          </section>
-
-          <section className="w-full max-w-md lg:justify-self-end">
-            <div className="rounded-[1.25rem] border border-[#C4832A]/22 bg-[#0D0A06]/72 p-5 shadow-[0_18px_70px_rgba(0,0,0,0.55)] backdrop-blur-xl sm:p-6">
-              {error && (
-                <div className="mb-4 flex items-start gap-2.5 rounded-2xl border border-[#8B4513]/30 bg-[#8B4513]/12 px-4 py-3 text-sm text-[#F0E0C0]/90 backdrop-blur-md animate-fade-in">
-                  <AlertIcon className="mt-0.5 h-4 w-4 flex-shrink-0" />
-                  {error}
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-[#F0E0C0]/82">
-                    Username / Email
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    required
-                    className="w-full rounded-2xl border border-[#C4832A]/26 bg-[#F7EFE0] px-4 py-3.5 text-sm font-semibold text-[#2A1C0A] placeholder:text-[#8B6B42]/70 focus:border-[#C4832A]/70 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/30"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-[#F0E0C0]/82">
-                    Password
-                  </label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    className="w-full rounded-2xl border border-[#C4832A]/26 bg-[#F7EFE0] px-4 py-3.5 text-sm font-semibold text-[#2A1C0A] placeholder:text-[#8B6B42]/70 focus:border-[#C4832A]/70 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/30"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:from-[#D4943B] hover:to-[#9B5523] hover:shadow-glow-blue active:scale-[0.98] disabled:opacity-50"
-                >
-                  {loading ? <><PulseRing size={16} /> Signing in…</> : 'Sign In'}
-                </button>
-              </form>
-
-              <div className="mt-5 flex flex-col gap-3 text-sm text-[#F0E0C0]/72 sm:flex-row sm:items-center sm:justify-between">
-                <p>
-                  New here?{' '}
-                  <Link to="/register" className="font-semibold text-[#C4832A] transition-colors hover:text-[#D4943B]">
-                    Create an account
-                  </Link>
-                </p>
-                <Link
-                  to="/forgot-password"
-                  className="shrink-0 font-medium text-[#C4832A] transition-colors hover:text-[#D4943B]"
-                >
-                  Forgot password?
-                </Link>
-              </div>
+      }
+      hero={
+        <>
+          <Link to="/" className="inline-block hover:opacity-80 transition-opacity">
+            <CoinFlip qrValue="https://menrush.com" sizeClass={publicHeroLogoClass} noFlip />
+          </Link>
+          <PublicHeroBlock
+            title="Sign in and see who's"
+            accent="near you right now."
+            copy="New here? Create an account, then verify with a government ID and matching selfie before you can discover or chat."
+          />
+        </>
+      }
+      panel={
+        <div className={publicPanelClass}>
+          {error && (
+            <div className="mb-4 flex items-start gap-2.5 rounded-2xl border border-[#8B4513]/30 bg-[#8B4513]/12 px-4 py-3 text-sm text-[#F0E0C0]/90 backdrop-blur-md animate-fade-in">
+              <AlertIcon className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              {error}
             </div>
-          </section>
-        </div>
-      </div>
+          )}
 
-      <SiteFooter className="relative z-10 shrink-0" />
-    </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="login-email" className={publicLabelClass}>
+                Username / Email
+              </label>
+              <input
+                id="login-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                required
+                className={publicInputClass}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="login-password" className={publicLabelClass}>
+                Password
+              </label>
+              <input
+                id="login-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                className={publicInputClass}
+              />
+            </div>
+
+            <button type="submit" disabled={loading} className={publicPrimaryButtonClass}>
+              {loading ? (
+                <>
+                  <PulseRing size={16} /> Signing in…
+                </>
+              ) : (
+                'Sign In'
+              )}
+            </button>
+          </form>
+
+          <div className="mt-5 flex flex-col gap-3 text-sm text-[#F0E0C0]/72 sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              New here?{' '}
+              <Link to="/register" className="font-semibold text-[#C4832A] transition-colors hover:text-[#D4943B]">
+                Create an account
+              </Link>
+            </p>
+            <Link
+              to="/forgot-password"
+              className="shrink-0 font-medium text-[#C4832A] transition-colors hover:text-[#D4943B]"
+            >
+              Forgot password?
+            </Link>
+          </div>
+        </div>
+      }
+    />
   );
 };
 

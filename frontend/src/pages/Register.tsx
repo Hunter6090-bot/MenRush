@@ -3,9 +3,17 @@ import { Link, useNavigate } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
 import { CoinFlip } from '../components/CoinFlip';
-import { RandomBackground } from '../components/RandomBackground';
+import { PublicHeroBlock, PublicMarketingShell } from '../components/PublicMarketingShell';
 import { PulseRing } from '../components/PulseRing';
-import { SiteFooter } from '../components/SiteFooter';
+import {
+  publicHeroLogoClass,
+  publicInputClass,
+  publicLabelClass,
+  publicNavLinkPrimary,
+  publicNavLinkSecondary,
+  publicPanelClass,
+  publicPrimaryButtonClass,
+} from '../lib/publicStyles';
 
 interface FormState {
   displayName: string;
@@ -107,10 +115,6 @@ export const Register = () => {
     }
   };
 
-  const inputClass =
-    'w-full bg-[#1E1508]/60 border border-[#3D2B0E] text-[#F0E0C0] placeholder:text-[#A89070]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 focus:border-[#C4832A]/50 transition-all duration-200';
-
-  const labelClass = 'block text-xs font-bold text-[#A89070] mb-1.5 uppercase tracking-wide';
   const helperClass = 'text-[11px] text-[#A89070]/70 mt-1.5 leading-snug';
 
   const segColor = (idx: number): string => {
@@ -121,29 +125,41 @@ export const Register = () => {
   };
 
   return (
-    <div className="relative flex min-h-dvh flex-col overflow-hidden">
-      <RandomBackground />
-      <div className="absolute inset-0 bg-black/60" />
-
-      <div className="relative z-10 flex flex-1 items-center justify-center p-4">
-        <div className="w-full max-w-sm animate-slide-up">
-          <div className="mb-6 flex justify-center">
-            <CoinFlip qrValue="https://menrush.com" sizeClass="h-28 sm:h-32" />
-          </div>
-
-        <div className="bg-[#1E1508]/80 backdrop-blur-xl border border-[#3D2B0E] rounded-2xl p-6 shadow-card">
-          <h1 className="mr-form-heading mb-5">Create account</h1>
-
+    <PublicMarketingShell
+      header={
+        <nav className="flex items-center gap-2 text-sm font-semibold">
+          <Link to="/login" className={publicNavLinkSecondary}>
+            Sign in
+          </Link>
+          <Link to="/coming-soon#waitlist" className={publicNavLinkPrimary}>
+            Waitlist
+          </Link>
+        </nav>
+      }
+      hero={
+        <>
+          <Link to="/" className="inline-block hover:opacity-80 transition-opacity">
+            <CoinFlip qrValue="https://menrush.com" sizeClass={publicHeroLogoClass} />
+          </Link>
+          <PublicHeroBlock
+            title="Create your account"
+            accent="and get verified."
+            copy="Government ID plus a matching selfie before you can discover or chat. Usually under three minutes."
+          />
+        </>
+      }
+      panel={
+        <div className={`${publicPanelClass} max-h-[min(70dvh,720px)] overflow-y-auto lg:max-h-none lg:overflow-visible`}>
           {error && (
-            <div className="flex items-start gap-2.5 bg-[#8B4513]/10 border border-[#8B4513]/25 text-[#F0E0C0]/90 px-4 py-3 rounded-xl mb-4 text-sm animate-fade-in">
-              <AlertIcon className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <div className="mb-4 flex items-start gap-2.5 rounded-2xl border border-[#8B4513]/30 bg-[#8B4513]/12 px-4 py-3 text-sm text-[#F0E0C0]/90 backdrop-blur-md animate-fade-in">
+              <AlertIcon className="mt-0.5 h-4 w-4 flex-shrink-0" />
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className={labelClass}>Display Name</label>
+              <label className={publicLabelClass}>Display Name</label>
               <input
                 type="text"
                 value={form.displayName}
@@ -153,15 +169,15 @@ export const Register = () => {
                 required
                 minLength={2}
                 maxLength={24}
-                className={inputClass}
+                className={publicInputClass}
               />
               <p className={helperClass}>
-                This is what other men see. First name, nickname, or handle. Doesn't need to be real.
+                This is what other men see. First name, nickname, or handle. Doesn&apos;t need to be real.
               </p>
             </div>
 
             <div>
-              <label className={labelClass}>Email</label>
+              <label className={publicLabelClass}>Email</label>
               <input
                 type="email"
                 value={form.email}
@@ -169,26 +185,26 @@ export const Register = () => {
                 placeholder="you@example.com"
                 aria-label="Email address"
                 required
-                className={inputClass}
+                className={publicInputClass}
               />
               <p className={helperClass}>Used for login and account recovery. We never share it.</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label className={labelClass}>Date of Birth</label>
+                <label className={publicLabelClass}>Date of Birth</label>
                 <input
                   type="date"
                   value={form.dob}
                   onChange={setField('dob')}
                   aria-label="Date of birth"
                   required
-                  className={inputClass}
+                  className={publicInputClass}
                 />
                 <p className={helperClass}>Must match the date on your government ID.</p>
               </div>
               <div>
-                <label className={labelClass}>Password</label>
+                <label className={publicLabelClass}>Password</label>
                 <input
                   type="password"
                   value={form.password}
@@ -196,13 +212,13 @@ export const Register = () => {
                   placeholder="Min 12 chars, mixed case, 1 number"
                   required
                   minLength={12}
-                  className={inputClass}
+                  className={publicInputClass}
                 />
-                <div className="flex gap-1 mt-2">
+                <div className="mt-2 flex gap-1">
                   {[0, 1, 2].map((i) => (
                     <span
                       key={i}
-                      className="flex-1 h-1 rounded-full transition-colors"
+                      className="h-1 flex-1 rounded-full transition-colors"
                       style={{ background: segColor(i) }}
                     />
                   ))}
@@ -210,77 +226,75 @@ export const Register = () => {
               </div>
             </div>
 
-            <label className="flex items-start gap-2.5 text-xs text-[#F0E0C0]/85 leading-snug cursor-pointer">
+            <label className="flex cursor-pointer items-start gap-2.5 text-xs leading-snug text-[#F0E0C0]/85">
               <input
                 type="checkbox"
                 checked={form.ageConsent}
                 onChange={setField('ageConsent')}
                 required
-                className="mt-0.5 w-4 h-4 rounded border-[#3D2B0E] bg-[#1E1508] accent-[#C4832A]"
+                className="mt-0.5 h-4 w-4 rounded border-[#3D2B0E] bg-[#1E1508] accent-[#C4832A]"
               />
               <span>I confirm I am 18 years or older.</span>
             </label>
 
-            <label className="flex items-start gap-2.5 text-xs text-[#F0E0C0]/85 leading-snug cursor-pointer">
+            <label className="flex cursor-pointer items-start gap-2.5 text-xs leading-snug text-[#F0E0C0]/85">
               <input
                 type="checkbox"
                 checked={form.idConsent}
                 onChange={setField('idConsent')}
                 required
-                className="mt-0.5 w-4 h-4 rounded border-[#3D2B0E] bg-[#1E1508] accent-[#C4832A]"
+                className="mt-0.5 h-4 w-4 rounded border-[#3D2B0E] bg-[#1E1508] accent-[#C4832A]"
               />
               <span>
-                I understand MenRush requires a government-issued photo ID (passport, driving
-                licence, or national ID for my country) plus a live selfie that matches that ID
-                before I can use the app.
+                I understand MenRush requires a government-issued photo ID plus a live selfie that
+                matches that ID before I can use the app.
               </span>
             </label>
 
-            <label className="flex items-start gap-2.5 text-xs text-[#F0E0C0]/85 leading-snug cursor-pointer">
+            <label className="flex cursor-pointer items-start gap-2.5 text-xs leading-snug text-[#F0E0C0]/85">
               <input
                 type="checkbox"
                 checked={form.legalConsent}
                 onChange={setField('legalConsent')}
                 required
-                className="mt-0.5 w-4 h-4 rounded border-[#3D2B0E] bg-[#1E1508] accent-[#C4832A]"
+                className="mt-0.5 h-4 w-4 rounded border-[#3D2B0E] bg-[#1E1508] accent-[#C4832A]"
               />
               <span>
                 I have read and accept the{' '}
-                <a href="/terms" className="text-[#C4832A] hover:text-[#D4943B] underline-offset-2 hover:underline">
+                <Link to="/terms" className="text-[#C4832A] underline-offset-2 hover:text-[#D4943B] hover:underline">
                   Terms of Service
-                </a>{' '}
+                </Link>{' '}
                 and{' '}
-                <a href="/privacy" className="text-[#C4832A] hover:text-[#D4943B] underline-offset-2 hover:underline">
+                <Link to="/privacy" className="text-[#C4832A] underline-offset-2 hover:text-[#D4943B] hover:underline">
                   Privacy Policy
-                </a>
+                </Link>
                 .
               </span>
             </label>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 mt-1 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] disabled:opacity-50 text-white font-bold text-sm tracking-wide transition-all duration-200 hover:shadow-glow-blue active:scale-[0.98] flex items-center justify-center gap-2"
-            >
-              {loading ? <><PulseRing size={16} /> Creating account…</> : '→ CREATE ACCOUNT'}
+            <button type="submit" disabled={loading} className={publicPrimaryButtonClass}>
+              {loading ? (
+                <>
+                  <PulseRing size={16} /> Creating account…
+                </>
+              ) : (
+                'Create account'
+              )}
             </button>
-            <p className="text-[11px] text-[#A89070]/80 text-center mt-2">
-              Next: government ID + matching selfie. Usually under 3 minutes.
+            <p className="mt-2 text-center text-[11px] text-[#A89070]/80">
+              Next: government ID + matching selfie.
             </p>
           </form>
 
-          <p className="text-center mt-5 text-xs text-[#A89070]">
+          <p className="mt-5 text-center text-xs text-[#A89070]">
             Already have an account?{' '}
-            <Link to="/login" className="text-[#C4832A] hover:text-[#D4943B] font-semibold transition-colors">
-              Sign In
+            <Link to="/login" className="font-semibold text-[#C4832A] transition-colors hover:text-[#D4943B]">
+              Sign in
             </Link>
           </p>
         </div>
-        </div>
-      </div>
-
-      <SiteFooter className="relative z-10 shrink-0" />
-    </div>
+      }
+    />
   );
 };
 

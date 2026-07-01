@@ -30,11 +30,11 @@ test('waitlist rejects invalid input without making a request', async ({ page })
   const network = await guardAgainstSideEffects(page);
 
   await page.goto('/');
-  await page.getByLabel('Email address').fill('not-an-email');
-  await page.getByRole('button', { name: 'Get early access' }).click();
+  await page.getByLabel('Email').fill('not-an-email');
+  await page.getByRole('button', { name: 'Join waitlist' }).click();
 
   await expect(page.getByText('Please enter a valid email address.')).toBeVisible();
-  await expect(page.getByLabel('Email address')).toHaveValue('not-an-email');
+  await expect(page.getByLabel('Email')).toHaveValue('not-an-email');
   expect(network.expectNoSideEffects()).toEqual([]);
 });
 
@@ -43,12 +43,7 @@ test('login page exposes sign-in controls without submitting credentials', async
 
   await page.goto('/login');
 
-  await expect(
-    page.getByRole('heading', {
-      level: 1,
-      name: /Invite holders can sign in and step back into/,
-    }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(/Sign in and see who's/i);
   await expect(page.getByPlaceholder('you@example.com')).toBeVisible();
   await expect(page.getByPlaceholder('••••••••')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign In' })).toBeEnabled();

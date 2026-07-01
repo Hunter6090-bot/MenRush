@@ -1,0 +1,44 @@
+---
+description: Invariants for MenRush public landing and auth pages — do not regress without explicit approval.
+globs: frontend/src/pages/ComingSoon.tsx,frontend/src/pages/Login.tsx,frontend/src/pages/Register.tsx,frontend/src/components/PublicMarketingShell.tsx,frontend/src/lib/publicStyles.ts,frontend/src/styles/globals.css
+alwaysApply: false
+---
+
+# Public marketing pages — design lock
+
+These invariants protect the pre-launch public experience. **Do not change without explicit product approval.**
+
+Enforced by E2E: `frontend/e2e/public-design-lock.spec.ts`  
+Run: `npm run test:e2e -- public-design-lock` (from `frontend/`)
+
+## Shell & styles
+
+- `/`, `/coming-soon`, `/login`, and `/register` **MUST** use `PublicMarketingShell` from `frontend/src/components/PublicMarketingShell.tsx`.
+- Shared tokens **MUST** come from `frontend/src/lib/publicStyles.ts` (`publicPanelClass`, `publicInputClass`, `publicNavLinkPrimary`, etc.).
+- Do not reintroduce one-off layout grids or duplicate shell markup on these pages.
+
+## Hero typography
+
+- Hero headings **MUST** use `mr-hero-heading` + `mr-hero-accent` (Inter via `globals.css`).
+- **Do NOT** use `mr-brand-wordmark`, Cinzel, or `--nn-font-display` on public hero `<h1>` elements.
+- Prefer `PublicHeroBlock` for consistent hero structure.
+
+## Landing (`/` and `/coming-soon`)
+
+- **One** header sign-in link only: “Already have an invite? Sign in” → `/login`.
+- **No** duplicate sign-in CTAs in the page body.
+- **No** separate “JOIN THE WAITLIST” or “GET EARLY ACCESS” button rows — waitlist lives in the right panel only (“Join waitlist” submit).
+- Canonical waitlist anchor: **`/coming-soon#waitlist`** (element `id="waitlist"`).
+- **Beta 200** copy in the hero footer note must remain unless product explicitly removes it.
+
+## Login & Register
+
+- Header nav includes **Waitlist** linking to `/coming-soon#waitlist`.
+- Form inputs use cream `publicInputClass` (`bg-[#F7EFE0]`).
+- Keep mobile/desktop layout in sync via `PublicMarketingShell` — no separate mobile-only hero or CTA stacks.
+
+## Before merging changes
+
+1. Run `npm run build` in `frontend/`.
+2. Run `npm run test:e2e -- public-design-lock`.
+3. If tests fail, fix or get product sign-off — do not weaken assertions to “make green.”

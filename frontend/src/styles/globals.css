@@ -63,6 +63,7 @@ input:-webkit-autofill:focus {
 .mr-hero-heading {
   max-width: 52rem;
   color: #F0E0C0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   font-size: clamp(3.35rem, 7.6vw, 6.9rem);
   font-weight: 900;
   line-height: 0.95;
