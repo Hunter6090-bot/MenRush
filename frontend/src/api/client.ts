@@ -61,4 +61,16 @@ export const messagesAPI = {
   getConversations: () => apiClient.get('/messages/conversations'),
 };
 
+type ContactSubmitPayload = {
+  name: string;
+  email: string;
+  enquiryType: 'general' | 'privacy' | 'support' | 'press';
+  message: string;
+};
+
+export const contactAPI = {
+  submit: (data: ContactSubmitPayload) =>
+    apiClient.post<{ success: boolean; message: string }>('/contact', data),
+};
+
 export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
