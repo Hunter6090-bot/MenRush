@@ -7,6 +7,8 @@ interface User {
   age?: number;
   bio?: string;
   photo_url?: string;
+  is_verified?: boolean;
+  verification_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
 }
 
 interface AuthState {
