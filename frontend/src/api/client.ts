@@ -17,6 +17,11 @@ apiClient.interceptors.request.use((config) => {
 export const authAPI = {
   register: (data: unknown) => apiClient.post('/auth/register', data),
   login: (data: unknown) => apiClient.post('/auth/login', data),
+  validateBetaInviteCode: (data: { code: string }) =>
+    apiClient.post<{ valid: boolean; registration_open: boolean; code?: string; message?: string }>(
+      '/auth/validate-beta-invite',
+      data,
+    ),
   forgotPassword: (data: { email: string }) => apiClient.post('/auth/forgot-password', data),
   resetPassword: (data: { token: string; password: string }) =>
     apiClient.post('/auth/reset-password', data),

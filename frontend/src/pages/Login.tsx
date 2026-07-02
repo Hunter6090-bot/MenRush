@@ -117,10 +117,16 @@ export const Login = () => {
             </button>
           </form>
 
-          <div className="mt-5 text-right text-sm">
+          <div className="mt-5 flex flex-col gap-3 text-sm text-[#F0E0C0]/72 sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              Selected for beta?{' '}
+              <Link to="/register" className="font-semibold text-[#C4832A] transition-colors hover:text-[#D4943B]">
+                Create an account
+              </Link>
+            </p>
             <Link
               to="/forgot-password"
-              className="font-medium text-[#C4832A] transition-colors hover:text-[#D4943B]"
+              className="shrink-0 font-medium text-[#C4832A] transition-colors hover:text-[#D4943B]"
             >
               Forgot password?
             </Link>

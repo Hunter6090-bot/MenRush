@@ -2,6 +2,7 @@ import bcryptjs from 'bcryptjs';
 import crypto from 'crypto';
 import { query } from '../db';
 import { RegisterInput, LoginInput } from '../types/validation';
+import { assertValidBetaInviteCode, isBetaRegistrationOpen } from './betaInvite.service';
 import { v4 as uuidv4 } from 'uuid';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -72,6 +73,13 @@ const verifyTokenInternal = (token: string): TokenPayload => {
 
 export const authService = {
   async register(data: RegisterInput) {
+    if (process.env.BETA_INVITE_CODES?.trim()) {
+      if (!isBetaRegistrationOpen()) {
+        throw new Error('Beta account creation is not open yet.');
+      }
+      assertValidBetaInviteCode(data.beta_invite_code || '');
+    }
+
     const id = uuidv4();
     const hashedPassword = await bcryptjs.hash(data.password, 10);
 

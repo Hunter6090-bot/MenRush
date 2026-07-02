@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
+import { getValidatedBetaInviteCode } from '../lib/betaInvite';
 import { CoinFlip } from '../components/CoinFlip';
 import { PublicHeroBlock, PublicMarketingShell } from '../components/PublicMarketingShell';
 import { PulseRing } from '../components/PulseRing';
@@ -9,7 +10,6 @@ import {
   publicHeroLogoClass,
   publicInputClass,
   publicLabelClass,
-  publicNavLinkPrimary,
   publicNavLinkSecondary,
   publicPanelClass,
   publicPrimaryButtonClass,
@@ -50,6 +50,7 @@ function passwordScore(pw: string): 0 | 1 | 2 | 3 {
 }
 
 export const Register = () => {
+  const betaInviteCode = getValidatedBetaInviteCode();
   const [form, setForm] = useState<FormState>({
     displayName: '',
     email: '',
@@ -76,6 +77,10 @@ export const Register = () => {
 
   const age = useMemo(() => calcAge(form.dob), [form.dob]);
   const pwScore = useMemo(() => passwordScore(form.password), [form.password]);
+
+  if (!betaInviteCode) {
+    return <Navigate to="/register" replace />;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,6 +110,7 @@ export const Register = () => {
         email: form.email,
         age: age ?? 0,
         password: form.password,
+        beta_invite_code: betaInviteCode,
       });
       setAuth(res.data.user, res.data.token);
       navigate('/verify');
@@ -131,7 +137,7 @@ export const Register = () => {
           <Link to="/login" className={publicNavLinkSecondary}>
             Sign in
           </Link>
-          <Link to="/coming-soon#waitlist" className={publicNavLinkPrimary}>
+          <Link to="/" className={publicNavLinkSecondary}>
             Waitlist
           </Link>
         </nav>

@@ -5,6 +5,11 @@ export const RegisterSchema = z.object({
   password: z.string().min(8),
   name: z.string().min(2).max(50),
   age: z.number().min(18).max(120),
+  beta_invite_code: z.string().min(1).optional(),
+});
+
+export const BetaInviteCodeSchema = z.object({
+  code: z.string().min(1).max(64),
 });
 
 export const LoginSchema = z.object({
@@ -29,6 +34,7 @@ export const MessageSchema = z.object({
 });
 
 export type RegisterInput = z.infer<typeof RegisterSchema>;
+export type BetaInviteCodeInput = z.infer<typeof BetaInviteCodeSchema>;
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type ProfileInput = z.infer<typeof ProfileSchema>;
 export type LocationInput = z.infer<typeof LocationSchema>;
