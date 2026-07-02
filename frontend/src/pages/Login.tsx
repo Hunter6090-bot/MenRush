@@ -10,7 +10,6 @@ import {
   publicHeroLogoClass,
   publicInputClass,
   publicLabelClass,
-  publicNavLinkPrimary,
   publicNavLinkSecondary,
   publicPanelClass,
   publicPrimaryButtonClass,
@@ -51,14 +50,9 @@ export const Login = () => {
   return (
     <PublicMarketingShell
       header={
-        <nav className="flex items-center gap-2 text-sm font-semibold">
-          <Link to="/register" className={publicNavLinkPrimary}>
-            Sign up
-          </Link>
-          <Link to="/coming-soon#waitlist" className={publicNavLinkSecondary}>
-            Waitlist
-          </Link>
-        </nav>
+        <Link to="/" className={publicNavLinkSecondary}>
+          Waitlist
+        </Link>
       }
       hero={
         <>
@@ -68,7 +62,7 @@ export const Login = () => {
           <PublicHeroBlock
             title="Sign in and see who's"
             accent="near you right now."
-            copy="New here? Create an account, then verify with a government ID and matching selfie before you can discover or chat."
+            copy="For invite holders only. Use the email and password from your invite."
           />
         </>
       }
@@ -123,16 +117,10 @@ export const Login = () => {
             </button>
           </form>
 
-          <div className="mt-5 flex flex-col gap-3 text-sm text-[#F0E0C0]/72 sm:flex-row sm:items-center sm:justify-between">
-            <p>
-              New here?{' '}
-              <Link to="/register" className="font-semibold text-[#C4832A] transition-colors hover:text-[#D4943B]">
-                Create an account
-              </Link>
-            </p>
+          <div className="mt-5 text-right text-sm">
             <Link
               to="/forgot-password"
-              className="shrink-0 font-medium text-[#C4832A] transition-colors hover:text-[#D4943B]"
+              className="font-medium text-[#C4832A] transition-colors hover:text-[#D4943B]"
             >
               Forgot password?
             </Link>
