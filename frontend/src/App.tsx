@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ComingSoon } from './pages/ComingSoon';
+import { GurlTingle } from './pages/GurlTingle';
 import { Login } from './pages/Login';
 import { RegisterInviteCode } from './pages/RegisterInviteCode';
 import { Register } from './pages/Register';
@@ -30,6 +31,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<ComingSoon />} />
         <Route path="/coming-soon" element={<ComingSoon />} />
+        <Route path="/gurltingle" element={<GurlTingle />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<RegisterInviteCode />} />
         <Route path="/register/create" element={<Register />} />
