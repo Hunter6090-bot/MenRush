@@ -10,6 +10,7 @@ import {
   publicHeroLogoClass,
   publicInputClass,
   publicLabelClass,
+  publicNavLinkPrimary,
   publicNavLinkSecondary,
   publicPanelClass,
   publicPrimaryButtonClass,
@@ -137,7 +138,7 @@ export const Register = () => {
           <Link to="/login" className={publicNavLinkSecondary}>
             Sign in
           </Link>
-          <Link to="/" className={publicNavLinkSecondary}>
+          <Link to="/coming-soon#waitlist" className={publicNavLinkPrimary}>
             Waitlist
           </Link>
         </nav>

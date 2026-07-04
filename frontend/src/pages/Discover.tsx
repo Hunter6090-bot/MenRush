@@ -1,415 +1,956 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import { useNavigate } from 'react-router-dom';
-import L from 'leaflet';
-import { usersAPI } from '../api/client';
+import type { Root } from 'react-dom/client';
+import { Link, useNavigate } from 'react-router-dom';
+import { EventDTO, pulseAPI, usersAPI } from '../api/client';
 import { useLocationStore } from '../hooks/store';
-import { ProfileCard, NearbyUser } from '../components/ProfileCard';
+import { NearbyUser } from '../components/ProfileCard';
 import { Layout } from '../components/Layout';
-import { getPhotoUrl } from '../components/UserAvatar';
+import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
+import { PulsingAvatar } from '../components/PulsingAvatar';
+import { PulseFab } from '../components/PulseFab';
+import { ProximitySlider, RADIUS_OPTIONS } from '../components/ProximitySlider';
+import { ProfileDrawer } from '../components/ProfileDrawer';
+import { createMapMarkerElement, MapMarker } from '../components/MapMarker';
+import { getPhotoUrl, UserAvatar } from '../components/UserAvatar';
+import { TribePillRow } from '../components/TribePillRow';
+import { EventsRail } from '../components/EventsRail';
+import { MoodBadge } from '../components/MoodPicker';
+import { getDistanceLabel, isUserPulsing, distanceMeters } from '../lib/discovery';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
+import {
+  discoveryResultBucket,
+  trackEventOnce,
+} from '../observability/analytics';
+import { ROUTE_LABELS } from '../lib/routeLabels';
 
-/* ── Map helpers ───────────────────────────────── */
 
-/** Keep map centred on current position */
-const MapSync = ({ center }: { center: [number, number] }) => {
-  const map = useMap();
-  useEffect(() => {
-    map.setView(center, map.getZoom(), { animate: true });
-  }, [center, map]);
-  return null;
-};
+const INJECT_ID = '__discover_styles__';
+if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
+  const s = document.createElement('style');
+  s.id = INJECT_ID;
+  s.textContent = `
+    .user-strip-scroll::-webkit-scrollbar { height: 0; }
+    .user-strip-scroll { scrollbar-width: none; -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; }
+    .user-strip-card { scroll-snap-align: start; }
+    .mapboxgl-popup-content { background: transparent !important; border: none !important; padding: 0 !important; box-shadow: none !important; }
+    .mapboxgl-popup-tip { display: none !important; }
+    .mapboxgl-map,
+    .mapboxgl-canvas-container,
+    .mapboxgl-canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
+    .map-self-dot {
+      width: 18px; height: 18px; border-radius: 50%;
+      background: var(--copper);
+      border: 3px solid var(--cream);
+      box-shadow: 0 0 0 6px rgba(196,131,42,0.18), 0 2px 10px rgba(196,131,42,0.55);
+      position: relative;
+    }
+    .map-self-dot--pulsing {
+      width: 22px; height: 22px;
+      box-shadow: 0 0 0 8px rgba(196,131,42,0.28), 0 0 24px rgba(196,131,42,0.75);
+      animation: pulse-breathe 2s ease-in-out infinite;
+    }
+    .map-self-dot--pulsing::before,
+    .map-self-dot--pulsing::after {
+      content: '';
+      position: absolute;
+      inset: -10px;
+      border-radius: 50%;
+      border: 2px solid rgba(196,131,42,0.65);
+      pointer-events: none;
+    }
+    .map-self-dot--pulsing::before { animation: pulse-ring 2s ease-out infinite; }
+    .map-self-dot--pulsing::after { animation: pulse-ring 2s ease-out 1s infinite; }
+  `;
+  document.head.appendChild(s);
+}
 
-/** Radar pulse marker for current user */
-const selfIcon = L.divIcon({
-  className: '',
-  html: `
-    <div style="position:relative;width:42px;height:42px;display:flex;align-items:center;justify-content:center;">
-      <div style="position:absolute;inset:0;border-radius:50%;background:#C4832A;animation:radarRing 2.4s ease-out infinite;opacity:.5;"></div>
-      <div style="position:absolute;inset:0;border-radius:50%;background:#C4832A;animation:radarRing 2.4s ease-out .8s infinite;opacity:.3;"></div>
-      <div style="position:absolute;inset:0;border-radius:50%;background:#C4832A;animation:radarRing 2.4s ease-out 1.6s infinite;opacity:.15;"></div>
-      <div style="position:relative;width:14px;height:14px;border-radius:50%;background:#C4832A;border:2.5px solid white;box-shadow:0 0 16px #C4832A80;z-index:10;"></div>
-    </div>`,
-  iconSize: [42, 42],
-  iconAnchor: [21, 21],
-});
+const DEFAULT_DISCOVERY_CENTER: [number, number] = [51.5136, -0.1365];
+const INSECURE_GPS_NOTICE =
+  'Live location on your phone needs a secure (HTTPS) link. Open the team tunnel URL — not the plain IP address — then allow location.';
 
-const createUserIcon = (user: NearbyUser) => {
-  const fullPhotoUrl = getPhotoUrl(user.photo_url);
-  return L.divIcon({
-    className: '',
-    html: `
-      <div style="
-        width:40px;height:40px;border-radius:50%;
-        border:2px solid #C4832A;overflow:hidden;
-        background:linear-gradient(135deg,#21252D,#1E1508);
-        display:flex;align-items:center;justify-content:center;
-        color:#F0E0C0;font-weight:700;font-size:15px;
-        box-shadow:0 0 0 3px rgba(196,131,42,.2),0 4px 16px rgba(0,0,0,.5);
-        transition:transform .2s;
-        font-family:Inter,sans-serif;
-      ">
-        ${fullPhotoUrl
-          ? `<img src="${fullPhotoUrl}" style="width:100%;height:100%;object-fit:cover;" />`
-          : `<span>${user.name[0]?.toUpperCase() ?? '?'}</span>`}
-      </div>`,
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
-    popupAnchor: [0, -24],
-  });
-};
-
-/* ── Page component ────────────────────────────── */
+/** Min interval between nearby roster API calls during live GPS. */
+const NEARBY_FETCH_MIN_MS = 20_000;
+/** Min movement before panning the map (avoids constant easeTo flicker). */
+const MAP_PAN_MIN_METERS = 50;
+/** Min movement before re-querying nearby users on GPS drift. */
+const NEARBY_REFETCH_MIN_METERS = 80;
 
 export const Discover = () => {
   const [users, setUsers] = useState<NearbyUser[]>([]);
+  const [likedUsers, setLikedUsers] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [radius, setRadius] = useState(5);
-  const [minAge, setMinAge] = useState(18);
-  const [maxAge, setMaxAge] = useState(100);
-  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
-  const [showFilters, setShowFilters] = useState(false);
+  const [radius, setRadius] = useState<number>(5);
+  const [tagFilters, setTagFilters] = useState<string[]>([]);
+  const [pulseUntil, setPulseUntil] = useState<Date | null>(null);
+  const [nextPulseAllowedAt, setNextPulseAllowedAt] = useState<string | null>(null);
+  const [pulseIsPremium, setPulseIsPremium] = useState(false);
+  const [pulseError, setPulseError] = useState('');
+  const [selectedUser, setSelectedUser] = useState<NearbyUser | null>(null);
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [locationNotice, setLocationNotice] = useState('');
+
   const { lat, lng, setLocation } = useLocationStore();
   const watchIdRef = useRef<number | null>(null);
   const hasFetchedRef = useRef(false);
+  const savedProfileLocationRef = useRef<{ lat: number; lng: number } | null>(null);
+  const lastGpsFetchRef = useRef<{ lat: number; lng: number; at: number } | null>(null);
+  const lastMapPanRef = useRef<{ lat: number; lng: number } | null>(null);
+  const fallbackTimerRef = useRef<number | null>(null);
+  const usingFallbackLocationRef = useRef(false);
+  const hasLiveGpsRef = useRef(false);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<mapboxgl.Map | null>(null);
+  const markersRef = useRef<Map<string, { marker: mapboxgl.Marker; root: Root; user: NearbyUser }>>(new Map());
+  const selfMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const selfDotRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
 
+  const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
+  const tokenMissing = !mapboxToken || mapboxToken === '__SET_ME__';
+
   const fetchNearbyUsers = useCallback(
-    async (latitude: number, longitude: number, r: number, filters?: any) => {
-      setLoading(true);
+    async (
+      latitude: number,
+      longitude: number,
+      r: number,
+      tags?: string[],
+      options?: { background?: boolean },
+    ) => {
+      if (!options?.background) setLoading(true);
       try {
-        const res = await usersAPI.getNearby(latitude, longitude, r, filters);
+        await usersAPI.updateLocation(latitude, longitude).catch(() => {});
+        const res = await usersAPI.getNearby(
+          latitude,
+          longitude,
+          r,
+          tags && tags.length > 0 ? { interests: tags } : undefined,
+        );
         setUsers(res.data);
+        trackEventOnce(
+          'first_discovery_load',
+          { outcome: 'succeeded', result_bucket: discoveryResultBucket(res.data.length) },
+          'first_discovery_load',
+        );
         setError('');
       } catch {
-        setError('Could not load nearby users. Please try again.');
+        trackEventOnce(
+          'first_discovery_load',
+          { outcome: 'failed', result_bucket: 'unknown' },
+          'first_discovery_load',
+        );
+        setError('Could not load nearby users.');
       } finally {
         setLoading(false);
       }
     },
-    []
+    [],
   );
+
+  const useDiscoveryLocation = useCallback(
+    (latitude: number, longitude: number, notice = '', forceRefresh = false) => {
+      setLocation(latitude, longitude);
+      setMapCenter([latitude, longitude]);
+      setLocationNotice(notice);
+      if (forceRefresh || !hasFetchedRef.current) {
+        hasFetchedRef.current = true;
+        fetchNearbyUsers(latitude, longitude, radius, tagFilters);
+      }
+    },
+    [fetchNearbyUsers, radius, setLocation, tagFilters],
+  );
+
+  const applyLiveGps = useCallback(
+    (latitude: number, longitude: number, options?: { force?: boolean }) => {
+      const recoveringFromFallback = usingFallbackLocationRef.current;
+      if (recoveringFromFallback) {
+        usingFallbackLocationRef.current = false;
+      }
+      hasLiveGpsRef.current = true;
+
+      setLocation(latitude, longitude);
+      setLocationNotice('');
+
+      const farFromPin =
+        mapCenter != null &&
+        distanceMeters(mapCenter[0], mapCenter[1], latitude, longitude) >= MAP_PAN_MIN_METERS;
+      const shouldRecenter =
+        !mapRef.current || recoveringFromFallback || options?.force || farFromPin;
+
+      if (!mapCenter || shouldRecenter) {
+        setMapCenter([latitude, longitude]);
+      }
+
+      if (mapRef.current) {
+        selfMarkerRef.current?.setLngLat([longitude, latitude]);
+        if (shouldRecenter) {
+          lastMapPanRef.current = { lat: latitude, lng: longitude };
+          mapRef.current.easeTo({ center: [longitude, latitude], duration: 700 });
+        }
+      }
+
+      const now = Date.now();
+      const lastFetch = lastGpsFetchRef.current;
+      const movedEnough =
+        !lastFetch ||
+        distanceMeters(lastFetch.lat, lastFetch.lng, latitude, longitude) >= NEARBY_REFETCH_MIN_METERS;
+      const waitedEnough = !lastFetch || now - lastFetch.at >= NEARBY_FETCH_MIN_MS;
+      const shouldFetch =
+        options?.force ||
+        recoveringFromFallback ||
+        !hasFetchedRef.current ||
+        (movedEnough && waitedEnough);
+
+      if (!shouldFetch) return;
+
+      const isBackground = lastFetch != null && !recoveringFromFallback;
+      hasFetchedRef.current = true;
+      lastGpsFetchRef.current = { lat: latitude, lng: longitude, at: now };
+      fetchNearbyUsers(latitude, longitude, radius, tagFilters, { background: isBackground });
+    },
+    [fetchNearbyUsers, mapCenter, radius, setLocation, tagFilters],
+  );
+
+  // Customer-facing "enable location" action for the fallback notice.
+  const handleEnableLocation = useCallback(() => {
+    if (!navigator.geolocation) return;
+    if (!window.isSecureContext) {
+      setLocationNotice(INSECURE_GPS_NOTICE);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        useDiscoveryLocation(coords.latitude, coords.longitude, '', true);
+      },
+      () => {
+        // Still blocked — keep the friendly fallback notice in place.
+      },
+      { enableHighAccuracy: true, timeout: 12000 },
+    );
+  }, [useDiscoveryLocation]);
+
+  const applyLocationFallback = useCallback(() => {
+    if (hasFetchedRef.current || hasLiveGpsRef.current) return;
+
+    usingFallbackLocationRef.current = true;
+
+    const saved = savedProfileLocationRef.current;
+    if (saved) {
+      useDiscoveryLocation(
+        saved.lat,
+        saved.lng,
+        window.isSecureContext
+          ? 'Using your last saved location.'
+          : INSECURE_GPS_NOTICE,
+        true,
+      );
+      return;
+    }
+
+    useDiscoveryLocation(
+      DEFAULT_DISCOVERY_CENTER[0],
+      DEFAULT_DISCOVERY_CENTER[1],
+      window.isSecureContext
+        ? 'Location access is off. Showing people near central London for now.'
+        : INSECURE_GPS_NOTICE,
+    );
+  }, [useDiscoveryLocation]);
+
+  useEffect(() => {
+    pulseAPI
+      .getMe()
+      .then((res) => {
+        const expiresAt = res.data?.pulse_expires_at;
+        setPulseUntil(expiresAt ? new Date(expiresAt) : null);
+        setNextPulseAllowedAt(res.data?.next_pulse_allowed_at ?? null);
+        setPulseIsPremium(!!res.data?.is_premium);
+      })
+      .catch(() => {});
+
+    usersAPI
+      .getMe()
+      .then((r) => {
+        const until = r.data?.pulse_expires_at || r.data?.available_until;
+        if (until) {
+          const d = new Date(until);
+          if (d.getTime() > Date.now()) {
+            setPulseUntil((current) => current ?? d);
+          }
+        }
+        if (r.data?.lat != null && r.data?.lng != null) {
+          const savedLat = Number(r.data.lat);
+          const savedLng = Number(r.data.lng);
+          savedProfileLocationRef.current = { lat: savedLat, lng: savedLng };
+          if (!hasLiveGpsRef.current && !hasFetchedRef.current) {
+            useDiscoveryLocation(savedLat, savedLng, '', true);
+          }
+        }
+      })
+      .catch(() => {});
+  }, [useDiscoveryLocation]);
+
+  // Render map tiles immediately while GPS resolves; saved profile / GPS recentre later.
+  useEffect(() => {
+    if (tokenMissing) return;
+    setMapCenter((current) => current ?? DEFAULT_DISCOVERY_CENTER);
+  }, [tokenMissing]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
+      setLocationNotice(INSECURE_GPS_NOTICE);
+      if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
+      fallbackTimerRef.current = window.setTimeout(() => {
+        applyLocationFallback();
+      }, 2500);
+    }
+  }, [applyLocationFallback]);
+
+  useEffect(() => {
+    if (!pulseUntil) return;
+    const id = window.setInterval(() => {
+      if (pulseUntil.getTime() <= Date.now()) {
+        setPulseUntil(null);
+      }
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [pulseUntil]);
 
   useEffect(() => {
     if (!navigator.geolocation) {
+      trackEventOnce(
+        'location_permission_outcome',
+        { outcome: 'unsupported' },
+        'location_permission_outcome',
+      );
       setError('Geolocation is not supported by your browser.');
       setLoading(false);
       return;
     }
-
     watchIdRef.current = navigator.geolocation.watchPosition(
       ({ coords }) => {
+        trackEventOnce(
+          'location_permission_outcome',
+          { outcome: 'granted' },
+          'location_permission_outcome',
+        );
         const { latitude, longitude } = coords;
-        setLocation(latitude, longitude);
-        setMapCenter([latitude, longitude]);
-        if (!hasFetchedRef.current) {
-          hasFetchedRef.current = true;
-          fetchNearbyUsers(latitude, longitude, radius, { minAge, maxAge, interests: selectedInterests });
+        applyLiveGps(latitude, longitude);
+      },
+      (positionError) => {
+        trackEventOnce(
+          'location_permission_outcome',
+          {
+            outcome: positionError.code === positionError.PERMISSION_DENIED ? 'denied' : 'unavailable',
+          },
+          'location_permission_outcome',
+        );
+        if (!hasFetchedRef.current && !hasLiveGpsRef.current) {
+          if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
+          fallbackTimerRef.current = window.setTimeout(() => {
+            applyLocationFallback();
+          }, window.isSecureContext ? 8000 : 2500);
         }
+        setError('');
       },
-      () => {
-        setError('Location access denied. Please allow it in your browser settings.');
-        setLoading(false);
-      },
-      { enableHighAccuracy: true, timeout: 12000 }
+      { enableHighAccuracy: true, timeout: 12000 },
     );
-
     return () => {
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+      if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
     };
-  }, []);
+  }, [applyLiveGps, applyLocationFallback]);
 
-  const handleRefresh = () => {
-    if (lat && lng) {
-      hasFetchedRef.current = false;
-      fetchNearbyUsers(lat, lng, radius, { minAge, maxAge, interests: selectedInterests });
-      hasFetchedRef.current = true;
+  // Live proximity: refresh the nearby roster every 20s using the latest location.
+  useEffect(() => {
+    if (lat == null || lng == null) return;
+    const id = window.setInterval(() => {
+      fetchNearbyUsers(lat, lng, radius, tagFilters, { background: true });
+    }, NEARBY_FETCH_MIN_MS);
+    return () => window.clearInterval(id);
+  }, [lat, lng, radius, tagFilters, fetchNearbyUsers]);
+
+  const handleRadiusChange = useCallback(
+    (next: (typeof RADIUS_OPTIONS)[number]) => {
+      setRadius(next);
+      if (lat != null && lng != null) fetchNearbyUsers(lat, lng, next, tagFilters);
+    },
+    [lat, lng, tagFilters, fetchNearbyUsers],
+  );
+
+  const handleRadiusCycle = () => {
+    const i = RADIUS_OPTIONS.indexOf(radius as (typeof RADIUS_OPTIONS)[number]);
+    const next = RADIUS_OPTIONS[(i + 1) % RADIUS_OPTIONS.length];
+    handleRadiusChange(next);
+  };
+
+  const toggleTag = useCallback(
+    (tag: string) => {
+      setTagFilters((prev) => {
+        const next = prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag];
+        if (lat != null && lng != null) fetchNearbyUsers(lat, lng, radius, next);
+        return next;
+      });
+    },
+    [lat, lng, radius, fetchNearbyUsers],
+  );
+
+  const clearTags = useCallback(() => {
+    setTagFilters([]);
+    if (lat != null && lng != null) fetchNearbyUsers(lat, lng, radius, []);
+  }, [lat, lng, radius, fetchNearbyUsers]);
+
+  const handleStartPulse = useCallback(
+    async (durationMin: 60 | 90 | 120) => {
+      try {
+        const res = await pulseAPI.start(durationMin);
+        setPulseUntil(new Date(res.data.expires_at));
+        setNextPulseAllowedAt(null);
+        setPulseError('');
+        if (lat != null && lng != null) fetchNearbyUsers(lat, lng, radius, tagFilters);
+      } catch (err: any) {
+        const cooldownAt = err?.response?.data?.next_pulse_allowed_at;
+        if (cooldownAt) {
+          setNextPulseAllowedAt(cooldownAt);
+        }
+        const msg = err?.response?.data?.error === 'cooldown'
+          ? 'Pulse is cooling down.'
+          : err?.response?.data?.error || 'Could not start Pulse.';
+        setPulseError(msg);
+        setTimeout(() => setPulseError(''), 4000);
+        throw err;
+      }
+    },
+    [lat, lng, radius, tagFilters, fetchNearbyUsers],
+  );
+
+  const handleStopPulse = useCallback(async () => {
+    try {
+      await pulseAPI.stop();
+      setPulseUntil(null);
+      const state = await pulseAPI.getMe().catch(() => null);
+      setNextPulseAllowedAt(state?.data?.next_pulse_allowed_at ?? null);
+      if (lat != null && lng != null) fetchNearbyUsers(lat, lng, radius, tagFilters);
+    } catch {
+      // swallow
     }
-  };
+  }, [lat, lng, radius, tagFilters, fetchNearbyUsers]);
 
-  const handleRadiusChange = (newRadius: number) => {
-    setRadius(newRadius);
-    if (lat && lng) fetchNearbyUsers(lat, lng, newRadius, { minAge, maxAge, interests: selectedInterests });
-  };
+  const handleLike = useCallback(
+    async (user: NearbyUser) => {
+      if (likedUsers.has(user.id)) {
+        navigate(`/messages/${user.id}`);
+        return;
+      }
+      try {
+        await usersAPI.likeUser(user.id);
+        setLikedUsers((p) => new Set([...p, user.id]));
+      } catch {
+        // ignore
+      }
+    },
+    [likedUsers, navigate],
+  );
 
-  const applyFilters = () => {
-    setShowFilters(false);
-    if (lat && lng) fetchNearbyUsers(lat, lng, radius, { minAge, maxAge, interests: selectedInterests });
-  };
+  useEffect(() => {
+    if (!selectedUser) return;
+    const fresh = users.find((user) => user.id === selectedUser.id);
+    if (fresh) setSelectedUser(fresh);
+  }, [users, selectedUser]);
 
-  const toggleInterest = (interest: string) => {
-    setSelectedInterests(prev =>
-      prev.includes(interest) ? prev.filter(i => i !== interest) : [...prev, interest]
+  useEffect(() => {
+    if (tokenMissing || !mapContainerRef.current) return;
+
+    if (mapRef.current) return;
+
+    const startCenter = mapCenter ?? DEFAULT_DISCOVERY_CENTER;
+    mapboxgl.accessToken = mapboxToken!;
+    const map = new mapboxgl.Map({
+      container: mapContainerRef.current,
+      style: 'mapbox://styles/mapbox/dark-v11',
+      center: [startCenter[1], startCenter[0]],
+      zoom: 14,
+      attributionControl: false,
+    });
+    map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
+    map.addControl(
+      new mapboxgl.GeolocateControl({
+        positionOptions: { enableHighAccuracy: true },
+        trackUserLocation: false,
+        showUserHeading: false,
+      }),
+      'bottom-right',
     );
-  };
+    const resizeMap = () => map.resize();
+    map.on('load', () => {
+      resizeMap();
+      setMapLoaded(true);
+    });
+    window.addEventListener('resize', resizeMap);
+    requestAnimationFrame(resizeMap);
+    window.setTimeout(resizeMap, 100);
+    window.setTimeout(resizeMap, 500);
+
+    const selfEl = document.createElement('div');
+    selfEl.className = 'map-self-dot';
+    selfDotRef.current = selfEl;
+    selfMarkerRef.current = new mapboxgl.Marker({ element: selfEl })
+      .setLngLat([startCenter[1], startCenter[0]])
+      .addTo(map);
+
+    mapRef.current = map;
+    return () => {
+      window.removeEventListener('resize', resizeMap);
+      markersRef.current.forEach(({ marker, root }) => {
+        marker.remove();
+        setTimeout(() => root.unmount(), 0);
+      });
+      markersRef.current.clear();
+      map.remove();
+      mapRef.current = null;
+      selfMarkerRef.current = null;
+      selfDotRef.current = null;
+      setMapLoaded(false);
+    };
+    // mapCenter excluded — GPS updates recenter via applyLiveGps/easeTo, not map teardown.
+  }, [mapboxToken, tokenMissing]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+
+    const visibleIds = new Set<string>();
+
+    users.forEach((user) => {
+      if (user.lat == null || user.lng == null) return;
+      visibleIds.add(user.id);
+      const isPulsing = isUserPulsing(user);
+      const markerUser = {
+        id: user.id,
+        name: user.name,
+        photo_url: user.photo_url,
+        isPulsing,
+        isVerified: !!(user as any).is_verified,
+      };
+      const lngLat: [number, number] = [Number(user.lng), Number(user.lat)];
+      const existing = markersRef.current.get(user.id);
+
+      if (existing) {
+        const prevLat = Number(existing.user.lat);
+        const prevLng = Number(existing.user.lng);
+        const nextLat = Number(user.lat);
+        const nextLng = Number(user.lng);
+        if (
+          Number.isFinite(prevLat) &&
+          Number.isFinite(prevLng) &&
+          (prevLat !== nextLat || prevLng !== nextLng)
+        ) {
+          existing.marker.setLngLat(lngLat);
+        }
+        const prev = existing.user;
+        const visualChanged =
+          prev.name !== user.name ||
+          prev.photo_url !== user.photo_url ||
+          isUserPulsing(prev) !== isPulsing ||
+          !!(prev as any).is_verified !== !!(user as any).is_verified;
+        if (visualChanged) {
+          const markerSize = isPulsing ? 52 : 44;
+          existing.root.render(<MapMarker user={markerUser} size={markerSize} />);
+          const el = existing.marker.getElement();
+          el.style.width = `${markerSize}px`;
+          el.style.height = `${markerSize}px`;
+        }
+        existing.user = user;
+        return;
+      }
+
+      const { element, root } = createMapMarkerElement(
+        markerUser,
+        () => setSelectedUser(user),
+        isPulsing ? 52 : 44,
+      );
+
+      const marker = new mapboxgl.Marker({ element })
+        .setLngLat(lngLat)
+        .addTo(map);
+
+      markersRef.current.set(user.id, { marker, root, user });
+    });
+
+    markersRef.current.forEach(({ marker, root }, userId) => {
+      if (visibleIds.has(userId)) return;
+      marker.remove();
+      setTimeout(() => root.unmount(), 0);
+      markersRef.current.delete(userId);
+    });
+  }, [users, mapLoaded]);
+
+  useEffect(() => {
+    if (!mapLoaded || lat == null || lng == null) return;
+    selfMarkerRef.current?.setLngLat([lng, lat]);
+  }, [mapLoaded, lat, lng]);
+
+  useEffect(() => {
+    const dot = selfDotRef.current;
+    if (!dot) return;
+    dot.className = pulseUntil ? 'map-self-dot map-self-dot--pulsing' : 'map-self-dot';
+  }, [pulseUntil]);
 
   const onlineCount = users.filter((u) => u.online).length;
-
-  const INTEREST_OPTIONS = [
-    'Travel', 'Music', 'Food', 'Sports', 'Art', 'Technology',
-    'Gaming', 'Photography', 'Fitness', 'Movies', 'Books', 'Cooking',
-    'Dancing', 'Hiking', 'Coffee', 'Fashion', 'Yoga', 'Skateboarding',
-    'Climbing', 'Cycling',
-  ];
+  const nearbyCount = users.length;
+  const sortedUsers = [...users].sort((a, b) => {
+    const ap = isUserPulsing(a) ? 1 : 0;
+    const bp = isUserPulsing(b) ? 1 : 0;
+    if (ap !== bp) return bp - ap;
+    return parseFloat(String(a.distance_km)) - parseFloat(String(b.distance_km));
+  });
 
   return (
     <Layout>
-      {/* ── Filter Modal ── */}
-      {showFilters && (
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[#1E1508] border border-white/10 w-full max-w-md rounded-3xl p-6 shadow-2xl animate-scale-up">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-[#F0E0C0]">Discovery Filters</h3>
-              <button onClick={() => setShowFilters(false)} className="text-[#F0E0C0]/40 hover:text-[#F0E0C0] transition-colors">
-                <CloseIcon className="w-6 h-6" />
-              </button>
-            </div>
+      <h1 className="sr-only">Nearby discovery map</h1>
+      <div
+        className="fixed left-0 right-0 top-[var(--mobile-header-height)] z-0 bottom-[var(--mobile-tab-bar-height)] bg-[#0D0A06] lg:left-[var(--desktop-sidebar-width)] lg:top-[var(--desktop-workspace-header)] lg:bottom-0"
+      >
+        <div className="absolute left-0 right-0 top-[104px] bottom-[188px] z-0 overflow-hidden border-y border-[var(--border-default)] bg-[#11100E] lg:top-0 lg:bottom-0 lg:right-[360px] lg:border-y-0 lg:border-r">
+          <div className="absolute inset-0">
+            <div ref={mapContainerRef} className="h-full w-full" />
+          </div>
 
-            <div className="space-y-6">
-              {/* Age Range */}
-              <div>
-                <label className="block text-xs font-bold text-[#F0E0C0]/40 uppercase tracking-widest mb-3">Age Range: {minAge} - {maxAge}</label>
-                <div className="flex gap-4">
-                  <input
-                    type="range"
-                    min="18"
-                    max="100"
-                    value={minAge}
-                    onChange={(e) => setMinAge(Math.min(Number(e.target.value), maxAge))}
-                    className="flex-1 accent-[#C4832A]"
-                  />
-                  <input
-                    type="range"
-                    min="18"
-                    max="100"
-                    value={maxAge}
-                    onChange={(e) => setMaxAge(Math.max(Number(e.target.value), minAge))}
-                    className="flex-1 accent-[#C4832A]"
-                  />
-                </div>
+          {tokenMissing && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center bg-[#0D0A06]">
+              <div className="w-14 h-14 rounded-full bg-[var(--copper)]/15 border border-[var(--copper)]/40 flex items-center justify-center mb-3">
+                <span className="text-[var(--copper)] text-2xl">·</span>
               </div>
-
-              {/* Interests */}
-              <div>
-                <label className="block text-xs font-bold text-[#F0E0C0]/40 uppercase tracking-widest mb-3">Filter by Interests</label>
-                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                  {INTEREST_OPTIONS.map(tag => (
-                    <button
-                      key={tag}
-                      onClick={() => toggleInterest(tag)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                        selectedInterests.includes(tag)
-                          ? 'bg-[#C4832A] border-[#C4832A] text-white shadow-glow-blue/40'
-                          : 'bg-white/5 border-white/10 text-[#F0E0C0]/60 hover:bg-white/10'
-                      }`}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <button
-                onClick={applyFilters}
-                className="w-full py-3.5 rounded-2xl bg-[#C4832A] hover:bg-[#D4943B] text-white font-bold text-sm shadow-lg shadow-blue-500/20 transition-all active:scale-95"
-              >
-                Apply Filters
-              </button>
+              <p className="text-[var(--cream)] text-sm font-bold">Map is taking a break</p>
+              <p className="text-[var(--cream-muted)] text-xs mt-1 max-w-xs leading-relaxed">
+                We can’t load the map right now. You can still browse who’s nearby below.
+              </p>
+              {import.meta.env.DEV && (
+                <p className="text-[var(--cream-muted)]/70 text-[10px] mt-2 max-w-xs leading-relaxed">
+                  Dev note: set <code className="text-[var(--copper)]">VITE_MAPBOX_TOKEN</code> in{' '}
+                  <code className="text-[var(--copper)]">frontend/.env</code> and restart the dev server.
+                </p>
+              )}
             </div>
+          )}
+
+          {!tokenMissing && !mapCenter && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0D0A06]/80 backdrop-blur-sm">
+              <div className="relative w-14 h-14 flex items-center justify-center">
+                <span className="absolute inset-0 rounded-full bg-[var(--copper)]/20 animate-pulse-ring" />
+                <span className="w-5 h-5 rounded-full bg-[var(--copper)] border-2 border-[var(--cream)] relative z-10" />
+              </div>
+              <p className="text-[var(--cream-muted)] text-xs font-medium tracking-widest uppercase mt-3">
+                {error || 'Finding nearby matches'}
+              </p>
+            </div>
+          )}
+
+          <div className="absolute top-3 left-3 z-30 pointer-events-auto">
+            <ProximitySlider value={radius} onChange={handleRadiusChange} variant="map" />
           </div>
         </div>
-      )}
 
-      {/* ── Map ── */}
-      <div className="relative w-full" style={{ height: '45vh', minHeight: 280 }}>
-        {mapCenter ? (
-          <MapContainer
-            center={mapCenter}
-            zoom={14}
-            style={{ width: '100%', height: '100%' }}
-            zoomControl={true}
-            attributionControl={true}
-          >
-            <TileLayer
-              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-              subdomains="abcd"
-              maxZoom={20}
-            />
-            <MapSync center={mapCenter} />
-
-            {/* Self marker */}
-            <Marker position={mapCenter} icon={selfIcon} />
-
-            {/* User markers */}
-            {users.map((user) =>
-              user.lat && user.lng ? (
-                <Marker
-                  key={user.id}
-                  position={[Number(user.lat), Number(user.lng)]}
-                  icon={createUserIcon(user)}
-                >
-                  <Popup>
-                    <div className="p-2 min-w-[160px]">
-                      <p className="font-semibold text-sm text-[#F0E0C0]">{user.name}, {user.age}</p>
-                      <p className="text-xs text-[#F0E0C0]/50 mt-0.5">
-                        {parseFloat(String(user.distance_km)).toFixed(1)} km away
-                      </p>
-                      {user.online && (
-                        <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 mt-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                          Online now
-                        </span>
-                      )}
-                      <button
-                        onClick={() => navigate(`/messages/${user.id}`)}
-                        className="mt-2 w-full py-1.5 rounded-lg bg-[#C4832A] hover:bg-[#D4943B] text-white text-xs font-semibold transition-colors"
-                      >
-                        Message
-                      </button>
-                    </div>
-                  </Popup>
-                </Marker>
-              ) : null
-            )}
-          </MapContainer>
-        ) : (
-          <div className="w-full h-full bg-[#1E1508] flex flex-col items-center justify-center gap-3">
-            {error ? (
-              <p className="text-[#FF6B6B]/80 text-sm px-8 text-center">{error}</p>
+        <div
+          data-testid="nearby-counts"
+          className="absolute top-[112px] left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-full bg-[var(--bg-elevated)]/85 backdrop-blur-sm border border-[var(--border-default)] shadow-md"
+        >
+          <p className="text-[11px] font-bold text-[var(--cream-soft)] tracking-wide whitespace-nowrap">
+            {loading && nearbyCount === 0 ? (
+              <span className="text-[var(--cream-muted)]">Scanning…</span>
+            ) : nearbyCount === 0 ? (
+              <button onClick={handleRadiusCycle} className="text-[var(--copper)]">
+                EXPAND YOUR RADIUS →
+              </button>
             ) : (
               <>
-                <div className="relative w-12 h-12 flex items-center justify-center">
-                  <span className="absolute inset-0 rounded-full bg-[#C4832A]/30 radar-ring-1" />
-                  <span className="absolute inset-0 rounded-full bg-[#C4832A]/20 radar-ring-2" />
-                  <span className="w-4 h-4 rounded-full bg-[#C4832A] border-2 border-white/80 shadow-glow-blue relative z-10" />
-                </div>
-                <p className="text-[#F0E0C0]/40 text-sm">Acquiring location…</p>
+                <span className="text-[var(--copper)] font-black">{nearbyCount}</span> NEARBY
+                <span className="text-[var(--cream-muted)] mx-1.5">·</span>
+                <span className="text-[var(--copper)] font-black">{onlineCount}</span> ONLINE NOW
               </>
             )}
-          </div>
-        )}
-
-        {/* Floating controls overlay */}
-        <div className="absolute top-3 right-3 z-[1000] flex flex-col gap-2">
-          <select
-            value={radius}
-            onChange={(e) => handleRadiusChange(Number(e.target.value))}
-            className="bg-[#1E1508]/90 backdrop-blur-sm border border-white/10 text-[#F0E0C0] text-xs font-medium px-2.5 py-1.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#C4832A] cursor-pointer"
-          >
-            <option value={1}>1 km</option>
-            <option value={2}>2 km</option>
-            <option value={5}>5 km</option>
-            <option value={10}>10 km</option>
-            <option value={25}>25 km</option>
-          </select>
-
-          <button
-            onClick={() => setShowFilters(true)}
-            className="flex items-center justify-center gap-1.5 bg-[#1E1508]/90 backdrop-blur-sm border border-white/10 text-[#F0E0C0] text-xs font-medium px-2.5 py-1.5 rounded-xl hover:bg-white/5 transition-all"
-          >
-            <FilterIcon className="w-3.5 h-3.5" />
-            Filters
-          </button>
-        </div>
-      </div>
-
-      {/* ── Users section ── */}
-      <div className="max-w-5xl mx-auto px-4 py-5 pb-6">
-        {/* Section header */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-base font-bold text-[#F0E0C0]">
-              {loading
-                ? 'Searching…'
-                : users.length > 0
-                ? `${users.length} ${users.length === 1 ? 'person' : 'people'} nearby`
-                : 'No one nearby'}
-            </h2>
-            {onlineCount > 0 && (
-              <p className="text-xs text-emerald-400/80 mt-0.5">{onlineCount} online now</p>
-            )}
-          </div>
-          <button
-            onClick={handleRefresh}
-            disabled={!lat || !lng || loading}
-            className="flex items-center gap-1.5 text-xs font-medium text-[#C4832A] hover:text-[#D4943B] disabled:opacity-30 transition-colors"
-          >
-            <RefreshIcon className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
+          </p>
         </div>
 
-        {error && !mapCenter && (
-          <div className="bg-[#FF6B6B]/10 border border-[#FF6B6B]/20 text-[#FF6B6B]/80 px-4 py-3 rounded-xl text-sm mb-4">
-            {error}
+        {locationNotice && (
+          <div
+            role="status"
+            data-testid="location-notice"
+            className="absolute left-3 right-3 top-[152px] z-20 max-w-[340px] rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-3 py-2 text-[11px] font-medium leading-snug text-[var(--cream-soft)] shadow-md backdrop-blur-sm sm:max-w-sm"
+          >
+            <p>{locationNotice}</p>
+            <button
+              type="button"
+              onClick={handleEnableLocation}
+              data-testid="enable-location"
+              className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[var(--copper)]/15 px-2.5 py-1 text-[11px] font-bold text-[var(--copper)] transition-colors hover:bg-[var(--copper)]/25"
+            >
+              {locationNotice === 'Using your last saved location.' ||
+              locationNotice === INSECURE_GPS_NOTICE
+                ? 'Refresh location'
+                : 'Enable location'}
+            </button>
           </div>
         )}
 
-        {/* Skeleton loaders */}
-        {loading && users.length === 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-[#1E1508] rounded-2xl border border-white/[0.06] overflow-hidden animate-pulse">
-                <div className="h-48 bg-white/5" />
-                <div className="p-4 space-y-2">
-                  <div className="h-3.5 bg-white/5 rounded-lg w-2/3" />
-                  <div className="h-3 bg-white/5 rounded-lg w-full" />
-                  <div className="h-8 bg-white/5 rounded-xl mt-3" />
-                </div>
-              </div>
-            ))}
+        <div className="absolute z-30 right-[var(--fab-offset)] top-3 flex items-center gap-2">
+          <div
+            className="flex items-center rounded-full overflow-hidden border bg-[var(--bg-elevated)]/85 backdrop-blur-sm"
+            style={{ borderColor: 'var(--border-default)' }}
+            role="group"
+            aria-label="Discovery surface"
+          >
+            <span
+              className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em]"
+              style={{ background: 'var(--copper)', color: 'var(--bg-primary)' }}
+              aria-current="page"
+            >
+              {ROUTE_LABELS.map}
+            </span>
+            <Link
+              to="/stream"
+              className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] transition-colors hover:text-[var(--copper)]"
+              style={{ color: 'var(--cream-soft)' }}
+              aria-label={`Switch to ${ROUTE_LABELS.liveProfileList}`}
+            >
+              {ROUTE_LABELS.liveProfileList}
+            </Link>
+          </div>
+        </div>
+
+        {pulseError && (
+          <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 px-3 py-2 rounded-md bg-[#3D1A1A] border border-[#8B4513] text-[var(--cream)] text-xs">
+            {pulseError}
           </div>
         )}
 
-        {/* User cards */}
-        {!loading && users.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 animate-fade-in">
-            {users.map((user) => (
-              <ProfileCard key={user.id} user={user} />
-            ))}
-          </div>
-        )}
+        <PulseFab
+          isPulsing={!!pulseUntil}
+          pulseExpiresAt={pulseUntil ? pulseUntil.toISOString() : undefined}
+          nextPulseAllowedAt={nextPulseAllowedAt ?? undefined}
+          isPremium={pulseIsPremium}
+          onStartPulse={handleStartPulse}
+          onStopPulse={handleStopPulse}
+        />
 
-        {/* Empty state */}
-        {!loading && users.length === 0 && !error && (
-          <div className="text-center py-16 animate-fade-in">
-            <div className="relative w-20 h-20 mx-auto mb-5 flex items-center justify-center">
-              <span className="absolute inset-0 rounded-full bg-[#C4832A]/20 radar-ring-1" />
-              <span className="absolute inset-0 rounded-full bg-[#C4832A]/15 radar-ring-2" />
-              <span className="absolute inset-0 rounded-full bg-[#C4832A]/10 radar-ring-3" />
-              <RadarIcon className="w-8 h-8 text-[#C4832A]/60 relative z-10" />
+        {/* Filter rail — Intent + multi-select Tribes */}
+        <div
+          className="absolute top-12 left-0 right-0 z-20 pointer-events-auto px-1 pt-1 pb-1"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgba(13,10,6,0.85), rgba(13,10,6,0.4) 80%, transparent)',
+          }}
+        >
+          <TribePillRow
+            selected={tagFilters}
+            onToggle={toggleTag}
+            onClear={tagFilters.length > 0 ? clearTags : undefined}
+          />
+        </div>
+
+        <div
+          className="absolute left-0 right-0 z-20 pointer-events-none max-lg:bottom-0 lg:bottom-auto lg:right-0 lg:top-0 lg:w-[360px] lg:pointer-events-auto lg:border-l lg:border-[var(--border-default)] lg:bg-[#0A0806]/95 lg:backdrop-blur-sm"
+        >
+          <div
+            className="h-12 pointer-events-none max-lg:block lg:hidden"
+            style={{ background: 'linear-gradient(to top, #0D0A06, transparent)' }}
+          />
+          <div className="pointer-events-auto space-y-2 pb-2 max-lg:pb-2 lg:flex lg:h-full lg:flex-col lg:overflow-hidden lg:pb-0">
+            <div className="hidden shrink-0 border-b border-[var(--border-default)] px-5 py-4 lg:block">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)]">
+                Nearby now
+              </p>
+              <p className="mt-1 text-sm font-semibold text-[var(--cream)]">
+                {loading && nearbyCount === 0 ? 'Scanning…' : `${nearbyCount} in range`}
+              </p>
             </div>
-            <p className="text-[#F0E0C0]/60 font-medium">No one nearby right now</p>
-            <p className="text-[#F0E0C0]/30 text-sm mt-1">Try expanding the radius</p>
+            <div className="hidden min-h-0 flex-1 overflow-y-auto lg:block">
+              <DesktopNearbyList
+                users={sortedUsers}
+                loading={loading}
+                onSelect={setSelectedUser}
+              />
+            </div>
+            <div className="lg:hidden">
+              <EventsRail lat={lat} lng={lng} onSelect={(ev: EventDTO) => navigate(`/rooms/${ev.id}`)} />
+              <UserStrip
+                users={sortedUsers}
+                loading={loading}
+                onSelect={setSelectedUser}
+              />
+            </div>
           </div>
-        )}
+        </div>
       </div>
+
+      <ProfileDrawer
+        user={selectedUser}
+        liked={selectedUser ? likedUsers.has(selectedUser.id) : false}
+        onClose={() => setSelectedUser(null)}
+        onLike={async () => {
+          if (!selectedUser) return;
+          await handleLike(selectedUser);
+        }}
+        onMessage={() => {
+          if (!selectedUser) return;
+          navigate(`/messages/${selectedUser.id}`);
+        }}
+        onPass={() => setSelectedUser(null)}
+      />
     </Layout>
   );
 };
 
-const RefreshIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-  </svg>
-);
+interface UserStripProps {
+  users: NearbyUser[];
+  loading: boolean;
+  onSelect: (u: NearbyUser) => void;
+}
 
-const RadarIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9 3.75A6.75 6.75 0 0115.75 9M6.75 9a5.25 5.25 0 0110.5 0M3 9a9 9 0 0118 0M12 9h.008v.008H12V9z" />
-  </svg>
-);
+const UserStrip: React.FC<UserStripProps> = ({ users, loading, onSelect }) => {
+  if (loading && users.length === 0) {
+    return (
+      <div className="user-strip-scroll flex gap-3 overflow-x-auto px-4 pb-2">
+        {[...Array(5)].map((_, i) => (
+          <div
+            key={i}
+            className="user-strip-card flex-shrink-0 w-[120px] h-[160px] rounded-2xl bg-[var(--bg-elevated)] border border-[var(--border-default)] animate-pulse"
+          />
+        ))}
+      </div>
+    );
+  }
 
-const FilterIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-  </svg>
-);
+  if (users.length === 0) {
+    return (
+      <div className="px-4 pb-3">
+        <div className="rounded-2xl bg-[var(--bg-elevated)]/85 backdrop-blur-sm border border-[var(--border-default)] p-4 text-center">
+          <p className="text-[var(--cream)] text-sm font-bold">No one nearby</p>
+          <p className="text-[var(--cream-muted)] text-xs mt-1">Pulse to wake the map.</p>
+        </div>
+      </div>
+    );
+  }
 
-const CloseIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-  </svg>
-);
+  return (
+    <div className="user-strip-scroll flex gap-3 overflow-x-auto px-4 pb-1">
+      {users.map((user) => (
+        <UserStripCard key={user.id} user={user} onSelect={() => onSelect(user)} />
+      ))}
+    </div>
+  );
+};
+
+const DesktopNearbyList: React.FC<UserStripProps> = ({ users, loading, onSelect }) => {
+  if (loading && users.length === 0) {
+    return (
+      <div className="space-y-2 px-3 py-3">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="h-16 animate-pulse rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]" />
+        ))}
+      </div>
+    );
+  }
+
+  if (users.length === 0) {
+    return (
+      <div className="px-5 py-16 text-center">
+        <p className="text-sm font-bold text-[var(--cream)]">No one nearby</p>
+        <p className="mt-1 text-xs text-[var(--cream-muted)]">Pulse on the map to refresh discovery.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1 px-2 py-2">
+      {users.map((user) => {
+        const distLabel = getDistanceLabel(user);
+        const isPulsing = isUserPulsing(user);
+        return (
+          <button
+            key={user.id}
+            type="button"
+            onClick={() => onSelect(user)}
+            className="flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-3 text-left transition-colors hover:border-[var(--border-default)] hover:bg-[var(--bg-card)]/80"
+          >
+            <UserAvatar name={user.name} photoUrl={user.photo_url} online={user.online} size="md" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="truncate text-sm font-semibold text-[var(--cream)]">{user.name}</p>
+                {isPulsing ? (
+                  <span className="rounded-full bg-[var(--copper)]/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[var(--copper)]">
+                    Live
+                  </span>
+                ) : null}
+              </div>
+              <p className="truncate text-xs text-[var(--cream-muted)]">
+                {user.headline || user.mood || `${user.age} · nearby`}
+              </p>
+            </div>
+            <span className="shrink-0 text-xs font-bold text-[var(--copper)]">
+              {user.distance_label ?? distLabel}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+};
+
+interface UserStripCardProps {
+  user: NearbyUser;
+  onSelect: () => void;
+}
+
+const UserStripCard: React.FC<UserStripCardProps> = ({ user, onSelect }) => {
+  const distance = parseFloat(String(user.distance_km));
+  const distLabel = getDistanceLabel(user);
+  const fullPhotoUrl = getPhotoUrl(user.photo_url);
+  const isPulsing = isUserPulsing(user);
+
+  return (
+    <button
+      onClick={onSelect}
+      className="user-strip-card flex-shrink-0 w-[120px] h-[160px] rounded-2xl overflow-hidden border border-[var(--border-default)] flex flex-col text-left bg-[var(--bg-elevated)] hover:border-[var(--copper)] transition-colors"
+      style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.55)' }}
+    >
+      <div className="relative w-full" style={{ height: 96, background: 'linear-gradient(135deg,#2A1C0A,#1E1508)' }}>
+        {fullPhotoUrl ? (
+          <img src={fullPhotoUrl} alt={user.name} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <SilhouetteAvatar size={64} variant="card" />
+          </div>
+        )}
+        <div className="absolute bottom-1 left-1">
+          <PulsingAvatar isPulsing={isPulsing} size={24} intensity={isPulsing ? "live" : "subtle"}>
+            <div
+              className="w-full h-full rounded-full"
+              style={{ background: isPulsing ? 'var(--copper)' : 'transparent' }}
+            />
+          </PulsingAvatar>
+        </div>
+        {user.online && !isPulsing && (
+          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-nn-online border border-nn-elevated" />
+        )}
+      </div>
+      <div className="flex-1 px-2 py-1.5 flex flex-col justify-between">
+        <div>
+          <p className="text-[13px] font-black text-[var(--cream)] truncate">{user.name}</p>
+          {user.mood ? (
+            <div className="mt-0.5">
+              <MoodBadge mood={user.mood} small />
+            </div>
+          ) : user.headline ? (
+            <p className="text-[11px] text-[var(--cream-soft)] truncate">{user.headline}</p>
+          ) : null}
+        </div>
+        <p className="text-[11px] font-bold text-[var(--copper)]">{user.distance_label ?? distLabel}</p>
+      </div>
+    </button>
+  );
+};

@@ -1,62 +1,92 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
+import { SiteFooter } from '../components/SiteFooter';
 
-// TODO: Replace with Termly published policy URL once live
+const sections = [
+  {
+    title: 'What we collect',
+    items: [
+      'Account details such as email, display name, age and encrypted login credentials.',
+      'Profile content you choose to add, including photos, bio, interests, mood and preferences.',
+      'Approximate location data when you use nearby discovery, Pulse, rooms or location features.',
+      'Messages, media metadata, reports, blocks and safety signals needed to operate the service.',
+      'Device, log and security information used to protect accounts and prevent abuse.',
+    ],
+  },
+  {
+    title: 'How we use it',
+    items: [
+      'To create your account, authenticate you and provide the MenRush app experience.',
+      'To show nearby profiles using privacy-bucketed distance rather than exact public coordinates.',
+      'To run verification, moderation, support, safety reviews and abuse prevention.',
+      'To send transactional emails, waitlist updates and service notices.',
+      'To improve product reliability, performance and launch readiness.',
+    ],
+  },
+  {
+    title: 'Your controls',
+    items: [
+      'You can edit profile details and visibility from your profile screen.',
+      'You can use Ghost mode where available to reduce visibility.',
+      'You can block or report users from relevant profile and chat surfaces.',
+      'You can request access, correction or deletion by emailing privacy@menrush.com.',
+      'You can unsubscribe from marketing emails using the unsubscribe link.',
+    ],
+  },
+];
 
 export const Privacy = () => {
   return (
-    <div className="flex min-h-dvh flex-col bg-[#0a0805] text-[#a89070]">
-      <div className="mx-auto w-full max-w-2xl flex-1 px-6 py-10">
-        <Link to="/" className="text-xs uppercase tracking-[0.18em] text-[#a89070] transition-colors hover:text-[#c8861c]">
-          ← Back
-        </Link>
+    <div className="flex min-h-dvh flex-col bg-[#0a0805] text-[#F0E0C0]">
+      <main className="flex-1 px-5 py-8 sm:px-8 sm:py-12">
+        <article className="mx-auto w-full max-w-4xl rounded-2xl border border-[#3D2B0E] bg-[#1A1410] p-6 sm:p-10">
+          <Link to="/" className="text-xs font-bold uppercase tracking-[0.18em] text-[#A89070] hover:text-[#C4832A]">
+            Back
+          </Link>
+          <p className="mt-8 text-xs font-black uppercase tracking-[0.18em] text-[#C4832A]">
+            Privacy policy
+          </p>
+          <h1 className="mr-page-heading mt-3">Private by design, clear by default.</h1>
+          <p className="mr-copy mt-4 max-w-3xl">
+            MenRush handles sensitive adult, identity and location data. This policy explains the
+            practical data use behind the product in direct language so members know what is collected,
+            why it is needed, and how to control it.
+          </p>
 
-        <h1 className="mt-6 text-3xl font-bold text-[#f0e4cc]">Privacy Policy</h1>
-        <p className="mt-2 text-xs uppercase tracking-[0.2em] text-[#a89070]/90">Interim notice · pre-launch</p>
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {sections.map((section) => (
+              <section key={section.title} className="rounded-2xl border border-[#3D2B0E] bg-[#0D0A06]/55 p-5">
+                <h2 className="text-lg font-bold">{section.title}</h2>
+                <ul className="mt-4 space-y-2 text-sm leading-6 text-[#A89070]">
+                  {section.items.map((item) => (
+                    <li key={item} className="flex gap-2">
+                      <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#C4832A]" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
 
-        <p className="mt-8 leading-relaxed text-[#f0e4cc]/85">
-          MenRush is in pre-launch. Our full privacy policy is being finalised through our
-          compliance partner and will be published before public launch.
-        </p>
+          <section className="mt-6 rounded-2xl border border-[#3D2B0E] bg-[#0D0A06]/55 p-5">
+            <h2 className="text-lg font-bold">Sharing and processors</h2>
+            <p className="mt-2 text-sm leading-7 text-[#A89070]">
+              We use trusted providers for hosting, email, analytics, payment, identity verification,
+              support and security. We do not sell personal data. We only share data where needed to
+              operate MenRush, comply with law, prevent harm, process user requests or protect the service.
+            </p>
+          </section>
 
-        <h2 className="mt-8 text-lg font-semibold text-[#f0e4cc]">In the meantime</h2>
-        <ul className="mt-3 list-disc space-y-2 pl-5 leading-relaxed text-[#f0e4cc]/85 marker:text-[#c8861c]">
-          <li>We collect your email address (waitlist signup).</li>
-          <li>
-            We use Resend (resend.com), provided by Resend Inc., for transactional and marketing
-            email delivery.
-          </li>
-          <li>
-            We use Zoho Mail for our team inbox (including hello@menrush.com) and for SMTP when
-            you send a message through the contact form on this site.
-          </li>
-          <li>You can unsubscribe at any time.</li>
-          <li>We don&apos;t sell or share your data.</li>
-        </ul>
-
-        <p className="mt-10 text-sm text-[#a89070]">
-          Questions?{' '}
-          <a
-            href="mailto:privacy@menrush.com"
-            className="font-medium text-[#c8861c] underline-offset-2 transition-colors hover:text-[#d9a038] hover:underline"
-          >
-            privacy@menrush.com
-          </a>
-        </p>
-      </div>
-      <footer className="mt-auto w-full py-4 text-center text-[10px] text-[#a89070]/80">
-        <Link to="/privacy" className="underline">
-          Privacy
-        </Link>
-        {' · '}
-        <Link to="/terms" className="underline">
-          Terms
-        </Link>
-        {' · '}
-        <Link to="/" className="underline">
-          Home
-        </Link>
-      </footer>
+          <section className="mt-6 rounded-2xl border border-[#3D2B0E] bg-[#0D0A06]/55 p-5">
+            <h2 className="text-lg font-bold">Contact</h2>
+            <p className="mt-2 text-sm leading-7 text-[#A89070]">
+              Privacy requests: <a className="font-semibold text-[#C4832A] hover:underline" href="mailto:privacy@menrush.com">privacy@menrush.com</a>.
+              Support and safety reports: <a className="font-semibold text-[#C4832A] hover:underline" href="mailto:support@menrush.com">support@menrush.com</a>.
+            </p>
+          </section>
+        </article>
+      </main>
+      <SiteFooter />
     </div>
   );
 };
