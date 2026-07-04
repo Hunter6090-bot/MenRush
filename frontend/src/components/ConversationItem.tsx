@@ -2,6 +2,9 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserAvatar } from './UserAvatar';
 import { NotificationDot } from './NotificationDot';
+import { MissedCallIcon } from './MissedCallIcon';
+import { ChatSafetyMenu } from './ChatSafetyMenu';
+import { MISSED_CALL_PREVIEW } from '../lib/missedCall';
 
 interface ConversationItemProps {
   userId: string;
@@ -11,6 +14,9 @@ interface ConversationItemProps {
   lastMessageTime?: string;
   lastMessage?: string;
   unreadCount?: number;
+  onBlocked?: () => void;
+  isActive?: boolean;
+  variant?: 'default' | 'sidebar';
 }
 
 export const ConversationItem: React.FC<ConversationItemProps> = ({
@@ -21,14 +27,28 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   lastMessageTime,
   lastMessage,
   unreadCount,
+  onBlocked,
+  isActive = false,
+  variant = 'default',
 }) => {
   const navigate = useNavigate();
+  const isMissedCall = lastMessage === MISSED_CALL_PREVIEW;
+  const isSidebar = variant === 'sidebar';
 
   return (
-    <button
-      onClick={() => navigate(`/messages/${userId}`)}
-      className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-[#222632] border border-white/[0.06] hover:border-[#4F8CFF]/30 hover:bg-[#272C3A] transition-all duration-200 text-left group"
-    >
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => navigate(`/messages/${userId}`)}
+        className={`group flex min-w-0 flex-1 items-center gap-3 text-left transition-all duration-200 ${
+          isSidebar
+            ? `rounded-xl px-3 py-3 border ${
+                isActive
+                  ? 'border-[var(--copper)]/40 bg-[var(--copper)]/12 shadow-[inset_3px_0_0_var(--copper)]'
+                  : 'border-transparent hover:border-[var(--border-default)] hover:bg-[var(--bg-card)]/70'
+              }`
+            : 'rounded-2xl border border-[#3D2B0E] bg-[#1E1508] px-4 py-3.5 hover:border-[#C4832A]/30 hover:bg-[#2A1C0A]'
+        }`}
+      >
       <div className="relative">
         <UserAvatar name={name} photoUrl={photoUrl} online={online} size="md" />
         {unreadCount ? <NotificationDot count={unreadCount} /> : null}
@@ -36,22 +56,42 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between">
-          <p className={`font-semibold text-sm truncate ${unreadCount ? 'text-[#F2F4F8]' : 'text-[#F2F4F8]/80'}`}>
+          <p className={`font-semibold text-sm truncate ${unreadCount ? 'text-[#F0E0C0]' : 'text-[#F0E0C0]/80'}`}>
             {name}
           </p>
           {lastMessageTime && (
-            <span className="text-[10px] text-[#F2F4F8]/30 flex-shrink-0 ml-2">
+            <span className="text-[10px] text-[#A89070] flex-shrink-0 ml-2">
               {formatRelative(lastMessageTime)}
             </span>
           )}
         </div>
-        <p className={`text-xs mt-0.5 truncate ${unreadCount ? 'text-[#F2F4F8]/70 font-medium' : 'text-[#F2F4F8]/40'}`}>
+        <p
+          className={`text-xs mt-0.5 truncate flex items-center gap-1 ${
+            isMissedCall
+              ? 'text-[#F87171] font-semibold'
+              : unreadCount
+                ? 'text-[#F0E0C0]/70 font-medium'
+                : 'text-[#A89070]'
+          }`}
+        >
+          {isMissedCall && <MissedCallIcon size={12} className="shrink-0" />}
           {lastMessage ?? (online ? 'Active now' : 'Say hello!')}
         </p>
       </div>
 
-      <ChevronIcon className="w-4 h-4 text-[#F2F4F8]/20 group-hover:text-[#4F8CFF]/60 transition-colors flex-shrink-0" />
-    </button>
+      <ChevronIcon
+        className={`h-4 w-4 flex-shrink-0 transition-colors ${
+          isSidebar
+            ? isActive
+              ? 'text-[var(--copper)]/70'
+              : 'text-[#A89070]/30 group-hover:text-[#C4832A]/50'
+            : 'text-[#A89070]/40 group-hover:text-[#C4832A]/60'
+        }`}
+      />
+      </button>
+
+      <ChatSafetyMenu peerId={userId} peerName={name} onBlocked={onBlocked} />
+    </div>
   );
 };
 

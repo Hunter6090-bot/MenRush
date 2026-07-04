@@ -1,98 +1,12 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { messagesAPI } from '../api/client';
-import { ConversationItem } from '../components/ConversationItem';
 import { Layout } from '../components/Layout';
-import { useUnreadStore } from '../hooks/store';
-import { useSocket } from '../hooks/useSocket';
-
-interface Conversation {
-  other_user_id: string;
-  other_user_name: string;
-  last_message_time: string;
-  last_message?: string;
-  photo_url?: string;
-  online?: boolean;
-}
+import { ConversationList } from '../components/ConversationList';
 
 export const Conversations = () => {
-  const [convs, setConvs] = useState<Conversation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
-  const clearUnread = useUnreadStore((s) => s.clearUnread);
-  const socket = useSocket();
-
-  const fetchConversations = useCallback(() => {
-    messagesAPI
-      .getConversations()
-      .then((r) => setConvs(r.data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    fetchConversations();
-    clearUnread();
-  }, []);
-
-  // Real-time: refresh conversation list when a new message arrives
-  useEffect(() => {
-    if (!socket) return;
-    const onMessage = () => fetchConversations();
-    socket.on('message', onMessage);
-    return () => { socket.off('message', onMessage); };
-  }, [socket, fetchConversations]);
-
   return (
     <Layout>
-      <div className="max-w-xl mx-auto px-4 py-6 pb-8">
-        <h2 className="text-xl font-bold text-[#F2F4F8] mb-5">Messages</h2>
-
-        {loading ? (
-          <div className="space-y-2">
-            {[...Array(5)].map((_, i) => (
-              <div
-                key={i}
-                className="h-[70px] bg-[#222632] rounded-2xl border border-white/[0.06] animate-pulse"
-              />
-            ))}
-          </div>
-        ) : convs.length === 0 ? (
-          <div className="text-center py-20 animate-fade-in">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#222632] border border-white/[0.06] flex items-center justify-center">
-              <ChatIcon className="w-8 h-8 text-[#4F8CFF]/50" />
-            </div>
-            <p className="text-[#F2F4F8]/60 font-medium mb-1">No conversations yet</p>
-            <p className="text-[#F2F4F8]/30 text-sm mb-5">Find someone nearby and say hi</p>
-            <button
-              onClick={() => navigate('/discover')}
-              className="px-5 py-2.5 rounded-xl bg-[#4F8CFF] hover:bg-[#3a6fe0] text-white text-sm font-semibold transition-all hover:shadow-glow-blue"
-            >
-              Discover People
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-2 animate-fade-in">
-            {convs.map((c) => (
-              <ConversationItem
-                key={c.other_user_id}
-                userId={c.other_user_id}
-                name={c.other_user_name}
-                photoUrl={c.photo_url}
-                online={c.online}
-                lastMessageTime={c.last_message_time}
-                lastMessage={c.last_message}
-              />
-            ))}
-          </div>
-        )}
+      <div className="flex h-[calc(100dvh-var(--mobile-header-height)-var(--mobile-tab-bar-height))] min-h-0 flex-col bg-[#0D0A06]">
+        <ConversationList variant="sidebar" className="h-full" />
       </div>
     </Layout>
   );
 };
-
-const ChatIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-  </svg>
-);

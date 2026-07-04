@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { SiteFooter } from '../components/SiteFooter';
 
 type Section = {
   id: string;
@@ -99,7 +100,7 @@ export const Terms = () => {
               <span className="inline-block rounded-full border border-[#c8861c]/30 bg-[#c8861c]/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#c8861c]">
                 Last updated: 06 May 2026
               </span>
-              <h1 className="mt-4 text-[2.5rem] font-bold leading-tight tracking-tight text-[#f0e4cc] sm:text-[2.75rem]">
+              <h1 className="mr-page-heading mt-4">
                 Terms and Conditions
               </h1>
               <p className="mt-2 text-sm text-[#a89070]">
@@ -234,9 +235,9 @@ export const Terms = () => {
               {sectionHeading(SECTIONS[2])}
               {para(
                 <>
-                  <Strong>3.1</Strong> MenRush offers an optional ID Verified badge. Users who
-                  choose to verify their identity must submit a government-issued identification
-                  document.
+                  <Strong>3.1</Strong> MenRush may require identity and age verification before
+                  users can access discovery, matches, rooms or chat. Verification helps reduce
+                  fake profiles, underage access and platform abuse.
                 </>,
               )}
               {para(
@@ -390,7 +391,7 @@ export const Terms = () => {
                 <>
                   <Strong>7.3</Strong> After any free trial period, Premium subscriptions are
                   billed on a recurring basis (monthly or annually) through our payment processor,
-                  Stripe.
+                  CCBill.
                 </>,
               )}
               {para(
@@ -701,19 +702,7 @@ export const Terms = () => {
         </svg>
       </button>
 
-      <footer className="mt-auto w-full border-t border-[#2e2418]/50 py-4 text-center text-[10px] text-[#a89070]/80">
-        <Link to="/privacy" className="underline">
-          Privacy
-        </Link>
-        {' · '}
-        <Link to="/terms" className="underline">
-          Terms
-        </Link>
-        {' · '}
-        <Link to="/" className="underline">
-          Home
-        </Link>
-      </footer>
+      <SiteFooter />
     </div>
   );
 };

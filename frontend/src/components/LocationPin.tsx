@@ -10,7 +10,7 @@ interface LocationPinProps {
 
 export const LocationPin: React.FC<LocationPinProps> = ({
   radar = false,
-  color = '#4F8CFF',
+  color = '#C4832A',
   size = 14,
   className = '',
 }) => {

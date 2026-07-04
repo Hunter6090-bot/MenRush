@@ -1,186 +1,267 @@
-import React, { useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuthStore, useUnreadStore, useNotificationStore } from '../hooks/store';
-import { useSocket } from '../hooks/useSocket';
+import { useAuthStore, useNotificationStore, useUnreadStore } from '../hooks/store';
 import { UserAvatar } from './UserAvatar';
-import { ToastNotifications } from './ToastNotifications';
+import { mobileBackFallback, shouldShowMobileBack } from '../lib/mobileBack';
+import { MobileBackButton } from './MobileBackButton';
+import { IconNotifications } from './icons';
 import { BRAND_LOGO_ORIGINAL } from '../lib/brand';
+import { ProfileSearchModal } from './ProfileSearchModal';
+import { ProfileQrModal } from './ProfileQrModal';
+import { NotificationDot } from './NotificationDot';
+import { getNavItems, isNavActive, mobilePageTitle, type NavItem } from '../lib/navConfig';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
+function badgeFor(item: NavItem, unreadCount: number, notificationUnread: number): number {
+  if (item.badgeKey === 'messages') return unreadCount;
+  if (item.badgeKey === 'notifications') return notificationUnread;
+  return 0;
+}
+
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, logout } = useAuthStore();
-  const { count: unreadCount, addUnread } = useUnreadStore();
-  const { addNotification } = useNotificationStore();
+  const unreadCount = useUnreadStore((s) => s.count);
+  const notificationUnread = useNotificationStore((s) => s.unreadCount);
   const location = useLocation();
   const navigate = useNavigate();
-  const socket = useSocket();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
 
-  useEffect(() => {
-    if (!socket) return;
-
-    const onMessage = (data: { sender_id: string; sender_name?: string }) => {
-      const isViewingConversation = location.pathname === `/messages/${data.sender_id}`;
-      if (!isViewingConversation) {
-        addUnread(data.sender_id);
-        addNotification({
-          type: 'message',
-          message: `New message from ${data.sender_name || 'someone'}`,
-          userId: data.sender_id,
-        });
-      }
-    };
-
-    const onNotification = (data: { type: string; message: string; userId?: string }) => {
-      addNotification({
-        type: (data.type === 'like' || data.type === 'match' || data.type === 'message'
-          ? data.type
-          : 'message') as 'like' | 'match' | 'message',
-        message: data.message,
-        userId: data.userId,
-      });
-    };
-
-    socket.on('message', onMessage);
-    socket.on('notification', onNotification);
-
-    return () => {
-      socket.off('message', onMessage);
-      socket.off('notification', onNotification);
-    };
-  }, [socket, location.pathname, addUnread, addNotification]);
+  const navItems = getNavItems();
+  const mobileTabs = navItems.filter((item) => item.mobileTab);
+  const desktopLinks = navItems.filter((item) => item.desktopNav);
+  const showMobileBack = shouldShowMobileBack(location.pathname);
+  const mobileBackTarget = mobileBackFallback(location.pathname);
+  const pageTitle = mobilePageTitle(location.pathname);
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  const navLinks = [
-    { to: '/discover', label: 'Discover', icon: CompassIcon, badge: 0 },
-    { to: '/matches', label: 'Matches', icon: HeartIcon, badge: 0 },
-    { to: '/conversations', label: 'Messages', icon: ChatIcon, badge: unreadCount },
-    { to: '/profile', label: 'Profile', icon: PersonIcon, badge: 0 },
-  ];
-
-  const isActive = (path: string) => location.pathname === path;
-
   return (
-    <div className="min-h-dvh bg-[#0D0A06] flex flex-col">
-      <header className="fixed top-0 left-0 right-0 z-30 h-14 flex items-center px-4 bg-[#0D0A06]/90 backdrop-blur-xl border-b border-[#3D2B0E]/60">
-        <div className="max-w-5xl mx-auto w-full flex items-center justify-between">
-          <Link to="/discover" className="flex items-center gap-2.5 group">
-            <img
-              src={BRAND_LOGO_ORIGINAL}
-              alt=""
-              className="h-8 w-8 rounded-full object-cover ring-1 ring-[#C4832A]/40 transition-opacity group-hover:opacity-90"
-              draggable={false}
-            />
-            <span className="font-black tracking-[0.12em] text-[#F0E0C0] text-sm sm:text-base">
-              MEN<span className="text-[#C4832A]">RUSH</span>
-            </span>
-          </Link>
-
-          <nav className="hidden sm:flex items-center gap-1">
-            {navLinks.map(({ to, label, icon: Icon, badge }) => (
-              <Link
-                key={to}
-                to={to}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                  isActive(to)
-                    ? 'bg-[#C4832A]/15 text-[#C4832A]'
-                    : 'text-[#A89070] hover:text-[#F0E0C0] hover:bg-[#1E1508]/80'
-                }`}
-              >
-                <span className="relative">
-                  <Icon className="w-4 h-4" />
-                  {badge > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-[#C4832A] text-[#0D0A06] text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
-                      {badge > 9 ? '9+' : badge}
-                    </span>
-                  )}
-                </span>
-                {label}
-              </Link>
-            ))}
-          </nav>
-
-          <div className="flex items-center gap-3">
-            <Link to="/profile" className="flex items-center gap-2 group">
-              <UserAvatar
-                name={user?.name ?? '?'}
-                photoUrl={user?.photo_url}
-                size="xs"
-                showStatus={false}
-                className="group-hover:ring-2 group-hover:ring-[#C4832A]/50 rounded-full transition-all"
-              />
-            </Link>
-            <button
-              onClick={handleLogout}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-[#A89070] hover:text-[#E8A87C] hover:bg-[#8B4513]/15 transition-all duration-200"
-            >
-              <LogoutIcon className="w-3.5 h-3.5" />
-              Sign out
-            </button>
+    <div className="min-h-dvh bg-[var(--bg-primary)] lg:grid lg:grid-cols-[var(--desktop-sidebar-width)_minmax(0,1fr)]">
+      {/* ── Desktop sidebar (web app) ── */}
+      <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:w-[var(--desktop-sidebar-width)] lg:border-r lg:border-[var(--border-default)] lg:bg-[#080604]">
+        <div className="flex items-center gap-3 px-5 pt-6 pb-5 border-b border-[var(--border-default)]/80">
+          <img
+            src={BRAND_LOGO_ORIGINAL}
+            alt=""
+            className="w-11 h-11 rounded-full object-cover ring-1 ring-[var(--copper)]/30 shadow-[var(--nn-glow-copper)]"
+            draggable={false}
+          />
+          <div className="min-w-0">
+            <p className="font-display text-lg font-black tracking-[0.14em] text-[var(--cream)] leading-none">
+              MENRUSH
+            </p>
+            <p className="text-[10px] uppercase tracking-[0.22em] text-[var(--cream-muted)] mt-1">
+              Desktop
+            </p>
           </div>
         </div>
-      </header>
 
-      <main className="flex-1 pt-14 pb-16 sm:pb-0">
-        <div className="page-enter">{children}</div>
-      </main>
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+          {desktopLinks.map((item) => {
+            const active = isNavActive(location.pathname, item.to);
+            const badge = badgeFor(item, unreadCount, notificationUnread);
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 border ${
+                  active
+                    ? 'bg-[var(--copper)]/12 text-[var(--copper)] border-[var(--copper)]/35 shadow-[inset_3px_0_0_var(--copper)]'
+                    : 'text-[var(--cream-soft)]/75 border-transparent hover:bg-[var(--bg-card)] hover:text-[var(--cream)] hover:border-[var(--border-default)]'
+                }`}
+              >
+                <span className="relative inline-flex shrink-0">
+                  <item.Icon size={20} />
+                  <NotificationDot
+                    count={badge}
+                    visible={badge > 0}
+                    data-testid={`badge-${item.to.replace(/\//g, '')}`}
+                    className="-top-2 -right-2 min-w-[16px] h-4 text-[9px] bg-[var(--copper)] border-[#080604]"
+                  />
+                </span>
+                <span className="truncate">{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
 
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#0D0A06]/95 backdrop-blur-xl border-t border-[#3D2B0E]/60 safe-area-inset-bottom">
-        <div className="flex items-stretch h-16">
-          {navLinks.map(({ to, label, icon: Icon, badge }) => (
-            <Link
-              key={to}
-              to={to}
-              className={`flex-1 flex flex-col items-center justify-center gap-1 text-[10px] font-medium transition-all duration-200 ${
-                isActive(to) ? 'text-[#C4832A]' : 'text-[#A89070]/70 hover:text-[#F0E0C0]'
-              }`}
+        <div className="px-3 py-4 border-t border-[var(--border-default)]/80 space-y-2">
+          <div className="flex gap-2 px-1">
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]/60 px-3 py-2.5 text-xs font-semibold text-[var(--cream-soft)] transition-colors hover:border-[var(--copper)]/40 hover:text-[var(--cream)]"
             >
-              <span className="relative">
-                <Icon className={`w-5 h-5 transition-transform duration-200 ${isActive(to) ? 'scale-110' : ''}`} />
-                {badge > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-[#C4832A] text-[#0D0A06] text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
-                    {badge > 9 ? '9+' : badge}
-                  </span>
-                )}
-              </span>
-              {label}
-            </Link>
-          ))}
+              <SearchIcon className="w-4 h-4" />
+              Search
+            </button>
+            <button
+              type="button"
+              onClick={() => setQrOpen(true)}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]/60 text-[var(--cream-soft)] transition-colors hover:border-[var(--copper)]/40 hover:text-[var(--cream)]"
+              aria-label="Profile QR code"
+            >
+              <QrIcon className="w-4 h-4" />
+            </button>
+          </div>
+
+          <Link
+            to="/profile"
+            className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]/40 px-3 py-3 transition-colors hover:border-[var(--copper)]/35"
+          >
+            <UserAvatar
+              name={user?.name ?? '?'}
+              photoUrl={user?.photo_url}
+              size="sm"
+              showStatus={false}
+            />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-[var(--cream)]">{user?.name ?? 'Account'}</p>
+              <p className="text-[10px] text-[var(--cream-muted)]">View profile</p>
+            </div>
+          </Link>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border-default)] px-3 py-2.5 text-xs font-semibold text-[var(--cream-muted)] transition-colors hover:border-[#8B4513]/40 hover:bg-[#8B4513]/10 hover:text-[var(--cream)]"
+          >
+            <LogoutIcon className="w-4 h-4" />
+            Sign out
+          </button>
         </div>
-      </nav>
-      <ToastNotifications />
+      </aside>
+
+      {/* ── Main column ── */}
+      <div className="flex min-h-dvh min-w-0 flex-col lg:col-start-2">
+        {/* Mobile app header */}
+        <header className="lg:hidden fixed top-0 left-0 right-0 z-50 border-b border-[var(--border-default)] bg-[#0D0A06]/92 backdrop-blur-xl pt-[env(safe-area-inset-top,0px)]">
+          <div className="flex h-[3.25rem] items-center gap-2 px-3">
+            <div className="w-10 shrink-0">
+              {showMobileBack ? (
+                <MobileBackButton fallback={mobileBackTarget} className="-ml-1" />
+              ) : (
+                <Link to="/discover" aria-label="MenRush home" className="inline-flex">
+                  <img
+                    src={BRAND_LOGO_ORIGINAL}
+                    alt=""
+                    className="h-10 w-10 rounded-full object-cover ring-1 ring-[var(--copper)]/25"
+                    draggable={false}
+                  />
+                </Link>
+              )}
+            </div>
+
+            <div className="min-w-0 flex-1 text-center">
+              {location.pathname !== '/discover' && (
+                <p className="truncate text-sm font-bold tracking-wide text-[var(--cream)]">{pageTitle}</p>
+              )}
+            </div>
+
+            <div className="flex w-[4.5rem] shrink-0 items-center justify-end gap-0.5">
+              <button
+                type="button"
+                onClick={() => setSearchOpen(true)}
+                className="flex h-10 w-10 items-center justify-center rounded-full text-[var(--cream-soft)] active:bg-[var(--bg-card)]"
+                aria-label="Search profiles"
+              >
+                <SearchIcon className="w-5 h-5" />
+              </button>
+              <Link
+                to="/notifications"
+                className="relative flex h-10 w-10 items-center justify-center rounded-full text-[var(--cream-soft)] active:bg-[var(--bg-card)]"
+                aria-label="Alerts"
+              >
+                <IconNotifications size={22} />
+                <NotificationDot
+                  count={notificationUnread}
+                  visible={notificationUnread > 0}
+                  className="-top-0.5 -right-0.5 min-w-[16px] h-4 text-[9px] bg-[var(--copper)] border-[#0D0A06]"
+                />
+              </Link>
+            </div>
+          </div>
+        </header>
+
+        {/* Desktop content header strip */}
+        <div className="hidden lg:flex items-center justify-between gap-4 border-b border-[var(--border-default)]/70 bg-[var(--bg-primary)]/80 px-8 py-4 backdrop-blur-sm">
+          <div>
+            <p className="nn-overline mb-1">Workspace</p>
+            <h1 className="text-xl font-bold text-[var(--cream)]">{pageTitle}</h1>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-[var(--cream-muted)]">
+            <span className="inline-flex h-2 w-2 rounded-full bg-[var(--status-online)] shadow-[0_0_8px_var(--status-online-glow)]" />
+            Live proximity
+          </div>
+        </div>
+
+        <main className="flex-1 min-h-0 max-lg:pt-[var(--mobile-header-height)] max-lg:pb-[var(--mobile-tab-bar-height)] lg:pb-0">
+          <div className="page-enter h-full min-h-0">{children}</div>
+        </main>
+
+        {/* Mobile bottom tab bar */}
+        <nav
+          className="lg:hidden fixed bottom-0 left-0 right-0 z-50 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] pt-2"
+          aria-label="Primary"
+        >
+          <div className="flex items-stretch rounded-[1.35rem] border border-[var(--border-default)] bg-[#12100C]/95 shadow-[0_12px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+            {mobileTabs.map((item) => {
+              const active = isNavActive(location.pathname, item.to);
+              const badge = badgeFor(item, unreadCount, notificationUnread);
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={`relative flex flex-1 flex-col items-center justify-center gap-1 py-2.5 transition-all duration-200 first:rounded-l-[1.25rem] last:rounded-r-[1.25rem] ${
+                    active
+                      ? 'text-[var(--copper)] bg-[var(--copper)]/10'
+                      : 'text-[var(--cream-muted)] active:scale-95'
+                  }`}
+                >
+                  <span className="relative inline-flex">
+                    <item.Icon size={22} className={active ? 'scale-110' : ''} />
+                    <NotificationDot
+                      count={badge}
+                      visible={badge > 0}
+                      data-testid={`badge-mobile-${item.to.replace(/\//g, '')}`}
+                      className="-top-2 -right-2.5 min-w-[16px] h-[16px] text-[9px] bg-[var(--copper)] border-[#12100C]"
+                    />
+                  </span>
+                  <span className="text-[9px] font-bold leading-none tracking-wide">
+                    {item.shortLabel ?? item.label}
+                  </span>
+                  {active ? (
+                    <span className="absolute bottom-1 h-1 w-1 rounded-full bg-[var(--copper)] shadow-[0_0_8px_var(--copper-glow-strong)]" />
+                  ) : null}
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      </div>
+
+      <ProfileSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <ProfileQrModal open={qrOpen} onClose={() => setQrOpen(false)} />
     </div>
   );
 };
 
-const CompassIcon = ({ className }: { className?: string }) => (
+const SearchIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <circle cx="12" cy="12" r="10" />
-    <polygon points="16.24,7.76 14.12,14.12 7.76,16.24 9.88,9.88" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
   </svg>
 );
 
-const HeartIcon = ({ className }: { className?: string }) => (
+const QrIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-  </svg>
-);
-
-const ChatIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-  </svg>
-);
-
-const PersonIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 3h2m2 0h2m-4 2v2m0-4v2m4-2v2" />
   </svg>
 );
 
