@@ -53,11 +53,7 @@ export const BetaAccess = () => {
   };
 
   return (
-    <PublicAuthShell
-      backgroundImage={AUTH_BACKGROUNDS.beta}
-      coinFlip={{ qrValue: 'https://menrush.com/beta' }}
-      showFooter
-    >
+    <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.beta} showFooter>
       <PublicAuthHero
         title="Beta access is"
         accent="invite-only."

@@ -54,10 +54,7 @@ export const Login = () => {
   const registerPath = BETA_INVITE_REQUIRED ? '/beta' : '/register';
 
   return (
-    <PublicAuthShell
-      backgroundImage={AUTH_BACKGROUNDS.login}
-      coinFlip={{ qrValue: 'https://menrush.com', noFlip: true }}
-    >
+    <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.login}>
       <PublicAuthHero
         title="Sign in and see who's"
         accent="near you right now."

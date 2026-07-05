@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { SiteFooter } from '../components/SiteFooter';
-import { BRAND_MEDALLION } from '../lib/brand';
+import { BrandMark } from '../components/BrandMark';
 
 const safetyRules = [
   {
@@ -39,7 +39,7 @@ export const Safety = () => {
                 and privacy controls are built into the experience.
               </p>
             </div>
-            <img src={BRAND_MEDALLION} alt="MenRush" className="mx-auto h-36 w-36 rounded-full object-cover" />
+            <BrandMark size="lg" />
           </header>
 
           <section className="mt-6 grid gap-3 sm:grid-cols-2">

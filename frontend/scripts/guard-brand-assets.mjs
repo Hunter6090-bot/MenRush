@@ -1,42 +1,50 @@
 #!/usr/bin/env node
 /**
- * Blocks deploys if canonical coin logos were replaced by flat app icons.
+ * Blocks deploys if UI source reintroduces bronze coin / medallion PNG marks.
  */
-import { statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'brand');
+const frontendRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+const srcRoot = join(frontendRoot, 'src');
 
-function sizeOf(file) {
-  return statSync(join(root, file)).size;
+const forbiddenPatterns = [
+  /['"`]\/brand\/menrush-logo-\d+\.png['"`]/,
+  /['"`]\/brand\/medallion[^'"`]*['"`]/,
+  /from ['"].*CoinFlip['"]/,
+  /BRAND_MEDALLION/,
+  /<CoinFlip\b/,
+];
+
+function walk(dir, files = []) {
+  for (const entry of readdirSync(dir)) {
+    const path = join(dir, entry);
+    const stat = statSync(path);
+    if (stat.isDirectory()) walk(path, files);
+    else if (/\.(tsx?|jsx?)$/.test(entry)) files.push(path);
+  }
+  return files;
 }
-
-const coin512 = sizeOf('menrush-logo-512.png');
-const coin192 = sizeOf('menrush-logo-192.png');
-const flat512 = sizeOf('app-icon-512.png');
-const flat192 = sizeOf('app-icon-192.png');
 
 let failed = false;
 
-if (coin512 < 400_000) {
-  console.error(`[brand-guard] menrush-logo-512.png is ${coin512}B — must be the bronze coin (>= 400KB).`);
-  console.error('[brand-guard] Restore: git checkout e27a726 -- frontend/public/brand/menrush-logo-512.png');
-  failed = true;
+for (const file of walk(srcRoot)) {
+  const rel = file.slice(srcRoot.length + 1);
+  const content = readFileSync(file, 'utf8');
+  for (const pattern of forbiddenPatterns) {
+    if (pattern.test(content)) {
+      console.error(`[brand-guard] Forbidden coin/medallion reference in src/${rel}: ${pattern}`);
+      failed = true;
+    }
+  }
 }
-if (coin192 < 60_000) {
-  console.error(`[brand-guard] menrush-logo-192.png is ${coin192}B — must be the bronze coin (>= 60KB).`);
-  console.error('[brand-guard] Restore: git checkout e27a726 -- frontend/public/brand/menrush-logo-192.png');
-  failed = true;
-}
-if (Math.abs(coin512 - flat512) < 10_000) {
-  console.error('[brand-guard] menrush-logo-512.png matches app-icon-512.png — coin was overwritten with flat icon.');
-  failed = true;
-}
-if (flat512 > 400_000) {
-  console.error(`[brand-guard] app-icon-512.png is ${flat512}B — flat app icon should stay separate from coin.`);
+
+const manifest = readFileSync(join(frontendRoot, 'public', 'manifest.json'), 'utf8');
+if (/menrush-logo/.test(manifest)) {
+  console.error('[brand-guard] manifest.json still references menrush-logo coin assets.');
   failed = true;
 }
 
 if (failed) process.exit(1);
-console.log('[brand-guard] Coin logo and flat app icon are correctly separated.');
+console.log('[brand-guard] No coin/medallion marks referenced in UI source.');

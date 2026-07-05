@@ -155,10 +155,7 @@ export const Register = () => {
   };
 
   return (
-    <PublicAuthShell
-      backgroundImage={AUTH_BACKGROUNDS.register}
-      coinFlip={{ qrValue: 'https://menrush.com' }}
-    >
+    <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.register}>
       <PublicAuthHero
         title="You're in."
         accent="Set up your account."
