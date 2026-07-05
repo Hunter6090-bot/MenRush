@@ -4,8 +4,13 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const databaseUrl = process.env.DATABASE_URL;
+// Railway private URLs use plain TCP inside the mesh; public TCP proxies (rlwy.net)
+// also expect a non-SSL client connection.
 const useSsl =
-  process.env.NODE_ENV === 'production' && !databaseUrl?.includes('railway.internal');
+  process.env.NODE_ENV === 'production' &&
+  !!databaseUrl &&
+  !databaseUrl.includes('railway.internal') &&
+  !databaseUrl.includes('rlwy.net');
 
 const pool = new Pool({
   connectionString: databaseUrl,
