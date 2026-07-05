@@ -5,7 +5,7 @@ import { UserAvatar } from './UserAvatar';
 import { mobileBackFallback, shouldShowMobileBack } from '../lib/mobileBack';
 import { MobileBackButton } from './MobileBackButton';
 import { IconNotifications } from './icons';
-import { BRAND_LOGO_ORIGINAL } from '../lib/brand';
+import { BrandMark } from './BrandMark';
 import { ProfileSearchModal } from './ProfileSearchModal';
 import { ProfileQrModal } from './ProfileQrModal';
 import { NotificationDot } from './NotificationDot';
@@ -47,12 +47,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* ── Desktop sidebar (web app) ── */}
       <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:w-[var(--desktop-sidebar-width)] lg:border-r lg:border-[var(--border-default)] lg:bg-[#080604]">
         <div className="flex items-center gap-3 px-5 pt-6 pb-5 border-b border-[var(--border-default)]/80">
-          <img
-            src={BRAND_LOGO_ORIGINAL}
-            alt=""
-            className="w-11 h-11 rounded-full object-cover ring-1 ring-[var(--copper)]/30 shadow-[var(--nn-glow-copper)]"
-            draggable={false}
-          />
+          <BrandMark size="sm" />
           <div className="min-w-0">
             <p className="font-display text-lg font-black tracking-[0.14em] text-[var(--cream)] leading-none">
               MENRUSH
@@ -149,12 +144,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <MobileBackButton fallback={mobileBackTarget} className="-ml-1" />
               ) : (
                 <Link to="/discover" aria-label="MenRush home" className="inline-flex">
-                  <img
-                    src={BRAND_LOGO_ORIGINAL}
-                    alt=""
-                    className="h-10 w-10 rounded-full object-cover ring-1 ring-[var(--copper)]/25"
-                    draggable={false}
-                  />
+                  <BrandMark size="sm" />
                 </Link>
               )}
             </div>

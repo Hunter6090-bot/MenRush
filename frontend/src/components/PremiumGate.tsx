@@ -1,5 +1,3 @@
-import { BRAND_MEDALLION_REVERSE } from '../lib/brand';
-
 interface PremiumGateProps {
   headline?: string;
   subline?: string;
@@ -38,11 +36,10 @@ export function PremiumGate({
       >
         <div className="relative px-6 pt-7 pb-5 text-center overflow-hidden">
           <div
-            className="pointer-events-none absolute inset-0 opacity-[0.16] bg-no-repeat bg-center"
+            className="pointer-events-none absolute inset-0 opacity-[0.12]"
             style={{
-              backgroundImage: `url(${BRAND_MEDALLION_REVERSE})`,
-              backgroundSize: '260px',
-              backgroundPosition: 'center 30%',
+              background:
+                'radial-gradient(circle at center 35%, rgba(196,131,42,0.35) 0%, transparent 55%)',
             }}
           />
           <div className="relative">

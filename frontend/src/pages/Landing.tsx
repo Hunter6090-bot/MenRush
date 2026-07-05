@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../hooks/store';
 import { authAPI } from '../api/client';
-import { CoinFlip } from '../components/CoinFlip';
+import { BrandMark } from '../components/BrandMark';
 import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
 import { SiteFooter } from '../components/SiteFooter';
@@ -51,7 +51,7 @@ export const Landing = () => {
       {/* Header */}
       <header className="relative z-10 flex flex-shrink-0 items-center justify-between px-5 pt-4 pb-2 sm:px-8 lg:px-10">
         <Link to="/" className="hover:opacity-80 transition-opacity">
-          <CoinFlip qrValue="https://menrush.com" sizeClass="h-28" noFlip />
+          <BrandMark size="lg" showWordmark />
         </Link>
         <Link
           to="/register"
