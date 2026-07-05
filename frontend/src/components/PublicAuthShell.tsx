@@ -1,6 +1,6 @@
 /**
  * Single-column auth shell — MenRush Design System handoff + beta-launch-handoff.
- * Brand: CSS radar BrandMark (motion-radar.html) — no bronze coin/medallion PNGs.
+ * Brand: static two-profile bronze medallion (medallion-480.png).
  */
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
@@ -45,13 +45,13 @@ export function PublicAuthShell({
           to={homeTo}
           className="mb-10 inline-block w-fit hover:opacity-80 transition-opacity"
         >
-          <BrandMark size="lg" showWordmark />
+          <BrandMark size="auth" />
         </Link>
         {children}
       </div>
 
       {showFooter ? (
-        <SiteFooter className="relative shrink-0 border-t border-[#3D2B0E] bg-[rgba(13,10,6,0.92)] py-7" />
+        <SiteFooter className="relative shrink-0 border-t border-[#3D2B0E] bg-[rgba(13,10,6,0.92)] px-6 pb-10 pt-7" />
       ) : null}
     </div>
   );
