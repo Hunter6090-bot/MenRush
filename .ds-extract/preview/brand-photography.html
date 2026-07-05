@@ -1,0 +1,120 @@
+<!doctype html>
+<!-- @dsCard group="Brand" name="Photography mood" subtitle="47 photos — night/club, street, rooftop, portraits, beach, cruising, pride" viewport="700x1200" -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Photography mood</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 0; background: var(--nn-bg); }
+  .banner { padding: 12px 16px; background: rgba(196,131,42,.06); border-bottom: 1px solid var(--nn-border); }
+  .banner b { font-size: 11px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--nn-copper); }
+  .banner small { display: block; font-size: 11px; color: var(--nn-muted); margin-top: 4px; line-height: 1.4; }
+  .banner small em { color: var(--nn-text); font-style: normal; }
+
+  .grid { display: grid; gap: 3px; padding: 3px;
+          grid-template-columns: repeat(8, 1fr);
+          grid-auto-rows: 84px;
+          grid-auto-flow: dense; }
+  .tile { position: relative; overflow: hidden; background: #000; }
+  .tile img { width: 100%; height: 100%; object-fit: cover; display: block; filter: saturate(1.06) contrast(1.02); }
+  .tile::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+                 background: linear-gradient(180deg, transparent 55%, rgba(13,10,6,.85)); }
+  .tile .lbl { position: absolute; left: 6px; bottom: 5px; right: 6px; z-index: 2;
+               font-family: 'Inter', sans-serif; font-size: 8.5px; font-weight: 700; letter-spacing: 0.16em;
+               color: var(--nn-text); text-transform: uppercase; line-height: 1.15;
+               text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+  /* spans for varied rhythm */
+  .w2 { grid-column: span 2; } .w3 { grid-column: span 3; }
+  .h2 { grid-row: span 2; } .h3 { grid-row: span 3; }
+
+  /* section divider strip */
+  .section { grid-column: 1 / -1; padding: 10px 12px 4px;
+             font-family: 'Inter', sans-serif; font-size: 9.5px; font-weight: 700;
+             letter-spacing: 0.22em; text-transform: uppercase; color: var(--nn-copper); }
+  .section small { font-weight: 500; letter-spacing: 0.04em; text-transform: none; color: var(--nn-muted); margin-left: 10px; }
+</style>
+</head>
+<body>
+  <div class="banner">
+    <b>Photography mood · warm · dim · masculine · real</b>
+    <small><em>47 photos in /assets/photos/.</em> All body types, ages, tribes, settings, ethnicities. Used as auth-screen backgrounds (slideshow), premium-gate heroes, marketing splash, and editorial tile beds. Warm grade, low-key light, period-real film look.</small>
+  </div>
+
+  <div class="grid">
+    <!-- ROW: night / club / leather (the high-intensity column) -->
+    <div class="section">Night · club · leather <small>The mood opener — late, sweaty, charged.</small></div>
+    <div class="tile w3 h2"><img src="../assets/photos/04-leather-harness-bears.jpeg"><span class="lbl">LEATHER · HARNESS · BEARS</span></div>
+    <div class="tile w2 h2"><img src="../assets/photos/07-leather-bar-close.jpeg"><span class="lbl">LEATHER BAR · CLOSE</span></div>
+    <div class="tile w3 h2"><img src="../assets/photos/15-underground-leather-bar.jpeg"><span class="lbl">UNDERGROUND</span></div>
+
+    <div class="tile w2"><img src="../assets/photos/12-bear-bar-red-lights.jpeg"><span class="lbl">RED-LIGHT BAR</span></div>
+    <div class="tile w2"><img src="../assets/photos/32-laser-club-shirtless.jpeg"><span class="lbl">LASERS · CLUB</span></div>
+    <div class="tile w2"><img src="../assets/photos/43-club-dance-shirtless.jpeg"><span class="lbl">DANCEFLOOR</span></div>
+    <div class="tile w2"><img src="../assets/photos/42-wolf-mask-leather-bar.jpeg"><span class="lbl">PUP · TRIBE</span></div>
+
+    <!-- ROW: street / village -->
+    <div class="section">Street · gay village <small>Public, crowded, neon-soaked.</small></div>
+    <div class="tile w3 h2"><img src="../assets/photos/02-soho-night-crowd.jpeg"><span class="lbl">SOHO · NEON</span></div>
+    <div class="tile w2 h2"><img src="../assets/photos/16-amsterdam-neon-night.jpeg"><span class="lbl">AMSTERDAM</span></div>
+    <div class="tile w3 h2"><img src="../assets/photos/41-twink-jock-neon-street.jpeg"><span class="lbl">TWO MEN · NEON</span></div>
+
+    <div class="tile w2"><img src="../assets/photos/10-sitges-street-summer.jpeg"><span class="lbl">SITGES · SUMMER</span></div>
+    <div class="tile w2"><img src="../assets/photos/14-soho-rainbow-crowd.jpeg"><span class="lbl">SOHO · RAINBOW</span></div>
+    <div class="tile w2"><img src="../assets/photos/36-wet-street-bar-line.jpeg"><span class="lbl">RAIN · BAR LINE</span></div>
+    <div class="tile w2"><img src="../assets/photos/38-club-line-night.jpeg"><span class="lbl">CLUB LINE</span></div>
+
+    <div class="tile w2"><img src="../assets/photos/19-soho-pub-night.jpeg"><span class="lbl">PUB · SMOKING</span></div>
+    <div class="tile w2"><img src="../assets/photos/39-the-club-cigarettes.jpeg"><span class="lbl">OUT FRONT</span></div>
+    <div class="tile w2"><img src="../assets/photos/26-rainy-square-blue-hour.jpeg"><span class="lbl">RAIN · BLUE HOUR</span></div>
+    <div class="tile w2"><img src="../assets/photos/45-string-lights-crowd.jpeg"><span class="lbl">STRING LIGHTS</span></div>
+
+    <!-- ROW: rooftop / city -->
+    <div class="section">Rooftop · city · party <small>Skyline backdrops, mixed crowds, warm lights.</small></div>
+    <div class="tile w3 h2"><img src="../assets/photos/01-rooftop-skyline-bears.jpeg"><span class="lbl">ROOFTOP · SKYLINE</span></div>
+    <div class="tile w2 h2"><img src="../assets/photos/17-rooftop-bar-skyline.jpeg"><span class="lbl">ROOFTOP BAR</span></div>
+    <div class="tile w3 h2"><img src="../assets/photos/47-rooftop-berlin-night.jpeg"><span class="lbl">BERLIN ROOFTOP</span></div>
+
+    <div class="tile w2"><img src="../assets/photos/03-rooftop-mixed-evening.jpeg"><span class="lbl">MIXED · EVENING</span></div>
+    <div class="tile w2"><img src="../assets/photos/31-london-rooftop-dusk.jpeg"><span class="lbl">LONDON DUSK</span></div>
+    <div class="tile w2"><img src="../assets/photos/13-rooftop-pool-bears.jpeg"><span class="lbl">POOL · BEARS</span></div>
+    <div class="tile w2"><img src="../assets/photos/46-pool-bears-rooftop.jpeg"><span class="lbl">POOL · ROOFTOP</span></div>
+
+    <!-- ROW: portraits + intimate -->
+    <div class="section">Portraits · intimate <small>Single subjects and quiet pairs — for hero, profile, paywall.</small></div>
+    <div class="tile w2 h2"><img src="../assets/photos/09-cigar-daddy-bar.jpeg"><span class="lbl">CIGAR · DADDY</span></div>
+    <div class="tile w2 h2"><img src="../assets/photos/22-daddy-twink-bar.jpeg"><span class="lbl">PAIR · INTIMATE</span></div>
+    <div class="tile w2 h2"><img src="../assets/photos/30-bear-portrait-night.jpeg"><span class="lbl">OTTER · NIGHT</span></div>
+    <div class="tile w2 h2"><img src="../assets/photos/44-bears-leather-vests.jpeg"><span class="lbl">BEARS · VESTS</span></div>
+
+    <!-- ROW: outdoors / beach / sun -->
+    <div class="section">Outdoors · beach · sun <small>Counterbalance to the night — light, warm, easy.</small></div>
+    <div class="tile w3 h2"><img src="../assets/photos/06-mediterranean-beach.jpeg"><span class="lbl">MEDITERRANEAN</span></div>
+    <div class="tile w2 h2"><img src="../assets/photos/27-golden-beach-sunset.jpeg"><span class="lbl">GOLDEN HOUR</span></div>
+    <div class="tile w3 h2"><img src="../assets/photos/23-beach-bears-skyline.jpeg"><span class="lbl">CITY BEACH</span></div>
+
+    <div class="tile w2"><img src="../assets/photos/05-beach-bonfire-dusk.jpeg"><span class="lbl">BONFIRE · DUSK</span></div>
+    <div class="tile w2"><img src="../assets/photos/11-brighton-beach-pier.jpeg"><span class="lbl">BRIGHTON · PIER</span></div>
+    <div class="tile w2"><img src="../assets/photos/25-amsterdam-canal-cruise.jpeg"><span class="lbl">CANAL · BOAT</span></div>
+    <div class="tile w2"><img src="../assets/photos/33-amsterdam-canal-pride.jpeg"><span class="lbl">CANAL · PRIDE</span></div>
+
+    <!-- ROW: cruising / parks / signs (slow + mood) -->
+    <div class="section">Cruising · parks · signs <small>Quiet menace, suggestion, the spaces between.</small></div>
+    <div class="tile w2"><img src="../assets/photos/08-park-phones-night.jpeg"><span class="lbl">PARK · PHONES</span></div>
+    <div class="tile w2"><img src="../assets/photos/34-cruising-bushes-dusk.jpeg"><span class="lbl">BUSHES · DUSK</span></div>
+    <div class="tile w2"><img src="../assets/photos/37-park-cruising-silhouettes.jpeg"><span class="lbl">SILHOUETTES</span></div>
+    <div class="tile w2"><img src="../assets/photos/18-bears-hollow-sign.jpeg"><span class="lbl">BEAR'S HOLLOW</span></div>
+
+    <div class="tile w2"><img src="../assets/photos/20-cruisers-copse-sign.jpeg"><span class="lbl">CRUISER'S COPSE</span></div>
+    <div class="tile w2"><img src="../assets/photos/24-west-heath-lane-sign.jpeg"><span class="lbl">WEST HEATH LANE</span></div>
+    <div class="tile w2"><img src="../assets/photos/35-string-lights-festival.jpeg"><span class="lbl">FESTIVAL</span></div>
+    <div class="tile w2"><img src="../assets/photos/40-copenhagen-pride-march.jpeg"><span class="lbl">COPENHAGEN · MARCH</span></div>
+
+    <!-- ROW: pride / public  -->
+    <div class="section">Pride · public · together <small>The communal frame — flags, marches, crowds in daylight.</small></div>
+    <div class="tile w3"><img src="../assets/photos/21-pride-parade-flags.jpeg"><span class="lbl">PARADE · FLAGS</span></div>
+    <div class="tile w3"><img src="../assets/photos/29-brighton-pride-bunting.jpeg"><span class="lbl">BRIGHTON PRIDE</span></div>
+    <div class="tile w2"><img src="../assets/photos/28-bear-pride-flag-day.jpeg"><span class="lbl">BEAR FLAG · DAY</span></div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,203 @@
+{
+  "plugins": [
+    "react",
+    "import"
+  ],
+  "rules": {
+    "react/forbid-elements": [
+      "warn",
+      {
+        "forbid": []
+      }
+    ],
+    "no-restricted-imports": [
+      "warn",
+      {
+        "patterns": [
+          {
+            "group": [
+              "ui_kits/menrush_app/**"
+            ],
+            "message": "Import design-system components from 'index.js', not component internals."
+          }
+        ]
+      }
+    ],
+    "no-restricted-syntax": [
+      "warn",
+      {
+        "selector": "Literal[value=/#[0-9a-fA-F]{3,8}\\b/]",
+        "message": "Raw hex color — use a design-system color token via var()."
+      },
+      {
+        "selector": "Literal[value=/\\b\\d+px\\b/]",
+        "message": "Raw px value — use a design-system spacing token via var()."
+      },
+      {
+        "selector": "Literal[value=/font-family\\s*:\\s*(?!['\\\"]?(?:JetBrains Mono|Inter))/i]",
+        "message": "Font not provided by the design system. Available: JetBrains Mono, Inter."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/index.js"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ],
+  "x-omelette": {
+    "components": {},
+    "tokens": [
+      "--nn-bg",
+      "--nn-body",
+      "--nn-body-lg",
+      "--nn-body-sm",
+      "--nn-border",
+      "--nn-button",
+      "--nn-caption",
+      "--nn-card",
+      "--nn-copper",
+      "--nn-copper-bright",
+      "--nn-danger",
+      "--nn-display-lg",
+      "--nn-display-md",
+      "--nn-display-xl",
+      "--nn-dur-base",
+      "--nn-dur-fast",
+      "--nn-dur-slow",
+      "--nn-ease-in",
+      "--nn-ease-out",
+      "--nn-elevated",
+      "--nn-faint",
+      "--nn-fg-1",
+      "--nn-fg-2",
+      "--nn-fg-3",
+      "--nn-font-display",
+      "--nn-font-mono",
+      "--nn-font-sans",
+      "--nn-glow-copper",
+      "--nn-glow-copper-strong",
+      "--nn-glow-rust",
+      "--nn-h1",
+      "--nn-h2",
+      "--nn-h3",
+      "--nn-h4",
+      "--nn-inset-warm",
+      "--nn-mono",
+      "--nn-muted",
+      "--nn-online",
+      "--nn-overline",
+      "--nn-radius-2xl",
+      "--nn-radius-full",
+      "--nn-radius-lg",
+      "--nn-radius-md",
+      "--nn-radius-sm",
+      "--nn-radius-xl",
+      "--nn-radius-xs",
+      "--nn-rust",
+      "--nn-shadow-card",
+      "--nn-shadow-card-hover",
+      "--nn-shadow-modal",
+      "--nn-space-0",
+      "--nn-space-1",
+      "--nn-space-10",
+      "--nn-space-12",
+      "--nn-space-16",
+      "--nn-space-2",
+      "--nn-space-3",
+      "--nn-space-4",
+      "--nn-space-5",
+      "--nn-space-6",
+      "--nn-space-8",
+      "--nn-text",
+      "--nn-verified",
+      "--nn-warning",
+      "--nn-z-base",
+      "--nn-z-modal",
+      "--nn-z-nav",
+      "--nn-z-overlay",
+      "--nn-z-sticky",
+      "--nn-z-toast"
+    ],
+    "tokenKinds": {
+      "--nn-bg": "color",
+      "--nn-card": "color",
+      "--nn-elevated": "color",
+      "--nn-border": "color",
+      "--nn-copper": "color",
+      "--nn-copper-bright": "color",
+      "--nn-rust": "color",
+      "--nn-text": "font",
+      "--nn-muted": "color",
+      "--nn-faint": "color",
+      "--nn-online": "color",
+      "--nn-warning": "color",
+      "--nn-danger": "color",
+      "--nn-verified": "color",
+      "--nn-fg-1": "color",
+      "--nn-fg-2": "color",
+      "--nn-fg-3": "color",
+      "--nn-font-display": "font",
+      "--nn-font-sans": "font",
+      "--nn-font-mono": "font",
+      "--nn-display-xl": "color",
+      "--nn-display-lg": "color",
+      "--nn-display-md": "color",
+      "--nn-h1": "color",
+      "--nn-h2": "color",
+      "--nn-h3": "color",
+      "--nn-h4": "color",
+      "--nn-body-lg": "color",
+      "--nn-body": "color",
+      "--nn-body-sm": "color",
+      "--nn-caption": "color",
+      "--nn-overline": "color",
+      "--nn-mono": "color",
+      "--nn-button": "color",
+      "--nn-space-0": "spacing",
+      "--nn-space-1": "spacing",
+      "--nn-space-2": "spacing",
+      "--nn-space-3": "spacing",
+      "--nn-space-4": "spacing",
+      "--nn-space-5": "spacing",
+      "--nn-space-6": "spacing",
+      "--nn-space-8": "spacing",
+      "--nn-space-10": "spacing",
+      "--nn-space-12": "spacing",
+      "--nn-space-16": "spacing",
+      "--nn-radius-xs": "radius",
+      "--nn-radius-sm": "radius",
+      "--nn-radius-md": "radius",
+      "--nn-radius-lg": "radius",
+      "--nn-radius-xl": "radius",
+      "--nn-radius-2xl": "radius",
+      "--nn-radius-full": "radius",
+      "--nn-shadow-card": "shadow",
+      "--nn-shadow-card-hover": "shadow",
+      "--nn-shadow-modal": "shadow",
+      "--nn-glow-copper": "shadow",
+      "--nn-glow-copper-strong": "shadow",
+      "--nn-glow-rust": "shadow",
+      "--nn-inset-warm": "spacing",
+      "--nn-ease-out": "other",
+      "--nn-ease-in": "other",
+      "--nn-dur-fast": "other",
+      "--nn-dur-base": "other",
+      "--nn-dur-slow": "other",
+      "--nn-z-base": "other",
+      "--nn-z-sticky": "other",
+      "--nn-z-nav": "other",
+      "--nn-z-overlay": "other",
+      "--nn-z-modal": "other",
+      "--nn-z-toast": "other"
+    },
+    "fontFamilies": [
+      "Inter",
+      "JetBrains Mono"
+    ]
+  }
+}

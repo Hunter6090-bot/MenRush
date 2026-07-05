@@ -1,0 +1,28 @@
+<!doctype html>
+<!-- @dsCard group="Spacing" name="Corner radii" subtitle="4 → 24 → full; 16 is the default card" viewport="700x170" -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Corner radii</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 28px; background: var(--nn-bg); color: var(--nn-text); }
+  .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
+  .swatch { aspect-ratio: 1 / 1.05; background: var(--nn-card); border: 1px solid var(--nn-border); display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding: 8px; box-shadow: var(--nn-shadow-card); }
+  .swatch:nth-child(1) { background: linear-gradient(135deg, #2A1C0A 0%, #1E1508 100%); }
+  .swatch::before { content: ''; flex: 1; width: 100%; }
+  .name { font: var(--nn-overline); letter-spacing: 0.14em; font-size: 10px; }
+  .val { font: var(--nn-mono); color: var(--nn-muted); font-size: 10px; margin-top: 2px; }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div class="swatch" style="border-radius:4px"><span class="name">XS</span><span class="val">4</span></div>
+    <div class="swatch" style="border-radius:8px"><span class="name">SM</span><span class="val">8</span></div>
+    <div class="swatch" style="border-radius:12px"><span class="name">MD</span><span class="val">12</span></div>
+    <div class="swatch" style="border-radius:16px; border-color:#C4832A"><span class="name" style="color:#C4832A">LG · DEFAULT</span><span class="val">16</span></div>
+    <div class="swatch" style="border-radius:24px"><span class="name">XL · DRAWER</span><span class="val">24</span></div>
+    <div class="swatch" style="border-radius:9999px"><span class="name">FULL</span><span class="val">∞</span></div>
+  </div>
+</body>
+</html>

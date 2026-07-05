@@ -1,0 +1,22 @@
+/* MenRush mobile UI-kit tokens — re-exports from the system-wide vars */
+@import url('../../colors_and_type.css');
+
+/* ─── Kit-local utilities (only what the JSX components reach for) ─── */
+.menrush-app {
+  background: var(--nn-bg);
+  color: var(--nn-text);
+  font: var(--nn-body);
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.menrush-app *::-webkit-scrollbar { width: 0; height: 0; }
+.menrush-app .scroll { overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
+
+/* Smaller radar variant for inline use (avatars in lists) */
+.radar-mini { position: absolute; inset: 0; border-radius: 50%; background: var(--nn-copper); pointer-events: none; }
+.radar-mini.r1 { opacity: .5; animation: nn-radar 2.4s var(--nn-ease-out) infinite; }
+.radar-mini.r2 { opacity: .32; animation: nn-radar 2.4s var(--nn-ease-out) .8s infinite; }
+.radar-mini.r3 { opacity: .18; animation: nn-radar 2.4s var(--nn-ease-out) 1.6s infinite; }

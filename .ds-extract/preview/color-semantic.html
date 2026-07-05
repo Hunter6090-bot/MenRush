@@ -1,0 +1,39 @@
+<!doctype html>
+<!-- @dsCard group="Colors" name="Semantic colors" subtitle="Online, premium, danger, verified — all earth-toned" viewport="700x210" -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Semantic / status colors</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 28px; background: var(--nn-bg); font: var(--nn-body-sm); color: var(--nn-text); }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .item { background: var(--nn-card); border: 1px solid var(--nn-border); border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; }
+  .chip { width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 14px currentColor; }
+  .name { font: var(--nn-overline); letter-spacing: 0.16em; color: var(--nn-text); }
+  .hex { font: var(--nn-mono); font-size: 11px; color: var(--nn-muted); margin-top: 2px; }
+  .desc { font: var(--nn-caption); color: var(--nn-muted); margin-top: 2px; }
+  .col { flex: 1; min-width: 0; }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div class="item">
+      <span class="chip" style="background:#6FA85A; color:#6FA85A; opacity:.9"></span>
+      <div class="col"><div class="name">ONLINE</div><div class="hex">#6FA85A · --nn-online</div><div class="desc">Active now. Mossy green, never neon mint.</div></div>
+    </div>
+    <div class="item">
+      <span class="chip" style="background:#D4A24C; color:#D4A24C; opacity:.9"></span>
+      <div class="col"><div class="name">WARNING / PREMIUM</div><div class="hex">#D4A24C · --nn-warning</div><div class="desc">Premium gates, boost prompts. Amber-copper.</div></div>
+    </div>
+    <div class="item">
+      <span class="chip" style="background:#B0432E; color:#B0432E; opacity:.9"></span>
+      <div class="col"><div class="name">DANGER</div><div class="hex">#B0432E · --nn-danger</div><div class="desc">Block, report, destructive. Burnt brick.</div></div>
+    </div>
+    <div class="item">
+      <span class="chip" style="background:#C4832A; color:#C4832A; opacity:.9"></span>
+      <div class="col"><div class="name">VERIFIED</div><div class="hex">#C4832A · --nn-verified</div><div class="desc">ID-verified badge = copper. Free for all.</div></div>
+    </div>
+  </div>
+</body>
+</html>

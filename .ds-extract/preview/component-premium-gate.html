@@ -1,0 +1,123 @@
+<!doctype html>
+<!-- @dsCard group="Components" name="Premium gates" subtitle="One pattern, five variants — likes · boost · incognito · radius · filters" viewport="700x480" -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Premium gates — one pattern, five variants</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 14px; background: var(--nn-bg); color: var(--nn-text); font-family: 'Inter', sans-serif;
+         display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .gate { aspect-ratio: 0.62/1; background: var(--nn-card); border: 1px solid rgba(196,131,42,.5); border-radius: 14px; padding: 12px 11px; box-shadow: 0 0 28px rgba(196,131,42,.18), 0 12px 32px rgba(0,0,0,.5); display: flex; flex-direction: column; position: relative; overflow: hidden; }
+  .hero { padding: 10px 0 8px; text-align: center; position: relative; }
+  .hero::before { content:''; position:absolute; inset: -8px;
+                  background: url('../assets/menrush-logo.png') center 35% / 130px no-repeat;
+                  opacity: .16; }
+  .eb { position: relative; font-size: 8px; font-weight: 700; letter-spacing: 0.2em; color: var(--nn-copper); }
+  .ti { position: relative; font-size: 13px; font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase; margin: 6px 0 3px; line-height: 1.1; }
+  .sb { position: relative; font-size: 9px; color: var(--nn-muted); line-height: 1.4; }
+  .perks { padding: 8px 0; display: flex; flex-direction: column; gap: 4px; font-size: 9.5px; flex: 1; }
+  .perk { display: flex; gap: 6px; align-items: flex-start; }
+  .perk svg { color: var(--nn-copper); flex-shrink: 0; margin-top: 1px; }
+  .cta { background: var(--nn-copper); color: #1A0E03; padding: 8px; border-radius: 7px; font-size: 8.5px; font-weight: 800; letter-spacing: 0.12em; text-align: center; box-shadow: 0 0 14px rgba(196,131,42,.55); }
+  .bundle { font-size: 8.5px; color: var(--nn-muted); line-height: 1.4; padding: 6px 8px; background: rgba(196,131,42,.06); border: 1px solid var(--nn-border); border-radius: 6px; margin-top: 5px; text-align: center; }
+  .bundle b { color: var(--nn-copper); font-weight: 700; }
+  .fine { text-align: center; font-size: 8px; color: var(--nn-faint); margin-top: 5px; }
+  .vlbl { position: absolute; left: 8px; bottom: 6px; font-size: 8px; font-weight: 700; letter-spacing: 0.16em; color: var(--nn-muted); text-transform: uppercase; }
+</style>
+</head>
+<body>
+  <!-- LIKES -->
+  <div class="gate">
+    <div class="hero">
+      <div class="eb">MENRUSH PREMIUM</div>
+      <div class="ti">3 men liked you.</div>
+      <div class="sb">See them. Skip the queue.</div>
+    </div>
+    <div class="perks">
+      <div class="perk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>See who liked you</div>
+      <div class="perk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Radius up to 30 miles</div>
+      <div class="perk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Message without match</div>
+      <div class="perk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Incognito + filters</div>
+    </div>
+    <div class="cta">UNLOCK · £9.99/MO</div>
+    <div class="fine">Cancel anytime.</div>
+    <div class="vlbl">LIKES</div>
+  </div>
+
+  <!-- BOOST -->
+  <div class="gate">
+    <div class="hero">
+      <div class="eb">BOOST</div>
+      <div class="ti">Top of nearby. 30 minutes.</div>
+      <div class="sb">Push your card to the top.</div>
+    </div>
+    <div class="perks">
+      <div class="perk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>First in the grid · 30 minutes</div>
+      <div class="perk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Pulsing copper card border</div>
+      <div class="perk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>More profile views while boosted</div>
+      <div class="perk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>One-tap, no auto-renew</div>
+    </div>
+    <div class="cta">BOOST · £4.99</div>
+    <div class="fine">Cancel anytime.</div>
+    <div class="vlbl">BOOST</div>
+  </div>
+
+  <!-- INCOGNITO -->
+  <div class="gate">
+    <div class="hero">
+      <div class="eb">INCOGNITO</div>
+      <div class="ti">Browse unseen.</div>
+      <div class="sb">They won't see you 'til you pulse.</div>
+    </div>
+    <div class="perks">
+      <div class="perk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Hide from the grid</div>
+      <div class="perk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>No "active now" leak</div>
+      <div class="perk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Still receive messages</div>
+      <div class="perk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Toggle on or off</div>
+    </div>
+    <div class="cta">INVISIBLE · £4.99/MO</div>
+    <div class="bundle">Get this plus 4 more in <b>MenRush Premium</b> for £9.99/mo.</div>
+    <div class="fine">Cancel anytime.</div>
+    <div class="vlbl">INCOGNITO</div>
+  </div>
+
+  <!-- RADIUS -->
+  <div class="gate">
+    <div class="hero">
+      <div class="eb">EXPANDED RADIUS</div>
+      <div class="ti">See further.</div>
+      <div class="sb">Up to 30 miles · cities · presets.</div>
+    </div>
+    <div class="perks">
+      <div class="perk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Radius up to 30 miles</div>
+      <div class="perk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Filter by city when away</div>
+      <div class="perk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Pin a custom location</div>
+      <div class="perk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Save 5 radius presets</div>
+    </div>
+    <div class="cta">EXPAND · £6.99/MO</div>
+    <div class="bundle">Get this plus 4 more in <b>MenRush Premium</b> for £9.99/mo.</div>
+    <div class="fine">Cancel anytime.</div>
+    <div class="vlbl">RADIUS</div>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="gate">
+    <div class="hero">
+      <div class="eb">ADVANCED FILTERS</div>
+      <div class="ti">Narrow it down.</div>
+      <div class="sb">Tribe · body · position · mood.</div>
+    </div>
+    <div class="perks">
+      <div class="perk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>14 tribe tags</div>
+      <div class="perk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Body · height · position</div>
+      <div class="perk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Mood · "here for"</div>
+      <div class="perk"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Verified-only mode</div>
+    </div>
+    <div class="cta">FILTERS · £6.99/MO</div>
+    <div class="bundle">Get this plus 4 more in <b>MenRush Premium</b> for £9.99/mo.</div>
+    <div class="fine">Cancel anytime.</div>
+    <div class="vlbl">FILTERS</div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,27 @@
+<!doctype html>
+<!-- @dsCard group="Colors" name="Surface stack" subtitle="Page → card → elevated → border → copper accent" viewport="700x290" -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Surfaces stack</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 28px; background: var(--nn-bg); }
+  .stack { display: flex; flex-direction: column; gap: 0; border-radius: 16px; overflow: hidden; box-shadow: var(--nn-shadow-card); }
+  .layer { padding: 18px 22px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--nn-border); }
+  .layer:first-child { border-top: none; }
+  .label { font: var(--nn-overline); letter-spacing: 0.18em; color: var(--nn-text); }
+  .right { font: var(--nn-mono); color: var(--nn-muted); font-size: 12px; }
+  .copper { color: var(--nn-copper) !important; }
+</style>
+</head>
+<body>
+  <div class="stack">
+    <div class="layer" style="background:#0D0A06"><span class="label">PAGE BACKGROUND</span><span class="right">#0D0A06 · --nn-bg</span></div>
+    <div class="layer" style="background:#1E1508"><span class="label">CARD</span><span class="right">#1E1508 · --nn-card</span></div>
+    <div class="layer" style="background:#2A1C0A"><span class="label">ELEVATED</span><span class="right">#2A1C0A · --nn-elevated</span></div>
+    <div class="layer" style="background:#3D2B0E"><span class="label">BORDER / HAIRLINE</span><span class="right">#3D2B0E · --nn-border</span></div>
+    <div class="layer" style="background:#1E1508"><span class="label copper">↳ COPPER ACCENT — CTA / ACTIVE / PULSE</span><span class="right copper">#C4832A</span></div>
+  </div>
+</body>
+</html>

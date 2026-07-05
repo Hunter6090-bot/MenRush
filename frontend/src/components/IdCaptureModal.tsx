@@ -16,6 +16,7 @@ interface IdCaptureModalProps {
   template: IdDocumentTemplate;
   ariaLabel?: string;
   filePrefix?: string;
+  handoff?: { sessionId: string; token: string };
 }
 
 function templateLabel(template: IdDocumentTemplate): string {
@@ -39,6 +40,7 @@ export function IdCaptureModal({
   template,
   ariaLabel = 'Scan your ID',
   filePrefix = 'id',
+  handoff,
 }: IdCaptureModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -200,8 +202,11 @@ export function IdCaptureModal({
     setPrecheckPhase('checking');
     setPrecheckResult(null);
 
-    verifyAPI
-      .precheck(previewFile, template)
+    const precheckRequest = handoff
+      ? verifyAPI.handoffPrecheck(handoff.sessionId, handoff.token, previewFile, template)
+      : verifyAPI.precheck(previewFile, template);
+
+    precheckRequest
       .then((response) => {
         if (precheckRequestRef.current !== requestId) return;
         setPrecheckResult(response.data);
@@ -218,7 +223,7 @@ export function IdCaptureModal({
           rejectionReasons: ['Could not reach the ID check service.'],
         });
       });
-  }, [open, phase, previewFile, template]);
+  }, [open, phase, previewFile, template, handoff]);
 
   useEffect(() => {
     if (!open) return;

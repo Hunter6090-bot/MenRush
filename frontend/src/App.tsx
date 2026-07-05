@@ -20,6 +20,7 @@ import { Help } from './pages/Help';
 import { MessagingRoute } from './components/MessagingRoute';
 import { RoomsRoute } from './components/RoomsRoute';
 import { Verify } from './pages/Verify';
+import { VerifyScan } from './pages/VerifyScan';
 import { VerifyPending } from './pages/VerifyPending';
 import { VerifyRejected } from './pages/VerifyRejected';
 import { Premium } from './pages/Premium';
@@ -133,6 +134,7 @@ function AppShell() {
         <Route path="/guidelines" element={<CommunityGuidelines />} />
         <Route path="/help" element={<Help />} />
         <Route path="/verify" element={<ProtectedRoute><Verify /></ProtectedRoute>} />
+        <Route path="/verify/scan/:sessionId" element={<VerifyScan />} />
         <Route path="/verify/pending" element={<ProtectedRoute><VerifyPending /></ProtectedRoute>} />
         <Route path="/verify/rejected" element={<ProtectedRoute><VerifyRejected /></ProtectedRoute>} />
         <Route path="/premium" element={<RequireVerified><Premium /></RequireVerified>} />

@@ -1,0 +1,45 @@
+<!doctype html>
+<!-- @dsCard group="Components" name="Form inputs & composer" subtitle="Field with focus state · chat composer" viewport="700x220" -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Form input</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 26px 30px; background: var(--nn-bg); color: var(--nn-text); display: flex; flex-direction: column; gap: 14px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .label { font: var(--nn-overline); letter-spacing: 0.16em; font-size: 10px; color: var(--nn-muted); }
+  .input, .textarea, .select {
+    background: var(--nn-card); border: 1px solid var(--nn-border); color: var(--nn-text);
+    font: var(--nn-body); padding: 12px 14px; border-radius: 12px;
+    box-shadow: var(--nn-inset-warm); outline: none;
+  }
+  .input.focus { border-color: var(--nn-copper); box-shadow: var(--nn-inset-warm), 0 0 0 3px rgba(196,131,42,.18); }
+  .input.error { border-color: #B0432E; }
+  .hint { font: var(--nn-caption); color: var(--nn-muted); }
+  .hint.err { color: #C46A53; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .composer { display: flex; gap: 8px; background: var(--nn-elevated); border: 1px solid var(--nn-border); border-radius: 999px; padding: 6px 6px 6px 18px; align-items: center; }
+  .composer input { flex: 1; background: transparent; border: 0; outline: none; color: var(--nn-text); font: var(--nn-body); }
+  .composer .send { width: 38px; height: 38px; border-radius: 50%; background: var(--nn-copper); border: 0; display: flex; align-items: center; justify-content: center; box-shadow: var(--nn-glow-copper); cursor: pointer; }
+  .composer .send svg { width: 18px; height: 18px; color: #1A0E03; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="field">
+      <span class="label">EMAIL</span>
+      <input class="input focus" value="marcus@menrush.app">
+      <span class="hint">Used for sign-in only. Never shown to others.</span>
+    </div>
+    <div class="field">
+      <span class="label">DISPLAY NAME</span>
+      <input class="input" value="Marcus">
+    </div>
+  </div>
+  <div class="composer">
+    <input placeholder="Say something direct…">
+    <button class="send"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11l18-8-8 18-2.5-7.5z"/></svg></button>
+  </div>
+</body>
+</html>

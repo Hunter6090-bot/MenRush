@@ -1,0 +1,91 @@
+<!doctype html>
+<!-- @dsCard group="Components" name="Message bubbles" subtitle="Text · typing · voice note (all users) · video note — premium plays, free sees blur + logo + upgrade note" viewport="700x560" -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Message bubbles</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 28px 32px; background: var(--nn-bg); color: var(--nn-text); display: flex; flex-direction: column; gap: 10px; }
+  .row { display: flex; }
+  .row.mine { justify-content: flex-end; }
+  .bubble { max-width: 70%; padding: 11px 16px; font: var(--nn-body); font-size: 14.5px; line-height: 1.45; box-shadow: var(--nn-shadow-card); }
+  .mine .bubble {
+    background: linear-gradient(135deg, #C4832A, #8B4513);
+    color: #1A0E03; font-weight: 500;
+    border-radius: 18px 18px 4px 18px;
+  }
+  .theirs .bubble {
+    background: var(--nn-elevated);
+    color: var(--nn-text);
+    border: 1px solid var(--nn-border);
+    border-radius: 18px 18px 18px 4px;
+  }
+  .time { font: var(--nn-mono); font-size: 10px; opacity: .55; margin-top: 4px; display: block; }
+  .typing { display: inline-flex; gap: 4px; padding: 12px 18px; align-items: center; }
+  .typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--nn-muted); animation: blink 1.2s ease-in-out infinite; }
+  .typing span:nth-child(2) { animation-delay: .2s; }
+  .typing span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%,60%,100%{opacity:.3;transform:translateY(0)} 30%{opacity:1;transform:translateY(-3px)} }
+
+  /* ── Voice note ── */
+  .voice { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+  .play { width: 30px; height: 30px; border-radius: 999px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .theirs .play { background: var(--nn-copper); color: #1A0E03; }
+  .mine  .play { background: rgba(26,14,3,.85); color: var(--nn-copper); }
+  .wave { display: flex; align-items: center; gap: 2.5px; height: 18px; }
+  .wave span { width: 2.5px; border-radius: 2px; background: rgba(196,131,42,.8); }
+  .mine .wave span { background: rgba(26,14,3,.7); }
+  .dur { font: var(--nn-mono); font-size: 10.5px; opacity: .6; }
+
+  /* ── Video note ── */
+  .video { width: 150px; height: 190px; border-radius: 16px; overflow: hidden; position: relative;
+           background: linear-gradient(160deg, #3D2B0E, #1E1508); border: 1px solid var(--nn-border); }
+  .video .center-play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .video .center-play span { width: 42px; height: 42px; border-radius: 999px; background: rgba(13,10,6,.6);
+           border: 1.5px solid var(--nn-copper); color: var(--nn-copper); display: flex; align-items: center; justify-content: center; }
+  .video .tag { position: absolute; top: 8px; left: 8px; padding: 3px 8px; border-radius: 999px;
+           background: rgba(13,10,6,.75); color: var(--nn-copper); font-size: 9px; font-weight: 700; letter-spacing: 0.12em; }
+  .video.locked .blur { position: absolute; inset: 0; background: radial-gradient(circle at 40% 30%, #6B4A16, #241804 70%);
+           filter: blur(14px); transform: scale(1.2); }
+  .video.locked .logo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: .28; padding: 24px; box-sizing: border-box; }
+  .video.locked .lockrow { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+           justify-content: flex-end; padding-bottom: 13px; gap: 6px; }
+  .video.locked .lockrow .pad { width: 32px; height: 32px; border-radius: 999px; background: rgba(13,10,6,.75);
+           border: 1px solid rgba(196,131,42,.55); color: var(--nn-copper); display: flex; align-items: center; justify-content: center; }
+  .video.locked .lockrow b { font-size: 9px; font-weight: 700; letter-spacing: 0.14em; color: var(--nn-copper); text-shadow: 0 1px 6px rgba(0,0,0,.8); }
+  .upnote { text-align: center; font-size: 10.5px; color: var(--nn-faint); letter-spacing: 0.04em; }
+  .upnote b { color: var(--nn-copper); font-weight: 700; }
+  .caption { font: var(--nn-mono); font-size: 9px; letter-spacing: 0.14em; color: var(--nn-muted); text-transform: uppercase; margin-top: 2px; }
+</style>
+</head>
+<body>
+  <div class="row theirs"><div class="bubble">Saw your pulse. Where are you?<span class="time">9:42 PM</span></div></div>
+  <div class="row mine"><div class="bubble">Stonewall. Back patio.<span class="time" style="color:rgba(26,14,3,.55)">9:43 PM · seen</span></div></div>
+  <div class="row theirs"><div class="bubble typing"><span></span><span></span><span></span></div></div>
+
+  <div class="caption">VOICE NOTE — PLAYS FOR EVERY USER</div>
+  <div class="row theirs"><div class="bubble voice">
+    <span class="play"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8z"/></svg></span>
+    <span class="wave"><span style="height:5px"></span><span style="height:9px"></span><span style="height:14px"></span><span style="height:8px"></span><span style="height:12px"></span><span style="height:16px"></span><span style="height:10px"></span><span style="height:6px"></span><span style="height:11px"></span><span style="height:15px"></span><span style="height:9px"></span><span style="height:5px"></span><span style="height:8px"></span><span style="height:13px"></span><span style="height:7px"></span><span style="height:10px"></span></span>
+    <span class="dur">0:09 · 9:44 PM</span>
+  </div></div>
+
+  <div class="caption">VIDEO NOTE — PREMIUM VIEWER</div>
+  <div class="row theirs"><div class="video">
+    <span class="tag">▶ 0:15</span>
+    <div class="center-play"><span><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8z"/></svg></span></div>
+  </div></div>
+
+  <div class="caption">VIDEO NOTE — FREE VIEWER (LOCKED)</div>
+  <div class="row theirs"><div class="video locked">
+    <div class="blur"></div>
+    <img class="logo" src="../assets/menrush-logo.png" alt="">
+    <div class="lockrow">
+      <span class="pad"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
+      <b>VIDEO · PREMIUM ONLY</b>
+    </div>
+  </div></div>
+  <div class="upnote">Video notes are for <b>Premium</b> members — upgrade to watch</div>
+</body>
+</html>

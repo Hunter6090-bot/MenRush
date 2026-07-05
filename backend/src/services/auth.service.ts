@@ -12,9 +12,17 @@ import { v4 as uuidv4 } from 'uuid';
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable is required');
 const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
+const HANDOFF_TOKEN_TTL_SECONDS = 30 * 60;
 
 type TokenPayload = {
   userId: string;
+  exp: number;
+};
+
+type HandoffTokenPayload = {
+  sessionId: string;
+  userId: string;
+  scope: 'verify_handoff';
   exp: number;
 };
 
@@ -153,6 +161,53 @@ export const authService = {
   verifyToken(token: string) {
     const payload = verifyTokenInternal(token);
     return { userId: payload.userId };
+  },
+
+  signHandoffToken(sessionId: string, userId: string): string {
+    const payload: HandoffTokenPayload = {
+      sessionId,
+      userId,
+      scope: 'verify_handoff',
+      exp: Math.floor(Date.now() / 1000) + HANDOFF_TOKEN_TTL_SECONDS,
+    };
+    const payloadJson = JSON.stringify(payload);
+    const payloadPart = base64UrlEncode(payloadJson);
+    const signature = crypto
+      .createHmac('sha256', JWT_SECRET)
+      .update(payloadJson)
+      .digest();
+    return `${payloadPart}.${base64UrlEncode(signature)}`;
+  },
+
+  verifyHandoffToken(token: string): { sessionId: string; userId: string } {
+    const [payloadPart, signaturePart] = token.split('.');
+    if (!payloadPart || !signaturePart) {
+      throw new Error('Invalid token');
+    }
+
+    const payloadJson = base64UrlDecode(payloadPart).toString('utf8');
+    const expectedSignature = crypto
+      .createHmac('sha256', JWT_SECRET)
+      .update(payloadJson)
+      .digest();
+    const actualSignature = base64UrlDecode(signaturePart);
+
+    if (
+      expectedSignature.length !== actualSignature.length ||
+      !crypto.timingSafeEqual(expectedSignature, actualSignature)
+    ) {
+      throw new Error('Invalid token');
+    }
+
+    const payload = JSON.parse(payloadJson) as HandoffTokenPayload;
+    if (payload.scope !== 'verify_handoff') {
+      throw new Error('Invalid token');
+    }
+    if (payload.exp < Math.floor(Date.now() / 1000)) {
+      throw new Error('Token expired');
+    }
+
+    return { sessionId: payload.sessionId, userId: payload.userId };
   },
 
   async requestPasswordReset(email: string) {

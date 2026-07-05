@@ -1,0 +1,97 @@
+<!doctype html>
+<!-- @dsCard group="Components" name="Verify ID flow" subtitle="Intro · capture · pending · verified — free for all" viewport="700x500" -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Verify ID flow</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 14px; background: var(--nn-bg); color: var(--nn-text); font-family: 'Inter', sans-serif; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; }
+  .tile { aspect-ratio: 9/16; border-radius: 16px; overflow: hidden; background: var(--nn-card); border: 1px solid var(--nn-border); padding: 12px; display: flex; flex-direction: column; gap: 8px; position: relative; }
+  .free { font-size: 10px; font-weight: 700; letter-spacing: 0.18em; color: var(--nn-copper); text-align: center; margin-bottom: 2px; }
+  .hero { width: 56px; height: 56px; margin: 8px auto 0; border-radius: 50%; background: linear-gradient(135deg, var(--nn-copper-bright, #E0A14A), var(--nn-copper)); display: flex; align-items: center; justify-content: center; color: #1A0E03; box-shadow: 0 0 24px rgba(196,131,42,.5); }
+  .h { font-size: 15px; font-weight: 900; letter-spacing: 0.03em; text-transform: uppercase; text-align: center; margin: 4px 0 2px; }
+  .sub { font-size: 11px; color: var(--nn-muted); text-align: center; line-height: 1.45; }
+  .step { display: flex; gap: 8px; align-items: center; padding: 5px 0; font-size: 11px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .dot.done { background: var(--nn-copper); box-shadow: 0 0 6px var(--nn-copper); }
+  .dot.now  { background: transparent; border: 2px solid var(--nn-copper); }
+  .dot.todo { background: var(--nn-elevated); border: 1px solid var(--nn-border); }
+  .cta { background: var(--nn-copper); color: #1A0E03; padding: 9px; border-radius: 7px; font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-align: center; margin-top: auto; }
+  .vf { aspect-ratio: 1.6/1; border-radius: 9px; border: 1px dashed rgba(196,131,42,.5); position: relative; background: #0D0A06; flex-shrink: 0; }
+  .vf::after { content: 'POSITION ID IN FRAME'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 8.5px; font-weight: 700; letter-spacing: 0.14em; color: var(--nn-muted); }
+  .shutter { width: 32px; height: 32px; border-radius: 50%; background: var(--nn-copper); margin: 0 auto; border: 3px solid var(--nn-bg); box-shadow: 0 0 0 1px var(--nn-copper); }
+  .lbl { position: absolute; left: 10px; bottom: 8px; font-size: 9px; font-weight: 700; letter-spacing: 0.16em; color: var(--nn-faint); text-transform: uppercase; }
+  .badge { background: rgba(196,131,42,.13); color: var(--nn-copper); border: 1px solid rgba(196,131,42,.4); padding: 4px 10px; border-radius: 999px; display: inline-flex; gap: 4px; align-items: center; font-size: 10.5px; font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <!-- Intro -->
+    <div class="tile">
+      <div class="free">VERIFIED IS FREE · ALWAYS</div>
+      <div class="hero">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><polyline points="9 12 11 14 15 10"/></svg>
+      </div>
+      <div class="h">Prove you're you.</div>
+      <div class="sub">ID + selfie. Two minutes.</div>
+      <div style="font-size:11px; color: var(--nn-text); display: flex; flex-direction: column; gap: 6px; margin-top: 8px;">
+        <div>✓ Free, always</div>
+        <div>✓ Documents deleted</div>
+      </div>
+      <div class="cta">START</div>
+      <div class="lbl">INTRO</div>
+    </div>
+
+    <!-- Capture -->
+    <div class="tile">
+      <div class="free">STEP 1 OF 2</div>
+      <div class="h">Front of your ID.</div>
+      <div class="vf"></div>
+      <div style="display:flex; gap: 6px; justify-content:center; margin-top: 8px;">
+        <span style="font-size:9px; font-weight:700; padding: 4px 10px; border-radius: 999px; background: var(--nn-copper); color: #1A0E03; letter-spacing: 0.08em;">FRONT</span>
+        <span style="font-size:9px; font-weight:700; padding: 4px 10px; border-radius: 999px; border:1px solid var(--nn-border); color: var(--nn-muted); letter-spacing: 0.08em;">BACK</span>
+      </div>
+      <div class="shutter" style="margin-top: 10px"></div>
+      <div class="lbl">CAPTURE</div>
+    </div>
+
+    <!-- Pending -->
+    <div class="tile">
+      <div class="free">UNDER REVIEW</div>
+      <div style="display:flex; justify-content:center; margin: 14px 0 6px;">
+        <div style="width: 56px; height: 56px; border-radius: 50%; border: 3px solid var(--nn-border); border-top-color: var(--nn-copper); animation: spin 1s linear infinite;"></div>
+      </div>
+      <div class="h">Hang tight.</div>
+      <div class="sub">Usually under 2 minutes.</div>
+      <div style="margin-top: 8px; padding: 8px 10px; background: var(--nn-elevated); border-radius: 8px; border: 1px solid var(--nn-border);">
+        <div class="step"><span class="dot done"></span>ID</div>
+        <div class="step"><span class="dot done"></span>Selfie</div>
+        <div class="step" style="color: var(--nn-copper); font-weight: 600;"><span class="dot now"></span>Review</div>
+        <div class="step" style="color: var(--nn-muted)"><span class="dot todo"></span>Badge</div>
+      </div>
+      <div class="lbl">PENDING</div>
+    </div>
+
+    <!-- Verified -->
+    <div class="tile">
+      <div class="free">VERIFIED</div>
+      <div style="position: relative; width: 64px; height: 64px; margin: 10px auto 0;">
+        <span style="position:absolute; inset: 18px; border-radius: 50%; background: var(--nn-copper); opacity: .35;"></span>
+        <span style="position:absolute; inset: 6px; border-radius: 50%; background: var(--nn-copper); opacity: .18;"></span>
+        <div style="position: relative; z-index: 2; width: 32px; height: 32px; border-radius: 50%; background: var(--nn-copper); margin: 16px; display:flex; align-items:center; justify-content:center; border: 2px solid var(--nn-bg); color: #1A0E03; box-shadow: 0 0 18px var(--nn-copper);">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2l-3.5-3.5L4 14.2 9 19.2 20 8.2l-1.5-1.5z"/></svg>
+        </div>
+      </div>
+      <div class="h">You're verified.</div>
+      <div style="background: var(--nn-elevated); border: 1px solid var(--nn-border); border-radius: 10px; padding: 10px; margin-top: 10px; display:flex; gap:10px; align-items:center; justify-content:center;">
+        <div style="width:30px; height:30px; border-radius:50%; background: var(--nn-card); border: 2px solid var(--nn-copper); display:flex; align-items:center; justify-content:center; color:var(--nn-text); font-size:11px; font-weight:700;">Y</div>
+        <span class="badge">✓ ID verified</span>
+      </div>
+      <div class="cta" style="margin-top: 8px">BACK TO NEARBY</div>
+      <div class="lbl">VERIFIED</div>
+    </div>
+  </div>
+</body>
+</html>

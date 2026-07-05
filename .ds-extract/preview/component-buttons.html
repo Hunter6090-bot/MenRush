@@ -1,0 +1,50 @@
+<!doctype html>
+<!-- @dsCard group="Components" name="Buttons" subtitle="Primary / secondary / ghost / danger / icon" viewport="700x240" -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Buttons</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 28px; background: var(--nn-bg); color: var(--nn-text); display: flex; flex-direction: column; gap: 14px; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .label { font: var(--nn-overline); letter-spacing: 0.16em; font-size: 10px; color: var(--nn-muted); min-width: 100px; }
+  .btn { font: var(--nn-button); border: 0; cursor: pointer; padding: 12px 22px; border-radius: 999px; letter-spacing: 0.02em; }
+  .primary { background: var(--nn-copper); color: #1A0E03; box-shadow: var(--nn-glow-copper); }
+  .primary-hover { background: #E0A14A; color: #1A0E03; box-shadow: var(--nn-glow-copper-strong); }
+  .secondary { background: transparent; color: var(--nn-copper); border: 1px solid var(--nn-copper); }
+  .ghost { background: rgba(196,131,42,.08); color: var(--nn-text); border: 1px solid var(--nn-border); }
+  .danger { background: transparent; color: #B0432E; border: 1px solid rgba(176,67,46,.5); }
+  .disabled { background: var(--nn-card); color: var(--nn-faint); border: 1px solid var(--nn-border); cursor: not-allowed; }
+  .icon-btn { width: 44px; height: 44px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--nn-elevated); border: 1px solid var(--nn-border); color: var(--nn-text); }
+  .icon-btn.copper { background: var(--nn-copper); color: #1A0E03; border-color: transparent; box-shadow: var(--nn-glow-copper); }
+  svg { width: 18px; height: 18px; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <span class="label">PRIMARY</span>
+    <button class="btn primary">PULSE NOW</button>
+    <button class="btn primary-hover">HOVER</button>
+    <button class="btn primary" style="transform:scale(0.95); opacity:.95">PRESSED</button>
+  </div>
+  <div class="row">
+    <span class="label">SECONDARY</span>
+    <button class="btn secondary">OPEN PROFILE</button>
+    <button class="btn ghost">Cancel</button>
+    <button class="btn disabled">DISABLED</button>
+  </div>
+  <div class="row">
+    <span class="label">DESTRUCTIVE</span>
+    <button class="btn danger">Block user</button>
+    <button class="btn danger">Report</button>
+  </div>
+  <div class="row">
+    <span class="label">ICON</span>
+    <button class="icon-btn copper" title="Pulse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7" opacity=".7"/><circle cx="12" cy="12" r="10.5" opacity=".4"/></svg></button>
+    <button class="icon-btn" title="Filter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 4h18l-7 9v7l-4-2v-5z"/></svg></button>
+    <button class="icon-btn" title="Message"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12c0 4.4-4 8-9 8a9.9 9.9 0 0 1-4.3-1L3 20l1.4-3.7C3.5 15 3 13.6 3 12c0-4.4 4-8 9-8s9 3.6 9 8z"/></svg></button>
+    <button class="icon-btn" title="More"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></button>
+  </div>
+</body>
+</html>

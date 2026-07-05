@@ -1,0 +1,31 @@
+<!doctype html>
+<!-- @dsCard group="Colors" name="Copper scale" subtitle="50–700 ramp; 500 default, 600 hover" viewport="700x170" -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Copper scale</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 28px; background: var(--nn-bg); }
+  .strip { display: grid; grid-template-columns: repeat(8, 1fr); border-radius: 12px; overflow: hidden; border: 1px solid var(--nn-border); box-shadow: var(--nn-shadow-card); }
+  .cell { aspect-ratio: 1 / 1.15; padding: 10px 8px; display: flex; flex-direction: column; justify-content: space-between; }
+  .step { font: var(--nn-mono); font-size: 10px; opacity: .55; }
+  .hex { font: var(--nn-mono); font-size: 10px; opacity: .85; }
+  .note { color: var(--nn-muted); font: var(--nn-caption); margin-top: 14px; text-align: center; }
+  .note b { color: var(--nn-copper); font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="strip">
+    <div class="cell" style="background:#2A1808; color:#C4832A"><span class="step">50</span><span class="hex">#2A1808</span></div>
+    <div class="cell" style="background:#4A2F11; color:#F0E0C0"><span class="step">100</span><span class="hex">#4A2F11</span></div>
+    <div class="cell" style="background:#6B461A; color:#F0E0C0"><span class="step">200</span><span class="hex">#6B461A</span></div>
+    <div class="cell" style="background:#8B4513; color:#F0E0C0"><span class="step">300 · rust</span><span class="hex">#8B4513</span></div>
+    <div class="cell" style="background:#A66923; color:#1A0E03"><span class="step">400</span><span class="hex">#A66923</span></div>
+    <div class="cell" style="background:#C4832A; color:#1A0E03"><span class="step">500 · copper</span><span class="hex">#C4832A</span></div>
+    <div class="cell" style="background:#E0A14A; color:#1A0E03"><span class="step">600 · hover</span><span class="hex">#E0A14A</span></div>
+    <div class="cell" style="background:#F0C887; color:#1A0E03"><span class="step">700</span><span class="hex">#F0C887</span></div>
+  </div>
+  <p class="note">Default UI accent: <b>500 · #C4832A</b>. Hover: <b>600 · #E0A14A</b>. Pressed: 400. Borders/secondary fills: 200–300.</p>
+</body>
+</html>

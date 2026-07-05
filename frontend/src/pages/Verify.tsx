@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { verifyAPI, type IdDocumentType } from '../api/verify';
 import { useAuthStore } from '../hooks/store';
+import { useSocket } from '../hooks/useSocket';
 import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
 import { SelfieCaptureModal } from '../components/SelfieCaptureModal';
 import { IdCaptureModal } from '../components/IdCaptureModal';
+import { VerificationQr } from '../components/VerificationQr';
 import { NATIONALITIES } from '../lib/nationalities';
+import { isPhoneDevice } from '../lib/device';
 import { consumePostAuthRedirect } from '../lib/profileLinks';
 import { trackEvent } from '../observability/analytics';
 
@@ -28,6 +31,19 @@ export const Verify: React.FC = () => {
   const [selfieOpen, setSelfieOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [handoffSessionId, setHandoffSessionId] = useState<string | null>(null);
+  const [handoffReady, setHandoffReady] = useState(false);
+  const [useLocalCamera, setUseLocalCamera] = useState(isPhoneDevice());
+  const [handoffLoading, setHandoffLoading] = useState(false);
+
+  const socket = useSocket();
+  const prefersPhoneScan = !isPhoneDevice();
+  const showPhoneQr = prefersPhoneScan && !useLocalCamera;
+
+  const handoffUrl = useMemo(() => {
+    if (!handoffSessionId || typeof window === 'undefined') return '';
+    return `${window.location.origin}/verify/scan/${handoffSessionId}`;
+  }, [handoffSessionId]);
 
   const isLicense = idType === 'driving_license';
   const totalIdSteps = isLicense ? 2 : 1;
@@ -64,12 +80,91 @@ export const Verify: React.FC = () => {
     setError(null);
   };
 
+  useEffect(() => {
+    if (step !== 'id-front' && step !== 'selfie') {
+      setHandoffSessionId(null);
+      setHandoffReady(false);
+      setHandoffLoading(false);
+    }
+  }, [step]);
+
+  useEffect(() => {
+    if (!showPhoneQr || step !== 'id-front' || !idType || handoffSessionId || handoffLoading) {
+      return;
+    }
+
+    let cancelled = false;
+    setHandoffLoading(true);
+    setError(null);
+
+    verifyAPI
+      .createHandoff(nationality, idType)
+      .then((res) => {
+        if (cancelled) return;
+        setHandoffSessionId(res.data.session_id);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setError('Could not start phone scanning. Try again or use this device\'s camera.');
+        setUseLocalCamera(true);
+      })
+      .finally(() => {
+        if (!cancelled) setHandoffLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showPhoneQr, step, idType, nationality, handoffSessionId, handoffLoading]);
+
+  useEffect(() => {
+    if (!socket || !handoffSessionId) return;
+
+    const onHandoff = (payload: {
+      session_id?: string;
+      status?: string;
+    }) => {
+      if (payload.session_id !== handoffSessionId || payload.status !== 'doc_captured') return;
+      setHandoffReady(true);
+      setIdFront({} as File);
+      if (isLicense) setIdBack({} as File);
+      setError(null);
+      setStep('selfie');
+    };
+
+    socket.on('verify:handoff', onHandoff);
+    return () => {
+      socket.off('verify:handoff', onHandoff);
+    };
+  }, [socket, handoffSessionId, isLicense]);
+
+  useEffect(() => {
+    if (!handoffSessionId || handoffReady || step === 'selfie') return;
+
+    const poll = window.setInterval(() => {
+      verifyAPI
+        .getHandoff(handoffSessionId)
+        .then((res) => {
+          if (res.data.status !== 'doc_captured') return;
+          setHandoffReady(true);
+          setIdFront({} as File);
+          if (isLicense) setIdBack({} as File);
+          setError(null);
+          setStep('selfie');
+        })
+        .catch(() => undefined);
+    }, 4000);
+
+    return () => window.clearInterval(poll);
+  }, [handoffSessionId, handoffReady, step, isLicense]);
+
   const handleSubmit = async () => {
-    if (!idFront || !selfie || !idType || !nationality) {
+    const hasIdViaHandoff = Boolean(handoffSessionId && handoffReady);
+    if ((!idFront && !hasIdViaHandoff) || !selfie || !idType || !nationality) {
       setError('Complete every step before submitting.');
       return;
     }
-    if (isLicense && !idBack) {
+    if (isLicense && !idBack && !hasIdViaHandoff) {
       setError('Driving licence requires front and back photos.');
       return;
     }
@@ -80,11 +175,12 @@ export const Verify: React.FC = () => {
 
     try {
       const res = await verifyAPI.submit({
-        idFront,
+        idFront: hasIdViaHandoff ? undefined : idFront ?? undefined,
         selfie,
         idType,
         nationality,
-        idBack: isLicense ? idBack ?? undefined : undefined,
+        idBack: hasIdViaHandoff ? undefined : isLicense ? idBack ?? undefined : undefined,
+        handoffSessionId: hasIdViaHandoff ? handoffSessionId ?? undefined : undefined,
       });
       const { status } = res.data;
 
@@ -284,32 +380,61 @@ export const Verify: React.FC = () => {
 
           {step === 'id-front' ? (
             <>
-              <p className="text-sm text-[#A89070] mb-4 text-center">
-                {idType === 'passport'
-                  ? 'Photograph your passport photo page'
-                  : `Step 1 of ${totalIdSteps} — front of your licence`}
-              </p>
-              {idFrontPreview ? (
-                <div className="mb-4 rounded-xl overflow-hidden border border-[#3D2B0E]">
-                  <img src={idFrontPreview} alt="ID front preview" className="w-full h-36 object-cover" />
-                </div>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setCaptureTarget('id-front')}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] text-white font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98]"
-              >
-                {idFront ? 'Rescan document' : 'Scan document'}
-              </button>
-              {idFront ? (
-                <button
-                  type="button"
-                  onClick={() => setStep(isLicense ? 'id-back' : 'selfie')}
-                  className="w-full mt-3 py-3 rounded-xl border border-[#3D2B0E] bg-[#0D0A06]/80 text-[#F0E0C0] font-semibold text-sm"
-                >
-                  Continue
-                </button>
-              ) : null}
+              {showPhoneQr ? (
+                <>
+                  <p className="text-sm text-[#A89070] mb-4 text-center">
+                    Scan the QR code with your phone to photograph your ID using its rear camera.
+                  </p>
+                  {handoffLoading || !handoffUrl ? (
+                    <div className="mb-4 flex items-center justify-center gap-2 py-8 text-sm text-[#A89070]">
+                      <PulseRing size={18} />
+                      Generating QR code…
+                    </div>
+                  ) : (
+                    <VerificationQr url={handoffUrl} className="mb-4" />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUseLocalCamera(true);
+                      setHandoffSessionId(null);
+                      setHandoffReady(false);
+                    }}
+                    className="w-full py-3 rounded-xl border border-[#3D2B0E] bg-[#0D0A06]/80 text-[#F0E0C0] font-semibold text-sm"
+                  >
+                    Use this device&apos;s camera instead
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-[#A89070] mb-4 text-center">
+                    {idType === 'passport'
+                      ? 'Photograph your passport photo page'
+                      : `Step 1 of ${totalIdSteps} — front of your licence`}
+                  </p>
+                  {idFrontPreview ? (
+                    <div className="mb-4 rounded-xl overflow-hidden border border-[#3D2B0E]">
+                      <img src={idFrontPreview} alt="ID front preview" className="w-full h-36 object-cover" />
+                    </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setCaptureTarget('id-front')}
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] text-white font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98]"
+                  >
+                    {idFront ? 'Rescan document' : 'Scan document'}
+                  </button>
+                  {idFront ? (
+                    <button
+                      type="button"
+                      onClick={() => setStep(isLicense ? 'id-back' : 'selfie')}
+                      className="w-full mt-3 py-3 rounded-xl border border-[#3D2B0E] bg-[#0D0A06]/80 text-[#F0E0C0] font-semibold text-sm"
+                    >
+                      Continue
+                    </button>
+                  ) : null}
+                </>
+              )}
               <button
                 type="button"
                 onClick={() => setStep('id-type')}
@@ -362,6 +487,12 @@ export const Verify: React.FC = () => {
                 Final step — live selfie to match your ID photo
               </p>
 
+              {handoffReady ? (
+                <p className="mb-3 text-center text-xs font-semibold text-[#C4832A]">
+                  ID received from your phone — take your selfie here to finish.
+                </p>
+              ) : null}
+
               {idFrontPreview ? (
                 <div className="mb-3 rounded-xl overflow-hidden border border-[#3D2B0E]">
                   <img src={idFrontPreview} alt="ID preview" className="w-full h-28 object-cover" />
@@ -383,7 +514,12 @@ export const Verify: React.FC = () => {
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={loading || !idFront || !selfie || (isLicense && !idBack)}
+                disabled={
+                  loading
+                  || (!idFront && !handoffReady)
+                  || !selfie
+                  || (isLicense && !idBack && !handoffReady)
+                }
                 className="w-full mt-4 py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] disabled:opacity-50 text-white font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2"
               >
                 {loading ? (

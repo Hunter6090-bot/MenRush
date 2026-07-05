@@ -1,0 +1,45 @@
+<!doctype html>
+<!-- @dsCard group="Components" name="Status badges" subtitle="Pulsing, active, recent, invisible, verified" viewport="700x240" -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Status badges</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 30px; background: var(--nn-bg); color: var(--nn-text); display: flex; flex-direction: column; gap: 14px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font: var(--nn-caption); font-size: 11.5px; border: 1px solid; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .online   { background: rgba(111,168,90,.12); color: #8FC773; border-color: rgba(111,168,90,.35); }
+  .online .dot { background: #6FA85A; box-shadow: 0 0 8px #6FA85A; }
+  .recent   { background: rgba(212,162,76,.10); color: #D4A24C; border-color: rgba(212,162,76,.32); }
+  .recent .dot { background: #D4A24C; }
+  .offline  { background: rgba(168,144,112,.08); color: var(--nn-muted); border-color: var(--nn-border); }
+  .offline .dot { background: var(--nn-muted); opacity: .5; }
+  .verified { background: rgba(196,131,42,.12); color: var(--nn-copper); border-color: rgba(196,131,42,.4); }
+  .verified svg { width: 12px; height: 12px; }
+  .pulse    { background: var(--nn-copper); color: #1A0E03; border-color: transparent; font-weight: 700; box-shadow: var(--nn-glow-copper); }
+  .pulse .dot { background: #1A0E03; }
+  .incog    { background: var(--nn-elevated); color: var(--nn-muted); border-color: var(--nn-border); }
+  .lbl { font: var(--nn-overline); letter-spacing: 0.16em; font-size: 10px; color: var(--nn-muted); min-width: 110px; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <span class="lbl">LIVE STATES</span>
+    <span class="badge pulse"><span class="dot"></span>PULSING · 2 MI</span>
+    <span class="badge online"><span class="dot"></span>Active now</span>
+    <span class="badge recent"><span class="dot"></span>Active 12m ago</span>
+  </div>
+  <div class="row">
+    <span class="lbl">QUIET STATES</span>
+    <span class="badge offline"><span class="dot"></span>Last seen 3h</span>
+    <span class="badge incog">◐ Invisible</span>
+  </div>
+  <div class="row">
+    <span class="lbl">TRUST</span>
+    <span class="badge verified"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2l-3.5-3.5L4 14.2 9 19.2 20 8.2l-1.5-1.5z"/></svg>ID verified</span>
+    <span class="badge verified" style="font-weight:700">+ PHOTO VERIFIED</span>
+  </div>
+</body>
+</html>

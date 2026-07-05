@@ -1,0 +1,125 @@
+<!doctype html>
+<!-- @dsCard group="Components" name="Video call" subtitle="Incoming pulse · active call — drag the self-view anywhere, resize from its corner" viewport="700x620" -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Video call</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 16px; background: var(--nn-bg); color: var(--nn-text); font-family: 'Inter', sans-serif; display: flex; gap: 14px; justify-content: center; }
+  .phone { height: 586px; aspect-ratio: 9 / 19.5; background: #000; border-radius: 28px; overflow: hidden; position: relative; box-shadow: var(--nn-shadow-card); border: 1px solid #222; flex-shrink: 0; }
+  .lbl { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 9px; font-weight: 700; letter-spacing: 0.18em; color: var(--nn-muted); z-index: 100; }
+
+  /* incoming */
+  .inc { background: #0D0A06; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; padding: 40px 20px 56px; }
+  .eb { font-size: 9px; font-weight: 700; letter-spacing: 0.22em; color: var(--nn-copper); margin-bottom: 14px; }
+  .av-wrap { position: relative; width: 140px; height: 140px; display: flex; align-items: center; justify-content: center; }
+  .av-ring { position: absolute; inset: 28px; border-radius: 50%; background: var(--nn-copper); }
+  .av-ring.r1 { opacity: .5; animation: nn-radar 2.4s cubic-bezier(.16,1,.3,1) infinite; }
+  .av-ring.r2 { opacity: .3; animation: nn-radar 2.4s cubic-bezier(.16,1,.3,1) .8s infinite; }
+  .av-core { position: absolute; inset: 28px; border-radius: 50%; background: linear-gradient(160deg, #3D2B0E, #1E1508); border: 2px solid var(--nn-copper); display: flex; align-items: center; justify-content: center; font-size: 36px; font-weight: 700; color: var(--nn-text); box-shadow: 0 0 0 3px rgba(196,131,42,.22), 0 4px 16px rgba(0,0,0,.5); z-index: 2; }
+  .name { font-size: 20px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 16px; }
+  .dist { font-size: 11px; color: var(--nn-muted); margin-top: 4px; }
+  .ctrls { margin-top: auto; display: flex; gap: 30px; }
+  .cbtn { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 20px rgba(0,0,0,.5); color: #fff; }
+  .cbtn.ans { background: #6FA85A; color: #0D1A06; }
+  .cbtn.hang { background: #B0432E; }
+
+  /* active */
+  .act { background: linear-gradient(160deg, #2A1C0A 0%, #0D0A06 80%); height: 100%; position: relative; }
+  .act-bg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: rgba(196,131,42,.18); }
+  .topbar { position: absolute; top: 48px; left: 14px; right: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .live-pill { padding: 4px 10px; border-radius: 999px; background: rgba(13,10,6,.6); backdrop-filter: blur(10px); border: 1px solid var(--nn-border); display: inline-flex; gap: 5px; align-items: center; font-family: ui-monospace, monospace; font-size: 10px; }
+  .live-pill .d { width: 5px; height: 5px; border-radius: 50%; background: #B0432E; box-shadow: 0 0 6px #B0432E; }
+  .pip { position: absolute; top: 80px; right: 14px; width: 64px; height: 90px; border-radius: 10px; background: linear-gradient(160deg, #3D2B0E, #1E1508); border: 1px solid rgba(196,131,42,.4); display: flex; align-items: center; justify-content: center; color: rgba(196,131,42,.3); box-shadow: 0 6px 20px rgba(0,0,0,.6); cursor: grab; touch-action: none; user-select: none; z-index: 5; }
+  .pip:active { cursor: grabbing; }
+  .pip .grip { position: absolute; right: -1px; bottom: -1px; width: 16px; height: 16px; border-radius: 8px 0 9px 0; background: var(--nn-copper); display: flex; align-items: center; justify-content: center; cursor: nwse-resize; }
+  .pip .grip svg { width: 8px; height: 8px; color: #1A0E03; }
+  .pip-hint { position: absolute; top: 80px; left: 14px; max-width: 110px; font-size: 8.5px; line-height: 1.5; letter-spacing: 0.08em; font-weight: 600; color: var(--nn-muted); text-transform: uppercase; }
+  .actctrls { position: absolute; bottom: 72px; left: 0; right: 0; display: flex; gap: 14px; justify-content: center; }
+  .cbtn-sm { width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,.12); display: flex; align-items: center; justify-content: center; color: #fff; }
+  .cbtn-md { width: 56px; height: 56px; border-radius: 50%; background: #B0432E; display: flex; align-items: center; justify-content: center; color: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+</style>
+</head>
+<body>
+  <!-- Incoming -->
+  <div class="phone">
+    <div class="inc">
+      <div class="eb">● INCOMING VIDEO</div>
+      <div class="av-wrap">
+        <span class="av-ring r1"></span><span class="av-ring r2"></span>
+        <div class="av-core">M</div>
+      </div>
+      <div class="name">Marcus</div>
+      <div class="dist">400 m away</div>
+      <div class="ctrls">
+        <div class="cbtn hang"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></div>
+        <div class="cbtn ans"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="6" width="14" height="12" rx="2"/><path d="M17 10l4-3v10l-4-3z" fill="currentColor"/></svg></div>
+      </div>
+    </div>
+    <div class="lbl" style="color: var(--nn-text); text-shadow: 0 1px 4px rgba(0,0,0,.5)">INCOMING</div>
+  </div>
+
+  <!-- Active -->
+  <div class="phone">
+    <div class="act">
+      <div class="act-bg"><svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="12" cy="8" r="4"/><path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></div>
+      <div class="topbar">
+        <span class="live-pill"><span class="d"></span>02:14</span>
+        <span style="font-size: 12px; font-weight: 700; color: var(--nn-text); text-shadow: 0 1px 4px rgba(0,0,0,.7)">Marcus</span>
+      </div>
+      <div class="pip" id="pip">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="12" cy="8" r="4"></circle><path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8"></path></svg>
+        <span class="grip" id="grip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M21 15v6h-6M21 21L13 13"></path></svg></span>
+      </div>
+      <div class="pip-hint">Drag to move · corner to resize</div>
+      <div class="actctrls">
+        <div class="cbtn-sm"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 12a7 7 0 0 0 14 0M12 19v3M8 22h8"/></svg></div>
+        <div class="cbtn-sm"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="14" height="12" rx="2"/><path d="M17 10l4-3v10l-4-3z" fill="currentColor"/></svg></div>
+        <div class="cbtn-md"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></div>
+        <div class="cbtn-sm"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></div>
+      </div>
+    </div>
+    <div class="lbl" style="color: var(--nn-text); text-shadow: 0 1px 4px rgba(0,0,0,.5)">ACTIVE</div>
+  </div>
+<script>
+(function () {
+  var pip = document.getElementById('pip');
+  var grip = document.getElementById('grip');
+  var stage = pip.closest('.act');
+  var RATIO = 90 / 64, MINW = 48, MAXW = 160;
+
+  function bounds() { return stage.getBoundingClientRect(); }
+  function place(x, y) {
+    var b = bounds(), r = pip.getBoundingClientRect();
+    x = Math.max(8, Math.min(x, b.width - r.width - 8));
+    y = Math.max(44, Math.min(y, b.height - r.height - 8));
+    pip.style.left = x + 'px'; pip.style.top = y + 'px'; pip.style.right = 'auto';
+  }
+  pip.addEventListener('pointerdown', function (e) {
+    if (e.target.closest('.grip')) return;
+    e.preventDefault();
+    pip.setPointerCapture(e.pointerId);
+    var b = bounds(), r = pip.getBoundingClientRect();
+    var ox = e.clientX - r.left, oy = e.clientY - r.top;
+    function mv(ev) { place(ev.clientX - b.left - ox, ev.clientY - b.top - oy); }
+    function up() { pip.removeEventListener('pointermove', mv); pip.removeEventListener('pointerup', up); }
+    pip.addEventListener('pointermove', mv);
+    pip.addEventListener('pointerup', up);
+  });
+  grip.addEventListener('pointerdown', function (e) {
+    e.preventDefault(); e.stopPropagation();
+    grip.setPointerCapture(e.pointerId);
+    var r = pip.getBoundingClientRect(), startW = r.width, sx = e.clientX;
+    function mv(ev) {
+      var w = Math.max(MINW, Math.min(MAXW, startW + (ev.clientX - sx)));
+      pip.style.width = w + 'px'; pip.style.height = Math.round(w * RATIO) + 'px';
+    }
+    function up() { grip.removeEventListener('pointermove', mv); grip.removeEventListener('pointerup', up); }
+    grip.addEventListener('pointermove', mv);
+    grip.addEventListener('pointerup', up);
+  });
+})();
+</script>
+</body>
+</html>
