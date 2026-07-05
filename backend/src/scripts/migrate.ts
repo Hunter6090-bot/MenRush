@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import pool from '../db';
 
-const MIGRATIONS_DIR = path.resolve(__dirname, '../../../database/migrations');
+const MIGRATIONS_DIR = path.resolve(__dirname, '../../database/migrations');
 
 async function main() {
   await pool.query(`
