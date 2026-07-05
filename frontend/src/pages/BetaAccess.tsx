@@ -1,16 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { betaAPI } from '../api/client';
-import { CoinFlip } from '../components/CoinFlip';
-import { PublicHeroBlock, PublicMarketingShell } from '../components/PublicMarketingShell';
+import {
+  AUTH_BACKGROUNDS,
+  PublicAuthHero,
+  PublicAuthShell,
+} from '../components/PublicAuthShell';
 import { PulseRing } from '../components/PulseRing';
 import { BETA_INVITE_REQUIRED, storeInviteCode } from '../lib/betaInvite';
 import {
-  publicHeroLogoClass,
-  publicInputClass,
-  publicLabelClass,
-  publicNavLinkPrimary,
-  publicNavLinkSecondary,
+  publicCodeInputClass,
+  publicErrorClass,
+  publicLabelCopperClass,
+  publicLinkClass,
   publicPanelClass,
   publicPrimaryButtonClass,
 } from '../lib/publicStyles';
@@ -51,93 +53,67 @@ export const BetaAccess = () => {
   };
 
   return (
-    <PublicMarketingShell
-      header={
-        <nav className="flex items-center gap-2 text-sm font-semibold">
-          <Link to="/login" className={publicNavLinkSecondary}>
-            Sign in
-          </Link>
-          <Link to="/coming-soon#waitlist" className={publicNavLinkPrimary}>
-            Waitlist
-          </Link>
-        </nav>
-      }
-      hero={
-        <>
-          <Link to="/" className="inline-block hover:opacity-80 transition-opacity">
-            <CoinFlip qrValue="https://menrush.com/beta" sizeClass={publicHeroLogoClass} />
-          </Link>
-          <PublicHeroBlock
-            title="Beta access"
-            accent="invite code required."
-            copy="MenRush is in a closed beta. Enter the code from your invite email to create an account."
-            footerNote={
+    <PublicAuthShell
+      backgroundImage={AUTH_BACKGROUNDS.beta}
+      coinFlip={{ qrValue: 'https://menrush.com/beta' }}
+      showFooter
+    >
+      <PublicAuthHero
+        title="Beta access is"
+        accent="invite-only."
+        copy="MenRush hasn't launched publicly yet. If you were selected for beta, enter the unique code from your invite email below."
+      />
+
+      <div className={publicPanelClass}>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-[18px]">
+          <div className="flex flex-col gap-2.5">
+            <label htmlFor="beta-invite-code" className={publicLabelCopperClass}>
+              Beta invite code
+            </label>
+            <input
+              id="beta-invite-code"
+              type="text"
+              value={code}
+              onChange={(e) => {
+                setCode(e.target.value.toUpperCase());
+                setError('');
+              }}
+              placeholder="E.g. MR-BETA-XXXX"
+              autoComplete="off"
+              spellCheck={false}
+              required
+              className={publicCodeInputClass}
+            />
+          </div>
+
+          {error ? <p className={publicErrorClass}>{error}</p> : null}
+
+          <p className="m-0 text-sm leading-[1.55] text-[#A89070]">
+            Codes are single-use and tied to selected waitlist members. No code?{' '}
+            <Link to="/coming-soon#waitlist" className={publicLinkClass}>
+              Join the waitlist
+            </Link>
+            .
+          </p>
+
+          <button type="submit" disabled={loading} className={publicPrimaryButtonClass}>
+            {loading ? (
               <>
-                No code yet?{' '}
-                <Link to="/coming-soon#waitlist" className="font-semibold text-[#C4832A] hover:text-[#D4943B]">
-                  Join the waitlist
-                </Link>
-                .
+                <PulseRing size={16} /> Checking code…
               </>
-            }
-          />
-        </>
-      }
-      panel={
-        <div className={publicPanelClass}>
-          {error && (
-            <div className="mb-4 flex items-start gap-2.5 rounded-2xl border border-[#8B4513]/30 bg-[#8B4513]/12 px-4 py-3 text-sm text-[#F0E0C0]/90 backdrop-blur-md animate-fade-in">
-              <AlertIcon className="mt-0.5 h-4 w-4 flex-shrink-0" />
-              {error}
-            </div>
-          )}
+            ) : (
+              'Continue'
+            )}
+          </button>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="beta-invite-code" className={publicLabelClass}>
-                Invite code
-              </label>
-              <input
-                id="beta-invite-code"
-                type="text"
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-                placeholder="MENRUSH-XXXX-XXXX"
-                autoComplete="off"
-                spellCheck={false}
-                required
-                className={`${publicInputClass} font-mono tracking-wide`}
-              />
-              <p className="mt-1.5 text-[11px] leading-snug text-[#A89070]/70">
-                Codes are single-use. Paste exactly as shown in your email.
-              </p>
-            </div>
-
-            <button type="submit" disabled={loading} className={publicPrimaryButtonClass}>
-              {loading ? (
-                <>
-                  <PulseRing size={16} /> Checking code…
-                </>
-              ) : (
-                'Continue to sign up'
-              )}
-            </button>
-          </form>
-
-          <p className="mt-5 text-center text-xs text-[#A89070]">
-            Already verified?{' '}
-            <Link to="/login" className="font-semibold text-[#C4832A] transition-colors hover:text-[#D4943B]">
+          <p className="m-0 text-center text-[15px] text-[#A89070]">
+            Already have an account?{' '}
+            <Link to="/login" className={publicLinkClass}>
               Sign in
             </Link>
           </p>
-        </div>
-      }
-    />
+        </form>
+      </div>
+    </PublicAuthShell>
   );
 };
-
-const AlertIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-  </svg>
-);

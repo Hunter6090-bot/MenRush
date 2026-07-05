@@ -1,21 +1,33 @@
-/** Shared public marketing / auth surfaces (landing, login, register). */
+/** Shared public marketing / auth surfaces — synced with beta-launch-handoff design tokens. */
 
 export const publicNavLinkPrimary =
-  'rounded-lg border border-[#C4832A]/45 bg-[#C4832A]/15 px-3.5 py-2 text-sm font-bold text-[#F0E0C0] transition-colors hover:bg-[#C4832A]/25';
+  'rounded-[14px] border border-[rgba(240,224,192,0.4)] bg-[rgba(13,10,6,0.45)] px-[22px] py-[14px] text-[15px] font-bold text-[#F0E0C0] no-underline transition-colors hover:border-[rgba(196,131,42,0.6)] hover:text-[#E0A14A]';
 
-export const publicNavLinkSecondary =
-  'rounded-lg border border-[#3D2B0E] bg-[#1E1508]/68 px-3.5 py-2 text-sm font-bold text-[#A89070] transition-colors hover:border-[#C4832A]/45 hover:text-[#F0E0C0]';
+export const publicNavLinkSecondary = publicNavLinkPrimary;
 
 export const publicPanelClass =
-  'rounded-[1.25rem] border border-[#C4832A]/22 bg-[#0D0A06]/72 p-5 shadow-[0_18px_70px_rgba(0,0,0,0.55)] backdrop-blur-xl sm:p-6';
+  'mt-[34px] flex flex-col gap-5 rounded-[24px] border border-[rgba(240,224,192,0.35)] bg-[rgba(13,10,6,0.45)] px-6 py-7';
 
 export const publicInputClass =
-  'w-full rounded-2xl border border-[#C4832A]/26 bg-[#F7EFE0] px-4 py-3.5 text-sm font-semibold text-[#2A1C0A] placeholder:text-[#8B6B42]/70 focus:border-[#C4832A]/70 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/30 disabled:opacity-50';
+  'w-full rounded-full border-0 bg-[#F5EBD8] px-6 py-[18px] text-base text-[#2A1C0A] placeholder:text-[#8B6B42]/70 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/40 disabled:opacity-50';
+
+export const publicCodeInputClass =
+  'w-full rounded-2xl border-0 bg-[#F5EBD8] px-6 py-[18px] font-mono text-[17px] uppercase tracking-[0.14em] text-[#2A1C0A] placeholder:normal-case placeholder:font-sans placeholder:text-[17px] placeholder:tracking-normal placeholder:text-[#8B6B42]/70 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/40 disabled:opacity-50';
 
 export const publicLabelClass =
-  'mb-1.5 block text-xs font-bold uppercase tracking-wide text-[#F0E0C0]/82';
+  'block text-[13px] font-extrabold uppercase tracking-[0.08em] text-[#F0E0C0]';
+
+export const publicLabelCopperClass =
+  'block text-[13px] font-extrabold uppercase tracking-[0.08em] text-[#E0A14A]';
 
 export const publicPrimaryButtonClass =
-  'flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:from-[#D4943B] hover:to-[#9B5523] hover:shadow-glow-blue active:scale-[0.98] disabled:opacity-50';
+  'flex w-full items-center justify-center gap-2 rounded-full border-0 bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-6 py-[17px] text-[17px] font-bold text-[#FFF6E6] shadow-[0_0_24px_rgba(196,131,42,0.3)] transition-all duration-[240ms] hover:from-[#E0A14A] hover:to-[#C4832A] active:scale-[0.97] disabled:opacity-50';
+
+export const publicErrorClass = 'text-sm font-semibold text-[#B0432E]';
+
+export const publicLinkClass = 'font-bold text-[#C4832A] no-underline transition-colors hover:text-[#E0A14A]';
+
+export const publicInviteChipClass =
+  'flex items-center justify-between gap-3 rounded-full border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.12)] px-5 py-3';
 
 export const publicHeroLogoClass = 'h-28 sm:h-32';

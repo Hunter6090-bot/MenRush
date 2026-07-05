@@ -3,15 +3,17 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
 import { consumePostAuthRedirect, safeNextPath, savePostAuthRedirect } from '../lib/profileLinks';
-import { CoinFlip } from '../components/CoinFlip';
-import { PublicHeroBlock, PublicMarketingShell } from '../components/PublicMarketingShell';
+import {
+  AUTH_BACKGROUNDS,
+  PublicAuthHero,
+  PublicAuthShell,
+} from '../components/PublicAuthShell';
 import { PulseRing } from '../components/PulseRing';
 import {
-  publicHeroLogoClass,
+  publicErrorClass,
   publicInputClass,
   publicLabelClass,
-  publicNavLinkPrimary,
-  publicNavLinkSecondary,
+  publicLinkClass,
   publicPanelClass,
   publicPrimaryButtonClass,
 } from '../lib/publicStyles';
@@ -49,103 +51,82 @@ export const Login = () => {
     }
   };
 
+  const registerPath = BETA_INVITE_REQUIRED ? '/beta' : '/register';
+
   return (
-    <PublicMarketingShell
-      header={
-        <nav className="flex items-center gap-2 text-sm font-semibold">
-          <Link to={BETA_INVITE_REQUIRED ? '/beta' : '/register'} className={publicNavLinkPrimary}>
-            Sign up
-          </Link>
-          <Link to="/coming-soon#waitlist" className={publicNavLinkSecondary}>
-            Waitlist
-          </Link>
-        </nav>
-      }
-      hero={
-        <>
-          <Link to="/" className="inline-block hover:opacity-80 transition-opacity">
-            <CoinFlip qrValue="https://menrush.com" sizeClass={publicHeroLogoClass} noFlip />
-          </Link>
-          <PublicHeroBlock
-            title="Sign in and see who's"
-            accent="near you right now."
-            copy="New here? Create an account, then verify with a government ID and matching selfie before you can discover or chat."
-          />
-        </>
-      }
-      panel={
-        <div className={publicPanelClass}>
-          {error && (
-            <div className="mb-4 flex items-start gap-2.5 rounded-2xl border border-[#8B4513]/30 bg-[#8B4513]/12 px-4 py-3 text-sm text-[#F0E0C0]/90 backdrop-blur-md animate-fade-in">
-              <AlertIcon className="mt-0.5 h-4 w-4 flex-shrink-0" />
-              {error}
-            </div>
-          )}
+    <PublicAuthShell
+      backgroundImage={AUTH_BACKGROUNDS.login}
+      coinFlip={{ qrValue: 'https://menrush.com', noFlip: true }}
+    >
+      <PublicAuthHero
+        title="Sign in and see who's"
+        accent="near you right now."
+        copy="For invite holders only. Use the email and password from your invite."
+      />
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="login-email" className={publicLabelClass}>
-                Username / Email
-              </label>
-              <input
-                id="login-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                required
-                className={publicInputClass}
-              />
-            </div>
+      <div className={publicPanelClass}>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          <div className="flex flex-col gap-2.5">
+            <label htmlFor="login-email" className={publicLabelClass}>
+              Username / Email
+            </label>
+            <input
+              id="login-email"
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setError('');
+              }}
+              placeholder="you@example.com"
+              required
+              className={publicInputClass}
+            />
+          </div>
 
-            <div>
-              <label htmlFor="login-password" className={publicLabelClass}>
-                Password
-              </label>
-              <input
-                id="login-password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                className={publicInputClass}
-              />
-            </div>
+          <div className="flex flex-col gap-2.5">
+            <label htmlFor="login-password" className={publicLabelClass}>
+              Password
+            </label>
+            <input
+              id="login-password"
+              type="password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setError('');
+              }}
+              placeholder="••••••••"
+              required
+              className={publicInputClass}
+            />
+          </div>
 
-            <button type="submit" disabled={loading} className={publicPrimaryButtonClass}>
-              {loading ? (
-                <>
-                  <PulseRing size={16} /> Signing in…
-                </>
-              ) : (
-                'Sign In'
-              )}
-            </button>
-          </form>
+          {error ? <p className={publicErrorClass}>{error}</p> : null}
 
-          <div className="mt-5 flex flex-col gap-3 text-sm text-[#F0E0C0]/72 sm:flex-row sm:items-center sm:justify-between">
-            <p>
-              New here?{' '}
-              <Link to="/register" className="font-semibold text-[#C4832A] transition-colors hover:text-[#D4943B]">
+          <button type="submit" disabled={loading} className={publicPrimaryButtonClass}>
+            {loading ? (
+              <>
+                <PulseRing size={16} /> Signing in…
+              </>
+            ) : (
+              'Sign In'
+            )}
+          </button>
+
+          <div className="flex flex-col gap-3 text-[15px] text-[#A89070]">
+            <p className="m-0">
+              Selected for beta?{' '}
+              <Link to={registerPath} className={publicLinkClass}>
                 Create an account
               </Link>
             </p>
-            <Link
-              to="/forgot-password"
-              className="shrink-0 font-medium text-[#C4832A] transition-colors hover:text-[#D4943B]"
-            >
+            <Link to="/forgot-password" className={publicLinkClass}>
               Forgot password?
             </Link>
           </div>
-        </div>
-      }
-    />
+        </form>
+      </div>
+    </PublicAuthShell>
   );
 };
-
-const AlertIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-  </svg>
-);

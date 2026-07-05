@@ -9,39 +9,35 @@ const FORBIDDEN_CTA_PATTERNS = [
   /^GET EARLY ACCESS$/i,
 ];
 
-async function assertLandingDesignLock(page: import('@playwright/test').Page) {
-  const header = page.locator('header');
-  const signInHeaderLinks = header.getByRole('link', {
-    name: /Already have an invite\? Sign in|Sign in/i,
-  });
-  await expect(signInHeaderLinks).toHaveCount(1);
+async function assertComingSoonDesignLock(page: import('@playwright/test').Page) {
+  const signInLink = page.getByRole('link', { name: /Already have an invite\? Sign in/i });
+  await expect(signInLink).toHaveCount(1);
+  await expect(signInLink).toHaveAttribute('href', '/login');
 
-  const heroHeading = page.locator('h1.mr-hero-heading');
+  const heroHeading = page.locator('h1.mr-coming-soon-heading');
   await expect(heroHeading).toBeVisible();
-  await expect(heroHeading).not.toHaveClass(/mr-brand-wordmark/);
+  await expect(heroHeading).toContainText(/Real men/i);
+  await expect(heroHeading).toContainText(/Verified bodies/i);
 
   for (const pattern of FORBIDDEN_CTA_PATTERNS) {
     await expect(page.getByRole('button', { name: pattern })).toHaveCount(0);
     await expect(page.getByRole('link', { name: pattern })).toHaveCount(0);
   }
 
-  await expect(page.getByText(/Beta 200:/)).toBeVisible();
   await expect(page.locator('#waitlist')).toBeVisible();
   await expect(page.locator('#waitlist-email')).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Join waitlist$/i })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /Join the verified waitlist/i })).toHaveCount(1);
+  await assertCoinLogo(page);
 }
 
-async function assertPublicMarketingShellGrid(page: import('@playwright/test').Page) {
-  const shellGrid = page.locator('div.grid.w-full.gap-10');
-  await expect(shellGrid).toBeVisible();
-  await expect(shellGrid).toHaveClass(/lg:grid-cols-\[1\.1fr_0\.9fr\]/);
-  await expect(page.locator('h1.mr-hero-heading')).toBeVisible();
+async function assertAuthShell(page: import('@playwright/test').Page) {
+  await expect(page.locator('h1.mr-auth-heading')).toBeVisible();
+  await expect(page.locator('img[alt="MenRush"]').first()).toBeVisible();
 }
 
-async function assertWaitlistNavLink(page: import('@playwright/test').Page) {
-  const waitlistLink = page.locator('header').getByRole('link', { name: /^Waitlist$/i });
-  await expect(waitlistLink).toHaveCount(1);
-  await expect(waitlistLink).toHaveAttribute('href', '/coming-soon#waitlist');
+async function assertCoinLogo(page: import('@playwright/test').Page) {
+  await expect(page.locator('img[alt="MenRush"]').first()).toBeVisible();
+  await expect(page.locator('img[src*="menrush-logo"]').first()).toBeVisible();
 }
 
 async function assertCreamInputs(page: import('@playwright/test').Page) {
@@ -49,7 +45,7 @@ async function assertCreamInputs(page: import('@playwright/test').Page) {
   const count = await inputs.count();
   expect(count).toBeGreaterThan(0);
   for (let i = 0; i < count; i += 1) {
-    await expect(inputs.nth(i)).toHaveClass(/bg-\[#F7EFE0\]/);
+    await expect(inputs.nth(i)).toHaveClass(/bg-\[#F5EBD8\]/);
   }
 }
 
@@ -58,39 +54,41 @@ test.describe('public design lock — landing', () => {
     test(`${path} keeps minimal landing invariants`, async ({ page }) => {
       const network = await guardAgainstSideEffects(page);
       await page.goto(path);
-      await assertLandingDesignLock(page);
+      await assertComingSoonDesignLock(page);
       expect(network.expectNoSideEffects()).toEqual([]);
     });
   }
 });
 
 test.describe('public design lock — auth pages', () => {
-  test('/login uses PublicMarketingShell and canonical waitlist link', async ({ page }) => {
+  test('/login uses auth shell and invite-holder copy', async ({ page }) => {
     const network = await guardAgainstSideEffects(page);
     await page.goto('/login');
-    await assertPublicMarketingShellGrid(page);
-    await assertWaitlistNavLink(page);
+    await assertAuthShell(page);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Sign in and see who's/i);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/near you right now/i);
+    await expect(page.getByText(/For invite holders only/i)).toBeVisible();
     expect(network.expectNoSideEffects()).toEqual([]);
   });
 
   test('/beta validates invite UI shell', async ({ page }) => {
     const network = await guardAgainstSideEffects(page);
     await page.goto('/beta');
-    await assertPublicMarketingShellGrid(page);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Beta access/i);
+    await assertAuthShell(page);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Beta access is/i);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/invite-only/i);
     await expect(page.locator('#beta-invite-code')).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Continue$/i })).toHaveCount(1);
     expect(network.expectNoSideEffects()).toEqual([]);
   });
 
-  test('/register uses PublicMarketingShell, cream inputs, and waitlist link', async ({ page }) => {
+  test('/register uses auth shell, cream inputs, and beta copy', async ({ page }) => {
     const network = await guardAgainstSideEffects(page);
-    await page.goto('/register');
-    await assertPublicMarketingShellGrid(page);
-    await assertWaitlistNavLink(page);
+    await page.goto('/register?invite=MR-BETA-TEST1');
+    await assertAuthShell(page);
     await assertCreamInputs(page);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Create your account/i);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/You're in/i);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Set up your account/i);
     expect(network.expectNoSideEffects()).toEqual([]);
   });
 });

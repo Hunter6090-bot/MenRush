@@ -29,7 +29,8 @@ export default defineConfig({
   webServer: externalBaseUrl
     ? undefined
     : {
-        command: 'npm run dev -- --host 127.0.0.1 --port 4173 --strictPort',
+        command:
+          'VITE_BETA_INVITE_REQUIRED=true npm run dev -- --host 127.0.0.1 --port 4173 --strictPort',
         url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
