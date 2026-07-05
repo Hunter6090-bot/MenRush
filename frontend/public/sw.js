@@ -12,8 +12,8 @@ self.addEventListener('push', (event) => {
   const url = data.url || '/discover';
   const options = {
     body: data.body || 'New activity on MenRush',
-    icon: data.icon || '/brand/icon-192.png',
-    badge: '/brand/icon-48.png',
+    icon: data.icon || '/brand/menrush-logo-192.png',
+    badge: '/brand/menrush-logo-48.png',
     // Per-conversation tag collapses repeats so a chat doesn't spam the tray.
     tag: data.tag || 'menrush',
     renotify: true,

@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect, type FormEvent } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { BrandMark } from '../components/BrandMark';
+import { CoinFlip } from '../components/CoinFlip';
 import { trackEvent, trackEventOnce } from '../observability/analytics';
-import { publicLinkClass, publicNavLinkPrimary } from '../lib/publicStyles';
+import { publicHeroLogoClass, publicLinkClass, publicNavLinkPrimary } from '../lib/publicStyles';
 
 const API_BASE_URL = String(import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 const WAITLIST_API_URL = `${API_BASE_URL}/waitlist`;
@@ -106,7 +106,13 @@ export const ComingSoon = () => {
       </Link>
 
       <div className="relative z-10 flex w-full max-w-[900px] flex-col items-center">
-        <BrandMark size="hero" className="mb-[34px]" />
+        <div className="relative mb-[34px] flex h-[150px] w-[150px] items-center justify-center">
+          <span className="mr-radar-ring" aria-hidden />
+          <span className="mr-radar-ring mr-radar-ring--delayed" aria-hidden />
+          <div className="relative z-[2] shadow-[0_0_0_2px_rgba(196,131,42,0.4),0_12px_44px_rgba(0,0,0,0.7)] rounded-full">
+            <CoinFlip qrValue="https://menrush.com" sizeClass={publicHeroLogoClass} noFlip />
+          </div>
+        </div>
 
         <p className="mr-coming-soon-overline mb-[22px]">MENRUSH · COMING SOON</p>
 

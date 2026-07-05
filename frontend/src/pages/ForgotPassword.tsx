@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { authAPI } from '../api/client';
-import { BrandMark } from '../components/BrandMark';
+import { CoinFlip } from '../components/CoinFlip';
 import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
 import { SiteFooter } from '../components/SiteFooter';
@@ -36,7 +36,7 @@ export const ForgotPassword = () => {
       <div className="relative z-10 mx-auto flex min-h-0 flex-1 w-full max-w-lg items-center px-5 py-8 sm:px-8">
         <section className="w-full">
           <Link to="/login" className="inline-block hover:opacity-80 transition-opacity">
-            <BrandMark size="md" showWordmark />
+            <CoinFlip qrValue="https://menrush.com" sizeClass="h-20" noFlip />
           </Link>
 
           <h1 className="mr-page-heading mt-6">
