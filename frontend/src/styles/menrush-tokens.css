@@ -1,6 +1,21 @@
-/* MenRush design tokens — synced with MenRush Design System handoff (colors_and_type.css) */
+/* MenRush design tokens — synced with MenRush Design System (colors_and_type.css) */
 
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMono-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMono-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   /* ===== Brand (nn namespace — source of truth) ===== */
@@ -24,9 +39,9 @@
   --nn-fg-2: var(--nn-muted);
   --nn-fg-3: var(--nn-faint);
 
-  --nn-font-display: 'Cinzel', 'Trajan Pro', 'Cormorant Garamond', serif;
+  --nn-font-display: 'Inter', system-ui, -apple-system, sans-serif;
   --nn-font-sans:    'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --nn-font-mono:    ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+  --nn-font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
   --nn-display-xl:    900 56px/1.0  var(--nn-font-display);
   --nn-display-lg:    900 40px/1.05 var(--nn-font-display);
