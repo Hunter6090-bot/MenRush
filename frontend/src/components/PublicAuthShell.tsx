@@ -14,6 +14,8 @@ export const AUTH_BACKGROUNDS = {
   beta: '/images/menrush/21-pride-parade-flags.jpeg',
   login: '/images/menrush/09-cigar-daddy-bar.jpeg',
   register: '/images/menrush/02-soho-night-crowd.jpeg',
+  verify: '/images/menrush/18-bears-hollow-sign.jpeg',
+  verifyScan: '/images/menrush/04-leather-harness-bears.jpeg',
 } as const;
 
 type PublicAuthShellProps = {

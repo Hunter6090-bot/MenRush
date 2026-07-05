@@ -2,11 +2,20 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { verifyAPI } from '../api/verify';
 import { useAuthStore } from '../hooks/store';
-import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
 import { consumePostAuthRedirect } from '../lib/profileLinks';
 import { trackEventOnce } from '../observability/analytics';
 import { VerifySignOut } from '../components/VerifySignOut';
+import {
+  AUTH_BACKGROUNDS,
+  PublicAuthHero,
+  PublicAuthShell,
+} from '../components/PublicAuthShell';
+import {
+  publicInfoBoxClass,
+  publicMutedCopyClass,
+  publicPanelClass,
+} from '../lib/publicStyles';
 
 export const VerifyPending: React.FC = () => {
   const navigate = useNavigate();
@@ -59,31 +68,66 @@ export const VerifyPending: React.FC = () => {
   }, [navigate, setVerified]);
 
   return (
-    <div className="relative min-h-dvh overflow-hidden flex items-center justify-center p-4">
-      <RandomBackground />
-      <div className="absolute inset-0 bg-black/70" />
+    <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.verify} homeTo="/discover">
+      <PublicAuthHero
+        title="Hang"
+        accent="tight."
+        copy="We're checking your documents. Usually under 2 minutes — sometimes a few hours during off-peak. You can leave this screen and come back."
+      />
 
-      <div className="relative z-10 w-full max-w-md animate-slide-up">
-        <div className="bg-[#1E1508]/85 backdrop-blur-xl border border-[#3D2B0E] rounded-2xl p-7 shadow-card text-[#F0E0C0] text-center">
-          <div className="flex justify-center mb-5">
-            <PulseRing size={48} />
-          </div>
-          <h1 className="text-2xl font-black tracking-tight mb-2">
-            Reviewing your ID
-          </h1>
-          <p className="text-sm text-[#A89070] leading-relaxed mb-5">
-            We are reviewing your document and selfie match. Clear matches are
-            usually approved within a minute. Borderline cases may need a manual
-            check — you can leave this screen and come back.
-          </p>
-          <div className="text-[11px] text-[#A89070]/70">
-            Last checked {tick * 5}s ago
-          </div>
-          <VerifySignOut />
+      <div className={publicPanelClass}>
+        <div className="flex justify-center py-2">
+          <PulseRing size={48} />
         </div>
+
+        <div className={publicInfoBoxClass}>
+          <VerifyStep label="Capture ID" done />
+          <VerifyStep label="Take selfie" done />
+          <VerifyStep label="Review documents" pending />
+          <VerifyStep label="Issue badge" />
+        </div>
+
+        <p className={publicMutedCopyClass}>
+          We'll update your profile the moment review finishes. Last checked {tick * 5}s ago.
+        </p>
+
+        <VerifySignOut />
       </div>
-    </div>
+    </PublicAuthShell>
   );
 };
+
+function VerifyStep({
+  label,
+  done,
+  pending,
+}: {
+  label: string;
+  done?: boolean;
+  pending?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-3 py-2">
+      <span
+        className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+          done
+            ? 'bg-[#C4832A] text-[#1A0E03]'
+            : pending
+              ? 'border-2 border-[#C4832A] bg-transparent'
+              : 'border border-[rgba(240,224,192,0.2)] bg-[rgba(13,10,6,0.35)]'
+        }`}
+      >
+        {done ? '✓' : null}
+      </span>
+      <span
+        className={`text-[13.5px] ${
+          done ? 'font-semibold text-[#F0E0C0]' : pending ? 'font-semibold text-[#E0A14A]' : 'text-[#A89070]'
+        }`}
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
 
 export default VerifyPending;

@@ -2,8 +2,18 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { verifyAPI, type IdDocumentType } from '../api/verify';
 import { IdCaptureModal } from '../components/IdCaptureModal';
-import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
+import {
+  AUTH_BACKGROUNDS,
+  PublicAuthHero,
+  PublicAuthShell,
+} from '../components/PublicAuthShell';
+import {
+  publicErrorClass,
+  publicMutedCopyClass,
+  publicPanelClass,
+  publicPrimaryButtonClass,
+} from '../lib/publicStyles';
 
 type ScanStep = 'loading' | 'front' | 'back' | 'uploading' | 'done' | 'error';
 
@@ -103,99 +113,80 @@ export const VerifyScan: React.FC = () => {
   const handoff =
     handoffToken && sessionId ? { sessionId, token: handoffToken } : undefined;
 
+  const heroCopy =
+    step === 'done'
+      ? 'Return to your computer to take your live selfie and finish verification.'
+      : step === 'uploading'
+        ? 'Uploading your ID securely…'
+        : 'Use your phone camera to photograph your ID. Fill the frame, avoid glare.';
+
   return (
-    <div className="relative min-h-dvh overflow-hidden flex items-center justify-center p-4">
-      <RandomBackground />
-      <div className="absolute inset-0 bg-black/70" />
+    <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.verifyScan} homeTo="/coming-soon">
+      <PublicAuthHero title="Scan your" accent="ID." copy={heroCopy} />
 
-      <div className="relative z-10 w-full max-w-md animate-slide-up">
-        <div className="bg-[#1E1508]/85 backdrop-blur-xl border border-[#3D2B0E] rounded-2xl p-7 shadow-card text-[#F0E0C0]">
-          <div className="flex justify-center mb-5">
-            <PhoneIcon className="w-12 h-12 text-[#C4832A]" />
+      <div className={publicPanelClass}>
+        {step === 'loading' ? (
+          <div className={`flex items-center justify-center gap-2 py-6 ${publicMutedCopyClass}`}>
+            <PulseRing size={18} />
+            Preparing scanner…
           </div>
+        ) : null}
 
-          <h1 className="text-2xl font-black text-center tracking-tight mb-2">
-            Scan your ID
-          </h1>
-
-          {step === 'loading' ? (
-            <div className="flex items-center justify-center gap-2 py-8 text-sm text-[#A89070]">
-              <PulseRing size={18} />
-              Preparing scanner…
-            </div>
-          ) : null}
-
-          {step === 'front' && !captureOpen ? (
-            <>
-              <p className="text-sm text-[#A89070] mb-4 text-center">
-                {idType === 'passport'
-                  ? 'Photograph your passport photo page'
-                  : 'Step 1 of 2 — front of your licence'}
+        {step === 'front' && !captureOpen ? (
+          <>
+            <p className={`m-0 text-center ${publicMutedCopyClass}`}>
+              {idType === 'passport'
+                ? 'Photograph your passport photo page'
+                : 'Step 1 of 2 — front of your licence'}
+            </p>
+            {nationality ? (
+              <p className="m-0 text-center text-xs text-[#6B5840]">
+                Document from <span className="text-[#C4832A]">{nationality}</span>
               </p>
-              {nationality ? (
-                <p className="mb-4 text-center text-xs text-[#6B5840]">
-                  Document from <span className="text-[#C4832A]">{nationality}</span>
-                </p>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => {
-                  setCaptureSide('front');
-                  setCaptureOpen(true);
-                }}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] text-white font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98]"
-              >
-                {idFront ? 'Rescan front' : 'Scan document'}
-              </button>
-            </>
-          ) : null}
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                setCaptureSide('front');
+                setCaptureOpen(true);
+              }}
+              className={publicPrimaryButtonClass}
+            >
+              {idFront ? 'Rescan front' : 'Scan document'}
+            </button>
+          </>
+        ) : null}
 
-          {step === 'back' && !captureOpen ? (
-            <>
-              <p className="text-sm text-[#A89070] mb-4 text-center">
-                Step 2 of 2 — back of your licence
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setCaptureSide('back');
-                  setCaptureOpen(true);
-                }}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] text-white font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98]"
-              >
-                {idBack ? 'Rescan back' : 'Scan back of licence'}
-              </button>
-            </>
-          ) : null}
+        {step === 'back' && !captureOpen ? (
+          <>
+            <p className={`m-0 text-center ${publicMutedCopyClass}`}>Step 2 of 2 — back of your licence</p>
+            <button
+              type="button"
+              onClick={() => {
+                setCaptureSide('back');
+                setCaptureOpen(true);
+              }}
+              className={publicPrimaryButtonClass}
+            >
+              {idBack ? 'Rescan back' : 'Scan back of licence'}
+            </button>
+          </>
+        ) : null}
 
-          {step === 'uploading' ? (
-            <div className="flex flex-col items-center gap-3 py-8 text-sm text-[#A89070]">
-              <PulseRing size={22} />
-              Uploading your ID securely…
-            </div>
-          ) : null}
+        {step === 'uploading' ? (
+          <div className={`flex flex-col items-center gap-3 py-6 ${publicMutedCopyClass}`}>
+            <PulseRing size={22} />
+            Uploading…
+          </div>
+        ) : null}
 
-          {step === 'done' ? (
-            <div className="py-4 text-center">
-              <p className="text-sm font-semibold text-[#C4832A] mb-2">ID captured successfully</p>
-              <p className="text-xs leading-relaxed text-[#A89070]">
-                Return to your computer to take your live selfie and finish verification.
-              </p>
-            </div>
-          ) : null}
+        {step === 'done' ? (
+          <p className="m-0 text-center text-sm font-semibold text-[#C4832A]">ID captured successfully</p>
+        ) : null}
 
-          {step === 'error' ? (
-            <div className="px-3 py-2.5 rounded-lg bg-[#8B4513]/15 border border-[#8B4513]/30 text-xs text-[#F0E0C0]/90 text-center">
-              {error ?? 'Something went wrong.'}
-            </div>
-          ) : null}
+        {step === 'error' ? <p className={publicErrorClass}>{error ?? 'Something went wrong.'}</p> : null}
 
-          {error && step !== 'error' ? (
-            <div className="mt-4 px-3 py-2.5 rounded-lg bg-[#8B4513]/15 border border-[#8B4513]/30 text-xs text-[#F0E0C0]/90">
-              {error}
-            </div>
-          ) : null}
-        </div>
+        {error && step !== 'error' ? <p className={publicErrorClass}>{error}</p> : null}
       </div>
 
       <IdCaptureModal
@@ -220,15 +211,8 @@ export const VerifyScan: React.FC = () => {
         filePrefix={captureSide === 'back' ? 'id-back' : 'id-front'}
         handoff={handoff}
       />
-    </div>
+    </PublicAuthShell>
   );
 };
-
-const PhoneIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-    <rect x="7" y="2.5" width="10" height="19" rx="2" />
-    <path d="M11 18.5h2" strokeLinecap="round" />
-  </svg>
-);
 
 export default VerifyScan;

@@ -1,9 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { verifyAPI } from '../api/verify';
-import { RandomBackground } from '../components/RandomBackground';
 import { trackEventOnce } from '../observability/analytics';
 import { VerifySignOut } from '../components/VerifySignOut';
+import {
+  AUTH_BACKGROUNDS,
+  PublicAuthHero,
+  PublicAuthShell,
+} from '../components/PublicAuthShell';
+import {
+  publicPanelClass,
+  publicPrimaryButtonClass,
+} from '../lib/publicStyles';
 
 const REASON_COPY: Record<string, string> = {
   document_unverified_other: "We couldn't read your ID clearly. Try again with better lighting.",
@@ -45,49 +53,26 @@ export const VerifyRejected: React.FC = () => {
       "We couldn't verify your ID. The image may have been blurry or didn't match your selfie.";
 
   return (
-    <div className="relative min-h-dvh overflow-hidden flex items-center justify-center p-4">
-      <RandomBackground />
-      <div className="absolute inset-0 bg-black/70" />
+    <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.verify} homeTo="/discover">
+      <PublicAuthHero
+        title="We couldn't verify"
+        accent="your ID."
+        copy={friendly}
+      />
 
-      <div className="relative z-10 w-full max-w-md animate-slide-up">
-        <div className="bg-[#1E1508]/85 backdrop-blur-xl border border-[#8B4513]/40 rounded-2xl p-7 shadow-card text-[#F0E0C0]">
-          <div className="flex justify-center mb-5">
-            <AlertIcon className="w-14 h-14 text-[#8B4513]" />
-          </div>
+      <div className={publicPanelClass}>
+        {reason ? (
+          <p className="m-0 text-center font-mono text-[11px] text-[#A89070]/70">code: {reason}</p>
+        ) : null}
 
-          <h1 className="text-2xl font-black text-center tracking-tight mb-2">
-            We couldn't verify your ID
-          </h1>
-          <p className="text-sm text-[#A89070] text-center leading-relaxed mb-5">
-            {friendly}
-          </p>
+        <button type="button" onClick={() => navigate('/verify')} className={publicPrimaryButtonClass}>
+          Try again
+        </button>
 
-          {reason && (
-            <p className="text-[11px] font-mono text-[#A89070]/60 text-center mb-5">
-              code: {reason}
-            </p>
-          )}
-
-          <button
-            onClick={() => navigate('/verify')}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] text-white font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98]"
-          >
-            Try again
-          </button>
-
-          <VerifySignOut />
-        </div>
+        <VerifySignOut />
       </div>
-    </div>
+    </PublicAuthShell>
   );
 };
-
-const AlertIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-    <circle cx="12" cy="12" r="10" />
-    <line x1="12" y1="8" x2="12" y2="13" strokeLinecap="round" />
-    <line x1="12" y1="16" x2="12.01" y2="16" strokeLinecap="round" strokeWidth={2} />
-  </svg>
-);
 
 export default VerifyRejected;

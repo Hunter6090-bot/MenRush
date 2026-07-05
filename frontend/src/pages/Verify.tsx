@@ -3,7 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { verifyAPI, type IdDocumentType } from '../api/verify';
 import { useAuthStore } from '../hooks/store';
 import { useSocket } from '../hooks/useSocket';
-import { RandomBackground } from '../components/RandomBackground';
+import {
+  AUTH_BACKGROUNDS,
+  PublicAuthHero,
+  PublicAuthShell,
+} from '../components/PublicAuthShell';
 import { PulseRing } from '../components/PulseRing';
 import { SelfieCaptureModal } from '../components/SelfieCaptureModal';
 import { IdCaptureModal } from '../components/IdCaptureModal';
@@ -12,6 +16,20 @@ import { NATIONALITIES } from '../lib/nationalities';
 import { isPhoneDevice } from '../lib/device';
 import { consumePostAuthRedirect } from '../lib/profileLinks';
 import { trackEvent } from '../observability/analytics';
+import {
+  publicBackButtonClass,
+  publicDocTypeButtonClass,
+  publicErrorClass,
+  publicInfoBoxClass,
+  publicLabelCopperClass,
+  publicMutedCopyClass,
+  publicPanelClass,
+  publicPrimaryButtonClass,
+  publicProgressFillClass,
+  publicProgressTrackClass,
+  publicSecondaryButtonClass,
+  publicSelectClass,
+} from '../lib/publicStyles';
 
 type Step = 'intro' | 'country' | 'id-type' | 'id-front' | 'id-back' | 'selfie';
 
@@ -228,92 +246,122 @@ export const Verify: React.FC = () => {
     }
   };
 
+  const heroForStep = (): { title: string; accent: string; copy: string } => {
+    switch (step) {
+      case 'intro':
+        return {
+          title: "Prove you're",
+          accent: 'you.',
+          copy:
+            'Snap your ID, then a live selfie. We compare them for your copper checkmark. Verification is free — always.',
+        };
+      case 'country':
+        return {
+          title: 'Where was your',
+          accent: 'ID issued?',
+          copy: 'Select the country that issued your passport or driving licence.',
+        };
+      case 'id-type':
+        return {
+          title: 'Which document',
+          accent: 'are you using?',
+          copy: `Choose the ID you'll photograph for ${nationality}.`,
+        };
+      case 'id-front':
+        return {
+          title: 'Front of your',
+          accent: 'ID.',
+          copy: showPhoneQr
+            ? 'Scan the QR with your phone, or use this device\'s camera.'
+            : idType === 'passport'
+              ? 'Photograph your passport photo page. Fill the frame, avoid glare.'
+              : 'Step 1 — front of your licence. Fill the frame, avoid glare.',
+        };
+      case 'id-back':
+        return {
+          title: 'Back of your',
+          accent: 'licence.',
+          copy: 'Step 2 — photograph the back of your driving licence.',
+        };
+      case 'selfie':
+        return {
+          title: 'Live',
+          accent: 'selfie.',
+          copy: 'Hold steady, face the camera, no filters. We match this to your ID photo.',
+        };
+      default:
+        return { title: 'Identity', accent: 'verification.', copy: '' };
+    }
+  };
+
+  const hero = heroForStep();
+
   return (
-    <div className="relative min-h-dvh overflow-hidden flex items-center justify-center p-4">
-      <RandomBackground />
-      <div className="absolute inset-0 bg-black/70" />
+    <>
+      <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.verify} homeTo="/discover">
+        <PublicAuthHero title={hero.title} accent={hero.accent} copy={hero.copy} />
 
-      <div className="relative z-10 w-full max-w-md animate-slide-up">
-        <div className="bg-[#1E1508]/85 backdrop-blur-xl border border-[#3D2B0E] rounded-2xl p-7 shadow-card text-[#F0E0C0]">
-          <div className="flex justify-center mb-5">
-            <ShieldIcon className="w-14 h-14 text-[#C4832A]" />
-          </div>
-
-          <h1 className="text-2xl font-black text-center tracking-tight mb-2">
-            Identity verification
-          </h1>
-
-          {step !== 'intro' ? (
-            <div className="mb-5">
-              <div className="flex justify-between text-[10px] font-semibold uppercase tracking-[0.14em] text-[#A89070] mb-1.5">
-                <span>Step {currentStep} of {totalSteps}</span>
-                <span>Secure scan</span>
-              </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-[#3D2B0E]">
-                <div
-                  className="h-full bg-[#C4832A] transition-all duration-300"
-                  style={{ width: `${(currentStep / totalSteps) * 100}%` }}
-                />
-              </div>
+        {step !== 'intro' ? (
+          <div className="mb-5 mt-2">
+            <div className="mb-1.5 flex justify-between text-[10px] font-semibold uppercase tracking-[0.14em] text-[#A89070]">
+              <span>
+                Step {currentStep} of {totalSteps}
+              </span>
+              <span>Secure scan</span>
             </div>
-          ) : null}
+            <div className={publicProgressTrackClass}>
+              <div
+                className={publicProgressFillClass}
+                style={{ width: `${(currentStep / totalSteps) * 100}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
 
+        <div className={publicPanelClass}>
           {step === 'intro' ? (
             <>
-              <div className="mb-5 rounded-xl border border-[#3D2B0E]/80 bg-[#0D0A06]/45 px-4 py-3.5">
-                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#C4832A]">
-                  Why we verify
+              <div className={publicInfoBoxClass}>
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#E0A14A]">
+                  Verified is free · always
                 </p>
-                <p className="mt-2 text-xs leading-relaxed text-[#F0E0C0]/88">
-                  We verify every member to keep MenRush clean — no scammers, fakers, or
-                  time-wasters. Real men, real IDs, real connections.
+                <p className={`mt-2 ${publicMutedCopyClass}`}>
+                  We verify every member to keep MenRush clean — no scammers, fakers, or time-wasters.
                 </p>
               </div>
 
-              <div className="mb-5 rounded-xl border border-[#3D2B0E]/80 bg-[#0D0A06]/45 px-4 py-3.5">
-                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#C4832A]">
+              <div className={publicInfoBoxClass}>
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#E0A14A]">
                   Your privacy
                 </p>
                 <ul className="mt-2 space-y-2 text-xs text-[#F0E0C0]/88">
-                  <Bullet>Your ID is visible only to you and our automated matching system</Bullet>
-                  <Bullet>
-                    Automated face match first; unclear cases are reviewed by our team only
-                  </Bullet>
-                  <Bullet>We never sell, share, or display your ID on your profile</Bullet>
+                  <Bullet>Documents auto-deleted after your badge is issued</Bullet>
+                  <Bullet>Automated face match first; unclear cases reviewed by our team only</Bullet>
+                  <Bullet>Other users only see the copper checkmark, never your ID</Bullet>
                 </ul>
               </div>
 
-              <p className="mb-2.5 text-[11px] font-black uppercase tracking-[0.16em] text-[#A89070]">
-                What you&apos;ll need
-              </p>
-              <ul className="space-y-2.5 mb-6 text-xs text-[#F0E0C0]/85">
+              <ul className="space-y-2 text-xs text-[#F0E0C0]/85">
                 <Bullet>Passport or driving licence from your country</Bullet>
                 <Bullet>Licence holders: front, then back</Bullet>
                 <Bullet>Live selfie for automated face match</Bullet>
               </ul>
-              <button
-                type="button"
-                onClick={() => setStep('country')}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] text-white font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98]"
-              >
+
+              <button type="button" onClick={() => setStep('country')} className={publicPrimaryButtonClass}>
                 Start verification
               </button>
+              <p className="m-0 text-center text-[11px] text-[#A89070]/70">Takes about 60 seconds.</p>
             </>
           ) : null}
 
           {step === 'country' ? (
             <>
-              <p className="text-sm text-[#A89070] mb-4 text-center">
-                Which country issued your ID?
-              </p>
-              <label className="mb-5 block">
-                <span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.16em] text-[#A89070]">
-                  Country
-                </span>
+              <label className="flex flex-col gap-2.5">
+                <span className={publicLabelCopperClass}>Country</span>
                 <select
                   value={nationality}
                   onChange={(e) => setNationality(e.target.value)}
-                  className="w-full rounded-xl border border-[#3D2B0E] bg-[#0D0A06]/80 px-3 py-2.5 text-sm text-[#F0E0C0] focus:border-[#C4832A]/70 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/25"
+                  className={publicSelectClass}
                 >
                   {NATIONALITIES.map((country) => (
                     <option key={country} value={country}>
@@ -322,18 +370,10 @@ export const Verify: React.FC = () => {
                   ))}
                 </select>
               </label>
-              <button
-                type="button"
-                onClick={() => setStep('id-type')}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] text-white font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98]"
-              >
+              <button type="button" onClick={() => setStep('id-type')} className={publicPrimaryButtonClass}>
                 Continue
               </button>
-              <button
-                type="button"
-                onClick={() => setStep('intro')}
-                className="w-full mt-3 text-sm text-[#A89070] hover:text-[#C4832A]"
-              >
+              <button type="button" onClick={() => setStep('intro')} className={publicBackButtonClass}>
                 Back
               </button>
             </>
@@ -341,13 +381,7 @@ export const Verify: React.FC = () => {
 
           {step === 'id-type' ? (
             <>
-              <p className="text-sm text-[#A89070] mb-1 text-center">
-                Document for <span className="font-semibold text-[#C4832A]">{nationality}</span>
-              </p>
-              <p className="text-sm text-[#A89070] mb-4 text-center">
-                Which document are you using?
-              </p>
-              <div className="grid grid-cols-2 gap-3 mb-5">
+              <div className="grid grid-cols-2 gap-3">
                 <DocTypeButton
                   active={idType === 'passport'}
                   onClick={() => setIdType('passport')}
@@ -359,20 +393,15 @@ export const Verify: React.FC = () => {
                   label="Driving licence"
                 />
               </div>
-
               <button
                 type="button"
                 disabled={!idType}
                 onClick={() => setStep('id-front')}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] disabled:opacity-50 text-white font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98]"
+                className={publicPrimaryButtonClass}
               >
                 Continue
               </button>
-              <button
-                type="button"
-                onClick={() => setStep('country')}
-                className="w-full mt-3 text-sm text-[#A89070] hover:text-[#C4832A]"
-              >
+              <button type="button" onClick={() => setStep('country')} className={publicBackButtonClass}>
                 Back
               </button>
             </>
@@ -382,16 +411,13 @@ export const Verify: React.FC = () => {
             <>
               {showPhoneQr ? (
                 <>
-                  <p className="text-sm text-[#A89070] mb-4 text-center">
-                    Scan the QR code with your phone to photograph your ID using its rear camera.
-                  </p>
                   {handoffLoading || !handoffUrl ? (
-                    <div className="mb-4 flex items-center justify-center gap-2 py-8 text-sm text-[#A89070]">
+                    <div className={`flex items-center justify-center gap-2 py-8 ${publicMutedCopyClass}`}>
                       <PulseRing size={18} />
                       Generating QR code…
                     </div>
                   ) : (
-                    <VerificationQr url={handoffUrl} className="mb-4" />
+                    <VerificationQr url={handoffUrl} className="mb-2" />
                   )}
                   <button
                     type="button"
@@ -400,27 +426,22 @@ export const Verify: React.FC = () => {
                       setHandoffSessionId(null);
                       setHandoffReady(false);
                     }}
-                    className="w-full py-3 rounded-xl border border-[#3D2B0E] bg-[#0D0A06]/80 text-[#F0E0C0] font-semibold text-sm"
+                    className={publicSecondaryButtonClass}
                   >
                     Use this device&apos;s camera instead
                   </button>
                 </>
               ) : (
                 <>
-                  <p className="text-sm text-[#A89070] mb-4 text-center">
-                    {idType === 'passport'
-                      ? 'Photograph your passport photo page'
-                      : `Step 1 of ${totalIdSteps} — front of your licence`}
-                  </p>
                   {idFrontPreview ? (
-                    <div className="mb-4 rounded-xl overflow-hidden border border-[#3D2B0E]">
-                      <img src={idFrontPreview} alt="ID front preview" className="w-full h-36 object-cover" />
+                    <div className="overflow-hidden rounded-2xl border border-[rgba(240,224,192,0.2)]">
+                      <img src={idFrontPreview} alt="ID front preview" className="h-36 w-full object-cover" />
                     </div>
                   ) : null}
                   <button
                     type="button"
                     onClick={() => setCaptureTarget('id-front')}
-                    className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] text-white font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98]"
+                    className={publicPrimaryButtonClass}
                   >
                     {idFront ? 'Rescan document' : 'Scan document'}
                   </button>
@@ -428,18 +449,14 @@ export const Verify: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setStep(isLicense ? 'id-back' : 'selfie')}
-                      className="w-full mt-3 py-3 rounded-xl border border-[#3D2B0E] bg-[#0D0A06]/80 text-[#F0E0C0] font-semibold text-sm"
+                      className={publicSecondaryButtonClass}
                     >
                       Continue
                     </button>
                   ) : null}
                 </>
               )}
-              <button
-                type="button"
-                onClick={() => setStep('id-type')}
-                className="w-full mt-3 text-sm text-[#A89070] hover:text-[#C4832A]"
-              >
+              <button type="button" onClick={() => setStep('id-type')} className={publicBackButtonClass}>
                 Back
               </button>
             </>
@@ -447,35 +464,24 @@ export const Verify: React.FC = () => {
 
           {step === 'id-back' ? (
             <>
-              <p className="text-sm text-[#A89070] mb-4 text-center">
-                Step 2 of 2 — back of your licence
-              </p>
               {idBackPreview ? (
-                <div className="mb-4 rounded-xl overflow-hidden border border-[#3D2B0E]">
-                  <img src={idBackPreview} alt="ID back preview" className="w-full h-36 object-cover" />
+                <div className="overflow-hidden rounded-2xl border border-[rgba(240,224,192,0.2)]">
+                  <img src={idBackPreview} alt="ID back preview" className="h-36 w-full object-cover" />
                 </div>
               ) : null}
               <button
                 type="button"
                 onClick={() => setCaptureTarget('id-back')}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] text-white font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98]"
+                className={publicPrimaryButtonClass}
               >
                 {idBack ? 'Rescan back' : 'Scan back of licence'}
               </button>
               {idBack ? (
-                <button
-                  type="button"
-                  onClick={() => setStep('selfie')}
-                  className="w-full mt-3 py-3 rounded-xl border border-[#3D2B0E] bg-[#0D0A06]/80 text-[#F0E0C0] font-semibold text-sm"
-                >
+                <button type="button" onClick={() => setStep('selfie')} className={publicSecondaryButtonClass}>
                   Continue
                 </button>
               ) : null}
-              <button
-                type="button"
-                onClick={() => setStep('id-front')}
-                className="w-full mt-3 text-sm text-[#A89070] hover:text-[#C4832A]"
-              >
+              <button type="button" onClick={() => setStep('id-front')} className={publicBackButtonClass}>
                 Back
               </button>
             </>
@@ -483,33 +489,23 @@ export const Verify: React.FC = () => {
 
           {step === 'selfie' ? (
             <>
-              <p className="text-sm text-[#A89070] mb-4 text-center">
-                Final step — live selfie to match your ID photo
-              </p>
-
               {handoffReady ? (
-                <p className="mb-3 text-center text-xs font-semibold text-[#C4832A]">
+                <p className="m-0 text-center text-xs font-semibold text-[#C4832A]">
                   ID received from your phone — take your selfie here to finish.
                 </p>
               ) : null}
 
               {idFrontPreview ? (
-                <div className="mb-3 rounded-xl overflow-hidden border border-[#3D2B0E]">
-                  <img src={idFrontPreview} alt="ID preview" className="w-full h-28 object-cover" />
+                <div className="overflow-hidden rounded-2xl border border-[rgba(240,224,192,0.2)]">
+                  <img src={idFrontPreview} alt="ID preview" className="h-28 w-full object-cover" />
                 </div>
               ) : null}
 
-              <button
-                type="button"
-                onClick={() => setSelfieOpen(true)}
-                className="w-full py-3 rounded-xl border border-[#3D2B0E] bg-[#0D0A06]/80 hover:border-[#C4832A]/60 text-[#F0E0C0] font-semibold text-sm"
-              >
+              <button type="button" onClick={() => setSelfieOpen(true)} className={publicSecondaryButtonClass}>
                 {selfie ? 'Retake live selfie' : 'Start live selfie scan'}
               </button>
 
-              {selfie ? (
-                <p className="text-xs text-[#C4832A] text-center mt-3">Selfie captured.</p>
-              ) : null}
+              {selfie ? <p className="m-0 text-center text-xs text-[#C4832A]">Selfie captured.</p> : null}
 
               <button
                 type="button"
@@ -520,7 +516,7 @@ export const Verify: React.FC = () => {
                   || !selfie
                   || (isLicense && !idBack && !handoffReady)
                 }
-                className="w-full mt-4 py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] disabled:opacity-50 text-white font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2"
+                className={publicPrimaryButtonClass}
               >
                 {loading ? (
                   <>
@@ -534,25 +530,21 @@ export const Verify: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setStep(isLicense ? 'id-back' : 'id-front')}
-                className="w-full mt-3 text-sm text-[#A89070] hover:text-[#C4832A]"
+                className={publicBackButtonClass}
               >
                 Back
               </button>
             </>
           ) : null}
 
-          {error ? (
-            <div className="mt-4 px-3 py-2.5 rounded-lg bg-[#8B4513]/15 border border-[#8B4513]/30 text-xs text-[#F0E0C0]/90">
-              {error}
-            </div>
-          ) : null}
+          {error ? <p className={publicErrorClass}>{error}</p> : null}
 
-          <p className="text-[11px] text-[#A89070]/70 text-center mt-5 leading-snug">
-            Your ID is used only to confirm you are a real adult. No human at MenRush will
-            access, sell, or share it.
+          <p className="m-0 text-center text-[11px] leading-snug text-[#A89070]/70">
+            Your ID is used only to confirm you are a real adult. No human at MenRush will access,
+            sell, or share it.
           </p>
         </div>
-      </div>
+      </PublicAuthShell>
 
       <IdCaptureModal
         open={captureTarget === 'id-front'}
@@ -581,7 +573,7 @@ export const Verify: React.FC = () => {
         onCapture={handleSelfieCapture}
         onError={setError}
       />
-    </div>
+    </>
   );
 };
 
@@ -590,34 +582,16 @@ const DocTypeButton: React.FC<{ active: boolean; onClick: () => void; label: str
   onClick,
   label,
 }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={`rounded-xl border px-3 py-3 text-sm font-semibold transition-colors ${
-      active
-        ? 'border-[#C4832A] bg-[#C4832A]/20 text-[#F0E0C0]'
-        : 'border-[#3D2B0E] bg-[#0D0A06]/80 text-[#A89070] hover:border-[#C4832A]/50'
-    }`}
-  >
+  <button type="button" onClick={onClick} className={publicDocTypeButtonClass(active)}>
     {label}
   </button>
 );
 
 const Bullet: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <li className="flex items-start gap-2">
-    <span className="text-[#C4832A] mt-0.5">•</span>
+    <span className="mt-0.5 text-[#C4832A]">•</span>
     <span>{children}</span>
   </li>
-);
-
-const ShieldIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-    <path
-      d="M12 2.5l8 3v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10v-6l8-3z"
-      strokeLinejoin="round"
-    />
-    <path d="M9 12l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
 );
 
 export default Verify;
