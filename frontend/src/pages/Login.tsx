@@ -15,6 +15,7 @@ import {
   publicPanelClass,
   publicPrimaryButtonClass,
 } from '../lib/publicStyles';
+import { BETA_INVITE_REQUIRED } from '../lib/betaInvite';
 
 export const Login = () => {
   const [email, setEmail] = useState('');
@@ -52,7 +53,7 @@ export const Login = () => {
     <PublicMarketingShell
       header={
         <nav className="flex items-center gap-2 text-sm font-semibold">
-          <Link to="/register" className={publicNavLinkPrimary}>
+          <Link to={BETA_INVITE_REQUIRED ? '/beta' : '/register'} className={publicNavLinkPrimary}>
             Sign up
           </Link>
           <Link to="/coming-soon#waitlist" className={publicNavLinkSecondary}>

@@ -1,10 +1,15 @@
-import React, { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useMemo, useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
 import { CoinFlip } from '../components/CoinFlip';
 import { PublicHeroBlock, PublicMarketingShell } from '../components/PublicMarketingShell';
 import { PulseRing } from '../components/PulseRing';
+import {
+  BETA_INVITE_REQUIRED,
+  readStoredInviteCode,
+  storeInviteCode,
+} from '../lib/betaInvite';
 import {
   publicHeroLogoClass,
   publicInputClass,
@@ -50,6 +55,9 @@ function passwordScore(pw: string): 0 | 1 | 2 | 3 {
 }
 
 export const Register = () => {
+  const [searchParams] = useSearchParams();
+  const inviteFromQuery = searchParams.get('invite')?.trim() || '';
+  const [inviteCode] = useState(() => inviteFromQuery || readStoredInviteCode() || '');
   const [form, setForm] = useState<FormState>({
     displayName: '',
     email: '',
@@ -63,6 +71,18 @@ export const Register = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
+
+  useEffect(() => {
+    if (inviteFromQuery) {
+      storeInviteCode(inviteFromQuery);
+    }
+  }, [inviteFromQuery]);
+
+  useEffect(() => {
+    if (BETA_INVITE_REQUIRED && !inviteCode) {
+      navigate('/beta', { replace: true });
+    }
+  }, [inviteCode, navigate]);
 
   const setField = <K extends keyof FormState>(field: K) =>
     (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -97,6 +117,10 @@ export const Register = () => {
       setError('Please confirm all consent checkboxes.');
       return;
     }
+    if (BETA_INVITE_REQUIRED && !inviteCode) {
+      setError('A beta invite code is required.');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -105,6 +129,7 @@ export const Register = () => {
         email: form.email,
         age: age ?? 0,
         password: form.password,
+        ...(BETA_INVITE_REQUIRED ? { invite_code: inviteCode } : {}),
       });
       setAuth(res.data.user, res.data.token);
       navigate('/verify');
@@ -150,6 +175,12 @@ export const Register = () => {
       }
       panel={
         <div className={`${publicPanelClass} max-h-[min(70dvh,720px)] overflow-y-auto lg:max-h-none lg:overflow-visible`}>
+          {BETA_INVITE_REQUIRED && inviteCode && (
+            <div className="mb-4 rounded-2xl border border-[#C4832A]/25 bg-[#C4832A]/10 px-4 py-3 text-sm text-[#F0E0C0]/90">
+              Beta invite accepted: <span className="font-mono text-[#C4832A]">{inviteCode}</span>
+            </div>
+          )}
+
           {error && (
             <div className="mb-4 flex items-start gap-2.5 rounded-2xl border border-[#8B4513]/30 bg-[#8B4513]/12 px-4 py-3 text-sm text-[#F0E0C0]/90 backdrop-blur-md animate-fade-in">
               <AlertIcon className="mt-0.5 h-4 w-4 flex-shrink-0" />

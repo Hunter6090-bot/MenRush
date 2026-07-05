@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { getEmailStatus, sendEmail } from '../services/mailer.service';
 import { verificationService } from '../services/verification.service';
+import { inviteCodeService } from '../services/invite-code.service';
 import {
   buildTransactionalEmail,
   transactionalParagraph,
@@ -146,6 +147,13 @@ const RejectBodySchema = z.object({
   reason: z.string().min(1).max(500).default('manual_review_rejected'),
 });
 
+const GenerateInviteCodesSchema = z.object({
+  count: z.number().int().min(1).max(500),
+  max_uses: z.number().int().min(1).max(100).optional(),
+  expires_in_days: z.number().int().min(1).max(365).optional(),
+  note: z.string().max(200).optional(),
+});
+
 router.post('/verification/:id/approve', async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   try {
@@ -175,6 +183,38 @@ router.post('/verification/:id/reject', async (req: Request, res: Response) => {
     }
     console.error('[admin] verification reject error:', err);
     return res.status(500).json({ error: 'verification_reject_failed' });
+  }
+});
+
+router.post('/invite-codes/generate', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const parsed = GenerateInviteCodesSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'validation_error', details: parsed.error.flatten() });
+  }
+  try {
+    const codes = await inviteCodeService.generateBatch({
+      count: parsed.data.count,
+      maxUses: parsed.data.max_uses,
+      expiresInDays: parsed.data.expires_in_days,
+      note: parsed.data.note,
+    });
+    return res.status(201).json({ ok: true, count: codes.length, codes });
+  } catch (err) {
+    console.error('[admin] invite code generate error:', err);
+    return res.status(500).json({ error: 'invite_code_generate_failed' });
+  }
+});
+
+router.get('/invite-codes', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const limit = Number(req.query.limit ?? 100);
+  try {
+    const codes = await inviteCodeService.listCodes(Number.isFinite(limit) ? limit : 100);
+    return res.json({ ok: true, codes });
+  } catch (err) {
+    console.error('[admin] invite code list error:', err);
+    return res.status(500).json({ error: 'invite_code_list_failed' });
   }
 });
 

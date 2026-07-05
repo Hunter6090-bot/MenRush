@@ -1,6 +1,7 @@
 import bcryptjs from 'bcryptjs';
 import crypto from 'crypto';
 import { query } from '../db';
+import pool from '../db';
 import { RegisterInput, LoginInput, ResetPasswordInput } from '../types/validation';
 import { sendEmail } from './mailer.service';
 import {
@@ -8,6 +9,7 @@ import {
   transactionalParagraph,
 } from './transactional-email.template';
 import { v4 as uuidv4 } from 'uuid';
+import { inviteCodeService, isInviteRequired } from './invite-code.service';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable is required');
@@ -88,13 +90,27 @@ export const authService = {
   async register(data: RegisterInput) {
     const id = uuidv4();
     const hashedPassword = await bcryptjs.hash(data.password, 10);
+    const inviteCode = data.invite_code?.trim();
+
+    if (isInviteRequired()) {
+      if (!inviteCode) {
+        throw new Error('A beta invite code is required to create an account.');
+      }
+      const check = await inviteCodeService.validate(inviteCode);
+      if (!check.valid) {
+        throw new Error('This invite code is invalid or has already been used.');
+      }
+    }
 
     // Signup always creates an unverified account. ID + matching selfie verification
     // is the only path to access the app. Set DEV_AUTO_VERIFY=true only for local dev.
     const autoVerify = process.env.DEV_AUTO_VERIFY === 'true';
 
+    const client = await pool.connect();
     try {
-      const result = await query(
+      await client.query('BEGIN');
+
+      const result = await client.query(
         `INSERT INTO users (id, email, password_hash, name, age, is_verified, verification_status)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING id, email, name, age, is_verified, verification_status`,
@@ -110,14 +126,23 @@ export const authService = {
       );
 
       const user = result.rows[0];
-      const token = signToken(user.id);
 
+      if (isInviteRequired() && inviteCode) {
+        await inviteCodeService.redeemForRegistration(inviteCode, user.id, client);
+      }
+
+      await client.query('COMMIT');
+
+      const token = signToken(user.id);
       return { user, token };
     } catch (error: any) {
+      await client.query('ROLLBACK');
       if (error.code === '23505') {
         throw new Error('Email already exists');
       }
       throw error;
+    } finally {
+      client.release();
     }
   },
 

@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { CoinFlip } from '../components/CoinFlip';
 import { PublicHeroBlock, PublicMarketingShell } from '../components/PublicMarketingShell';
 import { trackEvent, trackEventOnce } from '../observability/analytics';
+import { BETA_INVITE_REQUIRED } from '../lib/betaInvite';
 import {
   publicInputClass,
   publicLabelClass,
@@ -99,9 +100,16 @@ export const ComingSoon = () => {
   return (
     <PublicMarketingShell
       header={
-        <Link to="/login" className={publicNavLinkSecondary}>
-          Already have an invite? Sign in
-        </Link>
+        <nav className="flex items-center gap-2 text-sm font-semibold">
+          {BETA_INVITE_REQUIRED ? (
+            <Link to="/beta" className={publicNavLinkSecondary}>
+              Have a beta invite?
+            </Link>
+          ) : null}
+          <Link to="/login" className={publicNavLinkSecondary}>
+            Already have an invite? Sign in
+          </Link>
+        </nav>
       }
       hero={
         <>

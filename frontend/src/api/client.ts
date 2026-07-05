@@ -21,6 +21,10 @@ export const authAPI = {
   resetPassword: (data: { token: string; password: string }) => apiClient.post('/auth/reset-password', data),
 };
 
+export const betaAPI = {
+  validateInvite: (data: { code: string }) => apiClient.post('/beta/validate-invite', data),
+};
+
 export const usersAPI = {
   getMe: () => apiClient.get('/users/me'),
   getNearby: (

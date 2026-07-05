@@ -23,6 +23,7 @@ import meetRoutes from './routes/meet';
 import notificationRoutes from './routes/notifications';
 import webrtcRoutes from './routes/webrtc';
 import dripRoutes from './routes/drip';
+import betaRoutes from './routes/beta';
 import adminRoutes from './routes/admin.routes';
 import { startPulseExpiryCron } from './services/pulse.service';
 import { sendWelcomeEmailNow, subscribeToWaitlist, startDripWorker } from './services/drip.service';
@@ -83,6 +84,7 @@ app.use('/api/meet', meetRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/webrtc', webrtcRoutes);
 app.use('/api/waitlist', dripRoutes);
+app.use('/api/beta', betaRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Waitlist signup — POSTs to /api/waitlist land here; the dripRoutes router

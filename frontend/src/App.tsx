@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ComingSoon } from './pages/ComingSoon';
+import { BetaAccess } from './pages/BetaAccess';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { ForgotPassword } from './pages/ForgotPassword';
@@ -122,6 +123,7 @@ function AppShell() {
         <Route path="/" element={<ComingSoon />} />
         <Route path="/app" element={<AppEntry />} />
         <Route path="/coming-soon" element={<ComingSoon />} />
+        <Route path="/beta" element={<BetaAccess />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />

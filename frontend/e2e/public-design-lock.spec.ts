@@ -75,6 +75,15 @@ test.describe('public design lock — auth pages', () => {
     expect(network.expectNoSideEffects()).toEqual([]);
   });
 
+  test('/beta validates invite UI shell', async ({ page }) => {
+    const network = await guardAgainstSideEffects(page);
+    await page.goto('/beta');
+    await assertPublicMarketingShellGrid(page);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Beta access/i);
+    await expect(page.locator('#beta-invite-code')).toBeVisible();
+    expect(network.expectNoSideEffects()).toEqual([]);
+  });
+
   test('/register uses PublicMarketingShell, cream inputs, and waitlist link', async ({ page }) => {
     const network = await guardAgainstSideEffects(page);
     await page.goto('/register');
