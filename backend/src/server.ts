@@ -26,7 +26,12 @@ import dripRoutes from './routes/drip';
 import betaRoutes from './routes/beta';
 import adminRoutes from './routes/admin.routes';
 import { startPulseExpiryCron } from './services/pulse.service';
-import { sendWelcomeEmailNow, subscribeToWaitlist, startDripWorker } from './services/drip.service';
+import {
+  hasWelcomeBeenSent,
+  sendWelcomeEmailNow,
+  subscribeToWaitlist,
+  startDripWorker,
+} from './services/drip.service';
 import { errorHandler } from './middleware/auth';
 import { authService } from './services/auth.service';
 import { userService } from './services/user.service';
@@ -98,7 +103,8 @@ app.post('/api/waitlist', async (req, res) => {
   }
   try {
     const result = await subscribeToWaitlist(email, typeof source === 'string' ? source : 'menrush.com');
-    if (!result.alreadySubscribed) {
+    const welcomeAlreadySent = await hasWelcomeBeenSent(result.id);
+    if (!welcomeAlreadySent) {
       try {
         await sendWelcomeEmailNow(result);
       } catch (welcomeErr) {

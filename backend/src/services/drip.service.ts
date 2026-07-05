@@ -23,7 +23,7 @@ import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { query } from '../db';
-import { sendEmail } from './mailer.service';
+import { sendWaitlistCampaignEmail } from './mailer.service';
 
 // ─── Schedule ──────────────────────────────────────────────────────────────
 
@@ -256,7 +256,7 @@ async function sendDripStep(item: DueSend): Promise<{ messageId: string | null; 
   const claimId = claim.rows[0].id;
 
   try {
-    const info = await sendEmail({
+    const info = await sendWaitlistCampaignEmail({
       to: item.email,
       subject: item.step.subject,
       html,
@@ -279,6 +279,19 @@ async function sendDripStep(item: DueSend): Promise<{ messageId: string | null; 
     }
     throw err;
   }
+}
+
+export async function hasWelcomeBeenSent(subscriberId: string): Promise<boolean> {
+  const welcomeKey = DRIP_SCHEDULE[0].key;
+  const result = await query(
+    `SELECT 1
+       FROM waitlist_drip_sends
+      WHERE subscriber_id = $1
+        AND template_key = $2
+      LIMIT 1`,
+    [subscriberId, welcomeKey],
+  );
+  return (result.rowCount ?? 0) > 0;
 }
 
 export async function sendWelcomeEmailNow(

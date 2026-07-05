@@ -164,6 +164,75 @@ function formatToForLog(to: string | string[]): string {
  * Send a transactional email via Resend. Not wired into contact/drip yet —
  * used by POST /api/admin/test-email and future flows.
  */
+function stripHtmlToText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function sendViaZohoSmtp(params: SendEmailParams): Promise<{ id: string }> {
+  const transporter = getMailer();
+  const from = (
+    process.env.MAIL_FROM_EMAIL ||
+    process.env.CONTACT_FROM_EMAIL ||
+    getMailerFromAddress()
+  ).trim();
+  const replyTo = (process.env.RESEND_REPLY_TO || 'hello@menrush.com').trim();
+  const recipients = Array.isArray(params.to) ? params.to : [params.to];
+  const text = params.text || stripHtmlToText(params.html);
+
+  const info = await transporter.sendMail({
+    from: `"MenRush" <${from}>`,
+    to: recipients,
+    replyTo,
+    subject: params.subject,
+    html: params.html,
+    text,
+  });
+
+  const id = info.messageId || `zoho-${Date.now()}`;
+  console.log(`[mailer] sent ${id} to ${recipients.join(', ')} via Zoho SMTP subject="${params.subject}"`);
+  return { id };
+}
+
+function resendConfigured(): boolean {
+  return Boolean(
+    process.env.RESEND_API_KEY?.trim() &&
+      process.env.RESEND_FROM_EMAIL?.trim() &&
+      process.env.RESEND_REPLY_TO?.trim(),
+  );
+}
+
+/** Waitlist drip: prefer Resend, fall back to Zoho SMTP if Resend fails or is unset. */
+export async function sendWaitlistCampaignEmail(
+  params: SendEmailParams,
+): Promise<{ id: string; provider: 'resend' | 'zoho' }> {
+  if (resendConfigured()) {
+    try {
+      const result = await sendEmail(params);
+      return { id: result.id, provider: 'resend' };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[mailer] Resend waitlist send failed, trying Zoho SMTP: ${msg}`);
+    }
+  }
+
+  try {
+    const result = await sendViaZohoSmtp(params);
+    return { id: result.id, provider: 'zoho' };
+  } catch (err) {
+    if (err instanceof MailerNotConfiguredError) {
+      throw new Error(
+        'Waitlist email is not configured. Set RESEND_* or ZOHO_SMTP_* env vars on the backend.',
+      );
+    }
+    throw err;
+  }
+}
+
 export async function sendEmail(params: SendEmailParams): Promise<{ id: string }> {
   const from = process.env.RESEND_FROM_EMAIL?.trim();
   const replyTo = process.env.RESEND_REPLY_TO?.trim();
