@@ -1,5 +1,5 @@
 /**
- * MenRush brand mark — static two-profile bronze medallion (handoff medallion-480.png).
+ * MenRush brand mark — static two-profile bronze medallion (master: brand/menrush-logo.png).
  */
 import { BRAND_MEDALLION, BRAND_MEDALLION_SMALL } from '../lib/brand';
 

@@ -38,8 +38,8 @@ async function assertAuthShell(page: import('@playwright/test').Page) {
 async function assertBrandMark(page: import('@playwright/test').Page) {
   const mark = page.getByTestId('brand-mark').first();
   await expect(mark).toBeVisible();
-  await expect(mark.locator('img[src*="medallion-480"]')).toBeVisible();
-  await expect(page.locator('img[src*="menrush-logo"]')).toHaveCount(0);
+  await expect(mark.locator('img[src*="menrush-logo-512"]')).toBeVisible();
+  await expect(page.locator('img[src*="medallion-480"]')).toHaveCount(0);
 }
 
 async function assertCreamInputs(page: import('@playwright/test').Page) {
