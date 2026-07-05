@@ -27,17 +27,18 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   await expect(page.locator('#waitlist')).toBeVisible();
   await expect(page.locator('#waitlist-email')).toBeVisible();
   await expect(page.getByRole('button', { name: /Join the verified waitlist/i })).toHaveCount(1);
-  await assertCoinLogo(page);
+  await assertBrandMark(page);
 }
 
 async function assertAuthShell(page: import('@playwright/test').Page) {
   await expect(page.locator('h1.mr-auth-heading')).toBeVisible();
-  await expect(page.locator('img[alt="MenRush"]').first()).toBeVisible();
+  await assertBrandMark(page);
 }
 
-async function assertCoinLogo(page: import('@playwright/test').Page) {
-  await expect(page.locator('img[alt="MenRush"]').first()).toBeVisible();
-  await expect(page.locator('img[src*="menrush-logo"]').first()).toBeVisible();
+async function assertBrandMark(page: import('@playwright/test').Page) {
+  await expect(page.getByTestId('brand-mark').first()).toBeVisible();
+  await expect(page.locator('img[src*="menrush-logo"]')).toHaveCount(0);
+  await expect(page.locator('img[src*="medallion"]')).toHaveCount(0);
 }
 
 async function assertCreamInputs(page: import('@playwright/test').Page) {

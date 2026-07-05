@@ -1,11 +1,10 @@
 /**
  * Single-column auth shell — MenRush Design System handoff + beta-launch-handoff.
- * Used by /beta, /login, /register (not landing / coming-soon).
+ * Brand: CSS radar BrandMark (motion-radar.html) — no bronze coin/medallion PNGs.
  */
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { CoinFlip } from './CoinFlip';
-import { publicHeroLogoClass } from '../lib/publicStyles';
+import { BrandMark } from './BrandMark';
 import { SiteFooter } from './SiteFooter';
 
 const AUTH_GRADIENT =
@@ -17,16 +16,10 @@ export const AUTH_BACKGROUNDS = {
   register: '/images/menrush/02-soho-night-crowd.jpeg',
 } as const;
 
-type CoinFlipConfig = {
-  qrValue: string;
-  noFlip?: boolean;
-};
-
 type PublicAuthShellProps = {
   backgroundImage: string;
   backgroundOpacity?: number;
   homeTo?: string;
-  coinFlip: CoinFlipConfig;
   children: ReactNode;
   showFooter?: boolean;
 };
@@ -35,7 +28,6 @@ export function PublicAuthShell({
   backgroundImage,
   backgroundOpacity = 0.3,
   homeTo = '/coming-soon',
-  coinFlip,
   children,
   showFooter = false,
 }: PublicAuthShellProps) {
@@ -53,11 +45,7 @@ export function PublicAuthShell({
           to={homeTo}
           className="mb-10 inline-block w-fit hover:opacity-80 transition-opacity"
         >
-          <CoinFlip
-            qrValue={coinFlip.qrValue}
-            sizeClass={publicHeroLogoClass}
-            noFlip={coinFlip.noFlip ?? false}
-          />
+          <BrandMark size="lg" showWordmark />
         </Link>
         {children}
       </div>
