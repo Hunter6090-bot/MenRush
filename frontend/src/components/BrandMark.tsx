@@ -16,7 +16,7 @@ type BrandMarkProps = {
 
 const sizeClasses: Record<BrandMarkSize, { src: string; box: string }> = {
   sm: { src: BRAND_MEDALLION_SMALL, box: 'h-10 w-10' },
-  auth: { src: BRAND_MEDALLION, box: 'h-[52px] w-[52px]' },
+  auth: { src: BRAND_MEDALLION, box: 'h-28 w-28 sm:h-32 sm:w-32' },
   md: { src: BRAND_MEDALLION, box: 'h-20 w-20' },
   lg: { src: BRAND_MEDALLION, box: 'h-28 w-28 sm:h-32 sm:w-32' },
   hero: { src: BRAND_MEDALLION, box: 'h-[150px] w-[150px]' },
