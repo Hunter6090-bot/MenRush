@@ -1,34 +1,50 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { usersAPI } from '../api/client';
 import { useAuthStore, useNotificationStore, useUnreadStore } from '../hooks/store';
 import { UserAvatar } from './UserAvatar';
 import { mobileBackFallback, shouldShowMobileBack } from '../lib/mobileBack';
 import { MobileBackButton } from './MobileBackButton';
-import { IconNotifications } from './icons';
+import { IconNotifications, IconPulse } from './icons';
 import { BrandMark } from './BrandMark';
 import { ProfileSearchModal } from './ProfileSearchModal';
-import { ProfileQrModal } from './ProfileQrModal';
 import { NotificationDot } from './NotificationDot';
+import { MenRushPlusPromo } from './MenRushPlusPromo';
 import { getNavItems, isNavActive, mobilePageTitle, type NavItem } from '../lib/navConfig';
+import { DiscoveryShellProvider, useDiscoveryShell } from '../context/DiscoveryShellContext';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
-function badgeFor(item: NavItem, unreadCount: number, notificationUnread: number): number {
+function badgeFor(
+  item: NavItem,
+  unreadCount: number,
+  notificationUnread: number,
+  matchCount: number,
+): number {
   if (item.badgeKey === 'messages') return unreadCount;
   if (item.badgeKey === 'notifications') return notificationUnread;
+  if (item.badgeKey === 'matches') return matchCount;
   return 0;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children }) => {
+function LayoutInner({ children }: LayoutProps) {
   const { user, logout } = useAuthStore();
   const unreadCount = useUnreadStore((s) => s.count);
   const notificationUnread = useNotificationStore((s) => s.unreadCount);
   const location = useLocation();
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
-  const [qrOpen, setQrOpen] = useState(false);
+  const [matchCount, setMatchCount] = useState(0);
+  const { state: discoveryShell } = useDiscoveryShell();
+
+  useEffect(() => {
+    usersAPI
+      .getMatches()
+      .then((res) => setMatchCount(res.data?.length ?? 0))
+      .catch(() => setMatchCount(0));
+  }, [location.pathname]);
 
   const navItems = getNavItems();
   const mobileTabs = navItems.filter((item) => item.mobileTab);
@@ -44,32 +60,24 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <div className="min-h-dvh bg-[var(--bg-primary)] lg:grid lg:grid-cols-[var(--desktop-sidebar-width)_minmax(0,1fr)]">
-      {/* ── Desktop sidebar (web app) ── */}
       <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:w-[var(--desktop-sidebar-width)] lg:border-r lg:border-[var(--border-default)] lg:bg-[#080604]">
-        <div className="flex items-center gap-3 px-5 pt-6 pb-5 border-b border-[var(--border-default)]/80">
+        <div className="flex items-center gap-2.5 px-3.5 pt-5 pb-4">
           <BrandMark size="sm" />
-          <div className="min-w-0">
-            <p className="font-display text-lg font-black tracking-[0.14em] text-[var(--cream)] leading-none">
-              MENRUSH
-            </p>
-            <p className="text-[10px] uppercase tracking-[0.22em] text-[var(--cream-muted)] mt-1">
-              Desktop
-            </p>
-          </div>
+          <p className="font-display text-sm font-black tracking-[0.14em] text-[var(--cream)]">MENRUSH</p>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+        <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
           {desktopLinks.map((item) => {
             const active = isNavActive(location.pathname, item.to);
-            const badge = badgeFor(item, unreadCount, notificationUnread);
+            const badge = badgeFor(item, unreadCount, notificationUnread, matchCount);
             return (
               <Link
                 key={item.to}
                 to={item.to}
-                className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 border ${
+                className={`group flex items-center gap-3 rounded-[14px] px-3 py-3 text-[15px] font-bold transition-all duration-200 ${
                   active
-                    ? 'bg-[var(--copper)]/12 text-[var(--copper)] border-[var(--copper)]/35 shadow-[inset_3px_0_0_var(--copper)]'
-                    : 'text-[var(--cream-soft)]/75 border-transparent hover:bg-[var(--bg-card)] hover:text-[var(--cream)] hover:border-[var(--border-default)]'
+                    ? 'bg-[rgba(196,131,42,0.12)] text-[#E0A14A]'
+                    : 'text-[var(--cream-soft)]/75 hover:bg-[var(--bg-card)] hover:text-[var(--cream)]'
                 }`}
               >
                 <span className="relative inline-flex shrink-0">
@@ -81,62 +89,25 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     className="-top-2 -right-2 min-w-[16px] h-4 text-[9px] bg-[var(--copper)] border-[#080604]"
                   />
                 </span>
-                <span className="truncate">{item.label}</span>
+                <span className="truncate flex-1">{item.label}</span>
               </Link>
             );
           })}
         </nav>
 
-        <div className="px-3 py-4 border-t border-[var(--border-default)]/80 space-y-2">
-          <div className="flex gap-2 px-1">
-            <button
-              type="button"
-              onClick={() => setSearchOpen(true)}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]/60 px-3 py-2.5 text-xs font-semibold text-[var(--cream-soft)] transition-colors hover:border-[var(--copper)]/40 hover:text-[var(--cream)]"
-            >
-              <SearchIcon className="w-4 h-4" />
-              Search
-            </button>
-            <button
-              type="button"
-              onClick={() => setQrOpen(true)}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]/60 text-[var(--cream-soft)] transition-colors hover:border-[var(--copper)]/40 hover:text-[var(--cream)]"
-              aria-label="Profile QR code"
-            >
-              <QrIcon className="w-4 h-4" />
-            </button>
-          </div>
-
-          <Link
-            to="/profile"
-            className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]/40 px-3 py-3 transition-colors hover:border-[var(--copper)]/35"
-          >
-            <UserAvatar
-              name={user?.name ?? '?'}
-              photoUrl={user?.photo_url}
-              size="sm"
-              showStatus={false}
-            />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-[var(--cream)]">{user?.name ?? 'Account'}</p>
-              <p className="text-[10px] text-[var(--cream-muted)]">View profile</p>
-            </div>
-          </Link>
-
+        <div className="px-2.5 py-4 border-t border-[var(--border-default)]/80">
+          <MenRushPlusPromo />
           <button
             type="button"
             onClick={handleLogout}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border-default)] px-3 py-2.5 text-xs font-semibold text-[var(--cream-muted)] transition-colors hover:border-[#8B4513]/40 hover:bg-[#8B4513]/10 hover:text-[var(--cream)]"
+            className="mt-2 w-full rounded-[14px] px-3 py-3 text-left text-sm font-semibold text-[#6B5840] transition-colors hover:bg-[var(--bg-card)] hover:text-[#B0432E]"
           >
-            <LogoutIcon className="w-4 h-4" />
             Sign out
           </button>
         </div>
       </aside>
 
-      {/* ── Main column ── */}
       <div className="flex min-h-dvh min-w-0 flex-col lg:col-start-2">
-        {/* Mobile app header */}
         <header className="lg:hidden fixed top-0 left-0 right-0 z-50 border-b border-[var(--border-default)] bg-[#0D0A06]/92 backdrop-blur-xl pt-[env(safe-area-inset-top,0px)]">
           <div className="flex h-[3.25rem] items-center gap-2 px-3">
             <div className="w-10 shrink-0">
@@ -148,13 +119,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </Link>
               )}
             </div>
-
             <div className="min-w-0 flex-1 text-center">
               {location.pathname !== '/discover' && (
                 <p className="truncate text-sm font-bold tracking-wide text-[var(--cream)]">{pageTitle}</p>
               )}
             </div>
-
             <div className="flex w-[4.5rem] shrink-0 items-center justify-end gap-0.5">
               <button
                 type="button"
@@ -180,23 +149,53 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
         </header>
 
-        {/* Desktop content header strip */}
-        <div className="hidden lg:flex items-center justify-between gap-4 border-b border-[var(--border-default)]/70 bg-[var(--bg-primary)]/80 px-8 py-4 backdrop-blur-sm">
-          <div>
-            <p className="nn-overline mb-1">Workspace</p>
-            <h1 className="text-xl font-bold text-[var(--cream)]">{pageTitle}</h1>
+        <div className="hidden lg:flex h-[var(--desktop-workspace-header)] shrink-0 items-center gap-3.5 border-b border-[var(--border-default)] bg-[var(--bg-primary)] px-6">
+          <button
+            type="button"
+            onClick={() => setSearchOpen(true)}
+            className="flex max-w-[420px] flex-1 items-center gap-2.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] px-4 py-2.5 text-left transition-colors hover:border-[var(--copper)]/40"
+          >
+            <SearchIcon className="h-4 w-4 shrink-0 text-[var(--cream-muted)]" />
+            <span className="text-sm text-[var(--cream-muted)]">Search by name</span>
+          </button>
+          <div className="flex-1" />
+          <div className="flex items-center gap-2 text-[13px] text-[var(--cream-muted)]">
+            <span className="inline-flex h-2 w-2 rounded-full bg-[var(--status-online)]" />
+            {discoveryShell.nearbyCount} in your radius
           </div>
-          <div className="flex items-center gap-2 text-xs text-[var(--cream-muted)]">
-            <span className="inline-flex h-2 w-2 rounded-full bg-[var(--status-online)] shadow-[0_0_8px_var(--status-online-glow)]" />
-            Live proximity
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (discoveryShell.togglePulse) discoveryShell.togglePulse();
+              else navigate('/discover');
+            }}
+            title="Toggle pulse visibility"
+            className={`relative flex h-11 w-11 items-center justify-center rounded-full transition-all ${
+              discoveryShell.pulseOn
+                ? 'bg-[var(--copper)] text-[#1A0E03] shadow-[0_0_18px_rgba(196,131,42,0.45)]'
+                : 'border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--copper)]'
+            }`}
+          >
+            {discoveryShell.pulseOn ? (
+              <span className="mr-radar-ring pointer-events-none absolute inset-0" aria-hidden />
+            ) : null}
+            <IconPulse size={20} className="relative z-[1]" />
+          </button>
+          <Link to="/profile" className="shrink-0">
+            <UserAvatar
+              name={user?.name ?? '?'}
+              photoUrl={user?.photo_url}
+              size="sm"
+              showStatus={false}
+              className="ring-2 ring-[var(--copper)]"
+            />
+          </Link>
         </div>
 
         <main className="flex-1 min-h-0 max-lg:pt-[var(--mobile-header-height)] max-lg:pb-[var(--mobile-tab-bar-height)] lg:pb-0">
           <div className="page-enter h-full min-h-0">{children}</div>
         </main>
 
-        {/* Mobile bottom tab bar */}
         <nav
           className="lg:hidden fixed bottom-0 left-0 right-0 z-50 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] pt-2"
           aria-label="Primary"
@@ -204,7 +203,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="flex items-stretch rounded-[1.35rem] border border-[var(--border-default)] bg-[#12100C]/95 shadow-[0_12px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl">
             {mobileTabs.map((item) => {
               const active = isNavActive(location.pathname, item.to);
-              const badge = badgeFor(item, unreadCount, notificationUnread);
+              const badge = badgeFor(item, unreadCount, notificationUnread, matchCount);
               return (
                 <Link
                   key={item.to}
@@ -227,9 +226,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   <span className="text-[9px] font-bold leading-none tracking-wide">
                     {item.shortLabel ?? item.label}
                   </span>
-                  {active ? (
-                    <span className="absolute bottom-1 h-1 w-1 rounded-full bg-[var(--copper)] shadow-[0_0_8px_var(--copper-glow-strong)]" />
-                  ) : null}
                 </Link>
               );
             })}
@@ -238,25 +234,18 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </div>
 
       <ProfileSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
-      <ProfileQrModal open={qrOpen} onClose={() => setQrOpen(false)} />
     </div>
   );
-};
+}
+
+export const Layout: React.FC<LayoutProps> = ({ children }) => (
+  <DiscoveryShellProvider>
+    <LayoutInner>{children}</LayoutInner>
+  </DiscoveryShellProvider>
+);
 
 const SearchIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
-  </svg>
-);
-
-const QrIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 3h2m2 0h2m-4 2v2m0-4v2m4-2v2" />
-  </svg>
-);
-
-const LogoutIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
   </svg>
 );

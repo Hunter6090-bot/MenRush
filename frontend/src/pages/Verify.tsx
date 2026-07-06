@@ -21,15 +21,21 @@ import {
   publicDocTypeButtonClass,
   publicErrorClass,
   publicInfoBoxClass,
-  publicLabelCopperClass,
+  publicDarkSelectClass,
+  publicLabelClass,
   publicMutedCopyClass,
   publicPanelClass,
   publicPrimaryButtonClass,
   publicProgressFillClass,
   publicProgressTrackClass,
   publicSecondaryButtonClass,
-  publicSelectClass,
 } from '../lib/publicStyles';
+
+const INTRO_STEPS = [
+  { n: '1', text: 'Upload your ID document' },
+  { n: '2', text: 'Take a live selfie' },
+  { n: '3', text: 'Get your copper checkmark' },
+] as const;
 
 type Step = 'intro' | 'country' | 'id-type' | 'id-front' | 'id-back' | 'selfie';
 
@@ -250,10 +256,10 @@ export const Verify: React.FC = () => {
     switch (step) {
       case 'intro':
         return {
-          title: "Prove you're",
-          accent: 'you.',
+          title: 'Every man here is',
+          accent: 'real.',
           copy:
-            'Snap your ID, then a live selfie. We compare them for your copper checkmark. Verification is free — always.',
+            'Before you go visible, verify your identity. 2 minutes: your ID document, then a liveness check. Your document is never shown to other members.',
         };
       case 'country':
         return {
@@ -341,11 +347,19 @@ export const Verify: React.FC = () => {
                 </ul>
               </div>
 
-              <ul className="space-y-2 text-xs text-[#F0E0C0]/85">
-                <Bullet>Passport or driving licence from your country</Bullet>
-                <Bullet>Licence holders: front, then back</Bullet>
-                <Bullet>Live selfie for automated face match</Bullet>
-              </ul>
+              <div className="flex flex-col gap-2.5">
+                {INTRO_STEPS.map((item) => (
+                  <div
+                    key={item.n}
+                    className="flex items-center gap-3 rounded-xl border border-[#3D2B0E] bg-[#1E1508] px-4 py-3.5"
+                  >
+                    <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-[rgba(196,131,42,0.15)] text-[13px] font-extrabold text-[#E0A14A]">
+                      {item.n}
+                    </span>
+                    <span className="text-sm text-[#F0E0C0]">{item.text}</span>
+                  </div>
+                ))}
+              </div>
 
               <button type="button" onClick={() => setStep('country')} className={publicPrimaryButtonClass}>
                 Start verification
@@ -357,11 +371,11 @@ export const Verify: React.FC = () => {
           {step === 'country' ? (
             <>
               <label className="flex flex-col gap-2.5">
-                <span className={publicLabelCopperClass}>Country</span>
+                <span className={publicLabelClass}>Nationality</span>
                 <select
                   value={nationality}
                   onChange={(e) => setNationality(e.target.value)}
-                  className={publicSelectClass}
+                  className={publicDarkSelectClass}
                 >
                   {NATIONALITIES.map((country) => (
                     <option key={country} value={country}>
@@ -381,16 +395,19 @@ export const Verify: React.FC = () => {
 
           {step === 'id-type' ? (
             <>
+              <p className={publicLabelClass}>Document type</p>
               <div className="grid grid-cols-2 gap-3">
                 <DocTypeButton
                   active={idType === 'passport'}
                   onClick={() => setIdType('passport')}
                   label="Passport"
+                  sub="Photo page"
                 />
                 <DocTypeButton
                   active={idType === 'driving_license'}
                   onClick={() => setIdType('driving_license')}
                   label="Driving licence"
+                  sub="Front and back"
                 />
               </div>
               <button
@@ -577,13 +594,15 @@ export const Verify: React.FC = () => {
   );
 };
 
-const DocTypeButton: React.FC<{ active: boolean; onClick: () => void; label: string }> = ({
-  active,
-  onClick,
-  label,
-}) => (
+const DocTypeButton: React.FC<{
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  sub: string;
+}> = ({ active, onClick, label, sub }) => (
   <button type="button" onClick={onClick} className={publicDocTypeButtonClass(active)}>
-    {label}
+    <span>{label}</span>
+    <span className="text-[11px] font-normal normal-case tracking-normal text-[#A89070]">{sub}</span>
   </button>
 );
 

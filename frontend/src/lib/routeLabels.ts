@@ -8,4 +8,6 @@ export const ROUTE_LABELS = {
   alerts: 'Alerts',
   profile: 'Profile',
   rooms: 'Rooms',
+  events: 'Events',
+  settings: 'Settings',
 } as const;

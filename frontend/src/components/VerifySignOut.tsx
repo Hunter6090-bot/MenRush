@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../hooks/store';
+import { publicSignOutClass } from '../lib/publicStyles';
 
 export const VerifySignOut: React.FC = () => {
   const logout = useAuthStore((s) => s.logout);
@@ -13,7 +14,7 @@ export const VerifySignOut: React.FC = () => {
         logout();
         navigate('/login');
       }}
-      className="mt-5 block w-full text-center text-xs text-[#A89070] hover:text-[#C4832A] transition-colors"
+      className={publicSignOutClass}
     >
       Sign out
     </button>

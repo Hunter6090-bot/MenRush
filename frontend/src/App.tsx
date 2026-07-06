@@ -25,6 +25,8 @@ import { VerifyScan } from './pages/VerifyScan';
 import { VerifyPending } from './pages/VerifyPending';
 import { VerifyRejected } from './pages/VerifyRejected';
 import { Premium } from './pages/Premium';
+import { Events } from './pages/Events';
+import { Settings } from './pages/Settings';
 import { Notifications } from './pages/Notifications';
 import { useAuthStore } from './hooks/store';
 import { usePushNotifications } from './hooks/usePushNotifications';
@@ -141,7 +143,10 @@ function AppShell() {
         <Route path="/verify/rejected" element={<ProtectedRoute><VerifyRejected /></ProtectedRoute>} />
         <Route path="/premium" element={<RequireVerified><Premium /></RequireVerified>} />
         <Route path="/discover" element={<RequireVerified><Discover /></RequireVerified>} />
+        <Route path="/discovery" element={<Navigate to="/discover" replace />} />
         <Route path="/stream" element={<RequireVerified><Stream /></RequireVerified>} />
+        <Route path="/events" element={<RequireVerified><Events /></RequireVerified>} />
+        <Route path="/settings" element={<RequireVerified><Settings /></RequireVerified>} />
         <Route path="/notifications" element={<RequireVerified><Notifications /></RequireVerified>} />
         <Route path="/profile" element={<RequireVerified><Profile /></RequireVerified>} />
         <Route path="/profile/:id" element={<RequireVerified><ProfileView /></RequireVerified>} />
@@ -149,12 +154,8 @@ function AppShell() {
         <Route path="/matches" element={<RequireVerified><Matches /></RequireVerified>} />
         <Route path="/conversations" element={<RequireVerified><MessagingRoute /></RequireVerified>} />
         <Route path="/messages/:otherId" element={<RequireVerified><MessagingRoute /></RequireVerified>} />
-        {FEATURES.chatRooms && (
-          <>
-            <Route path="/rooms" element={<RequireVerified><RoomsRoute /></RequireVerified>} />
-            <Route path="/rooms/:roomId" element={<RequireVerified><RoomsRoute /></RequireVerified>} />
-          </>
-        )}
+        <Route path="/rooms" element={<RequireVerified><RoomsRoute /></RequireVerified>} />
+        <Route path="/rooms/:roomId" element={<RequireVerified><RoomsRoute /></RequireVerified>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
       {token && FEATURES.videoCalls && <VideoCallModal />}

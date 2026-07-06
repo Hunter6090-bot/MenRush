@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { usersAPI, profileMetaAPI, Mood } from '../api/client';
+import { usersAPI, profileMetaAPI, Mood, MOOD_LABELS } from '../api/client';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { Layout } from '../components/Layout';
 import { UserAvatar } from '../components/UserAvatar';
@@ -12,6 +12,10 @@ import { ProfileViewersCard, ProfileViewer } from '../components/ProfileViewersC
 import { normalizeProfileImageFile } from '../lib/imageUpload';
 import { CoverBanner, DEFAULT_COVER_FRAME, normalizeCoverFrame, type CoverFrame } from '../components/CoverBanner';
 import { CoverPhotoEditor } from '../components/CoverPhotoEditor';
+import { VerifiedBadge } from '../components/VerifiedBadge';
+import { QRCodeSVG } from 'qrcode.react';
+import { profileUrl as buildProfileUrl } from '../lib/profileLinks';
+import { getPhotoUrl } from '../components/UserAvatar';
 
 const INTEREST_GROUPS: { label: string; tags: string[] }[] = [
   { label: 'Position', tags: ['Top', 'Vers Top', 'Vers', 'Vers Bottom', 'Bottom', 'Side'] },
@@ -344,8 +348,72 @@ export const Profile = () => {
           disabled={uploadingCover}
         />
 
-        {/* ── Profile hero ── */}
-        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl overflow-hidden shadow-card lg:rounded-3xl">
+        {/* ── Desktop profile layout ── */}
+        <div className="hidden lg:grid lg:grid-cols-[300px_1fr] lg:gap-8">
+          <div>
+            <div className="relative aspect-[3/4] w-full max-w-[300px] overflow-hidden rounded-2xl border border-[#3D2B0E] bg-[#1E1508]">
+              {getPhotoUrl(photoUrl) ? (
+                <img src={getPhotoUrl(photoUrl)!} alt={profile.name} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <UserAvatar name={profile.name} photoUrl={profile.photo_url} size="xl" showStatus={false} />
+                </div>
+              )}
+            </div>
+            <div className="mt-3 grid max-w-[300px] grid-cols-3 gap-2">
+              {[photoUrl, coverUrl, photoUrl].filter(Boolean).slice(0, 3).map((src, i) => (
+                <div key={i} className="aspect-square overflow-hidden rounded-xl border border-[#3D2B0E] bg-[#1E1508]">
+                  {getPhotoUrl(src) ? (
+                    <img src={getPhotoUrl(src)!} alt="" className="h-full w-full object-cover" />
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-4">
+            <div className="mr-card p-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-2xl font-extrabold text-[var(--cream)]">{profile.name}</h2>
+                {(profile as ProfileData & { is_verified?: boolean }).is_verified ? (
+                  <VerifiedBadge />
+                ) : null}
+              </div>
+              <p className="mt-1 text-sm text-[var(--cream-muted)]">Age {profile.age}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {interests.slice(0, 4).map((tag) => (
+                  <span key={tag} className="mr-pill mr-pill-inactive text-xs">
+                    {tag}
+                  </span>
+                ))}
+                {mood ? (
+                  <span className="mr-pill mr-pill-active text-xs">{MOOD_LABELS[mood]}</span>
+                ) : null}
+              </div>
+            </div>
+            {user?.id ? (
+              <div className="mr-card flex items-center gap-5 p-5">
+                <div className="rounded-xl border border-[var(--border-default)] bg-white p-2">
+                  <QRCodeSVG value={buildProfileUrl(user.id)} size={96} level="M" />
+                </div>
+                <div>
+                  <p className="text-[15px] font-bold text-[var(--cream)]">Your QR code</p>
+                  <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
+                    Scan to open your profile in person.
+                  </p>
+                </div>
+              </div>
+            ) : null}
+            <div className="mr-card p-5">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--cream-muted)]">About</p>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--cream-soft)]">
+                {bio || 'Add a bio so nearby guys know what you are into.'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Profile hero (mobile) ── */}
+        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl overflow-hidden shadow-card lg:hidden lg:rounded-3xl">
           <div className="group relative">
             {coverUrl ? (
               <CoverBanner coverUrl={coverUrl} frame={coverFrame} />

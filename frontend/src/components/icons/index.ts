@@ -16,3 +16,5 @@ export { IconNotifications } from "./IconNotifications";
 export { IconRooms } from "./IconRooms";
 export { IconProfile } from "./IconProfile";
 export { IconClose } from "./IconClose";
+export { IconEvents } from "./IconEvents";
+export { IconSettings } from "./IconSettings";

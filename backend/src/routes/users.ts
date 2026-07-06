@@ -120,7 +120,7 @@ router.get('/search', verifiedMiddleware, async (req: AuthRequest, res: Response
 
 router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { radius, minAge, maxAge, interests, onlyPulse } = req.query;
+    const { radius, minAge, maxAge, interests, onlyPulse, lookingFor, mood } = req.query;
     const requestedRadius = radius ? Number.parseInt(radius as string, 10) : 5;
     if (!Number.isFinite(requestedRadius)) {
       return res.status(400).json({ error: 'Invalid radius' });
@@ -131,6 +131,8 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
       maxAge: maxAge ? parseInt(maxAge as string) : undefined,
       interests: (interests as string)?.split(',').filter(Boolean),
       onlyPulse: onlyPulse === 'true' || onlyPulse === '1',
+      lookingFor: typeof lookingFor === 'string' ? lookingFor : undefined,
+      mood: typeof mood === 'string' ? mood : undefined,
     };
 
     const queryLat = typeof req.query.lat === 'string' ? Number.parseFloat(req.query.lat) : NaN;
@@ -246,6 +248,15 @@ router.get('/matches', verifiedMiddleware, async (req: AuthRequest, res: Respons
   try {
     const matches = await userService.getMatches(req.userId!);
     res.json(matches);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/likes/received/summary', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const summary = await userService.getReceivedLikesSummary(req.userId!);
+    res.json(summary);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

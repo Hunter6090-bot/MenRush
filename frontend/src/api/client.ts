@@ -31,7 +31,14 @@ export const usersAPI = {
     lat: number,
     lng: number,
     radius?: number,
-    filters?: { minAge?: number; maxAge?: number; interests?: string[]; onlyPulse?: boolean }
+    filters?: {
+      minAge?: number;
+      maxAge?: number;
+      interests?: string[];
+      onlyPulse?: boolean;
+      lookingFor?: string;
+      mood?: string;
+    }
   ) =>
     apiClient.get('/users/nearby', {
       params: {
@@ -42,6 +49,8 @@ export const usersAPI = {
         maxAge: filters?.maxAge,
         interests: filters?.interests?.join(','),
         onlyPulse: filters?.onlyPulse ? 'true' : undefined,
+        lookingFor: filters?.lookingFor,
+        mood: filters?.mood,
       },
     }),
   getProfile: (id: string) => apiClient.get(`/users/profile/${id}`),
@@ -82,6 +91,12 @@ export const usersAPI = {
   updateVisibility: (isVisible: boolean) =>
     apiClient.patch('/users/visibility', { is_visible: isVisible }),
   getMatches: () => apiClient.get('/users/matches'),
+  getReceivedLikesSummary: () =>
+    apiClient.get<{
+      count: number;
+      is_premium: boolean;
+      preview?: Array<{ id: string; name: string; age: number; photo_url?: string | null }>;
+    }>('/users/likes/received/summary'),
   getProfileViews: () =>
     apiClient.get<{
       viewers: Array<{

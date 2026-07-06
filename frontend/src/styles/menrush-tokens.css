@@ -153,8 +153,8 @@
   --nav-height: 64px;
   --mobile-header-height: calc(3.25rem + env(safe-area-inset-top, 0px));
   --mobile-tab-bar-height: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
-  --desktop-sidebar-width: 272px;
-  --desktop-workspace-header: 4.25rem;
+  --desktop-sidebar-width: 232px;
+  --desktop-workspace-header: 4rem;
   --content-max-width: 1280px;
   --map-min-height: 60vh;
   --bottom-strip-height: 180px;
@@ -265,4 +265,42 @@ html, body {
 :focus-visible {
   outline: 2px solid var(--nn-copper);
   outline-offset: 2px;
+}
+
+/* Handoff utility classes */
+.mr-card {
+  border-radius: var(--nn-radius-lg);
+  border: 1px solid var(--nn-border);
+  background: var(--nn-card);
+  box-shadow: var(--nn-shadow-card);
+}
+
+.mr-pill {
+  border-radius: var(--nn-radius-full);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: all var(--nn-dur-base) var(--nn-ease-out);
+}
+
+.mr-pill-active {
+  border: 1px solid var(--nn-copper);
+  background: var(--nn-copper);
+  color: #1a0e03;
+}
+
+.mr-pill-inactive {
+  border: 1px solid var(--nn-border);
+  background: transparent;
+  color: var(--nn-muted);
+}
+
+.mr-cta-gradient {
+  background: linear-gradient(90deg, #c4832a, #a45e18);
+  color: #fff6e6;
+}
+
+.mr-cta-gradient:hover {
+  background: linear-gradient(90deg, #e0a14a, #c4832a);
 }

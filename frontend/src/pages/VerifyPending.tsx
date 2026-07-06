@@ -70,9 +70,9 @@ export const VerifyPending: React.FC = () => {
   return (
     <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.verify} homeTo="/discover">
       <PublicAuthHero
-        title="Hang"
-        accent="tight."
-        copy="We're checking your documents. Usually under 2 minutes — sometimes a few hours during off-peak. You can leave this screen and come back."
+        title="Checking your"
+        accent="ID."
+        copy="Usually under 2 minutes. You'll go visible the moment you're verified."
       />
 
       <div className={publicPanelClass}>

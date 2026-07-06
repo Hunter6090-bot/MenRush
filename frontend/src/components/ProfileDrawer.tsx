@@ -70,10 +70,10 @@ export function ProfileDrawer({
       <div
         onClick={(e) => e.stopPropagation()}
         className="
-          relative w-full sm:w-[380px] sm:h-full
-          max-h-[78vh] sm:max-h-none
+          relative w-full lg:w-[420px] lg:h-full
+          max-h-[78vh] lg:max-h-none
           bg-[var(--bg-elevated)] border border-[var(--border-default)]
-          rounded-t-3xl sm:rounded-none sm:rounded-l-2xl
+          rounded-t-3xl lg:rounded-none lg:rounded-l-2xl
           shadow-[var(--shadow-glow-strong)]
           overflow-hidden flex flex-col
         "

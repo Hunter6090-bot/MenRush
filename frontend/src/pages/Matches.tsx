@@ -1,9 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { usersAPI } from '../api/client';
 import { Layout } from '../components/Layout';
 import { ConversationItem } from '../components/ConversationItem';
 import { IconMatches } from '../components/icons';
+import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
+import { VerifiedBadge } from '../components/VerifiedBadge';
+import { getPhotoUrl } from '../components/UserAvatar';
+import { PremiumGate } from '../components/PremiumGate';
 
 interface Match {
   id: string;
@@ -15,20 +19,80 @@ interface Match {
   last_seen?: string;
   last_message?: string;
   last_message_at?: string;
+  is_verified?: boolean;
+}
+
+function MatchGridCard({ match, onClick }: { match: Match; onClick: () => void }) {
+  const photo = getPhotoUrl(match.photo_url);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group relative overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] text-left shadow-[var(--shadow-md)] transition-all hover:-translate-y-0.5 hover:border-[var(--copper)]/40"
+    >
+      <div className="relative aspect-[3/3.6] w-full bg-[var(--bg-elevated)]">
+        {photo ? (
+          <img src={photo} alt={match.name} className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            <SilhouetteAvatar size={80} variant="card" />
+          </div>
+        )}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.92)] to-transparent px-3 pb-2.5 pt-10">
+          <div className="flex items-center gap-1.5">
+            <span
+              className={`h-2 w-2 shrink-0 rounded-full ${match.online ? 'bg-[var(--status-online)]' : 'bg-[var(--cream-muted)]'}`}
+            />
+            <span className="truncate text-[15px] font-bold text-[var(--cream)]">
+              {match.name} {match.age}
+            </span>
+            {match.is_verified ? <VerifiedBadge size="sm" /> : null}
+          </div>
+          <p className="mt-0.5 truncate text-xs text-[var(--cream-muted)]">
+            {match.last_message ?? (match.online ? 'Active now — say hi!' : 'Say hello!')}
+          </p>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function PremiumUpsellTile({ count, onClick }: { count: number; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex min-h-[220px] flex-col items-center justify-center rounded-2xl border border-dashed border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.06)] p-6 text-center transition-colors hover:bg-[rgba(196,131,42,0.12)]"
+    >
+      <span className="text-3xl font-black text-[#E0A14A]">+{Math.min(count, 9)}</span>
+      <p className="mt-2 text-[15px] font-bold text-[var(--cream)]">
+        {count === 1 ? '1 man liked you.' : `${count} men liked you.`} See them.
+      </p>
+      <span className="mt-3 text-[13px] font-extrabold uppercase tracking-[0.12em] text-[var(--copper)]">
+        MENRUSH+
+      </span>
+    </button>
+  );
 }
 
 export const Matches = () => {
   const [matches, setMatches] = useState<Match[]>([]);
+  const [likesCount, setLikesCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [premiumOpen, setPremiumOpen] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchMatches = async () => {
       try {
-        const res = await usersAPI.getMatches();
-        setMatches(res.data);
-      } catch (err) {
+        const [matchesRes, likesRes] = await Promise.all([
+          usersAPI.getMatches(),
+          usersAPI.getReceivedLikesSummary().catch(() => ({ data: { count: 0, is_premium: false } })),
+        ]);
+        setMatches(matchesRes.data);
+        setLikesCount(likesRes.data.count ?? 0);
+      } catch {
         setError('Could not load matches.');
       } finally {
         setLoading(false);
@@ -39,34 +103,43 @@ export const Matches = () => {
 
   return (
     <Layout>
-      <div className="mx-auto max-w-5xl px-4 py-4 pb-8 lg:px-8 lg:py-8">
-        <div className="mb-6 hidden lg:block">
-          <p className="nn-overline mb-1">Connections</p>
-          <p className="text-sm text-[var(--cream-muted)]">Mutual likes — message anyone here directly.</p>
-        </div>
-
-        <div className="mb-5 flex items-center justify-between lg:hidden">
-          <div>
-            <h1 className="text-2xl font-black tracking-tight text-[#F0E0C0]">Your Matches</h1>
-            <p className="mt-1 text-sm text-[#A89070]">Your mutual connections</p>
-          </div>
+      <div className="mx-auto max-w-6xl px-6 py-6 pb-12">
+        <div className="mb-6">
+          <h1 className="text-2xl font-extrabold text-[var(--cream)] lg:text-[28px]">Matches</h1>
+          <p className="mt-1 hidden text-sm text-[var(--cream-muted)] lg:block">
+            Mutual likes. Chat&apos;s open.
+          </p>
+          <p className="mt-1 text-sm text-[var(--cream-muted)] lg:hidden">Your mutual connections</p>
         </div>
 
         {loading ? (
-          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3.5">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-[88px] animate-pulse rounded-2xl border border-[#3D2B0E] bg-[#1E1508] lg:h-[220px]" />
+              <div key={i} className="aspect-[3/3.6] animate-pulse rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]" />
             ))}
           </div>
         ) : error ? (
           <div className="py-12 text-center">
-            <p className="text-sm text-[#F0E0C0]/70">{error}</p>
+            <p className="text-sm text-[var(--cream-muted)]">{error}</p>
           </div>
-        ) : matches.length > 0 ? (
-          <div className="animate-fade-in flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:gap-4 xl:grid-cols-3">
-            {matches.map((match) => (
-              <div key={match.id} className="lg:rounded-2xl lg:border lg:border-[#3D2B0E] lg:bg-[#12100C]/80 lg:p-1 lg:shadow-card">
+        ) : matches.length > 0 || likesCount > 0 ? (
+          <>
+            <div className="hidden grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3.5 lg:grid">
+              {matches.map((match) => (
+                <MatchGridCard
+                  key={match.id}
+                  match={match}
+                  onClick={() => navigate(`/messages/${match.id}`)}
+                />
+              ))}
+              {likesCount > 0 ? (
+                <PremiumUpsellTile count={likesCount} onClick={() => setPremiumOpen(true)} />
+              ) : null}
+            </div>
+            <div className="flex flex-col gap-3 lg:hidden">
+              {matches.map((match) => (
                 <ConversationItem
+                  key={match.id}
                   userId={match.id}
                   name={match.name}
                   photoUrl={match.photo_url}
@@ -74,27 +147,37 @@ export const Matches = () => {
                   lastMessageTime={match.last_message_at}
                   lastMessage={match.last_message ?? (match.online ? 'Active now — say hi!' : 'Say hello!')}
                 />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-24 bg-[#1E1508] rounded-3xl border border-[#3D2B0E]">
-            <div className="w-16 h-16 bg-[#C4832A]/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <IconMatches size={32} className="text-[#C4832A]/40" />
+              ))}
             </div>
-            <h2 className="text-nn-text font-bold text-lg">No matches yet</h2>
-            <p className="text-nn-muted text-sm mt-1 max-w-xs mx-auto">
+          </>
+        ) : (
+          <div className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] py-24 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[rgba(196,131,42,0.1)]">
+              <IconMatches size={32} className="text-[var(--copper)]/40" />
+            </div>
+            <h2 className="text-lg font-bold text-[var(--cream)]">No matches yet</h2>
+            <p className="mx-auto mt-1 max-w-xs text-sm text-[var(--cream-muted)]">
               Match people on Nearby. When it&apos;s mutual, they show up here.
             </p>
-            <button
-              onClick={() => navigate('/discover')}
-              className="mt-6 px-6 py-2.5 bg-nn-copper hover:bg-nn-copper-bright text-[#1A0E03] rounded-full font-semibold text-sm transition-colors active:scale-95"
+            <Link
+              to="/discover"
+              className="mr-cta-gradient mt-6 inline-flex rounded-full px-6 py-2.5 text-sm font-semibold text-[#1A0E03]"
             >
               Go to Nearby
-            </button>
+            </Link>
           </div>
         )}
+
       </div>
+
+      {premiumOpen ? (
+        <PremiumGate
+          headline={likesCount === 1 ? '1 man liked you.' : `${likesCount} men liked you.`}
+          subline="See them. Open chat. Skip the queue."
+          onClose={() => setPremiumOpen(false)}
+          onUnlock={() => navigate('/premium')}
+        />
+      ) : null}
     </Layout>
   );
 };

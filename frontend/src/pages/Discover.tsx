@@ -13,6 +13,15 @@ import { ProfileDrawer } from '../components/ProfileDrawer';
 import { createMapMarkerElement, MapMarker } from '../components/MapMarker';
 import { getPhotoUrl, UserAvatar } from '../components/UserAvatar';
 import { TribePillRow } from '../components/TribePillRow';
+import { DiscoveryFilterPills } from '../components/DiscoveryFilterPills';
+import { NearbyProfileGrid } from '../components/NearbyProfileGrid';
+import { DiscoveryShellPublisher } from '../context/DiscoveryShellContext';
+import {
+  formatRadiusMiles,
+  matchesIntentFilter,
+  type DesktopRadiusMiles,
+  type IntentFilter,
+} from '../lib/discoveryFormat';
 import { EventsRail } from '../components/EventsRail';
 import { MoodBadge } from '../components/MoodPicker';
 import { getDistanceLabel, isUserPulsing, distanceMeters } from '../lib/discovery';
@@ -22,7 +31,13 @@ import {
   discoveryResultBucket,
   trackEventOnce,
 } from '../observability/analytics';
+import {
+  geoJsonCircle,
+  RADIUS_CIRCLE_LAYER,
+  RADIUS_CIRCLE_SOURCE,
+} from '../lib/mapRadiusCircle';
 import { ROUTE_LABELS } from '../lib/routeLabels';
+import { useIsDesktopLayout } from '../hooks/useMediaQuery';
 
 
 const INJECT_ID = '__discover_styles__';
@@ -86,6 +101,7 @@ export const Discover = () => {
   const [error, setError] = useState('');
   const [radius, setRadius] = useState<number>(5);
   const [tagFilters, setTagFilters] = useState<string[]>([]);
+  const [intentFilter, setIntentFilter] = useState<IntentFilter>('All');
   const [pulseUntil, setPulseUntil] = useState<Date | null>(null);
   const [nextPulseAllowedAt, setNextPulseAllowedAt] = useState<string | null>(null);
   const [pulseIsPremium, setPulseIsPremium] = useState(false);
@@ -110,6 +126,7 @@ export const Discover = () => {
   const selfMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const selfDotRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
+  const isDesktopLayout = useIsDesktopLayout();
 
   const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
   const tokenMissing = !mapboxToken || mapboxToken === '__SET_ME__';
@@ -129,7 +146,10 @@ export const Discover = () => {
           latitude,
           longitude,
           r,
-          tags && tags.length > 0 ? { interests: tags } : undefined,
+          {
+            interests: tags && tags.length > 0 ? tags : undefined,
+            lookingFor: intentFilter !== 'All' ? intentFilter.toLowerCase() : undefined,
+          },
         );
         setUsers(res.data);
         trackEventOnce(
@@ -149,7 +169,7 @@ export const Discover = () => {
         setLoading(false);
       }
     },
-    [],
+    [intentFilter],
   );
 
   const useDiscoveryLocation = useCallback(
@@ -510,6 +530,8 @@ export const Discover = () => {
         setTimeout(() => root.unmount(), 0);
       });
       markersRef.current.clear();
+      if (map.getLayer(RADIUS_CIRCLE_LAYER)) map.removeLayer(RADIUS_CIRCLE_LAYER);
+      if (map.getSource(RADIUS_CIRCLE_SOURCE)) map.removeSource(RADIUS_CIRCLE_SOURCE);
       map.remove();
       mapRef.current = null;
       selfMarkerRef.current = null;
@@ -517,7 +539,7 @@ export const Discover = () => {
       setMapLoaded(false);
     };
     // mapCenter excluded — GPS updates recenter via applyLiveGps/easeTo, not map teardown.
-  }, [mapboxToken, tokenMissing]);
+  }, [mapboxToken, tokenMissing, isDesktopLayout]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -600,6 +622,32 @@ export const Discover = () => {
     dot.className = pulseUntil ? 'map-self-dot map-self-dot--pulsing' : 'map-self-dot';
   }, [pulseUntil]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded || lat == null || lng == null) return;
+
+    const data = geoJsonCircle(lng, lat, radius);
+    const existing = map.getSource(RADIUS_CIRCLE_SOURCE) as mapboxgl.GeoJSONSource | undefined;
+
+    if (existing) {
+      existing.setData(data);
+      return;
+    }
+
+    map.addSource(RADIUS_CIRCLE_SOURCE, { type: 'geojson', data });
+    map.addLayer({
+      id: RADIUS_CIRCLE_LAYER,
+      type: 'line',
+      source: RADIUS_CIRCLE_SOURCE,
+      paint: {
+        'line-color': '#C4832A',
+        'line-width': 2,
+        'line-dasharray': [2, 2],
+        'line-opacity': 0.75,
+      },
+    });
+  }, [mapLoaded, lat, lng, radius]);
+
   const onlineCount = users.filter((u) => u.online).length;
   const nearbyCount = users.length;
   const sortedUsers = [...users].sort((a, b) => {
@@ -609,15 +657,64 @@ export const Discover = () => {
     return parseFloat(String(a.distance_km)) - parseFloat(String(b.distance_km));
   });
 
+  const displayUsers = sortedUsers.filter((u) => matchesIntentFilter(u, intentFilter));
+
+  const handleIntentChange = useCallback(
+    (next: IntentFilter) => {
+      setIntentFilter(next);
+      if (lat != null && lng != null) fetchNearbyUsers(lat, lng, radius, tagFilters);
+    },
+    [lat, lng, radius, tagFilters, fetchNearbyUsers],
+  );
+
+  const handleDesktopRadius = useCallback(
+    (mi: DesktopRadiusMiles) => {
+      handleRadiusChange(mi);
+    },
+    [handleRadiusChange],
+  );
+
+  const togglePulseHeader = useCallback(async () => {
+    if (pulseUntil) await handleStopPulse();
+    else await handleStartPulse(90);
+  }, [pulseUntil, handleStartPulse, handleStopPulse]);
+
   return (
     <Layout>
+      <DiscoveryShellPublisher
+        nearbyCount={nearbyCount}
+        radiusLabel={formatRadiusMiles(radius)}
+        pulseOn={!!pulseUntil}
+        togglePulse={() => void togglePulseHeader()}
+      />
       <h1 className="sr-only">Nearby discovery map</h1>
+
+      <div className="hidden lg:block lg:h-full lg:overflow-y-auto px-6 py-6">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <h2 className="flex-1 text-2xl font-extrabold text-[var(--cream)]">Nearby</h2>
+          <DiscoveryFilterPills
+            radiusKm={radius}
+            onRadiusChange={handleDesktopRadius}
+            intent={intentFilter}
+            onIntentChange={handleIntentChange}
+          />
+        </div>
+        <div className="relative mb-5 h-[45vh] min-h-[280px] overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[#11100E] shadow-[var(--shadow-md)]">
+          <div ref={isDesktopLayout ? mapContainerRef : undefined} className="absolute inset-0" />
+          <div className="pointer-events-none absolute bottom-3 left-3 z-10 flex items-center gap-2 rounded-full border border-[var(--border-default)] bg-[rgba(30,21,8,0.85)] px-4 py-2 text-[13px] text-[var(--cream-muted)] backdrop-blur-sm">
+            <span className="inline-flex h-2 w-2 rounded-full bg-[var(--status-online)]" />
+            {nearbyCount} in your radius · {formatRadiusMiles(radius)}
+          </div>
+        </div>
+        <NearbyProfileGrid users={displayUsers} loading={loading} onSelect={setSelectedUser} />
+      </div>
+
       <div
-        className="fixed left-0 right-0 top-[var(--mobile-header-height)] z-0 bottom-[var(--mobile-tab-bar-height)] bg-[#0D0A06] lg:left-[var(--desktop-sidebar-width)] lg:top-[var(--desktop-workspace-header)] lg:bottom-0"
+        className="fixed left-0 right-0 top-[var(--mobile-header-height)] z-0 bottom-[var(--mobile-tab-bar-height)] bg-[#0D0A06] lg:hidden"
       >
         <div className="absolute left-0 right-0 top-[104px] bottom-[188px] z-0 overflow-hidden border-y border-[var(--border-default)] bg-[#11100E] lg:top-0 lg:bottom-0 lg:right-[360px] lg:border-y-0 lg:border-r">
           <div className="absolute inset-0">
-            <div ref={mapContainerRef} className="h-full w-full" />
+            <div ref={isDesktopLayout ? undefined : mapContainerRef} className="h-full w-full" />
           </div>
 
           {tokenMissing && (
@@ -768,13 +865,6 @@ export const Discover = () => {
                 {loading && nearbyCount === 0 ? 'Scanning…' : `${nearbyCount} in range`}
               </p>
             </div>
-            <div className="hidden min-h-0 flex-1 overflow-y-auto lg:block">
-              <DesktopNearbyList
-                users={sortedUsers}
-                loading={loading}
-                onSelect={setSelectedUser}
-              />
-            </div>
             <div className="lg:hidden">
               <EventsRail lat={lat} lng={lng} onSelect={(ev: EventDTO) => navigate(`/rooms/${ev.id}`)} />
               <UserStrip
@@ -841,62 +931,6 @@ const UserStrip: React.FC<UserStripProps> = ({ users, loading, onSelect }) => {
       {users.map((user) => (
         <UserStripCard key={user.id} user={user} onSelect={() => onSelect(user)} />
       ))}
-    </div>
-  );
-};
-
-const DesktopNearbyList: React.FC<UserStripProps> = ({ users, loading, onSelect }) => {
-  if (loading && users.length === 0) {
-    return (
-      <div className="space-y-2 px-3 py-3">
-        {[...Array(6)].map((_, i) => (
-          <div key={i} className="h-16 animate-pulse rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]" />
-        ))}
-      </div>
-    );
-  }
-
-  if (users.length === 0) {
-    return (
-      <div className="px-5 py-16 text-center">
-        <p className="text-sm font-bold text-[var(--cream)]">No one nearby</p>
-        <p className="mt-1 text-xs text-[var(--cream-muted)]">Pulse on the map to refresh discovery.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-1 px-2 py-2">
-      {users.map((user) => {
-        const distLabel = getDistanceLabel(user);
-        const isPulsing = isUserPulsing(user);
-        return (
-          <button
-            key={user.id}
-            type="button"
-            onClick={() => onSelect(user)}
-            className="flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-3 text-left transition-colors hover:border-[var(--border-default)] hover:bg-[var(--bg-card)]/80"
-          >
-            <UserAvatar name={user.name} photoUrl={user.photo_url} online={user.online} size="md" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="truncate text-sm font-semibold text-[var(--cream)]">{user.name}</p>
-                {isPulsing ? (
-                  <span className="rounded-full bg-[var(--copper)]/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[var(--copper)]">
-                    Live
-                  </span>
-                ) : null}
-              </div>
-              <p className="truncate text-xs text-[var(--cream-muted)]">
-                {user.headline || user.mood || `${user.age} · nearby`}
-              </p>
-            </div>
-            <span className="shrink-0 text-xs font-bold text-[var(--copper)]">
-              {user.distance_label ?? distLabel}
-            </span>
-          </button>
-        );
-      })}
     </div>
   );
 };

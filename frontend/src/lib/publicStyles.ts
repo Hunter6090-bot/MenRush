@@ -38,6 +38,10 @@ export const publicSecondaryButtonClass =
 export const publicSelectClass =
   'w-full rounded-full border-0 bg-[#F5EBD8] px-6 py-[18px] text-base text-[#2A1C0A] focus:outline-none focus:ring-2 focus:ring-[#C4832A]/40';
 
+/** Dark select for in-app verify document steps (WebApp.dc.html doc flow). */
+export const publicDarkSelectClass =
+  'w-full rounded-xl border border-[#3D2B0E] bg-[#1E1508] px-4 py-3.5 text-[15px] text-[#F0E0C0] focus:outline-none focus:ring-2 focus:ring-[#C4832A]/40';
+
 export const publicInfoBoxClass =
   'rounded-[18px] border border-[rgba(240,224,192,0.2)] bg-[rgba(13,10,6,0.35)] px-5 py-4';
 
@@ -48,8 +52,11 @@ export const publicBackButtonClass =
 
 export const publicDocTypeButtonClass = (active: boolean) =>
   active
-    ? 'rounded-full border border-[#C4832A] bg-[rgba(196,131,42,0.2)] px-4 py-3 text-[15px] font-bold text-[#F0E0C0]'
-    : 'rounded-full border border-[rgba(240,224,192,0.25)] bg-[rgba(13,10,6,0.45)] px-4 py-3 text-[15px] font-semibold text-[#A89070] transition-colors hover:border-[rgba(196,131,42,0.5)]';
+    ? 'flex flex-col items-center gap-1.5 rounded-[14px] border border-[#C4832A] bg-[rgba(196,131,42,0.2)] px-3 py-4 text-[12px] font-extrabold uppercase tracking-[0.06em] text-[#F0E0C0]'
+    : 'flex flex-col items-center gap-1.5 rounded-[14px] border border-[rgba(240,224,192,0.25)] bg-[rgba(13,10,6,0.45)] px-3 py-4 text-[12px] font-extrabold uppercase tracking-[0.06em] text-[#A89070] transition-colors hover:border-[rgba(196,131,42,0.5)]';
+
+export const publicSignOutClass =
+  'mt-3 w-full text-center text-[15px] font-bold text-[#6B5840] transition-colors hover:text-[#B0432E]';
 
 export const publicProgressTrackClass = 'h-1.5 overflow-hidden rounded-full bg-[rgba(61,43,14,0.8)]';
 

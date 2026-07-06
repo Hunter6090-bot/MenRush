@@ -1,6 +1,5 @@
 import { createRoot, Root } from "react-dom/client";
 import { PulsingAvatar } from "./PulsingAvatar";
-import { SilhouetteAvatar } from "./SilhouetteAvatar";
 import { getPhotoUrl } from "./UserAvatar";
 
 export interface MapMarkerUser {
@@ -49,7 +48,12 @@ export function MapMarker({ user, size = 44 }: MapMarkerProps) {
               draggable={false}
             />
           ) : (
-            <SilhouetteAvatar size={Math.round(size * 0.85)} variant="card" />
+            <span
+              className="flex h-full w-full items-center justify-center text-sm font-extrabold uppercase text-[var(--copper)]"
+              aria-hidden
+            >
+              {user.name.trim().charAt(0) || '?'}
+            </span>
           )}
         </div>
       </PulsingAvatar>

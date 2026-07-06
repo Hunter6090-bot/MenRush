@@ -26,7 +26,14 @@ export const userService = {
   async getNearbyUsers(
     userId: string,
     radiusKm: number = 5,
-    filters?: { minAge?: number; maxAge?: number; interests?: string[]; onlyPulse?: boolean },
+    filters?: {
+      minAge?: number;
+      maxAge?: number;
+      interests?: string[];
+      onlyPulse?: boolean;
+      lookingFor?: string;
+      mood?: string;
+    },
     clientLocation?: { lat: number; lng: number },
   ) {
     await accessControl.requireVerified(userId);
@@ -52,7 +59,7 @@ export const userService = {
     // been cron-swept yet doesn't masquerade as pulsing in the UI.
     let queryStr = `
       SELECT
-        u.id, u.name, u.age, u.bio, u.headline, u.photo_url, u.cover_url, u.interests,
+        u.id, u.name, u.age, u.bio, u.headline, u.looking_for, u.photo_url, u.cover_url, u.interests,
         u.is_verified,
         p.online, p.last_seen, p.available_until,
         (u.is_pulsing AND u.pulse_expires_at IS NOT NULL AND u.pulse_expires_at > NOW()) AS is_pulsing,
@@ -102,6 +109,28 @@ export const userService = {
     if (filters?.interests && filters.interests.length > 0) {
       values.push(filters.interests);
       queryStr += ` AND u.interests && $${values.length}`;
+    }
+    if (filters?.lookingFor) {
+      const lf = filters.lookingFor.toLowerCase();
+      if (lf === 'chat') {
+        queryStr += ` AND p.online = true`;
+      } else if (lf === 'date') {
+        values.push('%dating%');
+        queryStr += ` AND (u.looking_for ILIKE $${values.length} OR u.interests && ARRAY['Dating']::text[])`;
+      } else if (lf === 'nsa') {
+        values.push('%nsa%');
+        queryStr += ` AND (u.looking_for ILIKE $${values.length} OR u.interests && ARRAY['NSA']::text[])`;
+      } else if (lf === 'drinks') {
+        queryStr += ` AND (
+          (p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' AND p.mood ILIKE '%drink%')
+          OR u.looking_for ILIKE '%drink%'
+          OR u.interests && ARRAY['Drinks']::text[]
+        )`;
+      }
+    }
+    if (filters?.mood) {
+      values.push(filters.mood);
+      queryStr += ` AND p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' AND p.mood ILIKE $${values.length}`;
     }
 
     // Spec: pulsing users sort first, then by last_seen DESC.
@@ -434,5 +463,42 @@ export const userService = {
       [userId]
     );
     return result.rows;
+  },
+
+  async getReceivedLikesSummary(userId: string) {
+    const { premiumService } = await import('./premium.service');
+    const isPremium = await premiumService.isPremium(userId);
+
+    const countResult = await query(
+      `SELECT COUNT(*)::int AS count
+       FROM likes l
+       WHERE l.liked_id = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM likes l2
+           WHERE l2.liker_id = $1 AND l2.liked_id = l.liker_id
+         )`,
+      [userId],
+    );
+    const count = countResult.rows[0]?.count ?? 0;
+
+    let preview: Array<{ id: string; name: string; age: number; photo_url: string | null }> = [];
+    if (isPremium && count > 0) {
+      const previewResult = await query(
+        `SELECT u.id, u.name, u.age, u.photo_url
+         FROM likes l
+         JOIN users u ON u.id = l.liker_id
+         WHERE l.liked_id = $1
+           AND NOT EXISTS (
+             SELECT 1 FROM likes l2
+             WHERE l2.liker_id = $1 AND l2.liked_id = l.liker_id
+           )
+         ORDER BY l.created_at DESC
+         LIMIT 3`,
+        [userId],
+      );
+      preview = previewResult.rows;
+    }
+
+    return { count, is_premium: isPremium, preview };
   },
 };
