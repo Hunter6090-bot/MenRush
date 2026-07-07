@@ -108,10 +108,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               <ChatIcon className="h-8 w-8 text-[#C4832A]/50" />
             </div>
             <p className="mb-1 font-medium text-[#F0E0C0]/60">No conversations yet</p>
-            <p className="mb-5 text-sm text-[#A89070]">Find someone nearby and say hi</p>
+            <p className="mb-5 text-sm text-nn-muted">See who&apos;s near you right now.</p>
             <button
               onClick={() => navigate('/discover')}
-              className="rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] px-5 py-2.5 text-sm font-semibold text-white transition-all hover:from-[#D4943B] hover:to-[#9B5523] hover:shadow-glow-blue"
+              className="rounded-xl bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-5 py-2.5 text-sm font-semibold text-white transition-all hover:from-[#D4943B] hover:to-[#C4832A] hover:shadow-glow-blue"
             >
               Discover People
             </button>

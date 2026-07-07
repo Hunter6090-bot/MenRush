@@ -820,7 +820,7 @@ export const Discover = () => {
         </div>
 
         {pulseError && (
-          <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 px-3 py-2 rounded-md bg-[#3D1A1A] border border-[#8B4513] text-[var(--cream)] text-xs">
+          <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 px-3 py-2 rounded-md bg-[#3D1A1A] border border-[#A45E18] text-[var(--cream)] text-xs">
             {pulseError}
           </div>
         )}
@@ -920,7 +920,7 @@ const UserStrip: React.FC<UserStripProps> = ({ users, loading, onSelect }) => {
       <div className="px-4 pb-3">
         <div className="rounded-2xl bg-[var(--bg-elevated)]/85 backdrop-blur-sm border border-[var(--border-default)] p-4 text-center">
           <p className="text-[var(--cream)] text-sm font-bold">No one nearby</p>
-          <p className="text-[var(--cream-muted)] text-xs mt-1">Pulse to wake the map.</p>
+          <p className="text-[var(--cream-muted)] text-xs mt-1">Try a wider radius.</p>
         </div>
       </div>
     );

@@ -321,7 +321,7 @@ export const Profile = () => {
           className={`fixed top-[calc(var(--mobile-header-height)+0.5rem)] left-1/2 z-50 -translate-x-1/2 px-5 py-2.5 rounded-xl text-sm font-medium shadow-card border animate-slide-up lg:top-6 ${
             toast.type === 'success'
               ? 'bg-nn-online/15 border-nn-online/25 text-[#8FC773]'
-              : 'bg-[#8B4513]/15 border-[#8B4513]/25 text-[#F0E0C0]/80'
+              : 'bg-[#A45E18]/15 border-[#A45E18]/25 text-[#F0E0C0]/80'
           }`}
         >
           {toast.msg}
@@ -427,7 +427,7 @@ export const Profile = () => {
                   uploadingCover ? 'pointer-events-none opacity-80' : ''
                 }`}
               >
-                <div className="absolute inset-0 bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#8B4513]/10" />
+                <div className="absolute inset-0 bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#A45E18]/10" />
               </button>
             )}
 
@@ -643,7 +643,7 @@ export const Profile = () => {
             <button
               type="submit"
               disabled={saving}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] disabled:opacity-50 text-white font-semibold text-sm transition-all hover:shadow-glow-blue active:scale-[0.98] flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#A45E18] hover:from-[#D4943B] hover:to-[#C4832A] disabled:opacity-50 text-white font-semibold text-sm transition-all hover:shadow-glow-blue active:scale-[0.98] flex items-center justify-center gap-2"
             >
               {saving ? <><Spinner className="w-4 h-4" /> Saving…</> : 'Save Changes'}
             </button>
@@ -781,7 +781,7 @@ export const Profile = () => {
           <p className="text-[#A89070] text-xs mt-0.5">You'll need to log back in</p>
           <button
             onClick={() => { logout(); navigate('/login'); }}
-            className="mt-4 flex w-full items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#8B4513]/10 hover:bg-[#8B4513]/20 text-[#F0E0C0]/80 text-xs font-semibold border border-[#8B4513]/20 transition-all"
+            className="mt-4 flex w-full items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#A45E18]/10 hover:bg-[#A45E18]/20 text-[#F0E0C0]/80 text-xs font-semibold border border-[#A45E18]/20 transition-all"
           >
             <LogoutIcon className="w-3.5 h-3.5" />
             Sign out

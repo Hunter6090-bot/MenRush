@@ -113,11 +113,11 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
         {/* Match button overlay */}
         <button
           onClick={handleLike}
-          className={`absolute bottom-3 right-3 w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+          className={`absolute bottom-3 right-3 w-11 h-11 rounded-full flex items-center justify-center transition-all ${
             liked
-              ? 'bg-[#8B4513] text-white shadow-glow-red'
-              : 'bg-black/50 backdrop-blur-sm text-white hover:bg-[#8B4513] hover:scale-110'
-          } border border-[#3D2B0E] z-10`}
+              ? 'bg-nn-copper text-nn-on-copper shadow-glow-copper'
+              : 'bg-black/50 backdrop-blur-sm text-nn-copper-bright hover:bg-nn-copper/20 hover:scale-110'
+          } border border-nn-border z-10`}
         >
           <IconMatches size={20} />
         </button>
@@ -162,7 +162,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
 
         <button
           onClick={liked ? () => navigate(`/messages/${user.id}`) : handleLike}
-          className="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] text-white text-sm font-semibold transition-all duration-200 hover:shadow-glow-blue active:scale-95"
+          className="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#A45E18] hover:from-[#D4943B] hover:to-[#C4832A] text-white text-sm font-semibold transition-all duration-200 hover:shadow-glow-blue active:scale-95"
         >
           {liked ? 'Open chat' : 'Match'}
         </button>

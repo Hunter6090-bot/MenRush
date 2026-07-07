@@ -74,7 +74,7 @@ export const Stream = () => {
             <PulseRing size={32} label="Loading live profiles" />
           </div>
         ) : error ? (
-          <div className="rounded-2xl border border-[#8B4513]/40 bg-[#1E1508] p-5 text-sm text-[#F0E0C0]">
+          <div className="rounded-2xl border border-[#A45E18]/40 bg-[#1E1508] p-5 text-sm text-[#F0E0C0]">
             {error}
           </div>
         ) : users.length === 0 ? (

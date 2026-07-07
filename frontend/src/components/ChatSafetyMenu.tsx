@@ -122,7 +122,7 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
                 setMenuOpen(false);
                 setBlockOpen(true);
               }}
-              className="w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[#8B4513]/15"
+              className="w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[#A45E18]/15"
               style={{ color: '#EF4444' }}
             >
               Block {peerName}

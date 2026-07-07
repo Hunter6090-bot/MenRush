@@ -149,7 +149,7 @@ export const Register = () => {
 
   const segColor = (idx: number): string => {
     if (pwScore <= idx) return '#3D2B0E';
-    if (pwScore === 1) return '#8B4513';
+    if (pwScore === 1) return '#A45E18';
     if (pwScore === 2) return '#C4832A';
     return '#D4943B';
   };

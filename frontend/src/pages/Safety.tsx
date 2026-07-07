@@ -51,7 +51,7 @@ export const Safety = () => {
             ))}
           </section>
 
-          <section className="mt-6 rounded-2xl border border-[#8B4513]/45 bg-[#1E1208] p-5">
+          <section className="mt-6 rounded-2xl border border-[#A45E18]/45 bg-[#1E1208] p-5">
             <h2 className="text-lg font-bold">Urgent risk</h2>
             <p className="mt-2 text-sm leading-6 text-[#F0E0C0]/82">
               If someone is in immediate danger, contact local emergency services first. For account

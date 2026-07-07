@@ -60,13 +60,13 @@ function LayoutInner({ children }: LayoutProps) {
 
   return (
     <div className="min-h-dvh bg-[var(--bg-primary)] lg:grid lg:grid-cols-[var(--desktop-sidebar-width)_minmax(0,1fr)]">
-      <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:w-[var(--desktop-sidebar-width)] lg:border-r lg:border-[var(--border-default)] lg:bg-[#080604]">
-        <div className="flex items-center gap-2.5 px-3.5 pt-5 pb-4">
-          <BrandMark size="sm" />
-          <p className="font-display text-sm font-black tracking-[0.14em] text-[var(--cream)]">MENRUSH</p>
+      <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:w-[var(--desktop-sidebar-width)] lg:border-r lg:border-[var(--border-default)] lg:bg-nn-bg lg:px-3.5 lg:py-5">
+        <div className="flex items-center gap-2.5 pb-4">
+          <BrandMark size="sm" className="shadow-[0_0_0_2px_rgba(196,131,42,0.4)] rounded-full" />
+          <p className="font-display text-sm font-black tracking-[0.14em] text-nn-text">MENRUSH</p>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
+        <nav className="flex-1 overflow-y-auto space-y-1">
           {desktopLinks.map((item) => {
             const active = isNavActive(location.pathname, item.to);
             const badge = badgeFor(item, unreadCount, notificationUnread, matchCount);
@@ -76,18 +76,17 @@ function LayoutInner({ children }: LayoutProps) {
                 to={item.to}
                 className={`group flex items-center gap-3 rounded-[14px] px-3 py-3 text-[15px] font-bold transition-all duration-200 ${
                   active
-                    ? 'bg-[rgba(196,131,42,0.12)] text-[#E0A14A]'
-                    : 'text-[var(--cream-soft)]/75 hover:bg-[var(--bg-card)] hover:text-[var(--cream)]'
+                    ? 'bg-[rgba(196,131,42,0.14)] text-nn-copper-bright'
+                    : 'text-nn-muted hover:bg-nn-card hover:text-nn-text'
                 }`}
               >
                 <span className="relative inline-flex shrink-0">
-                  <item.Icon size={20} />
-                  <NotificationDot
-                    count={badge}
-                    visible={badge > 0}
-                    data-testid={`badge-${item.to.replace(/\//g, '')}`}
-                    className="-top-2 -right-2 min-w-[16px] h-4 text-[9px] bg-[var(--copper)] border-[#080604]"
-                  />
+                  <item.Icon size={22} />
+                  {badge > 0 ? (
+                    <span className="absolute -right-2 -top-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-nn-copper px-1 text-[10px] font-bold text-nn-on-copper">
+                      {badge > 99 ? '99+' : badge}
+                    </span>
+                  ) : null}
                 </span>
                 <span className="truncate flex-1">{item.label}</span>
               </Link>
@@ -95,14 +94,14 @@ function LayoutInner({ children }: LayoutProps) {
           })}
         </nav>
 
-        <div className="px-2.5 py-4 border-t border-[var(--border-default)]/80">
+        <div className="mt-auto border-t border-nn-border pt-4">
           <MenRushPlusPromo />
           <button
             type="button"
             onClick={handleLogout}
-            className="mt-2 w-full rounded-[14px] px-3 py-3 text-left text-sm font-semibold text-[#6B5840] transition-colors hover:bg-[var(--bg-card)] hover:text-[#B0432E]"
+            className="mt-3 w-full px-1 py-2 text-left text-sm text-nn-faint transition-colors hover:text-nn-danger"
           >
-            Sign out
+            Sign out.
           </button>
         </div>
       </aside>
@@ -149,18 +148,24 @@ function LayoutInner({ children }: LayoutProps) {
           </div>
         </header>
 
-        <div className="hidden lg:flex h-[var(--desktop-workspace-header)] shrink-0 items-center gap-3.5 border-b border-[var(--border-default)] bg-[var(--bg-primary)] px-6">
+        <div className="hidden lg:flex h-16 shrink-0 items-center gap-3.5 border-b border-nn-border bg-nn-bg px-6">
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
-            className="flex max-w-[420px] flex-1 items-center gap-2.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] px-4 py-2.5 text-left transition-colors hover:border-[var(--copper)]/40"
+            className="flex max-w-[420px] flex-1 items-center gap-2.5 rounded-full border border-nn-border bg-nn-card px-4 py-2.5 text-left transition-colors hover:border-nn-copper/40"
           >
-            <SearchIcon className="h-4 w-4 shrink-0 text-[var(--cream-muted)]" />
-            <span className="text-sm text-[var(--cream-muted)]">Search by name</span>
+            <SearchIcon className="h-4 w-4 shrink-0 text-nn-muted" />
+            <span className="text-sm text-nn-muted">
+              {location.pathname.startsWith('/events')
+                ? 'Search events'
+                : location.pathname.startsWith('/matches')
+                  ? 'Search matches'
+                  : 'Search by name'}
+            </span>
           </button>
           <div className="flex-1" />
-          <div className="flex items-center gap-2 text-[13px] text-[var(--cream-muted)]">
-            <span className="inline-flex h-2 w-2 rounded-full bg-[var(--status-online)]" />
+          <div className="flex items-center gap-2 text-[13px] text-nn-muted">
+            <span className="inline-flex h-2 w-2 rounded-full bg-nn-online" />
             {discoveryShell.nearbyCount} in your radius
           </div>
           <button
@@ -170,14 +175,15 @@ function LayoutInner({ children }: LayoutProps) {
               else navigate('/discover');
             }}
             title="Toggle pulse visibility"
-            className={`relative flex h-11 w-11 items-center justify-center rounded-full transition-all ${
+            aria-pressed={discoveryShell.pulseOn}
+            className={`relative flex h-[46px] w-[46px] items-center justify-center rounded-full transition-all ${
               discoveryShell.pulseOn
-                ? 'bg-[var(--copper)] text-[#1A0E03] shadow-[0_0_18px_rgba(196,131,42,0.45)]'
-                : 'border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--copper)]'
+                ? 'mr-cta-gradient text-[#FFF6E6] shadow-[0_0_24px_rgba(196,131,42,0.5)]'
+                : 'border border-nn-border bg-nn-card text-nn-faint'
             }`}
           >
             {discoveryShell.pulseOn ? (
-              <span className="mr-radar-ring pointer-events-none absolute inset-0" aria-hidden />
+              <span className="mr-radar-ring pointer-events-none absolute inset-0 rounded-full" aria-hidden />
             ) : null}
             <IconPulse size={20} className="relative z-[1]" />
           </button>
@@ -185,9 +191,9 @@ function LayoutInner({ children }: LayoutProps) {
             <UserAvatar
               name={user?.name ?? '?'}
               photoUrl={user?.photo_url}
-              size="sm"
+              size="md"
               showStatus={false}
-              className="ring-2 ring-[var(--copper)]"
+              className="!w-[42px] !h-[42px] ring-2 ring-nn-copper"
             />
           </Link>
         </div>

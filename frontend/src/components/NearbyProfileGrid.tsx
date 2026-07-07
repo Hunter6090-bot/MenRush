@@ -39,7 +39,7 @@ export function NearbyProfileGrid({ users, loading, onSelect }: NearbyProfileGri
             key={user.id}
             type="button"
             onClick={() => onSelect(user)}
-            className="group relative overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] text-left shadow-[var(--shadow-md)] transition-all hover:-translate-y-0.5 hover:border-[var(--copper)]/40"
+            className="group relative overflow-hidden rounded-2xl border border-nn-border bg-nn-card text-left shadow-card transition-all hover:-translate-y-[3px] hover:border-[rgba(196,131,42,0.4)]"
           >
             <div className="relative aspect-[3/3.6] w-full bg-[var(--bg-elevated)]">
               {photo ? (

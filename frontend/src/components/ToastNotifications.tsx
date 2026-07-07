@@ -68,7 +68,7 @@ export const ToastNotifications = () => {
                 : toast.type === 'match'
                 ? 'bg-[#C4832A]/20 text-[#C4832A]'
                 : toast.type === 'like'
-                  ? 'bg-[#8B4513]/20 text-[#C4832A]'
+                  ? 'bg-[#A45E18]/20 text-[#C4832A]'
                   : toast.type === 'profile_view'
                     ? 'bg-[#C4832A]/15 text-[#C4832A]'
                     : 'bg-nn-online/20 text-[#8FC773]'

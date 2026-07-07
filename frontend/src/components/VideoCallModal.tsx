@@ -203,7 +203,7 @@ export function VideoCallModal() {
             <div
               className="w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold relative z-10"
               style={{
-                background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+                background: 'linear-gradient(135deg, #C4832A, #A45E18)',
                 color: '#FFF5E6',
                 boxShadow: '0 4px 24px rgba(196,131,42,0.45)',
               }}
@@ -285,7 +285,7 @@ export function VideoCallModal() {
             <div
               className="w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold"
               style={{
-                background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+                background: 'linear-gradient(135deg, #C4832A, #A45E18)',
                 color: '#FFF5E6',
                 boxShadow: '0 4px 24px rgba(196,131,42,0.45)',
               }}
@@ -401,7 +401,7 @@ export function VideoCallModal() {
             <div
               className="w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold"
               style={{
-                background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+                background: 'linear-gradient(135deg, #C4832A, #A45E18)',
                 color: '#FFF5E6',
               }}
             >

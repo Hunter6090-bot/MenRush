@@ -41,41 +41,45 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
         onClick={() => navigate(`/messages/${userId}`)}
         className={`group flex min-w-0 flex-1 items-center gap-3 text-left transition-all duration-200 ${
           isSidebar
-            ? `rounded-xl px-3 py-3 border ${
-                isActive
-                  ? 'border-[var(--copper)]/40 bg-[var(--copper)]/12 shadow-[inset_3px_0_0_var(--copper)]'
-                  : 'border-transparent hover:border-[var(--border-default)] hover:bg-[var(--bg-card)]/70'
+            ? `rounded-[14px] px-3 py-3 ${
+                isActive ? 'bg-nn-card' : 'hover:bg-nn-card/60'
               }`
-            : 'rounded-2xl border border-[#3D2B0E] bg-[#1E1508] px-4 py-3.5 hover:border-[#C4832A]/30 hover:bg-[#2A1C0A]'
+            : 'rounded-2xl border border-nn-border bg-nn-card px-4 py-3.5 hover:border-nn-copper/30 hover:bg-nn-elevated'
         }`}
       >
-      <div className="relative">
-        <UserAvatar name={name} photoUrl={photoUrl} online={online} size="md" />
-        {unreadCount ? <NotificationDot count={unreadCount} /> : null}
+      <div className="relative shrink-0">
+        <UserAvatar
+          name={name}
+          photoUrl={photoUrl}
+          online={online}
+          size="md"
+          className={isSidebar ? '!w-[46px] !h-[46px] ring-2 ring-[rgba(196,131,42,0.35)]' : undefined}
+        />
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between">
-          <p className={`font-semibold text-sm truncate ${unreadCount ? 'text-[#F0E0C0]' : 'text-[#F0E0C0]/80'}`}>
-            {name}
-          </p>
-          {lastMessageTime && (
-            <span className="text-[10px] text-[#A89070] flex-shrink-0 ml-2">
-              {formatRelative(lastMessageTime)}
-            </span>
-          )}
+        <div className="flex items-center justify-between gap-2">
+          <p className="truncate text-sm font-bold text-nn-text">{name}</p>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {lastMessageTime ? (
+              <span className="text-[11px] text-nn-faint">{formatRelative(lastMessageTime)}</span>
+            ) : null}
+            {unreadCount ? (
+              <span className="h-[9px] w-[9px] rounded-full bg-nn-copper" aria-label="Unread" />
+            ) : null}
+          </div>
         </div>
         <p
-          className={`text-xs mt-0.5 truncate flex items-center gap-1 ${
+          className={`mt-0.5 truncate text-[13px] flex items-center gap-1 ${
             isMissedCall
-              ? 'text-[#F87171] font-semibold'
+              ? 'font-semibold text-nn-danger-light'
               : unreadCount
-                ? 'text-[#F0E0C0]/70 font-medium'
-                : 'text-[#A89070]'
+                ? 'font-medium text-nn-muted'
+                : 'text-nn-muted'
           }`}
         >
           {isMissedCall && <MissedCallIcon size={12} className="shrink-0" />}
-          {lastMessage ?? (online ? 'Active now' : 'Say hello!')}
+          {lastMessage ?? (online ? 'Active now' : 'Tap to open chat')}
         </p>
       </div>
 

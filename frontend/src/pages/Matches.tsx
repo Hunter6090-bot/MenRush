@@ -19,7 +19,20 @@ interface Match {
   last_seen?: string;
   last_message?: string;
   last_message_at?: string;
+  matched_at?: string;
   is_verified?: boolean;
+}
+
+function formatMatchedAgo(iso?: string): string | null {
+  if (!iso) return null;
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Matched just now';
+  if (mins < 60) return `Matched ${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `Matched ${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `Matched ${days}d ago`;
 }
 
 function MatchGridCard({ match, onClick }: { match: Match; onClick: () => void }) {
@@ -28,7 +41,7 @@ function MatchGridCard({ match, onClick }: { match: Match; onClick: () => void }
     <button
       type="button"
       onClick={onClick}
-      className="group relative overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] text-left shadow-[var(--shadow-md)] transition-all hover:-translate-y-0.5 hover:border-[var(--copper)]/40"
+      className="group relative overflow-hidden rounded-2xl border border-[rgba(196,131,42,0.35)] bg-nn-card text-left shadow-card transition-all hover:-translate-y-[3px] hover:border-[rgba(196,131,42,0.4)]"
     >
       <div className="relative aspect-[3/3.6] w-full bg-[var(--bg-elevated)]">
         {photo ? (
@@ -48,8 +61,9 @@ function MatchGridCard({ match, onClick }: { match: Match; onClick: () => void }
             </span>
             {match.is_verified ? <VerifiedBadge size="sm" /> : null}
           </div>
-          <p className="mt-0.5 truncate text-xs text-[var(--cream-muted)]">
-            {match.last_message ?? (match.online ? 'Active now — say hi!' : 'Say hello!')}
+          <p className="mt-0.5 truncate text-xs text-[#E0A14A]">
+            {formatMatchedAgo(match.matched_at ?? match.last_message_at) ??
+              (match.online ? 'Active now' : 'Last seen recently')}
           </p>
         </div>
       </div>
@@ -145,7 +159,7 @@ export const Matches = () => {
                   photoUrl={match.photo_url}
                   online={match.online}
                   lastMessageTime={match.last_message_at}
-                  lastMessage={match.last_message ?? (match.online ? 'Active now — say hi!' : 'Say hello!')}
+                  lastMessage={match.last_message ?? (match.online ? 'Active now' : 'Tap to open chat')}
                 />
               ))}
             </div>

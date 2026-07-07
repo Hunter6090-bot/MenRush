@@ -24,7 +24,7 @@ export function MenRushPlusPromo() {
   return (
     <Link
       to="/premium"
-      className="mt-4 block rounded-2xl border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.1)] p-3.5 text-left transition-colors hover:bg-[rgba(196,131,42,0.18)]"
+      className="block rounded-2xl border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.1)] p-3.5 text-left transition-colors hover:bg-[rgba(196,131,42,0.18)]"
     >
       <p className="text-[13px] font-extrabold tracking-[0.08em] text-[#E0A14A]">MENRUSH+</p>
       <p className="mt-1 text-[13px] leading-snug text-[var(--cream-muted)]">

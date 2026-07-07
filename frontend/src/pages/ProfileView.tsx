@@ -115,7 +115,7 @@ export const ProfileView = () => {
               )}
             />
           ) : (
-            <div className="h-40 sm:h-32 bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#8B4513]/10" />
+            <div className="h-40 sm:h-32 bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#A45E18]/10" />
           )}
           <div className="px-5 pb-5">
             <div className="-mt-10 mb-3 flex items-end justify-between">

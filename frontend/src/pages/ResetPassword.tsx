@@ -63,7 +63,7 @@ export const ResetPassword = () => {
 
           <div className="mt-8">
             {error && (
-              <div className="mb-4 rounded-2xl border border-[#8B4513]/30 bg-[#8B4513]/12 px-4 py-3 text-sm text-[#F0E0C0]/90">
+              <div className="mb-4 rounded-2xl border border-[#A45E18]/30 bg-[#A45E18]/12 px-4 py-3 text-sm text-[#F0E0C0]/90">
                 {error}
               </div>
             )}
@@ -111,7 +111,7 @@ export const ResetPassword = () => {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:from-[#D4943B] hover:to-[#9B5523] hover:shadow-glow-blue active:scale-[0.98] disabled:opacity-50"
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#C4832A] to-[#A45E18] py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:from-[#D4943B] hover:to-[#C4832A] hover:shadow-glow-blue active:scale-[0.98] disabled:opacity-50"
                 >
                   {loading ? <><PulseRing size={16} /> Updating…</> : 'Update password'}
                 </button>
