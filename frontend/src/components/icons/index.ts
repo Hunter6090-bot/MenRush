@@ -5,8 +5,8 @@
  *
  * Usage:
  *   import { IconDiscover, IconPulse } from "@/components/icons";
- *   <IconDiscover className="text-copper" size={28} />  // Nearby — map + radius rings
- *   <IconMatches className="text-copper" size={28} />   // Matches — two silhouettes
+ *   <IconDiscover className="text-copper" size={28} />  // Nearby — two silhouettes
+ *   <IconMatches className="text-copper" size={28} />   // Matches — interlocking rings
  */
 export { IconDiscover } from "./IconDiscover";
 export { IconPulse } from "./IconPulse";

@@ -1,15 +1,28 @@
-import { SVGProps } from 'react';
+import { SVGProps } from "react";
 
+/**
+ * MenRush — Settings icon
+ * Doric column capital and shaft — structure and preference.
+ * Same classical architecture language as IconRooms.
+ */
 export function IconSettings({ size = 24, ...props }: SVGProps<SVGSVGElement> & { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-      <circle cx="12" cy="12" r="2.75" stroke="currentColor" strokeWidth="1.75" />
-      <path
-        d="M12 3.5v2.2M12 18.3V20.5M20.5 12h-2.2M5.7 12H3.5M18.2 5.8l-1.55 1.55M7.35 16.65l-1.55 1.55M18.2 18.2l-1.55-1.55M7.35 7.35L5.8 5.8"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-      />
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      {...props}
+    >
+      <line x1="6" y1="6" x2="18" y2="6" />
+      <line x1="7.5" y1="8" x2="16.5" y2="8" />
+      <rect x="10" y="8" width="4" height="11" />
+      <line x1="7.5" y1="19" x2="16.5" y2="19" />
+      <line x1="6" y1="21" x2="18" y2="21" />
     </svg>
   );
 }
