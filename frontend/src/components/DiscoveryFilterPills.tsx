@@ -1,13 +1,9 @@
-import {
-  DESKTOP_RADIUS_MILES,
-  INTENT_FILTERS,
-  type DesktopRadiusMiles,
-  type IntentFilter,
-} from '../lib/discoveryFormat';
+import { INTENT_FILTERS, type IntentFilter } from '../lib/discoveryFormat';
+import { RadiusMilesSelect } from './RadiusMilesSelect';
 
 interface DiscoveryFilterPillsProps {
   radiusKm: number;
-  onRadiusChange: (km: DesktopRadiusMiles) => void;
+  onRadiusChange: (km: number) => void;
   intent: IntentFilter;
   onIntentChange: (intent: IntentFilter) => void;
 }
@@ -23,19 +19,8 @@ export function DiscoveryFilterPills({
   onIntentChange,
 }: DiscoveryFilterPillsProps) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="flex flex-wrap gap-1.5">
-        {DESKTOP_RADIUS_MILES.map((mi) => (
-          <button
-            key={mi}
-            type="button"
-            onClick={() => onRadiusChange(mi)}
-            className={pillClass(radiusKm === mi)}
-          >
-            {mi} mile{mi === 1 ? '' : 's'}
-          </button>
-        ))}
-      </div>
+    <div className="flex flex-wrap items-center gap-3">
+      <RadiusMilesSelect valueKm={radiusKm} onChange={onRadiusChange} id="discover-radius-miles" />
       <div className="flex flex-wrap gap-1.5">
         {INTENT_FILTERS.map((item) => (
           <button

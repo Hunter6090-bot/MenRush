@@ -8,7 +8,13 @@ import { Layout } from '../components/Layout';
 import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
 import { PulsingAvatar } from '../components/PulsingAvatar';
 import { PulseFab } from '../components/PulseFab';
-import { ProximitySlider, RADIUS_OPTIONS } from '../components/ProximitySlider';
+import { RadiusMilesSelect } from '../components/RadiusMilesSelect';
+import {
+  MAX_RADIUS_KM,
+  RADIUS_MILE_OPTIONS,
+  clampRadiusKm,
+  radiusSelectionToKm,
+} from '../lib/discoveryFormat';
 import { ProfileDrawer } from '../components/ProfileDrawer';
 import { createMapMarkerElement, MapMarker } from '../components/MapMarker';
 import { getPhotoUrl, UserAvatar } from '../components/UserAvatar';
@@ -19,7 +25,6 @@ import { DiscoveryShellPublisher } from '../context/DiscoveryShellContext';
 import {
   formatRadiusMiles,
   matchesIntentFilter,
-  type DesktopRadiusMiles,
   type IntentFilter,
 } from '../lib/discoveryFormat';
 import { EventsRail } from '../components/EventsRail';
@@ -395,17 +400,23 @@ export const Discover = () => {
   }, [lat, lng, radius, tagFilters, fetchNearbyUsers]);
 
   const handleRadiusChange = useCallback(
-    (next: (typeof RADIUS_OPTIONS)[number]) => {
-      setRadius(next);
-      if (lat != null && lng != null) fetchNearbyUsers(lat, lng, next, tagFilters);
+    (next: number) => {
+      const clamped = clampRadiusKm(next);
+      setRadius(clamped);
+      if (lat != null && lng != null) fetchNearbyUsers(lat, lng, clamped, tagFilters);
     },
     [lat, lng, tagFilters, fetchNearbyUsers],
   );
 
   const handleRadiusCycle = () => {
-    const i = RADIUS_OPTIONS.indexOf(radius as (typeof RADIUS_OPTIONS)[number]);
-    const next = RADIUS_OPTIONS[(i + 1) % RADIUS_OPTIONS.length];
-    handleRadiusChange(next);
+    if (radius >= MAX_RADIUS_KM - 0.5) return;
+    const currentMiles = Math.round(radius / 1.60934);
+    const nextMiles = RADIUS_MILE_OPTIONS.find((m) => m > currentMiles) ?? MAX_RADIUS_KM;
+    handleRadiusChange(
+      typeof nextMiles === 'number' && nextMiles <= 31
+        ? radiusSelectionToKm(nextMiles)
+        : MAX_RADIUS_KM,
+    );
   };
 
   const toggleTag = useCallback(
@@ -667,13 +678,6 @@ export const Discover = () => {
     [lat, lng, radius, tagFilters, fetchNearbyUsers],
   );
 
-  const handleDesktopRadius = useCallback(
-    (mi: DesktopRadiusMiles) => {
-      handleRadiusChange(mi);
-    },
-    [handleRadiusChange],
-  );
-
   const togglePulseHeader = useCallback(async () => {
     if (pulseUntil) await handleStopPulse();
     else await handleStartPulse(90);
@@ -694,7 +698,7 @@ export const Discover = () => {
           <h2 className="flex-1 text-2xl font-extrabold text-[var(--cream)]">Nearby</h2>
           <DiscoveryFilterPills
             radiusKm={radius}
-            onRadiusChange={handleDesktopRadius}
+            onRadiusChange={handleRadiusChange}
             intent={intentFilter}
             onIntentChange={handleIntentChange}
           />
@@ -748,7 +752,13 @@ export const Discover = () => {
           )}
 
           <div className="absolute top-3 left-3 z-30 pointer-events-auto">
-            <ProximitySlider value={radius} onChange={handleRadiusChange} variant="map" />
+            <RadiusMilesSelect
+              valueKm={radius}
+              onChange={handleRadiusChange}
+              id="discover-radius-miles-mobile"
+              compact
+              className="rounded-full border border-[var(--border-default)]/70 bg-[var(--bg-elevated)]/85 px-2 py-1 shadow-lg backdrop-blur-md"
+            />
           </div>
         </div>
 

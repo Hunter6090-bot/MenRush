@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { useAuthStore } from '../hooks/store';
-import { DESKTOP_RADIUS_MILES } from '../lib/discoveryFormat';
+import { RadiusMilesSelect } from '../components/RadiusMilesSelect';
+import { clampRadiusKm } from '../lib/discoveryFormat';
 import { ROUTE_LABELS } from '../lib/routeLabels';
 
 const RADIUS_KEY = 'menrush_default_radius_km';
@@ -10,10 +12,14 @@ const RADIUS_KEY = 'menrush_default_radius_km';
 export const Settings = () => {
   const navigate = useNavigate();
   const logout = useAuthStore((s) => s.logout);
-  const savedRadius = Number(localStorage.getItem(RADIUS_KEY) ?? 5);
+  const [savedRadius, setSavedRadius] = useState(() =>
+    clampRadiusKm(Number(localStorage.getItem(RADIUS_KEY) ?? 5)),
+  );
 
   const setRadius = (km: number) => {
-    localStorage.setItem(RADIUS_KEY, String(km));
+    const clamped = clampRadiusKm(km);
+    localStorage.setItem(RADIUS_KEY, String(clamped));
+    setSavedRadius(clamped);
   };
 
   const handleLogout = () => {
@@ -48,18 +54,12 @@ export const Settings = () => {
 
           <section className="mr-card p-4">
             <p className="mb-3 text-[15px] font-bold text-[var(--cream)]">Default radius</p>
-            <div className="flex flex-wrap gap-2">
-              {DESKTOP_RADIUS_MILES.map((mi) => (
-                <button
-                  key={mi}
-                  type="button"
-                  onClick={() => setRadius(mi)}
-                  className={savedRadius === mi ? 'mr-pill mr-pill-active' : 'mr-pill mr-pill-inactive'}
-                >
-                  {mi} mile{mi === 1 ? '' : 's'}
-                </button>
-              ))}
-            </div>
+            <RadiusMilesSelect
+              valueKm={savedRadius}
+              onChange={setRadius}
+              id="settings-default-radius"
+              label="Default search radius in miles"
+            />
           </section>
 
           <Link
