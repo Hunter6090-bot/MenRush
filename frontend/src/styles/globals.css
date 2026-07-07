@@ -73,7 +73,7 @@ input:-webkit-autofill:focus {
 .mr-hero-accent {
   display: block;
   margin-top: 0.08em;
-  background: linear-gradient(90deg, #F0E0C0 0%, #C4832A 58%, #8B4513 100%);
+  background: linear-gradient(90deg, #F0E0C0 0%, #C4832A 58%, #A45E18 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -118,17 +118,17 @@ input:-webkit-autofill:focus {
 }
 
 @keyframes mr-radar {
-  0% { transform: scale(1); opacity: 0.5; }
-  100% { transform: scale(3.2); opacity: 0; }
+  0% { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(3); opacity: 0; }
 }
 
 .mr-radar-ring {
   position: absolute;
-  width: 96px;
-  height: 96px;
+  inset: -4px;
   border-radius: 50%;
-  background: #C4832A;
+  border: 2px solid var(--nn-copper);
   animation: mr-radar 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  pointer-events: none;
 }
 
 .mr-radar-ring--delayed {

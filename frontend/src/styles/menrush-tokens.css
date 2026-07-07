@@ -25,7 +25,9 @@
   --nn-border:    #3D2B0E;
   --nn-copper:    #C4832A;
   --nn-copper-bright: #E0A14A;
-  --nn-rust:      #8B4513;
+  --nn-rust:      #A45E18;
+  --nn-on-copper: #1A0E03;
+  --nn-danger-light: #D96A52;
   --nn-text:      #F0E0C0;
   --nn-muted:     #A89070;
   --nn-faint:     #6B5840;
@@ -285,9 +287,9 @@ html, body {
 }
 
 .mr-pill-active {
-  border: 1px solid var(--nn-copper);
-  background: var(--nn-copper);
-  color: #1a0e03;
+  border: 1px solid rgba(196, 131, 42, 0.45);
+  background: rgba(196, 131, 42, 0.1);
+  color: var(--nn-copper-bright);
 }
 
 .mr-pill-inactive {
