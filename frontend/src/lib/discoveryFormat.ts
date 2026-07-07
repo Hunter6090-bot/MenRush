@@ -17,9 +17,19 @@ export const RADIUS_MILE_OPTIONS = Array.from({ length: 31 }, (_, i) => i + 1) a
 
 export type RadiusMilesSelection = 'all' | number;
 
-/** @deprecated Use RADIUS_MILE_OPTIONS + RadiusMilesSelect */
-export const DESKTOP_RADIUS_MILES = [1, 5, 25] as const;
-export type DesktopRadiusMiles = (typeof DESKTOP_RADIUS_MILES)[number];
+/** Quick-pick mile presets on Discover (toggle on second click). */
+export const QUICK_RADIUS_MILES = [1, 5, 25] as const;
+export type QuickRadiusMiles = (typeof QUICK_RADIUS_MILES)[number];
+
+export const DEFAULT_RADIUS_KM = 5;
+
+/** @deprecated Use QUICK_RADIUS_MILES */
+export const DESKTOP_RADIUS_MILES = QUICK_RADIUS_MILES;
+export type DesktopRadiusMiles = QuickRadiusMiles;
+
+export function isQuickRadiusActive(radiusKm: number, miles: QuickRadiusMiles): boolean {
+  return Math.abs(clampRadiusKm(radiusKm) - radiusSelectionToKm(miles)) < 0.2;
+}
 
 export const INTENT_FILTERS = ['All', 'Chat', 'Drinks', 'Date', 'NSA'] as const;
 export type IntentFilter = (typeof INTENT_FILTERS)[number];
