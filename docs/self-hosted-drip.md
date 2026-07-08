@@ -25,6 +25,7 @@ get every email twice).
 | Schedule | 9 emails over ~75 days. Defined in `DRIP_SCHEDULE` in `backend/src/services/drip.service.ts`. |
 | Worker | Either an external cron hitting `POST /api/waitlist/admin/run`, or an in-process timer enabled by `DRIP_WORKER_ENABLED=true`. |
 | Idempotency | `UNIQUE (subscriber_id, template_key)` on the sends ledger — no duplicates even if two workers race. |
+| Catch-up guard | Max **one email per subscriber per batch**; spacing enforced from the previous send so overdue imports do not burst. |
 | Compliance | Every email gets `List-Unsubscribe` + `List-Unsubscribe-Post` headers and a footer unsubscribe link. Tokens are per-subscriber (`waitlist.unsubscribe_token`). |
 
 ---
@@ -206,9 +207,12 @@ AND step N is not already in waitlist_drip_sends.
 ```
 
 So:
-- A signup from 30 days ago lands in `runDripBatch` with all steps up to day 25
-  due simultaneously. They will receive them on consecutive batches (one per
-  worker tick), not all at once — `limit` caps how many sends per batch.
+- A signup from 30 days ago who never received any drip emails would previously
+  have had every overdue step fire in a single batch (up to `limit`). **As of
+  the catch-up guard**, each batch sends **at most one email per subscriber**,
+  and the next step waits the scheduled calendar gap from the previous send
+  (e.g. welcome → day-2 email waits 2 days), even when signup age makes many
+  steps overdue at once.
 - A signup from today only has day 0 due → only the welcome is sent.
 - Day 75 is the last step. After that the subscriber stays in `active` status
   but no more emails go out unless you add new steps.

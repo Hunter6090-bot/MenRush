@@ -10,8 +10,10 @@
  * Operating model:
  *   - Subscribers land in `waitlist` (POST /api/waitlist or imported).
  *   - For each subscriber, the welcome (day 0) is due immediately on signup.
- *   - Subsequent steps are due once `(now - subscriber.created_at) >= step.dayOffset`.
- *   - `runDripBatch()` processes up to N pending sends per invocation.
+ *   - Subsequent steps are due once `(now - subscriber.created_at) >= step.dayOffset`,
+ *     AND (when catching up) at least the scheduled gap since the previous step was sent.
+ *   - `runDripBatch()` processes up to N pending sends per invocation, but never more
+ *     than one email per subscriber per batch (prevents catch-up bursts).
  *   - An external cron (Railway/Render) or in-process timer (DRIP_WORKER_ENABLED)
  *     calls `runDripBatch()` periodically.
  *   - Each send is recorded in `waitlist_drip_sends`. The unique (subscriber_id,
@@ -325,33 +327,26 @@ export interface DueSend {
   step: DripStep;
 }
 
-/**
- * Find subscribers who are due for any pending step in `DRIP_SCHEDULE`.
- * Returns at most `limit` rows, ordered by oldest-overdue first so signups
- * never get jumped by later arrivals.
- *
- * Implementation: build a SQL VALUES table of (key, day_offset), join against
- * waitlist + LEFT JOIN waitlist_drip_sends to filter out already-sent rows.
- */
-export async function findDueSends(limit = 50): Promise<DueSend[]> {
+function buildStepsValuesSql(startParamIdx = 1): { valuesSql: string; params: (string | number)[] } {
   const valuesSql = DRIP_SCHEDULE.map(
-    (_, i) => `($${i * 2 + 1}, $${i * 2 + 2}::int)`,
+    (_, i) => `($${startParamIdx + i * 2}, $${startParamIdx + i * 2 + 1}::int)`,
   ).join(', ');
   const params: (string | number)[] = [];
   for (const step of DRIP_SCHEDULE) {
     params.push(step.key, step.dayOffset);
   }
-  params.push(limit);
-  const limitIdx = params.length;
+  return { valuesSql, params };
+}
 
+/**
+ * Count overdue (subscriber, step) pairs using signup age only — the old behaviour
+ * that could queue every missed step at once. Used for catch-up logging only.
+ */
+async function countUncappedDueCandidates(): Promise<number> {
+  const { valuesSql, params } = buildStepsValuesSql();
   const result = await query(
     `WITH steps(key, day_offset) AS (VALUES ${valuesSql})
-     SELECT w.id              AS subscriber_id,
-            w.email            AS email,
-            w.unsubscribe_token AS unsubscribe_token,
-            steps.key          AS template_key,
-            steps.day_offset   AS day_offset,
-            w.created_at       AS subscribed_at
+     SELECT COUNT(*)::int AS count
        FROM waitlist w
        CROSS JOIN steps
        LEFT JOIN waitlist_drip_sends s
@@ -359,8 +354,80 @@ export async function findDueSends(limit = 50): Promise<DueSend[]> {
       WHERE w.status = 'active'
         AND w.unsubscribe_token IS NOT NULL
         AND s.id IS NULL
-        AND NOW() >= w.created_at + (steps.day_offset || ' days')::interval
-      ORDER BY w.created_at ASC, steps.day_offset ASC
+        AND NOW() >= w.created_at + (steps.day_offset || ' days')::interval`,
+    params,
+  );
+  return result.rows[0]?.count ?? 0;
+}
+
+/**
+ * Find subscribers who are due for their **next** pending drip step.
+ *
+ * Safety rules (prevents burst / catch-up spam):
+ *   1. At most one step per subscriber per batch (`DISTINCT ON` keeps the lowest
+ *      unsent day_offset that passes the due checks).
+ *   2. Calendar spacing: after a step is sent, the next step waits the scheduled
+ *      gap (e.g. day 0 → day 2 waits 2 days from the previous send), even when
+ *      signup age would otherwise make every step overdue at once.
+ *
+ * Returns at most `limit` rows, ordered by oldest signup first.
+ */
+export async function findDueSends(limit = 50): Promise<DueSend[]> {
+  const { valuesSql, params } = buildStepsValuesSql();
+  params.push(limit);
+  const limitIdx = params.length;
+
+  const result = await query(
+    `WITH steps(key, day_offset) AS (VALUES ${valuesSql}),
+     candidates AS (
+       SELECT w.id               AS subscriber_id,
+              w.email             AS email,
+              w.unsubscribe_token AS unsubscribe_token,
+              steps.key           AS template_key,
+              steps.day_offset    AS day_offset,
+              w.created_at        AS subscribed_at
+         FROM waitlist w
+         CROSS JOIN steps
+         LEFT JOIN waitlist_drip_sends s
+           ON s.subscriber_id = w.id AND s.template_key = steps.key
+         LEFT JOIN LATERAL (
+           SELECT pst.day_offset AS last_sent_offset,
+                  ws.sent_at     AS last_sent_at
+             FROM waitlist_drip_sends ws
+             INNER JOIN steps pst ON pst.key = ws.template_key
+            WHERE ws.subscriber_id = w.id
+            ORDER BY pst.day_offset DESC
+            LIMIT 1
+         ) prior ON TRUE
+        WHERE w.status = 'active'
+          AND w.unsubscribe_token IS NOT NULL
+          AND s.id IS NULL
+          AND NOW() >= w.created_at + (steps.day_offset || ' days')::interval
+          AND (
+            prior.last_sent_at IS NULL
+            OR NOW() >= prior.last_sent_at
+                 + ((steps.day_offset - prior.last_sent_offset) || ' days')::interval
+          )
+     ),
+     next_per_subscriber AS (
+       SELECT DISTINCT ON (subscriber_id)
+              subscriber_id,
+              email,
+              unsubscribe_token,
+              template_key,
+              day_offset,
+              subscribed_at
+         FROM candidates
+        ORDER BY subscriber_id, day_offset ASC
+     )
+     SELECT subscriber_id,
+            email,
+            unsubscribe_token,
+            template_key,
+            day_offset,
+            subscribed_at
+       FROM next_per_subscriber
+      ORDER BY subscribed_at ASC, day_offset ASC
       LIMIT $${limitIdx}`,
     params,
   );
@@ -384,24 +451,39 @@ export interface DripBatchResult {
   attempted: number;
   sent: number;
   skipped: number;
+  /** Overdue steps held back by per-subscriber / spacing guardrails this run. */
+  suppressedCatchUp: number;
   errors: { email: string; templateKey: string; error: string }[];
 }
 
 /**
  * Process up to `limit` due sends. Safe to call frequently — the unique
  * (subscriber_id, template_key) constraint guarantees no duplicate sends
- * even if two workers race.
+ * even if two workers race. Each subscriber receives at most one email per
+ * batch, and catch-up respects calendar spacing between steps.
  */
 export async function runDripBatch(limit = 50): Promise<DripBatchResult> {
   const result: DripBatchResult = {
     attempted: 0,
     sent: 0,
     skipped: 0,
+    suppressedCatchUp: 0,
     errors: [],
   };
 
-  const due = await findDueSends(limit);
+  const [due, uncappedDueCount] = await Promise.all([
+    findDueSends(limit),
+    countUncappedDueCandidates(),
+  ]);
   result.attempted = due.length;
+  result.suppressedCatchUp = Math.max(0, uncappedDueCount - due.length);
+
+  if (result.suppressedCatchUp > 0) {
+    console.warn(
+      `[drip] catch-up guard: ${result.suppressedCatchUp} overdue step(s) held back ` +
+        `(sending ${due.length} now; max 1 email per subscriber per batch, calendar spacing between steps)`,
+    );
+  }
 
   for (const item of due) {
     try {
@@ -482,7 +564,7 @@ export function startDripWorker(intervalMinutes = 60): void {
       .then((r) => {
         if (r.attempted > 0) {
           console.log(
-            `[drip] batch: attempted=${r.attempted} sent=${r.sent} skipped=${r.skipped} errors=${r.errors.length}`,
+            `[drip] batch: attempted=${r.attempted} sent=${r.sent} skipped=${r.skipped} suppressedCatchUp=${r.suppressedCatchUp} errors=${r.errors.length}`,
           );
         }
         for (const e of r.errors) {
