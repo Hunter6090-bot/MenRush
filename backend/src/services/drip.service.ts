@@ -27,6 +27,15 @@ import path from 'path';
 import { query } from '../db';
 import { sendWaitlistCampaignEmail } from './mailer.service';
 
+/**
+ * Waitlist + drip sends are OFF by default until you explicitly opt in.
+ * Set WAITLIST_EMAILS_PAUSED=false on Railway when templates are approved.
+ */
+export function isWaitlistEmailPaused(): boolean {
+  const flag = (process.env.WAITLIST_EMAILS_PAUSED ?? 'true').trim().toLowerCase();
+  return flag !== 'false';
+}
+
 // ─── Schedule ──────────────────────────────────────────────────────────────
 
 export interface DripStep {
@@ -234,6 +243,14 @@ function renderTemplate(rawHtml: string, ctx: { email: string; unsubscribeUrl: s
 }
 
 async function sendDripStep(item: DueSend): Promise<{ messageId: string | null; skipped: boolean }> {
+  if (isWaitlistEmailPaused()) {
+    console.log(
+      `[drip] PAUSED — no email sent to ${item.email} (${item.step.key}). ` +
+        'Set WAITLIST_EMAILS_PAUSED=false when ready to send.',
+    );
+    return { messageId: null, skipped: true };
+  }
+
   if (!isDeliverableWaitlistEmail(item.email)) {
     return { messageId: null, skipped: true };
   }
@@ -470,6 +487,13 @@ export async function runDripBatch(limit = 50): Promise<DripBatchResult> {
     suppressedCatchUp: 0,
     errors: [],
   };
+
+  if (isWaitlistEmailPaused()) {
+    console.log(
+      '[drip] PAUSED — batch skipped. Set WAITLIST_EMAILS_PAUSED=false when ready to send.',
+    );
+    return result;
+  }
 
   const [due, uncappedDueCount] = await Promise.all([
     findDueSends(limit),

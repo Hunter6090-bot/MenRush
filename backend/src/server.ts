@@ -28,6 +28,7 @@ import adminRoutes from './routes/admin.routes';
 import { startPulseExpiryCron } from './services/pulse.service';
 import {
   hasWelcomeBeenSent,
+  isWaitlistEmailPaused,
   sendWelcomeEmailNow,
   subscribeToWaitlist,
   startDripWorker,
@@ -104,19 +105,24 @@ app.post('/api/waitlist', async (req, res) => {
   try {
     const result = await subscribeToWaitlist(email, typeof source === 'string' ? source : 'menrush.com');
     const welcomeAlreadySent = await hasWelcomeBeenSent(result.id);
-    if (!welcomeAlreadySent) {
+    if (!welcomeAlreadySent && !isWaitlistEmailPaused()) {
       try {
         await sendWelcomeEmailNow(result);
       } catch (welcomeErr) {
         console.error('Waitlist welcome send failed:', welcomeErr);
       }
+    } else if (!welcomeAlreadySent && isWaitlistEmailPaused()) {
+      console.log('[drip] PAUSED — welcome held for', result.email);
     }
+    const paused = isWaitlistEmailPaused();
     return res.json({
       success: true,
       already_subscribed: result.alreadySubscribed,
       message: result.alreadySubscribed
         ? "You're already on the list."
-        : "You're on the list! Check your inbox shortly.",
+        : paused
+          ? "You're on the list."
+          : "You're on the list! Check your inbox shortly.",
     });
   } catch (err) {
     console.error('Waitlist insert error:', err);
