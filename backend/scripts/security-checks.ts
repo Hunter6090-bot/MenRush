@@ -29,59 +29,104 @@ async function rejectsWithCode(run: () => Promise<unknown>, code: string) {
 }
 
 test('server-side verification rejects unverified accounts', async () => {
-  const access = createAccessControl(async () => ({
-    rows: [{ actor_verified: false }],
-    rowCount: 1,
-  }));
-  await rejectsWithCode(() => access.requireVerified('actor'), 'verification_required');
+  const prev = process.env.REQUIRE_ID_VERIFICATION;
+  process.env.REQUIRE_ID_VERIFICATION = 'true';
+  try {
+    const access = createAccessControl(async () => ({
+      rows: [{ actor_verified: false }],
+      rowCount: 1,
+    }));
+    await rejectsWithCode(() => access.requireVerified('actor'), 'verification_required');
+  } finally {
+    if (prev === undefined) delete process.env.REQUIRE_ID_VERIFICATION;
+    else process.env.REQUIRE_ID_VERIFICATION = prev;
+  }
 });
 
 test('interaction authorization enforces verification, bilateral blocks, and matches', async () => {
-  let state = {
-    actor_verified: true,
-    target_verified: true,
-    blocked: true,
-    matched: true,
-    target_visible: true,
-    target_ghost: false,
-  };
-  const access = createAccessControl(async () => ({ rows: [state], rowCount: 1 }));
+  const prev = process.env.REQUIRE_ID_VERIFICATION;
+  process.env.REQUIRE_ID_VERIFICATION = 'true';
+  try {
+    let state = {
+      actor_verified: true,
+      target_verified: true,
+      blocked: true,
+      matched: true,
+      target_visible: true,
+      target_ghost: false,
+    };
+    const access = createAccessControl(async () => ({ rows: [state], rowCount: 1 }));
 
-  await rejectsWithCode(
-    () => access.assertInteraction('actor', 'target', { requireMatch: true }),
-    'interaction_blocked',
-  );
+    await rejectsWithCode(
+      () => access.assertInteraction('actor', 'target', { requireMatch: true }),
+      'interaction_blocked',
+    );
 
-  state = { ...state, blocked: false, matched: false };
-  await rejectsWithCode(
-    () => access.assertInteraction('actor', 'target', { requireMatch: true }),
-    'match_required',
-  );
+    state = { ...state, blocked: false, matched: false };
+    await rejectsWithCode(
+      () => access.assertInteraction('actor', 'target', { requireMatch: true }),
+      'match_required',
+    );
 
-  state = { ...state, matched: true };
-  await access.assertInteraction('actor', 'target', { requireMatch: true });
+    state = { ...state, matched: true };
+    await access.assertInteraction('actor', 'target', { requireMatch: true });
+  } finally {
+    if (prev === undefined) delete process.env.REQUIRE_ID_VERIFICATION;
+    else process.env.REQUIRE_ID_VERIFICATION = prev;
+  }
 });
 
 test('profile visibility denies hidden, ghost, blocked, and unverified targets', async () => {
-  let state = {
-    actor_verified: true,
-    target_verified: true,
-    blocked: false,
-    matched: false,
-    target_visible: false,
-    target_ghost: false,
-  };
-  const access = createAccessControl(async () => ({ rows: [state], rowCount: 1 }));
-  await rejectsWithCode(() => access.assertProfileView('actor', 'target'), 'profile_unavailable');
+  const prev = process.env.REQUIRE_ID_VERIFICATION;
+  process.env.REQUIRE_ID_VERIFICATION = 'true';
+  try {
+    let state = {
+      actor_verified: true,
+      target_verified: true,
+      blocked: false,
+      matched: false,
+      target_visible: false,
+      target_ghost: false,
+    };
+    const access = createAccessControl(async () => ({ rows: [state], rowCount: 1 }));
+    await rejectsWithCode(() => access.assertProfileView('actor', 'target'), 'profile_unavailable');
 
-  state = { ...state, target_visible: true, target_ghost: true };
-  await rejectsWithCode(() => access.assertProfileView('actor', 'target'), 'profile_unavailable');
+    state = { ...state, target_visible: true, target_ghost: true };
+    await rejectsWithCode(() => access.assertProfileView('actor', 'target'), 'profile_unavailable');
 
-  state = { ...state, target_ghost: false, blocked: true };
-  await rejectsWithCode(() => access.assertProfileView('actor', 'target'), 'profile_unavailable');
+    state = { ...state, target_ghost: false, blocked: true };
+    await rejectsWithCode(() => access.assertProfileView('actor', 'target'), 'interaction_blocked');
 
-  state = { ...state, blocked: false, target_verified: false };
-  await rejectsWithCode(() => access.assertProfileView('actor', 'target'), 'profile_unavailable');
+    state = { ...state, blocked: false, target_verified: false };
+    await rejectsWithCode(() => access.assertProfileView('actor', 'target'), 'target_unavailable');
+  } finally {
+    if (prev === undefined) delete process.env.REQUIRE_ID_VERIFICATION;
+    else process.env.REQUIRE_ID_VERIFICATION = prev;
+  }
+});
+
+test('beta mode skips ID verification gate', async () => {
+  const prev = process.env.REQUIRE_ID_VERIFICATION;
+  delete process.env.REQUIRE_ID_VERIFICATION;
+  try {
+    const access = createAccessControl(async () => ({
+      rows: [{
+        actor_verified: false,
+        target_verified: false,
+        blocked: false,
+        matched: false,
+        target_visible: true,
+        target_ghost: false,
+      }],
+      rowCount: 1,
+    }));
+    await access.requireVerified('actor');
+    await access.assertInteraction('actor', 'target');
+    await access.assertProfileView('actor', 'target');
+  } finally {
+    if (prev === undefined) delete process.env.REQUIRE_ID_VERIFICATION;
+    else process.env.REQUIRE_ID_VERIFICATION = prev;
+  }
 });
 
 test('uploads use allowlisted MIME types, generated extensions, and magic bytes', async () => {

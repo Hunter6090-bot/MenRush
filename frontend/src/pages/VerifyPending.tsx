@@ -4,6 +4,7 @@ import { verifyAPI } from '../api/verify';
 import { useAuthStore } from '../hooks/store';
 import { PulseRing } from '../components/PulseRing';
 import { consumePostAuthRedirect } from '../lib/profileLinks';
+import { FEATURES } from '../lib/featureFlags';
 import { trackEventOnce } from '../observability/analytics';
 import { VerifySignOut } from '../components/VerifySignOut';
 import {
@@ -15,6 +16,7 @@ import {
   publicInfoBoxClass,
   publicMutedCopyClass,
   publicPanelClass,
+  publicPrimaryButtonClass,
 } from '../lib/publicStyles';
 
 export const VerifyPending: React.FC = () => {
@@ -35,7 +37,7 @@ export const VerifyPending: React.FC = () => {
           trackEventOnce('verification_transition', { state: 'verified' }, 'verification_verified');
           stoppedRef.current = true;
           setVerified('verified', true);
-          navigate(consumePostAuthRedirect('/discover'));
+          navigate(consumePostAuthRedirect('/profile/setup'));
           return;
         }
         if (status === 'rejected') {
@@ -90,6 +92,16 @@ export const VerifyPending: React.FC = () => {
         <p className={publicMutedCopyClass}>
           We'll update your profile the moment review finishes. Last checked {tick * 5}s ago.
         </p>
+
+        {!FEATURES.requireIdVerification ? (
+          <button
+            type="button"
+            onClick={() => navigate(consumePostAuthRedirect('/profile/setup'))}
+            className={publicPrimaryButtonClass}
+          >
+            Skip for now — continue to the app
+          </button>
+        ) : null}
 
         <VerifySignOut />
       </div>

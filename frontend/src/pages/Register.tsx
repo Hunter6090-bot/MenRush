@@ -13,6 +13,7 @@ import {
   readStoredInviteCode,
   storeInviteCode,
 } from '../lib/betaInvite';
+import { FEATURES } from '../lib/featureFlags';
 import {
   publicErrorClass,
   publicInputClass,
@@ -118,8 +119,12 @@ export const Register = () => {
       setError('Password must be at least 12 chars with mixed case and a number.');
       return;
     }
-    if (!form.ageConsent || !form.idConsent || !form.legalConsent) {
+    if (!form.ageConsent || !form.legalConsent) {
       setError('Please confirm all consent checkboxes.');
+      return;
+    }
+    if (FEATURES.requireIdVerification && !form.idConsent) {
+      setError('Please confirm the ID verification consent.');
       return;
     }
     if (BETA_INVITE_REQUIRED && !inviteCode) {
@@ -137,7 +142,7 @@ export const Register = () => {
         ...(BETA_INVITE_REQUIRED ? { invite_code: inviteCode } : {}),
       });
       setAuth(res.data.user, res.data.token);
-      navigate('/verify');
+      navigate(FEATURES.requireIdVerification ? '/verify' : '/profile/setup');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed. Please try again.');
     } finally {
@@ -249,19 +254,21 @@ export const Register = () => {
             <span>I confirm I am 18 years or older.</span>
           </label>
 
-          <label className="flex cursor-pointer items-start gap-2.5 text-[13px] leading-snug text-[#A89070]">
-            <input
-              type="checkbox"
-              checked={form.idConsent}
-              onChange={setField('idConsent')}
-              required
-              className="mt-0.5 h-4 w-4 rounded border-[#3D2B0E] bg-[#1E1508] accent-[#C4832A]"
-            />
-            <span>
-              I understand MenRush requires a government-issued photo ID plus a live selfie that
-              matches that ID before I can use the app.
-            </span>
-          </label>
+          {FEATURES.requireIdVerification ? (
+            <label className="flex cursor-pointer items-start gap-2.5 text-[13px] leading-snug text-[#A89070]">
+              <input
+                type="checkbox"
+                checked={form.idConsent}
+                onChange={setField('idConsent')}
+                required
+                className="mt-0.5 h-4 w-4 rounded border-[#3D2B0E] bg-[#1E1508] accent-[#C4832A]"
+              />
+              <span>
+                I understand MenRush requires a government-issued photo ID plus a live selfie that
+                matches that ID before I can use the app.
+              </span>
+            </label>
+          ) : null}
 
           <label className="flex cursor-pointer items-start gap-2.5 text-[13px] leading-snug text-[#A89070]">
             <input
@@ -280,7 +287,7 @@ export const Register = () => {
               <Link to="/privacy" className={`${publicLinkClass} underline-offset-2 hover:underline`}>
                 Privacy Policy
               </Link>
-              .
+              , including live location sharing with other verified members.
             </span>
           </label>
 

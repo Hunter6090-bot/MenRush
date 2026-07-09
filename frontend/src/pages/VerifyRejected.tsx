@@ -3,14 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { verifyAPI } from '../api/verify';
 import { trackEventOnce } from '../observability/analytics';
 import { VerifySignOut } from '../components/VerifySignOut';
+import { consumePostAuthRedirect } from '../lib/profileLinks';
+import { FEATURES } from '../lib/featureFlags';
 import {
   AUTH_BACKGROUNDS,
   PublicAuthHero,
   PublicAuthShell,
 } from '../components/PublicAuthShell';
 import {
+  publicMutedCopyClass,
   publicPanelClass,
   publicPrimaryButtonClass,
+  publicSecondaryButtonClass,
 } from '../lib/publicStyles';
 
 const REASON_COPY: Record<string, string> = {
@@ -65,9 +69,28 @@ export const VerifyRejected: React.FC = () => {
           <p className="m-0 text-center font-mono text-[11px] text-[#A89070]/70">code: {reason}</p>
         ) : null}
 
-        <button type="button" onClick={() => navigate('/verify')} className={publicPrimaryButtonClass}>
-          Try again
-        </button>
+        {!FEATURES.requireIdVerification ? (
+          <>
+            <p className={`${publicMutedCopyClass} text-center`}>
+              ID verification is paused for beta. You can use the app now — we&apos;ll ask again at
+              grand opening once the scanner is fixed.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate(consumePostAuthRedirect('/profile/setup'))}
+              className={publicPrimaryButtonClass}
+            >
+              Continue to the app
+            </button>
+            <button type="button" onClick={() => navigate('/verify')} className={publicSecondaryButtonClass}>
+              Try verification again
+            </button>
+          </>
+        ) : (
+          <button type="button" onClick={() => navigate('/verify')} className={publicPrimaryButtonClass}>
+            Try again
+          </button>
+        )}
 
         <VerifySignOut />
       </div>

@@ -18,6 +18,7 @@ import {
   publicPrimaryButtonClass,
 } from '../lib/publicStyles';
 import { BETA_INVITE_REQUIRED } from '../lib/betaInvite';
+import { FEATURES } from '../lib/featureFlags';
 
 type LoginUser = {
   email?: string;
@@ -27,10 +28,12 @@ type LoginUser = {
 
 function routeAfterLogin(navigate: ReturnType<typeof useNavigate>, user: LoginUser, nextPath: string | null) {
   if (nextPath) savePostAuthRedirect(nextPath);
-  if (user?.is_verified) {
+  if (!FEATURES.requireIdVerification || user?.is_verified) {
     navigate(consumePostAuthRedirect('/discover'));
   } else if (user?.verification_status === 'pending') {
     navigate('/verify/pending');
+  } else if (user?.verification_status === 'rejected') {
+    navigate('/verify/rejected');
   } else {
     navigate('/verify');
   }

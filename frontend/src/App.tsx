@@ -53,9 +53,8 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
   return children;
 }
 
-// Gate any route that surfaces other users (Discover, Matches, Chat, Rooms).
-// Unverified users are redirected to ID + selfie verification;
-// pending/rejected get a status-specific landing.
+// Hard gate is OFF for beta — unverified users enter the app. Verification
+// pages stay available but must not block Discover / Matches / Chat.
 function RequireVerified({
   children,
   allowIncompleteProfile = false,
@@ -71,7 +70,7 @@ function RequireVerified({
   if (!token) {
     return <Navigate to={`/login?next=${encodeURIComponent(returnPath)}`} replace />;
   }
-  if (!user?.is_verified) {
+  if (FEATURES.requireIdVerification && !user?.is_verified) {
     savePostAuthRedirect(returnPath);
     if (user?.verification_status === 'pending') return <Navigate to="/verify/pending" replace />;
     if (user?.verification_status === 'rejected') return <Navigate to="/verify/rejected" replace />;
@@ -113,7 +112,7 @@ function AppEntry() {
   if (!token) {
     return <Navigate to="/login?next=/discover" replace />;
   }
-  if (!user?.is_verified) {
+  if (FEATURES.requireIdVerification && !user?.is_verified) {
     if (user?.verification_status === 'pending') return <Navigate to="/verify/pending" replace />;
     if (user?.verification_status === 'rejected') return <Navigate to="/verify/rejected" replace />;
     return <Navigate to="/verify" replace />;

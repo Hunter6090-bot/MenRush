@@ -160,6 +160,16 @@ function formatToForLog(to: string | string[]): string {
   return Array.isArray(to) ? to.join(', ') : to;
 }
 
+function formatMenRushFromAddress(raw: string): string {
+  const value = raw.trim();
+  if (!value) return value;
+  if (/^"?MenRush"?\s*</i.test(value)) return value;
+
+  const angleMatch = value.match(/<([^>]+)>/);
+  const email = angleMatch?.[1]?.trim() || value;
+  return `"MenRush" <${email}>`;
+}
+
 /**
  * Send a transactional email via Resend. Not wired into contact/drip yet —
  * used by POST /api/admin/test-email and future flows.
@@ -248,7 +258,7 @@ export async function sendEmail(params: SendEmailParams): Promise<{ id: string }
 
   try {
     const { data, error } = await getResend().emails.send({
-      from,
+      from: formatMenRushFromAddress(from),
       to: params.to,
       subject: params.subject,
       html: params.html,

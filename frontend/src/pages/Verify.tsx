@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { verifyAPI, type IdDocumentType } from '../api/verify';
 import { useAuthStore } from '../hooks/store';
 import { useSocket } from '../hooks/useSocket';
@@ -11,10 +11,12 @@ import {
 import { PulseRing } from '../components/PulseRing';
 import { SelfieCaptureModal } from '../components/SelfieCaptureModal';
 import { IdCaptureModal } from '../components/IdCaptureModal';
+import { IdDocumentUploadButton } from '../components/IdDocumentUploadButton';
 import { VerificationQr } from '../components/VerificationQr';
 import { NATIONALITIES } from '../lib/nationalities';
 import { isPhoneDevice } from '../lib/device';
 import { consumePostAuthRedirect } from '../lib/profileLinks';
+import { FEATURES } from '../lib/featureFlags';
 import { trackEvent } from '../observability/analytics';
 import {
   publicBackButtonClass,
@@ -32,7 +34,7 @@ import {
 } from '../lib/publicStyles';
 
 const INTRO_STEPS = [
-  { n: '1', text: 'Upload your ID document' },
+  { n: '1', text: 'Photograph or upload your ID' },
   { n: '2', text: 'Take a live selfie' },
   { n: '3', text: 'Get your copper checkmark' },
 ] as const;
@@ -211,7 +213,7 @@ export const Verify: React.FC = () => {
       if (status === 'verified') {
         setVerified('verified', true);
         trackEvent('verification_transition', { state: 'verified' });
-        navigate(consumePostAuthRedirect('/discover'));
+        navigate(consumePostAuthRedirect('/profile/setup'));
         return;
       }
 
@@ -232,7 +234,7 @@ export const Verify: React.FC = () => {
         const code = err?.response?.data?.error;
         if (code === 'already_verified') {
           setVerified('verified', true);
-          navigate(consumePostAuthRedirect('/discover'));
+          navigate(consumePostAuthRedirect('/profile/setup'));
           return;
         } else if (code === 'document_already_used') {
           setError('This government ID is already linked to another MenRush account.');
@@ -278,10 +280,10 @@ export const Verify: React.FC = () => {
           title: 'Front of your',
           accent: 'ID.',
           copy: showPhoneQr
-            ? 'Scan the QR with your phone, or use this device\'s camera.'
+            ? 'Scan the QR with your phone, use this device\'s camera, or upload a photo.'
             : idType === 'passport'
-              ? 'Photograph your passport photo page. Fill the frame, avoid glare.'
-              : 'Step 1 — front of your licence. Fill the frame, avoid glare.',
+              ? 'Photograph or upload your passport photo page. Text must be readable.'
+              : 'Step 1 — front of your licence. Camera or upload from your device.',
         };
       case 'id-back':
         return {
@@ -327,6 +329,29 @@ export const Verify: React.FC = () => {
         <div className={publicPanelClass}>
           {step === 'intro' ? (
             <>
+              {!FEATURES.requireIdVerification ? (
+                <div className={publicInfoBoxClass}>
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#E0A14A]">
+                    Paused for beta
+                  </p>
+                  <p className={`mt-2 ${publicMutedCopyClass}`}>
+                    ID verification is temporarily paused while we fix the scanner. You can use MenRush
+                    without verifying. We&apos;ll ask you to resubmit at grand opening once it&apos;s
+                    working properly.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigate(consumePostAuthRedirect('/profile/setup'))}
+                    className={`${publicPrimaryButtonClass} mt-4`}
+                  >
+                    Continue to the app
+                  </button>
+                  <p className="m-0 mt-3 text-center text-[11px] text-[#A89070]/70">
+                    Prefer to try verification anyway? Scroll down — it won&apos;t block you if it fails.
+                  </p>
+                </div>
+              ) : null}
+
               <div className={publicInfoBoxClass}>
                 <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#E0A14A]">
                   Verified is free · always
@@ -345,6 +370,21 @@ export const Verify: React.FC = () => {
                   <Bullet>Automated face match first; unclear cases reviewed by our team only</Bullet>
                   <Bullet>Other users only see the copper checkmark, never your ID</Bullet>
                 </ul>
+              </div>
+
+              <div className={publicInfoBoxClass}>
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#E0A14A]">
+                  Two-factor authentication
+                </p>
+                <p className={`mt-2 ${publicMutedCopyClass}`}>
+                  Turn on an authenticator app in Settings so only you can sign in — even if someone learns your password.
+                </p>
+                <Link
+                  to="/settings"
+                  className="mt-3 inline-flex text-sm font-semibold text-[#C4832A] transition-colors hover:text-[#E0A14A]"
+                >
+                  Set up two-factor authentication →
+                </Link>
               </div>
 
               <div className="flex flex-col gap-2.5">
@@ -460,8 +500,14 @@ export const Verify: React.FC = () => {
                     onClick={() => setCaptureTarget('id-front')}
                     className={publicPrimaryButtonClass}
                   >
-                    {idFront ? 'Rescan document' : 'Scan document'}
+                    {idFront ? 'Retake with camera' : 'Use camera'}
                   </button>
+                  <IdDocumentUploadButton
+                    filePrefix="id-front"
+                    onCapture={handleIdFrontCapture}
+                    onError={setError}
+                    className={publicSecondaryButtonClass}
+                  />
                   {idFront ? (
                     <button
                       type="button"
@@ -491,8 +537,15 @@ export const Verify: React.FC = () => {
                 onClick={() => setCaptureTarget('id-back')}
                 className={publicPrimaryButtonClass}
               >
-                {idBack ? 'Rescan back' : 'Scan back of licence'}
+                {idBack ? 'Retake back with camera' : 'Use camera for back'}
               </button>
+              <IdDocumentUploadButton
+                filePrefix="id-back"
+                label="Upload back photo from device"
+                onCapture={handleIdBackCapture}
+                onError={setError}
+                className={publicSecondaryButtonClass}
+              />
               {idBack ? (
                 <button type="button" onClick={() => setStep('selfie')} className={publicSecondaryButtonClass}>
                   Continue

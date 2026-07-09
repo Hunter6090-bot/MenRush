@@ -1,4 +1,5 @@
 import { query } from '../db';
+import { isIdVerificationRequired } from '../config/verification-gate';
 
 type QueryResult = { rows: any[]; rowCount?: number | null };
 type QueryFn = (text: string, values?: unknown[]) => Promise<QueryResult>;
@@ -62,6 +63,7 @@ export function createAccessControl(runQuery: QueryFn) {
 
   return {
     async requireVerified(userId: string): Promise<void> {
+      if (!isIdVerificationRequired()) return;
       const result = await runQuery(
         `SELECT COALESCE(is_verified, FALSE) AS actor_verified
          FROM users
@@ -86,14 +88,15 @@ export function createAccessControl(runQuery: QueryFn) {
         throw new SecurityError('invalid_target', 400, 'Invalid interaction target');
       }
       const state = await getState(actorId, targetId);
-      if (!state.actor_verified) {
+      const gateOn = isIdVerificationRequired();
+      if (gateOn && !state.actor_verified) {
         throw new SecurityError(
           'verification_required',
           403,
           'Identity verification is required',
         );
       }
-      if (!state.target_verified) {
+      if (gateOn && !state.target_verified) {
         throw new SecurityError('target_unavailable', 404, 'User unavailable');
       }
       if (state.blocked) {
@@ -109,14 +112,15 @@ export function createAccessControl(runQuery: QueryFn) {
         return this.requireVerified(actorId);
       }
       const state = await getState(actorId, targetId);
-      if (!state.actor_verified) {
+      const gateOn = isIdVerificationRequired();
+      if (gateOn && !state.actor_verified) {
         throw new SecurityError(
           'verification_required',
           403,
           'Identity verification is required',
         );
       }
-      if (!state.target_verified) {
+      if (gateOn && !state.target_verified) {
         throw new SecurityError('target_unavailable', 404, 'User unavailable');
       }
       if (state.blocked) {

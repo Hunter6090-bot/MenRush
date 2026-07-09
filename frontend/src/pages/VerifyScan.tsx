@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { verifyAPI, type IdDocumentType } from '../api/verify';
 import { IdCaptureModal } from '../components/IdCaptureModal';
+import { IdDocumentUploadButton } from '../components/IdDocumentUploadButton';
 import { PulseRing } from '../components/PulseRing';
 import {
   AUTH_BACKGROUNDS,
@@ -13,6 +14,7 @@ import {
   publicMutedCopyClass,
   publicPanelClass,
   publicPrimaryButtonClass,
+  publicSecondaryButtonClass,
 } from '../lib/publicStyles';
 
 type ScanStep = 'loading' | 'front' | 'back' | 'uploading' | 'done' | 'error';
@@ -118,7 +120,7 @@ export const VerifyScan: React.FC = () => {
       ? 'Return to your computer to take your live selfie and finish verification.'
       : step === 'uploading'
         ? 'Uploading your ID securely…'
-        : 'Use your phone camera to photograph your ID. Fill the frame, avoid glare.';
+        : 'Use your phone camera or upload a photo of your ID. Text must be readable.';
 
   return (
     <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.verifyScan} homeTo="/coming-soon">
@@ -152,8 +154,14 @@ export const VerifyScan: React.FC = () => {
               }}
               className={publicPrimaryButtonClass}
             >
-              {idFront ? 'Rescan front' : 'Scan document'}
+              {idFront ? 'Retake front with camera' : 'Use camera'}
             </button>
+            <IdDocumentUploadButton
+              filePrefix="id-front"
+              onCapture={handleFrontCapture}
+              onError={setError}
+              className={publicSecondaryButtonClass}
+            />
           </>
         ) : null}
 
@@ -168,8 +176,15 @@ export const VerifyScan: React.FC = () => {
               }}
               className={publicPrimaryButtonClass}
             >
-              {idBack ? 'Rescan back' : 'Scan back of licence'}
+              {idBack ? 'Retake back with camera' : 'Use camera for back'}
             </button>
+            <IdDocumentUploadButton
+              filePrefix="id-back"
+              label="Upload back photo from device"
+              onCapture={handleBackCapture}
+              onError={setError}
+              className={publicSecondaryButtonClass}
+            />
           </>
         ) : null}
 

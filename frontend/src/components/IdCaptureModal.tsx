@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { verifyAPI, type IdPrecheckResult } from '../api/verify';
 import { assessFrameQuality, captureDocumentRegion } from '../lib/captureQuality';
+import { normalizeIdImageFile } from '../lib/imageUpload';
 import { DocumentScannerOverlay } from './DocumentScannerOverlay';
 
 export type IdDocumentTemplate = 'passport' | 'driving_license_front' | 'driving_license_back';
-
-/** Consecutive aligned frames before snap (anti-flicker only — not a hold timer). */
-const ALIGNED_FRAMES_TO_CAPTURE = 3;
 
 interface IdCaptureModalProps {
   open: boolean;
@@ -44,11 +42,10 @@ export function IdCaptureModal({
 }: IdCaptureModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const alignedFramesRef = useRef(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const onCloseRef = useRef(onClose);
   const onErrorRef = useRef(onError);
   const onCaptureRef = useRef(onCapture);
-  const captureFrameRef = useRef<() => void>(() => undefined);
 
   const [ready, setReady] = useState(false);
   const [phase, setPhase] = useState<'camera' | 'preview'>('camera');
@@ -76,7 +73,6 @@ export function IdCaptureModal({
       setQualityOk(false);
       setPrecheckPhase('idle');
       setPrecheckResult(null);
-      alignedFramesRef.current = 0;
     }
   }, [open]);
 
@@ -111,7 +107,13 @@ export function IdCaptureModal({
         const video = videoRef.current;
         if (video) {
           video.srcObject = stream;
-          void video.play().then(() => setReady(true)).catch(() => {
+          const markReady = () => {
+            if (video.videoWidth > 0 && video.videoHeight > 0) {
+              setReady(true);
+            }
+          };
+          video.onloadedmetadata = markReady;
+          void video.play().then(markReady).catch(() => {
             onErrorRef.current('Could not start the camera preview.');
             onCloseRef.current();
           });
@@ -135,6 +137,14 @@ export function IdCaptureModal({
     };
   }, [open, phase]);
 
+  const showPreview = useCallback((file: File, url: string) => {
+    setPreviewFile(file);
+    setPreviewUrl(url);
+    setPhase('preview');
+    setPrecheckPhase('idle');
+    setPrecheckResult(null);
+  }, []);
+
   const captureFrame = useCallback(() => {
     const video = videoRef.current;
     if (!video || !ready || video.videoWidth === 0) return;
@@ -152,21 +162,12 @@ export function IdCaptureModal({
           return;
         }
         const file = new File([blob], `${filePrefix}-${Date.now()}.jpg`, { type: 'image/jpeg' });
-        setPreviewFile(file);
-        setPreviewUrl(URL.createObjectURL(blob));
-        setPhase('preview');
-        setPrecheckPhase('idle');
-        setPrecheckResult(null);
-        alignedFramesRef.current = 0;
+        showPreview(file, URL.createObjectURL(blob));
       },
       'image/jpeg',
       0.94,
     );
-  }, [filePrefix, ready, template]);
-
-  useEffect(() => {
-    captureFrameRef.current = captureFrame;
-  }, [captureFrame]);
+  }, [filePrefix, ready, showPreview, template]);
 
   useEffect(() => {
     if (!open || phase !== 'camera' || !ready) return;
@@ -179,20 +180,26 @@ export function IdCaptureModal({
       const q = assessFrameQuality(video, 'document', docTemplate);
       setQualityMsg(q.message);
       setQualityOk(q.ok);
-
-      if (!q.ok) {
-        alignedFramesRef.current = 0;
-        return;
-      }
-
-      alignedFramesRef.current += 1;
-      if (alignedFramesRef.current >= ALIGNED_FRAMES_TO_CAPTURE) {
-        captureFrameRef.current();
-      }
-    }, 120);
+    }, 200);
 
     return () => window.clearInterval(tick);
   }, [open, phase, ready, template]);
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = event.target.files?.[0];
+    event.target.value = '';
+    if (!raw) return;
+
+    const { file, error } = normalizeIdImageFile(raw);
+    if (!file) {
+      onErrorRef.current(error ?? 'Could not use that file.');
+      return;
+    }
+
+    const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+    const renamed = new File([file], `${filePrefix}-${Date.now()}.${ext}`, { type: file.type });
+    showPreview(renamed, URL.createObjectURL(renamed));
+  };
 
   useEffect(() => {
     if (!open || phase !== 'preview' || !previewFile) return;
@@ -238,20 +245,19 @@ export function IdCaptureModal({
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
     setPreviewFile(null);
-    alignedFramesRef.current = 0;
     setPrecheckPhase('idle');
     setPrecheckResult(null);
     setPhase('camera');
   };
 
   const handleUsePhoto = () => {
-    if (!previewFile || !precheckResult?.acceptable) return;
+    if (!previewFile) return;
     onCaptureRef.current(previewFile);
     onCloseRef.current();
   };
 
-  const precheckReady = precheckPhase === 'done' && Boolean(precheckResult);
-  const canConfirm = precheckReady && precheckResult?.acceptable === true;
+  const precheckAdvisory =
+    precheckPhase === 'done' && precheckResult && !precheckResult.acceptable;
 
   if (!open) return null;
 
@@ -321,10 +327,10 @@ export function IdCaptureModal({
         <p className="mb-3 text-center text-xs leading-relaxed text-[#A89070]">
           {phase === 'preview'
             ? precheckPhase === 'checking'
-              ? 'AI is checking whether this ID scan is acceptable…'
+              ? 'Quick quality check running — you can confirm now if the photo looks clear.'
               : precheckResult?.acceptable
-                ? 'ID scan accepted — confirm to continue'
-                : 'This scan is not acceptable — rescan your ID'
+                ? 'Looks good — confirm to continue'
+                : 'Confirm when the ID is readable, or rescan / upload another photo.'
             : templateLabel(template)}
         </p>
 
@@ -376,24 +382,45 @@ export function IdCaptureModal({
               >
                 Rescan
               </button>
+              {precheckAdvisory ? (
+                <p className="mb-3 text-center text-[11px] text-[#FCA5A5]">
+                  Automated checks flagged this image — submit anyway only if your ID is clearly visible.
+                </p>
+              ) : null}
               <button
                 type="button"
                 onClick={handleUsePhoto}
-                disabled={!canConfirm}
+                disabled={!previewFile}
                 className="flex-1 rounded-xl bg-[#C4832A] py-3 text-sm font-bold text-[#0D0A06] disabled:opacity-40"
               >
-                {precheckPhase === 'checking' ? 'Checking…' : 'Confirm scan'}
+                Use this photo
               </button>
             </>
           ) : (
-            <button
-              type="button"
-              onClick={captureFrame}
-              disabled={!ready}
-              className="w-full rounded-xl border border-[#3D2B0E] py-3 text-sm font-semibold text-[#F0E0C0] disabled:opacity-40"
-            >
-              Capture manually
-            </button>
+            <div className="flex w-full flex-col gap-2">
+              <button
+                type="button"
+                onClick={captureFrame}
+                disabled={!ready}
+                className="w-full rounded-xl bg-[#C4832A] py-3 text-sm font-bold text-[#0D0A06] disabled:opacity-40"
+              >
+                Capture photo
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                className="sr-only"
+                onChange={handleFileUpload}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full rounded-xl border border-[#3D2B0E] py-3 text-sm font-semibold text-[#F0E0C0]"
+              >
+                Upload from device
+              </button>
+            </div>
           )}
         </div>
       </div>
