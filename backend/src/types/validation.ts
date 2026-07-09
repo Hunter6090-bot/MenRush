@@ -1,7 +1,12 @@
 import { z } from 'zod';
 
+const normalizedEmail = z
+  .string()
+  .email()
+  .transform((email) => email.trim().toLowerCase());
+
 export const RegisterSchema = z.object({
-  email: z.string().email(),
+  email: normalizedEmail,
   password: z.string().min(8),
   name: z.string().min(2).max(50),
   age: z.number().min(18).max(120),
@@ -9,17 +14,26 @@ export const RegisterSchema = z.object({
 });
 
 export const LoginSchema = z.object({
-  email: z.string().email(),
+  email: normalizedEmail,
   password: z.string(),
 });
 
 export const ForgotPasswordSchema = z.object({
-  email: z.string().email(),
+  email: normalizedEmail,
 });
 
 export const ResetPasswordSchema = z.object({
   token: z.string().min(1),
   password: z.string().min(8),
+});
+
+export const TwoFactorCodeSchema = z.object({
+  code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code from your authenticator app'),
+});
+
+export const TwoFactorVerifyLoginSchema = z.object({
+  pendingToken: z.string().min(1),
+  code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code from your authenticator app'),
 });
 
 export const ProfileSchema = z.object({
@@ -120,6 +134,10 @@ export const MoodSchema = z.object({
 
 export const GhostSchema = z.object({
   is_ghost: z.boolean(),
+});
+
+export const LiveLocationSharingSchema = z.object({
+  enabled: z.boolean(),
 });
 
 export const CreateAlbumSchema = z.object({

@@ -15,6 +15,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable is required');
 const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 const HANDOFF_TOKEN_TTL_SECONDS = 30 * 60;
+const TWO_FACTOR_PENDING_TTL_SECONDS = 5 * 60;
 
 type TokenPayload = {
   userId: string;
@@ -25,6 +26,12 @@ type HandoffTokenPayload = {
   sessionId: string;
   userId: string;
   scope: 'verify_handoff';
+  exp: number;
+};
+
+type TwoFactorPendingPayload = {
+  userId: string;
+  scope: '2fa_pending';
   exp: number;
 };
 
@@ -150,8 +157,9 @@ export const authService = {
     const result = await query(
       `SELECT id, email, password_hash, name, photo_url, is_verified, verification_status,
               COALESCE(is_premium, FALSE) AS is_premium,
-              COALESCE(premium_tier, 'free') AS premium_tier
-         FROM users WHERE email = $1`,
+              COALESCE(premium_tier, 'free') AS premium_tier,
+              COALESCE(totp_enabled, FALSE) AS totp_enabled
+         FROM users WHERE LOWER(email) = $1`,
       [data.email]
     );
 
@@ -166,8 +174,100 @@ export const authService = {
       throw new Error('Invalid credentials');
     }
 
+    const publicUser = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      photo_url: user.photo_url ?? undefined,
+      is_verified: user.is_verified,
+      verification_status: user.verification_status,
+      is_premium: user.is_premium ?? false,
+      premium_tier: user.premium_tier ?? 'free',
+    };
+
+    if (user.totp_enabled) {
+      return {
+        requires2fa: true as const,
+        pendingToken: this.signTwoFactorPendingToken(user.id),
+        user: publicUser,
+      };
+    }
+
     const token = signToken(user.id);
 
+    return {
+      requires2fa: false as const,
+      user: publicUser,
+      token,
+    };
+  },
+
+  signTwoFactorPendingToken(userId: string): string {
+    const payload: TwoFactorPendingPayload = {
+      userId,
+      scope: '2fa_pending',
+      exp: Math.floor(Date.now() / 1000) + TWO_FACTOR_PENDING_TTL_SECONDS,
+    };
+    const payloadJson = JSON.stringify(payload);
+    const payloadPart = base64UrlEncode(payloadJson);
+    const signature = crypto
+      .createHmac('sha256', JWT_SECRET)
+      .update(payloadJson)
+      .digest();
+    return `${payloadPart}.${base64UrlEncode(signature)}`;
+  },
+
+  verifyTwoFactorPendingToken(token: string): { userId: string } {
+    const [payloadPart, signaturePart] = token.split('.');
+    if (!payloadPart || !signaturePart) {
+      throw new Error('Invalid token');
+    }
+
+    const payloadJson = base64UrlDecode(payloadPart).toString('utf8');
+    const expectedSignature = crypto
+      .createHmac('sha256', JWT_SECRET)
+      .update(payloadJson)
+      .digest();
+    const actualSignature = base64UrlDecode(signaturePart);
+
+    if (
+      expectedSignature.length !== actualSignature.length ||
+      !crypto.timingSafeEqual(expectedSignature, actualSignature)
+    ) {
+      throw new Error('Invalid token');
+    }
+
+    const payload = JSON.parse(payloadJson) as TwoFactorPendingPayload;
+    if (payload.scope !== '2fa_pending') {
+      throw new Error('Invalid token');
+    }
+    if (payload.exp < Math.floor(Date.now() / 1000)) {
+      throw new Error('Token expired');
+    }
+
+    return { userId: payload.userId };
+  },
+
+  async completeTwoFactorLogin(pendingToken: string, code: string) {
+    const { userId } = this.verifyTwoFactorPendingToken(pendingToken);
+    const { twoFactorService } = await import('./two-factor.service');
+    const valid = await twoFactorService.verifyForLogin(userId, code);
+    if (!valid) {
+      throw new Error('Invalid authentication code');
+    }
+
+    const result = await query(
+      `SELECT id, email, name, photo_url, is_verified, verification_status,
+              COALESCE(is_premium, FALSE) AS is_premium,
+              COALESCE(premium_tier, 'free') AS premium_tier
+         FROM users WHERE id = $1`,
+      [userId],
+    );
+    if (result.rows.length === 0) {
+      throw new Error('User not found');
+    }
+
+    const user = result.rows[0];
     return {
       user: {
         id: user.id,
@@ -179,7 +279,7 @@ export const authService = {
         is_premium: user.is_premium ?? false,
         premium_tier: user.premium_tier ?? 'free',
       },
-      token,
+      token: signToken(user.id),
     };
   },
 
