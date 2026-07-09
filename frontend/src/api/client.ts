@@ -16,7 +16,14 @@ apiClient.interceptors.request.use((config) => {
 
 export const authAPI = {
   register: (data: unknown) => apiClient.post('/auth/register', data),
-  login: (data: unknown) => apiClient.post('/auth/login', data),
+  login: (data: { email: string; password: string }) => apiClient.post('/auth/login', data),
+  verifyTwoFactorLogin: (data: { pendingToken: string; code: string }) =>
+    apiClient.post('/auth/2fa/verify', data),
+  getTwoFactorStatus: () => apiClient.get<{ enabled: boolean; enabledAt: string | null }>('/auth/2fa/status'),
+  setupTwoFactor: () =>
+    apiClient.post<{ secret: string; otpauthUrl: string }>('/auth/2fa/setup'),
+  enableTwoFactor: (code: string) => apiClient.post('/auth/2fa/enable', { code }),
+  disableTwoFactor: (code: string) => apiClient.post('/auth/2fa/disable', { code }),
   forgotPassword: (data: { email: string }) => apiClient.post('/auth/forgot-password', data),
   resetPassword: (data: { token: string; password: string }) => apiClient.post('/auth/reset-password', data),
 };
@@ -304,6 +311,10 @@ export const profileMetaAPI = {
   getGhost: () => apiClient.get<{ is_ghost: boolean }>('/profile-meta/ghost'),
   setGhost: (is_ghost: boolean) =>
     apiClient.post<{ is_ghost: boolean }>('/profile-meta/ghost', { is_ghost }),
+  getLiveLocationSharing: () =>
+    apiClient.get<{ enabled: boolean }>('/profile-meta/live-location-sharing'),
+  setLiveLocationSharing: (enabled: boolean) =>
+    apiClient.post<{ enabled: boolean }>('/profile-meta/live-location-sharing', { enabled }),
 };
 
 // ── Albums ────────────────────────────────────────────────────────────────
@@ -377,6 +388,51 @@ export const eventsAPI = {
     apiClient.get<EventDTO[]>('/events/nearby', {
       params: { lat, lng, radius: radiusKm, limit },
     }),
+};
+
+// ── Hot Spots (venue check-ins — not user Pulse boost) ───────────────────
+export interface HotSpotCategoryDTO {
+  id: number;
+  slug: string;
+  name: string;
+  icon: string;
+  description: string | null;
+}
+
+export interface HotSpotDTO {
+  id: string;
+  name: string;
+  city: string | null;
+  description: string | null;
+  latitude: number;
+  longitude: number;
+  category_id: number;
+  category_slug: string;
+  category_name: string;
+  category_icon: string;
+  distance_km: number | null;
+  live_count: number | string;
+  live_count_exact: number;
+  is_checked_in: boolean;
+  my_checkin_anonymous: boolean | null;
+}
+
+export const hotSpotsAPI = {
+  listCategories: () =>
+    apiClient.get<{ categories: HotSpotCategoryDTO[] }>('/hot-spots/categories'),
+  listNearby: (lat: number, lng: number, radiusKm?: number, category?: string) =>
+    apiClient.get<{ spots: HotSpotDTO[] }>('/hot-spots', {
+      params: { lat, lng, radiusKm, category },
+    }),
+  getSpot: (id: string) => apiClient.get<{ spot: HotSpotDTO }>(`/hot-spots/${id}`),
+  checkIn: (id: string, anonymous = false) =>
+    apiClient.post<{ ok: boolean; spot: HotSpotDTO }>(`/hot-spots/${id}/check-in`, { anonymous }),
+  checkOut: (id?: string) =>
+    id
+      ? apiClient.post<{ ok: boolean }>(`/hot-spots/${id}/check-out`)
+      : apiClient.post<{ ok: boolean }>('/hot-spots/check-out'),
+  getMyCheckIn: () =>
+    apiClient.get<{ check_in: unknown | null }>('/hot-spots/me/check-in'),
 };
 
 export const aiAPI = {

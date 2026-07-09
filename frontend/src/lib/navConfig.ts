@@ -39,6 +39,12 @@ export function getNavItems(): NavItem[] {
       desktopNav: true,
     },
     {
+      to: '/hot-spots',
+      label: ROUTE_LABELS.hotSpots,
+      Icon: IconEvents,
+      desktopNav: true,
+    },
+    {
       to: '/matches',
       label: ROUTE_LABELS.matches,
       Icon: IconMatches,
@@ -104,6 +110,9 @@ export function isNavActive(pathname: string, path: string): boolean {
   }
   if (path === '/events') {
     return pathname === '/events' || pathname.startsWith('/events/');
+  }
+  if (path === '/hot-spots') {
+    return pathname === '/hot-spots' || pathname.startsWith('/hot-spots/');
   }
   return pathname === path || pathname.startsWith(`${path}/`);
 }

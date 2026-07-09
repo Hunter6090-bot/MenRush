@@ -70,7 +70,12 @@ export const Events = () => {
             PROMOTE YOUR EVENT
           </Link>
         </div>
-        <p className="mb-5 text-sm text-[var(--cream-muted)]">Gay events and venues, by what you&apos;re into.</p>
+        <p className="mb-5 text-sm text-[var(--cream-muted)]">
+          Gay events and venues, by what you&apos;re into.{' '}
+          <Link to="/hot-spots" className="font-semibold text-[#C4832A] hover:text-[#E0A14A]">
+            Browse Hot Spots check-ins →
+          </Link>
+        </p>
 
         <div className="mb-5 flex flex-wrap gap-1.5">
           {CATEGORIES.map((cat) => (

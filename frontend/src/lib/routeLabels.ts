@@ -9,5 +9,6 @@ export const ROUTE_LABELS = {
   profile: 'Profile',
   rooms: 'Rooms',
   events: 'Events',
+  hotSpots: 'Hot Spots',
   settings: 'Settings',
 } as const;

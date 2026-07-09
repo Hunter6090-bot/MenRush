@@ -8,7 +8,9 @@ import { ResetPassword } from './pages/ResetPassword';
 import { Discover } from './pages/Discover';
 import { Stream } from './pages/Stream';
 import { Profile } from './pages/Profile';
+import { ProfileSetup } from './pages/ProfileSetup';
 import { ProfileView } from './pages/ProfileView';
+import { RequireProfileSetup } from './components/RequireProfileSetup';
 import { Albums } from './pages/Albums';
 import { Matches } from './pages/Matches';
 import { Terms } from './pages/Terms';
@@ -26,6 +28,7 @@ import { VerifyPending } from './pages/VerifyPending';
 import { VerifyRejected } from './pages/VerifyRejected';
 import { Premium } from './pages/Premium';
 import { Events } from './pages/Events';
+import { HotSpots } from './pages/HotSpots';
 import { Settings } from './pages/Settings';
 import { Notifications } from './pages/Notifications';
 import { useAuthStore } from './hooks/store';
@@ -34,6 +37,7 @@ import { useGlobalMessageNotifications } from './hooks/useGlobalMessageNotificat
 import { useUnreadSync } from './hooks/useUnreadSync';
 import { useNotificationSync } from './hooks/useNotificationSync';
 import { useAuthProfileSync } from './hooks/useAuthProfileSync';
+import { useLiveLocationPublisher } from './hooks/useLiveLocationPublisher';
 import { FEATURES } from './lib/featureFlags';
 import { VideoCallModal } from './components/VideoCallModal';
 import { ToastNotifications } from './components/ToastNotifications';
@@ -52,7 +56,13 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
 // Gate any route that surfaces other users (Discover, Matches, Chat, Rooms).
 // Unverified users are redirected to ID + selfie verification;
 // pending/rejected get a status-specific landing.
-function RequireVerified({ children }: { children: JSX.Element }) {
+function RequireVerified({
+  children,
+  allowIncompleteProfile = false,
+}: {
+  children: JSX.Element;
+  allowIncompleteProfile?: boolean;
+}) {
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
   const location = useLocation();
@@ -67,7 +77,8 @@ function RequireVerified({ children }: { children: JSX.Element }) {
     if (user?.verification_status === 'rejected') return <Navigate to="/verify/rejected" replace />;
     return <Navigate to="/verify" replace />;
   }
-  return children;
+  if (allowIncompleteProfile) return children;
+  return <RequireProfileSetup>{children}</RequireProfileSetup>;
 }
 
 function NotFound() {
@@ -107,7 +118,7 @@ function AppEntry() {
     if (user?.verification_status === 'rejected') return <Navigate to="/verify/rejected" replace />;
     return <Navigate to="/verify" replace />;
   }
-  return <Navigate to="/discover" replace />;
+  return <Navigate to="/profile/setup" replace />;
 }
 
 function AppShell() {
@@ -117,6 +128,7 @@ function AppShell() {
   useUnreadSync();
   useNotificationSync();
   useAuthProfileSync();
+  useLiveLocationPublisher();
 
   return (
     <>
@@ -142,13 +154,15 @@ function AppShell() {
         <Route path="/verify/pending" element={<ProtectedRoute><VerifyPending /></ProtectedRoute>} />
         <Route path="/verify/rejected" element={<ProtectedRoute><VerifyRejected /></ProtectedRoute>} />
         <Route path="/premium" element={<RequireVerified><Premium /></RequireVerified>} />
+        <Route path="/profile/setup" element={<RequireVerified allowIncompleteProfile><ProfileSetup /></RequireVerified>} />
         <Route path="/discover" element={<RequireVerified><Discover /></RequireVerified>} />
         <Route path="/discovery" element={<Navigate to="/discover" replace />} />
         <Route path="/stream" element={<RequireVerified><Stream /></RequireVerified>} />
         <Route path="/events" element={<RequireVerified><Events /></RequireVerified>} />
-        <Route path="/settings" element={<RequireVerified><Settings /></RequireVerified>} />
+        <Route path="/hot-spots" element={<RequireVerified><HotSpots /></RequireVerified>} />
+        <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
         <Route path="/notifications" element={<RequireVerified><Notifications /></RequireVerified>} />
-        <Route path="/profile" element={<RequireVerified><Profile /></RequireVerified>} />
+        <Route path="/profile" element={<RequireVerified allowIncompleteProfile><Profile /></RequireVerified>} />
         <Route path="/profile/:id" element={<RequireVerified><ProfileView /></RequireVerified>} />
         <Route path="/albums" element={<RequireVerified><Albums /></RequireVerified>} />
         <Route path="/matches" element={<RequireVerified><Matches /></RequireVerified>} />
