@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { premiumAPI, PremiumPlan } from '../api/premium';
 import { useAuthStore } from '../hooks/store';
+import { BETA_INVITE_REQUIRED } from '../lib/betaInvite';
 import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
 import { MobileBackButton } from '../components/MobileBackButton';
@@ -75,8 +76,19 @@ export const Premium: React.FC = () => {
             MenRush Premium
           </h1>
           <p className="text-sm text-[#A89070] text-center mb-6">
-            No swiping theatre. Pay once. Get the edge.
+            {BETA_INVITE_REQUIRED
+              ? 'Premium perks are included free during the private beta.'
+              : 'No swiping theatre. Pay once. Get the edge.'}
           </p>
+
+          {BETA_INVITE_REQUIRED ? (
+            <div className="rounded-xl border border-[#C4832A]/40 bg-[#C4832A]/10 p-4 text-center mb-5">
+              <p className="text-[#C4832A] font-bold">Beta access includes Premium</p>
+              <p className="text-xs text-[#A89070] mt-1">
+                Billing stays off until CCBill merchant approval. Enjoy the full feature set while we test.
+              </p>
+            </div>
+          ) : null}
 
           {isPremium ? (
             <div className="rounded-xl border border-[#C4832A]/40 bg-[#C4832A]/10 p-4 text-center mb-5">
@@ -100,7 +112,7 @@ export const Premium: React.FC = () => {
                 ))}
               </ul>
 
-              {plan ? (
+              {plan && !BETA_INVITE_REQUIRED ? (
                 <button
                   type="button"
                   disabled={checkingOut || isPremium}

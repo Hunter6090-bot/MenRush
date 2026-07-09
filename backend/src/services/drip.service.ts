@@ -78,7 +78,7 @@ export const DRIP_SCHEDULE: readonly DripStep[] = [
     key: 'mr-d17-save-the-date',
     dayOffset: 17,
     filename: 'email5-save-the-date.html',
-    subject: 'Save the date — beta opens September 10, 2026',
+    subject: 'Save the date — MenRush beta is open now',
   },
   {
     key: 'mr-d25-build-journey',

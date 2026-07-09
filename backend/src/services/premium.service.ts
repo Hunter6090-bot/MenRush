@@ -100,9 +100,11 @@ export const premiumService = {
     const active =
       Boolean(row.is_premium) && (!until || until.getTime() > Date.now());
 
+    const betaFree = this.isBetaPremiumFree();
     return {
-      tier: (row.premium_tier || 'free') as PremiumTier,
-      is_premium: active,
+      tier: betaFree ? 'premium' : ((row.premium_tier || 'free') as PremiumTier),
+      is_premium: betaFree || active,
+      beta_premium_included: betaFree,
       premium_until: until?.toISOString() ?? null,
       subscription: row.subscription_id
         ? {
@@ -113,17 +115,23 @@ export const premiumService = {
             current_period_end: row.current_period_end,
           }
         : null,
-      features: active ? PREMIUM_FEATURES : [],
+      features: betaFree || active ? PREMIUM_FEATURES : [],
       free_limits: FREE_LIMITS,
     };
   },
 
+  isBetaPremiumFree(): boolean {
+    return process.env.BETA_PREMIUM_FREE === 'true';
+  },
+
   async isPremium(userId: string): Promise<boolean> {
+    if (this.isBetaPremiumFree()) return true;
     const status = await this.getStatus(userId);
     return Boolean(status?.is_premium);
   },
 
   async hasFeature(userId: string, _feature: PremiumFeature): Promise<boolean> {
+    if (this.isBetaPremiumFree()) return true;
     const status = await this.getStatus(userId);
     return Boolean(status?.is_premium);
   },
