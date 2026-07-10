@@ -170,6 +170,17 @@ Tables: `users`, `profiles`, `messages`, `likes`, `rooms`, `room_members`, `room
 
 ---
 
+## Multi-agent coordination
+
+Grok, Cursor, and Claude all edit this repo. **Before any commit or push:**
+
+1. `git fetch origin` and diff against `origin/mvp-complete`
+2. Read **`docs/ai-coordination.md`** (work ledger + pre-commit checklist)
+3. If the feature is already on remote, do not recommit
+4. Tag commit messages with `(claude)` for traceability
+
+---
+
 ## Security Warning
 
 MCP Docker previously injected malicious code into this repo:

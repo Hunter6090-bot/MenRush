@@ -62,6 +62,16 @@ cd backend && npm run dev     # :3000
 cd frontend && npm run dev    # :5173
 ```
 
+## Multi-agent coordination (Grok, Cursor, Claude)
+
+**Do not duplicate work** already done by another agent. Before any commit or push:
+
+1. `git fetch origin` and compare to `origin/mvp-complete`
+2. Read `docs/ai-coordination.md` — work ledger + pre-commit checklist
+3. Search `git log` for the feature; if it exists on remote, stop
+4. Stage narrowly; tag commits with `(cursor)` in the message
+5. Audit `frontend/src/api/client.ts` and `backend/src/server.ts` before push
+
 ## Cursor usage
 
 - Set `.env` before asking the Agent to wire new features (see `docs/cursor-workflow-guide.md`).
