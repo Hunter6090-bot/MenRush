@@ -1,13 +1,22 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { usersAPI } from '../api/client';
+import { profileMetaAPI, usersAPI } from '../api/client';
 import { Layout } from '../components/Layout';
-import { ConversationItem } from '../components/ConversationItem';
 import { IconMatches } from '../components/icons';
 import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { getPhotoUrl } from '../components/UserAvatar';
 import { PremiumGate } from '../components/PremiumGate';
+import { LiveLocationSharingToggle } from '../components/LiveLocationSharingToggle';
+import { MatchesLiveMap } from '../components/MatchesLiveMap';
+
+import { useLocationStore } from '../hooks/store';
+import { useSocket } from '../hooks/useSocket';
+import {
+  formatMatchDistanceKm,
+  getMatchCoordinates,
+  hasVisibleMatchLocation,
+} from '../lib/matchLiveLocation';
 
 interface Match {
   id: string;
@@ -21,6 +30,11 @@ interface Match {
   last_message_at?: string;
   matched_at?: string;
   is_verified?: boolean;
+  live_location_sharing?: boolean;
+  lat?: number | string | null;
+  lng?: number | string | null;
+  location_updated_at?: string | null;
+  distance_km?: number | string | null;
 }
 
 function formatMatchedAgo(iso?: string): string | null {
@@ -62,8 +76,10 @@ function MatchGridCard({ match, onClick }: { match: Match; onClick: () => void }
             {match.is_verified ? <VerifiedBadge size="sm" /> : null}
           </div>
           <p className="mt-0.5 truncate text-xs text-[#E0A14A]">
-            {formatMatchedAgo(match.matched_at ?? match.last_message_at) ??
-              (match.online ? 'Active now' : 'Last seen recently')}
+            {hasVisibleMatchLocation(match)
+              ? `Live · ${formatMatchDistanceKm(match.distance_km) ?? 'nearby'}`
+              : formatMatchedAgo(match.matched_at ?? match.last_message_at) ??
+                (match.online ? 'Active now' : 'Last seen recently')}
           </p>
         </div>
       </div>
@@ -95,39 +111,135 @@ export const Matches = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [premiumOpen, setPremiumOpen] = useState(false);
+  const [sharingLiveLocation, setSharingLiveLocation] = useState(true);
   const navigate = useNavigate();
+  const socket = useSocket();
+  const lat = useLocationStore((s) => s.lat);
+  const lng = useLocationStore((s) => s.lng);
+
+  const fetchMatches = useCallback(async () => {
+    try {
+      const [matchesRes, likesRes, sharingRes] = await Promise.all([
+        usersAPI.getMatches(),
+        usersAPI.getReceivedLikesSummary().catch(() => ({ data: { count: 0, is_premium: false } })),
+        profileMetaAPI.getLiveLocationSharing().catch(() => ({ data: { enabled: true } })),
+      ]);
+      setMatches(matchesRes.data);
+      setLikesCount(likesRes.data.count ?? 0);
+      setSharingLiveLocation(sharingRes.data.enabled !== false);
+      setError('');
+    } catch {
+      setError('Could not load matches.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchMatches = async () => {
-      try {
-        const [matchesRes, likesRes] = await Promise.all([
-          usersAPI.getMatches(),
-          usersAPI.getReceivedLikesSummary().catch(() => ({ data: { count: 0, is_premium: false } })),
-        ]);
-        setMatches(matchesRes.data);
-        setLikesCount(likesRes.data.count ?? 0);
-      } catch {
-        setError('Could not load matches.');
-      } finally {
-        setLoading(false);
-      }
+    void fetchMatches();
+  }, [fetchMatches]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      void fetchMatches();
+    }, 20000);
+    return () => window.clearInterval(id);
+  }, [fetchMatches]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const onMatchLocation = (payload: {
+      user_id: string;
+      lat: number;
+      lng: number;
+      updated_at: string;
+    }) => {
+      setMatches((prev) =>
+        prev.map((match) =>
+          match.id === payload.user_id
+            ? {
+                ...match,
+                live_location_sharing: true,
+                lat: payload.lat,
+                lng: payload.lng,
+                location_updated_at: payload.updated_at,
+              }
+            : match,
+        ),
+      );
     };
-    fetchMatches();
-  }, []);
+    socket.on('match:location', onMatchLocation);
+    return () => {
+      socket.off('match:location', onMatchLocation);
+    };
+  }, [socket]);
+
+  const liveMapMatches = useMemo(
+    () =>
+      matches
+        .map((match) => {
+          const coords = getMatchCoordinates(match);
+          if (!coords) return null;
+          return {
+            id: match.id,
+            name: match.name,
+            photo_url: match.photo_url,
+            lat: coords.lat,
+            lng: coords.lng,
+            distance_km: match.distance_km,
+          };
+        })
+        .filter((match): match is NonNullable<typeof match> => match != null),
+    [matches],
+  );
+
+  const handleSharingToggle = async (enabled: boolean) => {
+    setSharingLiveLocation(enabled);
+    try {
+      await profileMetaAPI.setLiveLocationSharing(enabled);
+      if (enabled && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          ({ coords }) => {
+            void usersAPI.updateLocation(coords.latitude, coords.longitude);
+          },
+          () => {},
+          { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
+        );
+      }
+      await fetchMatches();
+    } catch {
+      setSharingLiveLocation((current) => !current);
+      setError('Could not update live location sharing.');
+    }
+  };
 
   return (
     <Layout>
-      <div className="mx-auto max-w-6xl px-6 py-6 pb-12">
-        <div className="mb-6">
-          <h1 className="text-2xl font-extrabold text-[var(--cream)] lg:text-[28px]">Matches</h1>
-          <p className="mt-1 hidden text-sm text-[var(--cream-muted)] lg:block">
-            Mutual likes. Chat&apos;s open.
-          </p>
-          <p className="mt-1 text-sm text-[var(--cream-muted)] lg:hidden">Your mutual connections</p>
+      <div className="mx-auto max-w-6xl px-4 py-4 pb-12 sm:px-6 sm:py-6">
+        <div className="mb-6 space-y-4">
+          <div>
+            <h1 className="text-2xl font-extrabold text-[var(--cream)] lg:text-[28px]">Matches</h1>
+            <p className="mt-1 hidden text-sm text-[var(--cream-muted)] lg:block">
+              Mutual likes. Live location is on by default — slide the toggle off to pause.
+            </p>
+            <p className="mt-1 text-sm text-[var(--cream-muted)] lg:hidden">Your mutual connections</p>
+          </div>
+          <LiveLocationSharingToggle enabled={sharingLiveLocation} onToggle={handleSharingToggle} compact />
         </div>
 
+        {!loading && liveMapMatches.length > 0 ? (
+          <div className="mb-6">
+            <MatchesLiveMap
+              matches={liveMapMatches}
+              selfLat={lat}
+              selfLng={lng}
+              onSelectMatch={(matchId) => navigate(`/messages/${matchId}`)}
+            />
+          </div>
+        ) : null}
+
         {loading ? (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3.5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] sm:gap-3.5">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="aspect-[3/3.6] animate-pulse rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]" />
             ))}
@@ -137,33 +249,18 @@ export const Matches = () => {
             <p className="text-sm text-[var(--cream-muted)]">{error}</p>
           </div>
         ) : matches.length > 0 || likesCount > 0 ? (
-          <>
-            <div className="hidden grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3.5 lg:grid">
-              {matches.map((match) => (
-                <MatchGridCard
-                  key={match.id}
-                  match={match}
-                  onClick={() => navigate(`/messages/${match.id}`)}
-                />
-              ))}
-              {likesCount > 0 ? (
-                <PremiumUpsellTile count={likesCount} onClick={() => setPremiumOpen(true)} />
-              ) : null}
-            </div>
-            <div className="flex flex-col gap-3 lg:hidden">
-              {matches.map((match) => (
-                <ConversationItem
-                  key={match.id}
-                  userId={match.id}
-                  name={match.name}
-                  photoUrl={match.photo_url}
-                  online={match.online}
-                  lastMessageTime={match.last_message_at}
-                  lastMessage={match.last_message ?? (match.online ? 'Active now' : 'Tap to open chat')}
-                />
-              ))}
-            </div>
-          </>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] sm:gap-3.5">
+            {matches.map((match) => (
+              <MatchGridCard
+                key={match.id}
+                match={match}
+                onClick={() => navigate(`/messages/${match.id}`)}
+              />
+            ))}
+            {likesCount > 0 ? (
+              <PremiumUpsellTile count={likesCount} onClick={() => setPremiumOpen(true)} />
+            ) : null}
+          </div>
         ) : (
           <div className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] py-24 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[rgba(196,131,42,0.1)]">

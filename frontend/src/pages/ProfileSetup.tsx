@@ -16,7 +16,7 @@ import {
   type PhotoChoice,
 } from '../lib/genericAvatar';
 import { normalizeProfileImageFile } from '../lib/imageUpload';
-import { PROFILE_LOOKING_FOR_TAGS, PROFILE_TAG_GROUPS } from '../lib/profileTags';
+import { PROFILE_LOOKING_FOR_TAGS, PROFILE_TAG_GROUPS, toggleProfileInterest } from '../lib/profileTags';
 import {
   clearProfileSetupSkip,
   PROFILE_SETUP_STEPS,
@@ -45,7 +45,7 @@ const INTRO_ITEMS = [
   'Add your photo or pick a shared generic avatar',
   'Write a short bio guys can read on the map',
   'Pick what you are looking for',
-  'Tag position, tribe, body & vibe',
+  'Tag position, tribe, body, ethnicity & vibe',
   'Turn on live location and go visible',
 ] as const;
 
@@ -193,10 +193,8 @@ export const ProfileSetup: React.FC = () => {
     }
   };
 
-  const toggleInterest = (tag: string) => {
-    setInterests((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : prev.length < 10 ? [...prev, tag] : prev,
-    );
+  const toggleInterest = (tag: string, group: (typeof tagGroups)[number]) => {
+    setInterests((prev) => toggleProfileInterest(prev, tag, group));
   };
 
   const goNext = async () => {
@@ -528,7 +526,7 @@ export const ProfileSetup: React.FC = () => {
                         key={tag}
                         type="button"
                         disabled={maxed}
-                        onClick={() => toggleInterest(tag)}
+                        onClick={() => toggleInterest(tag, group)}
                         className={`rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors ${
                           active
                             ? 'border-[#C4832A] bg-[rgba(196,131,42,0.2)] text-[#E0A14A]'

@@ -85,7 +85,6 @@ export function getNavItems(): NavItem[] {
       label: ROUTE_LABELS.alerts,
       Icon: IconNotifications,
       badgeKey: 'notifications',
-      mobileTab: true,
       desktopNav: false,
     },
   ];

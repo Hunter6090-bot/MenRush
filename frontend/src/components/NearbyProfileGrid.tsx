@@ -13,7 +13,7 @@ interface NearbyProfileGridProps {
 export function NearbyProfileGrid({ users, loading, onSelect }: NearbyProfileGridProps) {
   if (loading && users.length === 0) {
     return (
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3.5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-3.5">
         {[...Array(6)].map((_, i) => (
           <div key={i} className="aspect-[3/3.6] animate-pulse rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]" />
         ))}
@@ -30,7 +30,7 @@ export function NearbyProfileGrid({ users, loading, onSelect }: NearbyProfileGri
   }
 
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3.5">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] lg:gap-3.5">
       {users.map((user) => {
         const photo = getPhotoUrl(user.photo_url);
         const meta = `${formatDistanceMiles(user)} · ${getTribeTag(user)} · ${formatActiveStatus(user)}`;

@@ -17,13 +17,8 @@ import { QRCodeSVG } from 'qrcode.react';
 import { profileUrl as buildProfileUrl } from '../lib/profileLinks';
 import { getPhotoUrl } from '../components/UserAvatar';
 
-const INTEREST_GROUPS: { label: string; tags: string[] }[] = [
-  { label: 'Position', tags: ['Top', 'Vers Top', 'Vers', 'Vers Bottom', 'Bottom', 'Side'] },
-  { label: 'Tribe', tags: ['Twink', 'Twunk', 'Otter', 'Bear', 'Cub', 'Daddy', 'Wolf', 'Jock', 'Leather', 'Rugged', 'Geek'] },
-  { label: 'Body', tags: ['Slim', 'Athletic', 'Muscular', 'Stocky', 'Chubby', 'Hairy', 'Smooth', 'Tatted'] },
-  { label: 'Looking for', tags: ['NSA', 'Hookup', 'Casual', 'Dating', 'FWB', 'Discreet', 'Hosting', 'Can Travel', 'Right Now'] },
-  { label: 'Vibe', tags: ['Kinky', 'Vanilla', 'Open', 'Sober', 'PnP-Free', 'Verified Only'] },
-];
+import { PROFILE_TAG_GROUPS, toggleProfileInterest } from '../lib/profileTags';
+import { clearProfileSetupSkip, isProfileSetupComplete } from '../lib/profileSetup';
 
 interface ProfileData {
   id: string;
@@ -163,10 +158,8 @@ export const Profile = () => {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const toggleInterest = (tag: string) => {
-    setInterests((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : prev.length < 10 ? [...prev, tag] : prev
-    );
+  const toggleInterest = (tag: string, group: (typeof PROFILE_TAG_GROUPS)[number]) => {
+    setInterests((prev) => toggleProfileInterest(prev, tag, group));
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -256,6 +249,17 @@ export const Profile = () => {
       const res = await usersAPI.updateProfile({ bio, headline, looking_for: lookingFor, photo_url: photoUrl || undefined, interests });
       setProfile((p) => p ? { ...p, ...res.data } : p);
       if (user && token) setAuth({ ...user, bio, photo_url: photoUrl || undefined }, token);
+      if (
+        isProfileSetupComplete({
+          photo_url: photoUrl,
+          bio,
+          headline,
+          looking_for: lookingFor,
+          interests,
+        })
+      ) {
+        clearProfileSetupSkip();
+      }
       showToast('success', 'Profile saved');
     } catch {
       showToast('error', 'Failed to save. Please try again.');
@@ -610,7 +614,7 @@ export const Profile = () => {
               <label className="block text-xs font-medium text-[#A89070] uppercase tracking-wide">
                 Your tags <span className="normal-case text-[#A89070]/50">({interests.length}/10)</span>
               </label>
-              {INTEREST_GROUPS.map((group) => (
+              {PROFILE_TAG_GROUPS.map((group) => (
                 <div key={group.label}>
                   <p className="text-[10px] font-black text-[#A89070]/60 uppercase tracking-[.18em] mb-2">{group.label}</p>
                   <div className="flex flex-wrap gap-2">
@@ -621,7 +625,7 @@ export const Profile = () => {
                         <button
                           key={tag}
                           type="button"
-                          onClick={() => toggleInterest(tag)}
+                          onClick={() => toggleInterest(tag, group)}
                           disabled={maxed}
                           className={`px-3 py-1 rounded-full text-xs font-medium border transition-all duration-150 ${
                             active

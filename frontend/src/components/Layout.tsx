@@ -113,13 +113,22 @@ function LayoutInner({ children }: LayoutProps) {
               {showMobileBack ? (
                 <MobileBackButton fallback={mobileBackTarget} className="-ml-1" />
               ) : (
-                <Link to="/discover" aria-label="MenRush home" className="inline-flex">
-                  <BrandMark size="sm" />
-                </Link>
+                <span className="block w-10" aria-hidden />
               )}
             </div>
             <div className="min-w-0 flex-1 text-center">
-              {location.pathname !== '/discover' && (
+              {location.pathname === '/discover' ? (
+                <Link
+                  to="/discover"
+                  aria-label="MenRush home"
+                  className="inline-flex items-center justify-center gap-2"
+                >
+                  <BrandMark size="sm" className="shadow-[0_0_0_2px_rgba(196,131,42,0.35)] rounded-full" />
+                  <span className="font-display text-xs font-black tracking-[0.16em] text-[var(--cream)]">
+                    MENRUSH
+                  </span>
+                </Link>
+              ) : (
                 <p className="truncate text-sm font-bold tracking-wide text-[var(--cream)]">{pageTitle}</p>
               )}
             </div>
@@ -149,6 +158,14 @@ function LayoutInner({ children }: LayoutProps) {
         </header>
 
         <div className="hidden lg:flex h-16 shrink-0 items-center gap-3.5 border-b border-nn-border bg-nn-bg px-6">
+          <Link
+            to="/discover"
+            aria-label="MenRush home"
+            className="inline-flex shrink-0 items-center gap-2.5 rounded-full pr-1 transition-opacity hover:opacity-90"
+          >
+            <BrandMark size="sm" className="shadow-[0_0_0_2px_rgba(196,131,42,0.35)] rounded-full" />
+            <span className="font-display text-sm font-black tracking-[0.14em] text-nn-text">MENRUSH</span>
+          </Link>
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
