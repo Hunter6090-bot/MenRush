@@ -49,10 +49,16 @@ export function useWebRTC() {
   }, []);
 
   const releaseMedia = useCallback(() => {
+    const pc = pcRef.current;
+    if (pc) {
+      pc.getSenders().forEach((sender) => sender.track?.stop());
+      pc.getReceivers().forEach((receiver) => receiver.track?.stop());
+      pc.close();
+    }
+    pcRef.current = null;
+
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
     remoteStreamRef.current?.getTracks().forEach((track) => track.stop());
-    pcRef.current?.close();
-    pcRef.current = null;
     localStreamRef.current = null;
     remoteStreamRef.current = null;
     remotePeerRef.current = null;

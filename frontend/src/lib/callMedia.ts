@@ -30,13 +30,31 @@ export function mapCallMediaError(error: unknown): string {
   return 'Could not start the video call';
 }
 
+export function detachStreamFromVideo(video: HTMLVideoElement | null): void {
+  if (!video) return;
+  try {
+    video.pause();
+  } catch {
+    /* ignore */
+  }
+  video.srcObject = null;
+  video.removeAttribute('src');
+  video.load();
+}
+
 export async function attachStreamToVideo(
   video: HTMLVideoElement | null,
   stream: MediaStream | null,
 ): Promise<void> {
-  if (!video || !stream) return;
+  if (!video) return;
+  if (!stream) {
+    detachStreamFromVideo(video);
+    return;
+  }
   try {
-    video.srcObject = stream;
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
     await video.play();
   } catch {
     /* preview falls back to avatar */

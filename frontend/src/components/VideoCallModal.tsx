@@ -1,10 +1,24 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCallStore } from '../hooks/store';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { useSocket } from '../hooks/useSocket';
 import { createCallTone, type CallToneKind } from '../lib/callTones';
 import { registerOutgoingCallHandler } from '../lib/callBridge';
-import { attachStreamToVideo, mapCallMediaError } from '../lib/callMedia';
+import { attachStreamToVideo, detachStreamFromVideo, mapCallMediaError } from '../lib/callMedia';
+
+type PrimaryFeed = 'remote' | 'local';
+
+const PIP_SIZE_PRESETS = {
+  s: { width: 96, height: 144 },
+  m: { width: 128, height: 192 },
+  l: { width: 168, height: 252 },
+  xl: { width: 216, height: 324 },
+} as const;
+
+type PipSizeKey = keyof typeof PIP_SIZE_PRESETS;
+
+const MIN_PIP = { width: 80, height: 120 };
+const MAX_PIP = { width: 280, height: 420 };
 
 // Unanswered calls end cleanly after this long. Overridable in tests so the
 // timeout path can be exercised without waiting the full 30s.
@@ -44,14 +58,57 @@ export function VideoCallModal() {
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const primaryVideoRef = useRef<HTMLVideoElement>(null);
+  const pipVideoRef = useRef<HTMLVideoElement>(null);
+
+  const [primaryFeed, setPrimaryFeed] = useState<PrimaryFeed>('remote');
+  const [pipSize, setPipSize] = useState<{ width: number; height: number }>(PIP_SIZE_PRESETS.m);
+  const [pipSizeKey, setPipSizeKey] = useState<PipSizeKey>('m');
+  const resizeRef = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(
+    null,
+  );
+
+  const resetLayout = useCallback(() => {
+    setPrimaryFeed('remote');
+    setPipSize(PIP_SIZE_PRESETS.m);
+    setPipSizeKey('m');
+  }, []);
+
+  const detachAllVideos = useCallback(() => {
+    detachStreamFromVideo(localVideoRef.current);
+    detachStreamFromVideo(remoteVideoRef.current);
+    detachStreamFromVideo(primaryVideoRef.current);
+    detachStreamFromVideo(pipVideoRef.current);
+  }, []);
 
   useEffect(() => {
-    void attachStreamToVideo(localVideoRef.current, localStream);
-  }, [localStream, callStatus]);
+    if (callStatus === 'calling') {
+      void attachStreamToVideo(localVideoRef.current, localStream);
+      detachStreamFromVideo(primaryVideoRef.current);
+      detachStreamFromVideo(pipVideoRef.current);
+      detachStreamFromVideo(remoteVideoRef.current);
+      return;
+    }
+
+    if (callStatus === 'connected') {
+      const primaryStream = primaryFeed === 'remote' ? remoteStream : localStream;
+      const pipStream = primaryFeed === 'remote' ? localStream : remoteStream;
+      void attachStreamToVideo(primaryVideoRef.current, primaryStream);
+      void attachStreamToVideo(pipVideoRef.current, pipStream);
+      detachStreamFromVideo(localVideoRef.current);
+      detachStreamFromVideo(remoteVideoRef.current);
+      return;
+    }
+
+    detachAllVideos();
+  }, [localStream, remoteStream, callStatus, primaryFeed, detachAllVideos]);
 
   useEffect(() => {
-    void attachStreamToVideo(remoteVideoRef.current, remoteStream);
-  }, [remoteStream, callStatus]);
+    if (callStatus === 'idle' || callStatus === 'ended') {
+      resetLayout();
+      detachAllVideos();
+    }
+  }, [callStatus, resetLayout, detachAllVideos]);
 
   useEffect(() => {
     registerOutgoingCallHandler(async (targetPeerId, _targetName) => {
@@ -159,6 +216,42 @@ export function VideoCallModal() {
 
   const mirrorLocalVideo = facingMode === 'user';
   const localVideoMirrorStyle = mirrorLocalVideo ? { transform: 'scaleX(-1)' } : undefined;
+
+  const swapFeeds = () => {
+    setPrimaryFeed((feed) => (feed === 'remote' ? 'local' : 'remote'));
+  };
+
+  const applyPipPreset = (key: PipSizeKey) => {
+    setPipSizeKey(key);
+    setPipSize(PIP_SIZE_PRESETS[key]);
+  };
+
+  const onPipResizeStart = (event: React.PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    resizeRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      startW: pipSize.width,
+      startH: pipSize.height,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const onPipResizeMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const start = resizeRef.current;
+    if (!start) return;
+    const nextW = Math.min(MAX_PIP.width, Math.max(MIN_PIP.width, start.startW + (event.clientX - start.startX)));
+    const nextH = Math.min(MAX_PIP.height, Math.max(MIN_PIP.height, start.startH + (event.clientY - start.startY)));
+    setPipSize({ width: nextW, height: nextH });
+    setPipSizeKey('m');
+  };
+
+  const onPipResizeEnd = (event: React.PointerEvent<HTMLButtonElement>) => {
+    resizeRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
 
   const initials = (name: string) =>
     name
@@ -381,19 +474,25 @@ export function VideoCallModal() {
 
   // ── Connected / in-call ──────────────────────────────────────────────────
   if (callStatus === 'connected') {
+    const primaryIsLocal = primaryFeed === 'local';
+    const primaryMirrorStyle = primaryIsLocal ? localVideoMirrorStyle : undefined;
+    const pipMirrorStyle = primaryIsLocal ? undefined : localVideoMirrorStyle;
+    const pipShowsLocal = primaryFeed === 'remote';
+    const showPipCameraOff = pipShowsLocal && isCameraOff;
+    const primaryStream = primaryFeed === 'remote' ? remoteStream : localStream;
+
     return (
-      <div className="fixed inset-0 z-[200] bg-black flex items-center justify-center">
-        {/* Remote video — fills screen */}
+      <div className="fixed inset-0 z-[200] bg-black flex items-center justify-center" data-testid="connected-call">
         <video
-          ref={remoteVideoRef}
+          ref={primaryVideoRef}
           autoPlay
           playsInline
+          muted={primaryIsLocal}
           className="absolute inset-0 w-full h-full object-cover"
-          style={{ background: '#0D0A06' }}
+          style={{ background: '#0D0A06', ...primaryMirrorStyle }}
         />
 
-        {/* Fallback when no remote video yet */}
-        {!remoteStream && (
+        {!primaryStream && (
           <div
             className="absolute inset-0 flex items-center justify-center"
             style={{ background: '#0D0A06' }}
@@ -410,41 +509,89 @@ export function VideoCallModal() {
           </div>
         )}
 
-        {/* Local PiP — bottom right */}
         <div
-          className="absolute bottom-28 right-4 rounded-2xl overflow-hidden shadow-2xl"
+          className="absolute bottom-28 right-4 rounded-2xl overflow-hidden shadow-2xl touch-none"
           style={{
-            width: 120,
-            height: 180,
+            width: pipSize.width,
+            height: pipSize.height,
             border: '2px solid rgba(196,131,42,0.5)',
             background: '#1E1508',
             zIndex: 10,
           }}
         >
+          <button
+            type="button"
+            onClick={swapFeeds}
+            className="absolute inset-0 z-10"
+            aria-label="Swap main and picture-in-picture video"
+          />
           <video
-            ref={localVideoRef}
+            ref={pipVideoRef}
             autoPlay
             playsInline
             muted
-            className="w-full h-full object-cover"
-            style={localVideoMirrorStyle}
+            className="relative z-0 h-full w-full object-cover pointer-events-none"
+            style={pipMirrorStyle}
           />
-          {isCameraOff && (
+          {showPipCameraOff && (
             <div
-              className="absolute inset-0 flex items-center justify-center"
+              className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none"
               style={{ background: '#1E1508' }}
             >
               <CameraOffIcon className="w-8 h-8" style={{ color: '#A89070' }} />
             </div>
           )}
+          <button
+            type="button"
+            aria-label="Resize picture-in-picture video"
+            onPointerDown={onPipResizeStart}
+            onPointerMove={onPipResizeMove}
+            onPointerUp={onPipResizeEnd}
+            onPointerCancel={onPipResizeEnd}
+            className="absolute bottom-1 right-1 z-30 flex h-7 w-7 items-center justify-center rounded-full"
+            style={{
+              background: 'rgba(13,10,6,0.75)',
+              border: '1px solid rgba(196,131,42,0.45)',
+              color: '#F0E0C0',
+            }}
+          >
+            <ResizeIcon className="h-3.5 w-3.5" />
+          </button>
         </div>
 
-        {/* Controls bar */}
         <div
-          className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-2 sm:gap-4 px-4 sm:px-8 pb-[max(2rem,env(safe-area-inset-bottom))] pt-4"
+          className="absolute top-0 left-0 right-0 flex items-center justify-between gap-3 px-4 pt-[max(0.75rem,env(safe-area-inset-top))]"
           style={{ zIndex: 10 }}
         >
-          {/* Mute */}
+          <p className="truncate text-sm font-semibold" style={{ color: '#F0E0C0' }}>
+            {peerName ?? 'Call'}
+          </p>
+          <div
+            className="flex items-center gap-1 rounded-full px-1 py-1"
+            style={{ background: 'rgba(13,10,6,0.72)', border: '1px solid #3D2B0E' }}
+          >
+            {(['s', 'm', 'l', 'xl'] as const).map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => applyPipPreset(key)}
+                aria-label={`Picture-in-picture size ${key.toUpperCase()}`}
+                className="rounded-full px-2.5 py-1 text-xs font-bold uppercase transition-colors"
+                style={{
+                  background: pipSizeKey === key ? '#C4832A' : 'transparent',
+                  color: pipSizeKey === key ? '#0D0A06' : '#A89070',
+                }}
+              >
+                {key}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div
+          className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-2 sm:gap-3 px-4 sm:px-8 pb-[max(2rem,env(safe-area-inset-bottom))] pt-4"
+          style={{ zIndex: 10 }}
+        >
           <button
             onClick={toggleMute}
             aria-label={isMuted ? 'Unmute' : 'Mute'}
@@ -459,7 +606,21 @@ export function VideoCallModal() {
             {isMuted ? <MicOffIcon className="w-6 h-6" /> : <MicIcon className="w-6 h-6" />}
           </button>
 
-          {/* End call */}
+          <button
+            type="button"
+            onClick={swapFeeds}
+            aria-label="Swap video views"
+            className="w-14 h-14 rounded-full flex items-center justify-center transition-all duration-150 active:scale-95"
+            style={{
+              background: 'rgba(30,21,8,0.85)',
+              border: '1px solid #3D2B0E',
+              backdropFilter: 'blur(8px)',
+              color: '#F0E0C0',
+            }}
+          >
+            <SwapViewIcon className="w-6 h-6" />
+          </button>
+
           <button
             onClick={endCall}
             aria-label="End call"
@@ -473,7 +634,6 @@ export function VideoCallModal() {
             <EndCallIcon className="w-7 h-7" />
           </button>
 
-          {/* Camera toggle */}
           <button
             onClick={toggleCamera}
             aria-label={isCameraOff ? 'Turn camera on' : 'Turn camera off'}
@@ -485,11 +645,7 @@ export function VideoCallModal() {
               color: isCameraOff ? '#EF4444' : '#F0E0C0',
             }}
           >
-            {isCameraOff ? (
-              <CameraOffIcon className="w-6 h-6" />
-            ) : (
-              <CameraIcon className="w-6 h-6" />
-            )}
+            {isCameraOff ? <CameraOffIcon className="w-6 h-6" /> : <CameraIcon className="w-6 h-6" />}
           </button>
 
           {canSwitchCamera && (
@@ -606,5 +762,20 @@ const FlipCameraIcon = ({ className }: { className?: string }) => (
     />
     <path strokeLinecap="round" strokeLinejoin="round" d="M16 8l4-2v12l-4-2" />
     <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l2 2-2 2M19 17l2-2-2-2" />
+  </svg>
+);
+
+const SwapViewIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h12l-3-3M17 17H5l3 3" />
+    <rect x="3" y="5" width="8" height="6" rx="1.5" />
+    <rect x="13" y="13" width="8" height="6" rx="1.5" />
+  </svg>
+);
+
+const ResizeIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M14 14l6 6M20 14v6h-6" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M10 10L4 4M4 10V4h6" />
   </svg>
 );
