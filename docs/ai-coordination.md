@@ -47,8 +47,12 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
-| Login show-password + clearer errors | `261e5e9` — pushed + Vercel prod | — | Grok — live on menrush.com |
-| Password reset Zoho fallback | `261e5e9` — pushed | backend deploy pending on Railway | Grok — commit on `mvp-complete`; Railway not promoting new builds yet |
+| Login show-password + clearer errors | `261e5e9`, `c0ed4e1` — pushed | — | Grok — `/login` + landing |
+| Password reset Zoho fallback | `261e5e9` — pushed | backend deploy pending on Railway | Grok — Railway not promoting new builds yet |
+| Video call camera/layout/ringtone | `902440a` — pushed | — | Grok |
+| UK locale miles display | `addb919` — pushed | — | Grok |
+| Mobile discover/matches/hub | `1ae8323` — pushed | — | Grok |
+| AI coordination runbook | `902846b` — pushed | — | Grok |
 | ID verification gate pause + broadcast | `705494f` — pushed | — | Grok — do not redo |
 | Miles radius dropdown / quick pills | `26fd490`, `a5d58a3` | `RadiusMilesSelect.tsx` further edits | Claude/Cursor on remote; local tweaks uncommitted |
 | UK locale: display miles vs km by browser locale | — | `localeUnits.ts`, `useLocaleUnits.ts`, display overrides | Grok — not on remote |
