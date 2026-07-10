@@ -1,3 +1,5 @@
+import { formatRadiusFromKm, resolveDistanceUnitSystem } from '../lib/localeUnits';
+
 export const RADIUS_OPTIONS = [1, 5, 10, 25, 50] as const;
 export type RadiusKm = (typeof RADIUS_OPTIONS)[number];
 
@@ -23,6 +25,7 @@ export function ProximitySlider({
   const atMin = index <= 0;
   const atMax = index >= RADIUS_OPTIONS.length - 1;
   const isMap = variant === 'map';
+  const radiusLabel = formatRadiusFromKm(value, resolveDistanceUnitSystem());
 
   const setIndex = (next: number) => {
     const clamped = Math.max(0, Math.min(RADIUS_OPTIONS.length - 1, next));
@@ -50,7 +53,7 @@ export function ProximitySlider({
           step={1}
           value={index}
           onChange={(event) => setIndex(Number(event.target.value))}
-          aria-label={`Search radius ${value} kilometres`}
+          aria-label={`Search radius ${radiusLabel}`}
           aria-valuemin={RADIUS_OPTIONS[0]}
           aria-valuemax={RADIUS_OPTIONS[RADIUS_OPTIONS.length - 1]}
           aria-valuenow={value}
@@ -76,7 +79,7 @@ export function ProximitySlider({
       <div
         className={`flex items-center gap-1.5 rounded-full border border-[var(--border-default)]/70 bg-[var(--bg-elevated)]/75 p-1.5 shadow-lg backdrop-blur-md ${className}`}
         data-testid="proximity-slider"
-        aria-label={`Search radius ${value} kilometres`}
+        aria-label={`Search radius ${radiusLabel}`}
       >
         {controls}
       </div>
@@ -93,7 +96,7 @@ export function ProximitySlider({
           Nearby radius
         </p>
         <p className="text-[11px] font-black text-[var(--copper)] tabular-nums">
-          {value} km
+          {radiusLabel}
         </p>
       </div>
       {controls}

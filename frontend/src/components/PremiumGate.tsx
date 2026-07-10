@@ -1,3 +1,5 @@
+import { formatRadiusFromKm } from '../lib/localeUnits';
+
 interface PremiumGateProps {
   headline?: string;
   subline?: string;
@@ -13,7 +15,7 @@ export function PremiumGate({
   subline = 'See them. Open chat. Skip the queue.',
   perks = [
     'See who matched you',
-    'Expand radius to 50 km',
+    `Expand radius to ${formatRadiusFromKm(50)}`,
     'Message without matching',
     'Boost — top of nearby for 30 min',
     'Incognito · advanced filters',

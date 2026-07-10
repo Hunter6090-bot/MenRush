@@ -1,4 +1,10 @@
 import type { NearbyUser } from '../components/ProfileCard';
+import {
+  formatDistanceFromKm,
+  formatRadiusFromKm,
+  resolveDistanceUnitSystem,
+  type DistanceUnitSystem,
+} from './localeUnits';
 
 const TRIBE_TAGS = [
   'Twink', 'Twunk', 'Otter', 'Bear', 'Cub', 'Daddy', 'Wolf', 'Jock', 'Leather', 'Rugged', 'Geek',
@@ -17,19 +23,7 @@ export const RADIUS_MILE_OPTIONS = Array.from({ length: 31 }, (_, i) => i + 1) a
 
 export type RadiusMilesSelection = 'all' | number;
 
-/** Quick-pick mile presets on Discover (toggle on second click). */
-export const QUICK_RADIUS_MILES = [1, 5, 25] as const;
-export type QuickRadiusMiles = (typeof QUICK_RADIUS_MILES)[number];
-
 export const DEFAULT_RADIUS_KM = 5;
-
-/** @deprecated Use QUICK_RADIUS_MILES */
-export const DESKTOP_RADIUS_MILES = QUICK_RADIUS_MILES;
-export type DesktopRadiusMiles = QuickRadiusMiles;
-
-export function isQuickRadiusActive(radiusKm: number, miles: QuickRadiusMiles): boolean {
-  return Math.abs(clampRadiusKm(radiusKm) - radiusSelectionToKm(miles)) < 0.2;
-}
 
 export const INTENT_FILTERS = ['All', 'Chat', 'Drinks', 'Date', 'NSA'] as const;
 export type IntentFilter = (typeof INTENT_FILTERS)[number];
@@ -61,10 +55,8 @@ export function radiusSelectionToKm(selection: RadiusMilesSelection): number {
   return clampRadiusKm(milesToKm(selection));
 }
 
-export function formatRadiusMiles(km: number): string {
-  const selection = kmToRadiusSelection(km);
-  if (selection === 'all') return 'All';
-  return `${selection} mile${selection === 1 ? '' : 's'}`;
+export function formatRadiusMiles(km: number, system?: DistanceUnitSystem): string {
+  return formatRadiusFromKm(km, system ?? resolveDistanceUnitSystem());
 }
 
 export function formatRadiusMilesLabel(selection: RadiusMilesSelection): string {
@@ -74,11 +66,7 @@ export function formatRadiusMilesLabel(selection: RadiusMilesSelection): string 
 
 export function formatDistanceMiles(user: NearbyUser): string {
   const km = Number(user.distance_km ?? 0);
-  if (!Number.isFinite(km) || km <= 0) return 'Nearby';
-  const miles = km * 0.621371;
-  if (miles < 0.1) return '< 0.1 mi';
-  if (miles < 10) return `${miles.toFixed(1)} mi`;
-  return `${Math.round(miles)} mi`;
+  return formatDistanceFromKm(km);
 }
 
 export function formatActiveStatus(user: NearbyUser): string {

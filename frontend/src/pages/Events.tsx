@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { EventDTO, eventsAPI } from '../api/client';
 import { Layout } from '../components/Layout';
 import { useLocationStore } from '../hooks/store';
+import { resolveLocaleTag } from '../lib/localeUnits';
 
 const CATEGORIES = ['All', 'Nightclub', 'Drag', 'Live', 'Bar', 'Pride', 'Fetish'] as const;
 
@@ -53,7 +54,10 @@ export const Events = () => {
   });
 
   const now = new Date();
-  const monthLabel = now.toLocaleString('en-GB', { month: 'long', year: 'numeric' });
+  const monthLabel = now.toLocaleString(resolveLocaleTag({ lat, lng }), {
+    month: 'long',
+    year: 'numeric',
+  });
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const firstWeekday = new Date(now.getFullYear(), now.getMonth(), 1).getDay();
   const eventDays = new Set(enriched.map((e) => e.day).filter(Boolean));

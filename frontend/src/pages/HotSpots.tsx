@@ -4,6 +4,7 @@ import { hotSpotsAPI, type HotSpotCategoryDTO, type HotSpotDTO } from '../api/cl
 import { Layout } from '../components/Layout';
 import { PulseRing } from '../components/PulseRing';
 import { useAuthStore, useLocationStore } from '../hooks/store';
+import { formatDistanceFromKm } from '../lib/localeUnits';
 
 export const HotSpots = () => {
   const { lat, lng } = useLocationStore();
@@ -133,7 +134,7 @@ export const HotSpots = () => {
                     <h2 className="text-base font-bold text-[var(--cream)]">{spot.name}</h2>
                     <p className="text-[13px] text-[var(--cream-muted)]">
                       {spot.city ?? 'UK'}
-                      {spot.distance_km != null ? ` · ${spot.distance_km} km` : ''}
+                      {spot.distance_km != null ? ` · ${formatDistanceFromKm(Number(spot.distance_km))}` : ''}
                     </p>
                   </div>
                   <div className="rounded-full border border-[var(--border-default)] bg-[rgba(196,131,42,0.12)] px-3 py-1 text-center">

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { syncLocaleCoords } from '../lib/localeUnits';
 
 interface User {
   id: string;
@@ -78,7 +79,10 @@ interface LocationState {
 export const useLocationStore = create<LocationState>((set) => ({
   lat: null,
   lng: null,
-  setLocation: (lat, lng) => set({ lat, lng }),
+  setLocation: (lat, lng) => {
+    syncLocaleCoords(lat, lng);
+    set({ lat, lng });
+  },
 }));
 
 interface UnreadState {
