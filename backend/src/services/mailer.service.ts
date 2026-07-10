@@ -216,6 +216,33 @@ function resendConfigured(): boolean {
   );
 }
 
+/** Account emails (password reset, etc.): prefer Resend, fall back to Zoho SMTP. */
+export async function sendTransactionalEmail(
+  params: SendEmailParams,
+): Promise<{ id: string; provider: 'resend' | 'zoho' }> {
+  if (resendConfigured()) {
+    try {
+      const result = await sendEmail(params);
+      return { id: result.id, provider: 'resend' };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[mailer] Resend transactional send failed, trying Zoho SMTP: ${msg}`);
+    }
+  }
+
+  try {
+    const result = await sendViaZohoSmtp(params);
+    return { id: result.id, provider: 'zoho' };
+  } catch (err) {
+    if (err instanceof MailerNotConfiguredError) {
+      throw new Error(
+        'Transactional email is not configured. Set RESEND_* or ZOHO_SMTP_* env vars on the backend.',
+      );
+    }
+    throw err;
+  }
+}
+
 /** Waitlist drip: prefer Resend, fall back to Zoho SMTP if Resend fails or is unset. */
 export async function sendWaitlistCampaignEmail(
   params: SendEmailParams,

@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { query } from '../db';
 import pool from '../db';
 import { RegisterInput, LoginInput, ResetPasswordInput } from '../types/validation';
-import { sendEmail } from './mailer.service';
+import { sendTransactionalEmail } from './mailer.service';
 import {
   buildTransactionalEmail,
   transactionalParagraph,
@@ -386,7 +386,7 @@ export const authService = {
       footerNote: 'You received this because a password reset was requested for your MenRush account.',
     });
 
-    await sendEmail({
+    await sendTransactionalEmail({
       to: deliverTo,
       subject: 'Reset your MenRush password',
       text: `We received a request to reset your MenRush password.\n\nOpen this link to choose a new password (valid for 1 hour):\n${resetUrl}\n\nIf you did not request this, you can ignore this email.`,

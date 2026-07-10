@@ -19,6 +19,8 @@ import {
 } from '../lib/publicStyles';
 import { BETA_INVITE_REQUIRED } from '../lib/betaInvite';
 import { FEATURES } from '../lib/featureFlags';
+import { PasswordInput } from '../components/PasswordInput';
+import { loginErrorMessage } from '../lib/authErrors';
 
 type LoginUser = {
   email?: string;
@@ -80,8 +82,8 @@ export const Login = () => {
 
       setAuth(res.data.user, res.data.token);
       routeAfterLogin(navigate, res.data.user, nextPath);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Login failed. Please try again.');
+    } catch (err: unknown) {
+      setError(loginErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -127,16 +129,13 @@ export const Login = () => {
                 <label htmlFor="login-password" className={publicLabelClass}>
                   Password
                 </label>
-                <input
+                <PasswordInput
                   id="login-password"
-                  type="password"
                   value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
+                  onChange={(value) => {
+                    setPassword(value);
                     setError('');
                   }}
-                  placeholder="••••••••"
-                  required
                   className={publicInputClass}
                 />
               </div>
