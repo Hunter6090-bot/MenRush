@@ -6,9 +6,12 @@ import { BrandMark } from '../components/BrandMark';
 import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
 import { SiteFooter } from '../components/SiteFooter';
+import { formatRadiusFromKm } from '../lib/localeUnits';
+import { PasswordInput } from '../components/PasswordInput';
+import { loginErrorMessage } from '../lib/authErrors';
 
 const stats = [
-  { value: '5 km', label: 'Discovery radius' },
+  { value: formatRadiusFromKm(5), label: 'Discovery radius' },
   { value: '1 tap', label: 'Match to message' },
   { value: 'Live', label: 'Real-time presence' },
 ];
@@ -20,6 +23,8 @@ export const Landing = () => {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [pendingToken, setPendingToken] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -32,11 +37,27 @@ export const Landing = () => {
     setError('');
     setLoading(true);
     try {
-      const res = await authAPI.login({ email, password });
+      if (pendingToken) {
+        const res = await authAPI.verifyTwoFactorLogin({
+          pendingToken,
+          code: twoFactorCode,
+        });
+        setAuth(res.data.user, res.data.token);
+        navigate('/discover');
+        return;
+      }
+
+      const res = await authAPI.login({ email: email.trim().toLowerCase(), password });
+      if (res.data.requires2fa) {
+        setPendingToken(res.data.pendingToken);
+        setTwoFactorCode('');
+        return;
+      }
+
       setAuth(res.data.user, res.data.token);
       navigate('/discover');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Login failed. Please try again.');
+    } catch (err: unknown) {
+      setError(loginErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -106,44 +127,84 @@ export const Landing = () => {
               )}
 
               <form onSubmit={handleSubmit} noValidate className="space-y-4">
-                <div>
-                  <label htmlFor="email" className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[#A89070]">
-                    Email
-                  </label>
-                  <input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    required
-                    autoComplete="email"
-                    className="w-full rounded-2xl border border-[#C4832A]/26 bg-[#F7EFE0] px-4 py-3.5 text-sm font-semibold text-[#2A1C0A] placeholder:text-[#8B6B42]/70 focus:border-[#C4832A]/70 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/30"
-                  />
-                </div>
+                {!pendingToken ? (
+                  <>
+                    <div>
+                      <label htmlFor="email" className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[#A89070]">
+                        Email
+                      </label>
+                      <input
+                        id="email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        required
+                        autoComplete="email"
+                        className="w-full rounded-2xl border border-[#C4832A]/26 bg-[#F7EFE0] px-4 py-3.5 text-sm font-semibold text-[#2A1C0A] placeholder:text-[#8B6B42]/70 focus:border-[#C4832A]/70 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/30"
+                      />
+                    </div>
 
-                <div>
-                  <label htmlFor="password" className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[#A89070]">
-                    Password
-                  </label>
-                  <input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    autoComplete="current-password"
-                    className="w-full rounded-2xl border border-[#C4832A]/26 bg-[#F7EFE0] px-4 py-3.5 text-sm font-semibold text-[#2A1C0A] placeholder:text-[#8B6B42]/70 focus:border-[#C4832A]/70 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/30"
-                  />
-                </div>
+                    <div>
+                      <label htmlFor="password" className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[#A89070]">
+                        Password
+                      </label>
+                      <PasswordInput
+                        id="password"
+                        value={password}
+                        onChange={setPassword}
+                        className="w-full rounded-2xl border border-[#C4832A]/26 bg-[#F7EFE0] px-4 py-3.5 text-sm font-semibold text-[#2A1C0A] placeholder:text-[#8B6B42]/70 focus:border-[#C4832A]/70 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/30"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <p className="mb-3 text-sm text-[#F0E0C0]/85">
+                      Enter the 6-digit code from your authenticator app.
+                    </p>
+                    <label htmlFor="landing-2fa" className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[#A89070]">
+                      Authenticator code
+                    </label>
+                    <input
+                      id="landing-2fa"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      value={twoFactorCode}
+                      onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="000000"
+                      required
+                      className="w-full rounded-2xl border border-[#C4832A]/26 bg-[#F7EFE0] px-4 py-3.5 text-center text-lg font-bold tracking-[0.35em] text-[#2A1C0A] placeholder:text-[#8B6B42]/70 focus:border-[#C4832A]/70 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/30"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPendingToken(null);
+                        setTwoFactorCode('');
+                        setError('');
+                      }}
+                      className="mt-2 text-sm font-semibold text-[#A89070] transition-colors hover:text-[#C4832A]"
+                    >
+                      Use a different account
+                    </button>
+                  </div>
+                )}
 
                 <button
                   type="submit"
                   disabled={loading}
                   className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#C4832A] to-[#A45E18] py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:from-[#D4943B] hover:to-[#C4832A] active:scale-[0.98] disabled:opacity-50"
                 >
-                  {loading ? <><PulseRing size={16} /> Logging in…</> : 'Login'}
+                  {loading ? (
+                    <>
+                      <PulseRing size={16} /> {pendingToken ? 'Verifying…' : 'Logging in…'}
+                    </>
+                  ) : pendingToken ? (
+                    'Verify and sign in'
+                  ) : (
+                    'Login'
+                  )}
                 </button>
               </form>
 
