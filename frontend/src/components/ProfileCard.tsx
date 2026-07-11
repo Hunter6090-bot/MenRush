@@ -39,7 +39,10 @@ interface ProfileCardProps {
 export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
   const navigate = useNavigate();
   const [liked, setLiked] = useState(false);
+  const [isMutual, setIsMutual] = useState(false);
   const [showMatch, setShowMatch] = useState(false);
+  const [likeHint, setLikeHint] = useState<string | null>(null);
+  const [liking, setLiking] = useState(false);
   const distance = parseFloat(String(user.distance_km));
   const distanceLabel = getDistanceLabel(user);
   const fullPhotoUrl = getPhotoUrl(user.photo_url);
@@ -47,17 +50,26 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
 
   const handleLike = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (liked) return;
+    if (liked || liking) return;
 
+    setLiking(true);
+    setLikeHint(null);
     try {
       const res = await usersAPI.likeUser(user.id);
       setLiked(true);
       if (res.data.match) {
+        setIsMutual(true);
         setShowMatch(true);
         setTimeout(() => setShowMatch(false), 3000);
+      } else {
+        setLikeHint('Liked — chat unlocks if he matches back.');
+        setTimeout(() => setLikeHint(null), 4000);
       }
-    } catch (err) {
-      console.error('Failed to like user:', err);
+    } catch {
+      setLikeHint('Could not send match. Try again.');
+      setTimeout(() => setLikeHint(null), 3500);
+    } finally {
+      setLiking(false);
     }
   };
 
@@ -161,11 +173,25 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
         )}
 
         <button
-          onClick={liked ? () => navigate(`/messages/${user.id}`) : handleLike}
-          className="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#A45E18] hover:from-[#D4943B] hover:to-[#C4832A] text-white text-sm font-semibold transition-all duration-200 hover:shadow-glow-blue active:scale-95"
+          type="button"
+          disabled={liking || (liked && !isMutual)}
+          onClick={
+            isMutual
+              ? (e) => {
+                  e.stopPropagation();
+                  navigate(`/messages/${user.id}`);
+                }
+              : handleLike
+          }
+          className="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#A45E18] hover:from-[#D4943B] hover:to-[#C4832A] text-white text-sm font-semibold transition-all duration-200 hover:shadow-glow-blue active:scale-95 disabled:opacity-60"
         >
-          {liked ? 'Open chat' : 'Match'}
+          {liking ? 'Sending…' : isMutual ? 'Open chat' : liked ? 'Liked' : 'Match'}
         </button>
+        {likeHint ? (
+          <p className="mt-2 text-center text-[11px] text-[#A89070]" role="status">
+            {likeHint}
+          </p>
+        ) : null}
       </div>
     </div>
   );

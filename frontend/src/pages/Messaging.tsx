@@ -487,35 +487,49 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     }
   }, []);
 
+  const sendTextMessage = useCallback(
+    async (raw: string) => {
+      const current = raw.trim();
+      if (!current || !otherId || !user || sending) return;
+
+      emitTyping(false);
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+
+      inputValueRef.current = '';
+      setInput('');
+      setSending(true);
+      inputRef.current?.focus();
+
+      try {
+        const res = await messagesAPI.sendMessage(otherId, current);
+        const saved: Message = res.data;
+        setMessages((prev) => [...prev, saved]);
+        trackEventOnce(
+          'first_message_success',
+          { kind: 'text', surface: 'direct_message' },
+          'first_message_success',
+        );
+      } catch {
+        inputValueRef.current = current;
+        setInput(current);
+      } finally {
+        setSending(false);
+      }
+    },
+    [otherId, user, sending, emitTyping],
+  );
+
   const handleSend = async (e?: React.FormEvent | React.KeyboardEvent) => {
     e?.preventDefault?.();
-    const current = (inputValueRef.current ?? input).trim();
-    if (!current || !otherId || !user) return;
-
-    emitTyping(false);
-    if (typingTimer.current) clearTimeout(typingTimer.current);
-
-    inputValueRef.current = '';
-    setInput('');
-    setSending(true);
-    inputRef.current?.focus();
-
-    try {
-      const res = await messagesAPI.sendMessage(otherId, current);
-      const saved: Message = res.data;
-      setMessages((prev) => [...prev, saved]);
-      trackEventOnce(
-        'first_message_success',
-        { kind: 'text', surface: 'direct_message' },
-        'first_message_success',
-      );
-    } catch {
-      inputValueRef.current = current;
-      setInput(current);
-    } finally {
-      setSending(false);
-    }
+    await sendTextMessage(inputValueRef.current ?? input);
   };
+
+  /** Direct, premium openers — never creepy. 18+ consent-first tone. */
+  const ICEBREAKERS = [
+    'Hey — saw you nearby. Free later?',
+    'Your profile stood out. Up for a chat?',
+    'What are you looking for tonight?',
+  ] as const;
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -763,7 +777,10 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         style={{ scrollbarWidth: 'thin' }}
       >
         {messages.length === 0 && !sending && (
-          <div className="flex flex-col items-center justify-center h-full select-none">
+          <div
+            className="flex flex-col items-center justify-center h-full select-none px-4"
+            data-testid="chat-icebreakers"
+          >
             <div
               className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
               style={{ background: '#1E1508', border: '1px solid #3D2B0E' }}
@@ -773,9 +790,22 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             <p className="font-medium text-sm" style={{ color: '#A89070' }}>
               No messages yet
             </p>
-            <p className="text-xs mt-1" style={{ color: '#6B5840' }}>
-              Say something direct.
+            <p className="text-xs mt-1 mb-4 text-center" style={{ color: '#6B5840' }}>
+              Be direct. Consent first. 18+ only.
             </p>
+            <div className="flex flex-col gap-2 w-full max-w-sm">
+              {ICEBREAKERS.map((line) => (
+                <button
+                  key={line}
+                  type="button"
+                  disabled={sending}
+                  onClick={() => void sendTextMessage(line)}
+                  className="rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-4 py-3 text-left text-[13px] font-medium text-[#F0E0C0] transition-colors hover:bg-[rgba(196,131,42,0.2)] disabled:opacity-50"
+                >
+                  {line}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

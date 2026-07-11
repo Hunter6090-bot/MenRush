@@ -64,6 +64,7 @@ style(icons): heritage set (claude)
 | Cursor workflow rules | `837e2ea` | `.cursor/rules/menrush-logo.mdc` (untracked) | Cursor |
 | Claude heritage icons | `9b7644f` | — | Claude — done |
 | Waitlist welcome / drip | `ebdbd7c`, `015f0ea` pause rules | `waitlist-ops-source-of-truth.md` edits | Ops — check Zoho + `waitlist_drip_sends` before sends |
+| Icebreakers + like feedback + inbox empty CTAs | cycle 2026-07-11 | Chat openers; Stream card like state; conversations empty multi-CTA | Grok CEO cycle 7 |
 | Stream location + Matches empty + match toast | cycle 2026-07-11 | No London on Stream; multi-CTA matches empty; mutual match → chat | Grok CEO cycle 6 |
 | Live location required + Hot Spots empty CTA + auth heal | cycle 2026-07-11 | Setup go-live needs GPS; empty density → Hot Spots; zombie token heal | Grok CEO cycle 5 |
 | Bio minimum + Pulse empty CTA + beta invite UX | cycle 2026-07-11 | Discover min needs bio; Start Pulse on empty density; invite normalize/guard | Grok CEO cycle 4 |
