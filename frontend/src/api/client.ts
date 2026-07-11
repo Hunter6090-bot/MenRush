@@ -7,11 +7,23 @@ const apiClient = axios.create({
   baseURL: API_BASE_URL,
 });
 
+/** Custom JWT is payload.signature (2 segments). Reject junk that only 401s forever. */
+function isPlausibleToken(token: unknown): token is string {
+  if (typeof token !== 'string') return false;
+  const t = token.trim();
+  if (t.length < 16) return false;
+  if (t === 'null' || t === 'undefined') return false;
+  return t.includes('.');
+}
+
 apiClient.interceptors.request.use((config) => {
   // Prefer live store token so logout immediately stops Authorization headers.
-  const token = useAuthStore.getState().token ?? localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  const raw = useAuthStore.getState().token ?? localStorage.getItem('token');
+  if (isPlausibleToken(raw)) {
+    config.headers.Authorization = `Bearer ${raw}`;
+  } else if (raw) {
+    // Corrupt token — clear so polls stop.
+    useAuthStore.getState().logout();
   }
   return config;
 });

@@ -17,6 +17,7 @@ export function useUnreadSync() {
     let cancelled = false;
     let intervalId = 0;
     const sync = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       if (!localStorage.getItem('token')) {
         if (intervalId) {
           window.clearInterval(intervalId);
@@ -40,9 +41,14 @@ export function useUnreadSync() {
 
     sync();
     intervalId = window.setInterval(sync, 60_000);
+    const onVis = () => {
+      if (document.visibilityState === 'visible') sync();
+    };
+    document.addEventListener('visibilitychange', onVis);
     return () => {
       cancelled = true;
       if (intervalId) window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVis);
     };
   }, [token, setUnreadFromServer]);
 }

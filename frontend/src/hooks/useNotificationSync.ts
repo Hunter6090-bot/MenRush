@@ -44,13 +44,14 @@ export function useNotificationSync() {
   }, [sync]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || !localStorage.getItem('token')) return;
 
     let intervalId = 0;
     const onFocus = () => {
       void sync();
     };
     const tick = async () => {
+      if (document.visibilityState === 'hidden') return;
       const result = await sync();
       if (result === 'auth' && intervalId) {
         window.clearInterval(intervalId);
@@ -58,9 +59,11 @@ export function useNotificationSync() {
       }
     };
     window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
     intervalId = window.setInterval(() => void tick(), 60_000);
     return () => {
       window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
       if (intervalId) window.clearInterval(intervalId);
     };
   }, [token, sync]);

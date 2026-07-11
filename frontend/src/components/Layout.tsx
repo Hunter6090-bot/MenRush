@@ -12,6 +12,7 @@ import { NotificationDot } from './NotificationDot';
 import { MenRushPlusPromo } from './MenRushPlusPromo';
 import { getNavItems, isNavActive, mobilePageTitle, type NavItem } from '../lib/navConfig';
 import { DiscoveryShellProvider, useDiscoveryShell } from '../context/DiscoveryShellContext';
+import { LocationPresenceStrip } from './LocationPresenceStrip';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -216,6 +217,7 @@ function LayoutInner({ children }: LayoutProps) {
         </div>
 
         <main className="flex-1 min-h-0 max-lg:pt-[var(--mobile-header-height)] max-lg:pb-[var(--mobile-tab-bar-height)] lg:pb-0">
+          <LocationPresenceStrip />
           <div className="page-enter h-full min-h-0">{children}</div>
         </main>
 

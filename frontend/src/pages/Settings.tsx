@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { TwoFactorSettings } from '../components/TwoFactorSettings';
 import { LiveLocationSharingToggle } from '../components/LiveLocationSharingToggle';
-import { profileMetaAPI } from '../api/client';
-import { useAuthStore } from '../hooks/store';
+import { profileMetaAPI, usersAPI } from '../api/client';
+import { useAuthStore, useLocationStore } from '../hooks/store';
 import { RadiusMilesSelect } from '../components/RadiusMilesSelect';
 import { clampRadiusKm } from '../lib/discoveryFormat';
 import { ROUTE_LABELS } from '../lib/routeLabels';
@@ -15,17 +15,61 @@ const RADIUS_KEY = 'menrush_default_radius_km';
 export const Settings = () => {
   const navigate = useNavigate();
   const logout = useAuthStore((s) => s.logout);
+  const setLocation = useLocationStore((s) => s.setLocation);
   const [savedRadius, setSavedRadius] = useState(() =>
     clampRadiusKm(Number(localStorage.getItem(RADIUS_KEY) ?? 5)),
   );
   const [sharingLiveLocation, setSharingLiveLocation] = useState(true);
+  const [hasPin, setHasPin] = useState<boolean | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locNotice, setLocNotice] = useState('');
 
   useEffect(() => {
     profileMetaAPI
       .getLiveLocationSharing()
       .then((res) => setSharingLiveLocation(res.data.enabled !== false))
       .catch(() => {});
+    usersAPI
+      .getMe()
+      .then((res) => {
+        const lat = res.data?.lat != null ? Number(res.data.lat) : NaN;
+        const lng = res.data?.lng != null ? Number(res.data.lng) : NaN;
+        setHasPin(Number.isFinite(lat) && Number.isFinite(lng));
+      })
+      .catch(() => setHasPin(null));
   }, []);
+
+  const enableDeviceLocation = useCallback(() => {
+    setLocNotice('');
+    if (!window.isSecureContext) {
+      setLocNotice('Location needs HTTPS (menrush.com).');
+      return;
+    }
+    if (!navigator.geolocation) {
+      setLocNotice('This browser cannot share location.');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords }) => {
+        try {
+          await usersAPI.updateLocation(coords.latitude, coords.longitude);
+          setLocation(coords.latitude, coords.longitude);
+          setHasPin(true);
+          setLocNotice('Location on — you can appear nearby.');
+        } catch {
+          setLocNotice('Could not save location.');
+        } finally {
+          setLocating(false);
+        }
+      },
+      () => {
+        setLocating(false);
+        setLocNotice('Permission denied. Enable location in browser settings.');
+      },
+      { enableHighAccuracy: true, timeout: 12000 },
+    );
+  }, [setLocation]);
 
   const setRadius = (km: number) => {
     const clamped = clampRadiusKm(km);
@@ -60,6 +104,29 @@ export const Settings = () => {
             <div className="mt-4">
               <TwoFactorSettings />
             </div>
+          </section>
+
+          <section className="mr-card p-4" data-testid="settings-device-location">
+            <p className="text-[15px] font-bold text-[var(--cream)]">Device location</p>
+            <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
+              Required for Nearby. Shared only while you use the app. 18+ only — never invents a city
+              pin.
+            </p>
+            <p className="mt-2 text-[12px] font-semibold text-[#A89070]">
+              Status:{' '}
+              <span className={hasPin ? 'text-[#8FC773]' : 'text-[#E0A14A]'}>
+                {hasPin == null ? '…' : hasPin ? 'On' : 'Off — invisible nearby'}
+              </span>
+            </p>
+            {locNotice ? <p className="mt-1 text-[12px] text-[#E0A14A]">{locNotice}</p> : null}
+            <button
+              type="button"
+              disabled={locating}
+              onClick={enableDeviceLocation}
+              className="mt-3 rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] disabled:opacity-60"
+            >
+              {locating ? 'Locating…' : hasPin ? 'Refresh location' : 'Enable location'}
+            </button>
           </section>
 
           <section className="mr-card p-4">
