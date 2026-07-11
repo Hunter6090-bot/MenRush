@@ -144,7 +144,7 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
 
     const users = await userService.getNearbyUsers(
       req.userId!,
-      Math.min(Math.max(requestedRadius, 0.8), 50),
+      Math.min(Math.max(requestedRadius, 0.8), 161),
       filters,
       clientLocation,
     );

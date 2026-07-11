@@ -136,8 +136,8 @@ export function formatRadiusFromKm(
   km: number,
   system: DistanceUnitSystem = resolveDistanceUnitSystem(),
 ): string {
-  const clamped = Math.min(Math.max(km, 0.8), 50);
-  if (clamped >= 49.5) return 'All';
+  const clamped = Math.min(Math.max(km, 0.8), 161);
+  if (clamped >= 160) return 'All';
 
   if (system === 'imperial') {
     const miles = clamped * MILES_PER_KM;
@@ -162,11 +162,11 @@ export function formatRadiusLabelFromKm(
 }
 
 /** Metric radius picker values (km). Imperial uses mile options elsewhere. */
-export const RADIUS_KM_OPTIONS = [1, 2, 5, 10, 20, 30, 50] as const;
+export const RADIUS_KM_OPTIONS = [1, 2, 5, 10, 20, 30, 50, 80, 100, 161] as const;
 
 export function kmToDisplayRadiusValue(km: number, system: DistanceUnitSystem): number | 'all' {
-  const clamped = Math.min(Math.max(km, 0.8), 50);
-  if (clamped >= 49.5) return 'all';
+  const clamped = Math.min(Math.max(km, 0.8), 161);
+  if (clamped >= 160) return 'all';
   if (system === 'imperial') return Math.max(1, Math.round(clamped * MILES_PER_KM));
   return RADIUS_KM_OPTIONS.reduce((best, option) =>
     Math.abs(option - clamped) < Math.abs(best - clamped) ? option : best,
@@ -174,11 +174,11 @@ export function kmToDisplayRadiusValue(km: number, system: DistanceUnitSystem): 
 }
 
 export function displayRadiusValueToKm(value: number | 'all', system: DistanceUnitSystem): number {
-  if (value === 'all') return 50;
+  if (value === 'all') return 161;
   if (system === 'imperial') {
-    return Math.min(Math.max(Math.round(value * KM_PER_MILE * 10) / 10, 0.8), 50);
+    return Math.min(Math.max(Math.round(value * KM_PER_MILE * 10) / 10, 0.8), 161);
   }
-  return Math.min(Math.max(value, 1), 50);
+  return Math.min(Math.max(value, 1), 161);
 }
 
 export { KM_PER_MILE, MILES_PER_KM };

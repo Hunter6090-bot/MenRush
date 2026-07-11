@@ -10,18 +10,19 @@ const TRIBE_TAGS = [
   'Twink', 'Twunk', 'Otter', 'Bear', 'Cub', 'Daddy', 'Wolf', 'Jock', 'Leather', 'Rugged', 'Geek',
 ];
 
-/** Matches backend `/users/nearby` clamp: Math.min(Math.max(radius, 0.8), 50). */
-export const MAX_RADIUS_KM = 50;
+/** Matches backend `/users/nearby` clamp: Math.min(Math.max(radius, 0.8), 161). */
+export const MAX_RADIUS_KM = 161;
 
-/** "All" uses the widest search the API allows (~31 miles). */
+/** "All" uses the widest search the API allows (100 miles). */
 export const RADIUS_ALL_KM = MAX_RADIUS_KM;
 
 const KM_PER_MILE = 1.60934;
 
-/** 0.5 mile minimum, then whole miles up to 30. */
+/** 0.5 mi, 1 mi, then 5-mile steps through 100 mi. */
 export const RADIUS_MILE_OPTIONS = [
   0.5,
-  ...Array.from({ length: 30 }, (_, i) => i + 1),
+  1,
+  ...Array.from({ length: 20 }, (_, i) => (i + 1) * 5),
 ] as readonly number[];
 
 export type RadiusMilesSelection = 'all' | number;
