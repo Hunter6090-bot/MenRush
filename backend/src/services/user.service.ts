@@ -75,6 +75,8 @@ export const userService = {
       FROM users u
       JOIN profiles p ON u.id = p.user_id
       WHERE u.id != $3
+        AND u.photo_url IS NOT NULL
+        AND TRIM(u.photo_url) <> ''
         AND ST_DWithin(p.location, ST_MakePoint($2, $1)::geography, $4)
         AND p.is_visible = true
         AND p.is_ghost = false

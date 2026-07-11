@@ -210,6 +210,19 @@ export const ProfileSetup: React.FC = () => {
         setError('Upload a photo or choose a generic avatar to continue.');
         return;
       }
+      if (photoChoice === 'generic' && !photoUrl) {
+        setSaving(true);
+        try {
+          const genericUrl = resolveGenericAvatarUrl({ age: userAge, interests });
+          await persistProfile({ photo_url: genericUrl });
+          setPhotoUrl(genericUrl);
+        } catch {
+          setError('Could not save your avatar.');
+          return;
+        } finally {
+          setSaving(false);
+        }
+      }
       setStep('about');
       return;
     }
@@ -318,8 +331,12 @@ export const ProfileSetup: React.FC = () => {
   };
 
   const handleSkip = () => {
-    skipProfileSetup();
-    navigate(consumePostAuthRedirect('/discover'));
+    if (step === 'live') {
+      skipProfileSetup();
+      navigate(consumePostAuthRedirect('/discover'));
+      return;
+    }
+    setError('Add a photo or generic avatar first — then you can finish the rest later.');
   };
 
   if (loading) {
@@ -376,18 +393,16 @@ export const ProfileSetup: React.FC = () => {
                 onChange={handlePhotoUpload}
               />
 
-              {photoChoice === 'generic' && !photoUrl ? (
-                genericPreviewUrl ? (
-                  <UserAvatar
-                    name={user?.name ?? 'You'}
-                    photoUrl={genericPreviewUrl}
-                    size="xl"
-                    showStatus={false}
-                    className="ring-4 ring-[rgba(240,224,192,0.2)]"
-                  />
-                ) : (
-                  <SilhouetteAvatar size={96} variant="card" className="ring-4 ring-[rgba(240,224,192,0.2)]" />
-                )
+              {photoChoice === 'generic' && !photoUrl && !genericPreviewUrl ? (
+                <SilhouetteAvatar size={96} variant="card" className="ring-4 ring-[rgba(240,224,192,0.2)]" />
+              ) : photoChoice === 'generic' ? (
+                <UserAvatar
+                  name={user?.name ?? 'You'}
+                  photoUrl={(genericPreviewUrl || photoUrl) ?? undefined}
+                  size="xl"
+                  showStatus={false}
+                  className="ring-4 ring-[rgba(240,224,192,0.2)]"
+                />
               ) : (
                 <button
                   type="button"
@@ -409,8 +424,8 @@ export const ProfileSetup: React.FC = () => {
               )}
 
               <p className={publicMutedCopyClass}>
-                {photoChoice === 'generic' && !genericPreviewUrl
-                  ? 'Your standard avatar is assigned after you add body & vibe tags.'
+                {photoChoice === 'generic'
+                  ? 'Standard avatar assigned now — refined when you add tags.'
                   : 'JPEG, PNG or WebP · max 5MB'}
               </p>
             </div>
@@ -434,9 +449,8 @@ export const ProfileSetup: React.FC = () => {
                 type="button"
                 onClick={() => {
                   setPhotoChoice('generic');
-                  if (!isGenericAvatarUrl(photoUrl)) {
-                    setPhotoUrl('');
-                  }
+                  const preview = resolveGenericAvatarUrl({ age: userAge, interests });
+                  setPhotoUrl(isGenericAvatarUrl(photoUrl) ? photoUrl : preview);
                   setError(null);
                 }}
                 className={`${publicSecondaryButtonClass} sm:flex-1 ${
@@ -585,9 +599,9 @@ export const ProfileSetup: React.FC = () => {
             </button>
           ) : null}
 
-          {step === 'welcome' || step === 'live' ? (
+          {step === 'live' ? (
             <button type="button" onClick={handleSkip} className={publicSecondaryButtonClass}>
-              {step === 'live' ? 'Skip location for now' : 'Skip for now'}
+              Skip location for now
             </button>
           ) : null}
         </div>

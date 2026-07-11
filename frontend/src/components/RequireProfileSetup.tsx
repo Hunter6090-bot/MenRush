@@ -3,8 +3,8 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { usersAPI } from '../api/client';
 import { PulseRing } from './PulseRing';
 import {
-  hasSkippedProfileSetup,
-  isProfileSetupComplete,
+  clearProfileSetupSkip,
+  needsProfileSetupRedirect,
   type ProfileSetupSnapshot,
 } from '../lib/profileSetup';
 
@@ -20,7 +20,7 @@ export function RequireProfileSetup({ children }: { children: JSX.Element }) {
   const [complete, setComplete] = useState(true);
 
   useEffect(() => {
-    if (isExemptPath(location.pathname) || hasSkippedProfileSetup()) {
+    if (isExemptPath(location.pathname)) {
       setComplete(true);
       setReady(true);
       return;
@@ -31,7 +31,11 @@ export function RequireProfileSetup({ children }: { children: JSX.Element }) {
       .getMe()
       .then((res) => {
         if (cancelled) return;
-        setComplete(isProfileSetupComplete(res.data as ProfileSetupSnapshot));
+        const profile = res.data as ProfileSetupSnapshot;
+        if (needsProfileSetupRedirect(profile)) {
+          clearProfileSetupSkip();
+        }
+        setComplete(!needsProfileSetupRedirect(profile));
         setReady(true);
       })
       .catch(() => {

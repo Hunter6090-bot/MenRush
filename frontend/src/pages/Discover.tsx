@@ -16,11 +16,13 @@ import {
 import { ProfileDrawer } from '../components/ProfileDrawer';
 import { createMapMarkerElement, MapMarker } from '../components/MapMarker';
 
+import { ActivationBanner } from '../components/ActivationBanner';
 import { DiscoveryFilterPills } from '../components/DiscoveryFilterPills';
 import { DiscoveryFilterPanel } from '../components/DiscoveryFilterPanel';
 import { NearbyProfileGrid } from '../components/NearbyProfileGrid';
 import { DiscoveryShellPublisher } from '../context/DiscoveryShellContext';
 import { formatRadiusMiles } from '../lib/discoveryFormat';
+import type { ProfileSetupSnapshot } from '../lib/profileSetup';
 import {
   DEFAULT_DISCOVERY_FILTERS,
   applyDiscoveryClientFilters,
@@ -113,6 +115,7 @@ export const Discover = () => {
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [locationNotice, setLocationNotice] = useState('');
+  const [activationProfile, setActivationProfile] = useState<ProfileSetupSnapshot | null>(null);
 
   const { lat, lng, setLocation } = useLocationStore();
   const watchIdRef = useRef<number | null>(null);
@@ -133,6 +136,13 @@ export const Discover = () => {
 
   const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
   const tokenMissing = !mapboxToken || mapboxToken === '__SET_ME__';
+
+  useEffect(() => {
+    usersAPI
+      .getMe()
+      .then((res) => setActivationProfile(res.data as ProfileSetupSnapshot))
+      .catch(() => {});
+  }, []);
 
   const fetchNearbyUsers = useCallback(
     async (
@@ -669,6 +679,8 @@ export const Discover = () => {
         togglePulse={() => void togglePulseHeader()}
       />
       <h1 className="sr-only">Nearby discovery map</h1>
+
+      {activationProfile ? <ActivationBanner profile={activationProfile} /> : null}
 
       <div className="hidden lg:block lg:h-full lg:overflow-y-auto px-6 py-6">
         <div className="mb-4 flex flex-wrap items-center gap-3">

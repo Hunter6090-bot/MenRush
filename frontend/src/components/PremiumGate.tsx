@@ -15,7 +15,7 @@ export function PremiumGate({
   subline = 'See them. Open chat. Skip the queue.',
   perks = [
     'See who matched you',
-    `Expand radius to ${formatRadiusFromKm(50)}`,
+    `Expand radius to ${formatRadiusFromKm(161)}`,
     'Message without matching',
     'Boost — top of nearby for 30 min',
     'Incognito · advanced filters',
