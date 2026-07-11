@@ -36,6 +36,13 @@ async function one(sql) {
         AND interests IS NOT NULL AND cardinality(interests) >= 3
     `),
     online: await one('SELECT COUNT(*)::int AS n FROM profiles WHERE online = TRUE'),
+    /** Matches Nearby "Active now" window (last_seen within 20 minutes). */
+    onlineFresh: await one(`
+      SELECT COUNT(*)::int AS n FROM profiles
+      WHERE online = TRUE
+        AND last_seen IS NOT NULL
+        AND last_seen > NOW() - INTERVAL '20 minutes'
+    `),
     likes: await one('SELECT COUNT(*)::int AS n FROM likes'),
     likes7d: await one("SELECT COUNT(*)::int AS n FROM likes WHERE created_at > NOW() - INTERVAL '7 days'"),
     messages: await one('SELECT COUNT(*)::int AS n FROM messages'),

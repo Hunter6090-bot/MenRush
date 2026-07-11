@@ -96,15 +96,66 @@ export const Events = () => {
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div>
-            {loading ? (
+            {lat == null || lng == null ? (
+              <div
+                className="rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.08)] px-6 py-12 text-center shadow-[0_12px_28px_rgba(0,0,0,0.3)]"
+                data-testid="events-location-gate"
+                role="status"
+              >
+                <p className="text-[16px] font-extrabold text-[var(--cream)]">Location unlocks Events</p>
+                <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--cream-muted)]">
+                  Enable device location to see what&apos;s on near you. Shared only while you use the
+                  app · 18+ only.
+                </p>
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                  <Link
+                    to="/settings"
+                    className="rounded-full bg-[#C4832A] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+                  >
+                    Enable in Settings
+                  </Link>
+                  <Link
+                    to="/hot-spots"
+                    className="rounded-full border border-[rgba(196,131,42,0.5)] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
+                  >
+                    Hot Spots
+                  </Link>
+                </div>
+                <p className="mt-4 text-[11px] text-[#A89070]">Meet in public · Consent first</p>
+              </div>
+            ) : loading ? (
               <div className="grid gap-3.5 sm:grid-cols-2">
                 {[...Array(4)].map((_, i) => (
                   <div key={i} className="h-56 animate-pulse rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]" />
                 ))}
               </div>
             ) : visible.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-[var(--border-default)] py-16 text-center text-[15px] text-[var(--cream-muted)]">
-                No events match. Clear the search or pick another date.
+              <div
+                className="rounded-2xl border border-[rgba(196,131,42,0.3)] bg-[rgba(196,131,42,0.05)] px-6 py-12 text-center"
+                data-testid="events-empty"
+              >
+                <p className="text-[15px] font-extrabold text-[var(--cream)]">No events in this filter</p>
+                <p className="mx-auto mt-2 max-w-sm text-[13px] text-[var(--cream-muted)]">
+                  Clear the day filter or category, or check Hot Spots for live venues.
+                </p>
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCategory('All');
+                      setSelectedDay(null);
+                    }}
+                    className="rounded-full bg-[#C4832A] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03]"
+                  >
+                    Clear filters
+                  </button>
+                  <Link
+                    to="/hot-spots"
+                    className="rounded-full border border-[rgba(196,131,42,0.5)] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A]"
+                  >
+                    Hot Spots
+                  </Link>
+                </div>
               </div>
             ) : (
               <div className="grid gap-3.5 sm:grid-cols-2">

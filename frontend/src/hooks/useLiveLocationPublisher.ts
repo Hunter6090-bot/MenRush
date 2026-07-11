@@ -5,6 +5,8 @@ import { useAuthStore, useLocationStore } from './store';
 
 const MIN_PUSH_MS = 20_000;
 const MIN_MOVE_METERS = 40;
+/** Keep last_seen fresh while the app is open so Nearby "Active now" stays honest (20m window). */
+const HEARTBEAT_MS = 8 * 60 * 1000;
 
 function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number): number {
   const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -59,6 +61,25 @@ export function useLiveLocationPublisher() {
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 5000 },
     );
 
-    return () => navigator.geolocation.clearWatch(watchId);
+    const heartbeatId = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      const last = lastPushRef.current;
+      if (last) {
+        // Re-push same pin to refresh last_seen / online without inventing coordinates.
+        void usersAPI.updateLocation(last.lat, last.lng).catch(() => {});
+        lastPushRef.current = { ...last, at: Date.now() };
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        ({ coords }) => push(coords.latitude, coords.longitude, true),
+        () => {},
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 60_000 },
+      );
+    }, HEARTBEAT_MS);
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      window.clearInterval(heartbeatId);
+    };
   }, [token, isVerified, setLocation]);
 }
