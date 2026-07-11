@@ -19,6 +19,7 @@ import { getPhotoUrl } from '../components/UserAvatar';
 
 import { PROFILE_TAG_GROUPS, toggleProfileInterest } from '../lib/profileTags';
 import { clearProfileSetupSkip, isProfileSetupComplete } from '../lib/profileSetup';
+import { isGenericAvatarUrl } from '../lib/genericAvatar';
 
 interface ProfileData {
   id: string;
@@ -373,6 +374,25 @@ export const Profile = () => {
                 </div>
               ))}
             </div>
+            {isGenericAvatarUrl(photoUrl) ? (
+              <div
+                className="mt-3 max-w-[300px] rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-3 py-3"
+                data-testid="photo-upgrade-nudge"
+              >
+                <p className="text-[12px] font-extrabold text-[#F0E0C0]">Upgrade from a shared avatar</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-[#A89070]">
+                  Real photos get more matches. Upload a clear face or upper-body shot — 18+ only.
+                </p>
+                <button
+                  type="button"
+                  disabled={uploading}
+                  onClick={() => photoInputRef.current?.click()}
+                  className="mt-2 rounded-full bg-[#C4832A] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#1A0E03] hover:bg-[#E0A14A] disabled:opacity-60"
+                >
+                  {uploading ? 'Uploading…' : 'Add real photo'}
+                </button>
+              </div>
+            ) : null}
           </div>
           <div className="space-y-4">
             <div className="mr-card p-5">
@@ -533,6 +553,25 @@ export const Profile = () => {
             </div>
             <h2 className="text-xl font-bold text-[#F0E0C0]">{profile.name}</h2>
             <p className="text-[#A89070] text-sm mt-0.5">Age {profile.age}</p>
+            {isGenericAvatarUrl(photoUrl) ? (
+              <div
+                className="mt-3 rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-3 py-3 lg:hidden"
+                data-testid="photo-upgrade-nudge-mobile"
+              >
+                <p className="text-[12px] font-extrabold text-[#F0E0C0]">Upgrade from a shared avatar</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-[#A89070]">
+                  Real photos get more matches. Clear face or upper body · 18+ only.
+                </p>
+                <button
+                  type="button"
+                  disabled={uploading}
+                  onClick={() => photoInputRef.current?.click()}
+                  className="mt-2 rounded-full bg-[#C4832A] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#1A0E03] disabled:opacity-60"
+                >
+                  {uploading ? 'Uploading…' : 'Add real photo'}
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
 

@@ -62,7 +62,9 @@ export const userService = {
       SELECT
         u.id, u.name, u.age, u.bio, u.headline, u.looking_for, u.photo_url, u.cover_url, u.interests,
         u.is_verified,
-        p.online, p.last_seen, p.available_until,
+        -- Presence must be fresh: stuck online=true from a crashed tab is not "Active now".
+        (p.online = TRUE AND p.last_seen IS NOT NULL AND p.last_seen > NOW() - INTERVAL '20 minutes') AS online,
+        p.last_seen, p.available_until,
         (u.is_pulsing AND u.pulse_expires_at IS NOT NULL AND u.pulse_expires_at > NOW()) AS is_pulsing,
         CASE
           WHEN u.is_pulsing AND u.pulse_expires_at > NOW() THEN u.pulse_expires_at
@@ -115,7 +117,7 @@ export const userService = {
     if (filters?.lookingFor) {
       const lf = filters.lookingFor.toLowerCase();
       if (lf === 'chat') {
-        queryStr += ` AND p.online = true`;
+        queryStr += ` AND p.online = true AND p.last_seen > NOW() - INTERVAL '20 minutes'`;
       } else if (lf === 'date') {
         values.push('%dating%');
         queryStr += ` AND (u.looking_for ILIKE $${values.length} OR u.interests && ARRAY['Dating']::text[])`;
@@ -135,12 +137,12 @@ export const userService = {
       queryStr += ` AND p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' AND p.mood ILIKE $${values.length}`;
     }
 
-    // Spec: pulsing users sort first, then by last_seen DESC.
+    // Spec: pulsing users sort first, then fresh presence, then last_seen DESC.
     queryStr += ` ORDER BY
       (u.is_pulsing AND u.pulse_expires_at > NOW()) DESC,
       (p.available_until IS NOT NULL AND p.available_until > NOW()) DESC,
-      p.online DESC,
-      p.last_seen DESC
+      (p.online = TRUE AND p.last_seen > NOW() - INTERVAL '20 minutes') DESC,
+      p.last_seen DESC NULLS LAST
     LIMIT 50`;
 
     const result = await query(queryStr, values);

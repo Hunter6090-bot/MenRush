@@ -106,16 +106,51 @@ export const HotSpots = () => {
         ) : null}
 
         {lat == null || lng == null ? (
-          <div className="rounded-2xl border border-dashed border-[var(--border-default)] py-16 text-center text-[15px] text-[var(--cream-muted)]">
-            Turn on location to find hot spots near you.
+          <div
+            className="rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.08)] px-6 py-12 text-center shadow-[0_12px_28px_rgba(0,0,0,0.3)]"
+            data-testid="hotspots-location-gate"
+            role="status"
+          >
+            <p className="text-[16px] font-extrabold text-[var(--cream)]">Location unlocks Hot Spots</p>
+            <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--cream-muted)]">
+              Turn on device location to see venues near you. Shared only while you use the app · 18+
+              only.
+            </p>
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+              <Link
+                to="/settings"
+                className="rounded-full bg-[#C4832A] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+              >
+                Enable in Settings
+              </Link>
+              <Link
+                to="/discover"
+                className="rounded-full border border-[rgba(196,131,42,0.5)] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
+              >
+                Nearby map
+              </Link>
+            </div>
+            <p className="mt-4 text-[11px] text-[#A89070]">Meet in public · Consent first</p>
           </div>
         ) : loading ? (
           <div className="flex justify-center py-20">
             <PulseRing size={36} label="Loading hot spots" />
           </div>
         ) : spots.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[var(--border-default)] py-16 text-center text-[15px] text-[var(--cream-muted)]">
-            No spots in range. Try another category or widen your search later.
+          <div
+            className="rounded-2xl border border-[rgba(196,131,42,0.3)] bg-[rgba(196,131,42,0.05)] px-6 py-12 text-center"
+            data-testid="hotspots-empty"
+          >
+            <p className="text-[15px] font-extrabold text-[var(--cream)]">No spots in this filter</p>
+            <p className="mx-auto mt-2 max-w-sm text-[13px] text-[var(--cream-muted)]">
+              Try another category or check back later as the beta fills in.
+            </p>
+            <Link
+              to="/discover"
+              className="mt-5 inline-flex rounded-full bg-[#C4832A] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03]"
+            >
+              Browse Nearby
+            </Link>
           </div>
         ) : (
           <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
