@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { messagesAPI, usersAPI, meetAPI, MediaKind, MessageMediaKind, MessageDTO, MeetAgreementState } from '../api/client';
 import { trackEventOnce } from '../observability/analytics';
 import { useSocket } from '../hooks/useSocket';
-import { useAuthStore, useCallStore, useUnreadStore } from '../hooks/store';
+import { useAuthStore, useCallStore, useLocationStore, useUnreadStore } from '../hooks/store';
 import { UserAvatar } from '../components/UserAvatar';
 import { StatusBadge } from '../components/StatusBadge';
 import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
@@ -19,6 +19,8 @@ import { MissedCallIcon } from '../components/MissedCallIcon';
 import { isMissedCallMessage, MISSED_CALL_PREVIEW } from '../lib/missedCall';
 import { openMapsDirections } from '../lib/maps';
 import { parseLocationPayload } from '../lib/locationMessage';
+import { getMatchCoordinates, hasVisibleMatchLocation } from '../lib/matchLiveLocation';
+import { MatchChatLiveLocation } from '../components/MatchChatLiveLocation';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
 interface Message extends Partial<MessageDTO> {
@@ -83,6 +85,11 @@ interface OtherUser {
   photo_url?: string;
   online?: boolean;
   last_seen?: string;
+  live_location_sharing?: boolean;
+  live_lat?: number | string | null;
+  live_lng?: number | string | null;
+  live_distance_km?: number | string | null;
+  live_location_updated_at?: string | null;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -154,6 +161,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const [, setBurnTick] = useState(0);
   const socket = useSocket();
   const user = useAuthStore((s) => s.user);
+  const { lat: selfLat, lng: selfLng } = useLocationStore();
   const { setCalling, setCallSetupError, resetCall } = useCallStore();
   const navigate = useNavigate();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -178,6 +186,42 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOtherTyping]);
+
+  useEffect(() => {
+    if (!socket || !otherId) return;
+    const onMatchLocation = (payload: {
+      user_id: string;
+      lat: number;
+      lng: number;
+      updated_at: string;
+    }) => {
+      if (payload.user_id !== otherId) return;
+      setOtherUser((current) =>
+        current
+          ? {
+              ...current,
+              live_location_sharing: true,
+              live_lat: payload.lat,
+              live_lng: payload.lng,
+              live_location_updated_at: payload.updated_at,
+            }
+          : current,
+      );
+    };
+    socket.on('match:location', onMatchLocation);
+    return () => {
+      socket.off('match:location', onMatchLocation);
+    };
+  }, [socket, otherId]);
+
+  useEffect(() => {
+    if (!otherId) return;
+    const refreshProfile = () => {
+      usersAPI.getProfile(otherId).then((r) => setOtherUser(r.data)).catch(() => {});
+    };
+    const id = window.setInterval(refreshProfile, 20000);
+    return () => window.clearInterval(id);
+  }, [otherId]);
 
   useEffect(() => {
     if (!socket || !otherId) return;
@@ -496,12 +540,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const handleShareLocation = () => {
     if (!otherId || sharingLocation || uploadingMedia) return;
 
-    const peer = otherUser?.name ?? 'your match';
-    const confirmed = window.confirm(
-      `Share your current location with ${peer}? They can open directions in their maps app.`,
-    );
-    if (!confirmed) return;
-
     if (!window.isSecureContext || !navigator.geolocation) {
       setMediaError('Location sharing needs HTTPS and a device with GPS.');
       return;
@@ -691,6 +729,23 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
           {safetyNotice.msg}
         </div>
       )}
+
+      {otherUser && hasVisibleMatchLocation(otherUser) ? (() => {
+        const coords = getMatchCoordinates(otherUser);
+        if (!coords) return null;
+        return (
+          <MatchChatLiveLocation
+            peerName={otherUser.name}
+            photoUrl={otherUser.photo_url}
+            lat={coords.lat}
+            lng={coords.lng}
+            distanceKm={otherUser.live_distance_km}
+            updatedAt={otherUser.live_location_updated_at}
+            selfLat={selfLat}
+            selfLng={selfLng}
+          />
+        );
+      })() : null}
 
       {otherId && meetState && (
         <MeetConsentBar

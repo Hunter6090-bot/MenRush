@@ -75,7 +75,6 @@ export const userService = {
       FROM users u
       JOIN profiles p ON u.id = p.user_id
       WHERE u.id != $3
-        AND u.is_verified = TRUE
         AND ST_DWithin(p.location, ST_MakePoint($2, $1)::geography, $4)
         AND p.is_visible = true
         AND p.is_ghost = false
@@ -221,11 +220,69 @@ export const userService = {
         CASE
           WHEN p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' THEN p.mood
           ELSE NULL
-        END AS mood
+        END AS mood,
+        EXISTS (
+          SELECT 1 FROM likes l1
+          JOIN likes l2 ON l1.liker_id = l2.liked_id AND l1.liked_id = l2.liker_id
+          WHERE l1.liker_id = $2 AND l1.liked_id = $1
+        ) AS is_match,
+        COALESCE(p.share_live_location_with_matches, TRUE) AS live_location_sharing,
+        CASE
+          WHEN EXISTS (
+            SELECT 1 FROM likes l1
+            JOIN likes l2 ON l1.liker_id = l2.liked_id AND l1.liked_id = l2.liker_id
+            WHERE l1.liker_id = $2 AND l1.liked_id = $1
+          )
+          AND COALESCE(p.share_live_location_with_matches, TRUE) = TRUE
+          AND p.lat IS NOT NULL AND p.lng IS NOT NULL
+          THEN p.lat
+          ELSE NULL
+        END AS live_lat,
+        CASE
+          WHEN EXISTS (
+            SELECT 1 FROM likes l1
+            JOIN likes l2 ON l1.liker_id = l2.liked_id AND l1.liked_id = l2.liker_id
+            WHERE l1.liker_id = $2 AND l1.liked_id = $1
+          )
+          AND COALESCE(p.share_live_location_with_matches, TRUE) = TRUE
+          AND p.lat IS NOT NULL AND p.lng IS NOT NULL
+          THEN p.lng
+          ELSE NULL
+        END AS live_lng,
+        CASE
+          WHEN EXISTS (
+            SELECT 1 FROM likes l1
+            JOIN likes l2 ON l1.liker_id = l2.liked_id AND l1.liked_id = l2.liker_id
+            WHERE l1.liker_id = $2 AND l1.liked_id = $1
+          )
+          AND COALESCE(p.share_live_location_with_matches, TRUE) = TRUE
+          AND p.lat IS NOT NULL AND p.lng IS NOT NULL
+          THEN p.updated_at
+          ELSE NULL
+        END AS live_location_updated_at,
+        CASE
+          WHEN viewer.lat IS NOT NULL AND viewer.lng IS NOT NULL
+           AND EXISTS (
+            SELECT 1 FROM likes l1
+            JOIN likes l2 ON l1.liker_id = l2.liked_id AND l1.liked_id = l2.liker_id
+            WHERE l1.liker_id = $2 AND l1.liked_id = $1
+          )
+          AND COALESCE(p.share_live_location_with_matches, TRUE) = TRUE
+          AND p.lat IS NOT NULL AND p.lng IS NOT NULL
+          THEN ROUND(
+            (ST_Distance(
+              ST_MakePoint(viewer.lng, viewer.lat)::geography,
+              ST_MakePoint(p.lng, p.lat)::geography
+            ) / 1000.0)::numeric,
+            1
+          )
+          ELSE NULL
+        END AS live_distance_km
        FROM users u
        LEFT JOIN profiles p ON p.user_id = u.id
+       LEFT JOIN profiles viewer ON viewer.user_id = $2
        WHERE u.id = $1`,
-      [targetId],
+      [targetId, viewerId],
     );
     return result.rows[0];
   },
@@ -237,8 +294,8 @@ export const userService = {
 
   async updateLocation(userId: string, lat: number, lng: number) {
     await query(
-      `INSERT INTO profiles (user_id, location, lat, lng, online, last_seen)
-       VALUES ($1, ST_MakePoint($3, $2), $2, $3, true, NOW())
+      `INSERT INTO profiles (user_id, location, lat, lng, online, last_seen, share_live_location_with_matches)
+       VALUES ($1, ST_MakePoint($3, $2), $2, $3, true, NOW(), TRUE)
        ON CONFLICT (user_id) DO UPDATE SET
          location = ST_MakePoint($3, $2),
          lat = $2,
@@ -415,7 +472,6 @@ export const userService = {
        FROM users u
        JOIN profiles p ON p.user_id = u.id
        WHERE u.id != $1
-         AND u.is_verified = TRUE
          AND p.is_visible = true
          AND u.name ILIKE $2
          AND NOT EXISTS (
@@ -433,12 +489,48 @@ export const userService = {
   async getMatches(userId: string) {
     const result = await query(
       `SELECT
-        u.id, u.name, u.age, u.bio, u.photo_url,
+        u.id, u.name, u.age, u.bio, u.photo_url, u.is_verified,
         p.online, p.last_seen,
+        COALESCE(p.share_live_location_with_matches, TRUE) AS live_location_sharing,
+        CASE
+          WHEN COALESCE(p.share_live_location_with_matches, TRUE) = TRUE
+           AND p.lat IS NOT NULL AND p.lng IS NOT NULL
+          THEN p.lat
+          ELSE NULL
+        END AS lat,
+        CASE
+          WHEN COALESCE(p.share_live_location_with_matches, TRUE) = TRUE
+           AND p.lat IS NOT NULL AND p.lng IS NOT NULL
+          THEN p.lng
+          ELSE NULL
+        END AS lng,
+        CASE
+          WHEN COALESCE(p.share_live_location_with_matches, TRUE) = TRUE
+           AND p.lat IS NOT NULL AND p.lng IS NOT NULL
+          THEN p.updated_at
+          ELSE NULL
+        END AS location_updated_at,
+        CASE
+          WHEN viewer.lat IS NOT NULL AND viewer.lng IS NOT NULL
+           AND COALESCE(p.share_live_location_with_matches, TRUE) = TRUE
+           AND p.lat IS NOT NULL AND p.lng IS NOT NULL
+          THEN ROUND(
+            (ST_Distance(
+              ST_MakePoint(viewer.lng, viewer.lat)::geography,
+              ST_MakePoint(p.lng, p.lat)::geography
+            ) / 1000.0)::numeric,
+            1
+          )
+          ELSE NULL
+        END AS distance_km,
         msg.message as last_message,
-        msg.created_at as last_message_at
+        msg.created_at as last_message_at,
+        GREATEST(l1.created_at, l2.created_at) AS matched_at
        FROM users u
        JOIN profiles p ON u.id = p.user_id
+       JOIN profiles viewer ON viewer.user_id = $1
+       JOIN likes l1 ON l1.liker_id = $1 AND l1.liked_id = u.id
+       JOIN likes l2 ON l2.liker_id = u.id AND l2.liked_id = $1
        LEFT JOIN LATERAL (
          SELECT message, created_at
          FROM messages
@@ -447,14 +539,7 @@ export const userService = {
          ORDER BY created_at DESC
          LIMIT 1
        ) msg ON true
-       WHERE u.id IN (
-         SELECT l1.liked_id
-         FROM likes l1
-         JOIN likes l2 ON l1.liker_id = l2.liked_id AND l1.liked_id = l2.liker_id
-         WHERE l1.liker_id = $1
-       )
-       AND u.is_verified = TRUE
-       AND NOT EXISTS (
+       WHERE NOT EXISTS (
          SELECT 1 FROM blocks b
          WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
             OR (b.blocker_id = u.id AND b.blocked_id = $1)

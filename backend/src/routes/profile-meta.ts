@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { profileMetaService } from '../services/profile-meta.service';
 import { premiumService } from '../services/premium.service';
-import { MoodSchema, GhostSchema } from '../types/validation';
+import { MoodSchema, GhostSchema, LiveLocationSharingSchema } from '../types/validation';
 
 const router = Router();
 router.use(authMiddleware, verifiedMiddleware);
@@ -55,6 +55,28 @@ router.post('/ghost', async (req: AuthRequest, res: Response) => {
     }
     await profileMetaService.setGhost(req.userId!, parsed.data.is_ghost);
     res.json({ is_ghost: parsed.data.is_ghost });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/live-location-sharing', async (req: AuthRequest, res: Response) => {
+  try {
+    const enabled = await profileMetaService.getLiveLocationSharing(req.userId!);
+    res.json({ enabled });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/live-location-sharing', async (req: AuthRequest, res: Response) => {
+  const parsed = LiveLocationSharingSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.errors[0].message });
+  }
+  try {
+    await profileMetaService.setLiveLocationSharing(req.userId!, parsed.data.enabled);
+    res.json({ enabled: parsed.data.enabled });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

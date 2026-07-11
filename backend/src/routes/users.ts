@@ -266,6 +266,13 @@ router.post('/location', verifiedMiddleware, async (req: AuthRequest, res: Respo
   try {
     const data = LocationSchema.parse(req.body);
     await userService.updateLocation(req.userId!, data.lat, data.lng);
+    const { matchLocationService } = await import('../services/match-location.service');
+    void matchLocationService.broadcastLocation(
+      req.app.get('io'),
+      req.userId!,
+      data.lat,
+      data.lng,
+    );
     res.json({ success: true });
   } catch (error: any) {
     res.status(400).json({ error: error.message });

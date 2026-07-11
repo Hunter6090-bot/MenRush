@@ -68,7 +68,6 @@ export const profileViewsService = {
        JOIN users u ON u.id = pv.viewer_id
        LEFT JOIN profiles p ON p.user_id = u.id
        WHERE pv.viewed_user_id = $1
-         AND u.is_verified = TRUE
          AND NOT EXISTS (
            SELECT 1 FROM blocks b
            WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)

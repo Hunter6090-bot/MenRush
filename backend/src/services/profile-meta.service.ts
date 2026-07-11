@@ -82,6 +82,20 @@ export const profileMetaService = {
     const res = await query(`SELECT is_ghost FROM profiles WHERE user_id = $1`, [userId]);
     return !!res.rows[0]?.is_ghost;
   },
+
+  async getLiveLocationSharing(userId: string): Promise<boolean> {
+    const res = await query(
+      `SELECT COALESCE(share_live_location_with_matches, TRUE) AS enabled
+         FROM profiles WHERE user_id = $1`,
+      [userId],
+    );
+    return res.rows[0]?.enabled !== false;
+  },
+
+  async setLiveLocationSharing(userId: string, enabled: boolean): Promise<void> {
+    const { matchLocationService } = await import('./match-location.service');
+    await matchLocationService.setSharingEnabled(userId, enabled);
+  },
 };
 
 export const MOOD_LABELS: Record<string, string> = {

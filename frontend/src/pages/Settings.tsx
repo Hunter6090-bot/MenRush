@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { NotificationSettings } from '../components/NotificationSettings';
+import { TwoFactorSettings } from '../components/TwoFactorSettings';
+import { LiveLocationSharingToggle } from '../components/LiveLocationSharingToggle';
+import { profileMetaAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
 import { RadiusMilesSelect } from '../components/RadiusMilesSelect';
 import { clampRadiusKm } from '../lib/discoveryFormat';
@@ -15,6 +18,14 @@ export const Settings = () => {
   const [savedRadius, setSavedRadius] = useState(() =>
     clampRadiusKm(Number(localStorage.getItem(RADIUS_KEY) ?? 5)),
   );
+  const [sharingLiveLocation, setSharingLiveLocation] = useState(true);
+
+  useEffect(() => {
+    profileMetaAPI
+      .getLiveLocationSharing()
+      .then((res) => setSharingLiveLocation(res.data.enabled !== false))
+      .catch(() => {});
+  }, []);
 
   const setRadius = (km: number) => {
     const clamped = clampRadiusKm(km);
@@ -42,6 +53,31 @@ export const Settings = () => {
           </section>
 
           <section className="mr-card p-4">
+            <p className="text-[15px] font-bold text-[var(--cream)]">Account security</p>
+            <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
+              Protect sign-in with an authenticator app in addition to your password.
+            </p>
+            <div className="mt-4">
+              <TwoFactorSettings />
+            </div>
+          </section>
+
+          <section className="mr-card p-4">
+            <p className="mb-3 text-[15px] font-bold text-[var(--cream)]">Live location with matches</p>
+            <LiveLocationSharingToggle
+              enabled={sharingLiveLocation}
+              onToggle={async (enabled) => {
+                setSharingLiveLocation(enabled);
+                try {
+                  await profileMetaAPI.setLiveLocationSharing(enabled);
+                } catch {
+                  setSharingLiveLocation((current) => !current);
+                }
+              }}
+            />
+          </section>
+
+          <section className="mr-card p-4">
             <p className="text-[15px] font-bold text-[var(--cream)]">Privacy & visibility</p>
             <p className="mt-1 text-[13px] text-[var(--cream-muted)]">Ghost mode, mood, and map visibility.</p>
             <Link
@@ -58,7 +94,7 @@ export const Settings = () => {
               valueKm={savedRadius}
               onChange={setRadius}
               id="settings-default-radius"
-              label="Default search radius in miles"
+              label="Default search radius"
             />
           </section>
 
@@ -78,8 +114,11 @@ export const Settings = () => {
             className="flex items-center gap-3.5 rounded-[14px] border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.08)] p-4 transition-colors hover:bg-[rgba(196,131,42,0.15)]"
           >
             <div className="flex-1">
-              <p className="text-[15px] font-bold text-[var(--cream)]">Verification</p>
-              <p className="mt-1 text-[13px] text-[var(--cream-muted)]">Re-run the check or update your document.</p>
+              <p className="text-[15px] font-bold text-[var(--cream)]">ID verification</p>
+              <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
+                Paused for beta — not required to use the app. You can still try the flow; we&apos;ll ask
+                again at grand opening once it&apos;s fixed.
+              </p>
             </div>
             <span className="text-[13px] font-extrabold tracking-wide text-[#E0A14A]">OPEN</span>
           </Link>

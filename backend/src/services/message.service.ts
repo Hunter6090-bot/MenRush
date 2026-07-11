@@ -363,7 +363,6 @@ export const messageService = {
          JOIN users u ON u.id = CASE WHEN m.sender_id = $1 THEN m.receiver_id ELSE m.sender_id END
          LEFT JOIN profiles p ON p.user_id = u.id
          WHERE (m.sender_id = $1 OR m.receiver_id = $1)
-           AND u.is_verified = TRUE
            AND NOT EXISTS (
              SELECT 1 FROM blocks b
              WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
