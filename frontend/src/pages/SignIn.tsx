@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
+import OnboardingTour from '../components/OnboardingTour';
+
+const TOUR_KEY = 'menrush_tour_seen';
 
 const btn: React.CSSProperties = {
   border: 0, cursor: 'pointer', borderRadius: 999, padding: '17px 24px',
@@ -16,6 +19,7 @@ export const SignIn = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showTour, setShowTour] = useState(false);
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
 
@@ -29,7 +33,11 @@ export const SignIn = () => {
     try {
       const res = await authAPI.login({ email: email.trim(), password });
       setAuth(res.data.user, res.data.token);
-      navigate('/discover');
+      if (!localStorage.getItem(TOUR_KEY)) {
+        setShowTour(true);
+      } else {
+        navigate('/discover');
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || 'No account found. Check your invite details.');
     } finally {
@@ -37,9 +45,16 @@ export const SignIn = () => {
     }
   };
 
+  const onTourDone = () => {
+    localStorage.setItem(TOUR_KEY, '1');
+    navigate('/discover');
+  };
+
   const onKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter') signIn(); };
 
   return (
+    <>
+    {showTour && <OnboardingTour onDone={onTourDone} />}
     <div style={{ minHeight: '100dvh', background: '#0D0A06', color: '#F0E0C0', fontFamily: "'Inter', system-ui, sans-serif", position: 'relative', overflow: 'hidden', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 24px 72px' }}>
       {/* Background */}
       <div style={{ position: 'absolute', inset: 0, backgroundImage: "url('/images/09-cigar-daddy-bar.jpeg')", backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.3 }} />
@@ -100,5 +115,6 @@ export const SignIn = () => {
         </div>
       </div>
     </div>
+    </>
   );
 };
