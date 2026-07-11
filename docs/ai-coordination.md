@@ -58,14 +58,14 @@ style(icons): heritage set (claude)
 | UK locale: display miles vs km by browser locale | — | `localeUnits.ts`, `useLocaleUnits.ts`, display overrides | Grok — not on remote |
 | Mobile hub / Discover grid / Matches mobile | partial mobile fixes in `a93d8ab` | `MobileHubTabs.tsx`, large `Discover.tsx` / `Matches.tsx` diffs | Grok — not on remote |
 | Desktop copper design migration | `2ec43b4` + follow-ups | some page tweaks | Claude/Cursor — largely on remote |
-| 2FA (TOTP) | — | migrations `022_*`, `two-factor.service.ts`, `TwoFactorSettings.tsx` | Grok — not on remote |
-| Match live location sharing | — | `023_*`, `match-location.service.ts`, chat/map components | Grok — not on remote |
+| 2FA (TOTP) | `b6b8f5b` — pushed | — | Grok — setup/enable/disable routes + Settings UI |
+| Match live location sharing | `b6b8f5b` — pushed | — | Grok — map, chat card, toggle, socket broadcasts |
 | Wave-2 waitlist invites (ops) | drip templates on remote | `send-wave-2-invites.ts` | Ops script; 40/41 already sent — do not bulk-resend without ledger check |
 | Cursor workflow rules | `837e2ea` | `.cursor/rules/menrush-logo.mdc` (untracked) | Cursor |
 | Claude heritage icons | `9b7644f` | — | Claude — done |
 | Waitlist welcome / drip | `ebdbd7c`, `015f0ea` pause rules | `waitlist-ops-source-of-truth.md` edits | Ops — check Zoho + `waitlist_drip_sends` before sends |
 
-*Last audited: 2026-07-10. Refresh `git fetch` + ledger before your next commit.*
+*Last audited: 2026-07-11. Refresh `git fetch` + ledger before your next commit.*
 
 ## What each agent should read
 
