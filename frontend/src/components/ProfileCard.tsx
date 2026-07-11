@@ -14,6 +14,7 @@ export interface NearbyUser {
   age: number;
   bio?: string;
   headline?: string;
+  looking_for?: string;
   photo_url?: string;
   cover_url?: string;
   interests?: string[];
@@ -147,9 +148,15 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
           <p className="text-[#C4832A]/80 text-xs font-medium mb-1">{user.headline}</p>
         )}
 
+        {user.looking_for ? (
+          <p className="text-[11px] font-semibold text-[#E0A14A] mb-1" data-testid="card-looking-for">
+            Looking for: {user.looking_for}
+          </p>
+        ) : null}
+
         {user.bio ? (
           <p className="text-[#F0E0C0]/55 text-xs leading-relaxed line-clamp-2 flex-1">{user.bio}</p>
-        ) : user.headline ? null : (
+        ) : user.headline || user.looking_for ? null : (
           <p className="text-[#A89070]/50 text-xs italic flex-1">No bio yet</p>
         )}
 

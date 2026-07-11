@@ -183,6 +183,21 @@ export function ProfileDrawer({
             <p className="mt-3 text-sm text-[var(--cream-soft)] leading-relaxed italic">"{user.headline}"</p>
           )}
 
+          {user.looking_for ? (
+            <div className="mt-3" data-testid="drawer-looking-for">
+              <p className="text-[10px] font-black text-[var(--cream-muted)] uppercase tracking-[.18em] mb-1">
+                Looking for
+              </p>
+              <p className="text-sm font-semibold text-[#E0A14A]">{user.looking_for}</p>
+            </div>
+          ) : null}
+
+          {user.mood ? (
+            <p className="mt-2 text-[12px] text-[var(--cream-muted)]">
+              Mood: <span className="font-semibold text-[var(--cream-soft)]">{String(user.mood).replace(/_/g, ' ')}</span>
+            </p>
+          ) : null}
+
           {user.interests && user.interests.length > 0 && (
             <div className="mt-4">
               <p className="text-[10px] font-black text-[var(--cream-muted)] uppercase tracking-[.18em] mb-2">Interests</p>
@@ -233,6 +248,7 @@ export function ProfileDrawer({
             </button>
           )}
           <button
+            type="button"
             onClick={() => (liked ? onMessage() : onLike())}
             className="flex-1 py-3 rounded-[var(--radius-md)] bg-[var(--copper)] text-[var(--bg-primary)] font-black text-sm tracking-wide hover:bg-[var(--copper-light)] active:scale-[0.98] transition-all"
           >
@@ -240,6 +256,7 @@ export function ProfileDrawer({
           </button>
           {onPulseBack && isPulsing && (
             <button
+              type="button"
               onClick={onPulseBack}
               className="px-4 py-3 rounded-[var(--radius-md)] border border-[var(--copper)] text-[var(--copper)] font-bold text-sm flex items-center gap-1.5 hover:bg-[var(--copper)]/10 transition-colors"
               title="Pulse back"
@@ -249,6 +266,9 @@ export function ProfileDrawer({
             </button>
           )}
           </div>
+          <p className="text-center text-[10px] font-medium tracking-wide text-[var(--cream-muted)]">
+            Match is mutual interest · Chat with consent · 18+ only
+          </p>
         </div>
       </div>
     </div>

@@ -64,6 +64,7 @@ style(icons): heritage set (claude)
 | Cursor workflow rules | `837e2ea` | `.cursor/rules/menrush-logo.mdc` (untracked) | Cursor |
 | Claude heritage icons | `9b7644f` | — | Claude — done |
 | Waitlist welcome / drip | `ebdbd7c`, `015f0ea` pause rules | `waitlist-ops-source-of-truth.md` edits | Ops — check Zoho + `waitlist_drip_sends` before sends |
+| Looking-for on cards/drawer + ops metrics commit | cycle 2026-07-11 | Intent visible on map cards; ops-metrics + migrations 022/023 in git | Grok CEO cycle 10 |
 | Pulse nudge + match→Pulse + notifications empty | cycle 2026-07-11 | Empty map Pulse prompt; match toast Start Pulse; alerts empty CTAs | Grok CEO cycle 9 |
 | Global location strip + Settings pin + poll hygiene | cycle 2026-07-11 | App-wide location CTA; Settings enable; pause hidden polls; junk JWT clear | Grok CEO cycle 8 |
 | Icebreakers + like feedback + inbox empty CTAs | cycle 2026-07-11 | Chat openers; Stream card like state; conversations empty multi-CTA | Grok CEO cycle 7 |
