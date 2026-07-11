@@ -115,7 +115,10 @@ export const Discover = () => {
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [locationNotice, setLocationNotice] = useState('');
+  /** True when GPS denied and no saved pin — never invent a city (was London). */
+  const [needsLocationGate, setNeedsLocationGate] = useState(false);
   const [activationProfile, setActivationProfile] = useState<ProfileSetupSnapshot | null>(null);
+  const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
 
   const { lat, lng, setLocation } = useLocationStore();
   const watchIdRef = useRef<number | null>(null);
@@ -197,6 +200,7 @@ export const Discover = () => {
         usingFallbackLocationRef.current = false;
       }
       hasLiveGpsRef.current = true;
+      setNeedsLocationGate(false);
 
       setLocation(latitude, longitude);
       setLocationNotice('');
@@ -243,17 +247,24 @@ export const Discover = () => {
 
   // Customer-facing "enable location" action for the fallback notice.
   const handleEnableLocation = useCallback(() => {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      setLocationNotice('This browser cannot share location. Try Chrome or Safari on your phone.');
+      return;
+    }
     if (!window.isSecureContext) {
       setLocationNotice(INSECURE_GPS_NOTICE);
+      setNeedsLocationGate(true);
       return;
     }
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
+        setNeedsLocationGate(false);
         useDiscoveryLocation(coords.latitude, coords.longitude, '', true);
       },
       () => {
-        // Still blocked — keep the friendly fallback notice in place.
+        setNeedsLocationGate(true);
+        setLocationNotice(BROWSER_GPS_DENIED_NOTICE);
+        setLoading(false);
       },
       { enableHighAccuracy: true, timeout: 12000 },
     );
@@ -266,6 +277,7 @@ export const Discover = () => {
 
     const saved = savedProfileLocationRef.current;
     if (saved) {
+      setNeedsLocationGate(false);
       useDiscoveryLocation(
         saved.lat,
         saved.lng,
@@ -277,9 +289,10 @@ export const Discover = () => {
       return;
     }
 
-    useDiscoveryLocation(
-      DEFAULT_DISCOVERY_CENTER[0],
-      DEFAULT_DISCOVERY_CENTER[1],
+    // Location-first product: do not invent a city centre pin. Gate until GPS or saved pin.
+    setNeedsLocationGate(true);
+    setLoading(false);
+    setLocationNotice(
       window.isSecureContext ? BROWSER_GPS_DENIED_NOTICE : INSECURE_GPS_NOTICE,
     );
   }, [useDiscoveryLocation]);
@@ -684,6 +697,49 @@ export const Discover = () => {
         <ActivationBanner profile={activationProfile} onEnableLocation={handleEnableLocation} />
       ) : null}
 
+      {safetyNotice ? (
+        <div
+          role="status"
+          className="mx-3 mb-2 rounded-xl border px-3 py-2 text-[12px] font-medium"
+          style={{
+            borderColor:
+              safetyNotice.tone === 'success' ? 'rgba(143,199,115,0.4)' : 'rgba(196,131,42,0.45)',
+            background:
+              safetyNotice.tone === 'success' ? 'rgba(143,199,115,0.12)' : 'rgba(196,131,42,0.1)',
+            color: safetyNotice.tone === 'success' ? '#8FC773' : '#F0E0C0',
+          }}
+        >
+          {safetyNotice.msg}
+        </div>
+      ) : null}
+
+      {needsLocationGate ? (
+        <div
+          className="mx-3 mb-3 rounded-2xl border border-[rgba(196,131,42,0.5)] bg-[rgba(196,131,42,0.12)] px-5 py-6 text-center shadow-[0_12px_32px_rgba(0,0,0,0.4)]"
+          role="dialog"
+          aria-labelledby="location-gate-title"
+          data-testid="location-gate"
+        >
+          <p id="location-gate-title" className="text-[17px] font-extrabold text-[#F0E0C0]">
+            Location unlocks Nearby
+          </p>
+          <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[#A89070]">
+            MenRush is live proximity — we never place you on a random city map. Allow location (18+
+            only · shared only while you use the app) to see men around you right now.
+          </p>
+          <button
+            type="button"
+            onClick={handleEnableLocation}
+            className="mt-4 rounded-full bg-[#C4832A] px-5 py-2.5 text-[13px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+          >
+            Enable location
+          </button>
+          {locationNotice ? (
+            <p className="mt-3 text-[11px] text-[#A89070]">{locationNotice}</p>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="hidden lg:block lg:h-full lg:overflow-y-auto px-6 py-6">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <h2 className="flex-1 text-2xl font-extrabold text-[var(--cream)]">Nearby</h2>
@@ -702,14 +758,16 @@ export const Discover = () => {
             {nearbyCount} in your radius · {formatRadiusMiles(radius)}
           </div>
         </div>
-        <NearbyProfileGrid
-          users={displayUsers}
-          loading={loading}
-          onSelect={setSelectedUser}
-          onExpandRadius={handleRadiusCycle}
-          onFinishProfile={() => navigate('/profile/setup')}
-          radiusLabel={formatRadiusMiles(radius)}
-        />
+        {!needsLocationGate ? (
+          <NearbyProfileGrid
+            users={displayUsers}
+            loading={loading}
+            onSelect={setSelectedUser}
+            onExpandRadius={handleRadiusCycle}
+            onFinishProfile={() => navigate('/profile/setup')}
+            radiusLabel={formatRadiusMiles(radius)}
+          />
+        ) : null}
       </div>
 
       <div className="relative lg:hidden">
@@ -831,15 +889,19 @@ export const Discover = () => {
             </div>
           </div>
 
-          <EventsRail lat={lat} lng={lng} onSelect={(ev: EventDTO) => navigate(`/rooms/${ev.id}`)} />
-          <NearbyProfileGrid
-            users={displayUsers}
-            loading={loading}
-            onSelect={setSelectedUser}
-            onExpandRadius={handleRadiusCycle}
-            onFinishProfile={() => navigate('/profile/setup')}
-            radiusLabel={formatRadiusMiles(radius)}
-          />
+          {!needsLocationGate ? (
+            <>
+              <EventsRail lat={lat} lng={lng} onSelect={(ev: EventDTO) => navigate(`/rooms/${ev.id}`)} />
+              <NearbyProfileGrid
+                users={displayUsers}
+                loading={loading}
+                onSelect={setSelectedUser}
+                onExpandRadius={handleRadiusCycle}
+                onFinishProfile={() => navigate('/profile/setup')}
+                radiusLabel={formatRadiusMiles(radius)}
+              />
+            </>
+          ) : null}
         </div>
 
         <PulseFab
@@ -865,6 +927,15 @@ export const Discover = () => {
           navigate(`/messages/${selectedUser.id}`);
         }}
         onPass={() => setSelectedUser(null)}
+        onSafetyNotice={(msg, tone) => {
+          setSafetyNotice({ msg, tone: tone ?? 'success' });
+          window.setTimeout(() => setSafetyNotice(null), 4000);
+        }}
+        onBlocked={() => {
+          if (!selectedUser) return;
+          setUsers((prev) => prev.filter((u) => u.id !== selectedUser.id));
+          setSelectedUser(null);
+        }}
       />
     </Layout>
   );

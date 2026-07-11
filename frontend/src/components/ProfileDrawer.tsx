@@ -8,6 +8,7 @@ import { IconPulse, IconClose } from "./icons";
 import { StatusBadge } from "./StatusBadge";
 import { DistancePill } from "./DistancePill";
 import { VerifiedBadge } from "./VerifiedBadge";
+import { ChatSafetyMenu } from "./ChatSafetyMenu";
 import { getDistanceLabel, isUserPulsing } from "../lib/discovery";
 
 interface ProfileDrawerProps {
@@ -18,6 +19,9 @@ interface ProfileDrawerProps {
   onPass?: () => void;
   onMessage: () => void;
   onPulseBack?: () => Promise<void> | void;
+  /** Safety feedback after report/block (18+ trust & safety). */
+  onSafetyNotice?: (message: string, tone?: 'success' | 'error') => void;
+  onBlocked?: () => void;
 }
 
 export function ProfileDrawer({
@@ -28,6 +32,8 @@ export function ProfileDrawer({
   onPass,
   onMessage,
   onPulseBack,
+  onSafetyNotice,
+  onBlocked,
 }: ProfileDrawerProps) {
   const navigate = useNavigate();
   const [mounted, setMounted] = useState(false);
@@ -88,13 +94,26 @@ export function ProfileDrawer({
       >
         <div className="sm:hidden w-10 h-1 rounded-full bg-[var(--border-default)] mx-auto mt-3" />
 
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-nn-bg/70 border border-nn-border text-nn-text hover:border-nn-copper/40 flex items-center justify-center transition-colors"
-          aria-label="Close"
-        >
-          <IconClose size={18} />
-        </button>
+        <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
+          <div className="rounded-full bg-nn-bg/70 border border-nn-border">
+            <ChatSafetyMenu
+              peerId={user.id}
+              peerName={user.name}
+              onNotice={onSafetyNotice}
+              onBlocked={() => {
+                onBlocked?.();
+                onClose();
+              }}
+            />
+          </div>
+          <button
+            onClick={onClose}
+            className="w-9 h-9 rounded-full bg-nn-bg/70 border border-nn-border text-nn-text hover:border-nn-copper/40 flex items-center justify-center transition-colors"
+            aria-label="Close"
+          >
+            <IconClose size={18} />
+          </button>
+        </div>
 
         <div
           className="relative w-full"

@@ -83,10 +83,13 @@ export function activationBlockers(profile: ProfileSetupSnapshot): ActivationBlo
 }
 
 export function profileSetupProgress(profile: ProfileSetupSnapshot): number {
+  // Setup steps + live location (proximity is the product).
+  const total = PROFILE_SETUP_STEPS.length + 1;
   let done = 0;
   if (hasProfileAvatar(profile)) done++;
   if ((profile.bio?.trim().length ?? 0) >= 20) done++;
   if (profile.looking_for?.trim()) done++;
   if ((profile.interests?.length ?? 0) >= 3) done++;
-  return Math.round((done / PROFILE_SETUP_STEPS.length) * 100);
+  if (isDiscoverLocationReady(profile)) done++;
+  return Math.round((done / total) * 100);
 }
