@@ -15,6 +15,8 @@ interface NearbyProfileGridProps {
   /** Turn on Pulse to become more visible when density is empty. */
   onStartPulse?: () => void;
   pulseOn?: boolean;
+  /** Venue check-ins when the map is quiet. */
+  onOpenHotSpots?: () => void;
   radiusLabel?: string;
 }
 
@@ -26,6 +28,7 @@ export function NearbyProfileGrid({
   onFinishProfile,
   onStartPulse,
   pulseOn,
+  onOpenHotSpots,
   radiusLabel,
 }: NearbyProfileGridProps) {
   if (loading && users.length === 0) {
@@ -71,6 +74,16 @@ export function NearbyProfileGrid({
               Start Pulse
             </button>
           ) : null}
+          {onOpenHotSpots ? (
+            <button
+              type="button"
+              onClick={onOpenHotSpots}
+              data-testid="empty-hot-spots"
+              className="rounded-full border border-[rgba(196,131,42,0.5)] bg-transparent px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
+            >
+              Hot Spots
+            </button>
+          ) : null}
           {onFinishProfile ? (
             <button
               type="button"
@@ -82,7 +95,8 @@ export function NearbyProfileGrid({
           ) : null}
         </div>
         <p className="mt-3 text-[12px] text-[#A89070]">
-          Pulse puts you first for nearby men for 90 minutes — be intentional, 18+ only.
+          Pulse puts you first nearby for 90 minutes. Hot Spots show live venues — be intentional,
+          18+ only.
         </p>
         <p className="mt-2 text-[11px] font-medium tracking-wide text-[#A89070]">
           Consent first · Report anytime

@@ -21,7 +21,7 @@ export function useNotificationSync() {
   const setLoadError = useNotificationStore((s) => s.setLoadError);
 
   const sync = useCallback(async (): Promise<'ok' | 'auth' | 'error'> => {
-    if (!token) {
+    if (!token || !localStorage.getItem('token')) {
       setFromServer([], 0);
       return 'ok';
     }

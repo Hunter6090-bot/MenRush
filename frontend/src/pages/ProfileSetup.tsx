@@ -303,34 +303,53 @@ export const ProfileSetup: React.FC = () => {
 
     if (step === 'live') {
       setSaving(true);
+      setError(null);
       try {
-        if (window.isSecureContext && navigator.geolocation) {
-          setLocating(true);
-          await new Promise<void>((resolve) => {
-            navigator.geolocation.getCurrentPosition(
-              async ({ coords }) => {
-                try {
-                  await usersAPI.updateLocation(coords.latitude, coords.longitude);
-                  setLocation(coords.latitude, coords.longitude);
-                } catch {
-                  /* GPS optional — still finish */
-                } finally {
-                  setLocating(false);
-                  resolve();
-                }
-              },
-              () => {
-                setLocating(false);
-                resolve();
-              },
-              { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
-            );
-          });
+        if (!window.isSecureContext) {
+          setError(
+            'Location needs a secure (HTTPS) connection. Open menrush.com on your phone, then allow location.',
+          );
+          return;
         }
+        if (!navigator.geolocation) {
+          setError('This browser cannot share location. Try Chrome or Safari, then finish.');
+          return;
+        }
+
+        setLocating(true);
+        const located = await new Promise<boolean>((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            async ({ coords }) => {
+              try {
+                await usersAPI.updateLocation(coords.latitude, coords.longitude);
+                setLocation(coords.latitude, coords.longitude);
+                resolve(true);
+              } catch {
+                resolve(false);
+              } finally {
+                setLocating(false);
+              }
+            },
+            () => {
+              setLocating(false);
+              resolve(false);
+            },
+            { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
+          );
+        });
+
+        if (!located) {
+          setError(
+            'Location is required to go live on Nearby — MenRush is proximity-first (18+). Allow location and try again, or open Discover to enable there.',
+          );
+          return;
+        }
+
         clearProfileSetupSkip();
         navigate(consumePostAuthRedirect('/discover'));
       } finally {
         setSaving(false);
+        setLocating(false);
       }
     }
   };
@@ -585,7 +604,8 @@ export const ProfileSetup: React.FC = () => {
               <SetupChecklistItem key={item.id} n="✓" text={item.label} done />
             ))}
             <p className="pt-2 text-[13px] leading-relaxed text-[#A89070]">
-              Tap finish to save everything and open Discover. Allow location when your browser asks.
+              Location unlocks Nearby. Tap finish and allow precise location — we never invent a city
+              pin. Shared only while you use the app. 18+ only.
             </p>
           </div>
         ) : null}
@@ -605,7 +625,7 @@ export const ProfileSetup: React.FC = () => {
                 {locating ? 'Getting location…' : 'Saving…'}
               </>
             ) : step === 'live' ? (
-              'Finish & go to Discover'
+              'Enable location & go live'
             ) : step === 'welcome' ? (
               'Start setup'
             ) : (
@@ -621,7 +641,7 @@ export const ProfileSetup: React.FC = () => {
 
           {step === 'live' ? (
             <button type="button" onClick={handleSkip} className={publicSecondaryButtonClass}>
-              Skip location for now
+              Open Discover without location
             </button>
           ) : null}
         </div>

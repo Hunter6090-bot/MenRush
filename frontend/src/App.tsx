@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ComingSoon } from './pages/ComingSoon';
 import { BetaAccess } from './pages/BetaAccess';
@@ -122,6 +123,22 @@ function AppEntry() {
 
 function AppShell() {
   const token = useAuthStore((s) => s.token);
+  const logout = useAuthStore((s) => s.logout);
+
+  // Zombie sessions: store.token set but localStorage cleared (or vice versa) → 401 spam.
+  // Heal on boot and whenever token flips.
+  useEffect(() => {
+    const lsToken = localStorage.getItem('token');
+    if (token && !lsToken) {
+      logout();
+      return;
+    }
+    if (!token && lsToken) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    }
+  }, [token, logout]);
+
   usePushNotifications(!!token);
   useGlobalMessageNotifications();
   useUnreadSync();

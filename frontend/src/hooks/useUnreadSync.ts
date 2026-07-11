@@ -8,7 +8,8 @@ export function useUnreadSync() {
   const setUnreadFromServer = useUnreadStore((s) => s.setUnreadFromServer);
 
   useEffect(() => {
-    if (!token) {
+    // Require both store + storage so we never poll half-logged-out sessions.
+    if (!token || !localStorage.getItem('token')) {
       setUnreadFromServer({});
       return;
     }
@@ -16,6 +17,13 @@ export function useUnreadSync() {
     let cancelled = false;
     let intervalId = 0;
     const sync = () => {
+      if (!localStorage.getItem('token')) {
+        if (intervalId) {
+          window.clearInterval(intervalId);
+          intervalId = 0;
+        }
+        return;
+      }
       messagesAPI
         .getUnreadSummary()
         .then((res) => {

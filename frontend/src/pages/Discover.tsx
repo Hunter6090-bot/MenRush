@@ -767,6 +767,7 @@ export const Discover = () => {
             onFinishProfile={() => navigate('/profile/setup')}
             onStartPulse={() => void handleStartPulse(90)}
             pulseOn={!!pulseUntil}
+            onOpenHotSpots={() => navigate('/hot-spots')}
             radiusLabel={formatRadiusMiles(radius)}
           />
         ) : null}
@@ -902,6 +903,7 @@ export const Discover = () => {
                 onFinishProfile={() => navigate('/profile/setup')}
                 onStartPulse={() => void handleStartPulse(90)}
                 pulseOn={!!pulseUntil}
+                onOpenHotSpots={() => navigate('/hot-spots')}
                 radiusLabel={formatRadiusMiles(radius)}
               />
             </>
