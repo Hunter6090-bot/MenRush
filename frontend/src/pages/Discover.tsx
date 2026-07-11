@@ -10,6 +10,7 @@ import {
   MAX_RADIUS_KM,
   RADIUS_MILE_OPTIONS,
   clampRadiusKm,
+  kmToRadiusSelection,
   radiusSelectionToKm,
 } from '../lib/discoveryFormat';
 import { ProfileDrawer } from '../components/ProfileDrawer';
@@ -401,13 +402,14 @@ export const Discover = () => {
 
   const handleRadiusCycle = () => {
     if (radius >= MAX_RADIUS_KM - 0.5) return;
-    const currentMiles = Math.round(radius / 1.60934);
-    const nextMiles = RADIUS_MILE_OPTIONS.find((m) => m > currentMiles) ?? MAX_RADIUS_KM;
-    handleRadiusChange(
-      typeof nextMiles === 'number' && nextMiles <= 31
-        ? radiusSelectionToKm(nextMiles)
-        : MAX_RADIUS_KM,
-    );
+    const current = kmToRadiusSelection(radius);
+    if (current === 'all') return;
+    const idx = RADIUS_MILE_OPTIONS.indexOf(current);
+    const next =
+      idx >= 0 && idx < RADIUS_MILE_OPTIONS.length - 1
+        ? RADIUS_MILE_OPTIONS[idx + 1]
+        : 'all';
+    handleRadiusChange(radiusSelectionToKm(next));
   };
 
   const handleDiscoveryFiltersChange = useCallback(

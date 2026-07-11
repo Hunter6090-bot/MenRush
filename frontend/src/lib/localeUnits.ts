@@ -136,12 +136,18 @@ export function formatRadiusFromKm(
   km: number,
   system: DistanceUnitSystem = resolveDistanceUnitSystem(),
 ): string {
-  const clamped = Math.min(Math.max(km, 1), 50);
+  const clamped = Math.min(Math.max(km, 0.8), 50);
   if (clamped >= 49.5) return 'All';
 
   if (system === 'imperial') {
-    const miles = Math.round(clamped * MILES_PER_KM);
-    return `${miles} mile${miles === 1 ? '' : 's'}`;
+    const miles = clamped * MILES_PER_KM;
+    if (miles < 1) {
+      const snapped = Math.round(miles * 2) / 2;
+      const milesText = snapped % 1 === 0 ? String(snapped) : snapped.toFixed(1);
+      return `${milesText} mile${snapped === 1 ? '' : 's'}`;
+    }
+    const rounded = Math.round(miles);
+    return `${rounded} mile${rounded === 1 ? '' : 's'}`;
   }
 
   const rounded = Math.round(clamped);
@@ -159,7 +165,7 @@ export function formatRadiusLabelFromKm(
 export const RADIUS_KM_OPTIONS = [1, 2, 5, 10, 20, 30, 50] as const;
 
 export function kmToDisplayRadiusValue(km: number, system: DistanceUnitSystem): number | 'all' {
-  const clamped = Math.min(Math.max(km, 1), 50);
+  const clamped = Math.min(Math.max(km, 0.8), 50);
   if (clamped >= 49.5) return 'all';
   if (system === 'imperial') return Math.max(1, Math.round(clamped * MILES_PER_KM));
   return RADIUS_KM_OPTIONS.reduce((best, option) =>
@@ -169,7 +175,9 @@ export function kmToDisplayRadiusValue(km: number, system: DistanceUnitSystem): 
 
 export function displayRadiusValueToKm(value: number | 'all', system: DistanceUnitSystem): number {
   if (value === 'all') return 50;
-  if (system === 'imperial') return Math.min(Math.max(Math.round(value * KM_PER_MILE * 10) / 10, 1), 50);
+  if (system === 'imperial') {
+    return Math.min(Math.max(Math.round(value * KM_PER_MILE * 10) / 10, 0.8), 50);
+  }
   return Math.min(Math.max(value, 1), 50);
 }
 

@@ -41,7 +41,7 @@ export function RadiusMilesSelect({
     const selectValue = selection === 'all' ? 'all' : String(selection);
 
     const handleChange = (raw: string) => {
-      const next: RadiusMilesSelection = raw === 'all' ? 'all' : Number.parseInt(raw, 10);
+      const next: RadiusMilesSelection = raw === 'all' ? 'all' : Number.parseFloat(raw);
       onChange(radiusSelectionToKm(next));
     };
 

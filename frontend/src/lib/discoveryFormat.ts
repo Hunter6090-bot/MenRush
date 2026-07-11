@@ -10,7 +10,7 @@ const TRIBE_TAGS = [
   'Twink', 'Twunk', 'Otter', 'Bear', 'Cub', 'Daddy', 'Wolf', 'Jock', 'Leather', 'Rugged', 'Geek',
 ];
 
-/** Matches backend `/users/nearby` clamp: Math.min(Math.max(radius, 1), 50). */
+/** Matches backend `/users/nearby` clamp: Math.min(Math.max(radius, 0.8), 50). */
 export const MAX_RADIUS_KM = 50;
 
 /** "All" uses the widest search the API allows (~31 miles). */
@@ -18,8 +18,11 @@ export const RADIUS_ALL_KM = MAX_RADIUS_KM;
 
 const KM_PER_MILE = 1.60934;
 
-/** Every whole mile from 1 up to the API cap. */
-export const RADIUS_MILE_OPTIONS = Array.from({ length: 31 }, (_, i) => i + 1) as readonly number[];
+/** 0.5 mile minimum, then whole miles up to 30. */
+export const RADIUS_MILE_OPTIONS = [
+  0.5,
+  ...Array.from({ length: 30 }, (_, i) => i + 1),
+] as readonly number[];
 
 export type RadiusMilesSelection = 'all' | number;
 
@@ -32,21 +35,23 @@ export function milesToKm(miles: number): number {
   return Math.round(miles * KM_PER_MILE * 10) / 10;
 }
 
+/** ~0.5 miles — matches the smallest dropdown option. */
+export const MIN_RADIUS_KM = milesToKm(0.5);
+
 export function kmToMiles(km: number): number {
   return km / KM_PER_MILE;
 }
 
 export function clampRadiusKm(km: number): number {
-  return Math.min(Math.max(km, 1), MAX_RADIUS_KM);
+  return Math.min(Math.max(km, MIN_RADIUS_KM), MAX_RADIUS_KM);
 }
 
 export function kmToRadiusSelection(km: number): RadiusMilesSelection {
   const clamped = clampRadiusKm(km);
   if (clamped >= RADIUS_ALL_KM - 0.5) return 'all';
-  const miles = Math.round(kmToMiles(clamped));
-  if (miles >= 1 && miles <= RADIUS_MILE_OPTIONS.length) return miles;
+  const miles = kmToMiles(clamped);
   return RADIUS_MILE_OPTIONS.reduce((best, option) =>
-    Math.abs(milesToKm(option) - clamped) < Math.abs(milesToKm(best) - clamped) ? option : best,
+    Math.abs(option - miles) < Math.abs(best - miles) ? option : best,
   );
 }
 
@@ -61,7 +66,8 @@ export function formatRadiusMiles(km: number, system?: DistanceUnitSystem): stri
 
 export function formatRadiusMilesLabel(selection: RadiusMilesSelection): string {
   if (selection === 'all') return 'All';
-  return `${selection} mile${selection === 1 ? '' : 's'}`;
+  const milesText = selection % 1 === 0 ? String(selection) : selection.toFixed(1);
+  return `${milesText} mile${selection === 1 ? '' : 's'}`;
 }
 
 export function formatDistanceMiles(user: NearbyUser): string {

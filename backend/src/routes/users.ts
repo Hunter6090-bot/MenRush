@@ -121,7 +121,7 @@ router.get('/search', verifiedMiddleware, async (req: AuthRequest, res: Response
 router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { radius, minAge, maxAge, interests, onlyPulse, lookingFor, mood } = req.query;
-    const requestedRadius = radius ? Number.parseInt(radius as string, 10) : 5;
+    const requestedRadius = radius ? Number.parseFloat(radius as string) : 5;
     if (!Number.isFinite(requestedRadius)) {
       return res.status(400).json({ error: 'Invalid radius' });
     }
@@ -144,7 +144,7 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
 
     const users = await userService.getNearbyUsers(
       req.userId!,
-      Math.min(Math.max(requestedRadius, 1), 50),
+      Math.min(Math.max(requestedRadius, 0.8), 50),
       filters,
       clientLocation,
     );
