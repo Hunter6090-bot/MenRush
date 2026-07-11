@@ -120,6 +120,13 @@ export const Discover = () => {
   const [activationProfile, setActivationProfile] = useState<ProfileSetupSnapshot | null>(null);
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
   const [matchToast, setMatchToast] = useState<{ name: string; id: string } | null>(null);
+  const [pulseNudgeDismissed, setPulseNudgeDismissed] = useState(() => {
+    try {
+      return localStorage.getItem('menrush_pulse_nudge_dismissed') === '1';
+    } catch {
+      return false;
+    }
+  });
 
   const { lat, lng, setLocation } = useLocationStore();
   const watchIdRef = useRef<number | null>(null);
@@ -731,19 +738,82 @@ export const Discover = () => {
         >
           <div>
             <p className="text-[14px] font-extrabold text-[#F0E0C0]">Match with {matchToast.name}</p>
-            <p className="mt-0.5 text-[12px] text-[#A89070]">You both said yes. Chat when ready — consent first.</p>
+            <p className="mt-0.5 text-[12px] text-[#A89070]">
+              You both said yes. Chat when ready — consent first. Pulse to get seen by more men nearby.
+            </p>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              const id = matchToast.id;
-              setMatchToast(null);
-              navigate(`/messages/${id}`);
-            }}
-            className="shrink-0 rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
-          >
-            Open chat
-          </button>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const id = matchToast.id;
+                setMatchToast(null);
+                navigate(`/messages/${id}`);
+              }}
+              className="rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+            >
+              Open chat
+            </button>
+            {!pulseUntil ? (
+              <button
+                type="button"
+                data-testid="match-toast-pulse"
+                onClick={() => {
+                  setMatchToast(null);
+                  void handleStartPulse(90).catch(() => {});
+                }}
+                className="rounded-full border border-[rgba(196,131,42,0.55)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
+              >
+                Start Pulse
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {!needsLocationGate &&
+      !loading &&
+      nearbyCount === 0 &&
+      !pulseUntil &&
+      !pulseNudgeDismissed &&
+      lat != null &&
+      lng != null ? (
+        <div
+          className="mx-3 mb-3 rounded-2xl border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.1)] px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
+          role="status"
+          data-testid="pulse-nudge"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] font-extrabold text-[#F0E0C0]">Quiet map? Start Pulse</p>
+              <p className="mt-1 text-[12px] text-[#A89070]">
+                90 minutes of priority visibility so men nearby see you first. Be intentional · 18+ only.
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void handleStartPulse(90).catch(() => {})}
+                className="rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+              >
+                Start Pulse
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPulseNudgeDismissed(true);
+                  try {
+                    localStorage.setItem('menrush_pulse_nudge_dismissed', '1');
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+                className="rounded-full border border-[rgba(196,131,42,0.45)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#A89070] transition-colors hover:text-[#F0E0C0]"
+              >
+                Not now
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
 
