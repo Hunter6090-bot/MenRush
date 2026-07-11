@@ -95,15 +95,26 @@ export const ProfileSetup: React.FC = () => {
       .getMe()
       .then((res) => {
         const d = res.data;
-        setPhotoUrl(d.photo_url ?? '');
+        const nextPhoto = d.photo_url ?? '';
+        const nextBio = d.bio ?? '';
+        const nextLooking = d.looking_for ?? '';
+        const nextInterests: string[] = d.interests ?? [];
+        setPhotoUrl(nextPhoto);
         setUserAge(d.age ?? user?.age);
-        if (d.photo_url) {
-          setPhotoChoice(isGenericAvatarUrl(d.photo_url) ? 'generic' : 'upload');
+        if (nextPhoto) {
+          setPhotoChoice(isGenericAvatarUrl(nextPhoto) ? 'generic' : 'upload');
         }
-        setBio(d.bio ?? '');
+        setBio(nextBio);
         setHeadline(d.headline ?? '');
-        setLookingFor(d.looking_for ?? '');
-        setInterests(d.interests ?? []);
+        setLookingFor(nextLooking);
+        setInterests(nextInterests);
+
+        // Resume at first incomplete step — skip welcome when avatar already set.
+        if (!nextPhoto) setStep('photo');
+        else if ((nextBio.trim().length ?? 0) < 20) setStep('about');
+        else if (!nextLooking.trim()) setStep('looking');
+        else if (nextInterests.length < 3) setStep('tags');
+        else setStep('live');
       })
       .catch(() => setError('Could not load your profile.'))
       .finally(() => setLoading(false));
@@ -331,12 +342,17 @@ export const ProfileSetup: React.FC = () => {
   };
 
   const handleSkip = () => {
-    if (step === 'live') {
-      skipProfileSetup();
-      navigate(consumePostAuthRedirect('/discover'));
+    // Hollow profiles kill discovery quality. Require looking + tags (avatar already gated).
+    if (!photoUrl && photoChoice !== 'generic') {
+      setError('Add a photo or generic avatar first.');
       return;
     }
-    setError('Add a photo or generic avatar first — then you can finish the rest later.');
+    if (!lookingFor.trim() || interests.length < 3) {
+      setError('Pick what you want and at least 3 tags — then you can finish bio later.');
+      return;
+    }
+    skipProfileSetup();
+    navigate(consumePostAuthRedirect('/discover'));
   };
 
   if (loading) {

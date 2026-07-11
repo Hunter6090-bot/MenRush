@@ -63,9 +63,22 @@ export function isDiscoverLocationReady(profile: ProfileSetupSnapshot): boolean 
   return Number.isFinite(lat) && Number.isFinite(lng);
 }
 
-/** Redirect to /profile/setup when true. Skip only counts after an avatar exists. */
+/**
+ * Minimum fields before Discover skip is allowed.
+ * Avatar alone is not enough — hollow profiles kill match quality.
+ */
+export function isDiscoverMinimumReady(profile: ProfileSetupSnapshot): boolean {
+  return (
+    isDiscoverAvatarReady(profile) &&
+    Boolean(profile.looking_for?.trim()) &&
+    (profile.interests?.length ?? 0) >= 3
+  );
+}
+
+/** Redirect to /profile/setup when true. Skip only after looking + tags (+ avatar). */
 export function needsProfileSetupRedirect(profile: ProfileSetupSnapshot): boolean {
   if (!isDiscoverAvatarReady(profile)) return true;
+  if (!isDiscoverMinimumReady(profile)) return true;
   if (isProfileSetupComplete(profile)) return false;
   return !hasSkippedProfileSetup();
 }

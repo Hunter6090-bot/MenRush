@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { useAuthStore } from '../hooks/store';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -7,7 +8,8 @@ const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  // Prefer live store token so logout immediately stops Authorization headers.
+  const token = useAuthStore.getState().token ?? localStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -28,7 +30,8 @@ let sessionExpiredHandling = false;
 
 /**
  * Stale JWT → endless 401 spam on unread/notifications polls.
- * Clear local session once so ProtectedRoute sends the user to login.
+ * Must clear Zustand synchronously — async logout left store.token set while
+ * localStorage was empty, so intervals kept firing unauthorized requests.
  */
 apiClient.interceptors.response.use(
   (response) => response,
@@ -38,18 +41,12 @@ apiClient.interceptors.response.use(
     const isAuthChallenge = AUTH_CHALLENGE_PATHS.some((p) => reqUrl.includes(p));
 
     if (status === 401 && !isAuthChallenge && !sessionExpiredHandling) {
-      const hadToken = Boolean(localStorage.getItem('token'));
-      if (hadToken) {
+      const store = useAuthStore.getState();
+      const hadSession = Boolean(store.token || localStorage.getItem('token'));
+      if (hadSession) {
         sessionExpiredHandling = true;
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        // Lazy import avoids circular deps with the store module.
-        void import('../hooks/store').then(({ useAuthStore }) => {
-          useAuthStore.getState().logout();
-          sessionExpiredHandling = false;
-        }).catch(() => {
-          sessionExpiredHandling = false;
-        });
+        store.logout();
+        sessionExpiredHandling = false;
       }
     }
     return Promise.reject(error);

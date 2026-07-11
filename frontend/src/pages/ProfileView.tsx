@@ -7,6 +7,7 @@ import { UserAvatar } from '../components/UserAvatar';
 import { CoverBanner, normalizeCoverFrame } from '../components/CoverBanner';
 import { StatusBadge } from '../components/StatusBadge';
 import { ProfileAlbumsSection } from '../components/ProfileAlbumsSection';
+import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 
 interface ViewableUser {
   id: string;
@@ -51,6 +52,9 @@ export const ProfileView = () => {
   const [user, setUser] = useState<ViewableUser | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!id) return;
@@ -104,6 +108,22 @@ export const ProfileView = () => {
   return (
     <Layout>
       <div className="max-w-xl mx-auto px-4 py-6 pb-10 space-y-4">
+        {safetyNotice ? (
+          <div
+            role="status"
+            className="rounded-xl border px-3 py-2 text-[12px] font-medium"
+            style={{
+              borderColor:
+                safetyNotice.tone === 'success' ? 'rgba(143,199,115,0.4)' : 'rgba(196,131,42,0.45)',
+              background:
+                safetyNotice.tone === 'success' ? 'rgba(143,199,115,0.12)' : 'rgba(196,131,42,0.1)',
+              color: safetyNotice.tone === 'success' ? '#8FC773' : '#F0E0C0',
+            }}
+          >
+            {safetyNotice.msg}
+          </div>
+        ) : null}
+
         <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl overflow-hidden shadow-card">
           {user.cover_url ? (
             <CoverBanner
@@ -118,7 +138,7 @@ export const ProfileView = () => {
             <div className="h-40 sm:h-32 bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#A45E18]/10" />
           )}
           <div className="px-5 pb-5">
-            <div className="-mt-10 mb-3 flex items-end justify-between">
+            <div className="-mt-10 mb-3 flex items-end justify-between gap-2">
               <UserAvatar
                 name={user.name}
                 photoUrl={user.photo_url}
@@ -126,7 +146,20 @@ export const ProfileView = () => {
                 size="xl"
                 className="ring-4 ring-[#1E1508]"
               />
-              <StatusBadge online={!!user.online} lastSeen={user.last_seen} />
+              <div className="flex items-center gap-1.5 pb-1">
+                <StatusBadge online={!!user.online} lastSeen={user.last_seen} />
+                <div className="rounded-full border border-[#3D2B0E] bg-[#0D0A06]/60">
+                  <ChatSafetyMenu
+                    peerId={user.id}
+                    peerName={user.name}
+                    onNotice={(msg, tone) => {
+                      setSafetyNotice({ msg, tone: tone ?? 'success' });
+                      window.setTimeout(() => setSafetyNotice(null), 4000);
+                    }}
+                    onBlocked={() => navigate('/discover', { replace: true })}
+                  />
+                </div>
+              </div>
             </div>
             <h2 className="text-xl font-bold text-[#F0E0C0]">{user.name}</h2>
             {typeof user.age === 'number' && (
@@ -170,6 +203,9 @@ export const ProfileView = () => {
             Message
           </button>
         </div>
+        <p className="text-center text-[11px] text-[#A89070]">
+          18+ only · Report underage or abuse anytime · Block is private
+        </p>
       </div>
     </Layout>
   );
