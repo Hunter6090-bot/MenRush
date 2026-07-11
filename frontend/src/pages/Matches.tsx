@@ -262,20 +262,41 @@ export const Matches = () => {
             ) : null}
           </div>
         ) : (
-          <div className="rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] py-24 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[rgba(196,131,42,0.1)]">
-              <IconMatches size={32} className="text-[var(--copper)]/40" />
+          <div
+            className="rounded-3xl border border-[rgba(196,131,42,0.35)] bg-[rgba(196,131,42,0.06)] py-16 px-6 text-center shadow-[0_12px_32px_rgba(0,0,0,0.3)]"
+            data-testid="matches-empty"
+          >
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[rgba(196,131,42,0.12)]">
+              <IconMatches size={32} className="text-[var(--copper)]/50" />
             </div>
             <h2 className="text-lg font-bold text-[var(--cream)]">No matches yet</h2>
-            <p className="mx-auto mt-1 max-w-xs text-sm text-[var(--cream-muted)]">
-              Match people on Nearby. When it&apos;s mutual, they show up here.
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-[var(--cream-muted)]">
+              Tap Match on Nearby or the live list. When it&apos;s mutual, they land here — ready to
+              chat. Be direct. Consent first.
             </p>
-            <Link
-              to="/discover"
-              className="mr-cta-gradient mt-6 inline-flex rounded-full px-6 py-2.5 text-sm font-semibold text-[#1A0E03]"
-            >
-              Go to Nearby
-            </Link>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+              <Link
+                to="/discover"
+                className="inline-flex rounded-full bg-[#C4832A] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+              >
+                Nearby map
+              </Link>
+              <Link
+                to="/stream"
+                className="inline-flex rounded-full border border-[rgba(196,131,42,0.5)] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
+              >
+                Live list
+              </Link>
+              <Link
+                to="/hot-spots"
+                className="inline-flex rounded-full border border-[rgba(196,131,42,0.5)] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
+              >
+                Hot Spots
+              </Link>
+            </div>
+            <p className="mt-5 text-[11px] font-medium tracking-wide text-[#A89070]">
+              18+ only · Report underage or abuse anytime
+            </p>
           </div>
         )}
 

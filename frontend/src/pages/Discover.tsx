@@ -119,6 +119,7 @@ export const Discover = () => {
   const [needsLocationGate, setNeedsLocationGate] = useState(false);
   const [activationProfile, setActivationProfile] = useState<ProfileSetupSnapshot | null>(null);
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
+  const [matchToast, setMatchToast] = useState<{ name: string; id: string } | null>(null);
 
   const { lat, lng, setLocation } = useLocationStore();
   const watchIdRef = useRef<number | null>(null);
@@ -486,10 +487,19 @@ export const Discover = () => {
         return;
       }
       try {
-        await usersAPI.likeUser(user.id);
+        const res = await usersAPI.likeUser(user.id);
         setLikedUsers((p) => new Set([...p, user.id]));
+        // Mutual match → celebrate and path to chat (engagement).
+        if (res.data?.match) {
+          setMatchToast({ name: user.name, id: user.id });
+          window.setTimeout(() => setMatchToast(null), 6000);
+        }
       } catch {
-        // ignore
+        setSafetyNotice({
+          msg: 'Could not send match. Try again in a moment.',
+          tone: 'error',
+        });
+        window.setTimeout(() => setSafetyNotice(null), 3500);
       }
     },
     [likedUsers, navigate],
@@ -710,6 +720,30 @@ export const Discover = () => {
           }}
         >
           {safetyNotice.msg}
+        </div>
+      ) : null}
+
+      {matchToast ? (
+        <div
+          role="status"
+          data-testid="match-toast"
+          className="mx-3 mb-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] px-4 py-3 shadow-[0_12px_28px_rgba(0,0,0,0.4)]"
+        >
+          <div>
+            <p className="text-[14px] font-extrabold text-[#F0E0C0]">Match with {matchToast.name}</p>
+            <p className="mt-0.5 text-[12px] text-[#A89070]">You both said yes. Chat when ready — consent first.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const id = matchToast.id;
+              setMatchToast(null);
+              navigate(`/messages/${id}`);
+            }}
+            className="shrink-0 rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+          >
+            Open chat
+          </button>
         </div>
       ) : null}
 
