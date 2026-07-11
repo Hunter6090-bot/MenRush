@@ -12,6 +12,9 @@ interface NearbyProfileGridProps {
   onExpandRadius?: () => void;
   /** Jump to profile setup when location/avatar incomplete. */
   onFinishProfile?: () => void;
+  /** Turn on Pulse to become more visible when density is empty. */
+  onStartPulse?: () => void;
+  pulseOn?: boolean;
   radiusLabel?: string;
 }
 
@@ -21,6 +24,8 @@ export function NearbyProfileGrid({
   onSelect,
   onExpandRadius,
   onFinishProfile,
+  onStartPulse,
+  pulseOn,
   radiusLabel,
 }: NearbyProfileGridProps) {
   if (loading && users.length === 0) {
@@ -56,6 +61,16 @@ export function NearbyProfileGrid({
               Expand radius
             </button>
           ) : null}
+          {onStartPulse && !pulseOn ? (
+            <button
+              type="button"
+              onClick={onStartPulse}
+              data-testid="empty-start-pulse"
+              className="rounded-full border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.15)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.28)]"
+            >
+              Start Pulse
+            </button>
+          ) : null}
           {onFinishProfile ? (
             <button
               type="button"
@@ -66,8 +81,11 @@ export function NearbyProfileGrid({
             </button>
           ) : null}
         </div>
-        <p className="mt-4 text-[11px] font-medium tracking-wide text-[#A89070]">
-          18+ only · Consent first · Report anytime
+        <p className="mt-3 text-[12px] text-[#A89070]">
+          Pulse puts you first for nearby men for 90 minutes — be intentional, 18+ only.
+        </p>
+        <p className="mt-2 text-[11px] font-medium tracking-wide text-[#A89070]">
+          Consent first · Report anytime
         </p>
       </div>
     );

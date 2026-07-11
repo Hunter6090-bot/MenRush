@@ -66,10 +66,12 @@ export function isDiscoverLocationReady(profile: ProfileSetupSnapshot): boolean 
 /**
  * Minimum fields before Discover skip is allowed.
  * Avatar alone is not enough — hollow profiles kill match quality.
+ * Bio (≥20 chars) is required so map cards have real intent, not ghost shells.
  */
 export function isDiscoverMinimumReady(profile: ProfileSetupSnapshot): boolean {
   return (
     isDiscoverAvatarReady(profile) &&
+    (profile.bio?.trim().length ?? 0) >= 20 &&
     Boolean(profile.looking_for?.trim()) &&
     (profile.interests?.length ?? 0) >= 3
   );

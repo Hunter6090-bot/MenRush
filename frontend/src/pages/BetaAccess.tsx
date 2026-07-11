@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { betaAPI } from '../api/client';
 import {
@@ -17,11 +17,16 @@ import {
   publicPrimaryButtonClass,
 } from '../lib/publicStyles';
 
+function normalizeClientInviteCode(raw: string): string {
+  return raw.trim().toUpperCase().replace(/[\s-]+/g, '');
+}
+
 export const BetaAccess = () => {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     if (!BETA_INVITE_REQUIRED) {
@@ -31,6 +36,7 @@ export const BetaAccess = () => {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (submittingRef.current || loading) return;
     setError('');
 
     const trimmed = code.trim();
@@ -39,15 +45,34 @@ export const BetaAccess = () => {
       return;
     }
 
+    const normalized = normalizeClientInviteCode(trimmed);
+    // Codes look like MENRUSHXXXXXXXX (15 chars) after stripping hyphens/spaces.
+    if (!normalized.startsWith('MENRUSH') || normalized.length !== 15) {
+      setError('Use the full code from your email (e.g. MENRUSH-XXXX-XXXX). 18+ beta only.');
+      return;
+    }
+
+    submittingRef.current = true;
     setLoading(true);
     try {
-      const res = await betaAPI.validateInvite({ code: trimmed });
+      const res = await betaAPI.validateInvite({ code: normalized });
       const validated = res.data.code ?? trimmed;
       storeInviteCode(validated);
       navigate(`/register?invite=${encodeURIComponent(validated)}`, { replace: true });
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'That invite code did not work. Check it and try again.');
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number; data?: { error?: string } } })?.response
+        ?.status;
+      const apiError = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      if (status === 429) {
+        setError('Too many attempts. Wait a few minutes, then try again.');
+      } else {
+        setError(
+          apiError ||
+            'That invite code is invalid, expired, or already used. Check the email or join the waitlist.',
+        );
+      }
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   };

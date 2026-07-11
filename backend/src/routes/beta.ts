@@ -21,9 +21,14 @@ const ValidateInviteSchema = z.object({
 router.post('/validate-invite', validateLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const { code } = ValidateInviteSchema.parse(req.body);
+    // normalizeInviteCode runs inside validate (trim, upper, strip spaces/hyphens).
     const result = await inviteCodeService.validate(code);
     if (!result.valid) {
-      return res.status(400).json({ valid: false, error: 'Invalid or expired invite code.' });
+      return res.status(400).json({
+        valid: false,
+        error:
+          'Invalid, expired, or already-used invite code. Use the full code from your beta email (18+ only).',
+      });
     }
     return res.json({ valid: true, code: result.code });
   } catch (error: any) {

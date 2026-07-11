@@ -765,6 +765,8 @@ export const Discover = () => {
             onSelect={setSelectedUser}
             onExpandRadius={handleRadiusCycle}
             onFinishProfile={() => navigate('/profile/setup')}
+            onStartPulse={() => void handleStartPulse(90)}
+            pulseOn={!!pulseUntil}
             radiusLabel={formatRadiusMiles(radius)}
           />
         ) : null}
@@ -898,6 +900,8 @@ export const Discover = () => {
                 onSelect={setSelectedUser}
                 onExpandRadius={handleRadiusCycle}
                 onFinishProfile={() => navigate('/profile/setup')}
+                onStartPulse={() => void handleStartPulse(90)}
+                pulseOn={!!pulseUntil}
                 radiusLabel={formatRadiusMiles(radius)}
               />
             </>

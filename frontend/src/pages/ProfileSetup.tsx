@@ -342,13 +342,17 @@ export const ProfileSetup: React.FC = () => {
   };
 
   const handleSkip = () => {
-    // Hollow profiles kill discovery quality. Require looking + tags (avatar already gated).
+    // Hollow profiles kill discovery quality. Bio + looking + tags required (avatar gated earlier).
     if (!photoUrl && photoChoice !== 'generic') {
       setError('Add a photo or generic avatar first.');
       return;
     }
+    if (bio.trim().length < 20) {
+      setError('Write at least 20 characters in your bio — men need a reason to tap you.');
+      return;
+    }
     if (!lookingFor.trim() || interests.length < 3) {
-      setError('Pick what you want and at least 3 tags — then you can finish bio later.');
+      setError('Pick what you want and at least 3 tags before skipping ahead.');
       return;
     }
     skipProfileSetup();
