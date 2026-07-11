@@ -39,6 +39,14 @@ export const userService = {
   ) {
     await accessControl.requireVerified(userId);
 
+    // Keep DB honest: zombie online=true from crashed tabs skews ops + chat filters.
+    await query(
+      `UPDATE profiles
+       SET online = false
+       WHERE online = true
+         AND (last_seen IS NULL OR last_seen < NOW() - INTERVAL '20 minutes')`,
+    ).catch(() => undefined);
+
     if (clientLocation) {
       await this.updateLocation(userId, clientLocation.lat, clientLocation.lng);
     }

@@ -6,6 +6,7 @@ import { SilhouetteAvatar } from './SilhouetteAvatar';
 import { IconMatches } from './icons';
 import { usersAPI } from '../api/client';
 import { VerifiedBadge } from './VerifiedBadge';
+import { MoodBadge } from './MoodPicker';
 import { getDistanceLabel, isUserPulsing } from '../lib/discovery';
 
 export interface NearbyUser {
@@ -152,6 +153,12 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
           <p className="text-[11px] font-semibold text-[#E0A14A] mb-1" data-testid="card-looking-for">
             Looking for: {user.looking_for}
           </p>
+        ) : null}
+
+        {user.mood ? (
+          <div className="mb-1.5">
+            <MoodBadge mood={user.mood} small />
+          </div>
         ) : null}
 
         {user.bio ? (

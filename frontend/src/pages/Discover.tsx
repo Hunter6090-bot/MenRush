@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import type { Root } from 'react-dom/client';
 import { Link, useNavigate } from 'react-router-dom';
-import { EventDTO, pulseAPI, usersAPI } from '../api/client';
+import { EventDTO, Mood, profileMetaAPI, pulseAPI, usersAPI } from '../api/client';
 import { useLocationStore } from '../hooks/store';
 import { NearbyUser } from '../components/ProfileCard';
 import { Layout } from '../components/Layout';
 import { PulseFab } from '../components/PulseFab';
+import { MoodPicker } from '../components/MoodPicker';
 import {
   MAX_RADIUS_KM,
   RADIUS_MILE_OPTIONS,
@@ -127,6 +128,8 @@ export const Discover = () => {
       return false;
     }
   });
+  const [mood, setMood] = useState<Mood | null>(null);
+  const [moodSaving, setMoodSaving] = useState(false);
 
   const { lat, lng, setLocation } = useLocationStore();
   const watchIdRef = useRef<number | null>(null);
@@ -151,8 +154,27 @@ export const Discover = () => {
   useEffect(() => {
     usersAPI
       .getMe()
-      .then((res) => setActivationProfile(res.data as ProfileSetupSnapshot))
+      .then((res) => {
+        setActivationProfile(res.data as ProfileSetupSnapshot);
+        if (res.data?.mood) setMood(res.data.mood as Mood);
+      })
       .catch(() => {});
+    profileMetaAPI
+      .getMood()
+      .then((res) => setMood(res.data.mood ?? null))
+      .catch(() => {});
+  }, []);
+
+  const handleMoodSelect = useCallback(async (next: Mood | null) => {
+    setMoodSaving(true);
+    try {
+      const res = await profileMetaAPI.setMood(next);
+      setMood(res.data.mood ?? null);
+    } catch {
+      /* keep previous mood */
+    } finally {
+      setMoodSaving(false);
+    }
   }, []);
 
   const fetchNearbyUsers = useCallback(
@@ -849,6 +871,19 @@ export const Discover = () => {
           <h2 className="flex-1 text-2xl font-extrabold text-[var(--cream)]">Nearby</h2>
           <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
         </div>
+        {!needsLocationGate ? (
+          <div
+            className="mb-4 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/80 px-4 py-3"
+            data-testid="discover-mood-strip"
+          >
+            <p className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-[#A89070]">
+              Your mood · shown nearby · 18+
+            </p>
+            <div className={moodSaving ? 'pointer-events-none opacity-60' : ''}>
+              <MoodPicker current={mood} onSelect={handleMoodSelect} />
+            </div>
+          </div>
+        ) : null}
         <DiscoveryFilterPanel
           variant="inline"
           value={discoveryFilters}
@@ -883,6 +918,20 @@ export const Discover = () => {
             <h2 className="flex-1 text-xl font-extrabold text-[var(--cream)]">Nearby</h2>
             <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
           </div>
+
+          {!needsLocationGate ? (
+            <div
+              className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/80 px-3 py-2.5"
+              data-testid="discover-mood-strip-mobile"
+            >
+              <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#A89070]">
+                Your mood · 18+
+              </p>
+              <div className={moodSaving ? 'pointer-events-none opacity-60' : ''}>
+                <MoodPicker current={mood} onSelect={handleMoodSelect} />
+              </div>
+            </div>
+          ) : null}
 
           <DiscoveryFilterPanel
             variant="inline"
