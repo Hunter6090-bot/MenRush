@@ -64,7 +64,7 @@ style(icons): heritage set (claude)
 | Cursor workflow rules | `837e2ea` | `.cursor/rules/menrush-logo.mdc` (untracked) | Cursor |
 | Claude heritage icons | `9b7644f` | — | Claude — done |
 | Waitlist welcome / drip | `ebdbd7c`, `015f0ea` pause rules | `waitlist-ops-source-of-truth.md` edits | Ops — check Zoho + `waitlist_drip_sends` before sends |
-| Ops health + density activation | cycle 2026-07-11 (this commit) | `/api/health`, 401 session clear, default generic avatar on signup, Discover empty CTAs + location nudge | Grok CEO cycle |
+| Ops health + density activation | `67e8517` — pushed + Railway SUCCESS | Prod backfill: 22 generic avatars → withPhoto 26/26 | Grok CEO cycle 2026-07-11 |
 
 *Last audited: 2026-07-11 (Grok CEO cycle). Refresh `git fetch` + ledger before your next commit.*
 
