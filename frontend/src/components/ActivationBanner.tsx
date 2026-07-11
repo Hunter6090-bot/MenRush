@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import {
   activationBlockers,
+  isDiscoverLocationReady,
   profileSetupProgress,
   type ProfileSetupSnapshot,
 } from '../lib/profileSetup';
@@ -15,20 +16,26 @@ const BLOCKER_COPY: Record<ReturnType<typeof activationBlockers>[number], string
 
 interface ActivationBannerProps {
   profile: ProfileSetupSnapshot;
+  /** Browser GPS grant — used when location is the primary gap. */
+  onEnableLocation?: () => void;
 }
 
 /** Nudge incomplete profiles — premium copper strip, no nag beyond facts. */
-export function ActivationBanner({ profile }: ActivationBannerProps) {
+export function ActivationBanner({ profile, onEnableLocation }: ActivationBannerProps) {
   const blockers = activationBlockers(profile);
-  if (blockers.length === 0) return null;
+  const needsLocation = !isDiscoverLocationReady(profile);
+  if (blockers.length === 0 && !needsLocation) return null;
 
   const progress = profileSetupProgress(profile);
+  const primary = blockers[0];
   const headline =
-    blockers[0] === 'avatar'
+    primary === 'avatar'
       ? 'You are invisible on the map'
-      : blockers[0] === 'location'
+      : primary === 'location' || (needsLocation && blockers.length === 0)
         ? 'Guys cannot see how close you are'
         : 'Complete your profile — more views, more matches';
+
+  const showLocationCta = (primary === 'location' || needsLocation) && Boolean(onEnableLocation);
 
   return (
     <div
@@ -40,7 +47,9 @@ export function ActivationBanner({ profile }: ActivationBannerProps) {
         <div className="min-w-0 flex-1">
           <p className="text-[14px] font-extrabold text-[#F0E0C0]">{headline}</p>
           <p className="mt-1 text-[12px] text-[#A89070]">
-            {blockers.map((b) => BLOCKER_COPY[b]).join(' · ')}
+            {blockers.length > 0
+              ? blockers.map((b) => BLOCKER_COPY[b]).join(' · ')
+              : 'Turn on precise location to appear near men around you.'}
           </p>
           <div className="mt-2 h-1.5 w-full max-w-[200px] overflow-hidden rounded-full bg-[rgba(13,10,6,0.5)]">
             <div
@@ -49,12 +58,33 @@ export function ActivationBanner({ profile }: ActivationBannerProps) {
             />
           </div>
         </div>
-        <Link
-          to="/profile/setup"
-          className="shrink-0 rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
-        >
-          Finish profile
-        </Link>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {showLocationCta ? (
+            <button
+              type="button"
+              onClick={onEnableLocation}
+              data-testid="activation-enable-location"
+              className="rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+            >
+              Enable location
+            </button>
+          ) : (
+            <Link
+              to="/profile/setup"
+              className="rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+            >
+              Finish profile
+            </Link>
+          )}
+          {showLocationCta ? (
+            <Link
+              to="/profile/setup"
+              className="rounded-full border border-[rgba(196,131,42,0.5)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
+            >
+              Profile
+            </Link>
+          ) : null}
+        </div>
       </div>
     </div>
   );

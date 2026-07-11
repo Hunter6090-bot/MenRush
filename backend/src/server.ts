@@ -132,10 +132,14 @@ app.post('/api/waitlist', async (req, res) => {
   }
 });
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
-});
+// Health checks — `/health` for Railway/Docker; `/api/health` for edge proxies
+// that only route `/api/*` to this service (menrush.com → backend).
+const healthHandler: express.RequestHandler = (_req, res) => {
+  res.json({ status: 'ok', service: 'menrush-backend' });
+};
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
+app.get('/api/healthz', healthHandler);
 
 // Socket.IO
 const userSockets: Map<string, string> = new Map(); // userId → socketId

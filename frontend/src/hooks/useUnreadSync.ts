@@ -14,20 +14,27 @@ export function useUnreadSync() {
     }
 
     let cancelled = false;
+    let intervalId = 0;
     const sync = () => {
       messagesAPI
         .getUnreadSummary()
         .then((res) => {
           if (!cancelled) setUnreadFromServer(res.data.bySender ?? {});
         })
-        .catch(() => {});
+        .catch((err: { response?: { status?: number } }) => {
+          // Dead session: stop polling; axios interceptor clears auth.
+          if (err?.response?.status === 401 && intervalId) {
+            window.clearInterval(intervalId);
+            intervalId = 0;
+          }
+        });
     };
 
     sync();
-    const id = window.setInterval(sync, 60_000);
+    intervalId = window.setInterval(sync, 60_000);
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      if (intervalId) window.clearInterval(intervalId);
     };
   }, [token, setUnreadFromServer]);
 }

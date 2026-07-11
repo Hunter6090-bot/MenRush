@@ -680,7 +680,9 @@ export const Discover = () => {
       />
       <h1 className="sr-only">Nearby discovery map</h1>
 
-      {activationProfile ? <ActivationBanner profile={activationProfile} /> : null}
+      {activationProfile ? (
+        <ActivationBanner profile={activationProfile} onEnableLocation={handleEnableLocation} />
+      ) : null}
 
       <div className="hidden lg:block lg:h-full lg:overflow-y-auto px-6 py-6">
         <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -700,7 +702,14 @@ export const Discover = () => {
             {nearbyCount} in your radius · {formatRadiusMiles(radius)}
           </div>
         </div>
-        <NearbyProfileGrid users={displayUsers} loading={loading} onSelect={setSelectedUser} />
+        <NearbyProfileGrid
+          users={displayUsers}
+          loading={loading}
+          onSelect={setSelectedUser}
+          onExpandRadius={handleRadiusCycle}
+          onFinishProfile={() => navigate('/profile/setup')}
+          radiusLabel={formatRadiusMiles(radius)}
+        />
       </div>
 
       <div className="relative lg:hidden">
@@ -823,7 +832,14 @@ export const Discover = () => {
           </div>
 
           <EventsRail lat={lat} lng={lng} onSelect={(ev: EventDTO) => navigate(`/rooms/${ev.id}`)} />
-          <NearbyProfileGrid users={displayUsers} loading={loading} onSelect={setSelectedUser} />
+          <NearbyProfileGrid
+            users={displayUsers}
+            loading={loading}
+            onSelect={setSelectedUser}
+            onExpandRadius={handleRadiusCycle}
+            onFinishProfile={() => navigate('/profile/setup')}
+            radiusLabel={formatRadiusMiles(radius)}
+          />
         </div>
 
         <PulseFab

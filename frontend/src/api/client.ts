@@ -14,6 +14,48 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+/** Paths that legitimately return 401 without meaning "session dead". */
+const AUTH_CHALLENGE_PATHS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/2fa/verify',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/beta/validate-invite',
+];
+
+let sessionExpiredHandling = false;
+
+/**
+ * Stale JWT → endless 401 spam on unread/notifications polls.
+ * Clear local session once so ProtectedRoute sends the user to login.
+ */
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    const reqUrl = String(error?.config?.url ?? '');
+    const isAuthChallenge = AUTH_CHALLENGE_PATHS.some((p) => reqUrl.includes(p));
+
+    if (status === 401 && !isAuthChallenge && !sessionExpiredHandling) {
+      const hadToken = Boolean(localStorage.getItem('token'));
+      if (hadToken) {
+        sessionExpiredHandling = true;
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        // Lazy import avoids circular deps with the store module.
+        void import('../hooks/store').then(({ useAuthStore }) => {
+          useAuthStore.getState().logout();
+          sessionExpiredHandling = false;
+        }).catch(() => {
+          sessionExpiredHandling = false;
+        });
+      }
+    }
+    return Promise.reject(error);
+  },
+);
+
 export const authAPI = {
   register: (data: unknown) => apiClient.post('/auth/register', data),
   login: (data: { email: string; password: string }) => apiClient.post('/auth/login', data),

@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { query } from '../db';
+import { defaultGenericAvatarUrl } from '../lib/genericAvatar';
 import { accessControl } from '../security/access';
 import { ProfileInput } from '../types/validation';
 
@@ -186,8 +187,40 @@ export const userService = {
     );
   },
 
+  /**
+   * Beta density fix: men without a photo are invisible on Discover.
+   * Assign a shared generic avatar by age so they appear on the map.
+   * Users can still replace it with a real photo in profile setup.
+   * 18+ only — age is validated at registration (min 18).
+   */
+  async ensureDefaultAvatar(userId: string): Promise<string | null> {
+    const existing = await query(
+      `SELECT photo_url, age FROM users WHERE id = $1`,
+      [userId],
+    );
+    const row = existing.rows[0] as { photo_url?: string | null; age?: number } | undefined;
+    if (!row) return null;
+    if (row.photo_url && String(row.photo_url).trim()) {
+      return row.photo_url;
+    }
+    // Refuse under-18 even if data is corrupt — safety hard stop.
+    if (row.age != null && row.age < 18) return null;
+
+    const avatar = defaultGenericAvatarUrl(row.age);
+    const updated = await query(
+      `UPDATE users
+       SET photo_url = $2
+       WHERE id = $1
+         AND (photo_url IS NULL OR TRIM(photo_url) = '')
+       RETURNING photo_url`,
+      [userId, avatar],
+    );
+    return (updated.rows[0]?.photo_url as string | undefined) ?? avatar;
+  },
+
   async getOwnProfile(userId: string) {
     await this.ensureProfileRow(userId);
+    await this.ensureDefaultAvatar(userId);
     const result = await query(
       `SELECT
         u.id, u.email, u.name, u.age, u.bio, u.headline, u.looking_for,

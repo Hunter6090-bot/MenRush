@@ -2,6 +2,7 @@ import bcryptjs from 'bcryptjs';
 import crypto from 'crypto';
 import { query } from '../db';
 import pool from '../db';
+import { defaultGenericAvatarUrl } from '../lib/genericAvatar';
 import { RegisterInput, LoginInput, ResetPasswordInput } from '../types/validation';
 import { sendTransactionalEmail } from './mailer.service';
 import {
@@ -117,16 +118,24 @@ export const authService = {
     try {
       await client.query('BEGIN');
 
+      // 18+ enforced by Zod (age min 18). Default shared avatar so new men
+      // are not invisible on Discover until they upload a photo.
+      if (data.age < 18) {
+        throw new Error('You must be 18 or older to join MenRush.');
+      }
+      const defaultAvatar = defaultGenericAvatarUrl(data.age);
+
       const result = await client.query(
-        `INSERT INTO users (id, email, password_hash, name, age, is_verified, verification_status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING id, email, name, age, is_verified, verification_status`,
+        `INSERT INTO users (id, email, password_hash, name, age, photo_url, is_verified, verification_status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, email, name, age, photo_url, is_verified, verification_status`,
         [
           id,
           data.email,
           hashedPassword,
           data.name,
           data.age,
+          defaultAvatar,
           autoVerify,
           autoVerify ? 'verified' : 'unverified',
         ],

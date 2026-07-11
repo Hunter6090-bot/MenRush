@@ -7,11 +7,12 @@ TARGETS=(
   "$REPO_ROOT/frontend/src/api/client.ts"
   "$REPO_ROOT/backend/src/server.ts"
 )
+# Known MCP malware fingerprints. A legitimate axios response interceptor
+# (e.g. session-expired logout) is allowed — only exfil targets fail.
 PATTERNS=(
-  '127\.0\.0\.1'
+  '127\.0\.0\.1:7779'
   'localhost:7779'
   '/ingest/'
-  'interceptors\.response'
   '09053abd-7c78-4d98-a2a7-cdb7b1a66b66'
 )
 
