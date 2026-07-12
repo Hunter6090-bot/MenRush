@@ -316,29 +316,21 @@ export const Discover = () => {
     [fetchNearbyUsers, mapCenter, radius, setLocation, discoveryFilters],
   );
 
-  // Customer-facing "enable location" action for the fallback notice.
+  // Customer-facing "enable location" — high accuracy then low-accuracy fallback.
   const handleEnableLocation = useCallback(() => {
-    if (!navigator.geolocation) {
-      setLocationNotice('This browser cannot share location. Try Chrome or Safari on your phone.');
-      return;
-    }
-    if (!window.isSecureContext) {
-      setLocationNotice(INSECURE_GPS_NOTICE);
-      setNeedsLocationGate(true);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        setNeedsLocationGate(false);
-        useDiscoveryLocation(coords.latitude, coords.longitude, '', true);
-      },
-      () => {
+    void (async () => {
+      const { requestDeviceLocation } = await import('../lib/deviceLocation');
+      const result = await requestDeviceLocation();
+      if (!result.ok) {
         setNeedsLocationGate(true);
-        setLocationNotice(BROWSER_GPS_DENIED_NOTICE);
+        setLocationNotice(result.message);
         setLoading(false);
-      },
-      { enableHighAccuracy: true, timeout: 12000 },
-    );
+        return;
+      }
+      setNeedsLocationGate(false);
+      setLocationNotice('');
+      useDiscoveryLocation(result.lat, result.lng, '', true);
+    })();
   }, [useDiscoveryLocation]);
 
   const applyLocationFallback = useCallback(() => {

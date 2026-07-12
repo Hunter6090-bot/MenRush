@@ -39,36 +39,27 @@ export const Settings = () => {
       .catch(() => setHasPin(null));
   }, []);
 
-  const enableDeviceLocation = useCallback(() => {
+  const enableDeviceLocation = useCallback(async () => {
     setLocNotice('');
-    if (!window.isSecureContext) {
-      setLocNotice('Location needs HTTPS (menrush.com).');
-      return;
-    }
-    if (!navigator.geolocation) {
-      setLocNotice('This browser cannot share location.');
-      return;
-    }
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async ({ coords }) => {
-        try {
-          await usersAPI.updateLocation(coords.latitude, coords.longitude);
-          setLocation(coords.latitude, coords.longitude);
-          setHasPin(true);
-          setLocNotice('Location on — you can appear nearby.');
-        } catch {
-          setLocNotice('Could not save location.');
-        } finally {
-          setLocating(false);
-        }
-      },
-      () => {
-        setLocating(false);
-        setLocNotice('Permission denied. Enable location in browser settings.');
-      },
-      { enableHighAccuracy: true, timeout: 12000 },
-    );
+    try {
+      const { requestDeviceLocation } = await import('../lib/deviceLocation');
+      const result = await requestDeviceLocation();
+      if (!result.ok) {
+        setLocNotice(result.message);
+        return;
+      }
+      try {
+        await usersAPI.updateLocation(result.lat, result.lng);
+        setLocation(result.lat, result.lng);
+        setHasPin(true);
+        setLocNotice('Location on — you can appear nearby.');
+      } catch {
+        setLocNotice('Could not save location. Check your connection.');
+      }
+    } finally {
+      setLocating(false);
+    }
   }, [setLocation]);
 
   const setRadius = (km: number) => {

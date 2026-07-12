@@ -305,43 +305,20 @@ export const ProfileSetup: React.FC = () => {
       setSaving(true);
       setError(null);
       try {
-        if (!window.isSecureContext) {
-          setError(
-            'Location needs a secure (HTTPS) connection. Open menrush.com on your phone, then allow location.',
-          );
-          return;
-        }
-        if (!navigator.geolocation) {
-          setError('This browser cannot share location. Try Chrome or Safari, then finish.');
-          return;
-        }
-
         setLocating(true);
-        const located = await new Promise<boolean>((resolve) => {
-          navigator.geolocation.getCurrentPosition(
-            async ({ coords }) => {
-              try {
-                await usersAPI.updateLocation(coords.latitude, coords.longitude);
-                setLocation(coords.latitude, coords.longitude);
-                resolve(true);
-              } catch {
-                resolve(false);
-              } finally {
-                setLocating(false);
-              }
-            },
-            () => {
-              setLocating(false);
-              resolve(false);
-            },
-            { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
-          );
-        });
-
-        if (!located) {
+        const { requestDeviceLocation } = await import('../lib/deviceLocation');
+        const result = await requestDeviceLocation();
+        if (!result.ok) {
           setError(
-            'Location is required to go live on Nearby — MenRush is proximity-first (18+). Allow location and try again, or open Discover to enable there.',
+            `${result.message} Location is required to go live on Nearby — MenRush is proximity-first (18+).`,
           );
+          return;
+        }
+        try {
+          await usersAPI.updateLocation(result.lat, result.lng);
+          setLocation(result.lat, result.lng);
+        } catch {
+          setError('Got your position but could not save it. Check your connection and try again.');
           return;
         }
 
