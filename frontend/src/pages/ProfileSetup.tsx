@@ -42,7 +42,7 @@ type Step = 'welcome' | 'photo' | 'about' | 'looking' | 'tags' | 'live';
 const STEP_ORDER: Step[] = ['welcome', 'photo', 'about', 'looking', 'tags', 'live'];
 
 const INTRO_ITEMS = [
-  'Add your photo or pick a shared generic avatar',
+  'Add a real photo (or a shared avatar if you prefer)',
   'Write a short bio guys can read on the map',
   'Pick what you are looking for',
   'Tag position, tribe, body, ethnicity & vibe',
@@ -464,24 +464,35 @@ export const ProfileSetup: React.FC = () => {
 
               <p className={publicMutedCopyClass}>
                 {photoChoice === 'generic'
-                  ? 'Standard avatar assigned now — refined when you add tags.'
-                  : 'JPEG, PNG or WebP · max 5MB'}
+                  ? 'Shared avatar for now — real photos rank first nearby and get more matches.'
+                  : 'Clear face or upper body · JPEG, PNG or WebP · max 5MB · 18+ only'}
               </p>
+              {photoChoice === 'generic' ? (
+                <p
+                  className="mt-2 rounded-xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-3 py-2 text-[12px] leading-relaxed text-[#E0A14A]"
+                  data-testid="setup-generic-warning"
+                >
+                  Men match real photos first. You can upload anytime from Profile.
+                </p>
+              ) : null}
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
               <button
                 type="button"
-                onClick={() => photoInputRef.current?.click()}
+                onClick={() => {
+                  setPhotoChoice('upload');
+                  photoInputRef.current?.click();
+                }}
                 disabled={uploading}
-                className={`${publicPrimaryButtonClass} sm:flex-1`}
+                className={`${publicPrimaryButtonClass} sm:flex-[1.4]`}
               >
                 {uploading ? (
                   <>
                     <PulseRing size={18} /> Uploading…
                   </>
                 ) : (
-                  'Upload your photo'
+                  'Upload real photo'
                 )}
               </button>
               <button
@@ -492,13 +503,13 @@ export const ProfileSetup: React.FC = () => {
                   setPhotoUrl(isGenericAvatarUrl(photoUrl) ? photoUrl : preview);
                   setError(null);
                 }}
-                className={`${publicSecondaryButtonClass} sm:flex-1 ${
+                className={`${publicSecondaryButtonClass} sm:flex-1 text-[12px] ${
                   photoChoice === 'generic'
                     ? 'border-[#C4832A] bg-[rgba(196,131,42,0.15)] text-[#E0A14A]'
-                    : ''
+                    : 'opacity-90'
                 }`}
               >
-                Use generic avatar
+                Use shared avatar
               </button>
             </div>
           </div>

@@ -22,6 +22,8 @@ interface NearbyProfileGridProps {
   /** Venue check-ins when the map is quiet. */
   onOpenHotSpots?: () => void;
   radiusLabel?: string;
+  /** Count of men at max radius when current radius is empty. */
+  beyondRadiusCount?: number;
 }
 
 export function NearbyProfileGrid({
@@ -37,6 +39,7 @@ export function NearbyProfileGrid({
   pulseOn,
   onOpenHotSpots,
   radiusLabel,
+  beyondRadiusCount = 0,
 }: NearbyProfileGridProps) {
   if (loading && users.length === 0) {
     return (
@@ -57,18 +60,34 @@ export function NearbyProfileGrid({
       >
         <p className="text-[16px] font-extrabold text-[var(--cream)]">No men in this radius yet</p>
         <p className="mx-auto mt-2 max-w-sm text-[13px] leading-relaxed text-[var(--cream-muted)]">
-          Beta is still filling in. Expand your range
-          {radiusLabel ? ` (now ${radiusLabel})` : ''}, turn on location, and finish your profile so
-          others can find you.
+          {beyondRadiusCount > 0 ? (
+            <>
+              <span className="font-bold text-[#E0A14A]">
+                {beyondRadiusCount === 1
+                  ? '1 man is farther out'
+                  : `${beyondRadiusCount} men are farther out`}
+              </span>
+              . Expand beyond
+              {radiusLabel ? ` ${radiusLabel}` : ' this range'} to see them — beta density is thin
+              close-in.
+            </>
+          ) : (
+            <>
+              Beta is still filling in. Expand your range
+              {radiusLabel ? ` (now ${radiusLabel})` : ''}, turn on location, and finish your profile
+              so others can find you.
+            </>
+          )}
         </p>
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
           {onExpandRadius ? (
             <button
               type="button"
               onClick={onExpandRadius}
+              data-testid="empty-expand-radius"
               className="rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
             >
-              Expand radius
+              {beyondRadiusCount > 0 ? 'Expand to find them' : 'Expand radius'}
             </button>
           ) : null}
           {onStartPulse && !pulseOn ? (

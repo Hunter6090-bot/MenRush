@@ -149,6 +149,8 @@ export const usersAPI = {
   updateVisibility: (isVisible: boolean) =>
     apiClient.patch('/users/visibility', { is_visible: isVisible }),
   getMatches: () => apiClient.get('/users/matches'),
+  /** Outbound like target ids — hydrate Match CTA after reload. */
+  getSentLikes: () => apiClient.get<{ ids: string[] }>('/users/likes/sent'),
   getReceivedLikesSummary: () =>
     apiClient.get<{
       count: number;

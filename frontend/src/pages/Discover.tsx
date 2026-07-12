@@ -122,6 +122,8 @@ export const Discover = () => {
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
   const [matchToast, setMatchToast] = useState<{ name: string; id: string } | null>(null);
   const [matchingUserId, setMatchingUserId] = useState<string | null>(null);
+  /** Men found at max radius when current radius is empty — expand teaser. */
+  const [beyondRadiusCount, setBeyondRadiusCount] = useState(0);
   const [pulseNudgeDismissed, setPulseNudgeDismissed] = useState(() => {
     try {
       return localStorage.getItem('menrush_pulse_nudge_dismissed') === '1';
@@ -164,15 +166,17 @@ export const Discover = () => {
       .getMood()
       .then((res) => setMood(res.data.mood ?? null))
       .catch(() => {});
-    // Hydrate Match CTA state after reload (likes are idempotent; UI should still say Matched).
-    usersAPI
-      .getMatches()
-      .then((res) => {
-        const ids = (res.data ?? []).map((m: { id: string }) => m.id).filter(Boolean);
-        if (ids.length === 0) return;
-        setLikedUsers((prev) => new Set([...prev, ...ids]));
-      })
-      .catch(() => {});
+    // Hydrate Match CTA after reload — outbound likes + mutual matches.
+    Promise.all([
+      usersAPI.getSentLikes().catch(() => ({ data: { ids: [] as string[] } })),
+      usersAPI.getMatches().catch(() => ({ data: [] as Array<{ id: string }> })),
+    ]).then(([sentRes, matchesRes]) => {
+      const sent = sentRes.data?.ids ?? [];
+      const mutual = (matchesRes.data ?? []).map((m: { id: string }) => m.id).filter(Boolean);
+      const ids = [...sent, ...mutual];
+      if (ids.length === 0) return;
+      setLikedUsers((prev) => new Set([...prev, ...ids]));
+    });
   }, []);
 
   const handleMoodSelect = useCallback(async (next: Mood | null) => {
@@ -198,8 +202,20 @@ export const Discover = () => {
       if (!options?.background) setLoading(true);
       try {
         await usersAPI.updateLocation(latitude, longitude).catch(() => {});
-        const res = await usersAPI.getNearby(latitude, longitude, r, buildNearbyApiFilters(filters));
+        const apiFilters = buildNearbyApiFilters(filters);
+        const res = await usersAPI.getNearby(latitude, longitude, r, apiFilters);
         setUsers(res.data);
+        // Cold density: count men outside current radius so Expand is intentional.
+        if (res.data.length === 0 && r < MAX_RADIUS_KM - 0.5) {
+          try {
+            const wider = await usersAPI.getNearby(latitude, longitude, MAX_RADIUS_KM, apiFilters);
+            setBeyondRadiusCount(wider.data?.length ?? 0);
+          } catch {
+            setBeyondRadiusCount(0);
+          }
+        } else {
+          setBeyondRadiusCount(0);
+        }
         trackEventOnce(
           'first_discovery_load',
           { outcome: 'succeeded', result_bucket: discoveryResultBucket(res.data.length) },
@@ -207,6 +223,7 @@ export const Discover = () => {
         );
         setError('');
       } catch {
+        setBeyondRadiusCount(0);
         trackEventOnce(
           'first_discovery_load',
           { outcome: 'failed', result_bucket: 'unknown' },
@@ -935,6 +952,7 @@ export const Discover = () => {
             pulseOn={!!pulseUntil}
             onOpenHotSpots={() => navigate('/hot-spots')}
             radiusLabel={formatRadiusMiles(radius)}
+            beyondRadiusCount={beyondRadiusCount}
           />
         ) : null}
       </div>
@@ -1088,6 +1106,7 @@ export const Discover = () => {
                 pulseOn={!!pulseUntil}
                 onOpenHotSpots={() => navigate('/hot-spots')}
                 radiusLabel={formatRadiusMiles(radius)}
+                beyondRadiusCount={beyondRadiusCount}
               />
             </>
           ) : null}

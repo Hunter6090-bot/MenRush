@@ -15,8 +15,10 @@ export const Stream = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [needsLocation, setNeedsLocation] = useState(false);
-  /** Mutual match ids — hydrate Match CTA so Stream shows Matched/Open chat. */
+  /** Mutual match ids — Open chat path. */
   const [matchedIds, setMatchedIds] = useState<Set<string>>(new Set());
+  /** Outbound likes — Matched state after reload. */
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
 
   const loadNearby = useCallback(async (latitude: number, longitude: number) => {
     await usersAPI.updateLocation(latitude, longitude).catch(() => {});
@@ -69,12 +71,17 @@ export const Stream = () => {
     let cancelled = false;
 
     (async () => {
-      // Mutual matches → Match CTA state survives reload.
+      // Match CTA state survives reload (outbound likes + mutual matches).
       try {
-        const matchesRes = await usersAPI.getMatches();
+        const [matchesRes, sentRes] = await Promise.all([
+          usersAPI.getMatches().catch(() => ({ data: [] as Array<{ id: string }> })),
+          usersAPI.getSentLikes().catch(() => ({ data: { ids: [] as string[] } })),
+        ]);
         if (!cancelled) {
-          const ids = (matchesRes.data ?? []).map((m: { id: string }) => m.id).filter(Boolean);
-          setMatchedIds(new Set(ids));
+          const mutual = (matchesRes.data ?? []).map((m: { id: string }) => m.id).filter(Boolean);
+          const sent = sentRes.data?.ids ?? [];
+          setMatchedIds(new Set(mutual));
+          setLikedIds(new Set([...sent, ...mutual]));
         }
       } catch {
         /* ignore */
@@ -226,7 +233,7 @@ export const Stream = () => {
                 key={user.id}
                 user={user}
                 initiallyMutual={matchedIds.has(user.id)}
-                initiallyLiked={matchedIds.has(user.id)}
+                initiallyLiked={likedIds.has(user.id)}
               />
             ))}
           </div>

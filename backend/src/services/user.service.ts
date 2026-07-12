@@ -597,6 +597,19 @@ export const userService = {
     return result.rows;
   },
 
+  /** Outbound like targets — hydrate Match CTA after reload (ids only). */
+  async getSentLikeIds(userId: string): Promise<string[]> {
+    const result = await query(
+      `SELECT liked_id AS id
+       FROM likes
+       WHERE liker_id = $1
+       ORDER BY created_at DESC
+       LIMIT 200`,
+      [userId],
+    );
+    return result.rows.map((row: { id: string }) => row.id);
+  },
+
   async getReceivedLikesSummary(userId: string) {
     const { premiumService } = await import('./premium.service');
     const isPremium = await premiumService.isPremium(userId);

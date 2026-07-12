@@ -266,6 +266,16 @@ router.get('/likes/received/summary', verifiedMiddleware, async (req: AuthReques
   }
 });
 
+/** Outbound likes — ids only, so Discover/Stream Match CTAs survive reload. */
+router.get('/likes/sent', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const ids = await userService.getSentLikeIds(req.userId!);
+    res.json({ ids });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/location', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const data = LocationSchema.parse(req.body);
