@@ -1,7 +1,7 @@
 # MenRush Waitlist Ops Source Of Truth
 
 This runbook exists to prevent duplicate welcome emails, stale imports, and old
-NearNow-era assumptions.
+legacy assumptions.
 
 ## Current Rules
 
@@ -13,7 +13,7 @@ NearNow-era assumptions.
    that were actually imported into the backend database.
 4. Never assume a local CSV is current. Every bulk send starts from a fresh Zoho
    export.
-5. Never use `/Users/alzain/NearNow/...` paths in MenRush operations.
+5. Never use outdated local paths in MenRush operations.
 
 ## Before Any Email Send
 

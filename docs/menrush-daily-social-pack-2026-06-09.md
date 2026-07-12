@@ -98,7 +98,7 @@ This is the exact product problem we are trying to solve with MenRush. A lot of 
 
 ## Metricool Import / Update Notes
 
-- The current import file is [`/Users/alzain/NearNow/menrush-social/metricool-imports/instagram-2026-06-02-to-2026-06-08.csv`](/Users/alzain/NearNow/menrush-social/metricool-imports/instagram-2026-06-02-to-2026-06-08.csv) and stops at 2026-06-08.
+- The current import file is [`/Users/alzain/em/menrush-social/metricool-imports/instagram-2026-06-02-to-2026-06-08.csv`](/Users/alzain/em/menrush-social/metricool-imports/instagram-2026-06-02-to-2026-06-08.csv) and stops at 2026-06-08.
 - Add a new 2026-06-09 Instagram draft row at `19:30:00` Europe/London using today’s caption and the approved logo/poster URL.
 - Keep `Draft=TRUE`, `Instagram=TRUE`, and all other channel columns `FALSE`.
 - Confirm the Planner timezone is Europe/London and the image preview renders before saving.
@@ -133,4 +133,4 @@ Waitlist is live at menrush.com",2026-06-09,19:30:00,TRUE,FALSE,FALSE,FALSE,FALS
 - Instagram still depends on Metricool workspace access and a connected MenRush Instagram account.
 - Reddit posting is blocked on an approved subreddit allowlist and confirmed credentials.
 - TikTok still has no confirmed API or approved assisted-posting route, so it remains manual-first.
-- [`/Users/alzain/NearNow/menrush-social/SOCIAL_STATUS.md`](/Users/alzain/NearNow/menrush-social/SOCIAL_STATUS.md) and the operator dashboard are stale; they still point to day-3 drafts even though later launch-week copy exists. Treat today’s pack and the launch docs as higher-confidence sources.
+- [`/Users/alzain/em/menrush-social/SOCIAL_STATUS.md`](/Users/alzain/em/menrush-social/SOCIAL_STATUS.md) and the operator dashboard are stale; they still point to day-3 drafts even though later launch-week copy exists. Treat today’s pack and the launch docs as higher-confidence sources.

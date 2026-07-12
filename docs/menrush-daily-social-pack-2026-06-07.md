@@ -6,8 +6,8 @@ Primary CTA: https://menrush.com
 
 Source references:
 - /Users/alzain/em/docs/social-launch-week-one.md
-- /Users/alzain/NearNow/menrush-social/draft-registry.json
-- /Users/alzain/NearNow/menrush-social/SOCIAL_STATUS.md
+- /Users/alzain/em/menrush-social/draft-registry.json
+- /Users/alzain/em/menrush-social/SOCIAL_STATUS.md
 
 ## Recommended X Posts
 
@@ -20,7 +20,7 @@ Who is actually around, available, and worth your attention right now?
 Waitlist:
 https://menrush.com
 
-Source: /Users/alzain/NearNow/menrush-social/drafts/x/day6-product-question-am.txt
+Source: /Users/alzain/em/menrush-social/drafts/x/day6-product-question-am.txt
 
 PM 19:30 UK
 
@@ -31,7 +31,7 @@ Who nearby is actually worth your attention right now?
 That is the lane.
 https://menrush.com
 
-Source: /Users/alzain/NearNow/menrush-social/drafts/x/day6-product-question-pm.txt
+Source: /Users/alzain/em/menrush-social/drafts/x/day6-product-question-pm.txt
 
 ## Instagram
 
@@ -62,8 +62,8 @@ Join early:
 menrush.com
 
 Sources:
-- /Users/alzain/NearNow/menrush-social/drafts/instagram/day6-product-question-caption.txt
-- /Users/alzain/NearNow/menrush-social/drafts/instagram/day6-product-question-story.txt
+- /Users/alzain/em/menrush-social/drafts/instagram/day6-product-question-caption.txt
+- /Users/alzain/em/menrush-social/drafts/instagram/day6-product-question-story.txt
 
 ## TikTok Hook
 
@@ -72,7 +72,7 @@ This is the product question every dating app should start with.
 Beat: "Who is actually nearby and worth your attention right now?"
 CTA: MenRush waitlist is live.
 
-Source: /Users/alzain/NearNow/menrush-social/drafts/tiktok/day6-product-question-hook.txt
+Source: /Users/alzain/em/menrush-social/drafts/tiktok/day6-product-question-hook.txt
 
 ## Bluesky
 
@@ -82,7 +82,7 @@ who nearby is actually worth your attention right now?
 
 https://menrush.com
 
-Source: /Users/alzain/NearNow/menrush-social/drafts/bluesky/day6-product-question.txt
+Source: /Users/alzain/em/menrush-social/drafts/bluesky/day6-product-question.txt
 
 ## Reddit Contribution Angle
 
@@ -91,13 +91,13 @@ Comment angle: Ask for feature feedback without over-selling.
 Suggested copy:
 If an app is built around nearby availability, what would you need to trust it? Better verification, clearer distance controls, stronger privacy settings, or something else?
 
-Source: /Users/alzain/NearNow/menrush-social/drafts/reddit/day6-product-question.txt
+Source: /Users/alzain/em/menrush-social/drafts/reddit/day6-product-question.txt
 
 ## Metricool Import and Update Notes
 
-- The June 7 Instagram draft row already exists in `/Users/alzain/NearNow/menrush-social/metricool-imports/instagram-2026-06-02-to-2026-06-08.csv`.
+- The June 7 Instagram draft row already exists in `/Users/alzain/em/menrush-social/metricool-imports/instagram-2026-06-02-to-2026-06-08.csv`.
 - Scheduled time in the CSV is 2026-06-07 19:30:00 Europe/London and the caption matches today's approved day-6 draft theme.
-- The CSV still points at `https://menrush.com/menrush-logo.png` as the picture URL, while newer draft-registry entries prefer `/Users/alzain/NearNow/menrush-social/assets/poster-logo.png`. Confirm which asset Metricool should use before queuing.
+- The CSV still points at `https://menrush.com/menrush-logo.png` as the picture URL, while newer draft-registry entries prefer `/Users/alzain/em/menrush-social/assets/poster-logo.png`. Confirm which asset Metricool should use before queuing.
 - Keep the row as `Draft=TRUE` until human approval.
 - Confirm the Metricool workspace timezone is `Europe/London` and the connected Instagram account is still active.
 
