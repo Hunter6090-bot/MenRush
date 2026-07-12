@@ -121,6 +121,7 @@ export const Discover = () => {
   const [activationProfile, setActivationProfile] = useState<ProfileSetupSnapshot | null>(null);
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
   const [matchToast, setMatchToast] = useState<{ name: string; id: string } | null>(null);
+  const [matchingUserId, setMatchingUserId] = useState<string | null>(null);
   const [pulseNudgeDismissed, setPulseNudgeDismissed] = useState(() => {
     try {
       return localStorage.getItem('menrush_pulse_nudge_dismissed') === '1';
@@ -515,6 +516,7 @@ export const Discover = () => {
         navigate(`/messages/${user.id}`);
         return;
       }
+      setMatchingUserId(user.id);
       try {
         const res = await usersAPI.likeUser(user.id);
         setLikedUsers((p) => new Set([...p, user.id]));
@@ -522,13 +524,26 @@ export const Discover = () => {
         if (res.data?.match) {
           setMatchToast({ name: user.name, id: user.id });
           window.setTimeout(() => setMatchToast(null), 6000);
+        } else {
+          setSafetyNotice({
+            msg: `Match sent to ${user.name}. Chat unlocks if he matches back · consent first.`,
+            tone: 'success',
+          });
+          window.setTimeout(() => setSafetyNotice(null), 4000);
         }
-      } catch {
+      } catch (err: unknown) {
+        const apiError = (err as { response?: { data?: { error?: string } } })?.response?.data
+          ?.error;
         setSafetyNotice({
-          msg: 'Could not send match. Try again in a moment.',
+          msg:
+            typeof apiError === 'string' && apiError.length > 0
+              ? apiError
+              : 'Could not send match. Try again in a moment.',
           tone: 'error',
         });
-        window.setTimeout(() => setSafetyNotice(null), 3500);
+        window.setTimeout(() => setSafetyNotice(null), 4000);
+      } finally {
+        setMatchingUserId(null);
       }
     },
     [likedUsers, navigate],
@@ -902,6 +917,9 @@ export const Discover = () => {
             users={displayUsers}
             loading={loading}
             onSelect={setSelectedUser}
+            onMatch={handleLike}
+            likedUserIds={likedUsers}
+            matchingUserId={matchingUserId}
             onExpandRadius={handleRadiusCycle}
             onFinishProfile={() => navigate('/profile/setup')}
             onStartPulse={() => void handleStartPulse(90)}
@@ -1052,6 +1070,9 @@ export const Discover = () => {
                 users={displayUsers}
                 loading={loading}
                 onSelect={setSelectedUser}
+                onMatch={handleLike}
+                likedUserIds={likedUsers}
+                matchingUserId={matchingUserId}
                 onExpandRadius={handleRadiusCycle}
                 onFinishProfile={() => navigate('/profile/setup')}
                 onStartPulse={() => void handleStartPulse(90)}

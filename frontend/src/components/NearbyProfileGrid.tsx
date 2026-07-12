@@ -8,6 +8,10 @@ interface NearbyProfileGridProps {
   users: NearbyUser[];
   loading: boolean;
   onSelect: (user: NearbyUser) => void;
+  /** One-tap match without opening the drawer — primary engagement path. */
+  onMatch?: (user: NearbyUser) => void | Promise<void>;
+  likedUserIds?: Set<string>;
+  matchingUserId?: string | null;
   /** Expand search radius — cold-start density for beta. */
   onExpandRadius?: () => void;
   /** Jump to profile setup when location/avatar incomplete. */
@@ -24,6 +28,9 @@ export function NearbyProfileGrid({
   users,
   loading,
   onSelect,
+  onMatch,
+  likedUserIds,
+  matchingUserId,
   onExpandRadius,
   onFinishProfile,
   onStartPulse,
@@ -110,35 +117,68 @@ export function NearbyProfileGrid({
       {users.map((user) => {
         const photo = getPhotoUrl(user.photo_url);
         const meta = `${formatDistanceMiles(user)} · ${getTribeTag(user)} · ${formatActiveStatus(user)}`;
+        const liked = likedUserIds?.has(user.id) ?? false;
+        const matching = matchingUserId === user.id;
         return (
-          <button
+          <div
             key={user.id}
-            type="button"
-            onClick={() => onSelect(user)}
             className="group relative overflow-hidden rounded-2xl border border-nn-border bg-nn-card text-left shadow-card transition-all hover:-translate-y-[3px] hover:border-[rgba(196,131,42,0.4)]"
+            data-testid="nearby-grid-card"
           >
-            <div className="relative aspect-[3/3.6] w-full bg-[var(--bg-elevated)]">
-              {photo ? (
-                <img src={photo} alt={user.name} className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full items-center justify-center">
-                  <SilhouetteAvatar size={80} variant="card" />
+            <button
+              type="button"
+              onClick={() => onSelect(user)}
+              className="block w-full text-left"
+              aria-label={`Open profile for ${user.name}`}
+            >
+              <div className="relative aspect-[3/3.6] w-full bg-[var(--bg-elevated)]">
+                {photo ? (
+                  <img src={photo} alt={user.name} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full items-center justify-center">
+                    <SilhouetteAvatar size={80} variant="card" />
+                  </div>
+                )}
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.92)] to-transparent px-3 pb-2.5 pt-10">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`h-2 w-2 shrink-0 rounded-full ${user.online ? 'bg-[var(--status-online)]' : 'bg-[var(--cream-muted)]'}`}
+                    />
+                    <span className="truncate text-[15px] font-bold text-[var(--cream)]">
+                      {user.name} {user.age}
+                    </span>
+                    {user.is_verified ? <VerifiedBadge size="sm" /> : null}
+                  </div>
+                  <p className="mt-0.5 truncate text-xs text-[var(--cream-muted)]">{meta}</p>
+                  {user.looking_for ? (
+                    <p className="mt-0.5 truncate text-[11px] font-semibold text-[#E0A14A]">
+                      {user.looking_for}
+                    </p>
+                  ) : null}
                 </div>
-              )}
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.92)] to-transparent px-3 pb-2.5 pt-10">
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className={`h-2 w-2 shrink-0 rounded-full ${user.online ? 'bg-[var(--status-online)]' : 'bg-[var(--cream-muted)]'}`}
-                  />
-                  <span className="truncate text-[15px] font-bold text-[var(--cream)]">
-                    {user.name} {user.age}
-                  </span>
-                  {user.is_verified ? <VerifiedBadge size="sm" /> : null}
-                </div>
-                <p className="mt-0.5 truncate text-xs text-[var(--cream-muted)]">{meta}</p>
               </div>
-            </div>
-          </button>
+            </button>
+            {onMatch ? (
+              <div className="border-t border-[var(--border-default)] p-2">
+                <button
+                  type="button"
+                  disabled={matching}
+                  data-testid={`grid-match-${user.id}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void onMatch(user);
+                  }}
+                  className={`w-full rounded-xl py-2 text-[12px] font-extrabold uppercase tracking-wide transition-colors disabled:opacity-60 ${
+                    liked
+                      ? 'border border-[rgba(196,131,42,0.5)] bg-transparent text-[#C4832A]'
+                      : 'bg-[#C4832A] text-[#1A0E03] hover:bg-[#E0A14A]'
+                  }`}
+                >
+                  {matching ? 'Sending…' : liked ? 'Matched' : 'Match'}
+                </button>
+              </div>
+            ) : null}
+          </div>
         );
       })}
     </div>

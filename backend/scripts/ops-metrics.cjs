@@ -58,7 +58,8 @@ async function one(sql) {
   };
 
   for (const [table, key] of [
-    ['waitlist_subscribers', 'waitlist'],
+    // Production table is `waitlist` (not waitlist_subscribers).
+    ['waitlist', 'waitlist'],
     ['waitlist_drip_sends', 'dripTotal'],
     ['beta_invite_codes', 'betaInvites'],
   ]) {

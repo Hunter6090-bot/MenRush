@@ -240,7 +240,11 @@ router.post('/like/:id', verifiedMiddleware, async (req: AuthRequest, res: Respo
 
     res.json({ match: isMatch });
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    // Preserve SecurityError HTTP status (403 blocked, 404 unavailable, etc.).
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
+    res.status(400).json({ error: error.message || 'Could not send match' });
   }
 });
 
