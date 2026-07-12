@@ -9,7 +9,7 @@ import {
 
 const BLOCKER_COPY: Record<ReturnType<typeof activationBlockers>[number], string> = {
   avatar: 'Add a photo or avatar',
-  location: 'Turn on location',
+  location: 'Allow location (private — not a public pin)',
   bio: 'Write your bio',
   looking: 'Say what you want',
   tags: 'Add at least 3 tags',
@@ -35,7 +35,7 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
     : primary === 'avatar'
       ? 'You are invisible on the map'
       : primary === 'location' || (needsLocation && blockers.length === 0)
-        ? 'Guys cannot see how close you are'
+        ? 'We need your location — others only see distance'
         : 'Complete your profile — more views, more matches';
 
   const showLocationCta =
@@ -55,7 +55,7 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
               ? 'Upload a clear face or upper-body shot. Men nearby rank real photos higher · 18+ only.'
               : blockers.length > 0
                 ? blockers.map((b) => BLOCKER_COPY[b]).join(' · ')
-                : 'Turn on precise location to appear near men around you.'}
+                : 'We need GPS for Nearby. You are not broadcasting an exact public pin — only approximate distance.'}
           </p>
           <div className="mt-2 h-1.5 w-full max-w-[200px] overflow-hidden rounded-full bg-[rgba(13,10,6,0.5)]">
             <div
@@ -80,7 +80,7 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
               data-testid="activation-enable-location"
               className="rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
             >
-              Enable location
+              Allow location
             </button>
           ) : (
             <Link

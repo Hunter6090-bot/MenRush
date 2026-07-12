@@ -89,29 +89,31 @@ export const Settings = () => {
             data-testid="settings-device-location"
           >
             <p className="text-[15px] font-bold text-[var(--cream)]">Device location</p>
-            <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
-              Required for Nearby. Shared only while you use the app. 18+ only — never invents a city
-              pin.
+            <p className="mt-1 text-[13px] leading-relaxed text-[var(--cream-muted)]">
+              We need your GPS for Nearby. Other men see approximate distance only — not your exact
+              public pin. Exact live pin with matches is the toggle below (optional). Shared only
+              while you use the app · 18+ only.
             </p>
             <p className="mt-2 text-[12px] font-semibold text-[#A89070]">
               Status:{' '}
               <span className={hasPin ? 'text-[#8FC773]' : 'text-[#E0A14A]'}>
-                {hasPin == null ? '…' : hasPin ? 'On' : 'Off — invisible nearby'}
+                {hasPin == null ? '…' : hasPin ? 'On — private proximity' : 'Off — invisible nearby'}
               </span>
             </p>
             {hasPin === false ? (
               <p className="mt-1 text-[12px] leading-relaxed text-[#E0A14A]">
-                Men cannot find you until you enable precise location. No fake city pins.
+                Without location you cannot appear near men. You are not putting a public address on
+                a map — we need the pin privately for distance.
               </p>
             ) : null}
             {locNotice ? <p className="mt-1 text-[12px] text-[#E0A14A]">{locNotice}</p> : null}
             <button
               type="button"
               disabled={locating}
-              onClick={enableDeviceLocation}
+              onClick={() => void enableDeviceLocation()}
               className="mt-3 rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] disabled:opacity-60"
             >
-              {locating ? 'Locating…' : hasPin ? 'Refresh location' : 'Enable location'}
+              {locating ? 'Locating…' : hasPin ? 'Refresh location' : 'Allow location'}
             </button>
           </section>
 

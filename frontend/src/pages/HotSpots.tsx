@@ -111,17 +111,19 @@ export const HotSpots = () => {
             data-testid="hotspots-location-gate"
             role="status"
           >
-            <p className="text-[16px] font-extrabold text-[var(--cream)]">Location unlocks Hot Spots</p>
+            <p className="text-[16px] font-extrabold text-[var(--cream)]">
+              We need your location for Hot Spots
+            </p>
             <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--cream-muted)]">
-              Turn on device location to see venues near you. Shared only while you use the app · 18+
-              only.
+              Not a public pin on a map — we use GPS privately to rank venues near you. Others do not
+              see your exact address. Shared only while you use the app · 18+ only.
             </p>
             <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
               <Link
                 to="/settings"
                 className="rounded-full bg-[#C4832A] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
               >
-                Enable in Settings
+                Allow in Settings
               </Link>
               <Link
                 to="/discover"

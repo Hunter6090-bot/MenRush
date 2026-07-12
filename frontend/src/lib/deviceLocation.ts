@@ -2,7 +2,20 @@
  * Device GPS for MenRush proximity — never invent city pins.
  * High-accuracy first, then low-accuracy fallback (desktop / weak GPS).
  * 18+ product; location shared only while the app is used.
+ *
+ * Privacy framing (product truth):
+ * - The app needs your coordinates for Nearby / distance.
+ * - Other men do NOT see your exact public pin — distances are bucketed.
+ * - Exact live pin with matches is a separate toggle (Matches settings).
  */
+
+/** Short line for banners / strips — privacy + necessity. */
+export const LOCATION_PRIVACY_LINE =
+  'We need your location to find men near you. Others see approximate distance only — not your exact pin on a public map.';
+
+/** Slightly longer for gates and Settings. */
+export const LOCATION_PRIVACY_DETAIL =
+  'MenRush uses your GPS for proximity only. You are not broadcasting an exact public address. Nearby shows bucketed distance (e.g. under 300 m). Exact live location with matches is optional and separate. Shared only while you use the app · 18+ only.';
 
 export type DeviceLocationError =
   | 'insecure'

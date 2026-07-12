@@ -20,12 +20,12 @@ export function LiveLocationSharingToggle({
     >
       <div className={compact ? 'min-w-0 flex-1' : undefined}>
         <p className={`font-semibold text-[var(--cream)] ${compact ? 'text-[13px]' : 'text-sm'}`}>
-          Share live location with matches
+          Exact live pin with matches only
         </p>
         <p className={`mt-1 text-[var(--cream-muted)] ${compact ? 'text-[11px] leading-snug' : 'text-xs'}`}>
           {enabled
-            ? 'On by default — you agreed to location sharing when you joined. Slide off to pause.'
-            : 'Paused. Slide on when you want matches to see your live location again.'}
+            ? 'Separate from Nearby. Nearby uses bucketed distance — not this exact pin. Slide off to pause live sharing with matches.'
+            : 'Paused. Nearby still works with private GPS + approximate distance. Slide on only if you want matches to see your live pin.'}
         </p>
       </div>
       <button

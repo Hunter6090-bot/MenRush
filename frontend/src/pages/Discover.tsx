@@ -943,18 +943,19 @@ export const Discover = () => {
           data-testid="location-gate"
         >
           <p id="location-gate-title" className="text-[17px] font-extrabold text-[#F0E0C0]">
-            Location unlocks Nearby
+            We need your location to unlock Nearby
           </p>
           <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[#A89070]">
-            MenRush is live proximity — we never place you on a random city map. Allow location (18+
-            only · shared only while you use the app) to see men around you right now.
+            Others do not see your exact pin publicly — only approximate distance. We need GPS so
+            the map is real men near you, never a fake city. Shared only while you use the app ·
+            18+ only.
           </p>
           <button
             type="button"
             onClick={handleEnableLocation}
             className="mt-4 rounded-full bg-[#C4832A] px-5 py-2.5 text-[13px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
           >
-            Enable location
+            Allow location
           </button>
           {locationNotice ? (
             <p className="mt-3 text-[11px] text-[#A89070]">{locationNotice}</p>

@@ -46,7 +46,7 @@ const INTRO_ITEMS = [
   'Write a short bio guys can read on the map',
   'Pick what you are looking for',
   'Tag position, tribe, body, ethnicity & vibe',
-  'Turn on live location and go visible',
+  'Allow location for Nearby (private — not a public pin)',
 ] as const;
 
 export const ProfileSetup: React.FC = () => {
@@ -592,8 +592,9 @@ export const ProfileSetup: React.FC = () => {
               <SetupChecklistItem key={item.id} n="✓" text={item.label} done />
             ))}
             <p className="pt-2 text-[13px] leading-relaxed text-[#A89070]">
-              Location unlocks Nearby. Tap finish and allow precise location — we never invent a city
-              pin. Shared only while you use the app. 18+ only.
+              We need your location to show men near you. Others see approximate distance only — not
+              your exact public pin. Exact live pin with matches is optional later. Shared only while
+              you use the app · 18+ only.
             </p>
           </div>
         ) : null}
@@ -613,7 +614,7 @@ export const ProfileSetup: React.FC = () => {
                 {locating ? 'Getting location…' : 'Saving…'}
               </>
             ) : step === 'live' ? (
-              'Enable location & go live'
+              'Allow location & go live'
             ) : step === 'welcome' ? (
               'Start setup'
             ) : (

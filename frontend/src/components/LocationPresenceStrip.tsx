@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { usersAPI } from '../api/client';
-import { requestDeviceLocation } from '../lib/deviceLocation';
+import { LOCATION_PRIVACY_LINE, requestDeviceLocation } from '../lib/deviceLocation';
 import { useLocationStore } from '../hooks/store';
 
 /**
@@ -89,11 +89,10 @@ export function LocationPresenceStrip() {
       <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-extrabold text-[#F0E0C0]">
-            Location required — you&apos;re invisible nearby
+            We need your location — not a public pin
           </p>
           <p className="text-[11px] leading-relaxed text-[#A89070]">
-            MenRush is live proximity. Allow precise location so men can find you. Shared only while
-            you use the app · never a fake city pin · 18+ only.
+            {LOCATION_PRIVACY_LINE} Without it you stay invisible on Nearby.
           </p>
           {notice ? (
             <p className="mt-1 text-[11px] font-semibold text-[#E0A14A]" data-testid="location-strip-error">

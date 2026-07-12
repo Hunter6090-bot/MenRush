@@ -182,18 +182,18 @@ export const Stream = () => {
             aria-labelledby="stream-location-title"
           >
             <p id="stream-location-title" className="text-[17px] font-extrabold text-[#F0E0C0]">
-              Location unlocks the live list
+              We need your location for the live list
             </p>
             <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[#A89070]">
               {error ||
-                'Allow precise location to see men near you. Shared only while you use the app.'}
+                'Others see approximate distance only — not your exact public pin. We need GPS so the list is real men near you. Shared only while you use the app · 18+ only.'}
             </p>
             <button
               type="button"
               onClick={requestLocation}
               className="mt-5 rounded-full bg-[#C4832A] px-5 py-2.5 text-[13px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
             >
-              Enable location
+              Allow location
             </button>
             <p className="mt-4 text-[11px] text-[#A89070]">Consent first · Report anytime</p>
           </div>
