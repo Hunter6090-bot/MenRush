@@ -47,7 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
-| Mutual chat gate + Match coach (likes dead-end fix) | cycle 2026-07-12 | Chat only on mutual; Matched vs Open chat; first-Match coach | Grok CEO cycle 18 |
+| Mutual chat gate + Match coach (likes dead-end fix) | `246aec0` — pushed + Vercel prod | Chat only on mutual; Matched vs Open chat; first-Match coach | Grok CEO cycle 18 |
 | Sent likes hydrate + empty density teaser + real photo setup | `2593b09` — pushed + Vercel + Railway | GET /likes/sent; beyond-radius count; ProfileSetup demotes generic | Grok CEO cycle 17 |
 | Profile depth strip + Settings location first + Stream Match hydrate | `c58a6a6` — pushed + Vercel prod | ProfileDepthStrip; Settings pin Off first; ProfileCard/Stream Match state + API errors | Grok CEO cycle 16 |
 | Real photo rank + generic upgrade banner + liked hydrate | `1d87118` — pushed + Vercel + Railway | Nearby ORDER BY real photo; ActivationBanner soft photo; Discover likedUsers from matches | Grok CEO cycle 15 |
