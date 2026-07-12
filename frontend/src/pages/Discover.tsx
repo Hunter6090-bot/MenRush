@@ -104,6 +104,9 @@ const NEARBY_REFETCH_MIN_METERS = 80;
 export const Discover = () => {
   const [users, setUsers] = useState<NearbyUser[]>([]);
   const [likedUsers, setLikedUsers] = useState<Set<string>>(new Set());
+  /** Mutual only — messaging requires match both ways. */
+  const [matchedUsers, setMatchedUsers] = useState<Set<string>>(new Set());
+  const [likesHydrated, setLikesHydrated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [radius, setRadius] = useState<number>(5);
@@ -124,6 +127,13 @@ export const Discover = () => {
   const [matchingUserId, setMatchingUserId] = useState<string | null>(null);
   /** Men found at max radius when current radius is empty — expand teaser. */
   const [beyondRadiusCount, setBeyondRadiusCount] = useState(0);
+  const [matchCoachDismissed, setMatchCoachDismissed] = useState(() => {
+    try {
+      return localStorage.getItem('menrush_match_coach_dismissed') === '1';
+    } catch {
+      return false;
+    }
+  });
   const [pulseNudgeDismissed, setPulseNudgeDismissed] = useState(() => {
     try {
       return localStorage.getItem('menrush_pulse_nudge_dismissed') === '1';
@@ -166,17 +176,21 @@ export const Discover = () => {
       .getMood()
       .then((res) => setMood(res.data.mood ?? null))
       .catch(() => {});
-    // Hydrate Match CTA after reload — outbound likes + mutual matches.
+    // Hydrate Match CTA after reload — outbound likes + mutual matches (separate).
     Promise.all([
       usersAPI.getSentLikes().catch(() => ({ data: { ids: [] as string[] } })),
       usersAPI.getMatches().catch(() => ({ data: [] as Array<{ id: string }> })),
-    ]).then(([sentRes, matchesRes]) => {
-      const sent = sentRes.data?.ids ?? [];
-      const mutual = (matchesRes.data ?? []).map((m: { id: string }) => m.id).filter(Boolean);
-      const ids = [...sent, ...mutual];
-      if (ids.length === 0) return;
-      setLikedUsers((prev) => new Set([...prev, ...ids]));
-    });
+    ])
+      .then(([sentRes, matchesRes]) => {
+        const sent = sentRes.data?.ids ?? [];
+        const mutual = (matchesRes.data ?? []).map((m: { id: string }) => m.id).filter(Boolean);
+        setMatchedUsers((prev) => new Set([...prev, ...mutual]));
+        const likedIds = [...sent, ...mutual];
+        if (likedIds.length > 0) {
+          setLikedUsers((prev) => new Set([...prev, ...likedIds]));
+        }
+      })
+      .finally(() => setLikesHydrated(true));
   }, []);
 
   const handleMoodSelect = useCallback(async (next: Mood | null) => {
@@ -538,16 +552,25 @@ export const Discover = () => {
 
   const handleLike = useCallback(
     async (user: NearbyUser) => {
-      if (likedUsers.has(user.id)) {
+      // Chat only when mutual — messaging API requires both-way match.
+      if (matchedUsers.has(user.id)) {
         navigate(`/messages/${user.id}`);
+        return;
+      }
+      if (likedUsers.has(user.id)) {
+        setSafetyNotice({
+          msg: `Match already sent to ${user.name}. Chat unlocks when he matches back · consent first.`,
+          tone: 'success',
+        });
+        window.setTimeout(() => setSafetyNotice(null), 4000);
         return;
       }
       setMatchingUserId(user.id);
       try {
         const res = await usersAPI.likeUser(user.id);
         setLikedUsers((p) => new Set([...p, user.id]));
-        // Mutual match → celebrate and path to chat (engagement).
         if (res.data?.match) {
+          setMatchedUsers((p) => new Set([...p, user.id]));
           setMatchToast({ name: user.name, id: user.id });
           window.setTimeout(() => setMatchToast(null), 6000);
         } else {
@@ -572,7 +595,7 @@ export const Discover = () => {
         setMatchingUserId(null);
       }
     },
-    [likedUsers, navigate],
+    [likedUsers, matchedUsers, navigate],
   );
 
   useEffect(() => {
@@ -777,6 +800,46 @@ export const Discover = () => {
         <ActivationBanner profile={activationProfile} onEnableLocation={handleEnableLocation} />
       ) : null}
 
+      {/* First Match coach — likes cold since July; no swipe, one tap. */}
+      {!needsLocationGate &&
+      likesHydrated &&
+      !loading &&
+      !matchCoachDismissed &&
+      likedUsers.size === 0 &&
+      displayUsers.length > 0 ? (
+        <div
+          className="mx-3 mb-3 rounded-2xl border border-[rgba(196,131,42,0.5)] bg-[rgba(196,131,42,0.12)] px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
+          role="status"
+          data-testid="match-coach"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] font-extrabold text-[#F0E0C0]">
+                Men nearby — tap Match on a card
+              </p>
+              <p className="mt-1 text-[12px] text-[#A89070]">
+                No swiping. One tap sends interest. Chat unlocks when it&apos;s mutual · consent
+                first · 18+ only.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setMatchCoachDismissed(true);
+                try {
+                  localStorage.setItem('menrush_match_coach_dismissed', '1');
+                } catch {
+                  /* ignore */
+                }
+              }}
+              className="shrink-0 rounded-full border border-[rgba(196,131,42,0.45)] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#A89070] hover:text-[#F0E0C0]"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {safetyNotice ? (
         <div
           role="status"
@@ -945,6 +1008,7 @@ export const Discover = () => {
             onSelect={setSelectedUser}
             onMatch={handleLike}
             likedUserIds={likedUsers}
+            mutualUserIds={matchedUsers}
             matchingUserId={matchingUserId}
             onExpandRadius={handleRadiusCycle}
             onFinishProfile={() => navigate('/profile/setup')}
@@ -1099,6 +1163,7 @@ export const Discover = () => {
                 onSelect={setSelectedUser}
                 onMatch={handleLike}
                 likedUserIds={likedUsers}
+                mutualUserIds={matchedUsers}
                 matchingUserId={matchingUserId}
                 onExpandRadius={handleRadiusCycle}
                 onFinishProfile={() => navigate('/profile/setup')}
@@ -1125,6 +1190,7 @@ export const Discover = () => {
       <ProfileDrawer
         user={selectedUser}
         liked={selectedUser ? likedUsers.has(selectedUser.id) : false}
+        mutual={selectedUser ? matchedUsers.has(selectedUser.id) : false}
         onClose={() => setSelectedUser(null)}
         onLike={async () => {
           if (!selectedUser) return;

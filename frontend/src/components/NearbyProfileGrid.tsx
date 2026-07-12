@@ -11,6 +11,8 @@ interface NearbyProfileGridProps {
   /** One-tap match without opening the drawer — primary engagement path. */
   onMatch?: (user: NearbyUser) => void | Promise<void>;
   likedUserIds?: Set<string>;
+  /** Mutual matches only — Open chat path (messaging requires mutual). */
+  mutualUserIds?: Set<string>;
   matchingUserId?: string | null;
   /** Expand search radius — cold-start density for beta. */
   onExpandRadius?: () => void;
@@ -32,6 +34,7 @@ export function NearbyProfileGrid({
   onSelect,
   onMatch,
   likedUserIds,
+  mutualUserIds,
   matchingUserId,
   onExpandRadius,
   onFinishProfile,
@@ -137,6 +140,7 @@ export function NearbyProfileGrid({
         const photo = getPhotoUrl(user.photo_url);
         const meta = `${formatDistanceMiles(user)} · ${getTribeTag(user)} · ${formatActiveStatus(user)}`;
         const liked = likedUserIds?.has(user.id) ?? false;
+        const mutual = mutualUserIds?.has(user.id) ?? false;
         const matching = matchingUserId === user.id;
         return (
           <div
@@ -188,12 +192,14 @@ export function NearbyProfileGrid({
                     void onMatch(user);
                   }}
                   className={`w-full rounded-xl py-2 text-[12px] font-extrabold uppercase tracking-wide transition-colors disabled:opacity-60 ${
-                    liked
-                      ? 'border border-[rgba(196,131,42,0.5)] bg-transparent text-[#C4832A]'
-                      : 'bg-[#C4832A] text-[#1A0E03] hover:bg-[#E0A14A]'
+                    mutual
+                      ? 'border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] text-[#E0A14A]'
+                      : liked
+                        ? 'border border-[rgba(196,131,42,0.5)] bg-transparent text-[#C4832A]'
+                        : 'bg-[#C4832A] text-[#1A0E03] hover:bg-[#E0A14A]'
                   }`}
                 >
-                  {matching ? 'Sending…' : liked ? 'Matched' : 'Match'}
+                  {matching ? 'Sending…' : mutual ? 'Open chat' : liked ? 'Matched' : 'Match'}
                 </button>
               </div>
             ) : null}

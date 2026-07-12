@@ -14,6 +14,8 @@ import { getDistanceLabel, isUserPulsing } from "../lib/discovery";
 interface ProfileDrawerProps {
   user: NearbyUser | null;
   liked: boolean;
+  /** Mutual match — only then is Open chat valid (messaging requires mutual). */
+  mutual?: boolean;
   onClose: () => void;
   onLike: () => Promise<void> | void;
   onPass?: () => void;
@@ -27,6 +29,7 @@ interface ProfileDrawerProps {
 export function ProfileDrawer({
   user,
   liked,
+  mutual = false,
   onClose,
   onLike,
   onPass,
@@ -249,10 +252,24 @@ export function ProfileDrawer({
           )}
           <button
             type="button"
-            onClick={() => (liked ? onMessage() : onLike())}
-            className="flex-1 py-3 rounded-[var(--radius-md)] bg-[var(--copper)] text-[var(--bg-primary)] font-black text-sm tracking-wide hover:bg-[var(--copper-light)] active:scale-[0.98] transition-all"
+            onClick={() => {
+              if (mutual) onMessage();
+              else if (liked) {
+                onSafetyNotice?.(
+                  "Match sent — chat unlocks when he matches back · consent first.",
+                  "success",
+                );
+              } else {
+                void onLike();
+              }
+            }}
+            className={`flex-1 py-3 rounded-[var(--radius-md)] font-black text-sm tracking-wide active:scale-[0.98] transition-all ${
+              mutual || !liked
+                ? "bg-[var(--copper)] text-[var(--bg-primary)] hover:bg-[var(--copper-light)]"
+                : "border border-[var(--copper)] bg-transparent text-[var(--copper)]"
+            }`}
           >
-            {liked ? "Open chat" : "Match"}
+            {mutual ? "Open chat" : liked ? "Matched" : "Match"}
           </button>
           {onPulseBack && isPulsing && (
             <button
