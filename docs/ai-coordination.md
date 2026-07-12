@@ -47,7 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
-| Grid Match CTA + like SecurityError + ops waitlist fix | cycle 2026-07-12 | NearbyProfileGrid Match; Discover wire; like route status; ops-metrics `waitlist` table | Grok CEO cycle 14 |
+| Grid Match CTA + like SecurityError + ops waitlist fix | `fdd3c43` — pushed + Vercel + Railway SUCCESS | — | Grok CEO cycle 14 |
 | Login show-password + clearer errors | `261e5e9`, `c0ed4e1` — pushed | — | Grok — `/login` + landing |
 | Password reset Zoho fallback | `261e5e9` — pushed | backend deploy pending on Railway | Grok — Railway not promoting new builds yet |
 | Video call camera/layout/ringtone | `902440a` — pushed | — | Grok |
