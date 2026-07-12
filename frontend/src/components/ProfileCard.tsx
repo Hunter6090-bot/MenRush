@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserAvatar, getPhotoUrl } from './UserAvatar';
+import { getPhotoUrl } from './UserAvatar';
 import { StatusBadge } from './StatusBadge';
 import { SilhouetteAvatar } from './SilhouetteAvatar';
 import { IconMatches } from './icons';
@@ -36,12 +36,19 @@ export interface NearbyUser {
 
 interface ProfileCardProps {
   user: NearbyUser;
+  /** Hydrate Match CTA after reload (mutual matches). */
+  initiallyLiked?: boolean;
+  initiallyMutual?: boolean;
 }
 
-export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
+export const ProfileCard: React.FC<ProfileCardProps> = ({
+  user,
+  initiallyLiked = false,
+  initiallyMutual = false,
+}) => {
   const navigate = useNavigate();
-  const [liked, setLiked] = useState(false);
-  const [isMutual, setIsMutual] = useState(false);
+  const [liked, setLiked] = useState(initiallyLiked || initiallyMutual);
+  const [isMutual, setIsMutual] = useState(initiallyMutual);
   const [showMatch, setShowMatch] = useState(false);
   const [likeHint, setLikeHint] = useState<string | null>(null);
   const [liking, setLiking] = useState(false);
@@ -50,9 +57,20 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
   const fullPhotoUrl = getPhotoUrl(user.photo_url);
   const isPulsing = isUserPulsing(user);
 
+  useEffect(() => {
+    if (initiallyMutual || initiallyLiked) {
+      setLiked(true);
+      if (initiallyMutual) setIsMutual(true);
+    }
+  }, [initiallyLiked, initiallyMutual]);
+
   const handleLike = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (liked || liking) return;
+    if (liking) return;
+    if (liked || isMutual) {
+      if (isMutual) navigate(`/messages/${user.id}`);
+      return;
+    }
 
     setLiking(true);
     setLikeHint(null);
@@ -64,12 +82,17 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
         setShowMatch(true);
         setTimeout(() => setShowMatch(false), 3000);
       } else {
-        setLikeHint('Liked — chat unlocks if he matches back.');
+        setLikeHint('Match sent — chat unlocks if he matches back · consent first.');
         setTimeout(() => setLikeHint(null), 4000);
       }
-    } catch {
-      setLikeHint('Could not send match. Try again.');
-      setTimeout(() => setLikeHint(null), 3500);
+    } catch (err: unknown) {
+      const apiError = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setLikeHint(
+        typeof apiError === 'string' && apiError.length > 0
+          ? apiError
+          : 'Could not send match. Try again.',
+      );
+      setTimeout(() => setLikeHint(null), 4000);
     } finally {
       setLiking(false);
     }
@@ -199,7 +222,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
           }
           className="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#A45E18] hover:from-[#D4943B] hover:to-[#C4832A] text-white text-sm font-semibold transition-all duration-200 hover:shadow-glow-blue active:scale-95 disabled:opacity-60"
         >
-          {liking ? 'Sending…' : isMutual ? 'Open chat' : liked ? 'Liked' : 'Match'}
+          {liking ? 'Sending…' : isMutual ? 'Open chat' : liked ? 'Matched' : 'Match'}
         </button>
         {likeHint ? (
           <p className="mt-2 text-center text-[11px] text-[#A89070]" role="status">

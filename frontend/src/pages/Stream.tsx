@@ -15,6 +15,8 @@ export const Stream = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [needsLocation, setNeedsLocation] = useState(false);
+  /** Mutual match ids — hydrate Match CTA so Stream shows Matched/Open chat. */
+  const [matchedIds, setMatchedIds] = useState<Set<string>>(new Set());
 
   const loadNearby = useCallback(async (latitude: number, longitude: number) => {
     await usersAPI.updateLocation(latitude, longitude).catch(() => {});
@@ -67,6 +69,17 @@ export const Stream = () => {
     let cancelled = false;
 
     (async () => {
+      // Mutual matches → Match CTA state survives reload.
+      try {
+        const matchesRes = await usersAPI.getMatches();
+        if (!cancelled) {
+          const ids = (matchesRes.data ?? []).map((m: { id: string }) => m.id).filter(Boolean);
+          setMatchedIds(new Set(ids));
+        }
+      } catch {
+        /* ignore */
+      }
+
       // 1) Hydrate from last saved pin so list appears quickly.
       try {
         const r = await usersAPI.getMe();
@@ -209,7 +222,12 @@ export const Stream = () => {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {users.map((user) => (
-              <ProfileCard key={user.id} user={user} />
+              <ProfileCard
+                key={user.id}
+                user={user}
+                initiallyMutual={matchedIds.has(user.id)}
+                initiallyLiked={matchedIds.has(user.id)}
+              />
             ))}
           </div>
         )}

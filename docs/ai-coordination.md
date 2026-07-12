@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Profile depth strip + Settings location first + Stream Match hydrate | cycle 2026-07-12 | ProfileDepthStrip; Settings pin Off first; ProfileCard/Stream Match state + API errors | Grok CEO cycle 16 |
 | Real photo rank + generic upgrade banner + liked hydrate | `1d87118` — pushed + Vercel + Railway | Nearby ORDER BY real photo; ActivationBanner soft photo; Discover likedUsers from matches | Grok CEO cycle 15 |
 | Grid Match CTA + like SecurityError + ops waitlist fix | `fdd3c43` — pushed + Vercel + Railway SUCCESS | — | Grok CEO cycle 14 |
 | Login show-password + clearer errors | `261e5e9`, `c0ed4e1` — pushed | — | Grok — `/login` + landing |

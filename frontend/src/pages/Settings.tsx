@@ -88,6 +88,42 @@ export const Settings = () => {
         <h1 className="mb-5 text-2xl font-extrabold text-[var(--cream)]">Settings</h1>
 
         <div className="space-y-2.5">
+          {/* Location first when off — 8 beta users still invisible nearby. */}
+          <section
+            className={`mr-card p-4 ${
+              hasPin === false
+                ? 'border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.1)] shadow-[0_8px_24px_rgba(0,0,0,0.3)]'
+                : ''
+            }`}
+            data-testid="settings-device-location"
+          >
+            <p className="text-[15px] font-bold text-[var(--cream)]">Device location</p>
+            <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
+              Required for Nearby. Shared only while you use the app. 18+ only — never invents a city
+              pin.
+            </p>
+            <p className="mt-2 text-[12px] font-semibold text-[#A89070]">
+              Status:{' '}
+              <span className={hasPin ? 'text-[#8FC773]' : 'text-[#E0A14A]'}>
+                {hasPin == null ? '…' : hasPin ? 'On' : 'Off — invisible nearby'}
+              </span>
+            </p>
+            {hasPin === false ? (
+              <p className="mt-1 text-[12px] leading-relaxed text-[#E0A14A]">
+                Men cannot find you until you enable precise location. No fake city pins.
+              </p>
+            ) : null}
+            {locNotice ? <p className="mt-1 text-[12px] text-[#E0A14A]">{locNotice}</p> : null}
+            <button
+              type="button"
+              disabled={locating}
+              onClick={enableDeviceLocation}
+              className="mt-3 rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] disabled:opacity-60"
+            >
+              {locating ? 'Locating…' : hasPin ? 'Refresh location' : 'Enable location'}
+            </button>
+          </section>
+
           <section className="mr-card p-4">
             <p className="text-[15px] font-bold text-[var(--cream)]">Push notifications</p>
             <p className="mt-1 text-[13px] text-[var(--cream-muted)]">Control alerts for messages and matches.</p>
@@ -104,29 +140,6 @@ export const Settings = () => {
             <div className="mt-4">
               <TwoFactorSettings />
             </div>
-          </section>
-
-          <section className="mr-card p-4" data-testid="settings-device-location">
-            <p className="text-[15px] font-bold text-[var(--cream)]">Device location</p>
-            <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
-              Required for Nearby. Shared only while you use the app. 18+ only — never invents a city
-              pin.
-            </p>
-            <p className="mt-2 text-[12px] font-semibold text-[#A89070]">
-              Status:{' '}
-              <span className={hasPin ? 'text-[#8FC773]' : 'text-[#E0A14A]'}>
-                {hasPin == null ? '…' : hasPin ? 'On' : 'Off — invisible nearby'}
-              </span>
-            </p>
-            {locNotice ? <p className="mt-1 text-[12px] text-[#E0A14A]">{locNotice}</p> : null}
-            <button
-              type="button"
-              disabled={locating}
-              onClick={enableDeviceLocation}
-              className="mt-3 rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] disabled:opacity-60"
-            >
-              {locating ? 'Locating…' : hasPin ? 'Refresh location' : 'Enable location'}
-            </button>
           </section>
 
           <section className="mr-card p-4">
