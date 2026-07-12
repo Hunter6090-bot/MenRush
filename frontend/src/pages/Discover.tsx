@@ -164,6 +164,15 @@ export const Discover = () => {
       .getMood()
       .then((res) => setMood(res.data.mood ?? null))
       .catch(() => {});
+    // Hydrate Match CTA state after reload (likes are idempotent; UI should still say Matched).
+    usersAPI
+      .getMatches()
+      .then((res) => {
+        const ids = (res.data ?? []).map((m: { id: string }) => m.id).filter(Boolean);
+        if (ids.length === 0) return;
+        setLikedUsers((prev) => new Set([...prev, ...ids]));
+      })
+      .catch(() => {});
   }, []);
 
   const handleMoodSelect = useCallback(async (next: Mood | null) => {

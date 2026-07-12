@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Real photo rank + generic upgrade banner + liked hydrate | cycle 2026-07-12 | Nearby ORDER BY real photo; ActivationBanner soft photo; Discover likedUsers from matches | Grok CEO cycle 15 |
 | Grid Match CTA + like SecurityError + ops waitlist fix | `fdd3c43` — pushed + Vercel + Railway SUCCESS | — | Grok CEO cycle 14 |
 | Login show-password + clearer errors | `261e5e9`, `c0ed4e1` — pushed | — | Grok — `/login` + landing |
 | Password reset Zoho fallback | `261e5e9` — pushed | backend deploy pending on Railway | Grok — Railway not promoting new builds yet |

@@ -145,11 +145,13 @@ export const userService = {
       queryStr += ` AND p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' AND p.mood ILIKE $${values.length}`;
     }
 
-    // Spec: pulsing users sort first, then fresh presence, then last_seen DESC.
+    // Spec: pulse first, then fresh presence. Real photos rank above shared
+    // generic avatars so the grid feels intentional and incentivizes upgrades.
     queryStr += ` ORDER BY
       (u.is_pulsing AND u.pulse_expires_at > NOW()) DESC,
       (p.available_until IS NOT NULL AND p.available_until > NOW()) DESC,
       (p.online = TRUE AND p.last_seen > NOW() - INTERVAL '20 minutes') DESC,
+      (u.photo_url IS NOT NULL AND u.photo_url NOT LIKE '/avatars/generic/%') DESC,
       p.last_seen DESC NULLS LAST
     LIMIT 50`;
 

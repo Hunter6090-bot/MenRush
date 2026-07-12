@@ -10,7 +10,7 @@ export interface ProfileSetupSnapshot {
   lng?: number | string | null;
 }
 
-import { hasProfileAvatar } from './genericAvatar';
+import { hasProfileAvatar, isGenericAvatarUrl } from './genericAvatar';
 
 export const PROFILE_SETUP_STEPS = [
   { id: 'photo', label: 'Photo or avatar' },
@@ -97,11 +97,17 @@ export function activationBlockers(profile: ProfileSetupSnapshot): ActivationBlo
   return blockers;
 }
 
+/** Shared generic avatar — soft upgrade, not a hard Discover gate. */
+export function needsRealPhotoUpgrade(profile: ProfileSetupSnapshot): boolean {
+  return isGenericAvatarUrl(profile.photo_url);
+}
+
 export function profileSetupProgress(profile: ProfileSetupSnapshot): number {
-  // Setup steps + live location (proximity is the product).
-  const total = PROFILE_SETUP_STEPS.length + 1;
+  // Setup steps + live location + real photo (generic counts as partial only).
+  const total = PROFILE_SETUP_STEPS.length + 2;
   let done = 0;
   if (hasProfileAvatar(profile)) done++;
+  if (hasProfileAvatar(profile) && !isGenericAvatarUrl(profile.photo_url)) done++;
   if ((profile.bio?.trim().length ?? 0) >= 20) done++;
   if (profile.looking_for?.trim()) done++;
   if ((profile.interests?.length ?? 0) >= 3) done++;

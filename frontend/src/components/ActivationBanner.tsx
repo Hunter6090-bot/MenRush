@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import {
   activationBlockers,
   isDiscoverLocationReady,
+  needsRealPhotoUpgrade,
   profileSetupProgress,
   type ProfileSetupSnapshot,
 } from '../lib/profileSetup';
@@ -24,32 +25,37 @@ interface ActivationBannerProps {
 export function ActivationBanner({ profile, onEnableLocation }: ActivationBannerProps) {
   const blockers = activationBlockers(profile);
   const needsLocation = !isDiscoverLocationReady(profile);
-  if (blockers.length === 0 && !needsLocation) return null;
+  const photoUpgrade = blockers.length === 0 && !needsLocation && needsRealPhotoUpgrade(profile);
+  if (blockers.length === 0 && !needsLocation && !photoUpgrade) return null;
 
   const progress = profileSetupProgress(profile);
   const primary = blockers[0];
-  const headline =
-    primary === 'avatar'
+  const headline = photoUpgrade
+    ? 'Shared avatar — real photos get matched first'
+    : primary === 'avatar'
       ? 'You are invisible on the map'
       : primary === 'location' || (needsLocation && blockers.length === 0)
         ? 'Guys cannot see how close you are'
         : 'Complete your profile — more views, more matches';
 
-  const showLocationCta = (primary === 'location' || needsLocation) && Boolean(onEnableLocation);
+  const showLocationCta =
+    !photoUpgrade && (primary === 'location' || needsLocation) && Boolean(onEnableLocation);
 
   return (
     <div
       className="mx-3 mb-3 rounded-2xl border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.1)] px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
       role="status"
-      data-testid="activation-banner"
+      data-testid={photoUpgrade ? 'activation-photo-upgrade' : 'activation-banner'}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-[14px] font-extrabold text-[#F0E0C0]">{headline}</p>
           <p className="mt-1 text-[12px] text-[#A89070]">
-            {blockers.length > 0
-              ? blockers.map((b) => BLOCKER_COPY[b]).join(' · ')
-              : 'Turn on precise location to appear near men around you.'}
+            {photoUpgrade
+              ? 'Upload a clear face or upper-body shot. Men nearby rank real photos higher · 18+ only.'
+              : blockers.length > 0
+                ? blockers.map((b) => BLOCKER_COPY[b]).join(' · ')
+                : 'Turn on precise location to appear near men around you.'}
           </p>
           <div className="mt-2 h-1.5 w-full max-w-[200px] overflow-hidden rounded-full bg-[rgba(13,10,6,0.5)]">
             <div
@@ -59,7 +65,15 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          {showLocationCta ? (
+          {photoUpgrade ? (
+            <Link
+              to="/profile"
+              data-testid="activation-add-real-photo"
+              className="rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+            >
+              Add real photo
+            </Link>
+          ) : showLocationCta ? (
             <button
               type="button"
               onClick={onEnableLocation}
