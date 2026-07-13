@@ -7,7 +7,9 @@
     "dev": "ts-node src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "db:migrate": "psql $DATABASE_URL < ../database/schema.sql"
+    "db:migrate": "psql $DATABASE_URL < ../database/schema.sql",
+    "test:features": "bash ../test-features.sh",
+    "predeploy": "npm run build && bash ../test-features.sh"
   },
   "dependencies": {
     "@types/multer": "^2.1.0",
