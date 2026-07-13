@@ -4,7 +4,14 @@ import { useWebRTC } from '../hooks/useWebRTC';
 import { useSocket } from '../hooks/useSocket';
 import { createCallTone, type CallToneKind } from '../lib/callTones';
 import { registerOutgoingCallHandler } from '../lib/callBridge';
-import { attachStreamToVideo, detachStreamFromVideo, mapCallMediaError } from '../lib/callMedia';
+import {
+  attachStreamToVideo,
+  detachStreamFromVideo,
+  mapCallMediaError,
+  resumeRemotePlayback,
+  streamHasAnyTrack,
+  streamHasLiveVideo,
+} from '../lib/callMedia';
 
 type PrimaryFeed = 'remote' | 'local';
 
@@ -64,6 +71,7 @@ export function VideoCallModal() {
   const [primaryFeed, setPrimaryFeed] = useState<PrimaryFeed>('remote');
   const [pipSize, setPipSize] = useState<{ width: number; height: number }>(PIP_SIZE_PRESETS.m);
   const [pipSizeKey, setPipSizeKey] = useState<PipSizeKey>('m');
+  const [remoteAudioBlocked, setRemoteAudioBlocked] = useState(false);
   const resizeRef = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(
     null,
   );
@@ -72,6 +80,7 @@ export function VideoCallModal() {
     setPrimaryFeed('remote');
     setPipSize(PIP_SIZE_PRESETS.m);
     setPipSizeKey('m');
+    setRemoteAudioBlocked(false);
   }, []);
 
   const detachAllVideos = useCallback(() => {
@@ -83,7 +92,7 @@ export function VideoCallModal() {
 
   useEffect(() => {
     if (callStatus === 'calling') {
-      void attachStreamToVideo(localVideoRef.current, localStream);
+      void attachStreamToVideo(localVideoRef.current, localStream, { preferUnmuted: false });
       detachStreamFromVideo(primaryVideoRef.current);
       detachStreamFromVideo(pipVideoRef.current);
       detachStreamFromVideo(remoteVideoRef.current);
@@ -93,8 +102,18 @@ export function VideoCallModal() {
     if (callStatus === 'connected') {
       const primaryStream = primaryFeed === 'remote' ? remoteStream : localStream;
       const pipStream = primaryFeed === 'remote' ? localStream : remoteStream;
-      void attachStreamToVideo(primaryVideoRef.current, primaryStream);
-      void attachStreamToVideo(pipVideoRef.current, pipStream);
+      const primaryIsRemote = primaryFeed === 'remote';
+      void attachStreamToVideo(primaryVideoRef.current, primaryStream, {
+        preferUnmuted: primaryIsRemote,
+      }).then((result) => {
+        if (primaryIsRemote && result === 'muted-fallback') {
+          setRemoteAudioBlocked(true);
+        } else if (primaryIsRemote && result === 'playing') {
+          setRemoteAudioBlocked(false);
+        }
+      });
+      // PiP is always muted (self preview or remote without doubling audio).
+      void attachStreamToVideo(pipVideoRef.current, pipStream, { preferUnmuted: false });
       detachStreamFromVideo(localVideoRef.current);
       detachStreamFromVideo(remoteVideoRef.current);
       return;
@@ -480,6 +499,13 @@ export function VideoCallModal() {
     const pipShowsLocal = primaryFeed === 'remote';
     const showPipCameraOff = pipShowsLocal && isCameraOff;
     const primaryStream = primaryFeed === 'remote' ? remoteStream : localStream;
+    const remoteReady = streamHasAnyTrack(remoteStream);
+    const primaryShowsRemote = primaryFeed === 'remote';
+    const waitingForRemote = primaryShowsRemote && !remoteReady;
+    const primaryHasVideo =
+      primaryShowsRemote
+        ? streamHasLiveVideo(remoteStream)
+        : streamHasLiveVideo(localStream) && !isCameraOff;
 
     return (
       <div className="fixed inset-0 z-[200] bg-black flex items-center justify-center" data-testid="connected-call">
@@ -492,10 +518,11 @@ export function VideoCallModal() {
           style={{ background: '#0D0A06', ...primaryMirrorStyle }}
         />
 
-        {!primaryStream && (
+        {(waitingForRemote || !primaryHasVideo) && (
           <div
-            className="absolute inset-0 flex items-center justify-center"
-            style={{ background: '#0D0A06' }}
+            className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6"
+            style={{ background: 'rgba(13,10,6,0.92)' }}
+            data-testid="remote-waiting"
           >
             <div
               className="w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold"
@@ -506,8 +533,38 @@ export function VideoCallModal() {
             >
               {peerName ? initials(peerName) : '?'}
             </div>
+            <p className="text-sm font-semibold text-center" style={{ color: '#F0E0C0' }}>
+              {waitingForRemote
+                ? `Connecting to ${peerName ?? 'him'}…`
+                : primaryShowsRemote
+                  ? 'Waiting for his camera…'
+                  : 'Camera off'}
+            </p>
+            <p className="text-xs text-center max-w-xs" style={{ color: '#A89070' }}>
+              Your preview is the small window. The main view is him — not a mirror of you.
+            </p>
           </div>
         )}
+
+        {remoteAudioBlocked && primaryShowsRemote && remoteReady ? (
+          <button
+            type="button"
+            data-testid="enable-call-audio"
+            onClick={() => {
+              void resumeRemotePlayback(primaryVideoRef.current).then((ok) => {
+                if (ok) setRemoteAudioBlocked(false);
+              });
+            }}
+            className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 rounded-full px-5 py-3 text-sm font-extrabold uppercase tracking-wide"
+            style={{
+              background: '#C4832A',
+              color: '#0D0A06',
+              boxShadow: '0 8px 28px rgba(0,0,0,0.5)',
+            }}
+          >
+            Tap for sound
+          </button>
+        ) : null}
 
         <div
           className="absolute bottom-28 right-4 rounded-2xl overflow-hidden shadow-2xl touch-none"
@@ -541,6 +598,12 @@ export function VideoCallModal() {
               <CameraOffIcon className="w-8 h-8" style={{ color: '#A89070' }} />
             </div>
           )}
+          <p
+            className="pointer-events-none absolute bottom-1 left-1 z-20 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide"
+            style={{ background: 'rgba(13,10,6,0.75)', color: '#E0A14A' }}
+          >
+            {pipShowsLocal ? 'You' : peerName ? peerName.split(' ')[0] : 'Him'}
+          </p>
           <button
             type="button"
             aria-label="Resize picture-in-picture video"
@@ -565,6 +628,7 @@ export function VideoCallModal() {
         >
           <p className="truncate text-sm font-semibold" style={{ color: '#F0E0C0' }}>
             {peerName ?? 'Call'}
+            {remoteReady ? '' : ' · connecting…'}
           </p>
           <div
             className="flex items-center gap-1 rounded-full px-1 py-1"
