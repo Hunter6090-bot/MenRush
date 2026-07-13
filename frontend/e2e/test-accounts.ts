@@ -18,14 +18,6 @@ export const MARKETING = {
   label: 'Marketing manager',
 } as const;
 
-export const ATRELL = {
-  id: 'd4a8f2c1-9b3e-4d7a-8e5f-1c2b3a4d5e6f',
-  email: 'attrelladam@gmail.com',
-  name: 'Attrell',
-  label: 'Tester',
-  password: 'LegalHead-7ydy1bkyp8!7',
-} as const;
-
 /** Playwright legacy fixtures — kept for existing specs. */
 export const ALICE = {
   id: 'a1000001-0001-4001-8001-000000000001',

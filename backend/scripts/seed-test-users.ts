@@ -45,14 +45,6 @@ export const SEED_USERS: SeedUser[] = [
     seedLondonLocation: true,
   },
   {
-    id: 'd4a8f2c1-9b3e-4d7a-8e5f-1c2b3a4d5e6f',
-    email: 'attrelladam@gmail.com',
-    name: 'Attrell',
-    age: 30,
-    label: 'Tester',
-    password: 'LegalHead-7ydy1bkyp8!7',
-  },
-  {
     id: 'b2000003-0003-4003-8003-000000000003',
     email: 'rfell30@hotmail.com',
     name: 'RFell',
