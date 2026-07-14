@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { usersAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
@@ -24,6 +24,8 @@ interface ViewableUser {
   interests?: string[];
   online?: boolean;
   last_seen?: string;
+  is_match?: boolean;
+  is_liked?: boolean;
 }
 
 const PROFILE_ERROR_MESSAGES: Record<string, string> = {
@@ -52,6 +54,9 @@ export const ProfileView = () => {
   const [user, setUser] = useState<ViewableUser | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [liked, setLiked] = useState(false);
+  const [mutual, setMutual] = useState(false);
+  const [matching, setMatching] = useState(false);
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(
     null,
   );
@@ -67,7 +72,10 @@ export const ProfileView = () => {
     usersAPI
       .getProfile(id)
       .then((r) => {
-        setUser(r.data);
+        const data = r.data as ViewableUser;
+        setUser(data);
+        setLiked(Boolean(data.is_liked || data.is_match));
+        setMutual(Boolean(data.is_match));
         setError(null);
       })
       .catch((err) => {
@@ -75,6 +83,57 @@ export const ProfileView = () => {
       })
       .finally(() => setLoading(false));
   }, [id, authUserId, navigate]);
+
+  const flash = useCallback((msg: string, tone: 'success' | 'error' = 'success') => {
+    setSafetyNotice({ msg, tone });
+    window.setTimeout(() => setSafetyNotice(null), 4000);
+  }, []);
+
+  const handleMatch = useCallback(async () => {
+    if (!user || matching) return;
+    if (mutual) {
+      navigate(`/messages/${user.id}`);
+      return;
+    }
+    if (liked) {
+      flash(`Match already sent to ${user.name}. Chat unlocks when he matches back · consent first.`);
+      return;
+    }
+    setMatching(true);
+    try {
+      const res = await usersAPI.likeUser(user.id);
+      setLiked(true);
+      if (res.data?.match) {
+        setMutual(true);
+        flash(`You matched with ${user.name}. Say hello.`);
+      } else {
+        flash(`Match sent to ${user.name}. Chat unlocks if he matches back · consent first.`);
+      }
+    } catch (err: unknown) {
+      const apiError = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      flash(
+        typeof apiError === 'string' && apiError.length > 0
+          ? apiError
+          : 'Could not send match. Try again.',
+        'error',
+      );
+    } finally {
+      setMatching(false);
+    }
+  }, [user, matching, mutual, liked, navigate, flash]);
+
+  const handleMessage = useCallback(() => {
+    if (!user) return;
+    if (mutual) {
+      navigate(`/messages/${user.id}`);
+      return;
+    }
+    flash('Chat unlocks after a mutual match. Tap Match first · consent first.');
+  }, [user, mutual, navigate, flash]);
+
+  const handlePass = useCallback(() => {
+    navigate(-1);
+  }, [navigate]);
 
   if (loading) {
     return (
@@ -142,6 +201,7 @@ export const ProfileView = () => {
               <UserAvatar
                 name={user.name}
                 photoUrl={user.photo_url}
+                age={user.age}
                 online={user.online}
                 size="xl"
                 className="ring-4 ring-[#1E1508]"
@@ -194,17 +254,44 @@ export const ProfileView = () => {
 
         <ProfileAlbumsSection ownerId={user.id} ownerName={user.name} />
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => navigate(`/messages/${user.id}`)}
-            className="flex-1 py-3 rounded-xl bg-[#C4832A] text-[#0D0A06] font-black text-sm tracking-wide hover:bg-[#C4832A]/90 active:scale-[0.98] transition-all"
+            onClick={handlePass}
+            className="flex-1 min-w-[5.5rem] py-3 rounded-xl border border-[#3D2B0E] text-[#F0E0C0]/80 font-bold text-sm hover:border-[#C4832A]/50 hover:text-[#F0E0C0] transition-all"
+          >
+            Pass
+          </button>
+          <button
+            type="button"
+            disabled={matching}
+            onClick={() => void handleMatch()}
+            data-testid="profile-view-match"
+            className={`flex-[1.4] min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide active:scale-[0.98] transition-all disabled:opacity-60 ${
+              mutual
+                ? 'border border-[#C4832A]/55 bg-[rgba(196,131,42,0.18)] text-[#E0A14A]'
+                : liked
+                  ? 'border border-[#C4832A]/50 bg-transparent text-[#C4832A]'
+                  : 'bg-[#C4832A] text-[#0D0A06] hover:bg-[#E0A14A]'
+            }`}
+          >
+            {matching ? 'Sending…' : mutual ? 'Open chat' : liked ? 'Matched' : 'Match'}
+          </button>
+          <button
+            type="button"
+            onClick={handleMessage}
+            data-testid="profile-view-message"
+            className={`flex-1 min-w-[5.5rem] py-3 rounded-xl font-bold text-sm transition-all ${
+              mutual
+                ? 'border border-[#C4832A]/40 text-[#C4832A] hover:bg-[rgba(196,131,42,0.12)]'
+                : 'border border-[#3D2B0E] text-[#A89070] hover:border-[#C4832A]/40 hover:text-[#C4832A]'
+            }`}
           >
             Message
           </button>
         </div>
         <p className="text-center text-[11px] text-[#A89070]">
-          18+ only · Report underage or abuse anytime · Block is private
+          Match is mutual interest · Chat unlocks when he matches back · 18+ · Report anytime
         </p>
       </div>
     </Layout>

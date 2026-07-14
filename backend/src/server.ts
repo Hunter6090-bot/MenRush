@@ -64,15 +64,21 @@ app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use('/api/premium/webhook', premiumWebhookRoutes);
 app.use(express.json());
 app.use('/api/verify', verifyRoutes);
+// Profile / message / album media. fallthrough:true so missing files hit a clean 404
+// (not 500) — Railway ephemeral disk often loses uploads without a volume.
+const uploadsRoot = path.join(__dirname, '../uploads');
 app.use(
-  '/uploads/profiles',
-  express.static(path.join(__dirname, '../uploads/profiles'), {
+  '/uploads',
+  express.static(uploadsRoot, {
     dotfiles: 'deny',
-    fallthrough: false,
+    fallthrough: true,
     immutable: true,
     maxAge: '30d',
   }),
 );
+app.use('/uploads', (_req, res) => {
+  res.status(404).json({ error: 'media_not_found' });
+});
 app.set('io', io);
 
 // Routes
