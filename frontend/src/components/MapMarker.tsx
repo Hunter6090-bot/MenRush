@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { createRoot, Root } from "react-dom/client";
+import { fallbackAvatarForAge, resolveAssetUrl } from "../lib/assetUrl";
 import { PulsingAvatar } from "./PulsingAvatar";
 import { getPhotoUrl } from "./UserAvatar";
 
@@ -40,24 +42,41 @@ export function MapMarker({ user, size = 44 }: MapMarkerProps) {
               : "0 3px 10px rgba(196,131,42,0.45)",
           }}
         >
-          {photo ? (
-            <img
-              src={photo}
-              alt={user.name}
-              className="w-full h-full object-cover"
-              draggable={false}
-            />
-          ) : (
-            <span
-              className="flex h-full w-full items-center justify-center text-sm font-extrabold uppercase text-[var(--copper)]"
-              aria-hidden
-            >
-              {user.name.trim().charAt(0) || '?'}
-            </span>
-          )}
+          <MapPhoto name={user.name} photo={photo} />
         </div>
       </PulsingAvatar>
     </div>
+  );
+}
+
+function MapPhoto({ name, photo }: { name: string; photo?: string }) {
+  const [src, setSrc] = useState(photo);
+  const [failed, setFailed] = useState(false);
+  if (!src) {
+    return (
+      <span
+        className="flex h-full w-full items-center justify-center text-sm font-extrabold uppercase text-[var(--copper)]"
+        aria-hidden
+      >
+        {name.trim().charAt(0) || "?"}
+      </span>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={name}
+      className="w-full h-full object-cover"
+      draggable={false}
+      onError={() => {
+        if (failed) {
+          setSrc(undefined);
+          return;
+        }
+        setFailed(true);
+        setSrc(resolveAssetUrl(fallbackAvatarForAge()) ?? "/avatars/generic/05.svg");
+      }}
+    />
   );
 }
 

@@ -273,6 +273,10 @@ export const userService = {
           JOIN likes l2 ON l1.liker_id = l2.liked_id AND l1.liked_id = l2.liker_id
           WHERE l1.liker_id = $2 AND l1.liked_id = $1
         ) AS is_match,
+        EXISTS (
+          SELECT 1 FROM likes l
+          WHERE l.liker_id = $2 AND l.liked_id = $1
+        ) AS is_liked,
         COALESCE(p.share_live_location_with_matches, TRUE) AS live_location_sharing,
         CASE
           WHEN EXISTS (

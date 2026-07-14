@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import type { NearbyUser } from './ProfileCard';
 import { SilhouetteAvatar } from './SilhouetteAvatar';
 import { VerifiedBadge } from './VerifiedBadge';
 import { getPhotoUrl } from './UserAvatar';
+import { fallbackAvatarForAge, resolveAssetUrl } from '../lib/assetUrl';
 import { formatActiveStatus, formatDistanceMiles, getTribeTag } from '../lib/discoveryFormat';
 
 interface NearbyProfileGridProps {
@@ -155,13 +157,12 @@ export function NearbyProfileGrid({
               aria-label={`Open profile for ${user.name}`}
             >
               <div className="relative aspect-[3/3.6] w-full bg-[var(--bg-elevated)]">
-                {photo ? (
-                  <img src={photo} alt={user.name} className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full items-center justify-center">
-                    <SilhouetteAvatar size={80} variant="card" />
-                  </div>
-                )}
+                <GridPhoto
+                  name={user.name}
+                  photoUrl={user.photo_url}
+                  age={user.age}
+                  resolved={photo}
+                />
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.92)] to-transparent px-3 pb-2.5 pt-10">
                   <div className="flex items-center gap-1.5">
                     <span
@@ -207,5 +208,47 @@ export function NearbyProfileGrid({
         );
       })}
     </div>
+  );
+}
+
+function GridPhoto({
+  name,
+  age,
+  resolved,
+}: {
+  name: string;
+  photoUrl?: string;
+  age?: number;
+  resolved?: string;
+}) {
+  const [src, setSrc] = useState(resolved);
+  const [failed, setFailed] = useState(false);
+
+  if (!src) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <SilhouetteAvatar size={80} variant="card" />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={name}
+      className="h-full w-full object-cover"
+      loading="lazy"
+      onError={() => {
+        if (failed) {
+          setSrc(undefined);
+          return;
+        }
+        setFailed(true);
+        setSrc(
+          resolveAssetUrl(fallbackAvatarForAge(age)) ??
+            resolveAssetUrl('/avatars/generic/05.svg'),
+        );
+      }}
+    />
   );
 }
