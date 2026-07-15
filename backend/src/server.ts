@@ -15,7 +15,7 @@ dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
-const io: any = new SocketIOServer(server, {
+const io = new SocketIOServer(server, {
   cors: {
     origin: process.env.FRONTEND_URL || 'http://localhost:5173',
     credentials: true,
@@ -32,6 +32,10 @@ app.set('io', io);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/messages', messageRoutes);
+
+// Add WebRTC route
+import webrtcRoutes from './routes/webrtc';
+app.use('/api/webrtc', webrtcRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -55,6 +59,7 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
+  // Existing message and typing...
   socket.on('message', (data: { receiver_id: string; message: string }) => {
     const receiverSocketId = userSockets.get(data.receiver_id);
     if (receiverSocketId) {
@@ -64,6 +69,49 @@ io.on('connection', (socket: Socket) => {
 
   socket.on('typing', (data: { receiver_id: string; typing: boolean }) => {
     io.to(`user:${data.receiver_id}`).emit('typing', { typing: data.typing });
+  });
+
+  // NEW WebRTC signalling
+  socket.on('call:initiate', (data: { to: string; offer: RTCSessionDescriptionInit }) => {
+    // Optional: check mutual match here
+    const targetSocket = userSockets.get(data.to);
+    if (targetSocket) {
+      io.to(`user:${data.to}`).emit('call:incoming', {
+        from: socket.data.userId || 'unknown',
+        fromName: 'Someone', // resolve name if needed
+        offer: data.offer
+      });
+    } else {
+      socket.emit('call:error', { error: 'target_offline' });
+    }
+  });
+
+  socket.on('call:answer', (data: { to: string; answer: RTCSessionDescriptionInit }) => {
+    const targetSocket = userSockets.get(data.to);
+    if (targetSocket) {
+      io.to(`user:${data.to}`).emit('call:answered', { answer: data.answer });
+    }
+  });
+
+  socket.on('call:ice-candidate', (data: { to: string; candidate: RTCIceCandidateInit }) => {
+    const targetSocket = userSockets.get(data.to);
+    if (targetSocket) {
+      io.to(`user:${data.to}`).emit('call:ice-candidate', { candidate: data.candidate });
+    }
+  });
+
+  socket.on('call:end', (data: { to: string }) => {
+    const targetSocket = userSockets.get(data.to);
+    if (targetSocket) {
+      io.to(`user:${data.to}`).emit('call:ended');
+    }
+  });
+
+  socket.on('call:reject', (data: { to: string }) => {
+    const targetSocket = userSockets.get(data.to);
+    if (targetSocket) {
+      io.to(`user:${data.to}`).emit('call:rejected');
+    }
   });
 
   socket.on('disconnect', () => {
