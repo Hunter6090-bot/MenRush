@@ -14,15 +14,22 @@ export const messageService = {
       [id, senderId, receiverId, sanitized]
     );
 
-    const message = result.rows[0];
-    
+    const savedMessage = result.rows[0] as {
+      id: string;
+      sender_id: string;
+      receiver_id: string;
+      message: string;
+      created_at: string;
+      sender_name?: string;
+    };
+
     // Get sender name for notification
     const senderRes = await query(`SELECT name FROM users WHERE id = $1`, [senderId]);
     if (senderRes.rows[0]) {
-      message.sender_name = senderRes.rows[0].name;
+      savedMessage.sender_name = senderRes.rows[0].name;
     }
 
-    return message;
+    return savedMessage;
   },
 
   async getConversation(userId: string, otherId: string, limit: number = 50) {
