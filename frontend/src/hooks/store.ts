@@ -70,18 +70,62 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 }));
 
+const LOCATION_STORAGE_KEY = 'menrush_last_location';
+
+function readStoredLocation(): { lat: number | null; lng: number | null } {
+  try {
+    const raw = localStorage.getItem(LOCATION_STORAGE_KEY);
+    if (!raw) return { lat: null, lng: null };
+    const parsed = JSON.parse(raw) as { lat?: unknown; lng?: unknown };
+    const lat = Number(parsed.lat);
+    const lng = Number(parsed.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return { lat: null, lng: null };
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return { lat: null, lng: null };
+    return { lat, lng };
+  } catch {
+    try {
+      localStorage.removeItem(LOCATION_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+    return { lat: null, lng: null };
+  }
+}
+
 interface LocationState {
   lat: number | null;
   lng: number | null;
   setLocation: (lat: number, lng: number) => void;
+  clearLocation: () => void;
+}
+
+const initialLocation = readStoredLocation();
+if (initialLocation.lat != null && initialLocation.lng != null) {
+  syncLocaleCoords(initialLocation.lat, initialLocation.lng);
 }
 
 export const useLocationStore = create<LocationState>((set) => ({
-  lat: null,
-  lng: null,
+  lat: initialLocation.lat,
+  lng: initialLocation.lng,
   setLocation: (lat, lng) => {
     syncLocaleCoords(lat, lng);
+    try {
+      localStorage.setItem(
+        LOCATION_STORAGE_KEY,
+        JSON.stringify({ lat, lng, at: Date.now() }),
+      );
+    } catch {
+      /* private mode / quota */
+    }
     set({ lat, lng });
+  },
+  clearLocation: () => {
+    try {
+      localStorage.removeItem(LOCATION_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+    set({ lat: null, lng: null });
   },
 }));
 
