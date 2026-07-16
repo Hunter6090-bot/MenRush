@@ -77,6 +77,8 @@ export const authAPI = {
   disableTwoFactor: (code: string) => apiClient.post('/auth/2fa/disable', { code }),
   forgotPassword: (data: { email: string }) => apiClient.post('/auth/forgot-password', data),
   resetPassword: (data: { token: string; password: string }) => apiClient.post('/auth/reset-password', data),
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    apiClient.post('/auth/change-password', data),
 };
 
 export const betaAPI = {

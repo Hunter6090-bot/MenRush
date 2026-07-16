@@ -3,7 +3,12 @@ import crypto from 'crypto';
 import { query } from '../db';
 import pool from '../db';
 import { defaultGenericAvatarUrl } from '../lib/genericAvatar';
-import { RegisterInput, LoginInput, ResetPasswordInput } from '../types/validation';
+import {
+  RegisterInput,
+  LoginInput,
+  ResetPasswordInput,
+  ChangePasswordInput,
+} from '../types/validation';
 import { sendTransactionalEmail } from './mailer.service';
 import {
   buildTransactionalEmail,
@@ -425,6 +430,37 @@ export const authService = {
       [hashedPassword, userId],
     );
     await query(`UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1`, [tokenId]);
+
+    return { ok: true };
+  },
+
+  async changePassword(userId: string, data: ChangePasswordInput) {
+    const result = await query(`SELECT password_hash FROM users WHERE id = $1`, [userId]);
+    if (result.rows.length === 0) {
+      throw new Error('User not found');
+    }
+
+    const valid = await bcryptjs.compare(data.current_password, result.rows[0].password_hash);
+    if (!valid) {
+      throw new Error('Current password is incorrect');
+    }
+
+    if (data.current_password === data.new_password) {
+      throw new Error('New password must be different from your current password');
+    }
+
+    const hashedPassword = await bcryptjs.hash(data.new_password, 10);
+    await query(
+      `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
+      [hashedPassword, userId],
+    );
+
+    // Invalidate any outstanding forgot-password tokens after a deliberate change.
+    await query(
+      `UPDATE password_reset_tokens SET used_at = NOW()
+       WHERE user_id = $1 AND used_at IS NULL`,
+      [userId],
+    );
 
     return { ok: true };
   },
