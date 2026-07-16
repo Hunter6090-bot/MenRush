@@ -11,12 +11,35 @@ function isDevTunnelOrigin(origin: string): boolean {
   }
 }
 
+const PRODUCTION_FRONTENDS = new Set([
+  'https://menrush.com',
+  'https://www.menrush.com',
+  'https://nearnow-frontend.vercel.app',
+  'https://menrush-hunter6090-bots-projects.vercel.app',
+]);
+
 export function isAllowedOrigin(origin: string | undefined): boolean {
   if (!origin) return true;
   if (LOCALHOST_ORIGIN.test(origin)) return true;
 
   const explicit = process.env.FRONTEND_URL?.replace(/\/$/, '');
   if (explicit && origin === explicit) return true;
+
+  // www / bare domain and known Vercel production aliases.
+  if (PRODUCTION_FRONTENDS.has(origin)) return true;
+  // Preview deploys: menrush-*.vercel.app
+  try {
+    const { hostname } = new URL(origin);
+    if (
+      hostname === 'menrush.com' ||
+      hostname.endsWith('.menrush.com') ||
+      (hostname.startsWith('menrush-') && hostname.endsWith('.vercel.app'))
+    ) {
+      return true;
+    }
+  } catch {
+    /* ignore */
+  }
 
   if (process.env.NODE_ENV !== 'production') {
     if (PRIVATE_LAN_ORIGIN.test(origin) || isDevTunnelOrigin(origin)) return true;
