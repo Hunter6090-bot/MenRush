@@ -37,9 +37,10 @@ The product is map-first and must feel local, immediate, and fast.
 Use `menrush` as the only technical naming convention.
 
 Do not introduce:
-- MenRush
+- NearNow
 - near&now
 - near_now
+- Near and Now
 
 ---
 

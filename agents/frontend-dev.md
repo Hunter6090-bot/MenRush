@@ -35,9 +35,10 @@ Use `menrush` in technical implementation.
 Use `MenRush` only for visible UI branding if needed.
 
 Do not introduce:
-- MenRush
+- NearNow
 - near&now
 - near_now
+- Near and Now
 
 ---
 

@@ -1,4 +1,4 @@
-# Near&Now - Complete Checklist ✅
+# MenRush - Complete Checklist ✅
 
 ## Generated Files
 
