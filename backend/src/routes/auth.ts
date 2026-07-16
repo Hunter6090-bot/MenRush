@@ -60,9 +60,12 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req: AuthRequest, 
       // Never leak mailer failures as "email not found" — log and still return ok.
       console.error('[forgot-password] send failed:', mailErr);
     }
-    res.json({
+    // Always 200 after a valid request so the UI can show success (sent or no-op).
+    res.status(200).json({
       ok: true,
-      message: 'If that email is registered, we sent a password reset link.',
+      sent: true,
+      message:
+        'If that email is on MenRush, we sent a reset link. Check your inbox and spam — valid for 1 hour.',
     });
   } catch (error: any) {
     // Validation only
