@@ -54,12 +54,18 @@ router.post('/login', authLimiter, async (req: AuthRequest, res: Response) => {
 router.post('/forgot-password', forgotPasswordLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const { email } = ForgotPasswordSchema.parse(req.body);
-    await authService.requestPasswordReset(email);
+    try {
+      await authService.requestPasswordReset(email);
+    } catch (mailErr: unknown) {
+      // Never leak mailer failures as "email not found" — log and still return ok.
+      console.error('[forgot-password] send failed:', mailErr);
+    }
     res.json({
       ok: true,
       message: 'If that email is registered, we sent a password reset link.',
     });
   } catch (error: any) {
+    // Validation only
     res.status(400).json({ error: error.message });
   }
 });
