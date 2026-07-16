@@ -7,6 +7,7 @@ import {
   LoginSchema,
   ForgotPasswordSchema,
   ResetPasswordSchema,
+  ChangePasswordSchema,
   TwoFactorCodeSchema,
   TwoFactorVerifyLoginSchema,
 } from '../types/validation';
@@ -80,6 +81,19 @@ router.post('/reset-password', authLimiter, async (req: AuthRequest, res: Respon
     res.json({ ok: true, message: 'Password updated. You can sign in now.' });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/change-password', authMiddleware, authLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const data = ChangePasswordSchema.parse(req.body);
+    await authService.changePassword(req.userId!, data);
+    res.json({ ok: true, message: 'Password updated.' });
+  } catch (error: any) {
+    const msg = error?.message || 'Could not change password';
+    const status =
+      msg === 'Current password is incorrect' || msg === 'User not found' ? 401 : 400;
+    res.status(status).json({ error: msg });
   }
 });
 

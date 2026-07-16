@@ -27,6 +27,16 @@ export const ResetPasswordSchema = z.object({
   password: z.string().min(8),
 });
 
+export const ChangePasswordSchema = z
+  .object({
+    current_password: z.string().min(1, 'Current password is required'),
+    new_password: z.string().min(8, 'New password must be at least 8 characters'),
+  })
+  .refine((data) => data.current_password !== data.new_password, {
+    message: 'New password must be different from your current password',
+    path: ['new_password'],
+  });
+
 export const TwoFactorCodeSchema = z.object({
   code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code from your authenticator app'),
 });
@@ -158,6 +168,7 @@ export type RegisterInput = z.infer<typeof RegisterSchema>;
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type ForgotPasswordInput = z.infer<typeof ForgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
+export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
 export type ProfileInput = z.infer<typeof ProfileSchema>;
 export type LocationInput = z.infer<typeof LocationSchema>;
 export type MessageInput = z.infer<typeof MessageSchema>;

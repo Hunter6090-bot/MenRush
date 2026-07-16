@@ -4,13 +4,25 @@ import { Layout } from '../components/Layout';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { TwoFactorSettings } from '../components/TwoFactorSettings';
 import { LiveLocationSharingToggle } from '../components/LiveLocationSharingToggle';
-import { profileMetaAPI, usersAPI } from '../api/client';
+import { PasswordInput } from '../components/PasswordInput';
+import { authAPI, profileMetaAPI, usersAPI } from '../api/client';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { RadiusMilesSelect } from '../components/RadiusMilesSelect';
 import { clampRadiusKm } from '../lib/discoveryFormat';
 import { ROUTE_LABELS } from '../lib/routeLabels';
 
 const RADIUS_KEY = 'menrush_default_radius_km';
+
+const fieldClass =
+  'w-full rounded-xl border border-[rgba(196,131,42,0.28)] bg-[#1A1208] px-3.5 py-2.5 text-[14px] text-[var(--cream)] placeholder:text-[#6B5340] outline-none focus:border-[var(--copper)]';
+
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <p className="mb-2 mt-5 first:mt-0 px-0.5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#8B6B42]">
+      {children}
+    </p>
+  );
+}
 
 export const Settings = () => {
   const navigate = useNavigate();
@@ -23,6 +35,14 @@ export const Settings = () => {
   const [hasPin, setHasPin] = useState<boolean | null>(null);
   const [locating, setLocating] = useState(false);
   const [locNotice, setLocNotice] = useState('');
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pwError, setPwError] = useState('');
+  const [pwSuccess, setPwSuccess] = useState('');
+  const [pwBusy, setPwBusy] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   useEffect(() => {
     profileMetaAPI
@@ -68,6 +88,45 @@ export const Settings = () => {
     setSavedRadius(clamped);
   };
 
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwError('');
+    setPwSuccess('');
+
+    if (newPassword.length < 8) {
+      setPwError('New password must be at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPwError('New passwords do not match.');
+      return;
+    }
+    if (currentPassword === newPassword) {
+      setPwError('New password must be different from your current password.');
+      return;
+    }
+
+    setPwBusy(true);
+    try {
+      await authAPI.changePassword({
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+      setPwSuccess('Password updated.');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setShowChangePassword(false);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+        'Could not change password.';
+      setPwError(msg);
+    } finally {
+      setPwBusy(false);
+    }
+  };
+
   const handleLogout = () => {
     logout();
     navigate('/login');
@@ -76,10 +135,123 @@ export const Settings = () => {
   return (
     <Layout>
       <div className="mx-auto max-w-[620px] px-6 py-6">
-        <h1 className="mb-5 text-2xl font-extrabold text-[var(--cream)]">Settings</h1>
+        <h1 className="mb-1 text-2xl font-extrabold text-[var(--cream)]">Settings</h1>
+        <p className="mb-5 text-[13px] text-[var(--cream-muted)]">
+          Account, location, and how you show up nearby.
+        </p>
 
         <div className="space-y-2.5">
-          {/* Location first when off — 8 beta users still invisible nearby. */}
+          <SectionLabel>Account</SectionLabel>
+
+          <section className="mr-card p-4" data-testid="settings-change-password">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[15px] font-bold text-[var(--cream)]">Password</p>
+                <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
+                  Change the password you use to sign in.
+                </p>
+              </div>
+              {!showChangePassword ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowChangePassword(true);
+                    setPwError('');
+                    setPwSuccess('');
+                  }}
+                  className="shrink-0 rounded-full border border-[rgba(196,131,42,0.4)] px-3.5 py-1.5 text-[12px] font-extrabold uppercase tracking-wide text-[#E0A14A] transition-colors hover:border-[var(--copper)] hover:bg-[rgba(196,131,42,0.1)]"
+                >
+                  Change
+                </button>
+              ) : null}
+            </div>
+
+            {pwSuccess && !showChangePassword ? (
+              <p className="mt-3 text-[13px] font-semibold text-[#8FC773]">{pwSuccess}</p>
+            ) : null}
+
+            {showChangePassword ? (
+              <form onSubmit={(e) => void handleChangePassword(e)} className="mt-4 space-y-3">
+                <div>
+                  <label htmlFor="settings-current-password" className="mb-1.5 block text-[12px] font-semibold text-[#A89070]">
+                    Current password
+                  </label>
+                  <PasswordInput
+                    id="settings-current-password"
+                    value={currentPassword}
+                    onChange={setCurrentPassword}
+                    autoComplete="current-password"
+                    className={fieldClass}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="settings-new-password" className="mb-1.5 block text-[12px] font-semibold text-[#A89070]">
+                    New password
+                  </label>
+                  <PasswordInput
+                    id="settings-new-password"
+                    value={newPassword}
+                    onChange={setNewPassword}
+                    autoComplete="new-password"
+                    className={fieldClass}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="settings-confirm-password" className="mb-1.5 block text-[12px] font-semibold text-[#A89070]">
+                    Confirm new password
+                  </label>
+                  <PasswordInput
+                    id="settings-confirm-password"
+                    value={confirmPassword}
+                    onChange={setConfirmPassword}
+                    autoComplete="new-password"
+                    className={fieldClass}
+                  />
+                </div>
+
+                {pwError ? (
+                  <p className="text-[13px] text-[#E0A14A]">{pwError}</p>
+                ) : null}
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button
+                    type="submit"
+                    disabled={pwBusy}
+                    className="rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] disabled:opacity-60"
+                  >
+                    {pwBusy ? 'Saving…' : 'Update password'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pwBusy}
+                    onClick={() => {
+                      setShowChangePassword(false);
+                      setCurrentPassword('');
+                      setNewPassword('');
+                      setConfirmPassword('');
+                      setPwError('');
+                    }}
+                    className="rounded-full border border-[var(--border-default)] px-4 py-2 text-[12px] font-bold text-[var(--cream-muted)] transition-colors hover:border-[#A89070] disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : null}
+          </section>
+
+          <section className="mr-card p-4">
+            <p className="text-[15px] font-bold text-[var(--cream)]">Two-factor authentication</p>
+            <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
+              Add an authenticator app on top of your password.
+            </p>
+            <div className="mt-4">
+              <TwoFactorSettings />
+            </div>
+          </section>
+
+          <SectionLabel>Location</SectionLabel>
+
           <section
             className={`mr-card p-4 ${
               hasPin === false
@@ -90,9 +262,8 @@ export const Settings = () => {
           >
             <p className="text-[15px] font-bold text-[var(--cream)]">Device location</p>
             <p className="mt-1 text-[13px] leading-relaxed text-[var(--cream-muted)]">
-              We need your GPS for Nearby. Other men see approximate distance only — not your exact
-              public pin. Exact live pin with matches is the toggle below (optional). Shared only
-              while you use the app · 18+ only.
+              Needed for Nearby. Others see approximate distance only — not your exact public pin.
+              Shared only while you use the app · 18+ only.
             </p>
             <p className="mt-2 text-[12px] font-semibold text-[#A89070]">
               Status:{' '}
@@ -102,8 +273,8 @@ export const Settings = () => {
             </p>
             {hasPin === false ? (
               <p className="mt-1 text-[12px] leading-relaxed text-[#E0A14A]">
-                Without location you cannot appear near men. You are not putting a public address on
-                a map — we need the pin privately for distance.
+                Without location you cannot appear near men. We use the pin privately for distance —
+                not as a public address on a map.
               </p>
             ) : null}
             {locNotice ? <p className="mt-1 text-[12px] text-[#E0A14A]">{locNotice}</p> : null}
@@ -118,25 +289,7 @@ export const Settings = () => {
           </section>
 
           <section className="mr-card p-4">
-            <p className="text-[15px] font-bold text-[var(--cream)]">Push notifications</p>
-            <p className="mt-1 text-[13px] text-[var(--cream-muted)]">Control alerts for messages and matches.</p>
-            <div className="mt-4">
-              <NotificationSettings />
-            </div>
-          </section>
-
-          <section className="mr-card p-4">
-            <p className="text-[15px] font-bold text-[var(--cream)]">Account security</p>
-            <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
-              Protect sign-in with an authenticator app in addition to your password.
-            </p>
-            <div className="mt-4">
-              <TwoFactorSettings />
-            </div>
-          </section>
-
-          <section className="mr-card p-4">
-            <p className="mb-3 text-[15px] font-bold text-[var(--cream)]">Live location with matches</p>
+            <p className="mb-3 text-[15px] font-bold text-[var(--cream)]">Live pin with matches</p>
             <LiveLocationSharingToggle
               enabled={sharingLiveLocation}
               onToggle={async (enabled) => {
@@ -147,6 +300,18 @@ export const Settings = () => {
                   setSharingLiveLocation((current) => !current);
                 }
               }}
+            />
+          </section>
+
+          <SectionLabel>Discovery</SectionLabel>
+
+          <section className="mr-card p-4">
+            <p className="mb-3 text-[15px] font-bold text-[var(--cream)]">Default radius</p>
+            <RadiusMilesSelect
+              valueKm={savedRadius}
+              onChange={setRadius}
+              id="settings-default-radius"
+              label="Default search radius"
             />
           </section>
 
@@ -161,14 +326,14 @@ export const Settings = () => {
             </Link>
           </section>
 
+          <SectionLabel>Notifications</SectionLabel>
+
           <section className="mr-card p-4">
-            <p className="mb-3 text-[15px] font-bold text-[var(--cream)]">Default radius</p>
-            <RadiusMilesSelect
-              valueKm={savedRadius}
-              onChange={setRadius}
-              id="settings-default-radius"
-              label="Default search radius"
-            />
+            <p className="text-[15px] font-bold text-[var(--cream)]">Push notifications</p>
+            <p className="mt-1 text-[13px] text-[var(--cream-muted)]">Control alerts for messages and matches.</p>
+            <div className="mt-4">
+              <NotificationSettings />
+            </div>
           </section>
 
           <Link
@@ -181,6 +346,8 @@ export const Settings = () => {
             </div>
             <span className="text-[13px] font-extrabold tracking-wide text-[#E0A14A]">OPEN</span>
           </Link>
+
+          <SectionLabel>More</SectionLabel>
 
           <Link
             to="/verify"
@@ -207,7 +374,7 @@ export const Settings = () => {
           <button
             type="button"
             onClick={handleLogout}
-            className="w-full rounded-[14px] border border-[var(--border-default)] py-3.5 text-[15px] font-bold text-[#B0432E] transition-colors hover:border-[#B0432E]"
+            className="mt-2 w-full rounded-[14px] border border-[var(--border-default)] py-3.5 text-[15px] font-bold text-[#B0432E] transition-colors hover:border-[#B0432E]"
           >
             Sign out
           </button>

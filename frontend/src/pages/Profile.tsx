@@ -341,6 +341,8 @@ export const Profile = () => {
           onChange={handlePhotoUpload}
           className="hidden"
           id="photo-upload"
+          aria-label="Upload profile photo"
+          title="Upload profile photo"
           disabled={uploading}
         />
 
@@ -350,6 +352,9 @@ export const Profile = () => {
           accept="image/*"
           onChange={handleCoverUpload}
           className="hidden"
+          id="cover-upload"
+          aria-label="Upload cover photo"
+          title="Upload cover photo"
           disabled={uploadingCover}
         />
 

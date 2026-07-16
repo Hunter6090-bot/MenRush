@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Settings tidy + change password | pending push | Account section, POST /auth/change-password, grouped Settings UI | Grok |
 | Mutual chat gate + Match coach (likes dead-end fix) | `246aec0` — pushed + Vercel prod | Chat only on mutual; Matched vs Open chat; first-Match coach | Grok CEO cycle 18 |
 | Sent likes hydrate + empty density teaser + real photo setup | `2593b09` — pushed + Vercel + Railway | GET /likes/sent; beyond-radius count; ProfileSetup demotes generic | Grok CEO cycle 17 |
 | Profile depth strip + Settings location first + Stream Match hydrate | `c58a6a6` — pushed + Vercel prod | ProfileDepthStrip; Settings pin Off first; ProfileCard/Stream Match state + API errors | Grok CEO cycle 16 |
