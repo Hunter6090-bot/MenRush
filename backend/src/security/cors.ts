@@ -14,7 +14,6 @@ function isDevTunnelOrigin(origin: string): boolean {
 const PRODUCTION_FRONTENDS = new Set([
   'https://menrush.com',
   'https://www.menrush.com',
-  'https://nearnow-frontend.vercel.app',
   'https://menrush-hunter6090-bots-projects.vercel.app',
 ]);
 

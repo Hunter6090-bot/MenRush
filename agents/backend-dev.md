@@ -42,9 +42,10 @@ Use:
 - `MenRush` only for user-facing branding if needed
 
 Do not introduce:
-- MenRush
+- NearNow
 - near&now
 - near_now
+- Near and Now
 
 ---
 

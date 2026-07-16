@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Near&Now - Feature Verification Script
+# MenRush - Feature Verification Script
 # Verifies: Auth, Profile Upload, Likes & Matches, Search Filters
 
 API_URL="http://localhost:3000/api"
