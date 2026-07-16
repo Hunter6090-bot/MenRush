@@ -87,12 +87,11 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
   document.head.appendChild(s);
 }
 
-const DEFAULT_DISCOVERY_CENTER: [number, number] = [51.5136, -0.1365];
 const INSECURE_GPS_NOTICE =
-  'Live location on your phone needs a secure (HTTPS) link. Open the team tunnel URL — not the plain IP address — then allow location in your browser.';
+  'Live location on your phone needs a secure (HTTPS) link. Open menrush.com (HTTPS), then allow location in your browser.';
 
 const BROWSER_GPS_DENIED_NOTICE =
-  'Allow location in your browser settings to use live discovery — you already agreed to this when you joined.';
+  'Location is blocked. Allow it in browser or phone settings, then tap Allow location. Your exact pin is not shown publicly — only approximate distance.';
 
 /** Min interval between nearby roster API calls during live GPS. */
 const NEARBY_FETCH_MIN_MS = 20_000;
@@ -116,11 +115,17 @@ export const Discover = () => {
   const [pulseIsPremium, setPulseIsPremium] = useState(false);
   const [pulseError, setPulseError] = useState('');
   const [selectedUser, setSelectedUser] = useState<NearbyUser | null>(null);
-  const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
+  const { lat, lng, setLocation } = useLocationStore();
+  /** Seed from last known pin so returning to Nearby never jumps to a fake city. */
+  const [mapCenter, setMapCenter] = useState<[number, number] | null>(() =>
+    lat != null && lng != null ? [lat, lng] : null,
+  );
   const [mapLoaded, setMapLoaded] = useState(false);
   const [locationNotice, setLocationNotice] = useState('');
-  /** True when GPS denied and no saved pin — never invent a city (was London). */
-  const [needsLocationGate, setNeedsLocationGate] = useState(false);
+  /** True when no GPS and no saved pin — never invent a city centre. */
+  const [needsLocationGate, setNeedsLocationGate] = useState(
+    () => lat == null || lng == null,
+  );
   const [activationProfile, setActivationProfile] = useState<ProfileSetupSnapshot | null>(null);
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
   const [matchToast, setMatchToast] = useState<{ name: string; id: string } | null>(null);
@@ -144,7 +149,6 @@ export const Discover = () => {
   const [mood, setMood] = useState<Mood | null>(null);
   const [moodSaving, setMoodSaving] = useState(false);
 
-  const { lat, lng, setLocation } = useLocationStore();
   const watchIdRef = useRef<number | null>(null);
   const hasFetchedRef = useRef(false);
   const savedProfileLocationRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -338,14 +342,21 @@ export const Discover = () => {
 
     usingFallbackLocationRef.current = true;
 
-    const saved = savedProfileLocationRef.current;
+    const fromProfile = savedProfileLocationRef.current;
+    const fromStore = useLocationStore.getState();
+    const saved =
+      fromProfile ??
+      (fromStore.lat != null && fromStore.lng != null
+        ? { lat: fromStore.lat, lng: fromStore.lng }
+        : null);
+
     if (saved) {
       setNeedsLocationGate(false);
       useDiscoveryLocation(
         saved.lat,
         saved.lng,
         window.isSecureContext
-          ? 'Using your last saved location.'
+          ? 'Using your last saved location — refreshing GPS…'
           : INSECURE_GPS_NOTICE,
         true,
       );
@@ -393,11 +404,15 @@ export const Discover = () => {
       .catch(() => {});
   }, [useDiscoveryLocation]);
 
-  // Render map tiles immediately while GPS resolves; saved profile / GPS recentre later.
+  // Seed Nearby from last known pin immediately (store / prior session) — never London.
   useEffect(() => {
-    if (tokenMissing) return;
-    setMapCenter((current) => current ?? DEFAULT_DISCOVERY_CENTER);
-  }, [tokenMissing]);
+    if (lat == null || lng == null) return;
+    if (hasLiveGpsRef.current) return;
+    if (hasFetchedRef.current) return;
+    savedProfileLocationRef.current = { lat, lng };
+    setNeedsLocationGate(false);
+    useDiscoveryLocation(lat, lng, '', true);
+  }, [lat, lng, useDiscoveryLocation]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && !window.isSecureContext) {
@@ -428,8 +443,26 @@ export const Discover = () => {
       );
       setError('Geolocation is not supported by your browser.');
       setLoading(false);
+      applyLocationFallback();
       return;
     }
+
+    // Fast path: accept a recent cached fix so returning to Nearby is accurate immediately.
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        trackEventOnce(
+          'location_permission_outcome',
+          { outcome: 'granted' },
+          'location_permission_outcome',
+        );
+        applyLiveGps(coords.latitude, coords.longitude, { force: true });
+      },
+      () => {
+        /* watchPosition / fallback handles permanent failures */
+      },
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
+    );
+
     watchIdRef.current = navigator.geolocation.watchPosition(
       ({ coords }) => {
         trackEventOnce(
@@ -437,8 +470,7 @@ export const Discover = () => {
           { outcome: 'granted' },
           'location_permission_outcome',
         );
-        const { latitude, longitude } = coords;
-        applyLiveGps(latitude, longitude);
+        applyLiveGps(coords.latitude, coords.longitude);
       },
       (positionError) => {
         const denied = positionError.code === positionError.PERMISSION_DENIED;
@@ -452,15 +484,16 @@ export const Discover = () => {
         if (denied && window.isSecureContext) {
           setLocationNotice(BROWSER_GPS_DENIED_NOTICE);
         }
+        // Have a last pin? Keep map on it; only gate when we have nothing.
         if (!hasFetchedRef.current && !hasLiveGpsRef.current) {
           if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
           fallbackTimerRef.current = window.setTimeout(() => {
             applyLocationFallback();
-          }, window.isSecureContext ? 8000 : 2500);
+          }, window.isSecureContext ? 4000 : 2500);
         }
         setError('');
       },
-      { enableHighAccuracy: true, timeout: 12000 },
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 15_000 },
     );
     return () => {
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
@@ -598,10 +631,11 @@ export const Discover = () => {
 
   useEffect(() => {
     if (tokenMissing || !mapContainerRef.current) return;
-
     if (mapRef.current) return;
+    // Never open Mapbox on a fake city. Wait for last-known or live GPS.
+    if (mapCenter == null) return;
 
-    const startCenter = mapCenter ?? DEFAULT_DISCOVERY_CENTER;
+    const startCenter = mapCenter;
     mapboxgl.accessToken = mapboxToken!;
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
@@ -613,7 +647,7 @@ export const Discover = () => {
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
     map.addControl(
       new mapboxgl.GeolocateControl({
-        positionOptions: { enableHighAccuracy: true },
+        positionOptions: { enableHighAccuracy: true, maximumAge: 15_000 },
         trackUserLocation: false,
         showUserHeading: false,
       }),
@@ -652,8 +686,9 @@ export const Discover = () => {
       selfDotRef.current = null;
       setMapLoaded(false);
     };
-    // mapCenter excluded — GPS updates recenter via applyLiveGps/easeTo, not map teardown.
-  }, [mapboxToken, tokenMissing, isDesktopLayout]);
+    // Depend on "has center" not every GPS tick — later moves use easeTo in applyLiveGps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mapCenter coords intentionally excluded
+  }, [mapboxToken, tokenMissing, isDesktopLayout, mapCenter != null]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -943,12 +978,12 @@ export const Discover = () => {
           data-testid="location-gate"
         >
           <p id="location-gate-title" className="text-[17px] font-extrabold text-[#F0E0C0]">
-            We need your location to unlock Nearby
+            Allow location to unlock Nearby
           </p>
           <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[#A89070]">
-            Others do not see your exact pin publicly — only approximate distance. We need GPS so
-            the map is real men near you, never a fake city. Shared only while you use the app ·
-            18+ only.
+            We need your device location to show men near you. Your exact pin is not shown to others
+            — they only see approximate distance. You can adjust your search radius once location is
+            on. Shared only while you use the app · 18+ only.
           </p>
           <button
             type="button"
@@ -1100,7 +1135,7 @@ export const Discover = () => {
                 data-testid="enable-location"
                 className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[var(--copper)]/15 px-2.5 py-1 text-[11px] font-bold text-[var(--copper)] transition-colors hover:bg-[var(--copper)]/25"
               >
-                {locationNotice === 'Using your last saved location.' ||
+                {locationNotice.startsWith('Using your last saved location') ||
                 locationNotice === INSECURE_GPS_NOTICE
                   ? 'Refresh location'
                   : 'Allow in browser'}
@@ -1130,14 +1165,33 @@ export const Discover = () => {
             ) : null}
 
             {!tokenMissing && !mapCenter ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0D0A06]/80 backdrop-blur-sm">
-                <div className="relative flex h-14 w-14 items-center justify-center">
-                  <span className="absolute inset-0 animate-pulse-ring rounded-full bg-[var(--copper)]/20" />
-                  <span className="relative z-10 h-5 w-5 rounded-full border-2 border-[var(--cream)] bg-[var(--copper)]" />
-                </div>
-                <p className="mt-3 text-xs font-medium uppercase tracking-widest text-[var(--cream-muted)]">
-                  {error || 'Finding nearby matches'}
-                </p>
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0D0A06]/90 px-5 text-center backdrop-blur-sm">
+                {needsLocationGate ? (
+                  <>
+                    <p className="text-sm font-extrabold text-[var(--cream)]">Location required</p>
+                    <p className="mt-2 max-w-xs text-xs leading-relaxed text-[var(--cream-muted)]">
+                      Grant location permission to load the map around you — not a default city.
+                      Others only see approximate distance.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleEnableLocation}
+                      className="mt-4 rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03]"
+                    >
+                      Allow location
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="relative flex h-14 w-14 items-center justify-center">
+                      <span className="absolute inset-0 animate-pulse-ring rounded-full bg-[var(--copper)]/20" />
+                      <span className="relative z-10 h-5 w-5 rounded-full border-2 border-[var(--cream)] bg-[var(--copper)]" />
+                    </div>
+                    <p className="mt-3 text-xs font-medium uppercase tracking-widest text-[var(--cream-muted)]">
+                      {error || 'Getting your location…'}
+                    </p>
+                  </>
+                )}
               </div>
             ) : null}
 

@@ -36,14 +36,29 @@ export function MatchesLiveMap({
   const token = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
   const tokenMissing = !token || token === '__SET_ME__';
 
+  const canInitMap =
+    (selfLat != null && selfLng != null && Number.isFinite(selfLat) && Number.isFinite(selfLng)) ||
+    matches.some((m) => Number.isFinite(m.lat) && Number.isFinite(m.lng));
+
   useEffect(() => {
-    if (tokenMissing || !containerRef.current || mapRef.current) return;
+    if (tokenMissing || !containerRef.current || mapRef.current || !canInitMap) return;
+
+    const startLng =
+      selfLng != null && Number.isFinite(selfLng)
+        ? selfLng
+        : matches.find((m) => Number.isFinite(m.lng))?.lng;
+    const startLat =
+      selfLat != null && Number.isFinite(selfLat)
+        ? selfLat
+        : matches.find((m) => Number.isFinite(m.lat))?.lat;
+    // Never invent a city centre — wait until we have a real pin.
+    if (startLng == null || startLat == null) return;
 
     mapboxgl.accessToken = token;
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: 'mapbox://styles/mapbox/dark-v11',
-      center: [selfLng ?? -0.1365, selfLat ?? 51.5136],
+      center: [startLng, startLat],
       zoom: 12,
       attributionControl: false,
     });
@@ -62,7 +77,8 @@ export function MatchesLiveMap({
       mapRef.current = null;
       setMapReady(false);
     };
-  }, [token, tokenMissing, selfLat, selfLng]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only create when we first have real coords
+  }, [token, tokenMissing, canInitMap]);
 
   useEffect(() => {
     const map = mapRef.current;
