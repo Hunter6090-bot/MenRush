@@ -97,8 +97,8 @@ export const ForgotPassword = () => {
                 <p className="mt-1.5 text-[#F0E0C0]/90">{SUCCESS_COPY}</p>
                 <p className="mt-3 text-[12px] text-[#A89070]">
                   Didn&apos;t get it? Wait a minute, check spam, then try again — or email{' '}
-                  <a href="mailto:hello@menrush.com" className="font-semibold text-[#C4832A]">
-                    hello@menrush.com
+                  <a href="mailto:support@menrush.com" className="font-semibold text-[#C4832A]">
+                    support@menrush.com
                   </a>
                   .
                 </p>
