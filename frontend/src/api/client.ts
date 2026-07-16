@@ -1,7 +1,19 @@
 import axios from 'axios';
 import { useAuthStore } from '../hooks/store';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+/** Strip whitespace and accidental literal "\\n" from Vercel env paste mistakes. */
+function sanitizeEnvUrl(raw: unknown, fallback = ''): string {
+  if (typeof raw !== 'string') return fallback;
+  let s = raw.trim();
+  // Env values sometimes contain the two-char sequence \n from bad CLI/dashboard paste.
+  while (s.endsWith('\\n') || s.endsWith('\\r')) {
+    s = s.slice(0, -2).trimEnd();
+  }
+  s = s.replace(/[\r\n]+/g, '').trim();
+  return s || fallback;
+}
+
+const API_BASE_URL = sanitizeEnvUrl(import.meta.env.VITE_API_URL, '/api').replace(/\/$/, '') || '/api';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -501,10 +513,9 @@ export const aiAPI = {
 export { apiClient };
 
 function resolveSocketUrl(): string {
-  if (import.meta.env.VITE_SOCKET_URL) {
-    return import.meta.env.VITE_SOCKET_URL;
-  }
-  const apiUrl = import.meta.env.VITE_API_URL;
+  const socket = sanitizeEnvUrl(import.meta.env.VITE_SOCKET_URL);
+  if (socket) return socket.replace(/\/$/, '');
+  const apiUrl = sanitizeEnvUrl(import.meta.env.VITE_API_URL);
   if (apiUrl && /^https?:\/\//.test(apiUrl)) {
     return apiUrl.replace(/\/api\/?$/, '');
   }
