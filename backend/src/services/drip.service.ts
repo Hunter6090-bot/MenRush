@@ -54,7 +54,7 @@ export const DRIP_SCHEDULE: readonly DripStep[] = [
     key: 'mr-d00-welcome',
     dayOffset: 0,
     filename: 'welcome-email.html',
-    subject: "You're in. 30 days of Premium on us.",
+    subject: 'Welcome to MenRush — beta is live',
   },
   {
     key: 'mr-d02-why-building',
