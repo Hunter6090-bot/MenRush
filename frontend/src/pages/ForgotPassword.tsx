@@ -95,7 +95,7 @@ export const ForgotPassword = () => {
               >
                 <p className="font-extrabold text-[#8FC773]">Reset email sent</p>
                 <p className="mt-1.5 text-[#F0E0C0]/90">{SUCCESS_COPY}</p>
-                <p className="mt-3 text-[12px] text-[#A89070]">
+                <p className="mt-3 text-[12px] text-[var(--cream-muted)]">
                   Didn&apos;t get it? Wait a minute, check spam, then try again — or email{' '}
                   <a href="mailto:support@menrush.com" className="font-semibold text-[#C4832A]">
                     support@menrush.com
@@ -108,7 +108,7 @@ export const ForgotPassword = () => {
             {!success ? (
               <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[#A89070]">
+                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[var(--cream-muted)]">
                     Email
                   </label>
                   <input
@@ -118,7 +118,7 @@ export const ForgotPassword = () => {
                     placeholder="you@example.com"
                     required
                     autoComplete="email"
-                    className="w-full rounded-2xl border border-[#3D2B0E] bg-[#1E1508]/40 px-4 py-3.5 text-sm text-[#F0E0C0] placeholder:text-[#A89070]/50 focus:border-[#C4832A]/60 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/25"
+                    className="w-full rounded-2xl border border-[#3D2B0E] bg-[#1E1508]/40 px-4 py-3.5 text-sm text-[#F0E0C0] placeholder:text-[var(--cream-muted)]/50 focus:border-[#C4832A]/60 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/25"
                   />
                 </div>
 
@@ -149,7 +149,7 @@ export const ForgotPassword = () => {
               </button>
             )}
 
-            <p className="mt-5 text-sm text-[#A89070]">
+            <p className="mt-5 text-sm text-[var(--cream-muted)]">
               Remembered it?{' '}
               <Link
                 to="/login"

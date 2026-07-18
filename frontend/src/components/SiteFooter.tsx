@@ -15,7 +15,7 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ className = '' }) => {
       role="contentinfo"
     >
       <nav
-        className="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-x-[34px] gap-y-[18px] text-[13px] font-semibold uppercase tracking-[0.18em] text-[#A89070]"
+        className="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-x-[34px] gap-y-[18px] text-[13px] font-semibold uppercase tracking-[0.18em] text-[var(--cream-muted)]"
         aria-label="Site links"
       >
         <Link to="/contact" className="transition-colors hover:text-[#c8861c]">

@@ -82,9 +82,9 @@ export const ToastNotifications = () => {
               {toast.message}
             </p>
             {toast.body && (
-              <p className="text-xs text-[#A89070] mt-1 line-clamp-2">{toast.body}</p>
+              <p className="text-xs text-[var(--cream-muted)] mt-1 line-clamp-2">{toast.body}</p>
             )}
-            <p className="text-[10px] text-[#A89070] mt-1 uppercase tracking-wider font-semibold">
+            <p className="text-[10px] text-[var(--cream-muted)] mt-1 uppercase tracking-wider font-semibold">
               Tap to open
             </p>
           </div>
@@ -94,7 +94,7 @@ export const ToastNotifications = () => {
               e.stopPropagation();
               setActiveToasts((current) => current.filter((at) => at.id !== toast.id));
             }}
-            className="text-[#A89070]/40 hover:text-[#A89070] transition-colors p-1"
+            className="text-[var(--cream-muted)]/40 hover:text-[var(--cream-muted)] transition-colors p-1"
             aria-label="Dismiss alert preview"
           >
             <CloseIcon className="w-4 h-4" />

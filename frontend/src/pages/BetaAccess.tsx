@@ -109,7 +109,7 @@ export const BetaAccess = () => {
 
           {error ? <p className={publicErrorClass}>{error}</p> : null}
 
-          <p className="m-0 text-sm leading-[1.55] text-[#A89070]">
+          <p className="m-0 text-sm leading-[1.55] text-[var(--cream-muted)]">
             Codes are single-use and tied to selected waitlist members. No code?{' '}
             <Link to="/coming-soon#waitlist" className={publicLinkClass}>
               Join the waitlist
@@ -127,7 +127,7 @@ export const BetaAccess = () => {
             )}
           </button>
 
-          <p className="m-0 text-center text-[15px] text-[#A89070]">
+          <p className="m-0 text-center text-[15px] text-[var(--cream-muted)]">
             Already have an account?{' '}
             <Link to="/login" className={publicLinkClass}>
               Sign in

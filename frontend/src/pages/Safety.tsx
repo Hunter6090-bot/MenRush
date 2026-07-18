@@ -26,7 +26,7 @@ export const Safety = () => {
     <div className="flex min-h-dvh flex-col bg-[#0a0805] text-[#F0E0C0]">
       <main className="flex-1 px-5 py-8 sm:px-8 sm:py-12">
         <div className="mx-auto w-full max-w-4xl">
-          <Link to="/" className="text-xs font-bold uppercase tracking-[0.18em] text-[#A89070] hover:text-[#C4832A]">
+          <Link to="/" className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)] hover:text-[#C4832A]">
             Back
           </Link>
           <header className="mt-8 grid gap-8 rounded-2xl border border-[#3D2B0E] bg-[#1A1410] p-6 sm:p-8 md:grid-cols-[1fr_180px] md:items-center">
@@ -46,7 +46,7 @@ export const Safety = () => {
             {safetyRules.map((item) => (
               <article key={item.title} className="rounded-2xl border border-[#3D2B0E] bg-[#120D08] p-5">
                 <h2 className="text-lg font-bold text-[#F0E0C0]">{item.title}</h2>
-                <p className="mt-2 text-sm leading-6 text-[#A89070]">{item.body}</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--cream-muted)]">{item.body}</p>
               </article>
             ))}
           </section>

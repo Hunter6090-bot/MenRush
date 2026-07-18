@@ -90,7 +90,7 @@ export function CoverPhotoEditor({
       >
         <div className="px-5 pt-5 pb-3 border-b border-[#3D2B0E]">
           <h2 className="text-lg font-bold text-[#F0E0C0]">Adjust cover photo</h2>
-          <p className="text-xs text-[#A89070] mt-1">
+          <p className="text-xs text-[var(--cream-muted)] mt-1">
             Drag to move · use the slider to zoom in or out
           </p>
         </div>
@@ -137,7 +137,7 @@ export function CoverPhotoEditor({
               type="button"
               aria-label="Reset cover framing"
               onClick={() => setFrame(DEFAULT_COVER_FRAME)}
-              className="h-10 rounded-xl border border-[#3D2B0E] text-[10px] font-bold uppercase tracking-wide text-[#A89070] hover:border-[#C4832A]/40"
+              className="h-10 rounded-xl border border-[#3D2B0E] text-[10px] font-bold uppercase tracking-wide text-[var(--cream-muted)] hover:border-[#C4832A]/40"
             >
               Reset
             </button>
@@ -162,7 +162,7 @@ export function CoverPhotoEditor({
           </div>
 
           <label className="block">
-            <div className="flex items-center justify-between text-xs text-[#A89070] mb-2">
+            <div className="flex items-center justify-between text-xs text-[var(--cream-muted)] mb-2">
               <span>Zoom</span>
               <span>{frame.zoom.toFixed(1)}×</span>
             </div>

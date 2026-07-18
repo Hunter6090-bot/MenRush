@@ -273,7 +273,7 @@ export function IdCaptureModal({
         <button
           type="button"
           onClick={() => onCloseRef.current()}
-          className="text-sm font-semibold text-[#A89070] hover:text-[#C4832A]"
+          className="text-sm font-semibold text-[var(--cream-muted)] hover:text-[#C4832A]"
         >
           Cancel
         </button>
@@ -297,7 +297,7 @@ export function IdCaptureModal({
               />
               <DocumentScannerOverlay mode="document" template={template} aligned={qualityOk} />
               {!ready && (
-                <div className="absolute inset-0 flex items-center justify-center text-sm text-[#A89070]">
+                <div className="absolute inset-0 flex items-center justify-center text-sm text-[var(--cream-muted)]">
                   Initialising scanner…
                 </div>
               )}
@@ -324,7 +324,7 @@ export function IdCaptureModal({
       </div>
 
       <div className="border-t border-[#3D2B0E]/80 bg-[#0D0A06] px-4 py-4">
-        <p className="mb-3 text-center text-xs leading-relaxed text-[#A89070]">
+        <p className="mb-3 text-center text-xs leading-relaxed text-[var(--cream-muted)]">
           {phase === 'preview'
             ? precheckPhase === 'checking'
               ? 'Quick quality check running — you can confirm now if the photo looks clear.'
@@ -337,7 +337,7 @@ export function IdCaptureModal({
         {phase === 'preview' ? (
           <div className="mb-4">
             {precheckPhase === 'checking' ? (
-              <div className="flex items-center justify-center gap-2 py-2 text-xs text-[#A89070]">
+              <div className="flex items-center justify-center gap-2 py-2 text-xs text-[var(--cream-muted)]">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#3D2B0E] border-t-[#C4832A]" />
                 Running ID acceptability checks…
               </div>
@@ -361,7 +361,7 @@ export function IdCaptureModal({
                       <span>
                         <span className="font-semibold text-[#F0E0C0]">{check.label}</span>
                         {check.detail ? (
-                          <span className="text-[#A89070]"> — {check.detail}</span>
+                          <span className="text-[var(--cream-muted)]"> — {check.detail}</span>
                         ) : null}
                       </span>
                     </li>

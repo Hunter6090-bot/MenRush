@@ -294,7 +294,7 @@ export const Matches = () => {
                 Hot Spots
               </Link>
             </div>
-            <p className="mt-5 text-[11px] font-medium tracking-wide text-[#A89070]">
+            <p className="mt-5 text-[11px] font-medium tracking-wide text-[var(--cream-muted)]">
               · Report underage or abuse anytime
             </p>
           </div>

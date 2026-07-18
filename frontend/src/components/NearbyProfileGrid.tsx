@@ -125,11 +125,10 @@ export function NearbyProfileGrid({
             </button>
           ) : null}
         </div>
-        <p className="mt-3 text-[12px] text-[#A89070]">
-          Pulse puts you first nearby for 90 minutes. Hot Spots show live venues — be intentional,
-         
+        <p className="mt-3 text-[13px] text-[var(--cream-muted)]">
+          Pulse puts you first nearby for 90 minutes. Hot Spots show live venues nearby.
         </p>
-        <p className="mt-2 text-[11px] font-medium tracking-wide text-[#A89070]">
+        <p className="mt-2 text-[12px] font-medium tracking-wide text-[var(--text-secondary)]">
           Consent first · Report anytime
         </p>
       </div>

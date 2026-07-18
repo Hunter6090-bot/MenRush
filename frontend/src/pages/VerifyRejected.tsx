@@ -66,7 +66,7 @@ export const VerifyRejected: React.FC = () => {
 
       <div className={publicPanelClass}>
         {reason ? (
-          <p className="m-0 text-center font-mono text-[11px] text-[#A89070]/70">code: {reason}</p>
+          <p className="m-0 text-center font-mono text-[11px] text-[var(--cream-muted)]/70">code: {reason}</p>
         ) : null}
 
         {!FEATURES.requireIdVerification ? (

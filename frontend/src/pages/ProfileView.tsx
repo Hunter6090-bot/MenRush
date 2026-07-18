@@ -223,7 +223,7 @@ export const ProfileView = () => {
             </div>
             <h2 className="text-xl font-bold text-[#F0E0C0]">{user.name}</h2>
             {typeof user.age === 'number' && (
-              <p className="text-[#A89070] text-sm mt-0.5">Age {user.age}</p>
+              <p className="text-[var(--cream-muted)] text-sm mt-0.5">Age {user.age}</p>
             )}
             {user.headline && (
               <p className="text-[#F0E0C0]/80 text-sm mt-3 italic">{user.headline}</p>
@@ -232,7 +232,7 @@ export const ProfileView = () => {
               <p className="text-[#F0E0C0]/65 text-sm mt-3 leading-relaxed">{user.bio}</p>
             )}
             {user.looking_for && (
-              <p className="text-[#A89070] text-xs mt-3">
+              <p className="text-[var(--cream-muted)] text-xs mt-3">
                 <span className="uppercase tracking-wide font-semibold">Looking for:</span>{' '}
                 <span className="text-[#F0E0C0]/80">{user.looking_for}</span>
               </p>
@@ -284,13 +284,13 @@ export const ProfileView = () => {
             className={`flex-1 min-w-[5.5rem] py-3 rounded-xl font-bold text-sm transition-all ${
               mutual
                 ? 'border border-[#C4832A]/40 text-[#C4832A] hover:bg-[rgba(196,131,42,0.12)]'
-                : 'border border-[#3D2B0E] text-[#A89070] hover:border-[#C4832A]/40 hover:text-[#C4832A]'
+                : 'border border-[#3D2B0E] text-[var(--cream-muted)] hover:border-[#C4832A]/40 hover:text-[#C4832A]'
             }`}
           >
             Message
           </button>
         </div>
-        <p className="text-center text-[11px] text-[#A89070]">
+        <p className="text-center text-[11px] text-[var(--cream-muted)]">
           Match is mutual interest · Chat unlocks when he matches back · Report anytime
         </p>
       </div>

@@ -125,7 +125,7 @@ export function LocationPresenceStrip() {
       <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-extrabold text-[#F0E0C0]">Turn on location for Nearby</p>
-          <p className="text-[11px] leading-relaxed text-[#A89070]">
+          <p className="text-[11px] leading-relaxed text-[var(--cream-muted)]">
             {LOCATION_PRIVACY_LINE}
           </p>
           {notice ? (

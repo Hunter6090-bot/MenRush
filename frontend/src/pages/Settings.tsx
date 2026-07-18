@@ -191,7 +191,7 @@ export const Settings = () => {
             {showChangePassword ? (
               <form onSubmit={(e) => void handleChangePassword(e)} className="mt-4 space-y-3">
                 <div>
-                  <label htmlFor="settings-current-password" className="mb-1.5 block text-[12px] font-semibold text-[#A89070]">
+                  <label htmlFor="settings-current-password" className="mb-1.5 block text-[12px] font-semibold text-[var(--cream-muted)]">
                     Current password
                   </label>
                   <PasswordInput
@@ -203,7 +203,7 @@ export const Settings = () => {
                   />
                 </div>
                 <div>
-                  <label htmlFor="settings-new-password" className="mb-1.5 block text-[12px] font-semibold text-[#A89070]">
+                  <label htmlFor="settings-new-password" className="mb-1.5 block text-[12px] font-semibold text-[var(--cream-muted)]">
                     New password
                   </label>
                   <PasswordInput
@@ -215,7 +215,7 @@ export const Settings = () => {
                   />
                 </div>
                 <div>
-                  <label htmlFor="settings-confirm-password" className="mb-1.5 block text-[12px] font-semibold text-[#A89070]">
+                  <label htmlFor="settings-confirm-password" className="mb-1.5 block text-[12px] font-semibold text-[var(--cream-muted)]">
                     Confirm new password
                   </label>
                   <PasswordInput
@@ -322,7 +322,7 @@ export const Settings = () => {
             <p className="mt-1 text-[13px] leading-relaxed text-[var(--cream-muted)]">
               Needed for Nearby. Others see approximate distance only — not your exact public pin.
             </p>
-            <p className="mt-2 text-[12px] font-semibold text-[#A89070]">
+            <p className="mt-2 text-[12px] font-semibold text-[var(--cream-muted)]">
               Status:{' '}
               <span className={hasPin ? 'text-[#8FC773]' : 'text-[#E0A14A]'}>
                 {hasPin == null

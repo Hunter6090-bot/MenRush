@@ -74,7 +74,7 @@ function ParticipantTile({
 
       {!participant.isLive && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/45">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[#A89070]">Away</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--cream-muted)]">Away</span>
         </div>
       )}
 
@@ -119,7 +119,7 @@ export function RoomGalleryGrid({
       <div className="flex h-full items-center justify-center px-6 text-center">
         <div>
           <p className="text-sm font-semibold text-[#F0E0C0]">Waiting for people to join</p>
-          <p className="mt-1 text-xs text-[#A89070]">Share the room — members appear here in the gallery.</p>
+          <p className="mt-1 text-xs text-[var(--cream-muted)]">Share the room — members appear here in the gallery.</p>
         </div>
       </div>
     );

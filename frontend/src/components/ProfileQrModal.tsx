@@ -101,7 +101,7 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-2 py-1 text-xs font-semibold text-[#A89070]"
+            className="rounded-lg px-2 py-1 text-xs font-semibold text-[var(--cream-muted)]"
           >
             Close
           </button>
@@ -112,7 +112,7 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
         </div>
 
         <p
-          className="shrink-0 px-4 py-3 text-center text-xs leading-relaxed text-[#A89070]"
+          className="shrink-0 px-4 py-3 text-center text-xs leading-relaxed text-[var(--cream-muted)]"
           style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
         >
           Line up the QR code inside the frame. Scanning stops automatically when a profile is found.
@@ -141,7 +141,7 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-2 py-1 text-xs font-semibold text-[#A89070] hover:text-[#F0E0C0]"
+            className="rounded-lg px-2 py-1 text-xs font-semibold text-[var(--cream-muted)] hover:text-[#F0E0C0]"
           >
             Close
           </button>
@@ -149,18 +149,18 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
 
         <div className="space-y-5 p-5">
           <div className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-4 text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#A89070]">Your code</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--cream-muted)]">Your code</p>
             <p className="mt-1 text-sm font-bold text-[#F0E0C0]">{user?.name ?? 'Your profile'}</p>
             {shareUrl ? (
               <div className="mx-auto mt-4 inline-flex rounded-2xl bg-white p-3">
                 <QRCodeSVG value={shareUrl} size={168} level="M" includeMargin={false} />
               </div>
             ) : (
-              <p className="mt-4 text-sm text-[#A89070]">Sign in to show your QR code.</p>
+              <p className="mt-4 text-sm text-[var(--cream-muted)]">Sign in to show your QR code.</p>
             )}
             {shareUrl && (
               <>
-                <p className="mt-3 break-all text-[11px] leading-relaxed text-[#A89070]">{shareUrl}</p>
+                <p className="mt-3 break-all text-[11px] leading-relaxed text-[var(--cream-muted)]">{shareUrl}</p>
                 <button
                   type="button"
                   onClick={handleCopy}
@@ -174,7 +174,7 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
 
           <div className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-4">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#A89070]">Open a profile</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--cream-muted)]">Open a profile</p>
               <button
                 type="button"
                 onClick={() => setScanning(true)}
@@ -184,7 +184,7 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
                 Scan QR
               </button>
             </div>
-            <p className="mt-2 text-xs leading-relaxed text-[#A89070]">
+            <p className="mt-2 text-xs leading-relaxed text-[var(--cream-muted)]">
               Paste a MenRush profile link or profile ID.
             </p>
             <input
@@ -192,7 +192,7 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
               value={pasteValue}
               onChange={(event) => setPasteValue(event.target.value)}
               placeholder="Profile link or ID"
-              className="mt-3 w-full rounded-xl border border-[#3D2B0E] bg-[#0D0A06] px-3 py-2.5 text-sm text-[#F0E0C0] placeholder:text-[#A89070]/70 focus:border-[#C4832A]/50 focus:outline-none"
+              className="mt-3 w-full rounded-xl border border-[#3D2B0E] bg-[#0D0A06] px-3 py-2.5 text-sm text-[#F0E0C0] placeholder:text-[var(--cream-muted)]/70 focus:border-[#C4832A]/50 focus:outline-none"
             />
             <button
               type="button"

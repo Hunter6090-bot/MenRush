@@ -88,8 +88,8 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
           isSidebar
             ? isActive
               ? 'text-[var(--copper)]/70'
-              : 'text-[#A89070]/30 group-hover:text-[#C4832A]/50'
-            : 'text-[#A89070]/40 group-hover:text-[#C4832A]/60'
+              : 'text-[var(--cream-muted)]/30 group-hover:text-[#C4832A]/50'
+            : 'text-[var(--cream-muted)]/40 group-hover:text-[#C4832A]/60'
         }`}
       />
       </button>

@@ -150,7 +150,7 @@ export const Register = () => {
     }
   };
 
-  const helperClass = 'text-[13px] leading-[1.55] text-[#A89070]';
+  const helperClass = 'text-[13px] leading-[1.55] text-[var(--cream-muted)]';
 
   const segColor = (idx: number): string => {
     if (pwScore <= idx) return '#3D2B0E';
@@ -243,7 +243,7 @@ export const Register = () => {
             </div>
           </div>
 
-          <label className="flex cursor-pointer items-start gap-2.5 text-[13px] leading-snug text-[#A89070]">
+          <label className="flex cursor-pointer items-start gap-2.5 text-[13px] leading-snug text-[var(--cream-muted)]">
             <input
               type="checkbox"
               checked={form.ageConsent}
@@ -255,7 +255,7 @@ export const Register = () => {
           </label>
 
           {FEATURES.requireIdVerification ? (
-            <label className="flex cursor-pointer items-start gap-2.5 text-[13px] leading-snug text-[#A89070]">
+            <label className="flex cursor-pointer items-start gap-2.5 text-[13px] leading-snug text-[var(--cream-muted)]">
               <input
                 type="checkbox"
                 checked={form.idConsent}
@@ -270,7 +270,7 @@ export const Register = () => {
             </label>
           ) : null}
 
-          <label className="flex cursor-pointer items-start gap-2.5 text-[13px] leading-snug text-[#A89070]">
+          <label className="flex cursor-pointer items-start gap-2.5 text-[13px] leading-snug text-[var(--cream-muted)]">
             <input
               type="checkbox"
               checked={form.legalConsent}
@@ -307,7 +307,7 @@ export const Register = () => {
             )}
           </button>
 
-          <p className="m-0 text-center text-[15px] text-[#A89070]">
+          <p className="m-0 text-center text-[15px] text-[var(--cream-muted)]">
             Already have an account?{' '}
             <Link to="/login" className={publicLinkClass}>
               Sign in

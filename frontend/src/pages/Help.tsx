@@ -33,7 +33,7 @@ export const Help = () => {
     <div className="flex min-h-dvh flex-col bg-[#0a0805] text-[#F0E0C0]">
       <main className="flex-1 px-5 py-8 sm:px-8 sm:py-12">
         <div className="mx-auto w-full max-w-3xl">
-          <Link to="/" className="text-xs font-bold uppercase tracking-[0.18em] text-[#A89070] hover:text-[#C4832A]">
+          <Link to="/" className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)] hover:text-[#C4832A]">
             Back
           </Link>
           <header className="mt-8">
@@ -44,7 +44,7 @@ export const Help = () => {
             {faqs.map((item) => (
               <section key={item.q} className="p-5">
                 <h2 className="text-base font-bold">{item.q}</h2>
-                <p className="mt-2 text-sm leading-6 text-[#A89070]">{item.a}</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--cream-muted)]">{item.a}</p>
               </section>
             ))}
           </div>

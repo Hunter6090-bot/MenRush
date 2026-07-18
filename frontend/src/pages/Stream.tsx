@@ -158,7 +158,7 @@ export const Stream = () => {
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#C4832A]">Live view</p>
             <h1 className="text-2xl font-bold text-[#F0E0C0]">{ROUTE_LABELS.liveProfileList}</h1>
-            <p className="text-sm text-[#A89070] mt-1">
+            <p className="text-sm text-[var(--cream-muted)] mt-1">
               Who is around right now — list view.
             </p>
           </div>
@@ -184,7 +184,7 @@ export const Stream = () => {
             <p id="stream-location-title" className="text-[17px] font-extrabold text-[#F0E0C0]">
               We need your location for the live list
             </p>
-            <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[#A89070]">
+            <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--cream-muted)]">
               {error ||
                 'Others see approximate distance only — not your exact public pin. We need GPS so the list is real men near you. Shared only while you use the app.'}
             </p>
@@ -195,7 +195,7 @@ export const Stream = () => {
             >
               Allow location
             </button>
-            <p className="mt-4 text-[11px] text-[#A89070]">Consent first · Report anytime</p>
+            <p className="mt-4 text-[11px] text-[var(--cream-muted)]">Consent first · Report anytime</p>
           </div>
         ) : error ? (
           <div className="rounded-2xl border border-[#A45E18]/40 bg-[#1E1508] p-5 text-sm text-[#F0E0C0]">
@@ -207,7 +207,7 @@ export const Stream = () => {
             data-testid="stream-empty"
           >
             <p className="text-[16px] font-extrabold text-[#F0E0C0]">No one nearby yet</p>
-            <p className="mx-auto mt-2 max-w-sm text-[13px] text-[#A89070]">
+            <p className="mx-auto mt-2 max-w-sm text-[13px] text-[var(--cream-muted)]">
               Expand radius on the map, start Pulse, or check Hot Spots for live venues.
             </p>
             <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
@@ -224,7 +224,7 @@ export const Stream = () => {
                 Hot Spots
               </Link>
             </div>
-            <p className="mt-4 text-[11px] text-[#A89070]">Be direct</p>
+            <p className="mt-4 text-[11px] text-[var(--cream-muted)]">Be direct</p>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
