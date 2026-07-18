@@ -1,7 +1,8 @@
 import { SVGProps } from 'react';
 
 /**
- * Hot Spots — pin + venue pulse (distinct from Events calendar plaque).
+ * MenRush — Hot Spots icon
+ * Cruise ship — venue / social hotspot (distinct from Events calendar).
  */
 export function IconHotSpots({ size = 24, ...props }: SVGProps<SVGSVGElement> & { size?: number }) {
   return (
@@ -17,8 +18,20 @@ export function IconHotSpots({ size = 24, ...props }: SVGProps<SVGSVGElement> & 
       strokeLinejoin="round"
       {...props}
     >
-      <path d="M12 21s-6-5.2-6-10a6 6 0 1 1 12 0c0 4.8-6 10-6 10z" />
-      <circle cx="12" cy="11" r="2.25" fill="currentColor" stroke="none" />
+      {/* Hull */}
+      <path d="M3 15.5c1.2 1.6 3.4 2.5 9 2.5s7.8-.9 9-2.5H3z" />
+      <path d="M4.5 15.5L6 11h12l1.5 4.5" />
+      {/* Superstructure */}
+      <path d="M8 11V8.5c0-.8.7-1.5 1.5-1.5H12v4" />
+      <path d="M12 11V7h2.5c.8 0 1.5.7 1.5 1.5V11" />
+      {/* Funnel */}
+      <path d="M13.5 7V4.5h2V7" />
+      {/* Waterline detail */}
+      <path d="M5 18.5h14" opacity="0.55" />
+      {/* Portholes */}
+      <circle cx="9" cy="13" r="0.6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="13" r="0.6" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="13" r="0.6" fill="currentColor" stroke="none" />
     </svg>
   );
 }
