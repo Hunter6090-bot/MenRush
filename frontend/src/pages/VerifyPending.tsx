@@ -133,7 +133,7 @@ function VerifyStep({
       </span>
       <span
         className={`text-[13.5px] ${
-          done ? 'font-semibold text-[#F0E0C0]' : pending ? 'font-semibold text-[#E0A14A]' : 'text-[#A89070]'
+          done ? 'font-semibold text-[#F0E0C0]' : pending ? 'font-semibold text-[#E0A14A]' : 'text-[var(--cream-muted)]'
         }`}
       >
         {label}

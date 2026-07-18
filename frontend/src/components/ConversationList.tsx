@@ -137,7 +137,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                 Matches
               </button>
             </div>
-            <p className="mt-5 text-[11px] font-medium tracking-wide text-[#A89070]">
+            <p className="mt-5 text-[11px] font-medium tracking-wide text-[var(--cream-muted)]">
               · Report anytime
             </p>
           </div>

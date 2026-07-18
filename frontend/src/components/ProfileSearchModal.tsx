@@ -171,19 +171,19 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-[#3D2B0E] px-3 py-3">
-          <SearchIcon className="w-4 h-4 shrink-0 text-[#A89070]" />
+          <SearchIcon className="w-4 h-4 shrink-0 text-[var(--cream-muted)]" />
           <input
             ref={inputRef}
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search by name…"
-            className="min-w-0 flex-1 bg-transparent text-sm text-[#F0E0C0] placeholder:text-[#A89070]/70 focus:outline-none"
+            className="min-w-0 flex-1 bg-transparent text-sm text-[#F0E0C0] placeholder:text-[var(--cream-muted)]/70 focus:outline-none"
           />
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-2 py-1 text-xs font-semibold text-[#A89070] hover:text-[#F0E0C0]"
+            className="rounded-lg px-2 py-1 text-xs font-semibold text-[var(--cream-muted)] hover:text-[#F0E0C0]"
           >
             Close
           </button>
@@ -207,16 +207,16 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
 
         <div className="max-h-[min(60vh,420px)] overflow-y-auto p-2">
           {query.trim().length < 2 && (
-            <p className="px-2 py-6 text-center text-sm text-[#A89070]">Type at least 2 characters.</p>
+            <p className="px-2 py-6 text-center text-sm text-[var(--cream-muted)]">Type at least 2 characters.</p>
           )}
           {loading && query.trim().length >= 2 && (
-            <p className="px-2 py-6 text-center text-sm text-[#A89070]">Searching…</p>
+            <p className="px-2 py-6 text-center text-sm text-[var(--cream-muted)]">Searching…</p>
           )}
           {error && (
             <p className="px-2 py-4 text-center text-sm text-[#EF4444]">{error}</p>
           )}
           {!loading && !error && query.trim().length >= 2 && results.length === 0 && (
-            <p className="px-2 py-6 text-center text-sm text-[#A89070]">No profiles found.</p>
+            <p className="px-2 py-6 text-center text-sm text-[var(--cream-muted)]">No profiles found.</p>
           )}
           {results.map((hit) => {
             const liked = likedIds.has(hit.id);
@@ -243,10 +243,10 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-[#F0E0C0]">
                       {hit.name}
-                      {hit.age ? <span className="font-normal text-[#A89070]"> · {hit.age}</span> : null}
+                      {hit.age ? <span className="font-normal text-[var(--cream-muted)]"> · {hit.age}</span> : null}
                     </p>
                     {(hit.headline || hit.bio) && (
-                      <p className="truncate text-xs text-[#A89070]">{hit.headline || hit.bio}</p>
+                      <p className="truncate text-xs text-[var(--cream-muted)]">{hit.headline || hit.bio}</p>
                     )}
                   </div>
                 </button>
@@ -254,7 +254,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
                   <button
                     type="button"
                     onClick={() => handlePass(hit)}
-                    className="rounded-full border border-[#3D2B0E] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-[#A89070] hover:border-[#C4832A]/40 hover:text-[#F0E0C0]"
+                    className="rounded-full border border-[#3D2B0E] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-[var(--cream-muted)] hover:border-[#C4832A]/40 hover:text-[#F0E0C0]"
                   >
                     Pass
                   </button>
@@ -276,7 +276,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
                   <button
                     type="button"
                     onClick={() => handleMessage(hit)}
-                    className="rounded-full border border-[#3D2B0E] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-[#A89070] hover:border-[#C4832A]/40 hover:text-[#C4832A]"
+                    className="rounded-full border border-[#3D2B0E] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-[var(--cream-muted)] hover:border-[#C4832A]/40 hover:text-[#C4832A]"
                   >
                     Message
                   </button>
@@ -285,7 +285,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
             );
           })}
         </div>
-        <p className="border-t border-[#3D2B0E] px-3 py-2 text-center text-[10px] text-[#A89070]">
+        <p className="border-t border-[#3D2B0E] px-3 py-2 text-center text-[10px] text-[var(--cream-muted)]">
           Match first · Chat unlocks when mutual
         </p>
       </div>

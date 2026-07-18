@@ -292,7 +292,7 @@ export const Profile = () => {
   };
 
   const inputClass =
-    'w-full bg-[#1E1508]/60 border border-[#3D2B0E] text-[#F0E0C0] placeholder:text-[#A89070]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all';
+    'w-full bg-[#1E1508]/60 border border-[#3D2B0E] text-[#F0E0C0] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all';
 
   if (!profile) {
     return (
@@ -385,7 +385,7 @@ export const Profile = () => {
                 data-testid="photo-upgrade-nudge"
               >
                 <p className="text-[12px] font-extrabold text-[#F0E0C0]">Upgrade from a shared avatar</p>
-                <p className="mt-1 text-[11px] leading-relaxed text-[#A89070]">
+                <p className="mt-1 text-[11px] leading-relaxed text-[var(--cream-muted)]">
                   Real photos get more matches. Upload a clear face or upper-body shot —
                 </p>
                 <button
@@ -522,7 +522,7 @@ export const Profile = () => {
           </div>
           {/* Avatar overlapping cover */}
           <div className="px-5 pb-5">
-            <p className="pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[#A89070] sm:hidden">
+            <p className="pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--cream-muted)] sm:hidden">
               Tap Adjust cover to move or zoom your banner
             </p>
             <div className="-mt-10 mb-3 flex items-end justify-between">
@@ -557,14 +557,14 @@ export const Profile = () => {
               <StatusBadge online={!!profile.online} lastSeen={profile.last_seen} />
             </div>
             <h2 className="text-xl font-bold text-[#F0E0C0]">{profile.name}</h2>
-            <p className="text-[#A89070] text-sm mt-0.5">Age {profile.age}</p>
+            <p className="text-[var(--cream-muted)] text-sm mt-0.5">Age {profile.age}</p>
             {isGenericAvatarUrl(photoUrl) ? (
               <div
                 className="mt-3 rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-3 py-3 lg:hidden"
                 data-testid="photo-upgrade-nudge-mobile"
               >
                 <p className="text-[12px] font-extrabold text-[#F0E0C0]">Upgrade from a shared avatar</p>
-                <p className="mt-1 text-[11px] leading-relaxed text-[#A89070]">
+                <p className="mt-1 text-[11px] leading-relaxed text-[var(--cream-muted)]">
                   Real photos get more matches. Clear face or upper body.
                 </p>
                 <button
@@ -589,20 +589,20 @@ export const Profile = () => {
 
           <form onSubmit={handleSave} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">Bio</label>
+              <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">Bio</label>
               <textarea
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 placeholder="Tell people about yourself…"
                 rows={3}
                 maxLength={500}
-                className="w-full bg-[#1E1508]/60 border border-[#3D2B0E] text-[#F0E0C0] placeholder:text-[#A89070]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all resize-none"
+                className="w-full bg-[#1E1508]/60 border border-[#3D2B0E] text-[#F0E0C0] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all resize-none"
               />
-              <p className="text-[10px] text-[#A89070]/60 mt-1 text-right">{bio.length}/500</p>
+              <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1 text-right">{bio.length}/500</p>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">Headline</label>
+              <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">Headline</label>
               <input
                 type="text"
                 value={headline}
@@ -614,7 +614,7 @@ export const Profile = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">Looking For</label>
+              <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">Looking For</label>
               <input
                 type="text"
                 value={lookingFor}
@@ -626,7 +626,7 @@ export const Profile = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">
+              <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">
                 Profile Photo
               </label>
               <div className="flex gap-4 items-center">
@@ -646,21 +646,21 @@ export const Profile = () => {
                   {uploading ? 'Uploading…' : 'Upload Photo'}
                 </button>
                 {photoUrl && !uploading && (
-                  <span className="text-[10px] text-[#A89070]/70">Current photo set</span>
+                  <span className="text-[10px] text-[var(--cream-muted)]/70">Current photo set</span>
                 )}
               </div>
-              <p className="text-[10px] text-[#A89070]/60 mt-1.5 px-1">
+              <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1.5 px-1">
                 JPEG, PNG or WebP. Max 5MB.
               </p>
             </div>
 
             <div className="space-y-4">
-              <label className="block text-xs font-medium text-[#A89070] uppercase tracking-wide">
-                Your tags <span className="normal-case text-[#A89070]/50">({interests.length}/10)</span>
+              <label className="block text-xs font-medium text-[var(--cream-muted)] uppercase tracking-wide">
+                Your tags <span className="normal-case text-[var(--cream-muted)]/50">({interests.length}/10)</span>
               </label>
               {PROFILE_TAG_GROUPS.map((group) => (
                 <div key={group.label}>
-                  <p className="text-[10px] font-black text-[#A89070]/60 uppercase tracking-[.18em] mb-2">{group.label}</p>
+                  <p className="text-[10px] font-black text-[var(--cream-muted)]/60 uppercase tracking-[.18em] mb-2">{group.label}</p>
                   <div className="flex flex-wrap gap-2">
                     {group.tags.map((tag) => {
                       const active = interests.includes(tag);
@@ -675,8 +675,8 @@ export const Profile = () => {
                             active
                               ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
                               : maxed
-                              ? 'bg-[#1E1508]/30 text-[#A89070]/20 border-[#3D2B0E]/30 cursor-not-allowed'
-                              : 'bg-[#1E1508]/40 text-[#A89070] border-[#3D2B0E] hover:bg-[#3D2B0E]/60 hover:text-[#F0E0C0]/80'
+                              ? 'bg-[#1E1508]/30 text-[var(--cream-muted)]/20 border-[#3D2B0E]/30 cursor-not-allowed'
+                              : 'bg-[#1E1508]/40 text-[var(--cream-muted)] border-[#3D2B0E] hover:bg-[#3D2B0E]/60 hover:text-[#F0E0C0]/80'
                           }`}
                         >
                           {tag}
@@ -724,11 +724,11 @@ export const Profile = () => {
           <div>
             <p className="text-[#F0E0C0]/80 text-sm font-semibold">Your location</p>
             {lat && lng ? (
-              <p className="text-[#A89070] text-xs mt-0.5">
+              <p className="text-[var(--cream-muted)] text-xs mt-0.5">
                 {lat.toFixed(5)}, {lng.toFixed(5)}
               </p>
             ) : (
-              <p className="text-[#A89070]/50 text-xs mt-0.5">Not shared yet</p>
+              <p className="text-[var(--cream-muted)]/50 text-xs mt-0.5">Not shared yet</p>
             )}
           </div>
           <button
@@ -746,14 +746,14 @@ export const Profile = () => {
           <div className="flex items-end justify-between mb-3">
             <div>
               <p className="text-[#F0E0C0]/80 text-sm font-semibold">Mood</p>
-              <p className="text-[#A89070] text-xs mt-0.5">
+              <p className="text-[var(--cream-muted)] text-xs mt-0.5">
                 Auto-clears in 6 hours. Shows on your card.
               </p>
             </div>
             {mood && (
               <button
                 onClick={() => handleMood(null)}
-                className="text-[10px] font-bold uppercase tracking-wider text-[#A89070] hover:text-[#C4832A] transition-colors"
+                className="text-[10px] font-bold uppercase tracking-wider text-[var(--cream-muted)] hover:text-[#C4832A] transition-colors"
               >
                 Clear
               </button>
@@ -793,7 +793,7 @@ export const Profile = () => {
         <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 flex items-center justify-between shadow-card">
           <div>
             <p className="text-[#F0E0C0]/80 text-sm font-semibold">Profile visibility</p>
-            <p className="text-[#A89070] text-xs mt-0.5">
+            <p className="text-[var(--cream-muted)] text-xs mt-0.5">
               {isVisible ? 'You appear in nearby discovery' : 'Hidden from nearby discovery'}
             </p>
           </div>
@@ -826,7 +826,7 @@ export const Profile = () => {
         {/* ── Sign out (mobile only — desktop uses sidebar) ── */}
         <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card lg:hidden">
           <p className="text-[#F0E0C0]/80 text-sm font-semibold">Sign out</p>
-          <p className="text-[#A89070] text-xs mt-0.5">You'll need to log back in</p>
+          <p className="text-[var(--cream-muted)] text-xs mt-0.5">You'll need to log back in</p>
           <button
             onClick={() => { logout(); navigate('/login'); }}
             className="mt-4 flex w-full items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#A45E18]/10 hover:bg-[#A45E18]/20 text-[#F0E0C0]/80 text-xs font-semibold border border-[#A45E18]/20 transition-all"

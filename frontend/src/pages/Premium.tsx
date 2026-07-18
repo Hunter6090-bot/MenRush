@@ -75,7 +75,7 @@ export const Premium: React.FC = () => {
           <h1 className="text-2xl font-black text-center tracking-tight mb-1 text-[#F0E0C0]">
             MenRush Premium
           </h1>
-          <p className="text-sm text-[#A89070] text-center mb-6">
+          <p className="text-sm text-[var(--cream-muted)] text-center mb-6">
             {BETA_INVITE_REQUIRED
               ? 'Premium perks are included free during the private beta.'
               : 'No swiping theatre. Pay once. Get the edge.'}
@@ -84,7 +84,7 @@ export const Premium: React.FC = () => {
           {BETA_INVITE_REQUIRED ? (
             <div className="rounded-xl border border-[#C4832A]/40 bg-[#C4832A]/10 p-4 text-center mb-5">
               <p className="text-[#C4832A] font-bold">Beta access includes Premium</p>
-              <p className="text-xs text-[#A89070] mt-1">
+              <p className="text-xs text-[var(--cream-muted)] mt-1">
                 Billing stays off until CCBill merchant approval. Enjoy the full feature set while we test.
               </p>
             </div>
@@ -93,7 +93,7 @@ export const Premium: React.FC = () => {
           {isPremium ? (
             <div className="rounded-xl border border-[#C4832A]/40 bg-[#C4832A]/10 p-4 text-center mb-5">
               <p className="text-[#C4832A] font-bold">You&apos;re Premium.</p>
-              <p className="text-xs text-[#A89070] mt-1">Your perks are active.</p>
+              <p className="text-xs text-[var(--cream-muted)] mt-1">Your perks are active.</p>
             </div>
           ) : null}
 
@@ -122,11 +122,11 @@ export const Premium: React.FC = () => {
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-left">
                       <p className="font-bold text-[#F0E0C0]">{plan.name}</p>
-                      <p className="text-xs text-[#A89070] mt-1">{plan.tagline}</p>
+                      <p className="text-xs text-[var(--cream-muted)] mt-1">{plan.tagline}</p>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-lg font-black text-[#C4832A]">£{plan.price}</p>
-                      <p className="text-[10px] text-[#A89070]">/ {plan.period_days} days</p>
+                      <p className="text-[10px] text-[var(--cream-muted)]">/ {plan.period_days} days</p>
                     </div>
                   </div>
                   {checkingOut ? (
@@ -150,7 +150,7 @@ export const Premium: React.FC = () => {
           <button
             type="button"
             onClick={() => navigate(isPremium ? '/discover' : '/profile')}
-            className="w-full mt-4 text-sm text-[#A89070] hover:text-[#C4832A] transition-colors"
+            className="w-full mt-4 text-sm text-[var(--cream-muted)] hover:text-[#C4832A] transition-colors"
           >
             {isPremium ? 'Back to Discover' : 'Not now'}
           </button>

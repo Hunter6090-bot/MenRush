@@ -73,7 +73,7 @@ export function PublicAuthHero({
       <h1 className="mr-auth-heading text-balance">
         {title} <span className="mr-auth-accent">{accent}</span>
       </h1>
-      <p className="mt-[22px] max-w-[480px] text-[17px] leading-[1.6] text-[#A89070]">{copy}</p>
+      <p className="mt-[22px] max-w-[480px] text-[17px] leading-[1.6] text-[var(--cream-muted)]">{copy}</p>
     </>
   );
 }

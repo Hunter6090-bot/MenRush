@@ -69,7 +69,7 @@ export function ProfileDepthStrip() {
               ? 'You need a photo to get matched'
               : 'Finish your profile — more views, more matches'}
           </p>
-          <p className="text-[11px] text-[#A89070]">
+          <p className="text-[11px] text-[var(--cream-muted)]">
             {detail}. Be direct. Consent.
           </p>
         </div>

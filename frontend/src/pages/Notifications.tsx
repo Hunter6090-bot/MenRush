@@ -58,7 +58,7 @@ export const Notifications = () => {
         <div className="flex items-start justify-between gap-3 lg:col-span-2 lg:hidden">
           <div>
             <h1 className="text-2xl font-bold text-[#F0E0C0]">Notifications</h1>
-            <p className="mt-1 text-sm text-[#A89070]">
+            <p className="mt-1 text-sm text-[var(--cream-muted)]">
               Messages, matches, profile views and more.
             </p>
           </div>
@@ -117,7 +117,7 @@ export const Notifications = () => {
             <p className="text-[#F0E0C0] font-extrabold">
               {loadError ? 'Could not load alerts' : 'No alerts yet'}
             </p>
-            <p className="text-[#A89070] text-sm mt-2 leading-relaxed mx-auto max-w-sm">
+            <p className="text-[var(--cream-muted)] text-sm mt-2 leading-relaxed mx-auto max-w-sm">
               {loadError
                 ? 'Pull to refresh or try again shortly.'
                 : 'Matches, messages, and profile views land here. Get seen on Nearby or the live list.'}
@@ -144,7 +144,7 @@ export const Notifications = () => {
                 </Link>
               </div>
             ) : null}
-            <p className="mt-4 text-[11px] font-medium tracking-wide text-[#A89070]">
+            <p className="mt-4 text-[11px] font-medium tracking-wide text-[var(--cream-muted)]">
               · Report abuse anytime
             </p>
           </div>
@@ -184,12 +184,12 @@ export const Notifications = () => {
                       <p className="text-sm font-semibold text-[#F0E0C0] leading-snug">
                         {notification.message}
                       </p>
-                      <span className="shrink-0 text-[10px] font-medium text-[#A89070]">
+                      <span className="shrink-0 text-[10px] font-medium text-[var(--cream-muted)]">
                         {formatRelativeTime(notification.createdAt)}
                       </span>
                     </div>
                     {notification.body && (
-                      <p className="mt-1 text-xs text-[#A89070] line-clamp-2">{notification.body}</p>
+                      <p className="mt-1 text-xs text-[var(--cream-muted)] line-clamp-2">{notification.body}</p>
                     )}
                     <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#C4832A]/80">
                       {notificationTypeLabel(notification.type)}

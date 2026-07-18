@@ -130,7 +130,7 @@ export const Landing = () => {
                 {!pendingToken ? (
                   <>
                     <div>
-                      <label htmlFor="email" className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[#A89070]">
+                      <label htmlFor="email" className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[var(--cream-muted)]">
                         Email
                       </label>
                       <input
@@ -146,7 +146,7 @@ export const Landing = () => {
                     </div>
 
                     <div>
-                      <label htmlFor="password" className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[#A89070]">
+                      <label htmlFor="password" className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[var(--cream-muted)]">
                         Password
                       </label>
                       <PasswordInput
@@ -162,7 +162,7 @@ export const Landing = () => {
                     <p className="mb-3 text-sm text-[#F0E0C0]/85">
                       Enter the 6-digit code from your authenticator app.
                     </p>
-                    <label htmlFor="landing-2fa" className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[#A89070]">
+                    <label htmlFor="landing-2fa" className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[var(--cream-muted)]">
                       Authenticator code
                     </label>
                     <input
@@ -184,7 +184,7 @@ export const Landing = () => {
                         setTwoFactorCode('');
                         setError('');
                       }}
-                      className="mt-2 text-sm font-semibold text-[#A89070] transition-colors hover:text-[#C4832A]"
+                      className="mt-2 text-sm font-semibold text-[var(--cream-muted)] transition-colors hover:text-[#C4832A]"
                     >
                       Use a different account
                     </button>
@@ -208,7 +208,7 @@ export const Landing = () => {
                 </button>
               </form>
 
-              <p className="mt-5 text-sm text-[#A89070]">
+              <p className="mt-5 text-sm text-[var(--cream-muted)]">
                 No account yet?{' '}
                 <Link to="/register" className="font-semibold text-[#C4832A] transition-colors hover:text-[#D4943B]">
                   Create one — it's free

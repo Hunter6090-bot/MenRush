@@ -123,7 +123,7 @@ function CompactSelfieCapture({
           <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 h-full w-full object-cover" style={mirror ? { transform: 'scaleX(-1)' } : undefined} />
         </div>
         <div className="flex justify-center gap-4 px-4 py-4">
-          <button type="button" onClick={() => onCloseRef.current()} className="rounded-xl border border-[#3D2B0E] px-4 py-2 text-sm text-[#A89070]">Cancel</button>
+          <button type="button" onClick={() => onCloseRef.current()} className="rounded-xl border border-[#3D2B0E] px-4 py-2 text-sm text-[var(--cream-muted)]">Cancel</button>
           <button type="button" onClick={handleCapture} disabled={!ready} className="rounded-xl bg-[#C4832A] px-5 py-2 text-sm font-bold text-[#0D0A06] disabled:opacity-40">{captureLabel ?? 'Capture'}</button>
         </div>
       </div>
@@ -307,7 +307,7 @@ function VerificationSelfieCapture({
         <button
           type="button"
           onClick={() => onCloseRef.current()}
-          className="text-sm font-semibold text-[#A89070] hover:text-[#C4832A]"
+          className="text-sm font-semibold text-[var(--cream-muted)] hover:text-[#C4832A]"
         >
           Cancel
         </button>
@@ -332,7 +332,7 @@ function VerificationSelfieCapture({
               />
               <DocumentScannerOverlay mode="selfie" aligned={qualityOk} />
               {!ready && (
-                <div className="absolute inset-0 flex items-center justify-center text-sm text-[#A89070]">
+                <div className="absolute inset-0 flex items-center justify-center text-sm text-[var(--cream-muted)]">
                   Initialising camera…
                 </div>
               )}
@@ -359,7 +359,7 @@ function VerificationSelfieCapture({
       </div>
 
       <div className="border-t border-[#3D2B0E]/80 bg-[#0D0A06] px-4 py-4">
-        <p className="mb-3 text-center text-xs leading-relaxed text-[#A89070]">
+        <p className="mb-3 text-center text-xs leading-relaxed text-[var(--cream-muted)]">
           {phase === 'preview'
             ? 'We will compare this live photo to your ID'
             : 'Centre your face in the oval. Look straight at the camera.'}

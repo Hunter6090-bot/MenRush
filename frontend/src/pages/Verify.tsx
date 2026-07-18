@@ -311,7 +311,7 @@ export const Verify: React.FC = () => {
 
         {step !== 'intro' ? (
           <div className="mb-5 mt-2">
-            <div className="mb-1.5 flex justify-between text-[10px] font-semibold uppercase tracking-[0.14em] text-[#A89070]">
+            <div className="mb-1.5 flex justify-between text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--cream-muted)]">
               <span>
                 Step {currentStep} of {totalSteps}
               </span>
@@ -346,7 +346,7 @@ export const Verify: React.FC = () => {
                   >
                     Continue to the app
                   </button>
-                  <p className="m-0 mt-3 text-center text-[11px] text-[#A89070]/70">
+                  <p className="m-0 mt-3 text-center text-[11px] text-[var(--cream-muted)]/70">
                     Prefer to try verification anyway? Scroll down — it won&apos;t block you if it fails.
                   </p>
                 </div>
@@ -404,7 +404,7 @@ export const Verify: React.FC = () => {
               <button type="button" onClick={() => setStep('country')} className={publicPrimaryButtonClass}>
                 Start verification
               </button>
-              <p className="m-0 text-center text-[11px] text-[#A89070]/70">Takes about 60 seconds.</p>
+              <p className="m-0 text-center text-[11px] text-[var(--cream-muted)]/70">Takes about 60 seconds.</p>
             </>
           ) : null}
 
@@ -609,7 +609,7 @@ export const Verify: React.FC = () => {
 
           {error ? <p className={publicErrorClass}>{error}</p> : null}
 
-          <p className="m-0 text-center text-[11px] leading-snug text-[#A89070]/70">
+          <p className="m-0 text-center text-[11px] leading-snug text-[var(--cream-muted)]/70">
             Your ID is used only to confirm you are a real adult. No human at MenRush will access,
             sell, or share it.
           </p>
@@ -655,7 +655,7 @@ const DocTypeButton: React.FC<{
 }> = ({ active, onClick, label, sub }) => (
   <button type="button" onClick={onClick} className={publicDocTypeButtonClass(active)}>
     <span>{label}</span>
-    <span className="text-[11px] font-normal normal-case tracking-normal text-[#A89070]">{sub}</span>
+    <span className="text-[11px] font-normal normal-case tracking-normal text-[var(--cream-muted)]">{sub}</span>
   </button>
 );
 

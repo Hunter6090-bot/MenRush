@@ -124,7 +124,7 @@ export const ComingSoon = () => {
           <strong className="font-bold text-[#E0A14A]">No bots. No catfish. No scam profiles.</strong>
         </p>
 
-        <p className="mt-3.5 max-w-[560px] text-sm leading-[1.6] text-[#A89070]">
+        <p className="mt-3.5 max-w-[560px] text-sm leading-[1.6] text-[var(--cream-muted)]">
           Your identity stays private. Your profile stays discreet. No time wasters.
         </p>
 
@@ -150,7 +150,7 @@ export const ComingSoon = () => {
                 autoComplete="email"
                 inputMode="email"
                 disabled={submitting}
-                className="min-w-0 flex-1 border-0 bg-transparent py-2.5 text-sm text-[#F0E0C0] placeholder:text-[#A89070]/80 focus:outline-none disabled:opacity-50"
+                className="min-w-0 flex-1 border-0 bg-transparent py-2.5 text-sm text-[#F0E0C0] placeholder:text-[var(--cream-muted)]/80 focus:outline-none disabled:opacity-50"
               />
               <button
                 type="submit"
@@ -175,7 +175,7 @@ export const ComingSoon = () => {
           Every member ID verified and selfie matched.
         </p>
 
-        <p className="relative mt-8 text-sm text-[#A89070]">
+        <p className="relative mt-8 text-sm text-[var(--cream-muted)]">
           Selected for beta?{' '}
           <Link to="/beta" className={publicLinkClass}>
             Enter your invite code

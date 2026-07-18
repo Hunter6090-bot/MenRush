@@ -182,7 +182,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
       <div className="p-4 flex-1 flex flex-col">
         <div className="flex items-center gap-2 mb-1">
           <h3 className="font-bold text-[#F0E0C0] text-base">{user.name}</h3>
-          <span className="text-[#A89070] text-sm">{user.age}</span>
+          <span className="text-[var(--cream-muted)] text-sm">{user.age}</span>
           {user.is_verified ? <VerifiedBadge /> : null}
         </div>
 
@@ -205,7 +205,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         {user.bio ? (
           <p className="text-[#F0E0C0]/55 text-xs leading-relaxed line-clamp-2 flex-1">{user.bio}</p>
         ) : user.headline || user.looking_for ? null : (
-          <p className="text-[#A89070]/50 text-xs italic flex-1">No bio yet</p>
+          <p className="text-[var(--cream-muted)]/50 text-xs italic flex-1">No bio yet</p>
         )}
 
         {/* Interest tags */}
@@ -220,7 +220,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               </span>
             ))}
             {user.interests.length > 3 && (
-              <span className="px-2 py-0.5 rounded-full bg-[#3D2B0E]/40 text-[#A89070] text-[10px] border border-[#3D2B0E]">
+              <span className="px-2 py-0.5 rounded-full bg-[#3D2B0E]/40 text-[var(--cream-muted)] text-[10px] border border-[#3D2B0E]">
                 +{user.interests.length - 3}
               </span>
             )}
@@ -243,7 +243,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           {liking ? 'Sending…' : isMutual ? 'Open chat' : liked ? 'Matched' : 'Match'}
         </button>
         {likeHint ? (
-          <p className="mt-2 text-center text-[11px] text-[#A89070]" role="status">
+          <p className="mt-2 text-center text-[11px] text-[var(--cream-muted)]" role="status">
             {likeHint}
           </p>
         ) : null}

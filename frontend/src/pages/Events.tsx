@@ -123,7 +123,7 @@ export const Events = () => {
                     Hot Spots
                   </Link>
                 </div>
-                <p className="mt-4 text-[11px] text-[#A89070]">Meet in public · Consent first</p>
+                <p className="mt-4 text-[11px] text-[var(--cream-muted)]">Meet in public · Consent first</p>
               </div>
             ) : loading ? (
               <div className="grid gap-3.5 sm:grid-cols-2">

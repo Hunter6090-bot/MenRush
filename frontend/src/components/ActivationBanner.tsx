@@ -50,7 +50,7 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-[14px] font-extrabold text-[#F0E0C0]">{headline}</p>
-          <p className="mt-1 text-[12px] text-[#A89070]">
+          <p className="mt-1 text-[12px] text-[var(--cream-muted)]">
             {photoUpgrade
               ? 'Upload a clear face or upper-body shot. Men nearby rank real photos higher.'
               : blockers.length > 0

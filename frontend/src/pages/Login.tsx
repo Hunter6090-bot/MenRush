@@ -168,7 +168,7 @@ export const Login = () => {
                   setTwoFactorCode('');
                   setError('');
                 }}
-                className="self-start text-sm font-semibold text-[#A89070] transition-colors hover:text-[#C4832A]"
+                className="self-start text-sm font-semibold text-[var(--cream-muted)] transition-colors hover:text-[#C4832A]"
               >
                 Use a different account
               </button>
@@ -189,7 +189,7 @@ export const Login = () => {
             )}
           </button>
 
-          <div className="flex flex-col gap-3 text-[15px] text-[#A89070]">
+          <div className="flex flex-col gap-3 text-[15px] text-[var(--cream-muted)]">
             <p className="m-0">
               Selected for beta?{' '}
               <Link to={registerPath} className={publicLinkClass}>

@@ -374,7 +374,7 @@ export const ProfileSetup: React.FC = () => {
           <div className={publicProgressTrackClass}>
             <div className={publicProgressFillClass} style={{ width: `${progressPct}%` }} />
           </div>
-          <p className="mt-2 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-[#A89070]">
+          <p className="mt-2 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--cream-muted)]">
             Step {stepIndex} of {progressSteps}
           </p>
         </div>
@@ -392,7 +392,7 @@ export const ProfileSetup: React.FC = () => {
         {step === 'photo' ? (
           <div className="flex flex-col gap-4">
             <div className={publicInfoBoxClass}>
-              <p className="text-[13px] leading-relaxed text-[#A89070]">
+              <p className="text-[13px] leading-relaxed text-[var(--cream-muted)]">
                 <span className="font-semibold text-[#F0E0C0]">Discreet?</span> A clear photo
                 still helps matches recognise you in chat — but it is your call. No photo means a
                 standard avatar picked from your profile tags; only a few variants exist so you may
@@ -507,11 +507,11 @@ export const ProfileSetup: React.FC = () => {
                 placeholder="What are you into? What should someone know before they message you?"
                 className={`${publicDarkSelectClass} mt-2 min-h-[120px] resize-none rounded-2xl`}
               />
-              <p className="mt-1 text-right text-[11px] text-[#A89070]">{bio.length}/500 · min 20</p>
+              <p className="mt-1 text-right text-[11px] text-[var(--cream-muted)]">{bio.length}/500 · min 20</p>
             </div>
             <div>
               <label className={publicLabelClass} htmlFor="setup-headline">
-                Headline <span className="font-normal normal-case text-[#A89070]">(optional)</span>
+                Headline <span className="font-normal normal-case text-[var(--cream-muted)]">(optional)</span>
               </label>
               <input
                 id="setup-headline"
@@ -538,7 +538,7 @@ export const ProfileSetup: React.FC = () => {
                   className={`rounded-full border px-4 py-2 text-[13px] font-semibold transition-colors ${
                     active
                       ? 'border-[#C4832A] bg-[rgba(196,131,42,0.2)] text-[#E0A14A]'
-                      : 'border-[rgba(240,224,192,0.2)] bg-[rgba(13,10,6,0.35)] text-[#A89070] hover:border-[rgba(196,131,42,0.4)]'
+                      : 'border-[rgba(240,224,192,0.2)] bg-[rgba(13,10,6,0.35)] text-[var(--cream-muted)] hover:border-[rgba(196,131,42,0.4)]'
                   }`}
                 >
                   {tag}
@@ -550,12 +550,12 @@ export const ProfileSetup: React.FC = () => {
 
         {step === 'tags' ? (
           <div className="max-h-[min(52vh,420px)] space-y-4 overflow-y-auto pr-1">
-            <p className="text-[12px] text-[#A89070]">
+            <p className="text-[12px] text-[var(--cream-muted)]">
               Selected {interests.length}/10
             </p>
             {tagGroups.map((group) => (
               <div key={group.label}>
-                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-[#A89070]/70">
+                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-[var(--cream-muted)]/70">
                   {group.label}
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -572,8 +572,8 @@ export const ProfileSetup: React.FC = () => {
                           active
                             ? 'border-[#C4832A] bg-[rgba(196,131,42,0.2)] text-[#E0A14A]'
                             : maxed
-                              ? 'cursor-not-allowed border-[rgba(240,224,192,0.1)] text-[#A89070]/30'
-                              : 'border-[rgba(240,224,192,0.2)] bg-[rgba(13,10,6,0.35)] text-[#A89070] hover:border-[rgba(196,131,42,0.35)]'
+                              ? 'cursor-not-allowed border-[rgba(240,224,192,0.1)] text-[var(--cream-muted)]/30'
+                              : 'border-[rgba(240,224,192,0.2)] bg-[rgba(13,10,6,0.35)] text-[var(--cream-muted)] hover:border-[rgba(196,131,42,0.35)]'
                         }`}
                       >
                         {tag}
@@ -591,7 +591,7 @@ export const ProfileSetup: React.FC = () => {
             {PROFILE_SETUP_STEPS.map((item) => (
               <SetupChecklistItem key={item.id} n="✓" text={item.label} done />
             ))}
-            <p className="pt-2 text-[13px] leading-relaxed text-[#A89070]">
+            <p className="pt-2 text-[13px] leading-relaxed text-[var(--cream-muted)]">
               We need your location to show men near you. Others see approximate distance only — not
               your exact public pin. Exact live pin with matches is optional later. Shared only while
               you use the app.
@@ -667,7 +667,7 @@ function SetupChecklistItem({
       >
         {n}
       </span>
-      <span className={`text-[13.5px] ${done ? 'font-semibold text-[#F0E0C0]' : 'text-[#A89070]'}`}>
+      <span className={`text-[13.5px] ${done ? 'font-semibold text-[#F0E0C0]' : 'text-[var(--cream-muted)]'}`}>
         {text}
       </span>
     </div>

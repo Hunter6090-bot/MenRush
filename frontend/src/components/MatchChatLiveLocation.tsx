@@ -145,7 +145,7 @@ export function MatchChatLiveLocation({
             {peerName} is {distanceLabel} away
           </p>
           {updatedLabel ? (
-            <p className="mt-0.5 text-[11px] text-[#A89070]">{updatedLabel}</p>
+            <p className="mt-0.5 text-[11px] text-[var(--cream-muted)]">{updatedLabel}</p>
           ) : null}
         </div>
         <span className="shrink-0 text-xs font-bold text-[#E0A14A]">{expanded ? 'Hide ▴' : 'Show map ▾'}</span>
@@ -156,7 +156,7 @@ export function MatchChatLiveLocation({
           {tokenMissing ? (
             <div className="rounded-xl border border-[#3D2B0E] bg-[#1E1508] px-4 py-6 text-center">
               <p className="text-sm font-semibold text-[#F0E0C0]">{peerName}&apos;s live location</p>
-              <p className="mt-1 text-xs text-[#A89070]">
+              <p className="mt-1 text-xs text-[var(--cream-muted)]">
                 {lat.toFixed(5)}, {lng.toFixed(5)}
               </p>
             </div>
@@ -170,11 +170,11 @@ export function MatchChatLiveLocation({
 
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <div className="rounded-xl border border-[#3D2B0E] bg-[#1E1508] px-3 py-2.5">
-              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#A89070]">Distance</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--cream-muted)]">Distance</p>
               <p className="mt-1 text-sm font-semibold text-[#F0E0C0]">{distanceLabel}</p>
             </div>
             <div className="rounded-xl border border-[#3D2B0E] bg-[#1E1508] px-3 py-2.5">
-              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#A89070]">Coordinates</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--cream-muted)]">Coordinates</p>
               <p className="mt-1 text-sm font-semibold text-[#F0E0C0]">
                 {lat.toFixed(5)}, {lng.toFixed(5)}
               </p>

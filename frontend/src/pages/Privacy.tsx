@@ -39,7 +39,7 @@ export const Privacy = () => {
     <div className="flex min-h-dvh flex-col bg-[#0a0805] text-[#F0E0C0]">
       <main className="flex-1 px-5 py-8 sm:px-8 sm:py-12">
         <article className="mx-auto w-full max-w-4xl rounded-2xl border border-[#3D2B0E] bg-[#1A1410] p-6 sm:p-10">
-          <Link to="/" className="text-xs font-bold uppercase tracking-[0.18em] text-[#A89070] hover:text-[#C4832A]">
+          <Link to="/" className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)] hover:text-[#C4832A]">
             Back
           </Link>
           <p className="mt-8 text-xs font-black uppercase tracking-[0.18em] text-[#C4832A]">
@@ -56,7 +56,7 @@ export const Privacy = () => {
             {sections.map((section) => (
               <section key={section.title} className="rounded-2xl border border-[#3D2B0E] bg-[#0D0A06]/55 p-5">
                 <h2 className="text-lg font-bold">{section.title}</h2>
-                <ul className="mt-4 space-y-2 text-sm leading-6 text-[#A89070]">
+                <ul className="mt-4 space-y-2 text-sm leading-6 text-[var(--cream-muted)]">
                   {section.items.map((item) => (
                     <li key={item} className="flex gap-2">
                       <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#C4832A]" />
@@ -70,7 +70,7 @@ export const Privacy = () => {
 
           <section className="mt-6 rounded-2xl border border-[#3D2B0E] bg-[#0D0A06]/55 p-5">
             <h2 className="text-lg font-bold">Sharing and processors</h2>
-            <p className="mt-2 text-sm leading-7 text-[#A89070]">
+            <p className="mt-2 text-sm leading-7 text-[var(--cream-muted)]">
               We use trusted providers for hosting, email, analytics, payment, identity verification,
               support and security. We do not sell personal data. We only share data where needed to
               operate MenRush, comply with law, prevent harm, process user requests or protect the service.
@@ -79,7 +79,7 @@ export const Privacy = () => {
 
           <section className="mt-6 rounded-2xl border border-[#3D2B0E] bg-[#0D0A06]/55 p-5">
             <h2 className="text-lg font-bold">Contact</h2>
-            <p className="mt-2 text-sm leading-7 text-[#A89070]">
+            <p className="mt-2 text-sm leading-7 text-[var(--cream-muted)]">
               Privacy requests: <a className="font-semibold text-[#C4832A] hover:underline" href="mailto:privacy@menrush.com">privacy@menrush.com</a>.
               Support and safety reports: <a className="font-semibold text-[#C4832A] hover:underline" href="mailto:support@menrush.com">support@menrush.com</a>.
             </p>

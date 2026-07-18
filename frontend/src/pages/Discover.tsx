@@ -844,7 +844,7 @@ export const Discover = () => {
               <p className="text-[14px] font-extrabold text-[#F0E0C0]">
                 Men nearby — tap Match on a card
               </p>
-              <p className="mt-1 text-[12px] text-[#A89070]">
+              <p className="mt-1 text-[12px] text-[var(--cream-muted)]">
                 No swiping. One tap sends interest. Chat unlocks when it&apos;s mutual · consent
                .
               </p>
@@ -859,7 +859,7 @@ export const Discover = () => {
                   /* ignore */
                 }
               }}
-              className="shrink-0 rounded-full border border-[rgba(196,131,42,0.45)] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#A89070] hover:text-[#F0E0C0]"
+              className="shrink-0 rounded-full border border-[rgba(196,131,42,0.45)] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)] hover:text-[#F0E0C0]"
             >
               Got it
             </button>
@@ -891,7 +891,7 @@ export const Discover = () => {
         >
           <div>
             <p className="text-[14px] font-extrabold text-[#F0E0C0]">Match with {matchToast.name}</p>
-            <p className="mt-0.5 text-[12px] text-[#A89070]">
+            <p className="mt-0.5 text-[12px] text-[var(--cream-muted)]">
               You both said yes. Chat when ready — consent first. Pulse to get seen by more men nearby.
             </p>
           </div>
@@ -938,8 +938,8 @@ export const Discover = () => {
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-extrabold text-[#F0E0C0]">Quiet map? Start Pulse</p>
-              <p className="mt-1 text-[12px] text-[#A89070]">
+              <p className="text-[14px] font-extrabold text-[var(--cream)]">Quiet map? Start Pulse</p>
+              <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
                 Get 90 minutes of priority visibility and appear first to men nearby.
               </p>
             </div>
@@ -961,7 +961,7 @@ export const Discover = () => {
                     /* ignore */
                   }
                 }}
-                className="rounded-full border border-[rgba(196,131,42,0.45)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#A89070] transition-colors hover:text-[#F0E0C0]"
+                className="rounded-full border border-[rgba(196,131,42,0.45)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)] transition-colors hover:text-[var(--cream)]"
               >
                 Not now
               </button>
@@ -980,7 +980,7 @@ export const Discover = () => {
           <p id="location-gate-title" className="text-[17px] font-extrabold text-[#F0E0C0]">
             Allow location to unlock Nearby
           </p>
-          <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[#A89070]">
+          <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--cream-muted)]">
             We need your device location to show men near you. Your exact pin is not shown to others
             — they only see approximate distance. You can adjust your search radius once location is
             on. Shared only while you use the app.
@@ -993,7 +993,7 @@ export const Discover = () => {
             Allow location
           </button>
           {locationNotice ? (
-            <p className="mt-3 text-[11px] text-[#A89070]">{locationNotice}</p>
+            <p className="mt-3 text-[11px] text-[var(--cream-muted)]">{locationNotice}</p>
           ) : null}
         </div>
       ) : null}
@@ -1008,7 +1008,7 @@ export const Discover = () => {
             className="mb-4 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/80 px-4 py-3"
             data-testid="discover-mood-strip"
           >
-            <p className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-[#A89070]">
+            <p className="mb-2 text-[12px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]">
               Your mood · shown nearby
             </p>
             <div className={moodSaving ? 'pointer-events-none opacity-60' : ''}>
@@ -1061,7 +1061,7 @@ export const Discover = () => {
               className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/80 px-3 py-2.5"
               data-testid="discover-mood-strip-mobile"
             >
-              <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#A89070]">
+              <p className="mb-2 text-[12px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]">
                 Your mood
               </p>
               <div className={moodSaving ? 'pointer-events-none opacity-60' : ''}>
