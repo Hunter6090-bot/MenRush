@@ -1,5 +1,5 @@
 {
-  "name": "nearnow-backend",
+  "name": "menrush-backend",
   "version": "1.0.0",
   "description": "Location-based social discovery platform",
   "main": "dist/server.js",
