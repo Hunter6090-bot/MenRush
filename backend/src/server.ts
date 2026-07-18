@@ -47,6 +47,15 @@ import { Sentry } from './observability/sentry';
 import { corsOrigin } from './security/cors';
 import { query } from './db';
 
+// Transient DB disconnects must not take down login/API.
+process.on('unhandledRejection', (reason) => {
+  console.error('[process] unhandledRejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[process] uncaughtException:', err);
+  // Let Railway restart if we're truly stuck; don't exit on every log noise.
+});
+
 logResendMailerStatus();
 
 const app = express();
