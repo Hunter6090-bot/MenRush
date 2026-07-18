@@ -1,9 +1,8 @@
-import { SVGProps } from "react";
+import { SVGProps } from 'react';
 
 /**
  * MenRush — Events icon
- * Classical pediment plaque — public notice board / gathering hall.
- * Matches the Doric column vocabulary of IconRooms.
+ * Calendar (month grid) — clear “events / dates” meaning.
  */
 export function IconEvents({ size = 24, ...props }: SVGProps<SVGSVGElement> & { size?: number }) {
   return (
@@ -19,11 +18,14 @@ export function IconEvents({ size = 24, ...props }: SVGProps<SVGSVGElement> & { 
       strokeLinejoin="round"
       {...props}
     >
-      <path d="M4 8 L12 3.5 L20 8" />
-      <rect x="5" y="8" width="14" height="12" rx="1" />
-      <line x1="8" y1="12" x2="16" y2="12" />
-      <line x1="8" y1="15" x2="16" y2="15" />
-      <line x1="8" y1="18" x2="13" y2="18" />
+      {/* Binding rings */}
+      <path d="M8 3v3M16 3v3" />
+      {/* Calendar body */}
+      <rect x="4" y="5" width="16" height="16" rx="2" />
+      {/* Header bar */}
+      <path d="M4 10h16" />
+      {/* Date dots / grid marks */}
+      <path d="M8 14h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01" strokeWidth="2" />
     </svg>
   );
 }
