@@ -1,4 +1,4 @@
-# Near&Now - Location-Based Social Discovery Platform
+# MenRush - Location-Based Social Discovery Platform
 
 A modern, full-stack MVP for discovering and messaging people nearby in real-time.
 
