@@ -70,8 +70,8 @@ export const ComingSoon = () => {
         });
         setSuccessMsg(
           alreadySubscribed
-            ? "You're already on the list. Keep an eye on your inbox."
-            : "You're on the list. We'll be in touch — discreetly.",
+            ? "You're already on the list. Check your inbox for the beta invite if you haven't used it yet."
+            : "You're on the list. Check your email — we'll send a link if you want to join the beta now.",
         );
         setEmail('');
 

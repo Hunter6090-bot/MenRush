@@ -48,9 +48,9 @@ export function NearbyProfileGrid({
 }: NearbyProfileGridProps) {
   if (loading && users.length === 0) {
     return (
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-3.5">
+      <div className="grid grid-cols-2 gap-3" data-testid="nearby-profile-grid-loading">
         {[...Array(6)].map((_, i) => (
-          <div key={i} className="aspect-[3/3.6] animate-pulse rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]" />
+          <div key={i} className="aspect-square animate-pulse rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]" />
         ))}
       </div>
     );
@@ -135,7 +135,7 @@ export function NearbyProfileGrid({
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] lg:gap-3.5">
+    <div className="grid grid-cols-2 gap-3" data-testid="nearby-profile-grid">
       {users.map((user) => {
         const photo = getPhotoUrl(user.photo_url);
         const meta = `${formatDistanceMiles(user)} · ${getTribeTag(user)} · ${formatActiveStatus(user)}`;
@@ -154,26 +154,26 @@ export function NearbyProfileGrid({
               className="block w-full text-left"
               aria-label={`Open profile for ${user.name}`}
             >
-              <div className="relative aspect-[3/3.6] w-full bg-[var(--bg-elevated)]">
+              <div className="relative aspect-square w-full bg-[var(--bg-elevated)]">
                 <GridPhoto
                   name={user.name}
                   photoUrl={user.photo_url}
                   age={user.age}
                   resolved={photo}
                 />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.92)] to-transparent px-3 pb-2.5 pt-10">
-                  <div className="flex items-center gap-1.5">
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.92)] to-transparent px-2.5 pb-2 pt-8">
+                  <div className="flex items-center gap-1">
                     <span
                       className={`h-2 w-2 shrink-0 rounded-full ${user.online ? 'bg-[var(--status-online)]' : 'bg-[var(--cream-muted)]'}`}
                     />
-                    <span className="truncate text-[15px] font-bold text-[var(--cream)]">
+                    <span className="truncate text-[14px] font-bold text-[var(--cream)]">
                       {user.name} {user.age}
                     </span>
                     {user.is_verified ? <VerifiedBadge size="sm" /> : null}
                   </div>
-                  <p className="mt-0.5 truncate text-xs text-[var(--cream-muted)]">{meta}</p>
+                  <p className="mt-0.5 truncate text-[11px] text-[var(--cream-muted)]">{meta}</p>
                   {user.looking_for ? (
-                    <p className="mt-0.5 truncate text-[11px] font-semibold text-[#E0A14A]">
+                    <p className="mt-0.5 truncate text-[10px] font-semibold text-[#E0A14A]">
                       {user.looking_for}
                     </p>
                   ) : null}
@@ -181,7 +181,7 @@ export function NearbyProfileGrid({
               </div>
             </button>
             {onMatch ? (
-              <div className="border-t border-[var(--border-default)] p-2">
+              <div className="border-t border-[var(--border-default)] p-1.5">
                 <button
                   type="button"
                   disabled={matching}
@@ -190,7 +190,7 @@ export function NearbyProfileGrid({
                     e.stopPropagation();
                     void onMatch(user);
                   }}
-                  className={`w-full rounded-xl py-2 text-[12px] font-extrabold uppercase tracking-wide transition-colors disabled:opacity-60 ${
+                  className={`w-full rounded-xl py-2 text-[11px] font-extrabold uppercase tracking-wide transition-colors disabled:opacity-60 ${
                     mutual
                       ? 'border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] text-[#E0A14A]'
                       : liked

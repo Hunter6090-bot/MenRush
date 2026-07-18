@@ -31,6 +31,17 @@ export const BetaAccess = () => {
   useEffect(() => {
     if (!BETA_INVITE_REQUIRED) {
       navigate('/register', { replace: true });
+      return;
+    }
+    // Prefill from waitlist welcome / invite email deep links.
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const fromLink = params.get('invite') || params.get('code');
+      if (fromLink) {
+        setCode(normalizeClientInviteCode(fromLink));
+      }
+    } catch {
+      /* ignore */
     }
   }, [navigate]);
 

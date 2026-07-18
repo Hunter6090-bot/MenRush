@@ -8,11 +8,9 @@ import { Layout } from '../components/Layout';
 import { PulseFab } from '../components/PulseFab';
 import { MoodPicker } from '../components/MoodPicker';
 import {
+  DEFAULT_RADIUS_KM,
   MAX_RADIUS_KM,
-  RADIUS_MILE_OPTIONS,
   clampRadiusKm,
-  kmToRadiusSelection,
-  radiusSelectionToKm,
 } from '../lib/discoveryFormat';
 import { ProfileDrawer } from '../components/ProfileDrawer';
 import { createMapMarkerElement, MapMarker } from '../components/MapMarker';
@@ -45,7 +43,28 @@ import {
 } from '../lib/mapRadiusCircle';
 import { ROUTE_LABELS } from '../lib/routeLabels';
 import { useIsDesktopLayout } from '../hooks/useMediaQuery';
+import { ProximitySlider } from '../components/ProximitySlider';
 
+/** Map panel: swipe up to hide, swipe down to show, expand for large map. */
+type MapPanelMode = 'hidden' | 'default' | 'expanded';
+const MAP_PANEL_STORAGE_KEY = 'menrush_nearby_map_panel';
+const DISCOVER_RADIUS_KEY = 'menrush_default_radius_km';
+
+function readMapPanelMode(): MapPanelMode {
+  try {
+    const raw = localStorage.getItem(MAP_PANEL_STORAGE_KEY);
+    if (raw === 'hidden' || raw === 'default' || raw === 'expanded') return raw;
+  } catch {
+    /* ignore */
+  }
+  return 'default';
+}
+
+function mapPanelHeightCss(mode: MapPanelMode): string {
+  if (mode === 'hidden') return '0px';
+  if (mode === 'expanded') return 'min(72vh, 640px)';
+  return 'min(38vh, 360px)';
+}
 
 const INJECT_ID = '__discover_styles__';
 if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
@@ -83,6 +102,14 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
     }
     .map-self-dot--pulsing::before { animation: pulse-ring 2s ease-out infinite; }
     .map-self-dot--pulsing::after { animation: pulse-ring 2s ease-out 1s infinite; }
+    .discover-map-panel {
+      transition: height 0.28s ease, min-height 0.28s ease, opacity 0.2s ease;
+      will-change: height;
+    }
+    .discover-map-panel.is-hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
   `;
   document.head.appendChild(s);
 }
@@ -108,7 +135,17 @@ export const Discover = () => {
   const [likesHydrated, setLikesHydrated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [radius, setRadius] = useState<number>(5);
+  const [radius, setRadius] = useState<number>(() => {
+    try {
+      const saved = Number(localStorage.getItem(DISCOVER_RADIUS_KEY));
+      if (Number.isFinite(saved) && saved > 0) return clampRadiusKm(saved);
+    } catch {
+      /* ignore */
+    }
+    return DEFAULT_RADIUS_KM;
+  });
+  const [mapPanelMode, setMapPanelMode] = useState<MapPanelMode>(() => readMapPanelMode());
+  const mapDragRef = useRef<{ startY: number; mode: MapPanelMode } | null>(null);
   const [discoveryFilters, setDiscoveryFilters] = useState<DiscoveryFilterState>(DEFAULT_DISCOVERY_FILTERS);
   const [pulseUntil, setPulseUntil] = useState<Date | null>(null);
   const [nextPulseAllowedAt, setNextPulseAllowedAt] = useState<string | null>(null);
@@ -514,22 +551,82 @@ export const Discover = () => {
     (next: number) => {
       const clamped = clampRadiusKm(next);
       setRadius(clamped);
-      if (lat != null && lng != null) fetchNearbyUsers(lat, lng, clamped, discoveryFilters);
+      try {
+        localStorage.setItem(DISCOVER_RADIUS_KEY, String(clamped));
+      } catch {
+        /* ignore */
+      }
+      if (lat != null && lng != null) {
+        void fetchNearbyUsers(lat, lng, clamped, discoveryFilters);
+      }
     },
     [lat, lng, discoveryFilters, fetchNearbyUsers],
   );
 
-  const handleRadiusCycle = () => {
+  /**
+   * Expand search radius — was stepping one tiny mile tier (felt broken).
+   * If we already know men exist farther out, jump to max. Otherwise big steps.
+   */
+  const handleRadiusCycle = useCallback(() => {
     if (radius >= MAX_RADIUS_KM - 0.5) return;
-    const current = kmToRadiusSelection(radius);
-    if (current === 'all') return;
-    const idx = RADIUS_MILE_OPTIONS.indexOf(current);
-    const next =
-      idx >= 0 && idx < RADIUS_MILE_OPTIONS.length - 1
-        ? RADIUS_MILE_OPTIONS[idx + 1]
-        : 'all';
-    handleRadiusChange(radiusSelectionToKm(next));
-  };
+
+    if (beyondRadiusCount > 0) {
+      handleRadiusChange(MAX_RADIUS_KM);
+      return;
+    }
+
+    // Big, noticeable jumps: ~5 → 25 → 50 → 100 mi (API max)
+    const stepsKm = [5, 10, 25, 50, 80, MAX_RADIUS_KM];
+    const next = stepsKm.find((km) => km > radius + 0.4) ?? MAX_RADIUS_KM;
+    handleRadiusChange(next);
+  }, [radius, beyondRadiusCount, handleRadiusChange]);
+
+  const setMapPanel = useCallback((mode: MapPanelMode) => {
+    setMapPanelMode(mode);
+    try {
+      localStorage.setItem(MAP_PANEL_STORAGE_KEY, mode);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const onMapHandlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      mapDragRef.current = { startY: e.clientY, mode: mapPanelMode };
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    },
+    [mapPanelMode],
+  );
+
+  const onMapHandlePointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      const drag = mapDragRef.current;
+      mapDragRef.current = null;
+      if (!drag) return;
+      const dy = e.clientY - drag.startY;
+      // Swipe up (negative dy) → hide / shrink. Swipe down → show / expand.
+      if (dy < -40) {
+        if (drag.mode === 'expanded') setMapPanel('default');
+        else setMapPanel('hidden');
+      } else if (dy > 40) {
+        if (drag.mode === 'hidden') setMapPanel('default');
+        else if (drag.mode === 'default') setMapPanel('expanded');
+      }
+    },
+    [setMapPanel],
+  );
+
+  // Mapbox needs resize when the collapsible panel changes height.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const t1 = window.setTimeout(() => map.resize(), 50);
+    const t2 = window.setTimeout(() => map.resize(), 320);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [mapPanelMode, isDesktopLayout]);
 
   const handleDiscoveryFiltersChange = useCallback(
     (next: DiscoveryFilterState) => {
@@ -1022,11 +1119,29 @@ export const Discover = () => {
           onChange={handleDiscoveryFiltersChange}
           className="mb-4"
         />
-        <div className="relative mb-5 h-[45vh] min-h-[280px] overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[#11100E] shadow-[var(--shadow-md)]">
+        <div className="relative mb-4 h-[min(48vh,520px)] min-h-[300px] overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[#11100E] shadow-[var(--shadow-md)]">
           <div ref={isDesktopLayout ? mapContainerRef : undefined} className="absolute inset-0" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-between gap-2 p-3">
+            <div className="pointer-events-auto">
+              <ProximitySlider
+                value={radius}
+                onChange={(km) => handleRadiusChange(km)}
+                variant="map"
+              />
+            </div>
+          </div>
           <div className="pointer-events-none absolute bottom-3 left-3 z-10 flex items-center gap-2 rounded-full border border-[var(--border-default)] bg-[rgba(30,21,8,0.85)] px-4 py-2 text-[13px] text-[var(--cream-muted)] backdrop-blur-sm">
             <span className="inline-flex h-2 w-2 rounded-full bg-[var(--status-online)]" />
             {nearbyCount} in your radius · {formatRadiusMiles(radius)}
+            {nearbyCount === 0 && radius < MAX_RADIUS_KM - 0.5 ? (
+              <button
+                type="button"
+                className="pointer-events-auto ml-1 font-extrabold text-[var(--copper)] underline-offset-2 hover:underline"
+                onClick={handleRadiusCycle}
+              >
+                Expand
+              </button>
+            ) : null}
           </div>
         </div>
         {!needsLocationGate ? (
@@ -1050,116 +1165,26 @@ export const Discover = () => {
       </div>
 
       <div className="relative lg:hidden">
-        <div className="space-y-4 overflow-y-auto px-4 py-4 pb-24">
-          <div className="flex flex-wrap items-center gap-3">
-            <h2 className="flex-1 text-xl font-extrabold text-[var(--cream)]">Nearby</h2>
-            <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
-          </div>
-
-          {!needsLocationGate ? (
-            <div
-              className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/80 px-3 py-2.5"
-              data-testid="discover-mood-strip-mobile"
-            >
-              <p className="mb-2 text-[12px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]">
-                Your mood
-              </p>
-              <div className={moodSaving ? 'pointer-events-none opacity-60' : ''}>
-                <MoodPicker current={mood} onSelect={handleMoodSelect} />
-              </div>
-            </div>
-          ) : null}
-
-          <DiscoveryFilterPanel
-            variant="inline"
-            value={discoveryFilters}
-            onChange={handleDiscoveryFiltersChange}
-          />
-
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div
-              data-testid="nearby-counts"
-              className="inline-flex rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
-            >
-              <p className="text-[11px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
-                {loading && nearbyCount === 0 ? (
-                  <span className="text-[var(--cream-muted)]">Scanning…</span>
-                ) : nearbyCount === 0 ? (
-                  <button type="button" onClick={handleRadiusCycle} className="text-[var(--copper)]">
-                    EXPAND YOUR RADIUS →
-                  </button>
-                ) : (
-                  <>
-                    <span className="font-black text-[var(--copper)]">{nearbyCount}</span> NEARBY
-                    <span className="mx-1.5 text-[var(--cream-muted)]">·</span>
-                    <span className="font-black text-[var(--copper)]">{onlineCount}</span> ONLINE NOW
-                  </>
-                )}
-              </p>
-            </div>
-
-            <div
-              className="flex items-center overflow-hidden rounded-full border bg-[var(--bg-elevated)]/85 backdrop-blur-sm"
-              style={{ borderColor: 'var(--border-default)' }}
-              role="group"
-              aria-label="Discovery surface"
-            >
-              <span
-                className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em]"
-                style={{ background: 'var(--copper)', color: 'var(--bg-primary)' }}
-                aria-current="page"
-              >
-                {ROUTE_LABELS.map}
-              </span>
-              <Link
-                to="/stream"
-                className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] transition-colors hover:text-[var(--copper)]"
-                style={{ color: 'var(--cream-soft)' }}
-                aria-label={`Switch to ${ROUTE_LABELS.liveProfileList}`}
-              >
-                {ROUTE_LABELS.liveProfileList}
-              </Link>
-            </div>
-          </div>
-
-          {locationNotice ? (
-            <div
-              role="status"
-              data-testid="location-notice"
-              className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-3 py-2 text-[11px] font-medium leading-snug text-[var(--cream-soft)] shadow-md backdrop-blur-sm"
-            >
-              <p>{locationNotice}</p>
-              <button
-                type="button"
-                onClick={handleEnableLocation}
-                data-testid="enable-location"
-                className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[var(--copper)]/15 px-2.5 py-1 text-[11px] font-bold text-[var(--copper)] transition-colors hover:bg-[var(--copper)]/25"
-              >
-                {locationNotice.startsWith('Using your last saved location') ||
-                locationNotice === INSECURE_GPS_NOTICE
-                  ? 'Refresh location'
-                  : 'Allow in browser'}
-              </button>
-            </div>
-          ) : null}
-
-          {pulseError ? (
-            <div className="rounded-md border border-[#A45E18] bg-[#3D1A1A] px-3 py-2 text-xs text-[var(--cream)]">
-              {pulseError}
-            </div>
-          ) : null}
-
-          <div className="relative h-[36vh] min-h-[220px] overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[#11100E] shadow-[var(--shadow-md)]">
+        <div className="overflow-y-auto pb-24">
+          {/* ── Map first: clean, collapsible (swipe up hide / down show / expand) ── */}
+          <div
+            className={`discover-map-panel relative w-full overflow-hidden border-b border-[var(--border-default)] bg-[#11100E] ${
+              mapPanelMode === 'hidden' ? 'is-hidden' : ''
+            }`}
+            style={{
+              height: mapPanelHeightCss(mapPanelMode),
+              minHeight: mapPanelMode === 'hidden' ? 0 : 120,
+            }}
+            data-testid="discover-map-panel"
+            data-map-mode={mapPanelMode}
+          >
             <div ref={isDesktopLayout ? undefined : mapContainerRef} className="absolute inset-0" />
 
             {tokenMissing ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0D0A06] px-6 text-center">
-                <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full border border-[var(--copper)]/40 bg-[var(--copper)]/15">
-                  <span className="text-2xl text-[var(--copper)]">·</span>
-                </div>
                 <p className="text-sm font-bold text-[var(--cream)]">Map is taking a break</p>
                 <p className="mt-1 max-w-xs text-xs leading-relaxed text-[var(--cream-muted)]">
-                  We can’t load the map right now. You can still browse who’s nearby below.
+                  Browse who&apos;s nearby below.
                 </p>
               </div>
             ) : null}
@@ -1170,8 +1195,7 @@ export const Discover = () => {
                   <>
                     <p className="text-sm font-extrabold text-[var(--cream)]">Location required</p>
                     <p className="mt-2 max-w-xs text-xs leading-relaxed text-[var(--cream-muted)]">
-                      Grant location permission to load the map around you — not a default city.
-                      Others only see approximate distance.
+                      Grant location to load the map around you.
                     </p>
                     <button
                       type="button"
@@ -1182,46 +1206,222 @@ export const Discover = () => {
                     </button>
                   </>
                 ) : (
-                  <>
-                    <div className="relative flex h-14 w-14 items-center justify-center">
-                      <span className="absolute inset-0 animate-pulse-ring rounded-full bg-[var(--copper)]/20" />
-                      <span className="relative z-10 h-5 w-5 rounded-full border-2 border-[var(--cream)] bg-[var(--copper)]" />
-                    </div>
-                    <p className="mt-3 text-xs font-medium uppercase tracking-widest text-[var(--cream-muted)]">
-                      {error || 'Getting your location…'}
-                    </p>
-                  </>
+                  <p className="text-xs font-medium uppercase tracking-widest text-[var(--cream-muted)]">
+                    {error || 'Getting your location…'}
+                  </p>
                 )}
               </div>
             ) : null}
 
-            <div className="pointer-events-none absolute bottom-3 left-3 z-10 flex items-center gap-2 rounded-full border border-[var(--border-default)] bg-[rgba(30,21,8,0.85)] px-3 py-1.5 text-[12px] text-[var(--cream-muted)] backdrop-blur-sm">
-              <span className="inline-flex h-2 w-2 rounded-full bg-[var(--status-online)]" />
-              {nearbyCount} in your radius · {formatRadiusMiles(radius)}
-            </div>
+            {/* Floating map controls */}
+            {mapPanelMode !== 'hidden' ? (
+              <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 p-3">
+                <div className="pointer-events-auto">
+                  <ProximitySlider
+                    value={radius}
+                    onChange={(km) => handleRadiusChange(km)}
+                    variant="map"
+                  />
+                </div>
+                <div className="pointer-events-auto flex flex-col items-end gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMapPanel(mapPanelMode === 'expanded' ? 'default' : 'expanded')
+                    }
+                    data-testid="map-expand-toggle"
+                    className="rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[var(--cream)] shadow-md backdrop-blur-md"
+                  >
+                    {mapPanelMode === 'expanded' ? 'Shrink map' : 'Expand map'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMapPanel('hidden')}
+                    data-testid="map-hide"
+                    className="rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)] shadow-md backdrop-blur-md"
+                  >
+                    Hide map
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {mapPanelMode !== 'hidden' ? (
+              <div className="pointer-events-none absolute bottom-10 left-3 z-10 flex items-center gap-2 rounded-full border border-[var(--border-default)] bg-[rgba(30,21,8,0.85)] px-3 py-1.5 text-[12px] text-[var(--cream-muted)] backdrop-blur-sm">
+                <span className="inline-flex h-2 w-2 rounded-full bg-[var(--status-online)]" />
+                {nearbyCount} nearby · {formatRadiusMiles(radius)}
+              </div>
+            ) : null}
+
+            {/* Drag handle — swipe up to hide, swipe down to expand */}
+            {mapPanelMode !== 'hidden' ? (
+              <div
+                role="slider"
+                aria-label="Map height. Swipe up to hide, swipe down to expand."
+                aria-valuemin={0}
+                aria-valuemax={2}
+                aria-valuenow={mapPanelMode === 'default' ? 1 : 2}
+                tabIndex={0}
+                data-testid="map-drag-handle"
+                onPointerDown={onMapHandlePointerDown}
+                onPointerUp={onMapHandlePointerUp}
+                onPointerCancel={() => {
+                  mapDragRef.current = null;
+                }}
+                className="absolute inset-x-0 bottom-0 z-20 flex cursor-grab touch-none flex-col items-center active:cursor-grabbing"
+                style={{ touchAction: 'none' }}
+              >
+                <div className="flex w-full flex-col items-center bg-gradient-to-t from-[rgba(13,10,6,0.85)] to-transparent pb-2 pt-6">
+                  <span className="mb-1 h-1 w-10 rounded-full bg-[var(--cream-muted)]/70" />
+                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--cream-muted)]">
+                    Swipe up to hide · down to enlarge
+                  </span>
+                </div>
+              </div>
+            ) : null}
           </div>
 
-          {!needsLocationGate ? (
-            <>
-              <EventsRail lat={lat} lng={lng} onSelect={(ev: EventDTO) => navigate(`/rooms/${ev.id}`)} />
-              <NearbyProfileGrid
-                users={displayUsers}
-                loading={loading}
-                onSelect={setSelectedUser}
-                onMatch={handleLike}
-                likedUserIds={likedUsers}
-                mutualUserIds={matchedUsers}
-                matchingUserId={matchingUserId}
-                onExpandRadius={handleRadiusCycle}
-                onFinishProfile={() => navigate('/profile/setup')}
-                onStartPulse={() => void handleStartPulse(90)}
-                pulseOn={!!pulseUntil}
-                onOpenHotSpots={() => navigate('/hot-spots')}
-                radiusLabel={formatRadiusMiles(radius)}
-                beyondRadiusCount={beyondRadiusCount}
-              />
-            </>
+          {/* When map hidden: show bar to pull it back */}
+          {mapPanelMode === 'hidden' ? (
+            <button
+              type="button"
+              data-testid="map-show-bar"
+              onClick={() => setMapPanel('default')}
+              onPointerDown={onMapHandlePointerDown}
+              onPointerUp={onMapHandlePointerUp}
+              className="flex w-full items-center justify-center gap-2 border-b border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-4 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[var(--copper)]"
+            >
+              <span className="h-1 w-8 rounded-full bg-[var(--copper)]/60" aria-hidden />
+              Show map
+              <span className="h-1 w-8 rounded-full bg-[var(--copper)]/60" aria-hidden />
+            </button>
           ) : null}
+
+          <div className="space-y-3 px-4 pt-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div
+                data-testid="nearby-counts"
+                className="inline-flex min-h-[36px] items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
+              >
+                <p className="text-[11px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
+                  {loading && nearbyCount === 0 ? (
+                    <span className="text-[var(--cream-muted)]">Scanning…</span>
+                  ) : nearbyCount === 0 ? (
+                    <button
+                      type="button"
+                      onClick={handleRadiusCycle}
+                      data-testid="expand-radius-chip"
+                      className="text-[var(--copper)]"
+                    >
+                      EXPAND YOUR RADIUS →
+                    </button>
+                  ) : (
+                    <>
+                      <span className="font-black text-[var(--copper)]">{nearbyCount}</span> NEARBY
+                      <span className="mx-1.5 text-[var(--cream-muted)]">·</span>
+                      <span className="font-black text-[var(--copper)]">{onlineCount}</span> ONLINE
+                    </>
+                  )}
+                </p>
+              </div>
+              <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
+              <div
+                className="ml-auto flex items-center overflow-hidden rounded-full border bg-[var(--bg-elevated)]/85 backdrop-blur-sm"
+                style={{ borderColor: 'var(--border-default)' }}
+                role="group"
+                aria-label="Discovery surface"
+              >
+                <span
+                  className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em]"
+                  style={{ background: 'var(--copper)', color: 'var(--bg-primary)' }}
+                  aria-current="page"
+                >
+                  {ROUTE_LABELS.map}
+                </span>
+                <Link
+                  to="/stream"
+                  className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] transition-colors hover:text-[var(--copper)]"
+                  style={{ color: 'var(--cream-soft)' }}
+                  aria-label={`Switch to ${ROUTE_LABELS.liveProfileList}`}
+                >
+                  {ROUTE_LABELS.liveProfileList}
+                </Link>
+              </div>
+            </div>
+
+            {locationNotice ? (
+              <div
+                role="status"
+                data-testid="location-notice"
+                className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-3 py-2 text-[11px] font-medium leading-snug text-[var(--cream-soft)] shadow-md backdrop-blur-sm"
+              >
+                <p>{locationNotice}</p>
+                <button
+                  type="button"
+                  onClick={handleEnableLocation}
+                  data-testid="enable-location"
+                  className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[var(--copper)]/15 px-2.5 py-1 text-[11px] font-bold text-[var(--copper)] transition-colors hover:bg-[var(--copper)]/25"
+                >
+                  {locationNotice.startsWith('Using your last saved location') ||
+                  locationNotice === INSECURE_GPS_NOTICE
+                    ? 'Refresh location'
+                    : 'Allow in browser'}
+                </button>
+              </div>
+            ) : null}
+
+            {pulseError ? (
+              <div className="rounded-md border border-[#A45E18] bg-[#3D1A1A] px-3 py-2 text-xs text-[var(--cream)]">
+                {pulseError}
+              </div>
+            ) : null}
+
+            {/* Compact filters + mood under map, not above */}
+            <details className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/60 px-3 py-2">
+              <summary className="cursor-pointer text-[12px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]">
+                Filters & mood
+              </summary>
+              <div className="mt-3 space-y-3">
+                {!needsLocationGate ? (
+                  <div data-testid="discover-mood-strip-mobile">
+                    <MoodPicker current={mood} onSelect={handleMoodSelect} />
+                  </div>
+                ) : null}
+                <DiscoveryFilterPanel
+                  variant="inline"
+                  value={discoveryFilters}
+                  onChange={handleDiscoveryFiltersChange}
+                />
+              </div>
+            </details>
+
+            {/* Profiles: two squares per row, directly under map */}
+            {!needsLocationGate ? (
+              <>
+                <NearbyProfileGrid
+                  users={displayUsers}
+                  loading={loading}
+                  onSelect={setSelectedUser}
+                  onMatch={handleLike}
+                  likedUserIds={likedUsers}
+                  mutualUserIds={matchedUsers}
+                  matchingUserId={matchingUserId}
+                  onExpandRadius={handleRadiusCycle}
+                  onFinishProfile={() => navigate('/profile/setup')}
+                  onStartPulse={() => void handleStartPulse(90)}
+                  pulseOn={!!pulseUntil}
+                  onOpenHotSpots={() => navigate('/hot-spots')}
+                  radiusLabel={formatRadiusMiles(radius)}
+                  beyondRadiusCount={beyondRadiusCount}
+                />
+                <EventsRail
+                  lat={lat}
+                  lng={lng}
+                  onSelect={(ev: EventDTO) => navigate(`/rooms/${ev.id}`)}
+                />
+              </>
+            ) : null}
+          </div>
         </div>
 
         <PulseFab
