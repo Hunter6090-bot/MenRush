@@ -25,7 +25,7 @@ function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number):
 /**
  * Keeps the signed-in user's profile location in sync with device GPS.
  * Members consent to location at signup (Terms §6.2). High-accuracy first,
- * low-accuracy fallback — never invents city pins. 18+ only.
+ * low-accuracy fallback — never invents city pins.
  */
 export function useLiveLocationPublisher() {
   const token = useAuthStore((s) => s.token);

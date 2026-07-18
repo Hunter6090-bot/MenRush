@@ -107,7 +107,7 @@ export const Events = () => {
                 </p>
                 <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--cream-muted)]">
                   Not broadcasting an exact public pin — we need GPS privately to show what&apos;s near
-                  you. Shared only while you use the app · 18+ only.
+                  you. Shared only while you use the app.
                 </p>
                 <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
                   <Link

@@ -4,6 +4,7 @@ import {
   IconChat,
   IconDiscover,
   IconEvents,
+  IconHotSpots,
   IconMatches,
   IconNotifications,
   IconProfile,
@@ -41,7 +42,7 @@ export function getNavItems(): NavItem[] {
     {
       to: '/hot-spots',
       label: ROUTE_LABELS.hotSpots,
-      Icon: IconEvents,
+      Icon: IconHotSpots,
       desktopNav: true,
     },
     {

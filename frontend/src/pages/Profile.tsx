@@ -386,7 +386,7 @@ export const Profile = () => {
               >
                 <p className="text-[12px] font-extrabold text-[#F0E0C0]">Upgrade from a shared avatar</p>
                 <p className="mt-1 text-[11px] leading-relaxed text-[#A89070]">
-                  Real photos get more matches. Upload a clear face or upper-body shot — 18+ only.
+                  Real photos get more matches. Upload a clear face or upper-body shot —
                 </p>
                 <button
                   type="button"
@@ -565,7 +565,7 @@ export const Profile = () => {
               >
                 <p className="text-[12px] font-extrabold text-[#F0E0C0]">Upgrade from a shared avatar</p>
                 <p className="mt-1 text-[11px] leading-relaxed text-[#A89070]">
-                  Real photos get more matches. Clear face or upper body · 18+ only.
+                  Real photos get more matches. Clear face or upper body.
                 </p>
                 <button
                   type="button"

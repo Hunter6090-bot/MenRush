@@ -11,11 +11,11 @@
 
 /** Short line for banners / strips — privacy + necessity. */
 export const LOCATION_PRIVACY_LINE =
-  'We need your location to find men near you. Others see approximate distance only — not your exact pin on a public map.';
+  'We need your location to find men near you. Others see approximate distance only — not your exact pin.';
 
 /** Slightly longer for gates and Settings. */
 export const LOCATION_PRIVACY_DETAIL =
-  'MenRush uses your GPS for proximity only. You are not broadcasting an exact public address. Nearby shows bucketed distance (e.g. under 300 m). Exact live location with matches is optional and separate. Shared only while you use the app · 18+ only.';
+  'MenRush uses your GPS for proximity only. You are not broadcasting an exact public address. Nearby shows approximate distance. Exact live pin with matches is optional and separate.';
 
 export type DeviceLocationError =
   | 'insecure'

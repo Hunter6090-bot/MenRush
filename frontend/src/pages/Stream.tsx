@@ -34,7 +34,7 @@ export const Stream = () => {
       setNeedsLocation(true);
       setLoading(false);
       setError(
-        'Location needs HTTPS. Open menrush.com on your phone, then allow location (18+ only).',
+        'Location needs HTTPS. Open menrush.com on your phone, then allow location.',
       );
       return;
     }
@@ -111,7 +111,7 @@ export const Stream = () => {
         setLoading(false);
         setError(
           !window.isSecureContext
-            ? 'Location needs HTTPS. Open menrush.com, then allow location (18+ only).'
+            ? 'Location needs HTTPS. Open menrush.com, then allow location.'
             : 'This browser cannot share location. Try Chrome or Safari.',
         );
         return;
@@ -159,7 +159,7 @@ export const Stream = () => {
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#C4832A]">Live view</p>
             <h1 className="text-2xl font-bold text-[#F0E0C0]">{ROUTE_LABELS.liveProfileList}</h1>
             <p className="text-sm text-[#A89070] mt-1">
-              Who is around right now — list view. 18+ only.
+              Who is around right now — list view.
             </p>
           </div>
           <Link
@@ -186,7 +186,7 @@ export const Stream = () => {
             </p>
             <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[#A89070]">
               {error ||
-                'Others see approximate distance only — not your exact public pin. We need GPS so the list is real men near you. Shared only while you use the app · 18+ only.'}
+                'Others see approximate distance only — not your exact public pin. We need GPS so the list is real men near you. Shared only while you use the app.'}
             </p>
             <button
               type="button"
@@ -224,7 +224,7 @@ export const Stream = () => {
                 Hot Spots
               </Link>
             </div>
-            <p className="mt-4 text-[11px] text-[#A89070]">18+ only · Be intentional</p>
+            <p className="mt-4 text-[11px] text-[#A89070]">Be direct</p>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

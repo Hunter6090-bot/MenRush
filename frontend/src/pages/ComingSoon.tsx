@@ -172,7 +172,7 @@ export const ComingSoon = () => {
           LONDON · MANCHESTER · BIRMINGHAM · BRIGHTON
         </p>
         <p className="relative mt-3 text-[11px] text-[#6B5840]">
-          18+ only. Every member ID verified and selfie matched.
+          Every member ID verified and selfie matched.
         </p>
 
         <p className="relative mt-8 text-sm text-[#A89070]">

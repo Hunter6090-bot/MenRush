@@ -442,7 +442,7 @@ export const ProfileSetup: React.FC = () => {
               <p className={publicMutedCopyClass}>
                 {photoChoice === 'generic'
                   ? 'Shared avatar for now — real photos rank first nearby and get more matches.'
-                  : 'Clear face or upper body · JPEG, PNG or WebP · max 5MB · 18+ only'}
+                  : 'Clear face or upper body · JPEG, PNG or WebP · max 5MB'}
               </p>
               {photoChoice === 'generic' ? (
                 <p
@@ -594,7 +594,7 @@ export const ProfileSetup: React.FC = () => {
             <p className="pt-2 text-[13px] leading-relaxed text-[#A89070]">
               We need your location to show men near you. Others see approximate distance only — not
               your exact public pin. Exact live pin with matches is optional later. Shared only while
-              you use the app · 18+ only.
+              you use the app.
             </p>
           </div>
         ) : null}

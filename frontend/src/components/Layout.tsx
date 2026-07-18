@@ -63,10 +63,15 @@ function LayoutInner({ children }: LayoutProps) {
   return (
     <div className="min-h-dvh bg-[var(--bg-primary)] lg:grid lg:grid-cols-[var(--desktop-sidebar-width)_minmax(0,1fr)]">
       <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:w-[var(--desktop-sidebar-width)] lg:border-r lg:border-[var(--border-default)] lg:bg-nn-bg lg:px-3.5 lg:py-5">
-        <div className="flex items-center gap-2.5 pb-4">
+        {/* Single desktop brand control — links home (Nearby). Top bar has search only. */}
+        <Link
+          to="/discover"
+          aria-label="MenRush home — Nearby"
+          className="mb-4 flex items-center gap-2.5 rounded-xl px-1 py-1 transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--copper)]"
+        >
           <BrandMark size="sm" className="shadow-[0_0_0_2px_rgba(196,131,42,0.4)] rounded-full" />
-          <p className="font-display text-sm font-black tracking-[0.14em] text-nn-text">MENRUSH</p>
-        </div>
+          <span className="font-display text-sm font-black tracking-[0.14em] text-nn-text">MENRUSH</span>
+        </Link>
 
         <nav className="flex-1 overflow-y-auto space-y-1">
           {desktopLinks.map((item) => {
@@ -109,7 +114,7 @@ function LayoutInner({ children }: LayoutProps) {
       </aside>
 
       <div className="flex min-h-dvh min-w-0 flex-col lg:col-start-2">
-        <header className="lg:hidden fixed top-0 left-0 right-0 z-50 border-b border-[var(--border-default)] bg-[#0D0A06]/92 backdrop-blur-xl pt-[env(safe-area-inset-top,0px)]">
+        <header className="lg:hidden fixed top-0 left-0 right-0 z-50 border-b border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-primary)_92%,transparent)] backdrop-blur-xl pt-[env(safe-area-inset-top,0px)]">
           <div className="flex h-[3.25rem] items-center gap-2 px-3">
             <div className="w-10 shrink-0">
               {showMobileBack ? (
@@ -160,18 +165,10 @@ function LayoutInner({ children }: LayoutProps) {
         </header>
 
         <div className="hidden lg:flex h-16 shrink-0 items-center gap-3.5 border-b border-nn-border bg-nn-bg px-6">
-          <Link
-            to="/discover"
-            aria-label="MenRush home"
-            className="inline-flex shrink-0 items-center gap-2.5 rounded-full pr-1 transition-opacity hover:opacity-90"
-          >
-            <BrandMark size="sm" className="shadow-[0_0_0_2px_rgba(196,131,42,0.35)] rounded-full" />
-            <span className="font-display text-sm font-black tracking-[0.14em] text-nn-text">MENRUSH</span>
-          </Link>
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
-            className="flex max-w-[420px] flex-1 items-center gap-2.5 rounded-full border border-nn-border bg-nn-card px-4 py-2.5 text-left transition-colors hover:border-nn-copper/40"
+            className="flex max-w-[520px] flex-1 items-center gap-2.5 rounded-full border border-nn-border bg-nn-card px-4 py-2.5 text-left transition-colors hover:border-nn-copper/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--copper)]"
           >
             <SearchIcon className="h-4 w-4 shrink-0 text-nn-muted" />
             <span className="text-sm text-nn-muted">

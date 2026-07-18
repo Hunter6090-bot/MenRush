@@ -38,6 +38,25 @@
     />
     <script>
       (function () {
+        // Theme before paint — avoids flash
+        try {
+          var pref = localStorage.getItem('menrush_theme') || 'system';
+          var dark = true;
+          if (pref === 'light') dark = false;
+          else if (pref === 'dark') dark = true;
+          else dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var resolved = dark ? 'dark' : 'light';
+          document.documentElement.dataset.theme = resolved;
+          document.documentElement.style.colorScheme = resolved;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', dark ? '#0D0A06' : '#F5EDE0');
+          if (!dark) {
+            document.documentElement.classList.add('theme-light');
+            document.body && (document.body.style.background = '#F5EDE0');
+            document.body && (document.body.style.color = '#1A1208');
+          }
+        } catch (e) { /* ignore */ }
+
         var origin = location.origin;
         if (!origin || origin === 'null') return;
         var image = origin + '/brand/menrush-social-preview.png';

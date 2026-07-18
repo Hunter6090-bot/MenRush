@@ -284,7 +284,7 @@ export function ProfileDrawer({
           )}
           </div>
           <p className="text-center text-[10px] font-medium tracking-wide text-[var(--cream-muted)]">
-            Match is mutual interest · Chat with consent · 18+ only
+            Match is mutual interest · Chat with consent
           </p>
         </div>
       </div>

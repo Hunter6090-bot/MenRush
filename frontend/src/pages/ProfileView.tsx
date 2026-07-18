@@ -291,7 +291,7 @@ export const ProfileView = () => {
           </button>
         </div>
         <p className="text-center text-[11px] text-[#A89070]">
-          Match is mutual interest · Chat unlocks when he matches back · 18+ · Report anytime
+          Match is mutual interest · Chat unlocks when he matches back · Report anytime
         </p>
       </div>
     </Layout>

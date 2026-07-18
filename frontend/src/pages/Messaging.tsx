@@ -791,7 +791,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               No messages yet
             </p>
             <p className="text-xs mt-1 mb-4 text-center" style={{ color: '#6B5840' }}>
-              Be direct. Consent first. 18+ only.
+              Be direct. Consent first.
             </p>
             <div className="flex flex-col gap-2 w-full max-w-sm">
               {ICEBREAKERS.map((line) => (

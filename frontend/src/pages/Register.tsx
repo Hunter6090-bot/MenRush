@@ -294,7 +294,7 @@ export const Register = () => {
           {error ? <p className={publicErrorClass}>{error}</p> : null}
 
           <p className={helperClass}>
-            18+ only. Every member is ID verified and selfie matched before going live.
+            Every member is ID verified and selfie matched before going live.
           </p>
 
           <button type="submit" disabled={loading} className={publicPrimaryButtonClass}>
