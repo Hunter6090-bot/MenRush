@@ -26,6 +26,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { query } from '../db';
 import { sendWaitlistCampaignEmail } from './mailer.service';
+import { inviteCodeService } from './invite-code.service';
 
 /**
  * Waitlist + drip sends are OFF by default until you explicitly opt in.
@@ -54,7 +55,7 @@ export const DRIP_SCHEDULE: readonly DripStep[] = [
     key: 'mr-d00-welcome',
     dayOffset: 0,
     filename: 'welcome-email.html',
-    subject: 'Welcome to MenRush — beta is live',
+    subject: "You're on the list — want the MenRush beta?",
   },
   {
     key: 'mr-d02-why-building',
@@ -217,15 +218,26 @@ function buildUnsubscribeUrl(token: string): string {
 }
 
 /**
- * Render an email by substituting `{{unsubscribe_url}}` and `{{email}}` and,
- * if no unsubscribe placeholder is present, appending a small footer so every
- * outgoing message complies with CAN-SPAM / UK PECR.
+ * Render an email by substituting placeholders and, if no unsubscribe
+ * placeholder is present, appending a small footer (CAN-SPAM / UK PECR).
  */
-function renderTemplate(rawHtml: string, ctx: { email: string; unsubscribeUrl: string }): string {
+function renderTemplate(
+  rawHtml: string,
+  ctx: {
+    email: string;
+    unsubscribeUrl: string;
+    inviteCode?: string;
+    betaUrl?: string;
+  },
+): string {
+  const betaUrl = ctx.betaUrl || 'https://menrush.com/beta';
+  const inviteCode = ctx.inviteCode || '';
   let html = rawHtml
     .replace(/\{\{\s*unsubscribe_url\s*\}\}/g, ctx.unsubscribeUrl)
     .replace(/\$\[LI:UNSUBSCRIBE\]\$/g, ctx.unsubscribeUrl)
-    .replace(/\{\{\s*email\s*\}\}/g, ctx.email);
+    .replace(/\{\{\s*email\s*\}\}/g, ctx.email)
+    .replace(/\{\{\s*invite_code\s*\}\}/g, inviteCode)
+    .replace(/\{\{\s*beta_url\s*\}\}/g, betaUrl);
 
   if (!/unsubscribe/i.test(html)) {
     const footer = `\n<div style="max-width:640px;margin:24px auto 0;padding:16px 24px;border-top:1px solid #2e2418;color:#a89070;font:12px/1.6 system-ui,sans-serif;text-align:center">
@@ -242,6 +254,20 @@ function renderTemplate(rawHtml: string, ctx: { email: string; unsubscribeUrl: s
   return html;
 }
 
+/** Mint a single-use beta invite for a waitlist welcome email. */
+async function createWelcomeInviteCode(email: string): Promise<string> {
+  const created = await inviteCodeService.generateBatch({
+    count: 1,
+    maxUses: 1,
+    note: `waitlist-welcome:${email}`,
+  });
+  const code = created[0]?.code;
+  if (!code) {
+    throw new Error('Failed to generate beta invite code for waitlist welcome');
+  }
+  return code;
+}
+
 async function sendDripStep(item: DueSend): Promise<{ messageId: string | null; skipped: boolean }> {
   if (isWaitlistEmailPaused()) {
     console.log(
@@ -255,13 +281,26 @@ async function sendDripStep(item: DueSend): Promise<{ messageId: string | null; 
     return { messageId: null, skipped: true };
   }
 
+  // Welcome emails include a personal beta invite — generate before claiming
+  // the send so a failed mint does not burn the drip ledger row.
+  let inviteCode = '';
+  let betaUrl = 'https://menrush.com/beta';
+  if (item.step.key === 'mr-d00-welcome') {
+    inviteCode = await createWelcomeInviteCode(item.email);
+    betaUrl = `https://menrush.com/beta?invite=${encodeURIComponent(inviteCode)}`;
+  }
+
   const rawHtml = await loadTemplate(item.step.filename);
   const unsubscribeUrl = buildUnsubscribeUrl(item.unsubscribeToken);
-  const html = renderTemplate(rawHtml, { email: item.email, unsubscribeUrl });
+  const html = renderTemplate(rawHtml, {
+    email: item.email,
+    unsubscribeUrl,
+    inviteCode,
+    betaUrl,
+  });
 
-  // Best-effort: claim the send row FIRST so a concurrent worker won't
-  // re-pick the same (subscriber, template). If the insert fails on the
-  // unique constraint, another worker beat us — skip cleanly.
+  // Claim the send row so a concurrent worker won't re-pick the same
+  // (subscriber, template). Unique constraint → skip if already claimed.
   const claim = await query(
     `INSERT INTO waitlist_drip_sends (subscriber_id, template_key, sent_at)
      VALUES ($1, $2, NOW())
@@ -279,6 +318,19 @@ async function sendDripStep(item: DueSend): Promise<{ messageId: string | null; 
       to: item.email,
       subject: item.step.subject,
       html,
+      text: item.step.key === 'mr-d00-welcome'
+        ? [
+            "You're on the MenRush waitlist.",
+            '',
+            'The beta is live. Want to log in early?',
+            inviteCode ? `Your invite code: ${inviteCode}` : '',
+            `Open: ${betaUrl}`,
+            '',
+            `Unsubscribe: ${unsubscribeUrl}`,
+          ]
+            .filter(Boolean)
+            .join('\n')
+        : undefined,
     });
 
     await query(

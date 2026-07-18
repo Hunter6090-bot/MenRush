@@ -11,8 +11,18 @@ interface ProximitySliderProps {
 }
 
 function indexForRadius(km: number): number {
-  const idx = RADIUS_OPTIONS.indexOf(km as RadiusKm);
-  return idx >= 0 ? idx : RADIUS_OPTIONS.indexOf(5);
+  if (!Number.isFinite(km)) return RADIUS_OPTIONS.indexOf(5);
+  // At or above max slider stop → pin to max so Expand/+ is not a no-op loop.
+  if (km >= RADIUS_OPTIONS[RADIUS_OPTIONS.length - 1]) {
+    return RADIUS_OPTIONS.length - 1;
+  }
+  let best = 0;
+  for (let i = 1; i < RADIUS_OPTIONS.length; i += 1) {
+    if (Math.abs(RADIUS_OPTIONS[i] - km) < Math.abs(RADIUS_OPTIONS[best] - km)) {
+      best = i;
+    }
+  }
+  return best;
 }
 
 export function ProximitySlider({

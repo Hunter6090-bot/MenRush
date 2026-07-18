@@ -136,10 +136,10 @@ app.post('/api/waitlist', async (req, res) => {
       success: true,
       already_subscribed: result.alreadySubscribed,
       message: result.alreadySubscribed
-        ? "You're already on the list."
+        ? "You're already on the list. Check your inbox for the beta invite if you haven't used it yet."
         : paused
           ? "You're on the list."
-          : "You're on the list! Check your inbox shortly.",
+          : "You're on the list! Check your email for a link to join the beta.",
     });
   } catch (err) {
     console.error('Waitlist insert error:', err);
