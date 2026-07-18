@@ -73,12 +73,11 @@ export function NearbyProfileGrid({
                   : `${beyondRadiusCount} men are farther out`}
               </span>
               . Expand beyond
-              {radiusLabel ? ` ${radiusLabel}` : ' this range'} to see them — beta density is thin
-              close-in.
+              {radiusLabel ? ` ${radiusLabel}` : ' this range'} to see them.
             </>
           ) : (
             <>
-              Beta is still filling in. Expand your range
+              Expand your range
               {radiusLabel ? ` (now ${radiusLabel})` : ''}, turn on location, and finish your profile
               so others can find you.
             </>
@@ -90,7 +89,7 @@ export function NearbyProfileGrid({
               type="button"
               onClick={onExpandRadius}
               data-testid="empty-expand-radius"
-              className="rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+              className="min-h-[44px] rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
             >
               {beyondRadiusCount > 0 ? 'Expand to find them' : 'Expand radius'}
             </button>
@@ -100,7 +99,7 @@ export function NearbyProfileGrid({
               type="button"
               onClick={onStartPulse}
               data-testid="empty-start-pulse"
-              className="rounded-full border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.15)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.28)]"
+              className="min-h-[44px] rounded-full border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.15)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.28)]"
             >
               Start Pulse
             </button>
@@ -110,7 +109,7 @@ export function NearbyProfileGrid({
               type="button"
               onClick={onOpenHotSpots}
               data-testid="empty-hot-spots"
-              className="rounded-full border border-[rgba(196,131,42,0.5)] bg-transparent px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
+              className="min-h-[44px] rounded-full border border-[rgba(196,131,42,0.5)] bg-transparent px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
             >
               Hot Spots
             </button>
@@ -119,14 +118,14 @@ export function NearbyProfileGrid({
             <button
               type="button"
               onClick={onFinishProfile}
-              className="rounded-full border border-[rgba(196,131,42,0.5)] bg-transparent px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
+              className="min-h-[44px] rounded-full border border-[rgba(196,131,42,0.5)] bg-transparent px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
             >
               Finish profile
             </button>
           ) : null}
         </div>
         <p className="mt-3 text-[13px] text-[var(--cream-muted)]">
-          Pulse puts you first nearby for 90 minutes. Hot Spots show live venues nearby.
+          Pulse gives you 90 minutes of priority visibility.
         </p>
         <p className="mt-2 text-[12px] font-medium tracking-wide text-[var(--text-secondary)]">
           Consent first · Report anytime
