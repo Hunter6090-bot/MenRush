@@ -46,19 +46,24 @@ export const matchLocationService = {
   ): Promise<void> {
     if (!io) return;
 
-    const sharing = await this.getSharingEnabled(userId);
-    if (!sharing) return;
+    try {
+      const sharing = await this.getSharingEnabled(userId);
+      if (!sharing) return;
 
-    const matchIds = await this.getMutualMatchIds(userId);
-    const payload = {
-      user_id: userId,
-      lat,
-      lng,
-      updated_at: new Date().toISOString(),
-    };
+      const matchIds = await this.getMutualMatchIds(userId);
+      const payload = {
+        user_id: userId,
+        lat,
+        lng,
+        updated_at: new Date().toISOString(),
+      };
 
-    for (const matchId of matchIds) {
-      io.to(`user:${matchId}`).emit('match:location', payload);
+      for (const matchId of matchIds) {
+        io.to(`user:${matchId}`).emit('match:location', payload);
+      }
+    } catch (err) {
+      // Never let a location fan-out kill the API process (login/API go 502).
+      console.error('[match-location] broadcast failed:', err);
     }
   },
 };
