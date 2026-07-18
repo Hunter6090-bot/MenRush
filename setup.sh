@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Near&Now - Quick Start Script
+# MenRush - Quick Start Script
 
 set -e
 
-echo "🚀 Near&Now - Location-Based Social Discovery Platform"
+echo "🚀 MenRush - Location-Based Social Discovery Platform"
 echo "=================================================="
 echo ""
 

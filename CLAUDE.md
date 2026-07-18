@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-NearNow is a location-based social discovery app. Users share their GPS location to find and message other users nearby. The core value prop is real-time proximity awareness + direct messaging.
+MenRush is a location-based social discovery app. Users share their GPS location to find and message other users nearby. The core value prop is real-time proximity awareness + direct messaging.
 
 ## Commands
 
@@ -65,7 +65,7 @@ Three tables: `users`, `profiles`, `messages`. `profiles` has a 1:1 with `users`
 
 | Var | Default | Notes |
 |-----|---------|-------|
-| `DATABASE_URL` | `postgresql://nearnow:nearnow123@postgres:5432/nearnow` | Used by backend |
+| `DATABASE_URL` | `postgresql://menrush:menrush123@postgres:5432/menrush` | Used by backend |
 | `JWT_SECRET` | `your-secret-key` | Change in production |
 | `FRONTEND_URL` | `http://localhost:5173` | Used for Socket.IO CORS |
 | `VITE_API_URL` | `http://localhost:3000/api` | Used by frontend axios client and socket |
