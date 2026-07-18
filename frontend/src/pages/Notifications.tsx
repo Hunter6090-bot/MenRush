@@ -145,7 +145,7 @@ export const Notifications = () => {
               </div>
             ) : null}
             <p className="mt-4 text-[11px] font-medium tracking-wide text-[#A89070]">
-              18+ only · Report abuse anytime
+              · Report abuse anytime
             </p>
           </div>
         ) : (

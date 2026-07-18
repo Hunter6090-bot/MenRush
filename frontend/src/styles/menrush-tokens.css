@@ -164,6 +164,49 @@
   --fab-offset: 16px;
 }
 
+/*
+ * Light appearance — same copper brand, warmer paper surfaces.
+ * Applied via data-theme="light" on <html> (see lib/theme.ts).
+ */
+html[data-theme='light'] {
+  --nn-bg: #F5EDE0;
+  --nn-card: #FFF8F0;
+  --nn-elevated: #FFFFFF;
+  --nn-border: #E0C9A8;
+  --nn-copper: #B8732A;
+  --nn-copper-bright: #C4832A;
+  --nn-rust: #8B5A1A;
+  --nn-on-copper: #1A0E03;
+  --nn-text: #1A1208;
+  --nn-muted: #5C4A32;
+  --nn-faint: #8A7355;
+  --nn-online: #3D7A2E;
+  --nn-warning: #B8860B;
+  --nn-danger: #9B3A28;
+
+  --bg-primary: var(--nn-bg);
+  --bg-elevated: var(--nn-elevated);
+  --bg-card: var(--nn-card);
+  --bg-card-hover: #F0E4D0;
+  --bg-overlay: rgba(245, 237, 224, 0.72);
+
+  --cream: var(--nn-text);
+  --cream-soft: var(--nn-muted);
+  --cream-muted: var(--nn-faint);
+  --cream-faded: #A89070;
+
+  --border-subtle: rgba(184, 115, 42, 0.18);
+  --border-default: var(--nn-border);
+  --border-strong: rgba(184, 115, 42, 0.45);
+
+  --nn-shadow-card: 0 4px 20px rgba(90, 60, 20, 0.12);
+  --nn-shadow-card-hover: 0 12px 36px rgba(90, 60, 20, 0.18);
+  --nn-shadow-modal: 0 20px 60px rgba(60, 40, 10, 0.22);
+  --shadow-sm: 0 1px 2px rgba(60, 40, 10, 0.08);
+  --shadow-md: var(--nn-shadow-card);
+  --shadow-lg: 0 12px 32px rgba(60, 40, 10, 0.14);
+}
+
 /* Typography utilities */
 .font-display { font-family: var(--nn-font-display); }
 .nn-display-md {

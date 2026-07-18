@@ -70,7 +70,7 @@ export function ProfileDepthStrip() {
               : 'Finish your profile — more views, more matches'}
           </p>
           <p className="text-[11px] text-[#A89070]">
-            {detail}. Be direct. Consent first · 18+ only.
+            {detail}. Be direct. Consent.
           </p>
         </div>
         <Link

@@ -8,8 +8,13 @@ import { PasswordInput } from '../components/PasswordInput';
 import { authAPI, profileMetaAPI, usersAPI } from '../api/client';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { RadiusMilesSelect } from '../components/RadiusMilesSelect';
-import { clampRadiusKm } from '../lib/discoveryFormat';
+import { clampRadiusKm, formatRadiusMiles } from '../lib/discoveryFormat';
 import { ROUTE_LABELS } from '../lib/routeLabels';
+import {
+  readThemePreference,
+  setThemePreference,
+  type ThemePreference,
+} from '../lib/theme';
 
 const RADIUS_KEY = 'menrush_default_radius_km';
 
@@ -43,6 +48,9 @@ export const Settings = () => {
   const [pwSuccess, setPwSuccess] = useState('');
   const [pwBusy, setPwBusy] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [themePref, setThemePref] = useState<ThemePreference>(() => readThemePreference());
+  const storeLat = useLocationStore((s) => s.lat);
+  const storeLng = useLocationStore((s) => s.lng);
 
   useEffect(() => {
     profileMetaAPI
@@ -54,10 +62,19 @@ export const Settings = () => {
       .then((res) => {
         const lat = res.data?.lat != null ? Number(res.data.lat) : NaN;
         const lng = res.data?.lng != null ? Number(res.data.lng) : NaN;
-        setHasPin(Number.isFinite(lat) && Number.isFinite(lng));
+        const ready = Number.isFinite(lat) && Number.isFinite(lng);
+        setHasPin(ready);
+        if (ready) setLocation(lat, lng);
       })
       .catch(() => setHasPin(null));
-  }, []);
+  }, [setLocation]);
+
+  // Keep Settings status in sync if GPS is published elsewhere.
+  useEffect(() => {
+    if (storeLat != null && storeLng != null && Number.isFinite(storeLat) && Number.isFinite(storeLng)) {
+      setHasPin(true);
+    }
+  }, [storeLat, storeLng]);
 
   const enableDeviceLocation = useCallback(async () => {
     setLocNotice('');
@@ -73,7 +90,8 @@ export const Settings = () => {
         await usersAPI.updateLocation(result.lat, result.lng);
         setLocation(result.lat, result.lng);
         setHasPin(true);
-        setLocNotice('Location on — you can appear nearby.');
+        const km = clampRadiusKm(Number(localStorage.getItem(RADIUS_KEY) ?? 5));
+        setLocNotice(`Location is active. Showing people within ${formatRadiusMiles(km)}.`);
       } catch {
         setLocNotice('Could not save location. Check your connection.');
       }
@@ -250,39 +268,89 @@ export const Settings = () => {
             </div>
           </section>
 
+          <SectionLabel>Appearance</SectionLabel>
+
+          <section className="mr-card p-4" data-testid="settings-appearance">
+            <p className="text-[15px] font-bold text-[var(--cream)]">Theme</p>
+            <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
+              Light, dark, or match your device.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Theme">
+              {(
+                [
+                  { id: 'light' as const, label: 'Light' },
+                  { id: 'dark' as const, label: 'Dark' },
+                  { id: 'system' as const, label: 'System' },
+                ]
+              ).map((opt) => {
+                const active = themePref === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => {
+                      setThemePref(opt.id);
+                      setThemePreference(opt.id);
+                    }}
+                    className={`min-h-[44px] rounded-full px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide transition-colors ${
+                      active
+                        ? 'bg-[#C4832A] text-[#1A0E03]'
+                        : 'border border-[var(--border-default)] text-[var(--cream-muted)] hover:border-[var(--copper)]'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
           <SectionLabel>Location</SectionLabel>
 
           <section
             className={`mr-card p-4 ${
               hasPin === false
                 ? 'border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.1)] shadow-[0_8px_24px_rgba(0,0,0,0.3)]'
-                : ''
+                : hasPin
+                  ? 'border-[rgba(143,199,115,0.35)]'
+                  : ''
             }`}
             data-testid="settings-device-location"
           >
             <p className="text-[15px] font-bold text-[var(--cream)]">Device location</p>
             <p className="mt-1 text-[13px] leading-relaxed text-[var(--cream-muted)]">
               Needed for Nearby. Others see approximate distance only — not your exact public pin.
-              Shared only while you use the app · 18+ only.
             </p>
             <p className="mt-2 text-[12px] font-semibold text-[#A89070]">
               Status:{' '}
               <span className={hasPin ? 'text-[#8FC773]' : 'text-[#E0A14A]'}>
-                {hasPin == null ? '…' : hasPin ? 'On — private proximity' : 'Off — invisible nearby'}
+                {hasPin == null
+                  ? '…'
+                  : hasPin
+                    ? `Active — within ${formatRadiusMiles(savedRadius)}`
+                    : 'Off — invisible nearby'}
               </span>
             </p>
             {hasPin === false ? (
               <p className="mt-1 text-[12px] leading-relaxed text-[#E0A14A]">
-                Without location you cannot appear near men. We use the pin privately for distance —
-                not as a public address on a map.
+                Without location you cannot appear near men. We use the pin privately for distance.
               </p>
             ) : null}
-            {locNotice ? <p className="mt-1 text-[12px] text-[#E0A14A]">{locNotice}</p> : null}
+            {locNotice ? (
+              <p
+                className={`mt-1 text-[12px] ${
+                  locNotice.startsWith('Location is active') ? 'text-[#8FC773]' : 'text-[#E0A14A]'
+                }`}
+              >
+                {locNotice}
+              </p>
+            ) : null}
             <button
               type="button"
               disabled={locating}
               onClick={() => void enableDeviceLocation()}
-              className="mt-3 rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] disabled:opacity-60"
+              className="mt-3 min-h-[44px] rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] disabled:opacity-60"
             >
               {locating ? 'Locating…' : hasPin ? 'Refresh location' : 'Allow location'}
             </button>

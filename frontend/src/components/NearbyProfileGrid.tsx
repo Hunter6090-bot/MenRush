@@ -127,7 +127,7 @@ export function NearbyProfileGrid({
         </div>
         <p className="mt-3 text-[12px] text-[#A89070]">
           Pulse puts you first nearby for 90 minutes. Hot Spots show live venues — be intentional,
-          18+ only.
+         
         </p>
         <p className="mt-2 text-[11px] font-medium tracking-wide text-[#A89070]">
           Consent first · Report anytime

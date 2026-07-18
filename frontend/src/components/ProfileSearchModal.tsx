@@ -286,7 +286,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
           })}
         </div>
         <p className="border-t border-[#3D2B0E] px-3 py-2 text-center text-[10px] text-[#A89070]">
-          Match first · Chat unlocks when mutual · 18+ only
+          Match first · Chat unlocks when mutual
         </p>
       </div>
     </div>

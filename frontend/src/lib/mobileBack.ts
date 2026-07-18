@@ -1,24 +1,32 @@
-/** Routes with bottom-tab navigation — no in-app back needed on mobile. */
+/** Primary mobile tabs — in-app back not shown (bottom nav is enough). */
 export const MOBILE_TAB_ROOTS = new Set([
   '/discover',
   '/matches',
   '/conversations',
-  '/notifications',
-  '/rooms',
+  '/profile',
 ]);
 
+/** Home for signed-in users — Nearby / Discover. */
+export const APP_HOME = '/discover';
+
 export function shouldShowMobileBack(pathname: string): boolean {
-  return !MOBILE_TAB_ROOTS.has(pathname);
+  if (MOBILE_TAB_ROOTS.has(pathname)) return false;
+  // Nested chat, setup, etc. always get a back control.
+  return true;
 }
 
 export function mobileBackFallback(pathname: string): string {
-  if (pathname === '/albums') return '/profile';
-  if (pathname.startsWith('/profile/')) return '/discover';
-  if (pathname === '/profile') return '/discover';
-  if (pathname === '/stream') return '/discover';
+  if (pathname === '/albums' || pathname === '/premium') return '/profile';
+  if (pathname === '/settings' || pathname === '/notifications') return APP_HOME;
+  if (pathname.startsWith('/profile/setup')) return APP_HOME;
+  if (pathname.startsWith('/profile/')) return APP_HOME;
+  if (pathname === '/stream' || pathname === '/events' || pathname === '/hot-spots') {
+    return APP_HOME;
+  }
   if (pathname.startsWith('/messages/')) return '/conversations';
   if (pathname.startsWith('/rooms/')) return '/rooms';
-  return '/discover';
+  if (pathname.startsWith('/verify')) return APP_HOME;
+  return APP_HOME;
 }
 
 import type { NavigateFunction } from 'react-router-dom';

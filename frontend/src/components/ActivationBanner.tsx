@@ -52,7 +52,7 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
           <p className="text-[14px] font-extrabold text-[#F0E0C0]">{headline}</p>
           <p className="mt-1 text-[12px] text-[#A89070]">
             {photoUpgrade
-              ? 'Upload a clear face or upper-body shot. Men nearby rank real photos higher · 18+ only.'
+              ? 'Upload a clear face or upper-body shot. Men nearby rank real photos higher.'
               : blockers.length > 0
                 ? blockers.map((b) => BLOCKER_COPY[b]).join(' · ')
                 : 'We need GPS for Nearby. You are not broadcasting an exact public pin — only approximate distance.'}

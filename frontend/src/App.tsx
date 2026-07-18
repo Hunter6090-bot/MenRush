@@ -39,6 +39,7 @@ import { useUnreadSync } from './hooks/useUnreadSync';
 import { useNotificationSync } from './hooks/useNotificationSync';
 import { useAuthProfileSync } from './hooks/useAuthProfileSync';
 import { useLiveLocationPublisher } from './hooks/useLiveLocationPublisher';
+import { readThemePreference, applyTheme } from './lib/theme';
 import { FEATURES } from './lib/featureFlags';
 import { VideoCallModal } from './components/VideoCallModal';
 import { ToastNotifications } from './components/ToastNotifications';
@@ -118,7 +119,8 @@ function AppEntry() {
     if (user?.verification_status === 'rejected') return <Navigate to="/verify/rejected" replace />;
     return <Navigate to="/verify" replace />;
   }
-  return <Navigate to="/profile/setup" replace />;
+  // Signed-in home: Nearby (Discover). Profile setup is gated by RequireProfileSetup.
+  return <Navigate to="/discover" replace />;
 }
 
 function AppShell() {
@@ -138,6 +140,17 @@ function AppShell() {
       localStorage.removeItem('user');
     }
   }, [token, logout]);
+
+  // Follow OS theme when preference is "system".
+  useEffect(() => {
+    applyTheme(readThemePreference());
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => {
+      if (readThemePreference() === 'system') applyTheme('system');
+    };
+    mq.addEventListener?.('change', onChange);
+    return () => mq.removeEventListener?.('change', onChange);
+  }, []);
 
   usePushNotifications(!!token);
   useGlobalMessageNotifications();

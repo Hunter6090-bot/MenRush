@@ -846,7 +846,7 @@ export const Discover = () => {
               </p>
               <p className="mt-1 text-[12px] text-[#A89070]">
                 No swiping. One tap sends interest. Chat unlocks when it&apos;s mutual · consent
-                first · 18+ only.
+               .
               </p>
             </div>
             <button
@@ -940,7 +940,7 @@ export const Discover = () => {
             <div className="min-w-0 flex-1">
               <p className="text-[14px] font-extrabold text-[#F0E0C0]">Quiet map? Start Pulse</p>
               <p className="mt-1 text-[12px] text-[#A89070]">
-                90 minutes of priority visibility so men nearby see you first. Be intentional · 18+ only.
+                Get 90 minutes of priority visibility and appear first to men nearby.
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
@@ -983,7 +983,7 @@ export const Discover = () => {
           <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[#A89070]">
             We need your device location to show men near you. Your exact pin is not shown to others
             — they only see approximate distance. You can adjust your search radius once location is
-            on. Shared only while you use the app · 18+ only.
+            on. Shared only while you use the app.
           </p>
           <button
             type="button"
@@ -1009,7 +1009,7 @@ export const Discover = () => {
             data-testid="discover-mood-strip"
           >
             <p className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-[#A89070]">
-              Your mood · shown nearby · 18+
+              Your mood · shown nearby
             </p>
             <div className={moodSaving ? 'pointer-events-none opacity-60' : ''}>
               <MoodPicker current={mood} onSelect={handleMoodSelect} />
@@ -1062,7 +1062,7 @@ export const Discover = () => {
               data-testid="discover-mood-strip-mobile"
             >
               <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#A89070]">
-                Your mood · 18+
+                Your mood
               </p>
               <div className={moodSaving ? 'pointer-events-none opacity-60' : ''}>
                 <MoodPicker current={mood} onSelect={handleMoodSelect} />

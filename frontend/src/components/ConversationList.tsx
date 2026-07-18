@@ -138,7 +138,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               </button>
             </div>
             <p className="mt-5 text-[11px] font-medium tracking-wide text-[#A89070]">
-              18+ only · Report anytime
+              · Report anytime
             </p>
           </div>
         ) : (
