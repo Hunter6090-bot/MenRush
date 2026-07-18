@@ -3,18 +3,18 @@ version: '3.8'
 services:
   postgres:
     image: postgis/postgis:16-3.4
-    container_name: nearnow-db
+    container_name: menrush-db
     environment:
-      POSTGRES_USER: nearnow
-      POSTGRES_PASSWORD: nearnow123
-      POSTGRES_DB: nearnow
+      POSTGRES_USER: menrush
+      POSTGRES_PASSWORD: menrush123
+      POSTGRES_DB: menrush
     ports:
       - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U nearnow']
+      test: ['CMD-SHELL', 'pg_isready -U menrush']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -23,9 +23,9 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: nearnow-backend
+    container_name: menrush-backend
     environment:
-      DATABASE_URL: postgresql://nearnow:nearnow123@postgres:5432/nearnow
+      DATABASE_URL: postgresql://menrush:menrush123@postgres:5432/menrush
       JWT_SECRET: your-secret-jwt-key-change-in-production
       PORT: 3000
       NODE_ENV: development
