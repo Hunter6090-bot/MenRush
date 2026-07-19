@@ -1,5 +1,9 @@
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 
+export function normalizeIdImageFile(file: File): { file: File | null; error?: string } {
+  return normalizeProfileImageFile(file);
+}
+
 export function normalizeProfileImageFile(file: File): { file: File | null; error?: string } {
   let type = file.type;
   if (!type) {

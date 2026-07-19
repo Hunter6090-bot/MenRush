@@ -1,3 +1,5 @@
+import { formatDistanceFromKm } from '../lib/localeUnits';
+
 interface DistancePillProps {
   km: number;
   label?: string;
@@ -6,7 +8,7 @@ interface DistancePillProps {
 
 /** Distance badge with pin icon — no emoji. */
 export function DistancePill({ km, label, className = '' }: DistancePillProps) {
-  const display = label || (km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`);
+  const display = label || formatDistanceFromKm(km);
 
   return (
     <span

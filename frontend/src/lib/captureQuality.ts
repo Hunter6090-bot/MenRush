@@ -211,7 +211,7 @@ export function assessDocumentAlignment(
     ok: true,
     brightness: center.brightness,
     sharpness: center.sharpness,
-    message: 'Aligned — capturing…',
+    message: 'Aligned — tap Capture photo',
   };
 }
 
@@ -291,6 +291,6 @@ export function assessFrameQuality(
     ok: true,
     brightness,
     sharpness,
-    message: 'Face aligned — capturing…',
+    message: 'Face aligned — tap Capture selfie',
   };
 }

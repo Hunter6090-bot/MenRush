@@ -131,7 +131,7 @@ export function ProfileQrScanner({
         </>
       ) : (
         <div
-          className={`flex items-center justify-center px-4 text-center text-xs leading-relaxed text-[#A89070] ${
+          className={`flex items-center justify-center px-4 text-center text-xs leading-relaxed text-[var(--cream-muted)] ${
             isFullscreen ? 'absolute inset-0' : 'aspect-[4/3]'
           }`}
         >

@@ -5,7 +5,7 @@ const MOOD_META: Array<{ value: Mood; accent: string }> = [
   { value: 'roaming', accent: '#C4832A' },
   { value: 'looking', accent: '#E8B04B' },
   { value: 'down_to_chat', accent: '#D49A3A' },
-  { value: 'dont_talk_just_watch', accent: '#8B4513' },
+  { value: 'dont_talk_just_watch', accent: '#A45E18' },
   { value: 'at_a_bar', accent: '#B96E25' },
   { value: 'hosting', accent: '#D28A2D' },
   { value: 'travelling', accent: '#A2672C' },

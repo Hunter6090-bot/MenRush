@@ -1,3 +1,5 @@
+import { formatDistanceFromKm } from './localeUnits';
+
 export interface DiscoveryPresence {
   distance_km?: string | number | null;
   distance_label?: string | null;
@@ -18,11 +20,9 @@ export function isUserPulsing(user: DiscoveryPresence): boolean {
 }
 
 export function getDistanceLabel(user: DiscoveryPresence): string {
-  if (user.distance_label) return user.distance_label;
-
   const km = Number(user.distance_km ?? 0);
   if (!Number.isFinite(km) || km <= 0) return 'Nearby';
-  return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
+  return formatDistanceFromKm(km);
 }
 
 /** Great-circle distance in metres (for throttling map/GPS updates). */

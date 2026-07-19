@@ -35,7 +35,7 @@ export function ProfileAlbumsSection({ ownerId, ownerName }: ProfileAlbumsSectio
     <section className="space-y-3">
       <div>
         <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#C4832A]">Albums</p>
-        <p className="text-xs text-[#A89070] mt-0.5">Tap an album to view or request access.</p>
+        <p className="text-xs text-[var(--cream-muted)] mt-0.5">Tap an album to view or request access.</p>
       </div>
 
       {notice && (

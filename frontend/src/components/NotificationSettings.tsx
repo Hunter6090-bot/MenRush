@@ -58,7 +58,7 @@ export const NotificationSettings: React.FC = () => {
     >
       <div className="pr-4">
         <p className="text-[#F0E0C0]/80 text-sm font-semibold">Push notifications</p>
-        <p className="text-[#A89070] text-xs mt-0.5" data-testid="notification-settings-status">
+        <p className="text-[var(--cream-muted)] text-xs mt-0.5" data-testid="notification-settings-status">
           {description}
         </p>
       </div>

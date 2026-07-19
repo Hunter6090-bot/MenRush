@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { notificationsAPI } from '../api/client';
 import { Layout } from '../components/Layout';
 import { NotificationSettings } from '../components/NotificationSettings';
@@ -58,7 +58,7 @@ export const Notifications = () => {
         <div className="flex items-start justify-between gap-3 lg:col-span-2 lg:hidden">
           <div>
             <h1 className="text-2xl font-bold text-[#F0E0C0]">Notifications</h1>
-            <p className="mt-1 text-sm text-[#A89070]">
+            <p className="mt-1 text-sm text-[var(--cream-muted)]">
               Messages, matches, profile views and more.
             </p>
           </div>
@@ -109,16 +109,43 @@ export const Notifications = () => {
         {notifications.length === 0 ? (
           <div
             data-testid="notifications-empty"
-            className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] px-6 py-12 text-center shadow-card"
+            className="rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[rgba(196,131,42,0.06)] px-6 py-12 text-center shadow-card"
           >
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#C4832A]/15 text-[#C4832A]">
               <IconNotifications size={28} />
             </div>
-            <p className="text-[#F0E0C0] font-semibold">You are all caught up</p>
-            <p className="text-[#A89070] text-sm mt-2 leading-relaxed">
+            <p className="text-[#F0E0C0] font-extrabold">
+              {loadError ? 'Could not load alerts' : 'No alerts yet'}
+            </p>
+            <p className="text-[var(--cream-muted)] text-sm mt-2 leading-relaxed mx-auto max-w-sm">
               {loadError
-                ? 'Alerts could not be loaded from the server.'
-                : 'When someone messages you, matches with you, or views your profile, it will show up here.'}
+                ? 'Pull to refresh or try again shortly.'
+                : 'Matches, messages, and profile views land here. Get seen on Nearby or the live list.'}
+            </p>
+            {!loadError ? (
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                <Link
+                  to="/discover"
+                  className="rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+                >
+                  Nearby map
+                </Link>
+                <Link
+                  to="/stream"
+                  className="rounded-full border border-[rgba(196,131,42,0.5)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
+                >
+                  Live list
+                </Link>
+                <Link
+                  to="/matches"
+                  className="rounded-full border border-[rgba(196,131,42,0.5)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
+                >
+                  Matches
+                </Link>
+              </div>
+            ) : null}
+            <p className="mt-4 text-[11px] font-medium tracking-wide text-[var(--cream-muted)]">
+              · Report abuse anytime
             </p>
           </div>
         ) : (
@@ -157,12 +184,12 @@ export const Notifications = () => {
                       <p className="text-sm font-semibold text-[#F0E0C0] leading-snug">
                         {notification.message}
                       </p>
-                      <span className="shrink-0 text-[10px] font-medium text-[#A89070]">
+                      <span className="shrink-0 text-[10px] font-medium text-[var(--cream-muted)]">
                         {formatRelativeTime(notification.createdAt)}
                       </span>
                     </div>
                     {notification.body && (
-                      <p className="mt-1 text-xs text-[#A89070] line-clamp-2">{notification.body}</p>
+                      <p className="mt-1 text-xs text-[var(--cream-muted)] line-clamp-2">{notification.body}</p>
                     )}
                     <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#C4832A]/80">
                       {notificationTypeLabel(notification.type)}

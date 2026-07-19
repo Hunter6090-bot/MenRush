@@ -8,26 +8,35 @@ import { IconPulse, IconClose } from "./icons";
 import { StatusBadge } from "./StatusBadge";
 import { DistancePill } from "./DistancePill";
 import { VerifiedBadge } from "./VerifiedBadge";
+import { ChatSafetyMenu } from "./ChatSafetyMenu";
 import { getDistanceLabel, isUserPulsing } from "../lib/discovery";
 
 interface ProfileDrawerProps {
   user: NearbyUser | null;
   liked: boolean;
+  /** Mutual match — only then is Open chat valid (messaging requires mutual). */
+  mutual?: boolean;
   onClose: () => void;
   onLike: () => Promise<void> | void;
   onPass?: () => void;
   onMessage: () => void;
   onPulseBack?: () => Promise<void> | void;
+  /** Safety feedback after report/block (18+ trust & safety). */
+  onSafetyNotice?: (message: string, tone?: 'success' | 'error') => void;
+  onBlocked?: () => void;
 }
 
 export function ProfileDrawer({
   user,
   liked,
+  mutual = false,
   onClose,
   onLike,
   onPass,
   onMessage,
   onPulseBack,
+  onSafetyNotice,
+  onBlocked,
 }: ProfileDrawerProps) {
   const navigate = useNavigate();
   const [mounted, setMounted] = useState(false);
@@ -70,10 +79,10 @@ export function ProfileDrawer({
       <div
         onClick={(e) => e.stopPropagation()}
         className="
-          relative w-full sm:w-[380px] sm:h-full
-          max-h-[78vh] sm:max-h-none
+          relative w-full lg:w-[420px] lg:h-full
+          max-h-[78vh] lg:max-h-none
           bg-[var(--bg-elevated)] border border-[var(--border-default)]
-          rounded-t-3xl sm:rounded-none sm:rounded-l-2xl
+          rounded-t-3xl lg:rounded-none lg:rounded-l-2xl
           shadow-[var(--shadow-glow-strong)]
           overflow-hidden flex flex-col
         "
@@ -88,13 +97,26 @@ export function ProfileDrawer({
       >
         <div className="sm:hidden w-10 h-1 rounded-full bg-[var(--border-default)] mx-auto mt-3" />
 
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-nn-bg/70 border border-nn-border text-nn-text hover:border-nn-copper/40 flex items-center justify-center transition-colors"
-          aria-label="Close"
-        >
-          <IconClose size={18} />
-        </button>
+        <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
+          <div className="rounded-full bg-nn-bg/70 border border-nn-border">
+            <ChatSafetyMenu
+              peerId={user.id}
+              peerName={user.name}
+              onNotice={onSafetyNotice}
+              onBlocked={() => {
+                onBlocked?.();
+                onClose();
+              }}
+            />
+          </div>
+          <button
+            onClick={onClose}
+            className="w-9 h-9 rounded-full bg-nn-bg/70 border border-nn-border text-nn-text hover:border-nn-copper/40 flex items-center justify-center transition-colors"
+            aria-label="Close"
+          >
+            <IconClose size={18} />
+          </button>
+        </div>
 
         <div
           className="relative w-full"
@@ -164,6 +186,21 @@ export function ProfileDrawer({
             <p className="mt-3 text-sm text-[var(--cream-soft)] leading-relaxed italic">"{user.headline}"</p>
           )}
 
+          {user.looking_for ? (
+            <div className="mt-3" data-testid="drawer-looking-for">
+              <p className="text-[10px] font-black text-[var(--cream-muted)] uppercase tracking-[.18em] mb-1">
+                Looking for
+              </p>
+              <p className="text-sm font-semibold text-[#E0A14A]">{user.looking_for}</p>
+            </div>
+          ) : null}
+
+          {user.mood ? (
+            <p className="mt-2 text-[12px] text-[var(--cream-muted)]">
+              Mood: <span className="font-semibold text-[var(--cream-soft)]">{String(user.mood).replace(/_/g, ' ')}</span>
+            </p>
+          ) : null}
+
           {user.interests && user.interests.length > 0 && (
             <div className="mt-4">
               <p className="text-[10px] font-black text-[var(--cream-muted)] uppercase tracking-[.18em] mb-2">Interests</p>
@@ -214,13 +251,29 @@ export function ProfileDrawer({
             </button>
           )}
           <button
-            onClick={() => (liked ? onMessage() : onLike())}
-            className="flex-1 py-3 rounded-[var(--radius-md)] bg-[var(--copper)] text-[var(--bg-primary)] font-black text-sm tracking-wide hover:bg-[var(--copper-light)] active:scale-[0.98] transition-all"
+            type="button"
+            onClick={() => {
+              if (mutual) onMessage();
+              else if (liked) {
+                onSafetyNotice?.(
+                  "Match sent — chat unlocks when he matches back · consent first.",
+                  "success",
+                );
+              } else {
+                void onLike();
+              }
+            }}
+            className={`flex-1 py-3 rounded-[var(--radius-md)] font-black text-sm tracking-wide active:scale-[0.98] transition-all ${
+              mutual || !liked
+                ? "bg-[var(--copper)] text-[var(--bg-primary)] hover:bg-[var(--copper-light)]"
+                : "border border-[var(--copper)] bg-transparent text-[var(--copper)]"
+            }`}
           >
-            {liked ? "Open chat" : "Match"}
+            {mutual ? "Open chat" : liked ? "Matched" : "Match"}
           </button>
           {onPulseBack && isPulsing && (
             <button
+              type="button"
               onClick={onPulseBack}
               className="px-4 py-3 rounded-[var(--radius-md)] border border-[var(--copper)] text-[var(--copper)] font-bold text-sm flex items-center gap-1.5 hover:bg-[var(--copper)]/10 transition-colors"
               title="Pulse back"
@@ -230,6 +283,9 @@ export function ProfileDrawer({
             </button>
           )}
           </div>
+          <p className="text-center text-[10px] font-medium tracking-wide text-[var(--cream-muted)]">
+            Match is mutual interest · Chat with consent
+          </p>
         </div>
       </div>
     </div>

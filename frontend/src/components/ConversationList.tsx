@@ -103,18 +103,43 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             ))}
           </div>
         ) : convs.length === 0 ? (
-          <div className={`text-center animate-fade-in ${isSidebar ? 'px-4 py-16' : 'py-20'}`}>
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-[#3D2B0E] bg-[#1E1508]">
-              <ChatIcon className="h-8 w-8 text-[#C4832A]/50" />
+          <div
+            className={`text-center animate-fade-in ${isSidebar ? 'px-4 py-14' : 'py-16'}`}
+            data-testid="conversations-empty"
+          >
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[rgba(196,131,42,0.08)]">
+              <ChatIcon className="h-8 w-8 text-[#C4832A]/60" />
             </div>
-            <p className="mb-1 font-medium text-[#F0E0C0]/60">No conversations yet</p>
-            <p className="mb-5 text-sm text-[#A89070]">Find someone nearby and say hi</p>
-            <button
-              onClick={() => navigate('/discover')}
-              className="rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] px-5 py-2.5 text-sm font-semibold text-white transition-all hover:from-[#D4943B] hover:to-[#9B5523] hover:shadow-glow-blue"
-            >
-              Discover People
-            </button>
+            <p className="mb-1 text-[15px] font-extrabold text-[#F0E0C0]">No conversations yet</p>
+            <p className="mx-auto mb-5 max-w-xs text-sm leading-relaxed text-nn-muted">
+              Match someone nearby, then open chat. Be direct. Consent first.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => navigate('/discover')}
+                className="rounded-full bg-[#C4832A] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+              >
+                Nearby map
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/stream')}
+                className="rounded-full border border-[rgba(196,131,42,0.5)] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
+              >
+                Live list
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/matches')}
+                className="rounded-full border border-[rgba(196,131,42,0.5)] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
+              >
+                Matches
+              </button>
+            </div>
+            <p className="mt-5 text-[11px] font-medium tracking-wide text-[var(--cream-muted)]">
+              · Report anytime
+            </p>
           </div>
         ) : (
           <div className={`animate-fade-in ${isSidebar ? 'space-y-1' : 'space-y-2'}`}>

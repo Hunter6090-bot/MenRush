@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "dev:lan": "vite --host 0.0.0.0",
-    "build": "tsc && vite build",
+    "build": "node scripts/guard-brand-assets.mjs && tsc && vite build",
+    "brand:sync-logo": "node scripts/sync-brand-logo.mjs",
     "preview": "vite preview",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",

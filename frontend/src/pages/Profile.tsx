@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { usersAPI, profileMetaAPI, Mood } from '../api/client';
+import { usersAPI, profileMetaAPI, Mood, MOOD_LABELS } from '../api/client';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { Layout } from '../components/Layout';
 import { UserAvatar } from '../components/UserAvatar';
@@ -12,14 +12,14 @@ import { ProfileViewersCard, ProfileViewer } from '../components/ProfileViewersC
 import { normalizeProfileImageFile } from '../lib/imageUpload';
 import { CoverBanner, DEFAULT_COVER_FRAME, normalizeCoverFrame, type CoverFrame } from '../components/CoverBanner';
 import { CoverPhotoEditor } from '../components/CoverPhotoEditor';
+import { VerifiedBadge } from '../components/VerifiedBadge';
+import { QRCodeSVG } from 'qrcode.react';
+import { profileUrl as buildProfileUrl } from '../lib/profileLinks';
+import { getPhotoUrl } from '../components/UserAvatar';
 
-const INTEREST_GROUPS: { label: string; tags: string[] }[] = [
-  { label: 'Position', tags: ['Top', 'Vers Top', 'Vers', 'Vers Bottom', 'Bottom', 'Side'] },
-  { label: 'Tribe', tags: ['Twink', 'Twunk', 'Otter', 'Bear', 'Cub', 'Daddy', 'Wolf', 'Jock', 'Leather', 'Rugged', 'Geek'] },
-  { label: 'Body', tags: ['Slim', 'Athletic', 'Muscular', 'Stocky', 'Chubby', 'Hairy', 'Smooth', 'Tatted'] },
-  { label: 'Looking for', tags: ['NSA', 'Hookup', 'Casual', 'Dating', 'FWB', 'Discreet', 'Hosting', 'Can Travel', 'Right Now'] },
-  { label: 'Vibe', tags: ['Kinky', 'Vanilla', 'Open', 'Sober', 'PnP-Free', 'Verified Only'] },
-];
+import { PROFILE_TAG_GROUPS, toggleProfileInterest } from '../lib/profileTags';
+import { clearProfileSetupSkip, isProfileSetupComplete } from '../lib/profileSetup';
+import { isGenericAvatarUrl } from '../lib/genericAvatar';
 
 interface ProfileData {
   id: string;
@@ -159,10 +159,8 @@ export const Profile = () => {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const toggleInterest = (tag: string) => {
-    setInterests((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : prev.length < 10 ? [...prev, tag] : prev
-    );
+  const toggleInterest = (tag: string, group: (typeof PROFILE_TAG_GROUPS)[number]) => {
+    setInterests((prev) => toggleProfileInterest(prev, tag, group));
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -252,6 +250,17 @@ export const Profile = () => {
       const res = await usersAPI.updateProfile({ bio, headline, looking_for: lookingFor, photo_url: photoUrl || undefined, interests });
       setProfile((p) => p ? { ...p, ...res.data } : p);
       if (user && token) setAuth({ ...user, bio, photo_url: photoUrl || undefined }, token);
+      if (
+        isProfileSetupComplete({
+          photo_url: photoUrl,
+          bio,
+          headline,
+          looking_for: lookingFor,
+          interests,
+        })
+      ) {
+        clearProfileSetupSkip();
+      }
       showToast('success', 'Profile saved');
     } catch {
       showToast('error', 'Failed to save. Please try again.');
@@ -283,7 +292,7 @@ export const Profile = () => {
   };
 
   const inputClass =
-    'w-full bg-[#1E1508]/60 border border-[#3D2B0E] text-[#F0E0C0] placeholder:text-[#A89070]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all';
+    'w-full bg-[#1E1508]/60 border border-[#3D2B0E] text-[#F0E0C0] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all';
 
   if (!profile) {
     return (
@@ -317,7 +326,7 @@ export const Profile = () => {
           className={`fixed top-[calc(var(--mobile-header-height)+0.5rem)] left-1/2 z-50 -translate-x-1/2 px-5 py-2.5 rounded-xl text-sm font-medium shadow-card border animate-slide-up lg:top-6 ${
             toast.type === 'success'
               ? 'bg-nn-online/15 border-nn-online/25 text-[#8FC773]'
-              : 'bg-[#8B4513]/15 border-[#8B4513]/25 text-[#F0E0C0]/80'
+              : 'bg-[#A45E18]/15 border-[#A45E18]/25 text-[#F0E0C0]/80'
           }`}
         >
           {toast.msg}
@@ -332,6 +341,8 @@ export const Profile = () => {
           onChange={handlePhotoUpload}
           className="hidden"
           id="photo-upload"
+          aria-label="Upload profile photo"
+          title="Upload profile photo"
           disabled={uploading}
         />
 
@@ -341,11 +352,97 @@ export const Profile = () => {
           accept="image/*"
           onChange={handleCoverUpload}
           className="hidden"
+          id="cover-upload"
+          aria-label="Upload cover photo"
+          title="Upload cover photo"
           disabled={uploadingCover}
         />
 
-        {/* ── Profile hero ── */}
-        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl overflow-hidden shadow-card lg:rounded-3xl">
+        {/* ── Desktop profile layout ── */}
+        <div className="hidden lg:grid lg:grid-cols-[300px_1fr] lg:gap-8">
+          <div>
+            <div className="relative aspect-[3/4] w-full max-w-[300px] overflow-hidden rounded-2xl border border-[#3D2B0E] bg-[#1E1508]">
+              {getPhotoUrl(photoUrl) ? (
+                <img src={getPhotoUrl(photoUrl)!} alt={profile.name} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <UserAvatar name={profile.name} photoUrl={profile.photo_url} size="xl" showStatus={false} />
+                </div>
+              )}
+            </div>
+            <div className="mt-3 grid max-w-[300px] grid-cols-3 gap-2">
+              {[photoUrl, coverUrl, photoUrl].filter(Boolean).slice(0, 3).map((src, i) => (
+                <div key={i} className="aspect-square overflow-hidden rounded-xl border border-[#3D2B0E] bg-[#1E1508]">
+                  {getPhotoUrl(src) ? (
+                    <img src={getPhotoUrl(src)!} alt="" className="h-full w-full object-cover" />
+                  ) : null}
+                </div>
+              ))}
+            </div>
+            {isGenericAvatarUrl(photoUrl) ? (
+              <div
+                className="mt-3 max-w-[300px] rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-3 py-3"
+                data-testid="photo-upgrade-nudge"
+              >
+                <p className="text-[12px] font-extrabold text-[#F0E0C0]">Upgrade from a shared avatar</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-[var(--cream-muted)]">
+                  Real photos get more matches. Upload a clear face or upper-body shot —
+                </p>
+                <button
+                  type="button"
+                  disabled={uploading}
+                  onClick={() => photoInputRef.current?.click()}
+                  className="mt-2 rounded-full bg-[#C4832A] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#1A0E03] hover:bg-[#E0A14A] disabled:opacity-60"
+                >
+                  {uploading ? 'Uploading…' : 'Add real photo'}
+                </button>
+              </div>
+            ) : null}
+          </div>
+          <div className="space-y-4">
+            <div className="mr-card p-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-2xl font-extrabold text-[var(--cream)]">{profile.name}</h2>
+                {(profile as ProfileData & { is_verified?: boolean }).is_verified ? (
+                  <VerifiedBadge />
+                ) : null}
+              </div>
+              <p className="mt-1 text-sm text-[var(--cream-muted)]">Age {profile.age}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {interests.slice(0, 4).map((tag) => (
+                  <span key={tag} className="mr-pill mr-pill-inactive text-xs">
+                    {tag}
+                  </span>
+                ))}
+                {mood ? (
+                  <span className="mr-pill mr-pill-active text-xs">{MOOD_LABELS[mood]}</span>
+                ) : null}
+              </div>
+            </div>
+            {user?.id ? (
+              <div className="mr-card flex items-center gap-5 p-5">
+                <div className="rounded-xl border border-[var(--border-default)] bg-white p-2">
+                  <QRCodeSVG value={buildProfileUrl(user.id)} size={96} level="M" />
+                </div>
+                <div>
+                  <p className="text-[15px] font-bold text-[var(--cream)]">Your QR code</p>
+                  <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
+                    Scan to open your profile in person.
+                  </p>
+                </div>
+              </div>
+            ) : null}
+            <div className="mr-card p-5">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--cream-muted)]">About</p>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--cream-soft)]">
+                {bio || 'Add a bio so nearby guys know what you are into.'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Profile hero (mobile) ── */}
+        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl overflow-hidden shadow-card lg:hidden lg:rounded-3xl">
           <div className="group relative">
             {coverUrl ? (
               <CoverBanner coverUrl={coverUrl} frame={coverFrame} />
@@ -359,7 +456,7 @@ export const Profile = () => {
                   uploadingCover ? 'pointer-events-none opacity-80' : ''
                 }`}
               >
-                <div className="absolute inset-0 bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#8B4513]/10" />
+                <div className="absolute inset-0 bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#A45E18]/10" />
               </button>
             )}
 
@@ -425,7 +522,7 @@ export const Profile = () => {
           </div>
           {/* Avatar overlapping cover */}
           <div className="px-5 pb-5">
-            <p className="pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[#A89070] sm:hidden">
+            <p className="pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--cream-muted)] sm:hidden">
               Tap Adjust cover to move or zoom your banner
             </p>
             <div className="-mt-10 mb-3 flex items-end justify-between">
@@ -460,7 +557,26 @@ export const Profile = () => {
               <StatusBadge online={!!profile.online} lastSeen={profile.last_seen} />
             </div>
             <h2 className="text-xl font-bold text-[#F0E0C0]">{profile.name}</h2>
-            <p className="text-[#A89070] text-sm mt-0.5">Age {profile.age}</p>
+            <p className="text-[var(--cream-muted)] text-sm mt-0.5">Age {profile.age}</p>
+            {isGenericAvatarUrl(photoUrl) ? (
+              <div
+                className="mt-3 rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-3 py-3 lg:hidden"
+                data-testid="photo-upgrade-nudge-mobile"
+              >
+                <p className="text-[12px] font-extrabold text-[#F0E0C0]">Upgrade from a shared avatar</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-[var(--cream-muted)]">
+                  Real photos get more matches. Clear face or upper body.
+                </p>
+                <button
+                  type="button"
+                  disabled={uploading}
+                  onClick={() => photoInputRef.current?.click()}
+                  className="mt-2 rounded-full bg-[#C4832A] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#1A0E03] disabled:opacity-60"
+                >
+                  {uploading ? 'Uploading…' : 'Add real photo'}
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -473,20 +589,20 @@ export const Profile = () => {
 
           <form onSubmit={handleSave} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">Bio</label>
+              <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">Bio</label>
               <textarea
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 placeholder="Tell people about yourself…"
                 rows={3}
                 maxLength={500}
-                className="w-full bg-[#1E1508]/60 border border-[#3D2B0E] text-[#F0E0C0] placeholder:text-[#A89070]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all resize-none"
+                className="w-full bg-[#1E1508]/60 border border-[#3D2B0E] text-[#F0E0C0] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all resize-none"
               />
-              <p className="text-[10px] text-[#A89070]/60 mt-1 text-right">{bio.length}/500</p>
+              <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1 text-right">{bio.length}/500</p>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">Headline</label>
+              <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">Headline</label>
               <input
                 type="text"
                 value={headline}
@@ -498,7 +614,7 @@ export const Profile = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">Looking For</label>
+              <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">Looking For</label>
               <input
                 type="text"
                 value={lookingFor}
@@ -510,7 +626,7 @@ export const Profile = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-[#A89070] mb-1.5 uppercase tracking-wide">
+              <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">
                 Profile Photo
               </label>
               <div className="flex gap-4 items-center">
@@ -530,21 +646,21 @@ export const Profile = () => {
                   {uploading ? 'Uploading…' : 'Upload Photo'}
                 </button>
                 {photoUrl && !uploading && (
-                  <span className="text-[10px] text-[#A89070]/70">Current photo set</span>
+                  <span className="text-[10px] text-[var(--cream-muted)]/70">Current photo set</span>
                 )}
               </div>
-              <p className="text-[10px] text-[#A89070]/60 mt-1.5 px-1">
+              <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1.5 px-1">
                 JPEG, PNG or WebP. Max 5MB.
               </p>
             </div>
 
             <div className="space-y-4">
-              <label className="block text-xs font-medium text-[#A89070] uppercase tracking-wide">
-                Your tags <span className="normal-case text-[#A89070]/50">({interests.length}/10)</span>
+              <label className="block text-xs font-medium text-[var(--cream-muted)] uppercase tracking-wide">
+                Your tags <span className="normal-case text-[var(--cream-muted)]/50">({interests.length}/10)</span>
               </label>
-              {INTEREST_GROUPS.map((group) => (
+              {PROFILE_TAG_GROUPS.map((group) => (
                 <div key={group.label}>
-                  <p className="text-[10px] font-black text-[#A89070]/60 uppercase tracking-[.18em] mb-2">{group.label}</p>
+                  <p className="text-[10px] font-black text-[var(--cream-muted)]/60 uppercase tracking-[.18em] mb-2">{group.label}</p>
                   <div className="flex flex-wrap gap-2">
                     {group.tags.map((tag) => {
                       const active = interests.includes(tag);
@@ -553,14 +669,14 @@ export const Profile = () => {
                         <button
                           key={tag}
                           type="button"
-                          onClick={() => toggleInterest(tag)}
+                          onClick={() => toggleInterest(tag, group)}
                           disabled={maxed}
                           className={`px-3 py-1 rounded-full text-xs font-medium border transition-all duration-150 ${
                             active
                               ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
                               : maxed
-                              ? 'bg-[#1E1508]/30 text-[#A89070]/20 border-[#3D2B0E]/30 cursor-not-allowed'
-                              : 'bg-[#1E1508]/40 text-[#A89070] border-[#3D2B0E] hover:bg-[#3D2B0E]/60 hover:text-[#F0E0C0]/80'
+                              ? 'bg-[#1E1508]/30 text-[var(--cream-muted)]/20 border-[#3D2B0E]/30 cursor-not-allowed'
+                              : 'bg-[#1E1508]/40 text-[var(--cream-muted)] border-[#3D2B0E] hover:bg-[#3D2B0E]/60 hover:text-[#F0E0C0]/80'
                           }`}
                         >
                           {tag}
@@ -575,7 +691,7 @@ export const Profile = () => {
             <button
               type="submit"
               disabled={saving}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] disabled:opacity-50 text-white font-semibold text-sm transition-all hover:shadow-glow-blue active:scale-[0.98] flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#A45E18] hover:from-[#D4943B] hover:to-[#C4832A] disabled:opacity-50 text-white font-semibold text-sm transition-all hover:shadow-glow-blue active:scale-[0.98] flex items-center justify-center gap-2"
             >
               {saving ? <><Spinner className="w-4 h-4" /> Saving…</> : 'Save Changes'}
             </button>
@@ -608,11 +724,11 @@ export const Profile = () => {
           <div>
             <p className="text-[#F0E0C0]/80 text-sm font-semibold">Your location</p>
             {lat && lng ? (
-              <p className="text-[#A89070] text-xs mt-0.5">
+              <p className="text-[var(--cream-muted)] text-xs mt-0.5">
                 {lat.toFixed(5)}, {lng.toFixed(5)}
               </p>
             ) : (
-              <p className="text-[#A89070]/50 text-xs mt-0.5">Not shared yet</p>
+              <p className="text-[var(--cream-muted)]/50 text-xs mt-0.5">Not shared yet</p>
             )}
           </div>
           <button
@@ -630,14 +746,14 @@ export const Profile = () => {
           <div className="flex items-end justify-between mb-3">
             <div>
               <p className="text-[#F0E0C0]/80 text-sm font-semibold">Mood</p>
-              <p className="text-[#A89070] text-xs mt-0.5">
+              <p className="text-[var(--cream-muted)] text-xs mt-0.5">
                 Auto-clears in 6 hours. Shows on your card.
               </p>
             </div>
             {mood && (
               <button
                 onClick={() => handleMood(null)}
-                className="text-[10px] font-bold uppercase tracking-wider text-[#A89070] hover:text-[#C4832A] transition-colors"
+                className="text-[10px] font-bold uppercase tracking-wider text-[var(--cream-muted)] hover:text-[#C4832A] transition-colors"
               >
                 Clear
               </button>
@@ -677,7 +793,7 @@ export const Profile = () => {
         <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 flex items-center justify-between shadow-card">
           <div>
             <p className="text-[#F0E0C0]/80 text-sm font-semibold">Profile visibility</p>
-            <p className="text-[#A89070] text-xs mt-0.5">
+            <p className="text-[var(--cream-muted)] text-xs mt-0.5">
               {isVisible ? 'You appear in nearby discovery' : 'Hidden from nearby discovery'}
             </p>
           </div>
@@ -710,10 +826,10 @@ export const Profile = () => {
         {/* ── Sign out (mobile only — desktop uses sidebar) ── */}
         <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card lg:hidden">
           <p className="text-[#F0E0C0]/80 text-sm font-semibold">Sign out</p>
-          <p className="text-[#A89070] text-xs mt-0.5">You'll need to log back in</p>
+          <p className="text-[var(--cream-muted)] text-xs mt-0.5">You'll need to log back in</p>
           <button
             onClick={() => { logout(); navigate('/login'); }}
-            className="mt-4 flex w-full items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#8B4513]/10 hover:bg-[#8B4513]/20 text-[#F0E0C0]/80 text-xs font-semibold border border-[#8B4513]/20 transition-all"
+            className="mt-4 flex w-full items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#A45E18]/10 hover:bg-[#A45E18]/20 text-[#F0E0C0]/80 text-xs font-semibold border border-[#A45E18]/20 transition-all"
           >
             <LogoutIcon className="w-3.5 h-3.5" />
             Sign out

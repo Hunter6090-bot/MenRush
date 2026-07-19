@@ -1,0 +1,38 @@
+---
+description: MenRush canonical logo — never remove, replace, or regenerate without the master file
+alwaysApply: true
+---
+
+# MenRush logo — single source of truth
+
+The MenRush logo is the **bronze two-profile medallion** with "MENRUSH" at the bottom. It is **not** a CSS animation, radar icon, wordmark-only treatment, or AI-generated variant.
+
+## Canonical asset
+
+- **Master file (never delete or swap):** `frontend/public/brand/menrush-logo.png`
+- **UI display sizes:** generated from master — `medallion-480.png`, `medallion-380.png`
+- **Favicons / PWA:** `frontend/public/brand/icon-*.png` (generated from master)
+- **Emails:** `frontend/public/menrush-logo.png` and `email-assets/menrush-logo.png` (copies of master)
+
+## Code
+
+- All public pages use `BrandMark` → `BRAND_MEDALLION` from `frontend/src/lib/brand.ts`
+- **Do not** remove `BrandMark` from `/`, `/coming-soon`, `/beta`, `/login`, `/register`, or in-app chrome
+- **Do not** replace the medallion with CSS shapes, CoinFlip, radar animations, or text-only wordmarks
+- **Do not** add new logo PNGs with different artwork — only resize the master
+
+## Regenerating sizes
+
+If the master is updated, run from `frontend/`:
+
+```bash
+node scripts/sync-brand-logo.mjs
+```
+
+Never hand-edit or AI-generate derivative PNGs.
+
+## Forbidden
+
+- Removing the logo from public/auth pages
+- Introducing `CoinFlip`, `mr-radar_*` animations, or alternate logo components
+- Pointing UI at `logo.png`, `images/logo.jpeg`, or unrelated assets

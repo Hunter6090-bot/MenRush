@@ -43,16 +43,21 @@ export function videoConstraintsForFacing(facingMode: CameraFacing): MediaTrackC
   return { ...MOBILE_VIDEO_CONSTRAINTS, facingMode };
 }
 
+export function isMobileCallDevice(): boolean {
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+}
+
+/** Front/back flip is phone-only — MacBooks with multiple cameras keep a stable lens. */
 export async function canFlipCamera(): Promise<boolean> {
-  if (!navigator.mediaDevices?.enumerateDevices) return false;
+  if (!isMobileCallDevice()) return false;
+  if (!navigator.mediaDevices?.enumerateDevices) return true;
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
     const videoInputs = devices.filter((device) => device.kind === 'videoinput');
-    if (videoInputs.length >= 2) return true;
+    return videoInputs.length >= 2;
   } catch {
-    return false;
+    return true;
   }
-  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 }
 
 export async function acquireLocalMedia(facingMode: CameraFacing = 'user'): Promise<MediaStream> {
@@ -98,6 +103,7 @@ export async function acquireVideoTrackForFacing(facingMode: CameraFacing): Prom
     try {
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       const track = stream.getVideoTracks()[0];
+      stream.getAudioTracks().forEach((audioTrack) => audioTrack.stop());
       if (track) return track;
     } catch (error) {
       lastError = error;

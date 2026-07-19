@@ -110,7 +110,7 @@ export function PulsingAvatar({
             right: 0,
             bottom: 0,
             background:
-              "linear-gradient(135deg, #D4943B 0%, #C4832A 50%, #8B4513 100%)",
+              "linear-gradient(135deg, #D4943B 0%, #C4832A 50%, #A45E18 100%)",
             border: "1.5px solid #0D0A06",
             boxShadow:
               "0 1px 3px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,225,180,0.45), inset 0 -1px 0 rgba(0,0,0,0.35)",

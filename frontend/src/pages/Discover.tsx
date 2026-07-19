@@ -1,38 +1,76 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import type { Root } from 'react-dom/client';
 import { Link, useNavigate } from 'react-router-dom';
-import { EventDTO, pulseAPI, usersAPI } from '../api/client';
+import { EventDTO, Mood, profileMetaAPI, pulseAPI, usersAPI } from '../api/client';
 import { useLocationStore } from '../hooks/store';
 import { NearbyUser } from '../components/ProfileCard';
 import { Layout } from '../components/Layout';
-import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
-import { PulsingAvatar } from '../components/PulsingAvatar';
 import { PulseFab } from '../components/PulseFab';
-import { ProximitySlider, RADIUS_OPTIONS } from '../components/ProximitySlider';
+import { MoodPicker } from '../components/MoodPicker';
+import {
+  DEFAULT_RADIUS_KM,
+  MAX_RADIUS_KM,
+  clampRadiusKm,
+} from '../lib/discoveryFormat';
 import { ProfileDrawer } from '../components/ProfileDrawer';
 import { createMapMarkerElement, MapMarker } from '../components/MapMarker';
-import { getPhotoUrl, UserAvatar } from '../components/UserAvatar';
-import { TribePillRow } from '../components/TribePillRow';
+
+import { ActivationBanner } from '../components/ActivationBanner';
+import { DiscoveryFilterPills } from '../components/DiscoveryFilterPills';
+import { DiscoveryFilterPanel } from '../components/DiscoveryFilterPanel';
+import { NearbyProfileGrid } from '../components/NearbyProfileGrid';
+import { DiscoveryShellPublisher } from '../context/DiscoveryShellContext';
+import { formatRadiusMiles } from '../lib/discoveryFormat';
+import type { ProfileSetupSnapshot } from '../lib/profileSetup';
+import {
+  DEFAULT_DISCOVERY_FILTERS,
+  applyDiscoveryClientFilters,
+  buildNearbyApiFilters,
+  type DiscoveryFilterState,
+} from '../lib/discoveryFilters';
 import { EventsRail } from '../components/EventsRail';
-import { MoodBadge } from '../components/MoodPicker';
-import { getDistanceLabel, isUserPulsing, distanceMeters } from '../lib/discovery';
+import { isUserPulsing, distanceMeters } from '../lib/discovery';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import {
   discoveryResultBucket,
   trackEventOnce,
 } from '../observability/analytics';
+import {
+  geoJsonCircle,
+  RADIUS_CIRCLE_LAYER,
+  RADIUS_CIRCLE_SOURCE,
+} from '../lib/mapRadiusCircle';
 import { ROUTE_LABELS } from '../lib/routeLabels';
+import { useIsDesktopLayout } from '../hooks/useMediaQuery';
+import { ProximitySlider } from '../components/ProximitySlider';
 
+/** Map panel: swipe up to hide, swipe down to show, expand for large map. */
+type MapPanelMode = 'hidden' | 'default' | 'expanded';
+const MAP_PANEL_STORAGE_KEY = 'menrush_nearby_map_panel';
+const DISCOVER_RADIUS_KEY = 'menrush_default_radius_km';
+
+function readMapPanelMode(): MapPanelMode {
+  try {
+    const raw = localStorage.getItem(MAP_PANEL_STORAGE_KEY);
+    if (raw === 'hidden' || raw === 'default' || raw === 'expanded') return raw;
+  } catch {
+    /* ignore */
+  }
+  return 'default';
+}
+
+function mapPanelHeightCss(mode: MapPanelMode): string {
+  if (mode === 'hidden') return '0px';
+  if (mode === 'expanded') return 'min(72vh, 640px)';
+  return 'min(38vh, 360px)';
+}
 
 const INJECT_ID = '__discover_styles__';
 if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
   const s = document.createElement('style');
   s.id = INJECT_ID;
   s.textContent = `
-    .user-strip-scroll::-webkit-scrollbar { height: 0; }
-    .user-strip-scroll { scrollbar-width: none; -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; }
-    .user-strip-card { scroll-snap-align: start; }
     .mapboxgl-popup-content { background: transparent !important; border: none !important; padding: 0 !important; box-shadow: none !important; }
     .mapboxgl-popup-tip { display: none !important; }
     .mapboxgl-map,
@@ -64,13 +102,23 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
     }
     .map-self-dot--pulsing::before { animation: pulse-ring 2s ease-out infinite; }
     .map-self-dot--pulsing::after { animation: pulse-ring 2s ease-out 1s infinite; }
+    .discover-map-panel {
+      transition: height 0.28s ease, min-height 0.28s ease, opacity 0.2s ease;
+      will-change: height;
+    }
+    .discover-map-panel.is-hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
   `;
   document.head.appendChild(s);
 }
 
-const DEFAULT_DISCOVERY_CENTER: [number, number] = [51.5136, -0.1365];
 const INSECURE_GPS_NOTICE =
-  'Live location on your phone needs a secure (HTTPS) link. Open the team tunnel URL — not the plain IP address — then allow location.';
+  'Live location on your phone needs a secure (HTTPS) link. Open menrush.com (HTTPS), then allow location in your browser.';
+
+const BROWSER_GPS_DENIED_NOTICE =
+  'Location is blocked. Allow it in browser or phone settings, then tap Allow location. Your exact pin is not shown publicly — only approximate distance.';
 
 /** Min interval between nearby roster API calls during live GPS. */
 const NEARBY_FETCH_MIN_MS = 20_000;
@@ -82,20 +130,62 @@ const NEARBY_REFETCH_MIN_METERS = 80;
 export const Discover = () => {
   const [users, setUsers] = useState<NearbyUser[]>([]);
   const [likedUsers, setLikedUsers] = useState<Set<string>>(new Set());
+  /** Mutual only — messaging requires match both ways. */
+  const [matchedUsers, setMatchedUsers] = useState<Set<string>>(new Set());
+  const [likesHydrated, setLikesHydrated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [radius, setRadius] = useState<number>(5);
-  const [tagFilters, setTagFilters] = useState<string[]>([]);
+  const [radius, setRadius] = useState<number>(() => {
+    try {
+      const saved = Number(localStorage.getItem(DISCOVER_RADIUS_KEY));
+      if (Number.isFinite(saved) && saved > 0) return clampRadiusKm(saved);
+    } catch {
+      /* ignore */
+    }
+    return DEFAULT_RADIUS_KM;
+  });
+  const [mapPanelMode, setMapPanelMode] = useState<MapPanelMode>(() => readMapPanelMode());
+  const mapDragRef = useRef<{ startY: number; mode: MapPanelMode } | null>(null);
+  const [discoveryFilters, setDiscoveryFilters] = useState<DiscoveryFilterState>(DEFAULT_DISCOVERY_FILTERS);
   const [pulseUntil, setPulseUntil] = useState<Date | null>(null);
   const [nextPulseAllowedAt, setNextPulseAllowedAt] = useState<string | null>(null);
   const [pulseIsPremium, setPulseIsPremium] = useState(false);
   const [pulseError, setPulseError] = useState('');
   const [selectedUser, setSelectedUser] = useState<NearbyUser | null>(null);
-  const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
+  const { lat, lng, setLocation } = useLocationStore();
+  /** Seed from last known pin so returning to Nearby never jumps to a fake city. */
+  const [mapCenter, setMapCenter] = useState<[number, number] | null>(() =>
+    lat != null && lng != null ? [lat, lng] : null,
+  );
   const [mapLoaded, setMapLoaded] = useState(false);
   const [locationNotice, setLocationNotice] = useState('');
+  /** True when no GPS and no saved pin — never invent a city centre. */
+  const [needsLocationGate, setNeedsLocationGate] = useState(
+    () => lat == null || lng == null,
+  );
+  const [activationProfile, setActivationProfile] = useState<ProfileSetupSnapshot | null>(null);
+  const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
+  const [matchToast, setMatchToast] = useState<{ name: string; id: string } | null>(null);
+  const [matchingUserId, setMatchingUserId] = useState<string | null>(null);
+  /** Men found at max radius when current radius is empty — expand teaser. */
+  const [beyondRadiusCount, setBeyondRadiusCount] = useState(0);
+  const [matchCoachDismissed, setMatchCoachDismissed] = useState(() => {
+    try {
+      return localStorage.getItem('menrush_match_coach_dismissed') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [pulseNudgeDismissed, setPulseNudgeDismissed] = useState(() => {
+    try {
+      return localStorage.getItem('menrush_pulse_nudge_dismissed') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [mood, setMood] = useState<Mood | null>(null);
+  const [moodSaving, setMoodSaving] = useState(false);
 
-  const { lat, lng, setLocation } = useLocationStore();
   const watchIdRef = useRef<number | null>(null);
   const hasFetchedRef = useRef(false);
   const savedProfileLocationRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -110,28 +200,77 @@ export const Discover = () => {
   const selfMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const selfDotRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
+  const isDesktopLayout = useIsDesktopLayout();
 
   const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
   const tokenMissing = !mapboxToken || mapboxToken === '__SET_ME__';
+
+  useEffect(() => {
+    usersAPI
+      .getMe()
+      .then((res) => {
+        setActivationProfile(res.data as ProfileSetupSnapshot);
+        if (res.data?.mood) setMood(res.data.mood as Mood);
+      })
+      .catch(() => {});
+    profileMetaAPI
+      .getMood()
+      .then((res) => setMood(res.data.mood ?? null))
+      .catch(() => {});
+    // Hydrate Match CTA after reload — outbound likes + mutual matches (separate).
+    Promise.all([
+      usersAPI.getSentLikes().catch(() => ({ data: { ids: [] as string[] } })),
+      usersAPI.getMatches().catch(() => ({ data: [] as Array<{ id: string }> })),
+    ])
+      .then(([sentRes, matchesRes]) => {
+        const sent = sentRes.data?.ids ?? [];
+        const mutual = (matchesRes.data ?? []).map((m: { id: string }) => m.id).filter(Boolean);
+        setMatchedUsers((prev) => new Set([...prev, ...mutual]));
+        const likedIds = [...sent, ...mutual];
+        if (likedIds.length > 0) {
+          setLikedUsers((prev) => new Set([...prev, ...likedIds]));
+        }
+      })
+      .finally(() => setLikesHydrated(true));
+  }, []);
+
+  const handleMoodSelect = useCallback(async (next: Mood | null) => {
+    setMoodSaving(true);
+    try {
+      const res = await profileMetaAPI.setMood(next);
+      setMood(res.data.mood ?? null);
+    } catch {
+      /* keep previous mood */
+    } finally {
+      setMoodSaving(false);
+    }
+  }, []);
 
   const fetchNearbyUsers = useCallback(
     async (
       latitude: number,
       longitude: number,
       r: number,
-      tags?: string[],
+      filters: DiscoveryFilterState,
       options?: { background?: boolean },
     ) => {
       if (!options?.background) setLoading(true);
       try {
         await usersAPI.updateLocation(latitude, longitude).catch(() => {});
-        const res = await usersAPI.getNearby(
-          latitude,
-          longitude,
-          r,
-          tags && tags.length > 0 ? { interests: tags } : undefined,
-        );
+        const apiFilters = buildNearbyApiFilters(filters);
+        const res = await usersAPI.getNearby(latitude, longitude, r, apiFilters);
         setUsers(res.data);
+        // Cold density: count men outside current radius so Expand is intentional.
+        if (res.data.length === 0 && r < MAX_RADIUS_KM - 0.5) {
+          try {
+            const wider = await usersAPI.getNearby(latitude, longitude, MAX_RADIUS_KM, apiFilters);
+            setBeyondRadiusCount(wider.data?.length ?? 0);
+          } catch {
+            setBeyondRadiusCount(0);
+          }
+        } else {
+          setBeyondRadiusCount(0);
+        }
         trackEventOnce(
           'first_discovery_load',
           { outcome: 'succeeded', result_bucket: discoveryResultBucket(res.data.length) },
@@ -139,6 +278,7 @@ export const Discover = () => {
         );
         setError('');
       } catch {
+        setBeyondRadiusCount(0);
         trackEventOnce(
           'first_discovery_load',
           { outcome: 'failed', result_bucket: 'unknown' },
@@ -159,10 +299,10 @@ export const Discover = () => {
       setLocationNotice(notice);
       if (forceRefresh || !hasFetchedRef.current) {
         hasFetchedRef.current = true;
-        fetchNearbyUsers(latitude, longitude, radius, tagFilters);
+        fetchNearbyUsers(latitude, longitude, radius, discoveryFilters);
       }
     },
-    [fetchNearbyUsers, radius, setLocation, tagFilters],
+    [fetchNearbyUsers, radius, setLocation, discoveryFilters],
   );
 
   const applyLiveGps = useCallback(
@@ -172,6 +312,7 @@ export const Discover = () => {
         usingFallbackLocationRef.current = false;
       }
       hasLiveGpsRef.current = true;
+      setNeedsLocationGate(false);
 
       setLocation(latitude, longitude);
       setLocationNotice('');
@@ -211,27 +352,26 @@ export const Discover = () => {
       const isBackground = lastFetch != null && !recoveringFromFallback;
       hasFetchedRef.current = true;
       lastGpsFetchRef.current = { lat: latitude, lng: longitude, at: now };
-      fetchNearbyUsers(latitude, longitude, radius, tagFilters, { background: isBackground });
+      fetchNearbyUsers(latitude, longitude, radius, discoveryFilters, { background: isBackground });
     },
-    [fetchNearbyUsers, mapCenter, radius, setLocation, tagFilters],
+    [fetchNearbyUsers, mapCenter, radius, setLocation, discoveryFilters],
   );
 
-  // Customer-facing "enable location" action for the fallback notice.
+  // Customer-facing "enable location" — high accuracy then low-accuracy fallback.
   const handleEnableLocation = useCallback(() => {
-    if (!navigator.geolocation) return;
-    if (!window.isSecureContext) {
-      setLocationNotice(INSECURE_GPS_NOTICE);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        useDiscoveryLocation(coords.latitude, coords.longitude, '', true);
-      },
-      () => {
-        // Still blocked — keep the friendly fallback notice in place.
-      },
-      { enableHighAccuracy: true, timeout: 12000 },
-    );
+    void (async () => {
+      const { requestDeviceLocation } = await import('../lib/deviceLocation');
+      const result = await requestDeviceLocation();
+      if (!result.ok) {
+        setNeedsLocationGate(true);
+        setLocationNotice(result.message);
+        setLoading(false);
+        return;
+      }
+      setNeedsLocationGate(false);
+      setLocationNotice('');
+      useDiscoveryLocation(result.lat, result.lng, '', true);
+    })();
   }, [useDiscoveryLocation]);
 
   const applyLocationFallback = useCallback(() => {
@@ -239,25 +379,32 @@ export const Discover = () => {
 
     usingFallbackLocationRef.current = true;
 
-    const saved = savedProfileLocationRef.current;
+    const fromProfile = savedProfileLocationRef.current;
+    const fromStore = useLocationStore.getState();
+    const saved =
+      fromProfile ??
+      (fromStore.lat != null && fromStore.lng != null
+        ? { lat: fromStore.lat, lng: fromStore.lng }
+        : null);
+
     if (saved) {
+      setNeedsLocationGate(false);
       useDiscoveryLocation(
         saved.lat,
         saved.lng,
         window.isSecureContext
-          ? 'Using your last saved location.'
+          ? 'Using your last saved location — refreshing GPS…'
           : INSECURE_GPS_NOTICE,
         true,
       );
       return;
     }
 
-    useDiscoveryLocation(
-      DEFAULT_DISCOVERY_CENTER[0],
-      DEFAULT_DISCOVERY_CENTER[1],
-      window.isSecureContext
-        ? 'Location access is off. Showing people near central London for now.'
-        : INSECURE_GPS_NOTICE,
+    // Location-first product: do not invent a city centre pin. Gate until GPS or saved pin.
+    setNeedsLocationGate(true);
+    setLoading(false);
+    setLocationNotice(
+      window.isSecureContext ? BROWSER_GPS_DENIED_NOTICE : INSECURE_GPS_NOTICE,
     );
   }, [useDiscoveryLocation]);
 
@@ -294,11 +441,15 @@ export const Discover = () => {
       .catch(() => {});
   }, [useDiscoveryLocation]);
 
-  // Render map tiles immediately while GPS resolves; saved profile / GPS recentre later.
+  // Seed Nearby from last known pin immediately (store / prior session) — never London.
   useEffect(() => {
-    if (tokenMissing) return;
-    setMapCenter((current) => current ?? DEFAULT_DISCOVERY_CENTER);
-  }, [tokenMissing]);
+    if (lat == null || lng == null) return;
+    if (hasLiveGpsRef.current) return;
+    if (hasFetchedRef.current) return;
+    savedProfileLocationRef.current = { lat, lng };
+    setNeedsLocationGate(false);
+    useDiscoveryLocation(lat, lng, '', true);
+  }, [lat, lng, useDiscoveryLocation]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && !window.isSecureContext) {
@@ -329,8 +480,26 @@ export const Discover = () => {
       );
       setError('Geolocation is not supported by your browser.');
       setLoading(false);
+      applyLocationFallback();
       return;
     }
+
+    // Fast path: accept a recent cached fix so returning to Nearby is accurate immediately.
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        trackEventOnce(
+          'location_permission_outcome',
+          { outcome: 'granted' },
+          'location_permission_outcome',
+        );
+        applyLiveGps(coords.latitude, coords.longitude, { force: true });
+      },
+      () => {
+        /* watchPosition / fallback handles permanent failures */
+      },
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
+    );
+
     watchIdRef.current = navigator.geolocation.watchPosition(
       ({ coords }) => {
         trackEventOnce(
@@ -338,26 +507,30 @@ export const Discover = () => {
           { outcome: 'granted' },
           'location_permission_outcome',
         );
-        const { latitude, longitude } = coords;
-        applyLiveGps(latitude, longitude);
+        applyLiveGps(coords.latitude, coords.longitude);
       },
       (positionError) => {
+        const denied = positionError.code === positionError.PERMISSION_DENIED;
         trackEventOnce(
           'location_permission_outcome',
           {
-            outcome: positionError.code === positionError.PERMISSION_DENIED ? 'denied' : 'unavailable',
+            outcome: denied ? 'denied' : 'unavailable',
           },
           'location_permission_outcome',
         );
+        if (denied && window.isSecureContext) {
+          setLocationNotice(BROWSER_GPS_DENIED_NOTICE);
+        }
+        // Have a last pin? Keep map on it; only gate when we have nothing.
         if (!hasFetchedRef.current && !hasLiveGpsRef.current) {
           if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
           fallbackTimerRef.current = window.setTimeout(() => {
             applyLocationFallback();
-          }, window.isSecureContext ? 8000 : 2500);
+          }, window.isSecureContext ? 4000 : 2500);
         }
         setError('');
       },
-      { enableHighAccuracy: true, timeout: 12000 },
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 15_000 },
     );
     return () => {
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
@@ -369,40 +542,99 @@ export const Discover = () => {
   useEffect(() => {
     if (lat == null || lng == null) return;
     const id = window.setInterval(() => {
-      fetchNearbyUsers(lat, lng, radius, tagFilters, { background: true });
+      fetchNearbyUsers(lat, lng, radius, discoveryFilters, { background: true });
     }, NEARBY_FETCH_MIN_MS);
     return () => window.clearInterval(id);
-  }, [lat, lng, radius, tagFilters, fetchNearbyUsers]);
+  }, [lat, lng, radius, discoveryFilters, fetchNearbyUsers]);
 
   const handleRadiusChange = useCallback(
-    (next: (typeof RADIUS_OPTIONS)[number]) => {
-      setRadius(next);
-      if (lat != null && lng != null) fetchNearbyUsers(lat, lng, next, tagFilters);
+    (next: number) => {
+      const clamped = clampRadiusKm(next);
+      setRadius(clamped);
+      try {
+        localStorage.setItem(DISCOVER_RADIUS_KEY, String(clamped));
+      } catch {
+        /* ignore */
+      }
+      if (lat != null && lng != null) {
+        void fetchNearbyUsers(lat, lng, clamped, discoveryFilters);
+      }
     },
-    [lat, lng, tagFilters, fetchNearbyUsers],
+    [lat, lng, discoveryFilters, fetchNearbyUsers],
   );
 
-  const handleRadiusCycle = () => {
-    const i = RADIUS_OPTIONS.indexOf(radius as (typeof RADIUS_OPTIONS)[number]);
-    const next = RADIUS_OPTIONS[(i + 1) % RADIUS_OPTIONS.length];
-    handleRadiusChange(next);
-  };
+  /**
+   * Expand search radius — was stepping one tiny mile tier (felt broken).
+   * If we already know men exist farther out, jump to max. Otherwise big steps.
+   */
+  const handleRadiusCycle = useCallback(() => {
+    if (radius >= MAX_RADIUS_KM - 0.5) return;
 
-  const toggleTag = useCallback(
-    (tag: string) => {
-      setTagFilters((prev) => {
-        const next = prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag];
-        if (lat != null && lng != null) fetchNearbyUsers(lat, lng, radius, next);
-        return next;
-      });
+    if (beyondRadiusCount > 0) {
+      handleRadiusChange(MAX_RADIUS_KM);
+      return;
+    }
+
+    // Big, noticeable jumps: ~5 → 25 → 50 → 100 mi (API max)
+    const stepsKm = [5, 10, 25, 50, 80, MAX_RADIUS_KM];
+    const next = stepsKm.find((km) => km > radius + 0.4) ?? MAX_RADIUS_KM;
+    handleRadiusChange(next);
+  }, [radius, beyondRadiusCount, handleRadiusChange]);
+
+  const setMapPanel = useCallback((mode: MapPanelMode) => {
+    setMapPanelMode(mode);
+    try {
+      localStorage.setItem(MAP_PANEL_STORAGE_KEY, mode);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const onMapHandlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      mapDragRef.current = { startY: e.clientY, mode: mapPanelMode };
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    },
+    [mapPanelMode],
+  );
+
+  const onMapHandlePointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      const drag = mapDragRef.current;
+      mapDragRef.current = null;
+      if (!drag) return;
+      const dy = e.clientY - drag.startY;
+      // Swipe up (negative dy) → hide / shrink. Swipe down → show / expand.
+      if (dy < -40) {
+        if (drag.mode === 'expanded') setMapPanel('default');
+        else setMapPanel('hidden');
+      } else if (dy > 40) {
+        if (drag.mode === 'hidden') setMapPanel('default');
+        else if (drag.mode === 'default') setMapPanel('expanded');
+      }
+    },
+    [setMapPanel],
+  );
+
+  // Mapbox needs resize when the collapsible panel changes height.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const t1 = window.setTimeout(() => map.resize(), 50);
+    const t2 = window.setTimeout(() => map.resize(), 320);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [mapPanelMode, isDesktopLayout]);
+
+  const handleDiscoveryFiltersChange = useCallback(
+    (next: DiscoveryFilterState) => {
+      setDiscoveryFilters(next);
+      if (lat != null && lng != null) fetchNearbyUsers(lat, lng, radius, next);
     },
     [lat, lng, radius, fetchNearbyUsers],
   );
-
-  const clearTags = useCallback(() => {
-    setTagFilters([]);
-    if (lat != null && lng != null) fetchNearbyUsers(lat, lng, radius, []);
-  }, [lat, lng, radius, fetchNearbyUsers]);
 
   const handleStartPulse = useCallback(
     async (durationMin: 60 | 90 | 120) => {
@@ -411,7 +643,7 @@ export const Discover = () => {
         setPulseUntil(new Date(res.data.expires_at));
         setNextPulseAllowedAt(null);
         setPulseError('');
-        if (lat != null && lng != null) fetchNearbyUsers(lat, lng, radius, tagFilters);
+        if (lat != null && lng != null) fetchNearbyUsers(lat, lng, radius, discoveryFilters);
       } catch (err: any) {
         const cooldownAt = err?.response?.data?.next_pulse_allowed_at;
         if (cooldownAt) {
@@ -425,7 +657,7 @@ export const Discover = () => {
         throw err;
       }
     },
-    [lat, lng, radius, tagFilters, fetchNearbyUsers],
+    [lat, lng, radius, discoveryFilters, fetchNearbyUsers],
   );
 
   const handleStopPulse = useCallback(async () => {
@@ -434,26 +666,58 @@ export const Discover = () => {
       setPulseUntil(null);
       const state = await pulseAPI.getMe().catch(() => null);
       setNextPulseAllowedAt(state?.data?.next_pulse_allowed_at ?? null);
-      if (lat != null && lng != null) fetchNearbyUsers(lat, lng, radius, tagFilters);
+      if (lat != null && lng != null) fetchNearbyUsers(lat, lng, radius, discoveryFilters);
     } catch {
       // swallow
     }
-  }, [lat, lng, radius, tagFilters, fetchNearbyUsers]);
+  }, [lat, lng, radius, discoveryFilters, fetchNearbyUsers]);
 
   const handleLike = useCallback(
     async (user: NearbyUser) => {
-      if (likedUsers.has(user.id)) {
+      // Chat only when mutual — messaging API requires both-way match.
+      if (matchedUsers.has(user.id)) {
         navigate(`/messages/${user.id}`);
         return;
       }
+      if (likedUsers.has(user.id)) {
+        setSafetyNotice({
+          msg: `Match already sent to ${user.name}. Chat unlocks when he matches back · consent first.`,
+          tone: 'success',
+        });
+        window.setTimeout(() => setSafetyNotice(null), 4000);
+        return;
+      }
+      setMatchingUserId(user.id);
       try {
-        await usersAPI.likeUser(user.id);
+        const res = await usersAPI.likeUser(user.id);
         setLikedUsers((p) => new Set([...p, user.id]));
-      } catch {
-        // ignore
+        if (res.data?.match) {
+          setMatchedUsers((p) => new Set([...p, user.id]));
+          setMatchToast({ name: user.name, id: user.id });
+          window.setTimeout(() => setMatchToast(null), 6000);
+        } else {
+          setSafetyNotice({
+            msg: `Match sent to ${user.name}. Chat unlocks if he matches back · consent first.`,
+            tone: 'success',
+          });
+          window.setTimeout(() => setSafetyNotice(null), 4000);
+        }
+      } catch (err: unknown) {
+        const apiError = (err as { response?: { data?: { error?: string } } })?.response?.data
+          ?.error;
+        setSafetyNotice({
+          msg:
+            typeof apiError === 'string' && apiError.length > 0
+              ? apiError
+              : 'Could not send match. Try again in a moment.',
+          tone: 'error',
+        });
+        window.setTimeout(() => setSafetyNotice(null), 4000);
+      } finally {
+        setMatchingUserId(null);
       }
     },
-    [likedUsers, navigate],
+    [likedUsers, matchedUsers, navigate],
   );
 
   useEffect(() => {
@@ -464,10 +728,11 @@ export const Discover = () => {
 
   useEffect(() => {
     if (tokenMissing || !mapContainerRef.current) return;
-
     if (mapRef.current) return;
+    // Never open Mapbox on a fake city. Wait for last-known or live GPS.
+    if (mapCenter == null) return;
 
-    const startCenter = mapCenter ?? DEFAULT_DISCOVERY_CENTER;
+    const startCenter = mapCenter;
     mapboxgl.accessToken = mapboxToken!;
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
@@ -479,7 +744,7 @@ export const Discover = () => {
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
     map.addControl(
       new mapboxgl.GeolocateControl({
-        positionOptions: { enableHighAccuracy: true },
+        positionOptions: { enableHighAccuracy: true, maximumAge: 15_000 },
         trackUserLocation: false,
         showUserHeading: false,
       }),
@@ -510,14 +775,17 @@ export const Discover = () => {
         setTimeout(() => root.unmount(), 0);
       });
       markersRef.current.clear();
+      if (map.getLayer(RADIUS_CIRCLE_LAYER)) map.removeLayer(RADIUS_CIRCLE_LAYER);
+      if (map.getSource(RADIUS_CIRCLE_SOURCE)) map.removeSource(RADIUS_CIRCLE_SOURCE);
       map.remove();
       mapRef.current = null;
       selfMarkerRef.current = null;
       selfDotRef.current = null;
       setMapLoaded(false);
     };
-    // mapCenter excluded — GPS updates recenter via applyLiveGps/easeTo, not map teardown.
-  }, [mapboxToken, tokenMissing]);
+    // Depend on "has center" not every GPS tick — later moves use easeTo in applyLiveGps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mapCenter coords intentionally excluded
+  }, [mapboxToken, tokenMissing, isDesktopLayout, mapCenter != null]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -600,6 +868,32 @@ export const Discover = () => {
     dot.className = pulseUntil ? 'map-self-dot map-self-dot--pulsing' : 'map-self-dot';
   }, [pulseUntil]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded || lat == null || lng == null) return;
+
+    const data = geoJsonCircle(lng, lat, radius);
+    const existing = map.getSource(RADIUS_CIRCLE_SOURCE) as mapboxgl.GeoJSONSource | undefined;
+
+    if (existing) {
+      existing.setData(data);
+      return;
+    }
+
+    map.addSource(RADIUS_CIRCLE_SOURCE, { type: 'geojson', data });
+    map.addLayer({
+      id: RADIUS_CIRCLE_LAYER,
+      type: 'line',
+      source: RADIUS_CIRCLE_SOURCE,
+      paint: {
+        'line-color': '#C4832A',
+        'line-width': 2,
+        'line-dasharray': [2, 2],
+        'line-opacity': 0.75,
+      },
+    });
+  }, [mapLoaded, lat, lng, radius]);
+
   const onlineCount = users.filter((u) => u.online).length;
   const nearbyCount = users.length;
   const sortedUsers = [...users].sort((a, b) => {
@@ -609,124 +903,526 @@ export const Discover = () => {
     return parseFloat(String(a.distance_km)) - parseFloat(String(b.distance_km));
   });
 
+  const displayUsers = applyDiscoveryClientFilters(sortedUsers, discoveryFilters);
+
+  const togglePulseHeader = useCallback(async () => {
+    if (pulseUntil) await handleStopPulse();
+    else await handleStartPulse(90);
+  }, [pulseUntil, handleStartPulse, handleStopPulse]);
+
   return (
     <Layout>
+      <DiscoveryShellPublisher
+        nearbyCount={nearbyCount}
+        radiusLabel={formatRadiusMiles(radius)}
+        pulseOn={!!pulseUntil}
+        togglePulse={() => void togglePulseHeader()}
+      />
       <h1 className="sr-only">Nearby discovery map</h1>
-      <div
-        className="fixed left-0 right-0 top-[var(--mobile-header-height)] z-0 bottom-[var(--mobile-tab-bar-height)] bg-[#0D0A06] lg:left-[var(--desktop-sidebar-width)] lg:top-[var(--desktop-workspace-header)] lg:bottom-0"
-      >
-        <div className="absolute left-0 right-0 top-[104px] bottom-[188px] z-0 overflow-hidden border-y border-[var(--border-default)] bg-[#11100E] lg:top-0 lg:bottom-0 lg:right-[360px] lg:border-y-0 lg:border-r">
-          <div className="absolute inset-0">
-            <div ref={mapContainerRef} className="h-full w-full" />
-          </div>
 
-          {tokenMissing && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center bg-[#0D0A06]">
-              <div className="w-14 h-14 rounded-full bg-[var(--copper)]/15 border border-[var(--copper)]/40 flex items-center justify-center mb-3">
-                <span className="text-[var(--copper)] text-2xl">·</span>
-              </div>
-              <p className="text-[var(--cream)] text-sm font-bold">Map is taking a break</p>
-              <p className="text-[var(--cream-muted)] text-xs mt-1 max-w-xs leading-relaxed">
-                We can’t load the map right now. You can still browse who’s nearby below.
-              </p>
-              {import.meta.env.DEV && (
-                <p className="text-[var(--cream-muted)]/70 text-[10px] mt-2 max-w-xs leading-relaxed">
-                  Dev note: set <code className="text-[var(--copper)]">VITE_MAPBOX_TOKEN</code> in{' '}
-                  <code className="text-[var(--copper)]">frontend/.env</code> and restart the dev server.
-                </p>
-              )}
-            </div>
-          )}
+      {activationProfile ? (
+        <ActivationBanner profile={activationProfile} onEnableLocation={handleEnableLocation} />
+      ) : null}
 
-          {!tokenMissing && !mapCenter && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0D0A06]/80 backdrop-blur-sm">
-              <div className="relative w-14 h-14 flex items-center justify-center">
-                <span className="absolute inset-0 rounded-full bg-[var(--copper)]/20 animate-pulse-ring" />
-                <span className="w-5 h-5 rounded-full bg-[var(--copper)] border-2 border-[var(--cream)] relative z-10" />
-              </div>
-              <p className="text-[var(--cream-muted)] text-xs font-medium tracking-widest uppercase mt-3">
-                {error || 'Finding nearby matches'}
-              </p>
-            </div>
-          )}
-
-          <div className="absolute top-3 left-3 z-30 pointer-events-auto">
-            <ProximitySlider value={radius} onChange={handleRadiusChange} variant="map" />
-          </div>
-        </div>
-
+      {/* First Match coach — likes cold since July; no swipe, one tap. */}
+      {!needsLocationGate &&
+      likesHydrated &&
+      !loading &&
+      !matchCoachDismissed &&
+      likedUsers.size === 0 &&
+      displayUsers.length > 0 ? (
         <div
-          data-testid="nearby-counts"
-          className="absolute top-[112px] left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-full bg-[var(--bg-elevated)]/85 backdrop-blur-sm border border-[var(--border-default)] shadow-md"
+          className="mx-3 mb-3 rounded-2xl border border-[rgba(196,131,42,0.5)] bg-[rgba(196,131,42,0.12)] px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
+          role="status"
+          data-testid="match-coach"
         >
-          <p className="text-[11px] font-bold text-[var(--cream-soft)] tracking-wide whitespace-nowrap">
-            {loading && nearbyCount === 0 ? (
-              <span className="text-[var(--cream-muted)]">Scanning…</span>
-            ) : nearbyCount === 0 ? (
-              <button onClick={handleRadiusCycle} className="text-[var(--copper)]">
-                EXPAND YOUR RADIUS →
-              </button>
-            ) : (
-              <>
-                <span className="text-[var(--copper)] font-black">{nearbyCount}</span> NEARBY
-                <span className="text-[var(--cream-muted)] mx-1.5">·</span>
-                <span className="text-[var(--copper)] font-black">{onlineCount}</span> ONLINE NOW
-              </>
-            )}
-          </p>
-        </div>
-
-        {locationNotice && (
-          <div
-            role="status"
-            data-testid="location-notice"
-            className="absolute left-3 right-3 top-[152px] z-20 max-w-[340px] rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-3 py-2 text-[11px] font-medium leading-snug text-[var(--cream-soft)] shadow-md backdrop-blur-sm sm:max-w-sm"
-          >
-            <p>{locationNotice}</p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] font-extrabold text-[#F0E0C0]">
+                Men nearby — tap Match on a card
+              </p>
+              <p className="mt-1 text-[12px] text-[var(--cream-muted)]">
+                No swiping. One tap sends interest. Chat unlocks when it&apos;s mutual · consent
+               .
+              </p>
+            </div>
             <button
               type="button"
-              onClick={handleEnableLocation}
-              data-testid="enable-location"
-              className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[var(--copper)]/15 px-2.5 py-1 text-[11px] font-bold text-[var(--copper)] transition-colors hover:bg-[var(--copper)]/25"
+              onClick={() => {
+                setMatchCoachDismissed(true);
+                try {
+                  localStorage.setItem('menrush_match_coach_dismissed', '1');
+                } catch {
+                  /* ignore */
+                }
+              }}
+              className="shrink-0 rounded-full border border-[rgba(196,131,42,0.45)] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)] hover:text-[#F0E0C0]"
             >
-              {locationNotice === 'Using your last saved location.' ||
-              locationNotice === INSECURE_GPS_NOTICE
-                ? 'Refresh location'
-                : 'Enable location'}
+              Got it
             </button>
           </div>
-        )}
+        </div>
+      ) : null}
 
-        <div className="absolute z-30 right-[var(--fab-offset)] top-3 flex items-center gap-2">
-          <div
-            className="flex items-center rounded-full overflow-hidden border bg-[var(--bg-elevated)]/85 backdrop-blur-sm"
-            style={{ borderColor: 'var(--border-default)' }}
-            role="group"
-            aria-label="Discovery surface"
-          >
-            <span
-              className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em]"
-              style={{ background: 'var(--copper)', color: 'var(--bg-primary)' }}
-              aria-current="page"
+      {safetyNotice ? (
+        <div
+          role="status"
+          className="mx-3 mb-2 rounded-xl border px-3 py-2 text-[12px] font-medium"
+          style={{
+            borderColor:
+              safetyNotice.tone === 'success' ? 'rgba(143,199,115,0.4)' : 'rgba(196,131,42,0.45)',
+            background:
+              safetyNotice.tone === 'success' ? 'rgba(143,199,115,0.12)' : 'rgba(196,131,42,0.1)',
+            color: safetyNotice.tone === 'success' ? '#8FC773' : '#F0E0C0',
+          }}
+        >
+          {safetyNotice.msg}
+        </div>
+      ) : null}
+
+      {matchToast ? (
+        <div
+          role="status"
+          data-testid="match-toast"
+          className="mx-3 mb-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] px-4 py-3 shadow-[0_12px_28px_rgba(0,0,0,0.4)]"
+        >
+          <div>
+            <p className="text-[14px] font-extrabold text-[#F0E0C0]">Match with {matchToast.name}</p>
+            <p className="mt-0.5 text-[12px] text-[var(--cream-muted)]">
+              You both said yes. Chat when ready — consent first. Pulse to get seen by more men nearby.
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const id = matchToast.id;
+                setMatchToast(null);
+                navigate(`/messages/${id}`);
+              }}
+              className="rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
             >
-              {ROUTE_LABELS.map}
-            </span>
-            <Link
-              to="/stream"
-              className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] transition-colors hover:text-[var(--copper)]"
-              style={{ color: 'var(--cream-soft)' }}
-              aria-label={`Switch to ${ROUTE_LABELS.liveProfileList}`}
-            >
-              {ROUTE_LABELS.liveProfileList}
-            </Link>
+              Open chat
+            </button>
+            {!pulseUntil ? (
+              <button
+                type="button"
+                data-testid="match-toast-pulse"
+                onClick={() => {
+                  setMatchToast(null);
+                  void handleStartPulse(90).catch(() => {});
+                }}
+                className="rounded-full border border-[rgba(196,131,42,0.55)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
+              >
+                Start Pulse
+              </button>
+            ) : null}
           </div>
         </div>
+      ) : null}
 
-        {pulseError && (
-          <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 px-3 py-2 rounded-md bg-[#3D1A1A] border border-[#8B4513] text-[var(--cream)] text-xs">
-            {pulseError}
+      {!needsLocationGate &&
+      !loading &&
+      nearbyCount === 0 &&
+      !pulseUntil &&
+      !pulseNudgeDismissed &&
+      lat != null &&
+      lng != null ? (
+        <div
+          className="mx-3 mb-3 rounded-2xl border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.1)] px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
+          role="status"
+          data-testid="pulse-nudge"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] font-extrabold text-[var(--cream)]">Quiet map? Start Pulse</p>
+              <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
+                Get 90 minutes of priority visibility and appear first to men nearby.
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void handleStartPulse(90).catch(() => {})}
+                className="rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+              >
+                Start Pulse
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPulseNudgeDismissed(true);
+                  try {
+                    localStorage.setItem('menrush_pulse_nudge_dismissed', '1');
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+                className="rounded-full border border-[rgba(196,131,42,0.45)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)] transition-colors hover:text-[var(--cream)]"
+              >
+                Not now
+              </button>
+            </div>
           </div>
-        )}
+        </div>
+      ) : null}
+
+      {needsLocationGate ? (
+        <div
+          className="mx-3 mb-3 rounded-2xl border border-[rgba(196,131,42,0.5)] bg-[rgba(196,131,42,0.12)] px-5 py-6 text-center shadow-[0_12px_32px_rgba(0,0,0,0.4)]"
+          role="dialog"
+          aria-labelledby="location-gate-title"
+          data-testid="location-gate"
+        >
+          <p id="location-gate-title" className="text-[17px] font-extrabold text-[#F0E0C0]">
+            Allow location to unlock Nearby
+          </p>
+          <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--cream-muted)]">
+            We need your device location to show men near you. Your exact pin is not shown to others
+            — they only see approximate distance. You can adjust your search radius once location is
+            on. Shared only while you use the app.
+          </p>
+          <button
+            type="button"
+            onClick={handleEnableLocation}
+            className="mt-4 rounded-full bg-[#C4832A] px-5 py-2.5 text-[13px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+          >
+            Allow location
+          </button>
+          {locationNotice ? (
+            <p className="mt-3 text-[11px] text-[var(--cream-muted)]">{locationNotice}</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="hidden lg:block lg:h-full lg:overflow-y-auto px-6 py-6">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <h2 className="flex-1 text-2xl font-extrabold text-[var(--cream)]">Nearby</h2>
+          <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
+        </div>
+        {!needsLocationGate ? (
+          <div
+            className="mb-4 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/80 px-4 py-3"
+            data-testid="discover-mood-strip"
+          >
+            <p className="mb-2 text-[12px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]">
+              Your mood · shown nearby
+            </p>
+            <div className={moodSaving ? 'pointer-events-none opacity-60' : ''}>
+              <MoodPicker current={mood} onSelect={handleMoodSelect} />
+            </div>
+          </div>
+        ) : null}
+        <DiscoveryFilterPanel
+          variant="inline"
+          value={discoveryFilters}
+          onChange={handleDiscoveryFiltersChange}
+          className="mb-4"
+        />
+        <div className="relative mb-4 h-[min(48vh,520px)] min-h-[300px] overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[#11100E] shadow-[var(--shadow-md)]">
+          <div ref={isDesktopLayout ? mapContainerRef : undefined} className="absolute inset-0" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-between gap-2 p-3">
+            <div className="pointer-events-auto">
+              <ProximitySlider
+                value={radius}
+                onChange={(km) => handleRadiusChange(km)}
+                variant="map"
+              />
+            </div>
+          </div>
+          <div className="pointer-events-none absolute bottom-3 left-3 z-10 flex items-center gap-2 rounded-full border border-[var(--border-default)] bg-[rgba(30,21,8,0.85)] px-4 py-2 text-[13px] text-[var(--cream-muted)] backdrop-blur-sm">
+            <span className="inline-flex h-2 w-2 rounded-full bg-[var(--status-online)]" />
+            {nearbyCount} in your radius · {formatRadiusMiles(radius)}
+            {nearbyCount === 0 && radius < MAX_RADIUS_KM - 0.5 ? (
+              <button
+                type="button"
+                className="pointer-events-auto ml-1 font-extrabold text-[var(--copper)] underline-offset-2 hover:underline"
+                onClick={handleRadiusCycle}
+              >
+                Expand
+              </button>
+            ) : null}
+          </div>
+        </div>
+        {!needsLocationGate ? (
+          <NearbyProfileGrid
+            users={displayUsers}
+            loading={loading}
+            onSelect={setSelectedUser}
+            onMatch={handleLike}
+            likedUserIds={likedUsers}
+            mutualUserIds={matchedUsers}
+            matchingUserId={matchingUserId}
+            onExpandRadius={handleRadiusCycle}
+            onFinishProfile={() => navigate('/profile/setup')}
+            onStartPulse={() => void handleStartPulse(90)}
+            pulseOn={!!pulseUntil}
+            onOpenHotSpots={() => navigate('/hot-spots')}
+            radiusLabel={formatRadiusMiles(radius)}
+            beyondRadiusCount={beyondRadiusCount}
+          />
+        ) : null}
+      </div>
+
+      <div className="relative lg:hidden">
+        <div className="overflow-y-auto pb-24">
+          {/* ── Map first: clean, collapsible (swipe up hide / down show / expand) ── */}
+          <div
+            className={`discover-map-panel relative w-full overflow-hidden border-b border-[var(--border-default)] bg-[#11100E] ${
+              mapPanelMode === 'hidden' ? 'is-hidden' : ''
+            }`}
+            style={{
+              height: mapPanelHeightCss(mapPanelMode),
+              minHeight: mapPanelMode === 'hidden' ? 0 : 120,
+            }}
+            data-testid="discover-map-panel"
+            data-map-mode={mapPanelMode}
+          >
+            <div ref={isDesktopLayout ? undefined : mapContainerRef} className="absolute inset-0" />
+
+            {tokenMissing ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0D0A06] px-6 text-center">
+                <p className="text-sm font-bold text-[var(--cream)]">Map is taking a break</p>
+                <p className="mt-1 max-w-xs text-xs leading-relaxed text-[var(--cream-muted)]">
+                  Browse who&apos;s nearby below.
+                </p>
+              </div>
+            ) : null}
+
+            {!tokenMissing && !mapCenter ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0D0A06]/90 px-5 text-center backdrop-blur-sm">
+                {needsLocationGate ? (
+                  <>
+                    <p className="text-sm font-extrabold text-[var(--cream)]">Location required</p>
+                    <p className="mt-2 max-w-xs text-xs leading-relaxed text-[var(--cream-muted)]">
+                      Grant location to load the map around you.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleEnableLocation}
+                      className="mt-4 rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03]"
+                    >
+                      Allow location
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-xs font-medium uppercase tracking-widest text-[var(--cream-muted)]">
+                    {error || 'Getting your location…'}
+                  </p>
+                )}
+              </div>
+            ) : null}
+
+            {/* Floating map controls */}
+            {mapPanelMode !== 'hidden' ? (
+              <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 p-3">
+                <div className="pointer-events-auto">
+                  <ProximitySlider
+                    value={radius}
+                    onChange={(km) => handleRadiusChange(km)}
+                    variant="map"
+                  />
+                </div>
+                <div className="pointer-events-auto flex flex-col items-end gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMapPanel(mapPanelMode === 'expanded' ? 'default' : 'expanded')
+                    }
+                    data-testid="map-expand-toggle"
+                    className="rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[var(--cream)] shadow-md backdrop-blur-md"
+                  >
+                    {mapPanelMode === 'expanded' ? 'Shrink map' : 'Expand map'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMapPanel('hidden')}
+                    data-testid="map-hide"
+                    className="rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)] shadow-md backdrop-blur-md"
+                  >
+                    Hide map
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {mapPanelMode !== 'hidden' ? (
+              <div className="pointer-events-none absolute bottom-10 left-3 z-10 flex items-center gap-2 rounded-full border border-[var(--border-default)] bg-[rgba(30,21,8,0.85)] px-3 py-1.5 text-[12px] text-[var(--cream-muted)] backdrop-blur-sm">
+                <span className="inline-flex h-2 w-2 rounded-full bg-[var(--status-online)]" />
+                {nearbyCount} nearby · {formatRadiusMiles(radius)}
+              </div>
+            ) : null}
+
+            {/* Drag handle — swipe up to hide, swipe down to expand */}
+            {mapPanelMode !== 'hidden' ? (
+              <div
+                role="slider"
+                aria-label="Map height. Swipe up to hide, swipe down to expand."
+                aria-valuemin={0}
+                aria-valuemax={2}
+                aria-valuenow={mapPanelMode === 'default' ? 1 : 2}
+                tabIndex={0}
+                data-testid="map-drag-handle"
+                onPointerDown={onMapHandlePointerDown}
+                onPointerUp={onMapHandlePointerUp}
+                onPointerCancel={() => {
+                  mapDragRef.current = null;
+                }}
+                className="absolute inset-x-0 bottom-0 z-20 flex cursor-grab touch-none flex-col items-center active:cursor-grabbing"
+                style={{ touchAction: 'none' }}
+              >
+                <div className="flex w-full flex-col items-center bg-gradient-to-t from-[rgba(13,10,6,0.85)] to-transparent pb-2 pt-6">
+                  <span className="mb-1 h-1 w-10 rounded-full bg-[var(--cream-muted)]/70" />
+                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--cream-muted)]">
+                    Swipe up to hide · down to enlarge
+                  </span>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          {/* When map hidden: show bar to pull it back */}
+          {mapPanelMode === 'hidden' ? (
+            <button
+              type="button"
+              data-testid="map-show-bar"
+              onClick={() => setMapPanel('default')}
+              onPointerDown={onMapHandlePointerDown}
+              onPointerUp={onMapHandlePointerUp}
+              className="flex w-full items-center justify-center gap-2 border-b border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-4 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[var(--copper)]"
+            >
+              <span className="h-1 w-8 rounded-full bg-[var(--copper)]/60" aria-hidden />
+              Show map
+              <span className="h-1 w-8 rounded-full bg-[var(--copper)]/60" aria-hidden />
+            </button>
+          ) : null}
+
+          <div className="space-y-3 px-4 pt-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div
+                data-testid="nearby-counts"
+                className="inline-flex min-h-[36px] items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
+              >
+                <p className="text-[11px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
+                  {loading && nearbyCount === 0 ? (
+                    <span className="text-[var(--cream-muted)]">Scanning…</span>
+                  ) : nearbyCount === 0 ? (
+                    <button
+                      type="button"
+                      onClick={handleRadiusCycle}
+                      data-testid="expand-radius-chip"
+                      className="text-[var(--copper)]"
+                    >
+                      EXPAND YOUR RADIUS →
+                    </button>
+                  ) : (
+                    <>
+                      <span className="font-black text-[var(--copper)]">{nearbyCount}</span> NEARBY
+                      <span className="mx-1.5 text-[var(--cream-muted)]">·</span>
+                      <span className="font-black text-[var(--copper)]">{onlineCount}</span> ONLINE
+                    </>
+                  )}
+                </p>
+              </div>
+              <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
+              <div
+                className="ml-auto flex items-center overflow-hidden rounded-full border bg-[var(--bg-elevated)]/85 backdrop-blur-sm"
+                style={{ borderColor: 'var(--border-default)' }}
+                role="group"
+                aria-label="Discovery surface"
+              >
+                <span
+                  className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em]"
+                  style={{ background: 'var(--copper)', color: 'var(--bg-primary)' }}
+                  aria-current="page"
+                >
+                  {ROUTE_LABELS.map}
+                </span>
+                <Link
+                  to="/stream"
+                  className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] transition-colors hover:text-[var(--copper)]"
+                  style={{ color: 'var(--cream-soft)' }}
+                  aria-label={`Switch to ${ROUTE_LABELS.liveProfileList}`}
+                >
+                  {ROUTE_LABELS.liveProfileList}
+                </Link>
+              </div>
+            </div>
+
+            {locationNotice ? (
+              <div
+                role="status"
+                data-testid="location-notice"
+                className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-3 py-2 text-[11px] font-medium leading-snug text-[var(--cream-soft)] shadow-md backdrop-blur-sm"
+              >
+                <p>{locationNotice}</p>
+                <button
+                  type="button"
+                  onClick={handleEnableLocation}
+                  data-testid="enable-location"
+                  className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[var(--copper)]/15 px-2.5 py-1 text-[11px] font-bold text-[var(--copper)] transition-colors hover:bg-[var(--copper)]/25"
+                >
+                  {locationNotice.startsWith('Using your last saved location') ||
+                  locationNotice === INSECURE_GPS_NOTICE
+                    ? 'Refresh location'
+                    : 'Allow in browser'}
+                </button>
+              </div>
+            ) : null}
+
+            {pulseError ? (
+              <div className="rounded-md border border-[#A45E18] bg-[#3D1A1A] px-3 py-2 text-xs text-[var(--cream)]">
+                {pulseError}
+              </div>
+            ) : null}
+
+            {/* Compact filters + mood under map, not above */}
+            <details className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/60 px-3 py-2">
+              <summary className="cursor-pointer text-[12px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]">
+                Filters & mood
+              </summary>
+              <div className="mt-3 space-y-3">
+                {!needsLocationGate ? (
+                  <div data-testid="discover-mood-strip-mobile">
+                    <MoodPicker current={mood} onSelect={handleMoodSelect} />
+                  </div>
+                ) : null}
+                <DiscoveryFilterPanel
+                  variant="inline"
+                  value={discoveryFilters}
+                  onChange={handleDiscoveryFiltersChange}
+                />
+              </div>
+            </details>
+
+            {/* Profiles: two squares per row, directly under map */}
+            {!needsLocationGate ? (
+              <>
+                <NearbyProfileGrid
+                  users={displayUsers}
+                  loading={loading}
+                  onSelect={setSelectedUser}
+                  onMatch={handleLike}
+                  likedUserIds={likedUsers}
+                  mutualUserIds={matchedUsers}
+                  matchingUserId={matchingUserId}
+                  onExpandRadius={handleRadiusCycle}
+                  onFinishProfile={() => navigate('/profile/setup')}
+                  onStartPulse={() => void handleStartPulse(90)}
+                  pulseOn={!!pulseUntil}
+                  onOpenHotSpots={() => navigate('/hot-spots')}
+                  radiusLabel={formatRadiusMiles(radius)}
+                  beyondRadiusCount={beyondRadiusCount}
+                />
+                <EventsRail
+                  lat={lat}
+                  lng={lng}
+                  onSelect={(ev: EventDTO) => navigate(`/rooms/${ev.id}`)}
+                />
+              </>
+            ) : null}
+          </div>
+        </div>
 
         <PulseFab
           isPulsing={!!pulseUntil}
@@ -736,60 +1432,12 @@ export const Discover = () => {
           onStartPulse={handleStartPulse}
           onStopPulse={handleStopPulse}
         />
-
-        {/* Filter rail — Intent + multi-select Tribes */}
-        <div
-          className="absolute top-12 left-0 right-0 z-20 pointer-events-auto px-1 pt-1 pb-1"
-          style={{
-            background:
-              'linear-gradient(to bottom, rgba(13,10,6,0.85), rgba(13,10,6,0.4) 80%, transparent)',
-          }}
-        >
-          <TribePillRow
-            selected={tagFilters}
-            onToggle={toggleTag}
-            onClear={tagFilters.length > 0 ? clearTags : undefined}
-          />
-        </div>
-
-        <div
-          className="absolute left-0 right-0 z-20 pointer-events-none max-lg:bottom-0 lg:bottom-auto lg:right-0 lg:top-0 lg:w-[360px] lg:pointer-events-auto lg:border-l lg:border-[var(--border-default)] lg:bg-[#0A0806]/95 lg:backdrop-blur-sm"
-        >
-          <div
-            className="h-12 pointer-events-none max-lg:block lg:hidden"
-            style={{ background: 'linear-gradient(to top, #0D0A06, transparent)' }}
-          />
-          <div className="pointer-events-auto space-y-2 pb-2 max-lg:pb-2 lg:flex lg:h-full lg:flex-col lg:overflow-hidden lg:pb-0">
-            <div className="hidden shrink-0 border-b border-[var(--border-default)] px-5 py-4 lg:block">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)]">
-                Nearby now
-              </p>
-              <p className="mt-1 text-sm font-semibold text-[var(--cream)]">
-                {loading && nearbyCount === 0 ? 'Scanning…' : `${nearbyCount} in range`}
-              </p>
-            </div>
-            <div className="hidden min-h-0 flex-1 overflow-y-auto lg:block">
-              <DesktopNearbyList
-                users={sortedUsers}
-                loading={loading}
-                onSelect={setSelectedUser}
-              />
-            </div>
-            <div className="lg:hidden">
-              <EventsRail lat={lat} lng={lng} onSelect={(ev: EventDTO) => navigate(`/rooms/${ev.id}`)} />
-              <UserStrip
-                users={sortedUsers}
-                loading={loading}
-                onSelect={setSelectedUser}
-              />
-            </div>
-          </div>
-        </div>
       </div>
 
       <ProfileDrawer
         user={selectedUser}
         liked={selectedUser ? likedUsers.has(selectedUser.id) : false}
+        mutual={selectedUser ? matchedUsers.has(selectedUser.id) : false}
         onClose={() => setSelectedUser(null)}
         onLike={async () => {
           if (!selectedUser) return;
@@ -800,157 +1448,16 @@ export const Discover = () => {
           navigate(`/messages/${selectedUser.id}`);
         }}
         onPass={() => setSelectedUser(null)}
+        onSafetyNotice={(msg, tone) => {
+          setSafetyNotice({ msg, tone: tone ?? 'success' });
+          window.setTimeout(() => setSafetyNotice(null), 4000);
+        }}
+        onBlocked={() => {
+          if (!selectedUser) return;
+          setUsers((prev) => prev.filter((u) => u.id !== selectedUser.id));
+          setSelectedUser(null);
+        }}
       />
     </Layout>
-  );
-};
-
-interface UserStripProps {
-  users: NearbyUser[];
-  loading: boolean;
-  onSelect: (u: NearbyUser) => void;
-}
-
-const UserStrip: React.FC<UserStripProps> = ({ users, loading, onSelect }) => {
-  if (loading && users.length === 0) {
-    return (
-      <div className="user-strip-scroll flex gap-3 overflow-x-auto px-4 pb-2">
-        {[...Array(5)].map((_, i) => (
-          <div
-            key={i}
-            className="user-strip-card flex-shrink-0 w-[120px] h-[160px] rounded-2xl bg-[var(--bg-elevated)] border border-[var(--border-default)] animate-pulse"
-          />
-        ))}
-      </div>
-    );
-  }
-
-  if (users.length === 0) {
-    return (
-      <div className="px-4 pb-3">
-        <div className="rounded-2xl bg-[var(--bg-elevated)]/85 backdrop-blur-sm border border-[var(--border-default)] p-4 text-center">
-          <p className="text-[var(--cream)] text-sm font-bold">No one nearby</p>
-          <p className="text-[var(--cream-muted)] text-xs mt-1">Pulse to wake the map.</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="user-strip-scroll flex gap-3 overflow-x-auto px-4 pb-1">
-      {users.map((user) => (
-        <UserStripCard key={user.id} user={user} onSelect={() => onSelect(user)} />
-      ))}
-    </div>
-  );
-};
-
-const DesktopNearbyList: React.FC<UserStripProps> = ({ users, loading, onSelect }) => {
-  if (loading && users.length === 0) {
-    return (
-      <div className="space-y-2 px-3 py-3">
-        {[...Array(6)].map((_, i) => (
-          <div key={i} className="h-16 animate-pulse rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]" />
-        ))}
-      </div>
-    );
-  }
-
-  if (users.length === 0) {
-    return (
-      <div className="px-5 py-16 text-center">
-        <p className="text-sm font-bold text-[var(--cream)]">No one nearby</p>
-        <p className="mt-1 text-xs text-[var(--cream-muted)]">Pulse on the map to refresh discovery.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-1 px-2 py-2">
-      {users.map((user) => {
-        const distLabel = getDistanceLabel(user);
-        const isPulsing = isUserPulsing(user);
-        return (
-          <button
-            key={user.id}
-            type="button"
-            onClick={() => onSelect(user)}
-            className="flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-3 text-left transition-colors hover:border-[var(--border-default)] hover:bg-[var(--bg-card)]/80"
-          >
-            <UserAvatar name={user.name} photoUrl={user.photo_url} online={user.online} size="md" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="truncate text-sm font-semibold text-[var(--cream)]">{user.name}</p>
-                {isPulsing ? (
-                  <span className="rounded-full bg-[var(--copper)]/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[var(--copper)]">
-                    Live
-                  </span>
-                ) : null}
-              </div>
-              <p className="truncate text-xs text-[var(--cream-muted)]">
-                {user.headline || user.mood || `${user.age} · nearby`}
-              </p>
-            </div>
-            <span className="shrink-0 text-xs font-bold text-[var(--copper)]">
-              {user.distance_label ?? distLabel}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
-};
-
-interface UserStripCardProps {
-  user: NearbyUser;
-  onSelect: () => void;
-}
-
-const UserStripCard: React.FC<UserStripCardProps> = ({ user, onSelect }) => {
-  const distance = parseFloat(String(user.distance_km));
-  const distLabel = getDistanceLabel(user);
-  const fullPhotoUrl = getPhotoUrl(user.photo_url);
-  const isPulsing = isUserPulsing(user);
-
-  return (
-    <button
-      onClick={onSelect}
-      className="user-strip-card flex-shrink-0 w-[120px] h-[160px] rounded-2xl overflow-hidden border border-[var(--border-default)] flex flex-col text-left bg-[var(--bg-elevated)] hover:border-[var(--copper)] transition-colors"
-      style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.55)' }}
-    >
-      <div className="relative w-full" style={{ height: 96, background: 'linear-gradient(135deg,#2A1C0A,#1E1508)' }}>
-        {fullPhotoUrl ? (
-          <img src={fullPhotoUrl} alt={user.name} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <SilhouetteAvatar size={64} variant="card" />
-          </div>
-        )}
-        <div className="absolute bottom-1 left-1">
-          <PulsingAvatar isPulsing={isPulsing} size={24} intensity={isPulsing ? "live" : "subtle"}>
-            <div
-              className="w-full h-full rounded-full"
-              style={{ background: isPulsing ? 'var(--copper)' : 'transparent' }}
-            />
-          </PulsingAvatar>
-        </div>
-        {user.online && !isPulsing && (
-          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-nn-online border border-nn-elevated" />
-        )}
-      </div>
-      <div className="flex-1 px-2 py-1.5 flex flex-col justify-between">
-        <div>
-          <p className="text-[13px] font-black text-[var(--cream)] truncate">{user.name}</p>
-          {user.mood ? (
-            <div className="mt-0.5">
-              <MoodBadge mood={user.mood} small />
-            </div>
-          ) : user.headline ? (
-            <p className="text-[11px] text-[var(--cream-soft)] truncate">{user.headline}</p>
-          ) : null}
-        </div>
-        <p className="text-[11px] font-bold text-[var(--copper)]">{user.distance_label ?? distLabel}</p>
-      </div>
-    </button>
   );
 };

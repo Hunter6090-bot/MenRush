@@ -1,29 +1,100 @@
 import axios from 'axios';
+import { useAuthStore } from '../hooks/store';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+/** Strip whitespace and accidental literal "\\n" from Vercel env paste mistakes. */
+function sanitizeEnvUrl(raw: unknown, fallback = ''): string {
+  if (typeof raw !== 'string') return fallback;
+  let s = raw.trim();
+  // Env values sometimes contain the two-char sequence \n from bad CLI/dashboard paste.
+  while (s.endsWith('\\n') || s.endsWith('\\r')) {
+    s = s.slice(0, -2).trimEnd();
+  }
+  s = s.replace(/[\r\n]+/g, '').trim();
+  return s || fallback;
+}
+
+const API_BASE_URL = sanitizeEnvUrl(import.meta.env.VITE_API_URL, '/api').replace(/\/$/, '') || '/api';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
 });
 
+/** Custom JWT is payload.signature (2 segments). Reject junk that only 401s forever. */
+function isPlausibleToken(token: unknown): token is string {
+  if (typeof token !== 'string') return false;
+  const t = token.trim();
+  if (t.length < 16) return false;
+  if (t === 'null' || t === 'undefined') return false;
+  return t.includes('.');
+}
+
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  // Prefer live store token so logout immediately stops Authorization headers.
+  const raw = useAuthStore.getState().token ?? localStorage.getItem('token');
+  if (isPlausibleToken(raw)) {
+    config.headers.Authorization = `Bearer ${raw}`;
+  } else if (raw) {
+    // Corrupt token — clear so polls stop.
+    useAuthStore.getState().logout();
   }
   return config;
 });
 
+/** Paths that legitimately return 401 without meaning "session dead". */
+const AUTH_CHALLENGE_PATHS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/2fa/verify',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/beta/validate-invite',
+];
+
+let sessionExpiredHandling = false;
+
+/**
+ * Stale JWT → endless 401 spam on unread/notifications polls.
+ * Must clear Zustand synchronously — async logout left store.token set while
+ * localStorage was empty, so intervals kept firing unauthorized requests.
+ */
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    const reqUrl = String(error?.config?.url ?? '');
+    const isAuthChallenge = AUTH_CHALLENGE_PATHS.some((p) => reqUrl.includes(p));
+
+    if (status === 401 && !isAuthChallenge && !sessionExpiredHandling) {
+      const store = useAuthStore.getState();
+      const hadSession = Boolean(store.token || localStorage.getItem('token'));
+      if (hadSession) {
+        sessionExpiredHandling = true;
+        store.logout();
+        sessionExpiredHandling = false;
+      }
+    }
+    return Promise.reject(error);
+  },
+);
+
 export const authAPI = {
   register: (data: unknown) => apiClient.post('/auth/register', data),
-  login: (data: unknown) => apiClient.post('/auth/login', data),
-  validateBetaInviteCode: (data: { code: string }) =>
-    apiClient.post<{ valid: boolean; registration_open: boolean; code?: string; message?: string }>(
-      '/auth/validate-beta-invite',
-      data,
-    ),
+  login: (data: { email: string; password: string }) => apiClient.post('/auth/login', data),
+  verifyTwoFactorLogin: (data: { pendingToken: string; code: string }) =>
+    apiClient.post('/auth/2fa/verify', data),
+  getTwoFactorStatus: () => apiClient.get<{ enabled: boolean; enabledAt: string | null }>('/auth/2fa/status'),
+  setupTwoFactor: () =>
+    apiClient.post<{ secret: string; otpauthUrl: string }>('/auth/2fa/setup'),
+  enableTwoFactor: (code: string) => apiClient.post('/auth/2fa/enable', { code }),
+  disableTwoFactor: (code: string) => apiClient.post('/auth/2fa/disable', { code }),
   forgotPassword: (data: { email: string }) => apiClient.post('/auth/forgot-password', data),
   resetPassword: (data: { token: string; password: string }) => apiClient.post('/auth/reset-password', data),
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    apiClient.post('/auth/change-password', data),
+};
+
+export const betaAPI = {
+  validateInvite: (data: { code: string }) => apiClient.post('/beta/validate-invite', data),
 };
 
 export const usersAPI = {
@@ -32,7 +103,14 @@ export const usersAPI = {
     lat: number,
     lng: number,
     radius?: number,
-    filters?: { minAge?: number; maxAge?: number; interests?: string[]; onlyPulse?: boolean }
+    filters?: {
+      minAge?: number;
+      maxAge?: number;
+      interests?: string[];
+      onlyPulse?: boolean;
+      lookingFor?: string;
+      mood?: string;
+    }
   ) =>
     apiClient.get('/users/nearby', {
       params: {
@@ -43,6 +121,8 @@ export const usersAPI = {
         maxAge: filters?.maxAge,
         interests: filters?.interests?.join(','),
         onlyPulse: filters?.onlyPulse ? 'true' : undefined,
+        lookingFor: filters?.lookingFor,
+        mood: filters?.mood,
       },
     }),
   getProfile: (id: string) => apiClient.get(`/users/profile/${id}`),
@@ -83,6 +163,14 @@ export const usersAPI = {
   updateVisibility: (isVisible: boolean) =>
     apiClient.patch('/users/visibility', { is_visible: isVisible }),
   getMatches: () => apiClient.get('/users/matches'),
+  /** Outbound like target ids — hydrate Match CTA after reload. */
+  getSentLikes: () => apiClient.get<{ ids: string[] }>('/users/likes/sent'),
+  getReceivedLikesSummary: () =>
+    apiClient.get<{
+      count: number;
+      is_premium: boolean;
+      preview?: Array<{ id: string; name: string; age: number; photo_url?: string | null }>;
+    }>('/users/likes/received/summary'),
   getProfileViews: () =>
     apiClient.get<{
       viewers: Array<{
@@ -290,6 +378,10 @@ export const profileMetaAPI = {
   getGhost: () => apiClient.get<{ is_ghost: boolean }>('/profile-meta/ghost'),
   setGhost: (is_ghost: boolean) =>
     apiClient.post<{ is_ghost: boolean }>('/profile-meta/ghost', { is_ghost }),
+  getLiveLocationSharing: () =>
+    apiClient.get<{ enabled: boolean }>('/profile-meta/live-location-sharing'),
+  setLiveLocationSharing: (enabled: boolean) =>
+    apiClient.post<{ enabled: boolean }>('/profile-meta/live-location-sharing', { enabled }),
 };
 
 // ── Albums ────────────────────────────────────────────────────────────────
@@ -365,6 +457,51 @@ export const eventsAPI = {
     }),
 };
 
+// ── Hot Spots (venue check-ins — not user Pulse boost) ───────────────────
+export interface HotSpotCategoryDTO {
+  id: number;
+  slug: string;
+  name: string;
+  icon: string;
+  description: string | null;
+}
+
+export interface HotSpotDTO {
+  id: string;
+  name: string;
+  city: string | null;
+  description: string | null;
+  latitude: number;
+  longitude: number;
+  category_id: number;
+  category_slug: string;
+  category_name: string;
+  category_icon: string;
+  distance_km: number | null;
+  live_count: number | string;
+  live_count_exact: number;
+  is_checked_in: boolean;
+  my_checkin_anonymous: boolean | null;
+}
+
+export const hotSpotsAPI = {
+  listCategories: () =>
+    apiClient.get<{ categories: HotSpotCategoryDTO[] }>('/hot-spots/categories'),
+  listNearby: (lat: number, lng: number, radiusKm?: number, category?: string) =>
+    apiClient.get<{ spots: HotSpotDTO[] }>('/hot-spots', {
+      params: { lat, lng, radiusKm, category },
+    }),
+  getSpot: (id: string) => apiClient.get<{ spot: HotSpotDTO }>(`/hot-spots/${id}`),
+  checkIn: (id: string, anonymous = false) =>
+    apiClient.post<{ ok: boolean; spot: HotSpotDTO }>(`/hot-spots/${id}/check-in`, { anonymous }),
+  checkOut: (id?: string) =>
+    id
+      ? apiClient.post<{ ok: boolean }>(`/hot-spots/${id}/check-out`)
+      : apiClient.post<{ ok: boolean }>('/hot-spots/check-out'),
+  getMyCheckIn: () =>
+    apiClient.get<{ check_in: unknown | null }>('/hot-spots/me/check-in'),
+};
+
 export const aiAPI = {
   generateImage: (prompt: string, numberOfImages?: number) =>
     apiClient.post<{ images: Array<{ imageBase64: string; mimeType: string }> }>(
@@ -376,10 +513,9 @@ export const aiAPI = {
 export { apiClient };
 
 function resolveSocketUrl(): string {
-  if (import.meta.env.VITE_SOCKET_URL) {
-    return import.meta.env.VITE_SOCKET_URL;
-  }
-  const apiUrl = import.meta.env.VITE_API_URL;
+  const socket = sanitizeEnvUrl(import.meta.env.VITE_SOCKET_URL);
+  if (socket) return socket.replace(/\/$/, '');
+  const apiUrl = sanitizeEnvUrl(import.meta.env.VITE_API_URL);
   if (apiUrl && /^https?:\/\//.test(apiUrl)) {
     return apiUrl.replace(/\/api\/?$/, '');
   }

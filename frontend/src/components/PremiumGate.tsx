@@ -1,4 +1,4 @@
-import { BRAND_MEDALLION_REVERSE } from '../lib/brand';
+import { formatRadiusFromKm } from '../lib/localeUnits';
 
 interface PremiumGateProps {
   headline?: string;
@@ -15,12 +15,12 @@ export function PremiumGate({
   subline = 'See them. Open chat. Skip the queue.',
   perks = [
     'See who matched you',
-    'Expand radius to 50 km',
+    `Expand radius to ${formatRadiusFromKm(161)}`,
     'Message without matching',
     'Boost — top of nearby for 30 min',
     'Incognito · advanced filters',
   ],
-  ctaLabel = 'Unlock — £4.99/mo',
+  ctaLabel = 'Unlock — £9.99/mo',
   onClose,
   onUnlock,
 }: PremiumGateProps) {
@@ -38,11 +38,10 @@ export function PremiumGate({
       >
         <div className="relative px-6 pt-7 pb-5 text-center overflow-hidden">
           <div
-            className="pointer-events-none absolute inset-0 opacity-[0.16] bg-no-repeat bg-center"
+            className="pointer-events-none absolute inset-0 opacity-[0.12]"
             style={{
-              backgroundImage: `url(${BRAND_MEDALLION_REVERSE})`,
-              backgroundSize: '260px',
-              backgroundPosition: 'center 30%',
+              background:
+                'radial-gradient(circle at center 35%, rgba(196,131,42,0.35) 0%, transparent 55%)',
             }}
           />
           <div className="relative">

@@ -1,8 +1,5 @@
 node_modules
-dist
+*.md
 .env
 .env.*
-*.log
-.git
-.gitignore
-README.md
+dist

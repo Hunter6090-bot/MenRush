@@ -4,7 +4,7 @@ export default {
     extend: {
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        display: ['Cinzel', 'Trajan Pro', 'Cormorant Garamond', 'serif'],
+        display: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
       },
       colors: {
         nn: {
@@ -13,7 +13,9 @@ export default {
           elevated: '#2A1C0A',
           copper: '#C4832A',
           'copper-bright': '#E0A14A',
-          rust: '#8B4513',
+          rust: '#A45E18',
+          'on-copper': '#1A0E03',
+          'danger-light': '#D96A52',
           border: '#3D2B0E',
           text: '#F0E0C0',
           muted: '#A89070',

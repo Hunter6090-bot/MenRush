@@ -14,13 +14,22 @@ interface TonePattern {
   offMs: number;
   type: OscillatorType;
   peakGain: number;
+  /** Stagger each frequency within one ring (ms) — soft arpeggio. */
+  staggerMs?: number;
 }
 
 // Outgoing ringback: low, slow, reassuring double tone (UK-style 400/450Hz).
-// Incoming: brighter, faster warble so the two are clearly distinguishable.
+// Incoming: gentle C-major arpeggio with a long pause — noticeable but not shrill.
 const PATTERNS: Record<CallToneKind, TonePattern> = {
   outgoing: { freqs: [400, 450], onMs: 1200, offMs: 2400, type: 'sine', peakGain: 0.1 },
-  incoming: { freqs: [587.33, 880], onMs: 700, offMs: 700, type: 'triangle', peakGain: 0.14 },
+  incoming: {
+    freqs: [523.25, 659.25, 783.99],
+    onMs: 1400,
+    offMs: 3600,
+    type: 'sine',
+    peakGain: 0.055,
+    staggerMs: 220,
+  },
 };
 
 export interface CallTonePlayer {
@@ -50,20 +59,25 @@ export function createCallTone(kind: CallToneKind): CallTonePlayer {
     const now = ctx.currentTime;
     const onSec = pattern.onMs / 1000;
 
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(pattern.peakGain, now + 0.04);
-    gain.gain.setValueAtTime(pattern.peakGain, now + Math.max(onSec - 0.06, 0.05));
-    gain.gain.linearRampToValueAtTime(0, now + onSec);
-    gain.connect(ctx.destination);
+    pattern.freqs.forEach((freq, index) => {
+      const staggerSec = (pattern.staggerMs ?? 0) * index / 1000;
+      const noteStart = now + staggerSec;
+      const noteLength = pattern.staggerMs ? 0.42 : onSec;
+      const noteEnd = noteStart + noteLength;
 
-    pattern.freqs.forEach((freq) => {
+      const gain = ctx!.createGain();
+      gain.gain.setValueAtTime(0, noteStart);
+      gain.gain.linearRampToValueAtTime(pattern.peakGain, noteStart + 0.03);
+      gain.gain.setValueAtTime(pattern.peakGain, noteEnd - 0.08);
+      gain.gain.linearRampToValueAtTime(0, noteEnd);
+      gain.connect(ctx!.destination);
+
       const osc = ctx!.createOscillator();
       osc.type = pattern.type;
-      osc.frequency.setValueAtTime(freq, now);
+      osc.frequency.setValueAtTime(freq, noteStart);
       osc.connect(gain);
-      osc.start(now);
-      osc.stop(now + onSec);
+      osc.start(noteStart);
+      osc.stop(noteEnd);
     });
 
     beepTimer = setTimeout(scheduleBeep, pattern.onMs + pattern.offMs);

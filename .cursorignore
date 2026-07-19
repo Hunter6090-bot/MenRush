@@ -1,0 +1,52 @@
+# Secrets and credentials
+.env
+.env.*
+**/.env
+**/.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Dependencies and build output
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+.vite/
+*.tsbuildinfo
+
+# Database / ORM artifacts (not used today; ignore if added later)
+prisma/migrations/
+
+# User uploads and media (large, sensitive)
+uploads/
+**/uploads/
+backend/uploads/
+menrush-media/
+tmp/
+
+# Legal bundles and ops CSVs
+legal/
+legal/*.zip
+old-waitlist-import.csv
+waitlist-recipients.csv
+email-assets/*.csv
+email-assets/send-log.md
+
+# Test and CI artifacts
+frontend/playwright-report/
+frontend/test-results/
+.playwright-cli/
+frontend/.playwright-cli/
+
+# Deploy / IDE / agent scratch
+.vercel
+.vscode/
+.auto-memory/
+.venv/
+**/.venv/
+__pycache__/
+*.pyc
+logs/
+*.log

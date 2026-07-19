@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { IconPulse, IconClose } from "./icons";
 import { dismissPulseIntro, isPulseIntroDismissed } from "../lib/pulseIntro";
+import { formatRadiusFromKm } from "../lib/localeUnits";
 
 interface PulseFabProps {
   isPulsing: boolean;
@@ -227,7 +228,7 @@ export function PulseFab({
                 ) : (
                   <>
                     <p className="text-nn-muted mb-6 leading-relaxed">
-                      Go visible. <span className="text-nn-copper font-semibold">5 km radius.</span>
+                      Go visible. <span className="text-nn-copper font-semibold">{formatRadiusFromKm(5)} radius.</span>
                     </p>
 
                     <div className="grid grid-cols-3 gap-3 mb-6">

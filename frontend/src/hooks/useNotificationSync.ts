@@ -20,15 +20,22 @@ export function useNotificationSync() {
   const setFromServer = useNotificationStore((s) => s.setFromServer);
   const setLoadError = useNotificationStore((s) => s.setLoadError);
 
-  const sync = useCallback(async () => {
-    if (!token) {
+  const sync = useCallback(async (): Promise<'ok' | 'auth' | 'error'> => {
+    if (!token || !localStorage.getItem('token')) {
       setFromServer([], 0);
-      return;
+      return 'ok';
     }
     try {
       await pullNotifications(setFromServer, setLoadError);
-    } catch {
+      return 'ok';
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 401) {
+        // Dead session: axios interceptor clears auth; do not nag with load error.
+        return 'auth';
+      }
       setLoadError('Could not load alerts. Pull down or reopen this page to retry.');
+      return 'error';
     }
   }, [token, setFromServer, setLoadError]);
 
@@ -37,16 +44,27 @@ export function useNotificationSync() {
   }, [sync]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || !localStorage.getItem('token')) return;
 
+    let intervalId = 0;
     const onFocus = () => {
       void sync();
     };
+    const tick = async () => {
+      if (document.visibilityState === 'hidden') return;
+      const result = await sync();
+      if (result === 'auth' && intervalId) {
+        window.clearInterval(intervalId);
+        intervalId = 0;
+      }
+    };
     window.addEventListener('focus', onFocus);
-    const id = window.setInterval(() => void sync(), 60_000);
+    document.addEventListener('visibilitychange', onFocus);
+    intervalId = window.setInterval(() => void tick(), 60_000);
     return () => {
       window.removeEventListener('focus', onFocus);
-      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onFocus);
+      if (intervalId) window.clearInterval(intervalId);
     };
   }, [token, sync]);
 }

@@ -1,6 +1,21 @@
-/* MenRush design tokens — synced with MenRush Design System handoff (colors_and_type.css) */
+/* MenRush design tokens — synced with MenRush Design System (colors_and_type.css) */
 
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMono-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMono-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   /* ===== Brand (nn namespace — source of truth) ===== */
@@ -10,10 +25,13 @@
   --nn-border:    #3D2B0E;
   --nn-copper:    #C4832A;
   --nn-copper-bright: #E0A14A;
-  --nn-rust:      #8B4513;
-  --nn-text:      #F0E0C0;
-  --nn-muted:     #A89070;
-  --nn-faint:     #6B5840;
+  --nn-rust:      #A45E18;
+  --nn-on-copper: #1A0E03;
+  --nn-danger-light: #D96A52;
+  --nn-text:      #F0E0C0;   /* main text — keep */
+  --nn-muted:     #D4C4A8;   /* was #A89070 — readable muted on dark */
+  --nn-faint:     #C9B896;   /* helper / status (was too dark #6B5840) */
+  --nn-soft:      #E8D9B8;   /* secondary information */
 
   --nn-online:    #6FA85A;
   --nn-warning:   #D4A24C;
@@ -24,9 +42,9 @@
   --nn-fg-2: var(--nn-muted);
   --nn-fg-3: var(--nn-faint);
 
-  --nn-font-display: 'Cinzel', 'Trajan Pro', 'Cormorant Garamond', serif;
+  --nn-font-display: 'Inter', system-ui, -apple-system, sans-serif;
   --nn-font-sans:    'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --nn-font-mono:    ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+  --nn-font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
   --nn-display-xl:    900 56px/1.0  var(--nn-font-display);
   --nn-display-lg:    900 40px/1.05 var(--nn-font-display);
@@ -89,9 +107,10 @@
   --bg-overlay: rgba(13, 10, 6, 0.60);
 
   --cream: var(--nn-text);
-  --cream-soft: var(--nn-muted);
-  --cream-muted: var(--nn-faint);
-  --cream-faded: #4A3A24;
+  --cream-soft: var(--nn-soft);      /* #E8D9B8 secondary */
+  --cream-muted: var(--nn-muted);    /* #D4C4A8 muted labels */
+  --text-secondary: var(--nn-faint); /* #C9B896 helper / status */
+  --cream-faded: #A89070;            /* placeholders only — not body text */
 
   --status-online: var(--nn-online);
   --status-online-glow: rgba(111, 168, 90, 0.4);
@@ -138,13 +157,58 @@
   --nav-height: 64px;
   --mobile-header-height: calc(3.25rem + env(safe-area-inset-top, 0px));
   --mobile-tab-bar-height: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
-  --desktop-sidebar-width: 272px;
-  --desktop-workspace-header: 4.25rem;
+  --desktop-sidebar-width: 232px;
+  --desktop-workspace-header: 4rem;
   --content-max-width: 1280px;
   --map-min-height: 60vh;
   --bottom-strip-height: 180px;
   --fab-size: 64px;
   --fab-offset: 16px;
+}
+
+/*
+ * Light appearance — same copper brand, warmer paper surfaces.
+ * Applied via data-theme="light" on <html> (see lib/theme.ts).
+ */
+html[data-theme='light'] {
+  --nn-bg: #F5EDE0;
+  --nn-card: #FFF8F0;
+  --nn-elevated: #FFFFFF;
+  --nn-border: #E0C9A8;
+  --nn-copper: #B8732A;
+  --nn-copper-bright: #C4832A;
+  --nn-rust: #8B5A1A;
+  --nn-on-copper: #1A0E03;
+  --nn-text: #1A1208;
+  --nn-muted: #5C4A32;     /* secondary on light paper */
+  --nn-faint: #6B5840;     /* helper on light */
+  --nn-soft: #3D2B0E;
+  --nn-online: #3D7A2E;
+  --nn-warning: #B8860B;
+  --nn-danger: #9B3A28;
+
+  --bg-primary: var(--nn-bg);
+  --bg-elevated: var(--nn-elevated);
+  --bg-card: var(--nn-card);
+  --bg-card-hover: #F0E4D0;
+  --bg-overlay: rgba(245, 237, 224, 0.72);
+
+  --cream: var(--nn-text);
+  --cream-soft: var(--nn-soft);
+  --cream-muted: var(--nn-muted);
+  --text-secondary: var(--nn-faint);
+  --cream-faded: #A89070;
+
+  --border-subtle: rgba(184, 115, 42, 0.18);
+  --border-default: var(--nn-border);
+  --border-strong: rgba(184, 115, 42, 0.45);
+
+  --nn-shadow-card: 0 4px 20px rgba(90, 60, 20, 0.12);
+  --nn-shadow-card-hover: 0 12px 36px rgba(90, 60, 20, 0.18);
+  --nn-shadow-modal: 0 20px 60px rgba(60, 40, 10, 0.22);
+  --shadow-sm: 0 1px 2px rgba(60, 40, 10, 0.08);
+  --shadow-md: var(--nn-shadow-card);
+  --shadow-lg: 0 12px 32px rgba(60, 40, 10, 0.14);
 }
 
 /* Typography utilities */
@@ -250,4 +314,42 @@ html, body {
 :focus-visible {
   outline: 2px solid var(--nn-copper);
   outline-offset: 2px;
+}
+
+/* Handoff utility classes */
+.mr-card {
+  border-radius: var(--nn-radius-lg);
+  border: 1px solid var(--nn-border);
+  background: var(--nn-card);
+  box-shadow: var(--nn-shadow-card);
+}
+
+.mr-pill {
+  border-radius: var(--nn-radius-full);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: all var(--nn-dur-base) var(--nn-ease-out);
+}
+
+.mr-pill-active {
+  border: 1px solid rgba(196, 131, 42, 0.45);
+  background: rgba(196, 131, 42, 0.1);
+  color: var(--nn-copper-bright);
+}
+
+.mr-pill-inactive {
+  border: 1px solid var(--nn-border);
+  background: transparent;
+  color: var(--nn-muted);
+}
+
+.mr-cta-gradient {
+  background: linear-gradient(90deg, #c4832a, #a45e18);
+  color: #fff6e6;
+}
+
+.mr-cta-gradient:hover {
+  background: linear-gradient(90deg, #e0a14a, #c4832a);
 }

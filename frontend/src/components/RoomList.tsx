@@ -113,7 +113,7 @@ export const RoomList: React.FC<RoomListProps> = ({
             <>
               <div
                 className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full"
-                style={{ background: 'linear-gradient(135deg, #C4832A, #8B4513)' }}
+                style={{ background: 'linear-gradient(135deg, #C4832A, #A45E18)' }}
               >
                 <RoomsIcon className="h-5 w-5 text-white" />
               </div>
@@ -134,7 +134,7 @@ export const RoomList: React.FC<RoomListProps> = ({
             aria-label="Create group"
             className="flex h-10 w-10 items-center justify-center rounded-2xl transition-all duration-150 active:scale-95"
             style={{
-              background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+              background: 'linear-gradient(135deg, #C4832A, #A45E18)',
               boxShadow: '0 2px 12px rgba(196,131,42,0.35)',
               color: '#fff',
             }}
@@ -189,7 +189,7 @@ export const RoomList: React.FC<RoomListProps> = ({
                 onClick={() => setCreateOpen(true)}
                 className="mt-4 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all duration-150 active:scale-95"
                 style={{
-                  background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+                  background: 'linear-gradient(135deg, #C4832A, #A45E18)',
                   color: '#FFF5E6',
                   boxShadow: '0 2px 12px rgba(196,131,42,0.35)',
                 }}
@@ -250,7 +250,7 @@ export const RoomList: React.FC<RoomListProps> = ({
                           <span
                             className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[9px] font-bold"
                             style={{
-                              background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+                              background: 'linear-gradient(135deg, #C4832A, #A45E18)',
                               color: '#fff',
                             }}
                           >

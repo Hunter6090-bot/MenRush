@@ -4,7 +4,97 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-MenRush is a location-based social discovery app. Users share their GPS location to find and message other users nearby. The core value prop is real-time proximity awareness + direct messaging.
+**MenRush** is a real-time, location-first social and hookup platform designed for men who want to meet other men nearby — without delay, swiping, or friction.
+
+At its core, MenRush is built around **live proximity awareness**. Users share their GPS location to instantly discover who is around them within a configurable radius (default 5km), enabling fast, direct, and intentional connections.
+
+The product focuses on **speed, presence, and realism** — prioritising who is actually nearby and available right now.
+
+### Core Positioning
+> **"See who's near you right now."**
+
+Supporting tone:
+> No waiting. No swiping. Just men nearby.
+
+### Branding
+Dark, masculine copper/bronze aesthetic (`#C4832A` gold, `#0D0A06` background, `#F0E0C0` text). Designed to feel strong, direct, unfiltered, and premium.
+
+---
+
+## Core Concept
+
+Unlike traditional dating apps that rely on swiping and delayed interactions, MenRush removes barriers and surfaces:
+- Who is physically near you
+- Who is currently active
+- Who is open to connecting now
+
+---
+
+## Current Status
+
+MenRush is in **pre-launch**. Landing page is live at **menrush.com** (Vercel), featuring:
+- Countdown to October 1, 2026 launch
+- Email waitlist (Formspree)
+- Rotating slideshow of imagery
+
+The full app is not yet deployed. `App.tsx` currently renders only `<ComingSoon />`.
+
+---
+
+## Core MVP Features
+
+- Fast registration and authentication
+- Profile creation with photo upload
+- Interest and preference (including kink) selection
+- Location-based discovery with filters (age, interests, radius)
+- Like system with mutual match detection
+- Real-time one-to-one messaging
+- Group chat rooms
+- Video calling
+- Live online/offline status indicators
+- Basic privacy controls
+
+---
+
+## Premium Subscription (Stripe — Upcoming)
+
+### Discovery & Visibility
+- See who liked you
+- See profile views
+- Profile boost (priority visibility)
+- Unlimited likes (free capped at 20/day)
+- Expanded radius (beyond 5km — free capped at 5km)
+
+### Messaging & Interaction
+- Message without matching
+- Read receipts
+- Voice messages
+- Photo and video sharing
+
+### Profile Enhancements
+- Extended photo gallery (unlimited vs 6 free)
+- Video profile intro
+- Incognito browsing mode
+
+### Advanced Access
+- Advanced filters (body type, relationship type, kinks)
+- Access to premium-only rooms and experiences
+
+**ID verification with verified badge is available to ALL users, free or paid.**
+
+---
+
+## Technical Architecture
+
+MenRush is a full-stack monorepo:
+
+- **Frontend**: React 18 + Vite + TypeScript + TailwindCSS
+- **Backend**: Node.js (Express) + Socket.IO
+- **Database**: PostgreSQL with PostGIS
+- **Auth**: Custom JWT using HMAC-SHA256
+- **Deployment**: Docker, Railway (backend), Vercel (frontend)
+
+---
 
 ## Commands
 
@@ -30,9 +120,10 @@ docker-compose up postgres # start only the DB (then run backend locally)
 
 No test runner is configured yet.
 
-## Architecture
+---
 
-### Backend (`backend/src/`)
+## Backend Architecture (`backend/src/`)
+
 Express + Socket.IO app compiled with `tsc`, entry point `server.ts`.
 
 **Layer structure:**
@@ -41,33 +132,59 @@ Express + Socket.IO app compiled with `tsc`, entry point `server.ts`.
 - `middleware/auth.ts` — extracts Bearer token, sets `req.userId`; also exports `errorHandler`
 - `types/validation.ts` — all Zod schemas and inferred TypeScript types
 
-**Custom JWT implementation** — `auth.service.ts` does NOT use `jsonwebtoken`. It implements HMAC-SHA256 signing manually using Node's `crypto` module. Token format is `base64url(payload).base64url(signature)` (no header segment). `verifyToken` returns `{ userId }`.
+**Custom JWT** — `auth.service.ts` uses HMAC-SHA256 via Node `crypto`. Token format: `base64url(payload).base64url(signature)`. `verifyToken` returns `{ userId }`.
 
-**Socket.IO** — server maintains a `userSockets: Map<string, string>` (userId → socketId) in memory. On `authenticate` event, users join room `user:<userId>` and are marked online in the DB. On disconnect, they're marked offline. Socket events: `authenticate`, `message`, `typing`, `disconnect`.
+**Socket.IO** — `userSockets: Map<string, string>` (userId → socketId) in memory. Events: `authenticate`, `message`, `typing`, `disconnect`, `room:*`, `call:*`.
 
-**Geospatial** — PostGIS `GEOGRAPHY(POINT, 4326)` column on `profiles.location`. `ST_MakePoint(lng, lat)` — note argument order is **longitude first**. `ST_DWithin` for radius queries, `ST_Distance` for computed distance. Radius defaults to 5 km.
+**Geospatial** — PostGIS `GEOGRAPHY(POINT, 4326)` on `profiles.location`. `ST_MakePoint(lng, lat)` — longitude first. `ST_DWithin` for radius, `ST_Distance` for computed distance. Default radius: 5km.
 
-**DB pattern** — no ORM. All queries use `query(sql, params)` from `db.ts` (thin wrapper over `pg.Pool`). UUIDs generated with `uuidv4()` in application code before insert.
+**DB pattern** — no ORM. Raw SQL via `pg.Pool`. UUIDs via `uuidv4()` in application code.
 
-### Frontend (`frontend/src/`)
-Vite + React 18 + TypeScript.
+---
 
-- `api/client.ts` — axios instance pointed at `VITE_API_URL || http://localhost:3000/api`. Interceptor reads token from `localStorage`.
-- `hooks/store.ts` — Zustand store for auth state (token, user)
-- `hooks/useSocket.ts` — creates Socket.IO connection authenticated with JWT, emits `authenticate` on connect
-- Pages: `Login`, `Register`, `Discover` (nearby users map), `Messaging` (conversation view)
-- `App.tsx` — React Router v6; `/discover` and `/messages/:otherId` are protected routes
+## Frontend Architecture (`frontend/src/`)
 
-### Database (`database/schema.sql`)
-Three tables: `users`, `profiles`, `messages`. `profiles` has a 1:1 with `users` and is created lazily on first `POST /users/location`. Location stored in both `GEOGRAPHY(POINT)` (for spatial queries) and raw `lat`/`lng` decimal columns.
+- `api/client.ts` — axios instance at `VITE_API_URL || http://localhost:3000/api`. Token from `localStorage`.
+- `hooks/store.ts` — Zustand store for auth state
+- `hooks/useSocket.ts` — Socket.IO connection, emits `authenticate` on connect
+- `App.tsx` — currently `<ComingSoon />` only (pre-launch)
+
+---
+
+## Database (`database/schema.sql`)
+
+Tables: `users`, `profiles`, `messages`, `likes`, `rooms`, `room_members`, `room_messages`, `push_subscriptions`, `interests`.
+
+`profiles` is 1:1 with `users`, created lazily on first `POST /users/location`. Location in both `GEOGRAPHY(POINT)` and raw `lat`/`lng` columns.
+
+---
 
 ## Key Env Vars
 
 | Var | Default | Notes |
 |-----|---------|-------|
-| `DATABASE_URL` | `postgresql://menrush:menrush123@postgres:5432/menrush` | Used by backend |
+| `DATABASE_URL` | `postgresql://menrush:menrush123@postgres:5432/menrush` | Backend |
 | `JWT_SECRET` | `your-secret-key` | Change in production |
-| `FRONTEND_URL` | `http://localhost:5173` | Used for Socket.IO CORS |
-| `VITE_API_URL` | `http://localhost:3000/api` | Used by frontend axios client and socket |
+| `FRONTEND_URL` | `http://localhost:5173` | Socket.IO CORS |
+| `VITE_API_URL` | `http://localhost:3000/api` | Frontend axios + socket |
 
-Copy `.env.example` to `backend/.env` for local development outside Docker.
+---
+
+## Multi-agent coordination
+
+Grok, Cursor, and Claude all edit this repo. **Before any commit or push:**
+
+1. `git fetch origin` and diff against `origin/mvp-complete`
+2. Read **`docs/ai-coordination.md`** (work ledger + pre-commit checklist)
+3. If the feature is already on remote, do not recommit
+4. Tag commit messages with `(claude)` for traceability
+
+---
+
+## Security Warning
+
+MCP Docker previously injected malicious code into this repo:
+1. `frontend/src/api/client.ts` — exfiltration interceptor to `http://127.0.0.1:7779/ingest/...`
+2. `backend/src/server.ts` — middleware doing the same
+
+**Before any `git push`, audit these two files for unexplained outbound HTTP calls.**

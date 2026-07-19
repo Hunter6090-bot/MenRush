@@ -63,7 +63,7 @@ export function PublicHeroBlock({
         <span className="mr-hero-accent">{accent}</span>
       </h1>
       <p className="mr-copy mt-5 max-w-2xl">{copy}</p>
-      {footerNote ? <div className="mt-4 max-w-2xl text-sm leading-6 text-[#A89070]/90">{footerNote}</div> : null}
+      {footerNote ? <div className="mt-4 max-w-2xl text-sm leading-6 text-[var(--cream-muted)]/90">{footerNote}</div> : null}
     </>
   );
 }

@@ -5,7 +5,8 @@
 set -euo pipefail
 
 API_URL="${API_URL:-http://localhost:3000/api}"
-BETA_CODE="${BETA_INVITE_CODE:-TESTBETA}"
+# Codes must match invite service: normalize to MENRUSH + 8 chars (e.g. MENRUSH-TEST-BETA)
+BETA_CODE="${BETA_INVITE_CODE:-MENRUSH-TEST-BETA}"
 PASS=0
 FAIL=0
 
@@ -43,9 +44,9 @@ if [ "$CODE" = "000" ]; then
 fi
 ok "Backend reachable (login probe HTTP $CODE)"
 
-# 1. Beta invite validation
+# 1. Beta invite validation (route is /beta/validate-invite, not /auth/...)
 echo "🎟️  Validating beta invite..."
-INVITE_RES=$(curl -s -X POST "$API_URL/auth/validate-beta-invite" \
+INVITE_RES=$(curl -s -X POST "$API_URL/beta/validate-invite" \
   -H "Content-Type: application/json" \
   -d "{\"code\":\"$BETA_CODE\"}")
 if echo "$INVITE_RES" | grep -q '"valid":true'; then
@@ -54,21 +55,21 @@ else
   die "Beta invite failed: $INVITE_RES"
 fi
 
-BAD_INVITE=$(curl -s -X POST "$API_URL/auth/validate-beta-invite" \
+BAD_INVITE=$(curl -s -X POST "$API_URL/beta/validate-invite" \
   -H "Content-Type: application/json" \
   -d '{"code":"NOT-A-REAL-CODE"}')
-if echo "$BAD_INVITE" | grep -qi 'error\|not recognized\|not open'; then
+if echo "$BAD_INVITE" | grep -qi 'error\|not recognized\|not open\|invalid\|expired'; then
   ok "Invalid beta invite rejected"
 else
   bad "Invalid beta invite should fail: $BAD_INVITE"
 fi
 
-# 2. Register User 1 (Alice)
+# 2. Register User 1 (Alice) — body field is invite_code
 echo "👤 Registering Alice..."
 SUFFIX=$(date +%s)
 RES1=$(curl -s -X POST "$API_URL/auth/register" \
   -H "Content-Type: application/json" \
-  -d "{\"email\":\"alice+$SUFFIX@test.com\",\"password\":\"password123\",\"name\":\"Alice\",\"age\":25,\"beta_invite_code\":\"$BETA_CODE\"}")
+  -d "{\"email\":\"alice+$SUFFIX@test.com\",\"password\":\"password123\",\"name\":\"Alice\",\"age\":25,\"invite_code\":\"$BETA_CODE\"}")
 TOKEN1=$(json_field "$RES1" "token")
 USER1_ID=$(json_field "$RES1" "user.id")
 [ -n "$TOKEN1" ] || die "Alice registration failed: $RES1"
@@ -78,7 +79,7 @@ ok "Alice registered ($USER1_ID)"
 echo "👤 Registering Bob..."
 RES2=$(curl -s -X POST "$API_URL/auth/register" \
   -H "Content-Type: application/json" \
-  -d "{\"email\":\"bob+$SUFFIX@test.com\",\"password\":\"password123\",\"name\":\"Bob\",\"age\":28,\"beta_invite_code\":\"$BETA_CODE\"}")
+  -d "{\"email\":\"bob+$SUFFIX@test.com\",\"password\":\"password123\",\"name\":\"Bob\",\"age\":28,\"invite_code\":\"$BETA_CODE\"}")
 TOKEN2=$(json_field "$RES2" "token")
 USER2_ID=$(json_field "$RES2" "user.id")
 [ -n "$TOKEN2" ] || die "Bob registration failed: $RES2"

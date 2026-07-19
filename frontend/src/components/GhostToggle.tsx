@@ -20,7 +20,7 @@ export const GhostToggle: React.FC<GhostToggleProps> = ({ isGhost, isPremium, on
               Premium
             </span>
           </div>
-          <p className="text-[#A89070] text-xs mt-1">
+          <p className="text-[var(--cream-muted)] text-xs mt-1">
             Browse quietly. When enabled, you stay off nearby discovery until you switch it back on.
           </p>
           {locked && (

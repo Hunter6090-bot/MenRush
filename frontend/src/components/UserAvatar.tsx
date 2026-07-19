@@ -1,11 +1,12 @@
-import React from 'react';
-import { resolveAssetUrl } from '../lib/assetUrl';
+import React, { useEffect, useState } from 'react';
+import { fallbackAvatarForAge, isUploadPath, resolveAssetUrl } from '../lib/assetUrl';
 
 type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
 interface UserAvatarProps {
   name: string;
   photoUrl?: string;
+  age?: number;
   online?: boolean;
   size?: Size;
   showStatus?: boolean;
@@ -13,11 +14,11 @@ interface UserAvatarProps {
 }
 
 const sizes: Record<Size, { outer: string; text: string; dot: string; dotPos: string }> = {
-  xs: { outer: 'w-7 h-7',  text: 'text-xs',  dot: 'w-2 h-2',  dotPos: 'bottom-0 right-0' },
-  sm: { outer: 'w-9 h-9',  text: 'text-sm',  dot: 'w-2.5 h-2.5', dotPos: 'bottom-0 right-0' },
-  md: { outer: 'w-11 h-11', text: 'text-base', dot: 'w-3 h-3',  dotPos: 'bottom-0.5 right-0.5' },
-  lg: { outer: 'w-16 h-16', text: 'text-xl',  dot: 'w-3.5 h-3.5', dotPos: 'bottom-0.5 right-0.5' },
-  xl: { outer: 'w-24 h-24', text: 'text-3xl',  dot: 'w-4 h-4',  dotPos: 'bottom-1 right-1' },
+  xs: { outer: 'w-7 h-7', text: 'text-xs', dot: 'w-2 h-2', dotPos: 'bottom-0 right-0' },
+  sm: { outer: 'w-9 h-9', text: 'text-sm', dot: 'w-2.5 h-2.5', dotPos: 'bottom-0 right-0' },
+  md: { outer: 'w-11 h-11', text: 'text-base', dot: 'w-3 h-3', dotPos: 'bottom-0.5 right-0.5' },
+  lg: { outer: 'w-16 h-16', text: 'text-xl', dot: 'w-3.5 h-3.5', dotPos: 'bottom-0.5 right-0.5' },
+  xl: { outer: 'w-24 h-24', text: 'text-3xl', dot: 'w-4 h-4', dotPos: 'bottom-1 right-1' },
 };
 
 export const getPhotoUrl = (url?: string) => resolveAssetUrl(url);
@@ -25,6 +26,7 @@ export const getPhotoUrl = (url?: string) => resolveAssetUrl(url);
 export const UserAvatar: React.FC<UserAvatarProps> = ({
   name,
   photoUrl,
+  age,
   online,
   size = 'md',
   showStatus = true,
@@ -32,15 +34,41 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
 }) => {
   const s = sizes[size];
   const initial = name?.[0]?.toUpperCase() ?? '?';
-  const fullPhotoUrl = getPhotoUrl(photoUrl);
+  const [src, setSrc] = useState<string | undefined>(() => resolveAssetUrl(photoUrl));
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+    setSrc(resolveAssetUrl(photoUrl));
+  }, [photoUrl]);
+
+  const handleError = () => {
+    if (failed) {
+      setSrc(undefined);
+      return;
+    }
+    setFailed(true);
+    // Broken upload → generic avatar so the grid never shows empty rings.
+    if (isUploadPath(photoUrl) || photoUrl) {
+      setSrc(resolveAssetUrl(fallbackAvatarForAge(age)));
+      return;
+    }
+    setSrc(undefined);
+  };
 
   return (
     <div className={`relative flex-shrink-0 ${className}`}>
       <div
         className={`${s.outer} rounded-full overflow-hidden bg-gradient-to-br from-[#C4832A]/30 to-[#C4832A]/10 border border-[#3D2B0E] flex items-center justify-center font-semibold text-[#F0E0C0]`}
       >
-        {fullPhotoUrl ? (
-          <img src={fullPhotoUrl} alt={name} className="w-full h-full object-cover" />
+        {src ? (
+          <img
+            src={src}
+            alt={name}
+            className="w-full h-full object-cover"
+            onError={handleError}
+            loading="lazy"
+          />
         ) : (
           <span className={s.text}>{initial}</span>
         )}

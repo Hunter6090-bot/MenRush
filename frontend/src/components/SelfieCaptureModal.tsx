@@ -2,8 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { assessFrameQuality } from '../lib/captureQuality';
 import { DocumentScannerOverlay } from './DocumentScannerOverlay';
 
-const ALIGNED_FRAMES_TO_CAPTURE = 3;
-
 interface SelfieCaptureModalProps {
   open: boolean;
   onClose: () => void;
@@ -73,7 +71,11 @@ function CompactSelfieCapture({
         const video = videoRef.current;
         if (video) {
           video.srcObject = stream;
-          void video.play().then(() => setReady(true)).catch(() => {
+          const markReady = () => {
+            if (video.videoWidth > 0 && video.videoHeight > 0) setReady(true);
+          };
+          video.onloadedmetadata = markReady;
+          void video.play().then(markReady).catch(() => {
             onErrorRef.current('Could not start the camera preview.');
             onCloseRef.current();
           });
@@ -121,7 +123,7 @@ function CompactSelfieCapture({
           <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 h-full w-full object-cover" style={mirror ? { transform: 'scaleX(-1)' } : undefined} />
         </div>
         <div className="flex justify-center gap-4 px-4 py-4">
-          <button type="button" onClick={() => onCloseRef.current()} className="rounded-xl border border-[#3D2B0E] px-4 py-2 text-sm text-[#A89070]">Cancel</button>
+          <button type="button" onClick={() => onCloseRef.current()} className="rounded-xl border border-[#3D2B0E] px-4 py-2 text-sm text-[var(--cream-muted)]">Cancel</button>
           <button type="button" onClick={handleCapture} disabled={!ready} className="rounded-xl bg-[#C4832A] px-5 py-2 text-sm font-bold text-[#0D0A06] disabled:opacity-40">{captureLabel ?? 'Capture'}</button>
         </div>
       </div>
@@ -141,11 +143,9 @@ function VerificationSelfieCapture({
 }: SelfieCaptureModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const alignedFramesRef = useRef(0);
   const onCloseRef = useRef(onClose);
   const onErrorRef = useRef(onError);
   const onCaptureRef = useRef(onCapture);
-  const captureFrameRef = useRef<() => void>(() => undefined);
 
   const [ready, setReady] = useState(false);
   const [phase, setPhase] = useState<'camera' | 'preview'>('camera');
@@ -168,7 +168,6 @@ function VerificationSelfieCapture({
       setPreviewFile(null);
       setQualityMsg('Starting camera…');
       setQualityOk(false);
-      alignedFramesRef.current = 0;
     }
   }, [open]);
 
@@ -199,7 +198,11 @@ function VerificationSelfieCapture({
         const video = videoRef.current;
         if (video) {
           video.srcObject = stream;
-          void video.play().then(() => setReady(true)).catch(() => {
+          const markReady = () => {
+            if (video.videoWidth > 0 && video.videoHeight > 0) setReady(true);
+          };
+          video.onloadedmetadata = markReady;
+          void video.play().then(markReady).catch(() => {
             onErrorRef.current('Could not start the camera preview.');
             onCloseRef.current();
           });
@@ -222,37 +225,6 @@ function VerificationSelfieCapture({
       if (video) video.srcObject = null;
     };
   }, [open, phase, facingMode]);
-
-  const captureFrame = useCallback(() => {
-    const video = videoRef.current;
-    if (!video || !ready || video.videoWidth === 0) return;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      onErrorRef.current('Could not capture the photo.');
-      return;
-    }
-    if (mirror) {
-      ctx.translate(canvas.width, 0);
-      ctx.scale(-1, 1);
-    }
-    ctx.drawImage(video, 0, 0);
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) {
-          onErrorRef.current('Could not capture the photo.');
-          return;
-        }
-        onCaptureRef.current(new File([blob], `${filePrefix}-${Date.now()}.jpg`, { type: 'image/jpeg' }));
-        onCloseRef.current();
-      },
-      'image/jpeg',
-      0.94,
-    );
-  }, [filePrefix, mirror, ready]);
 
   const captureForPreview = useCallback(() => {
     const video = videoRef.current;
@@ -281,16 +253,11 @@ function VerificationSelfieCapture({
         setPreviewFile(file);
         setPreviewUrl(URL.createObjectURL(blob));
         setPhase('preview');
-        alignedFramesRef.current = 0;
       },
       'image/jpeg',
       0.94,
     );
   }, [filePrefix, mirror, ready]);
-
-  useEffect(() => {
-    captureFrameRef.current = captureForPreview;
-  }, [captureForPreview]);
 
   useEffect(() => {
     if (!open || phase !== 'camera' || !ready) return;
@@ -302,17 +269,7 @@ function VerificationSelfieCapture({
       const q = assessFrameQuality(video, 'selfie');
       setQualityMsg(q.message);
       setQualityOk(q.ok);
-
-      if (!q.ok) {
-        alignedFramesRef.current = 0;
-        return;
-      }
-
-      alignedFramesRef.current += 1;
-      if (alignedFramesRef.current >= ALIGNED_FRAMES_TO_CAPTURE) {
-        captureFrameRef.current();
-      }
-    }, 120);
+    }, 200);
 
     return () => window.clearInterval(tick);
   }, [open, phase, ready]);
@@ -330,7 +287,6 @@ function VerificationSelfieCapture({
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
     setPreviewFile(null);
-    alignedFramesRef.current = 0;
     setPhase('camera');
   };
 
@@ -351,7 +307,7 @@ function VerificationSelfieCapture({
         <button
           type="button"
           onClick={() => onCloseRef.current()}
-          className="text-sm font-semibold text-[#A89070] hover:text-[#C4832A]"
+          className="text-sm font-semibold text-[var(--cream-muted)] hover:text-[#C4832A]"
         >
           Cancel
         </button>
@@ -376,7 +332,7 @@ function VerificationSelfieCapture({
               />
               <DocumentScannerOverlay mode="selfie" aligned={qualityOk} />
               {!ready && (
-                <div className="absolute inset-0 flex items-center justify-center text-sm text-[#A89070]">
+                <div className="absolute inset-0 flex items-center justify-center text-sm text-[var(--cream-muted)]">
                   Initialising camera…
                 </div>
               )}
@@ -403,7 +359,7 @@ function VerificationSelfieCapture({
       </div>
 
       <div className="border-t border-[#3D2B0E]/80 bg-[#0D0A06] px-4 py-4">
-        <p className="mb-3 text-center text-xs leading-relaxed text-[#A89070]">
+        <p className="mb-3 text-center text-xs leading-relaxed text-[var(--cream-muted)]">
           {phase === 'preview'
             ? 'We will compare this live photo to your ID'
             : 'Centre your face in the oval. Look straight at the camera.'}
@@ -443,9 +399,9 @@ function VerificationSelfieCapture({
               type="button"
               onClick={captureForPreview}
               disabled={!ready}
-              className="w-full rounded-xl border border-[#3D2B0E] py-3 text-sm font-semibold text-[#F0E0C0] disabled:opacity-40"
+              className="w-full rounded-xl bg-[#C4832A] py-3 text-sm font-bold text-[#0D0A06] disabled:opacity-40"
             >
-              Capture manually
+              Capture selfie
             </button>
           )}
         </div>
