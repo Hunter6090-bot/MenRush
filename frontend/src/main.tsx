@@ -6,6 +6,10 @@ import './styles/globals.css';
 import App from './App';
 import { initializeAnalytics } from './observability/analytics';
 import { initializeErrorReporting, Sentry } from './observability/sentry';
+import { initThemeFromStorage } from './lib/theme';
+
+// Restore appearance before first paint of React tree (index.html also pre-applies).
+initThemeFromStorage();
 
 initializeErrorReporting();
 initializeAnalytics();

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../api/client';
-import { CoinFlip } from '../components/CoinFlip';
+import { BrandMark } from '../components/BrandMark';
 import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
 import { SiteFooter } from '../components/SiteFooter';
@@ -51,7 +51,7 @@ export const ResetPassword = () => {
       <div className="relative z-10 mx-auto flex min-h-0 flex-1 w-full max-w-lg items-center px-5 py-8 sm:px-8">
         <section className="w-full">
           <Link to="/login" className="inline-block hover:opacity-80 transition-opacity">
-            <CoinFlip qrValue="https://menrush.com" sizeClass="h-20" noFlip />
+            <BrandMark size="md" showWordmark />
           </Link>
 
           <h1 className="mr-page-heading mt-6">
@@ -63,13 +63,13 @@ export const ResetPassword = () => {
 
           <div className="mt-8">
             {error && (
-              <div className="mb-4 rounded-2xl border border-[#8B4513]/30 bg-[#8B4513]/12 px-4 py-3 text-sm text-[#F0E0C0]/90">
+              <div className="mb-4 rounded-2xl border border-[#A45E18]/30 bg-[#A45E18]/12 px-4 py-3 text-sm text-[#F0E0C0]/90">
                 {error}
               </div>
             )}
 
             {!token ? (
-              <p className="text-sm text-[#A89070]">
+              <p className="text-sm text-[var(--cream-muted)]">
                 This reset link is invalid.{' '}
                 <Link to="/forgot-password" className="font-semibold text-[#C4832A] hover:text-[#D4943B]">
                   Request a new one
@@ -79,7 +79,7 @@ export const ResetPassword = () => {
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[#A89070]">
+                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[var(--cream-muted)]">
                     New password
                   </label>
                   <input
@@ -89,12 +89,12 @@ export const ResetPassword = () => {
                     placeholder="••••••••"
                     required
                     minLength={8}
-                    className="w-full rounded-2xl border border-[#3D2B0E] bg-[#1E1508]/40 px-4 py-3.5 text-sm text-[#F0E0C0] placeholder:text-[#A89070]/50 focus:border-[#C4832A]/60 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/25"
+                    className="w-full rounded-2xl border border-[#3D2B0E] bg-[#1E1508]/40 px-4 py-3.5 text-sm text-[#F0E0C0] placeholder:text-[var(--cream-muted)]/50 focus:border-[#C4832A]/60 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/25"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[#A89070]">
+                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[var(--cream-muted)]">
                     Confirm password
                   </label>
                   <input
@@ -104,21 +104,21 @@ export const ResetPassword = () => {
                     placeholder="••••••••"
                     required
                     minLength={8}
-                    className="w-full rounded-2xl border border-[#3D2B0E] bg-[#1E1508]/40 px-4 py-3.5 text-sm text-[#F0E0C0] placeholder:text-[#A89070]/50 focus:border-[#C4832A]/60 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/25"
+                    className="w-full rounded-2xl border border-[#3D2B0E] bg-[#1E1508]/40 px-4 py-3.5 text-sm text-[#F0E0C0] placeholder:text-[var(--cream-muted)]/50 focus:border-[#C4832A]/60 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/25"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:from-[#D4943B] hover:to-[#9B5523] hover:shadow-glow-blue active:scale-[0.98] disabled:opacity-50"
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#C4832A] to-[#A45E18] py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:from-[#D4943B] hover:to-[#C4832A] hover:shadow-glow-blue active:scale-[0.98] disabled:opacity-50"
                 >
                   {loading ? <><PulseRing size={16} /> Updating…</> : 'Update password'}
                 </button>
               </form>
             )}
 
-            <p className="mt-5 text-sm text-[#A89070]">
+            <p className="mt-5 text-sm text-[var(--cream-muted)]">
               <Link to="/login" className="font-semibold text-[#C4832A] transition-colors hover:text-[#D4943B]">
                 Back to sign in
               </Link>

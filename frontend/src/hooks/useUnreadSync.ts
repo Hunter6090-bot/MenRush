@@ -8,26 +8,47 @@ export function useUnreadSync() {
   const setUnreadFromServer = useUnreadStore((s) => s.setUnreadFromServer);
 
   useEffect(() => {
-    if (!token) {
+    // Require both store + storage so we never poll half-logged-out sessions.
+    if (!token || !localStorage.getItem('token')) {
       setUnreadFromServer({});
       return;
     }
 
     let cancelled = false;
+    let intervalId = 0;
     const sync = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      if (!localStorage.getItem('token')) {
+        if (intervalId) {
+          window.clearInterval(intervalId);
+          intervalId = 0;
+        }
+        return;
+      }
       messagesAPI
         .getUnreadSummary()
         .then((res) => {
           if (!cancelled) setUnreadFromServer(res.data.bySender ?? {});
         })
-        .catch(() => {});
+        .catch((err: { response?: { status?: number } }) => {
+          // Dead session: stop polling; axios interceptor clears auth.
+          if (err?.response?.status === 401 && intervalId) {
+            window.clearInterval(intervalId);
+            intervalId = 0;
+          }
+        });
     };
 
     sync();
-    const id = window.setInterval(sync, 60_000);
+    intervalId = window.setInterval(sync, 60_000);
+    const onVis = () => {
+      if (document.visibilityState === 'visible') sync();
+    };
+    document.addEventListener('visibilitychange', onVis);
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      if (intervalId) window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVis);
     };
   }, [token, setUnreadFromServer]);
 }

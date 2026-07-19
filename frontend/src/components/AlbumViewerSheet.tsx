@@ -152,7 +152,7 @@ export function AlbumViewerSheet({
               <h2 id="album-sheet-title" className="text-lg font-bold text-[#F0E0C0] truncate">
                 {album.name}
               </h2>
-              <p className="text-xs text-[#A89070] mt-0.5">
+              <p className="text-xs text-[var(--cream-muted)] mt-0.5">
                 {album.photo_count} {album.photo_count === 1 ? 'photo' : 'photos'}
                 {album.is_locked ? ' · Locked' : ' · Open'}
               </p>
@@ -173,7 +173,7 @@ export function AlbumViewerSheet({
                 type="button"
                 onClick={onClose}
                 aria-label="Close"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-[#3D2B0E] text-lg leading-none text-[#A89070] hover:text-[#F0E0C0]"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-[#3D2B0E] text-lg leading-none text-[var(--cream-muted)] hover:text-[#F0E0C0]"
               >
                 ×
               </button>
@@ -187,7 +187,7 @@ export function AlbumViewerSheet({
                   <LockIcon className="h-8 w-8 text-[#C4832A]" />
                 </div>
                 <p className="text-sm font-semibold text-[#F0E0C0]">Private album</p>
-                <p className="mt-2 text-sm leading-relaxed text-[#A89070] max-w-xs mx-auto">
+                <p className="mt-2 text-sm leading-relaxed text-[var(--cream-muted)] max-w-xs mx-auto">
                   {ownerName} keeps this album locked. Ask in chat if you want access — they can
                   unlock it for you after you match.
                 </p>
@@ -203,9 +203,9 @@ export function AlbumViewerSheet({
                 </button>
               </div>
             ) : loading ? (
-              <p className="py-10 text-center text-sm text-[#A89070]">Loading photos…</p>
+              <p className="py-10 text-center text-sm text-[var(--cream-muted)]">Loading photos…</p>
             ) : photos.length === 0 ? (
-              <p className="py-10 text-center text-sm text-[#A89070]">No photos in this album yet.</p>
+              <p className="py-10 text-center text-sm text-[var(--cream-muted)]">No photos in this album yet.</p>
             ) : (
               <div className="grid grid-cols-3 gap-2">
                 {photos.map((photo) => (
@@ -249,11 +249,11 @@ export function AlbumViewerSheet({
                 <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#C4832A]">
                   Share access
                 </p>
-                <p className="mt-1 text-xs leading-relaxed text-[#A89070]">
+                <p className="mt-1 text-xs leading-relaxed text-[var(--cream-muted)]">
                   Locked albums are hidden until you grant a match access.
                 </p>
                 {matches.length === 0 ? (
-                  <p className="mt-3 text-sm text-[#A89070]">No matches yet to share with.</p>
+                  <p className="mt-3 text-sm text-[var(--cream-muted)]">No matches yet to share with.</p>
                 ) : (
                   <ul className="mt-3 space-y-2">
                     {matches.map((match) => (
@@ -354,7 +354,7 @@ export function AlbumCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate font-semibold text-[#F0E0C0]">{album.name}</p>
-          <p className="mt-0.5 text-xs text-[#A89070]">
+          <p className="mt-0.5 text-xs text-[var(--cream-muted)]">
             {album.photo_count} {album.photo_count === 1 ? 'photo' : 'photos'}
           </p>
         </div>

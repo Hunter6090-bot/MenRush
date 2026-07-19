@@ -693,7 +693,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                     style={
                       isMine
                         ? {
-                            background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+                            background: 'linear-gradient(135deg, #C4832A, #A45E18)',
                             color: '#FFF5E6',
                             borderRadius: showTail
                               ? '18px 18px 4px 18px'
@@ -811,7 +811,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             aria-label="Send message"
             className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
             style={{
-              background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+              background: 'linear-gradient(135deg, #C4832A, #A45E18)',
               boxShadow: input.trim() ? '0 2px 12px rgba(196,131,42,0.4)' : 'none',
             }}
           >

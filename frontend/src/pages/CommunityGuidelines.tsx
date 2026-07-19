@@ -16,7 +16,7 @@ export const CommunityGuidelines = () => {
     <div className="flex min-h-dvh flex-col bg-[#0a0805] text-[#F0E0C0]">
       <main className="flex-1 px-5 py-8 sm:px-8 sm:py-12">
         <article className="mx-auto w-full max-w-3xl rounded-2xl border border-[#3D2B0E] bg-[#1A1410] p-6 sm:p-9">
-          <Link to="/" className="text-xs font-bold uppercase tracking-[0.18em] text-[#A89070] hover:text-[#C4832A]">
+          <Link to="/" className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)] hover:text-[#C4832A]">
             Back
           </Link>
           <p className="mt-8 text-xs font-black uppercase tracking-[0.18em] text-[#C4832A]">Community guidelines</p>

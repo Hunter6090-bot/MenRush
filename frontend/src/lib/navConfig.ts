@@ -1,7 +1,16 @@
 import type { ComponentType } from 'react';
-import { FEATURES } from './featureFlags';
 import { ROUTE_LABELS } from './routeLabels';
-import { IconChat, IconDiscover, IconMatches, IconNotifications, IconProfile, IconRooms } from '../components/icons';
+import {
+  IconChat,
+  IconDiscover,
+  IconEvents,
+  IconHotSpots,
+  IconMatches,
+  IconNotifications,
+  IconProfile,
+  IconRooms,
+  IconSettings,
+} from '../components/icons';
 
 export type NavIcon = ComponentType<{ size?: number; className?: string }>;
 
@@ -10,13 +19,13 @@ export interface NavItem {
   label: string;
   shortLabel?: string;
   Icon: NavIcon;
-  badgeKey?: 'messages' | 'notifications';
+  badgeKey?: 'messages' | 'notifications' | 'matches';
   mobileTab?: boolean;
   desktopNav?: boolean;
 }
 
 export function getNavItems(): NavItem[] {
-  const items: NavItem[] = [
+  return [
     {
       to: '/discover',
       label: ROUTE_LABELS.nearby,
@@ -25,9 +34,22 @@ export function getNavItems(): NavItem[] {
       desktopNav: true,
     },
     {
+      to: '/events',
+      label: ROUTE_LABELS.events,
+      Icon: IconEvents,
+      desktopNav: true,
+    },
+    {
+      to: '/hot-spots',
+      label: ROUTE_LABELS.hotSpots,
+      Icon: IconHotSpots,
+      desktopNav: true,
+    },
+    {
       to: '/matches',
       label: ROUTE_LABELS.matches,
       Icon: IconMatches,
+      badgeKey: 'matches',
       mobileTab: true,
       desktopNav: true,
     },
@@ -40,25 +62,11 @@ export function getNavItems(): NavItem[] {
       mobileTab: true,
       desktopNav: true,
     },
-  ];
-
-  if (FEATURES.chatRooms) {
-    items.push({
+    {
       to: '/rooms',
       label: ROUTE_LABELS.rooms,
       Icon: IconRooms,
-      desktopNav: true,
-    });
-  }
-
-  items.push(
-    {
-      to: '/notifications',
-      label: ROUTE_LABELS.alerts,
-      Icon: IconNotifications,
-      badgeKey: 'notifications',
-      mobileTab: true,
-      desktopNav: true,
+      desktopNav: false,
     },
     {
       to: '/profile',
@@ -67,9 +75,20 @@ export function getNavItems(): NavItem[] {
       mobileTab: true,
       desktopNav: true,
     },
-  );
-
-  return items;
+    {
+      to: '/settings',
+      label: ROUTE_LABELS.settings,
+      Icon: IconSettings,
+      desktopNav: true,
+    },
+    {
+      to: '/notifications',
+      label: ROUTE_LABELS.alerts,
+      Icon: IconNotifications,
+      badgeKey: 'notifications',
+      desktopNav: false,
+    },
+  ];
 }
 
 export function isNavActive(pathname: string, path: string): boolean {
@@ -85,6 +104,15 @@ export function isNavActive(pathname: string, path: string): boolean {
   }
   if (path === '/profile') {
     return pathname === '/profile';
+  }
+  if (path === '/settings') {
+    return pathname === '/settings';
+  }
+  if (path === '/events') {
+    return pathname === '/events' || pathname.startsWith('/events/');
+  }
+  if (path === '/hot-spots') {
+    return pathname === '/hot-spots' || pathname.startsWith('/hot-spots/');
   }
   return pathname === path || pathname.startsWith(`${path}/`);
 }

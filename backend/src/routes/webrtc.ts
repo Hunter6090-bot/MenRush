@@ -1,15 +1,13 @@
-import { Router } from 'express';
+import { Router, Response } from 'express';
+import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
+import { getIceServers } from '../services/webrtc.service';
+
 const router = Router();
 
-// Simple ICE servers endpoint
-router.get('/ice-servers', (req, res) => {
-  res.json({
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-      // Add TURN if configured in env
-    ]
-  });
+router.use(authMiddleware, verifiedMiddleware);
+
+router.get('/ice-servers', (_req: AuthRequest, res: Response) => {
+  res.json({ iceServers: getIceServers() });
 });
 
 export default router;

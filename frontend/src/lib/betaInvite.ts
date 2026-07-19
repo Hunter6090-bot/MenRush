@@ -1,18 +1,21 @@
-const BETA_INVITE_KEY = 'menrush:beta-invite-code';
+export const BETA_INVITE_REQUIRED =
+  String(import.meta.env.VITE_BETA_INVITE_REQUIRED || '').toLowerCase() === 'true';
 
-export function saveValidatedBetaInviteCode(code: string): void {
-  sessionStorage.setItem(BETA_INVITE_KEY, code.trim().toUpperCase());
+export const BETA_INVITE_STORAGE_KEY = 'menrush.beta.invite_code';
+
+export function readStoredInviteCode(): string | null {
+  try {
+    const value = sessionStorage.getItem(BETA_INVITE_STORAGE_KEY);
+    return value?.trim() ? value : null;
+  } catch {
+    return null;
+  }
 }
 
-export function getValidatedBetaInviteCode(): string | null {
-  const code = sessionStorage.getItem(BETA_INVITE_KEY);
-  return code?.trim() || null;
+export function storeInviteCode(code: string): void {
+  sessionStorage.setItem(BETA_INVITE_STORAGE_KEY, code.trim());
 }
 
-export function clearValidatedBetaInviteCode(): void {
-  sessionStorage.removeItem(BETA_INVITE_KEY);
-}
-
-export function hasValidatedBetaInviteCode(): boolean {
-  return getValidatedBetaInviteCode() !== null;
+export function clearStoredInviteCode(): void {
+  sessionStorage.removeItem(BETA_INVITE_STORAGE_KEY);
 }

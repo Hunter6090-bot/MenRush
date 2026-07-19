@@ -24,12 +24,15 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: menrush-backend
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://menrush:menrush123@postgres:5432/menrush
       JWT_SECRET: your-secret-jwt-key-change-in-production
       PORT: 3000
       NODE_ENV: development
-      FRONTEND_URL: http://localhost:5173
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      DEV_AUTO_VERIFY: ${DEV_AUTO_VERIFY:-false}
     ports:
       - '3000:3000'
     depends_on:
@@ -37,6 +40,19 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/src:/app/src
+      - uploads_data:/app/uploads
+
+  nginx:
+    image: nginx:alpine
+    container_name: menrush-nginx
+    ports:
+      - '80:80'
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - uploads_data:/var/www/uploads:ro
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:
+  uploads_data:

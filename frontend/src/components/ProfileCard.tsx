@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserAvatar, getPhotoUrl } from './UserAvatar';
+import { fallbackAvatarForAge, resolveAssetUrl } from '../lib/assetUrl';
+import { getPhotoUrl } from './UserAvatar';
 import { StatusBadge } from './StatusBadge';
 import { SilhouetteAvatar } from './SilhouetteAvatar';
 import { IconMatches } from './icons';
 import { usersAPI } from '../api/client';
 import { VerifiedBadge } from './VerifiedBadge';
+import { MoodBadge } from './MoodPicker';
 import { getDistanceLabel, isUserPulsing } from '../lib/discovery';
 
 export interface NearbyUser {
@@ -14,6 +16,7 @@ export interface NearbyUser {
   age: number;
   bio?: string;
   headline?: string;
+  looking_for?: string;
   photo_url?: string;
   cover_url?: string;
   interests?: string[];
@@ -34,30 +37,71 @@ export interface NearbyUser {
 
 interface ProfileCardProps {
   user: NearbyUser;
+  /** Hydrate Match CTA after reload (mutual matches). */
+  initiallyLiked?: boolean;
+  initiallyMutual?: boolean;
 }
 
-export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
+export const ProfileCard: React.FC<ProfileCardProps> = ({
+  user,
+  initiallyLiked = false,
+  initiallyMutual = false,
+}) => {
   const navigate = useNavigate();
-  const [liked, setLiked] = useState(false);
+  const [liked, setLiked] = useState(initiallyLiked || initiallyMutual);
+  const [isMutual, setIsMutual] = useState(initiallyMutual);
   const [showMatch, setShowMatch] = useState(false);
+  const [likeHint, setLikeHint] = useState<string | null>(null);
+  const [liking, setLiking] = useState(false);
   const distance = parseFloat(String(user.distance_km));
   const distanceLabel = getDistanceLabel(user);
-  const fullPhotoUrl = getPhotoUrl(user.photo_url);
+  const [fullPhotoUrl, setFullPhotoUrl] = useState(() => getPhotoUrl(user.photo_url));
+  const [photoFailed, setPhotoFailed] = useState(false);
   const isPulsing = isUserPulsing(user);
+
+  useEffect(() => {
+    setFullPhotoUrl(getPhotoUrl(user.photo_url));
+    setPhotoFailed(false);
+  }, [user.photo_url]);
+
+  useEffect(() => {
+    if (initiallyMutual || initiallyLiked) {
+      setLiked(true);
+      if (initiallyMutual) setIsMutual(true);
+    }
+  }, [initiallyLiked, initiallyMutual]);
 
   const handleLike = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (liked) return;
+    if (liking) return;
+    if (liked || isMutual) {
+      if (isMutual) navigate(`/messages/${user.id}`);
+      return;
+    }
 
+    setLiking(true);
+    setLikeHint(null);
     try {
       const res = await usersAPI.likeUser(user.id);
       setLiked(true);
       if (res.data.match) {
+        setIsMutual(true);
         setShowMatch(true);
         setTimeout(() => setShowMatch(false), 3000);
+      } else {
+        setLikeHint('Match sent — chat unlocks if he matches back · consent first.');
+        setTimeout(() => setLikeHint(null), 4000);
       }
-    } catch (err) {
-      console.error('Failed to like user:', err);
+    } catch (err: unknown) {
+      const apiError = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setLikeHint(
+        typeof apiError === 'string' && apiError.length > 0
+          ? apiError
+          : 'Could not send match. Try again.',
+      );
+      setTimeout(() => setLikeHint(null), 4000);
+    } finally {
+      setLiking(false);
     }
   };
 
@@ -87,6 +131,17 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
             src={fullPhotoUrl}
             alt={user.name}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            onError={() => {
+              if (photoFailed) {
+                setFullPhotoUrl(undefined);
+                return;
+              }
+              setPhotoFailed(true);
+              setFullPhotoUrl(
+                resolveAssetUrl(fallbackAvatarForAge(user.age)) ??
+                  resolveAssetUrl('/avatars/generic/05.svg'),
+              );
+            }}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
@@ -113,11 +168,11 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
         {/* Match button overlay */}
         <button
           onClick={handleLike}
-          className={`absolute bottom-3 right-3 w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+          className={`absolute bottom-3 right-3 w-11 h-11 rounded-full flex items-center justify-center transition-all ${
             liked
-              ? 'bg-[#8B4513] text-white shadow-glow-red'
-              : 'bg-black/50 backdrop-blur-sm text-white hover:bg-[#8B4513] hover:scale-110'
-          } border border-[#3D2B0E] z-10`}
+              ? 'bg-nn-copper text-nn-on-copper shadow-glow-copper'
+              : 'bg-black/50 backdrop-blur-sm text-nn-copper-bright hover:bg-nn-copper/20 hover:scale-110'
+          } border border-nn-border z-10`}
         >
           <IconMatches size={20} />
         </button>
@@ -127,7 +182,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
       <div className="p-4 flex-1 flex flex-col">
         <div className="flex items-center gap-2 mb-1">
           <h3 className="font-bold text-[#F0E0C0] text-base">{user.name}</h3>
-          <span className="text-[#A89070] text-sm">{user.age}</span>
+          <span className="text-[var(--cream-muted)] text-sm">{user.age}</span>
           {user.is_verified ? <VerifiedBadge /> : null}
         </div>
 
@@ -135,10 +190,22 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
           <p className="text-[#C4832A]/80 text-xs font-medium mb-1">{user.headline}</p>
         )}
 
+        {user.looking_for ? (
+          <p className="text-[11px] font-semibold text-[#E0A14A] mb-1" data-testid="card-looking-for">
+            Looking for: {user.looking_for}
+          </p>
+        ) : null}
+
+        {user.mood ? (
+          <div className="mb-1.5">
+            <MoodBadge mood={user.mood} small />
+          </div>
+        ) : null}
+
         {user.bio ? (
           <p className="text-[#F0E0C0]/55 text-xs leading-relaxed line-clamp-2 flex-1">{user.bio}</p>
-        ) : user.headline ? null : (
-          <p className="text-[#A89070]/50 text-xs italic flex-1">No bio yet</p>
+        ) : user.headline || user.looking_for ? null : (
+          <p className="text-[var(--cream-muted)]/50 text-xs italic flex-1">No bio yet</p>
         )}
 
         {/* Interest tags */}
@@ -153,7 +220,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
               </span>
             ))}
             {user.interests.length > 3 && (
-              <span className="px-2 py-0.5 rounded-full bg-[#3D2B0E]/40 text-[#A89070] text-[10px] border border-[#3D2B0E]">
+              <span className="px-2 py-0.5 rounded-full bg-[#3D2B0E]/40 text-[var(--cream-muted)] text-[10px] border border-[#3D2B0E]">
                 +{user.interests.length - 3}
               </span>
             )}
@@ -161,11 +228,25 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ user }) => {
         )}
 
         <button
-          onClick={liked ? () => navigate(`/messages/${user.id}`) : handleLike}
-          className="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#8B4513] hover:from-[#D4943B] hover:to-[#9B5523] text-white text-sm font-semibold transition-all duration-200 hover:shadow-glow-blue active:scale-95"
+          type="button"
+          disabled={liking || (liked && !isMutual)}
+          onClick={
+            isMutual
+              ? (e) => {
+                  e.stopPropagation();
+                  navigate(`/messages/${user.id}`);
+                }
+              : handleLike
+          }
+          className="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#A45E18] hover:from-[#D4943B] hover:to-[#C4832A] text-white text-sm font-semibold transition-all duration-200 hover:shadow-glow-blue active:scale-95 disabled:opacity-60"
         >
-          {liked ? 'Open chat' : 'Match'}
+          {liking ? 'Sending…' : isMutual ? 'Open chat' : liked ? 'Matched' : 'Match'}
         </button>
+        {likeHint ? (
+          <p className="mt-2 text-center text-[11px] text-[var(--cream-muted)]" role="status">
+            {likeHint}
+          </p>
+        ) : null}
       </div>
     </div>
   );

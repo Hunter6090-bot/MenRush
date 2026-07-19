@@ -13,8 +13,25 @@ import {
   type CameraFacing,
 } from '../lib/webrtcCall';
 
-function createRemoteStream(): MediaStream {
-  return new MediaStream();
+function iceCandidatePayload(candidate: RTCIceCandidate): RTCIceCandidateInit {
+  if (typeof candidate.toJSON === 'function') {
+    return candidate.toJSON();
+  }
+  return {
+    candidate: candidate.candidate,
+    sdpMid: candidate.sdpMid,
+    sdpMLineIndex: candidate.sdpMLineIndex,
+    usernameFragment: candidate.usernameFragment,
+  };
+}
+
+function sessionDescriptionPayload(
+  desc: RTCSessionDescription | RTCSessionDescriptionInit,
+): RTCSessionDescriptionInit {
+  if (typeof (desc as RTCSessionDescription).toJSON === 'function') {
+    return (desc as RTCSessionDescription).toJSON();
+  }
+  return { type: desc.type, sdp: desc.sdp };
 }
 
 export function useWebRTC() {
@@ -24,7 +41,10 @@ export function useWebRTC() {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
+  /** ICE while remote description not set yet (same PC). */
   const pendingIceRef = useRef<RTCIceCandidateInit[]>([]);
+  /** ICE that arrived before answer/start created a PC (common on callee). */
+  const earlyIceByPeerRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const remotePeerRef = useRef<string | null>(null);
 
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -35,8 +55,15 @@ export function useWebRTC() {
   const [canSwitchCamera, setCanSwitchCamera] = useState(false);
   const [isSwitchingCamera, setIsSwitchingCamera] = useState(false);
 
-  const flushPendingIce = useCallback(async (pc: RTCPeerConnection) => {
+  const flushPendingIce = useCallback(async (pc: RTCPeerConnection, peerKey?: string) => {
     if (!pc.remoteDescription) return;
+
+    if (peerKey) {
+      const early = earlyIceByPeerRef.current.get(peerKey) ?? [];
+      earlyIceByPeerRef.current.delete(peerKey);
+      pendingIceRef.current.push(...early);
+    }
+
     const pending = pendingIceRef.current;
     pendingIceRef.current = [];
     for (const candidate of pending) {
@@ -49,10 +76,30 @@ export function useWebRTC() {
   }, []);
 
   const releaseMedia = useCallback(() => {
-    localStreamRef.current?.getTracks().forEach((track) => track.stop());
-    remoteStreamRef.current?.getTracks().forEach((track) => track.stop());
-    pcRef.current?.close();
+    const pc = pcRef.current;
+    if (pc) {
+      try {
+        pc.ontrack = null;
+        pc.onicecandidate = null;
+        pc.onconnectionstatechange = null;
+        pc.oniceconnectionstatechange = null;
+      } catch {
+        /* ignore */
+      }
+      pc.getSenders().forEach((sender) => {
+        try {
+          sender.track?.stop();
+        } catch {
+          /* ignore */
+        }
+      });
+      pc.close();
+    }
     pcRef.current = null;
+
+    localStreamRef.current?.getTracks().forEach((track) => track.stop());
+    // Do not stop remote tracks that may still be owned by the peer connection receivers —
+    // closing PC is enough; stop only local.
     localStreamRef.current = null;
     remoteStreamRef.current = null;
     remotePeerRef.current = null;
@@ -66,28 +113,50 @@ export function useWebRTC() {
     setIsSwitchingCamera(false);
   }, []);
 
+  const publishRemoteStream = useCallback((stream: MediaStream) => {
+    remoteStreamRef.current = stream;
+    // New MediaStream wrapper so React always sees a reference change when tracks update.
+    setRemoteStream(new MediaStream(stream.getTracks()));
+  }, []);
+
   const bindPeerConnection = useCallback(
     (remotePeerId: string, activeSocket: Socket, iceServers: RTCIceServer[]) => {
       remotePeerRef.current = remotePeerId;
       pendingIceRef.current = [];
 
       const pc = createPeerConnection(iceServers);
-      const rs = createRemoteStream();
-      remoteStreamRef.current = rs;
-      setRemoteStream(rs);
+      // Start with null remote — UI shows waiting until ontrack fires with real media.
+      remoteStreamRef.current = null;
+      setRemoteStream(null);
 
       pc.ontrack = (ev) => {
-        ev.streams[0]?.getTracks().forEach((track) => rs.addTrack(track));
-        const next = new MediaStream(rs.getTracks());
-        remoteStreamRef.current = next;
-        setRemoteStream(next);
+        const track = ev.track;
+        if (!track) return;
+
+        // Prefer the browser-provided remote stream (audio+video together).
+        let inbound = ev.streams[0] ?? remoteStreamRef.current ?? new MediaStream();
+        if (!inbound.getTracks().some((t) => t.id === track.id)) {
+          try {
+            inbound.addTrack(track);
+          } catch {
+            inbound = new MediaStream([...inbound.getTracks(), track]);
+          }
+        }
+
+        publishRemoteStream(inbound);
+
+        // Some devices fire muted tracks first; re-publish when media actually flows.
+        track.addEventListener('unmute', () => {
+          const current = remoteStreamRef.current;
+          if (current) publishRemoteStream(current);
+        });
       };
 
       pc.onicecandidate = (ev) => {
         if (!ev.candidate) return;
         activeSocket.emit('call:ice-candidate', {
           to: remotePeerId,
-          candidate: ev.candidate,
+          candidate: iceCandidatePayload(ev.candidate),
         });
       };
 
@@ -114,11 +183,16 @@ export function useWebRTC() {
       pcRef.current = pc;
       return pc;
     },
-    [releaseMedia, resetCall, setCallSetupError],
+    [publishRemoteStream, releaseMedia, resetCall, setCallSetupError],
   );
 
   const attachLocalTracks = useCallback((pc: RTCPeerConnection, stream: MediaStream) => {
-    stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+    for (const track of stream.getTracks()) {
+      const already = pc.getSenders().some((sender) => sender.track?.id === track.id);
+      if (!already) {
+        pc.addTrack(track, stream);
+      }
+    }
   }, []);
 
   const startCall = useCallback(
@@ -135,15 +209,24 @@ export function useWebRTC() {
       void canFlipCamera().then(setCanSwitchCamera);
       attachLocalTracks(pc, stream);
 
-      const offer = await pc.createOffer();
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      });
       await pc.setLocalDescription(offer);
-      socket.emit('call:initiate', { to: targetPeerId, offer });
+      socket.emit('call:initiate', {
+        to: targetPeerId,
+        offer: sessionDescriptionPayload(pc.localDescription ?? offer),
+      });
     },
     [socket, bindPeerConnection, attachLocalTracks],
   );
 
   const answerCall = useCallback(
-    async (offer: RTCSessionDescriptionInit, remotePeerId: string): Promise<RTCSessionDescriptionInit> => {
+    async (
+      offer: RTCSessionDescriptionInit,
+      remotePeerId: string,
+    ): Promise<RTCSessionDescriptionInit> => {
       if (!socket) throw new Error('signalling_unavailable');
       await waitForSocket(socket);
 
@@ -157,10 +240,11 @@ export function useWebRTC() {
       attachLocalTracks(pc, stream);
 
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
-      await flushPendingIce(pc);
+      // Apply ICE that arrived while the phone was still ringing (before PC existed).
+      await flushPendingIce(pc, remotePeerId);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      return answer;
+      return sessionDescriptionPayload(pc.localDescription ?? answer);
     },
     [socket, bindPeerConnection, attachLocalTracks, flushPendingIce],
   );
@@ -169,6 +253,9 @@ export function useWebRTC() {
     const target = remotePeerRef.current ?? peerId;
     if (target && socket) {
       socket.emit('call:end', { to: target });
+    }
+    if (target) {
+      earlyIceByPeerRef.current.delete(target);
     }
     releaseMedia();
     resetCall();
@@ -222,18 +309,49 @@ export function useWebRTC() {
     const onAnswered = async ({ answer }: { answer: RTCSessionDescriptionInit }) => {
       const pc = pcRef.current;
       if (!pc) return;
-      await pc.setRemoteDescription(new RTCSessionDescription(answer));
-      await flushPendingIce(pc);
-      setConnected();
+      try {
+        if (pc.signalingState === 'stable' && pc.currentRemoteDescription) {
+          // Already applied (duplicate event) — still mark connected.
+          setConnected();
+          return;
+        }
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        const peer = remotePeerRef.current;
+        await flushPendingIce(pc, peer ?? undefined);
+        setConnected();
+      } catch (err) {
+        console.error('[webrtc] setRemoteDescription(answer) failed', err);
+        setCallSetupError('Could not connect the video call. Try again.');
+        releaseMedia();
+        resetCall();
+      }
     };
 
-    const onIceCandidate = async ({ candidate }: { candidate: RTCIceCandidateInit }) => {
+    const onIceCandidate = async ({
+      candidate,
+      from,
+    }: {
+      candidate: RTCIceCandidateInit;
+      from?: string;
+    }) => {
+      if (!candidate) return;
       const pc = pcRef.current;
-      if (!pc) return;
+      const peerKey = from || remotePeerRef.current;
+
+      // No PC yet (callee still on ring screen) — buffer by peer for answerCall.
+      if (!pc) {
+        if (!peerKey) return;
+        const list = earlyIceByPeerRef.current.get(peerKey) ?? [];
+        list.push(candidate);
+        earlyIceByPeerRef.current.set(peerKey, list);
+        return;
+      }
+
       if (!pc.remoteDescription) {
         pendingIceRef.current.push(candidate);
         return;
       }
+
       try {
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
       } catch {

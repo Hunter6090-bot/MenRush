@@ -169,7 +169,7 @@ export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalP
                 onClick={() => navigate('/premium')}
                 className="flex-1 py-3 rounded-xl text-sm font-semibold"
                 style={{
-                  background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+                  background: 'linear-gradient(135deg, #C4832A, #A45E18)',
                   color: '#FFF5E6',
                 }}
               >
@@ -275,7 +275,7 @@ export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalP
                 disabled={!name.trim() || creating}
                 className="flex-1 py-3 rounded-xl text-sm font-semibold disabled:opacity-40"
                 style={{
-                  background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+                  background: 'linear-gradient(135deg, #C4832A, #A45E18)',
                   color: '#FFF5E6',
                 }}
               >

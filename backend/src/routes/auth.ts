@@ -1,9 +1,18 @@
 import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { authService } from '../services/auth.service';
-import { RegisterSchema, LoginSchema, BetaInviteCodeSchema } from '../types/validation';
-import { validateBetaInviteCode, assertValidBetaInviteCode, isBetaRegistrationOpen } from '../services/betaInvite.service';
-import { AuthRequest } from '../middleware/auth';
+import { twoFactorService } from '../services/two-factor.service';
+import {
+  RegisterSchema,
+  LoginSchema,
+  ForgotPasswordSchema,
+  ResetPasswordSchema,
+  ChangePasswordSchema,
+  TwoFactorCodeSchema,
+  TwoFactorVerifyLoginSchema,
+} from '../types/validation';
+import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { query } from '../db';
 
 const router = Router();
 
@@ -16,14 +25,12 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-router.post('/validate-beta-invite', authLimiter, async (req: AuthRequest, res: Response) => {
-  try {
-    const { code } = BetaInviteCodeSchema.parse(req.body);
-    const result = validateBetaInviteCode(code);
-    res.json(result);
-  } catch (error: any) {
-    res.status(400).json({ error: error.message });
-  }
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: 'Too many reset requests, please try again in 15 minutes' },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 router.post('/register', authLimiter, async (req: AuthRequest, res: Response) => {
@@ -43,6 +50,103 @@ router.post('/login', authLimiter, async (req: AuthRequest, res: Response) => {
     res.json(result);
   } catch (error: any) {
     res.status(401).json({ error: error.message });
+  }
+});
+
+router.post('/forgot-password', forgotPasswordLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const { email } = ForgotPasswordSchema.parse(req.body);
+    try {
+      await authService.requestPasswordReset(email);
+    } catch (mailErr: unknown) {
+      // Never leak mailer failures as "email not found" — log and still return ok.
+      console.error('[forgot-password] send failed:', mailErr);
+    }
+    // Always 200 after a valid request so the UI can show success (sent or no-op).
+    res.status(200).json({
+      ok: true,
+      sent: true,
+      message:
+        'If that email is on MenRush, we sent a reset link. Check your inbox and spam — valid for 1 hour.',
+    });
+  } catch (error: any) {
+    // Validation only
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/reset-password', authLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const data = ResetPasswordSchema.parse(req.body);
+    await authService.resetPassword(data);
+    res.json({ ok: true, message: 'Password updated. You can sign in now.' });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/change-password', authMiddleware, authLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const data = ChangePasswordSchema.parse(req.body);
+    await authService.changePassword(req.userId!, data);
+    res.json({ ok: true, message: 'Password updated.' });
+  } catch (error: any) {
+    const msg = error?.message || 'Could not change password';
+    const status =
+      msg === 'Current password is incorrect' || msg === 'User not found' ? 401 : 400;
+    res.status(status).json({ error: msg });
+  }
+});
+
+router.post('/2fa/verify', authLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const data = TwoFactorVerifyLoginSchema.parse(req.body);
+    const result = await authService.completeTwoFactorLogin(data.pendingToken, data.code);
+    res.json(result);
+  } catch (error: any) {
+    res.status(401).json({ error: error.message });
+  }
+});
+
+router.get('/2fa/status', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const status = await twoFactorService.getStatus(req.userId!);
+    res.json(status);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/2fa/setup', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const emailResult = await query(`SELECT email FROM users WHERE id = $1`, [req.userId!]);
+    if (emailResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const setup = await twoFactorService.beginSetup(req.userId!, emailResult.rows[0].email);
+    res.json(setup);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/2fa/enable', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { code } = TwoFactorCodeSchema.parse(req.body);
+    await twoFactorService.enable(req.userId!, code);
+    res.json({ ok: true, enabled: true });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/2fa/disable', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { code } = TwoFactorCodeSchema.parse(req.body);
+    await twoFactorService.disable(req.userId!, code);
+    res.json({ ok: true, enabled: false });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
   }
 });
 

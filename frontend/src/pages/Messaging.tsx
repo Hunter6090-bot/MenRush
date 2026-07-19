@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { messagesAPI, usersAPI, meetAPI, MediaKind, MessageMediaKind, MessageDTO, MeetAgreementState } from '../api/client';
 import { trackEventOnce } from '../observability/analytics';
 import { useSocket } from '../hooks/useSocket';
-import { useAuthStore, useCallStore, useUnreadStore } from '../hooks/store';
+import { useAuthStore, useCallStore, useLocationStore, useUnreadStore } from '../hooks/store';
 import { UserAvatar } from '../components/UserAvatar';
 import { StatusBadge } from '../components/StatusBadge';
 import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
@@ -19,6 +19,8 @@ import { MissedCallIcon } from '../components/MissedCallIcon';
 import { isMissedCallMessage, MISSED_CALL_PREVIEW } from '../lib/missedCall';
 import { openMapsDirections } from '../lib/maps';
 import { parseLocationPayload } from '../lib/locationMessage';
+import { getMatchCoordinates, hasVisibleMatchLocation } from '../lib/matchLiveLocation';
+import { MatchChatLiveLocation } from '../components/MatchChatLiveLocation';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
 interface Message extends Partial<MessageDTO> {
@@ -83,6 +85,11 @@ interface OtherUser {
   photo_url?: string;
   online?: boolean;
   last_seen?: string;
+  live_location_sharing?: boolean;
+  live_lat?: number | string | null;
+  live_lng?: number | string | null;
+  live_distance_km?: number | string | null;
+  live_location_updated_at?: string | null;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -154,6 +161,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const [, setBurnTick] = useState(0);
   const socket = useSocket();
   const user = useAuthStore((s) => s.user);
+  const { lat: selfLat, lng: selfLng } = useLocationStore();
   const { setCalling, setCallSetupError, resetCall } = useCallStore();
   const navigate = useNavigate();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -178,6 +186,42 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOtherTyping]);
+
+  useEffect(() => {
+    if (!socket || !otherId) return;
+    const onMatchLocation = (payload: {
+      user_id: string;
+      lat: number;
+      lng: number;
+      updated_at: string;
+    }) => {
+      if (payload.user_id !== otherId) return;
+      setOtherUser((current) =>
+        current
+          ? {
+              ...current,
+              live_location_sharing: true,
+              live_lat: payload.lat,
+              live_lng: payload.lng,
+              live_location_updated_at: payload.updated_at,
+            }
+          : current,
+      );
+    };
+    socket.on('match:location', onMatchLocation);
+    return () => {
+      socket.off('match:location', onMatchLocation);
+    };
+  }, [socket, otherId]);
+
+  useEffect(() => {
+    if (!otherId) return;
+    const refreshProfile = () => {
+      usersAPI.getProfile(otherId).then((r) => setOtherUser(r.data)).catch(() => {});
+    };
+    const id = window.setInterval(refreshProfile, 20000);
+    return () => window.clearInterval(id);
+  }, [otherId]);
 
   useEffect(() => {
     if (!socket || !otherId) return;
@@ -443,35 +487,49 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     }
   }, []);
 
+  const sendTextMessage = useCallback(
+    async (raw: string) => {
+      const current = raw.trim();
+      if (!current || !otherId || !user || sending) return;
+
+      emitTyping(false);
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+
+      inputValueRef.current = '';
+      setInput('');
+      setSending(true);
+      inputRef.current?.focus();
+
+      try {
+        const res = await messagesAPI.sendMessage(otherId, current);
+        const saved: Message = res.data;
+        setMessages((prev) => [...prev, saved]);
+        trackEventOnce(
+          'first_message_success',
+          { kind: 'text', surface: 'direct_message' },
+          'first_message_success',
+        );
+      } catch {
+        inputValueRef.current = current;
+        setInput(current);
+      } finally {
+        setSending(false);
+      }
+    },
+    [otherId, user, sending, emitTyping],
+  );
+
   const handleSend = async (e?: React.FormEvent | React.KeyboardEvent) => {
     e?.preventDefault?.();
-    const current = (inputValueRef.current ?? input).trim();
-    if (!current || !otherId || !user) return;
-
-    emitTyping(false);
-    if (typingTimer.current) clearTimeout(typingTimer.current);
-
-    inputValueRef.current = '';
-    setInput('');
-    setSending(true);
-    inputRef.current?.focus();
-
-    try {
-      const res = await messagesAPI.sendMessage(otherId, current);
-      const saved: Message = res.data;
-      setMessages((prev) => [...prev, saved]);
-      trackEventOnce(
-        'first_message_success',
-        { kind: 'text', surface: 'direct_message' },
-        'first_message_success',
-      );
-    } catch {
-      inputValueRef.current = current;
-      setInput(current);
-    } finally {
-      setSending(false);
-    }
+    await sendTextMessage(inputValueRef.current ?? input);
   };
+
+  /** Direct, premium openers — never creepy. 18+ consent-first tone. */
+  const ICEBREAKERS = [
+    'Hey — saw you nearby. Free later?',
+    'Your profile stood out. Up for a chat?',
+    'What are you looking for tonight?',
+  ] as const;
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -495,12 +553,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
   const handleShareLocation = () => {
     if (!otherId || sharingLocation || uploadingMedia) return;
-
-    const peer = otherUser?.name ?? 'your match';
-    const confirmed = window.confirm(
-      `Share your current location with ${peer}? They can open directions in their maps app.`,
-    );
-    if (!confirmed) return;
 
     if (!window.isSecureContext || !navigator.geolocation) {
       setMediaError('Location sharing needs HTTPS and a device with GPS.');
@@ -650,9 +702,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             <button
               onClick={() => void handleStartVideoCall()}
               aria-label="Start video call"
-              className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 active:scale-95"
+              className="flex-shrink-0 w-[42px] h-[42px] rounded-xl flex items-center justify-center transition-all duration-150 active:scale-95 mr-cta-gradient"
               style={{
-                background: 'linear-gradient(135deg, #C4832A, #8B4513)',
                 boxShadow: '0 2px 12px rgba(196,131,42,0.35)',
               }}
               onMouseEnter={(e) => {
@@ -693,6 +744,23 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         </div>
       )}
 
+      {otherUser && hasVisibleMatchLocation(otherUser) ? (() => {
+        const coords = getMatchCoordinates(otherUser);
+        if (!coords) return null;
+        return (
+          <MatchChatLiveLocation
+            peerName={otherUser.name}
+            photoUrl={otherUser.photo_url}
+            lat={coords.lat}
+            lng={coords.lng}
+            distanceKm={otherUser.live_distance_km}
+            updatedAt={otherUser.live_location_updated_at}
+            selfLat={selfLat}
+            selfLng={selfLng}
+          />
+        );
+      })() : null}
+
       {otherId && meetState && (
         <MeetConsentBar
           state={meetState}
@@ -709,7 +777,10 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         style={{ scrollbarWidth: 'thin' }}
       >
         {messages.length === 0 && !sending && (
-          <div className="flex flex-col items-center justify-center h-full select-none">
+          <div
+            className="flex flex-col items-center justify-center h-full select-none px-4"
+            data-testid="chat-icebreakers"
+          >
             <div
               className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
               style={{ background: '#1E1508', border: '1px solid #3D2B0E' }}
@@ -719,9 +790,22 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             <p className="font-medium text-sm" style={{ color: '#A89070' }}>
               No messages yet
             </p>
-            <p className="text-xs mt-1" style={{ color: '#6B5035' }}>
-              Say hello and break the ice
+            <p className="text-xs mt-1 mb-4 text-center" style={{ color: '#6B5840' }}>
+              Be direct. Consent first.
             </p>
+            <div className="flex flex-col gap-2 w-full max-w-sm">
+              {ICEBREAKERS.map((line) => (
+                <button
+                  key={line}
+                  type="button"
+                  disabled={sending}
+                  onClick={() => void sendTextMessage(line)}
+                  className="rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-4 py-3 text-left text-[13px] font-medium text-[#F0E0C0] transition-colors hover:bg-[rgba(196,131,42,0.2)] disabled:opacity-50"
+                >
+                  {line}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -757,9 +841,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                   <div
                     className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
                     style={{
-                      background: 'rgba(239,68,68,0.08)',
-                      border: '1px solid rgba(239,68,68,0.25)',
-                      color: '#F87171',
+                      background: 'rgba(176,67,46,0.12)',
+                      border: '1px solid rgba(217,106,82,0.35)',
+                      color: '#D96A52',
                     }}
                   >
                     <MissedCallIcon size={14} className="shrink-0" />
@@ -823,7 +907,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 )}
 
                 <div
-                  className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} max-w-[72%]`}
+                  className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} max-w-[62%]`}
                 >
                   {msg.media_type === 'image' ? (
                     <ImageBubble
@@ -863,7 +947,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                       style={
                         isMine
                           ? {
-                              background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+                              background: 'linear-gradient(135deg, #C4832A, #A45E18)',
                               color: '#FFF5E6',
                               borderRadius: showTail
                                 ? '18px 18px 4px 18px'
@@ -999,7 +1083,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               aria-label="Send voice note"
               className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center active:scale-95"
               style={{
-                background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+                background: 'linear-gradient(135deg, #C4832A, #A45E18)',
                 boxShadow: '0 2px 12px rgba(196,131,42,0.4)',
               }}
             >
@@ -1014,8 +1098,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               disabled={uploadingMedia || sharingLocation || !!pendingImage}
               aria-label="Share location"
               title="Share location"
-              className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40"
-              style={{ background: '#1E1508', border: '1px solid #3D2B0E', color: '#C4832A' }}
+              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper"
             >
               <LocationPinIcon className="w-4 h-4" />
             </button>
@@ -1027,8 +1110,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               disabled={uploadingMedia || !!pendingImage}
               aria-label="Take selfie"
               title="Take selfie"
-              className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40"
-              style={{ background: '#1E1508', border: '1px solid #3D2B0E', color: '#C4832A' }}
+              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper"
             >
               <CameraIcon className="w-4 h-4" />
             </button>
@@ -1040,8 +1122,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               disabled={uploadingMedia || !!pendingImage}
               aria-label="Attach from gallery"
               title="Attach from gallery"
-              className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40"
-              style={{ background: '#1E1508', border: '1px solid #3D2B0E', color: '#A89070' }}
+              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper"
             >
               <AttachIcon className="w-4 h-4" />
             </button>
@@ -1054,7 +1135,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                placeholder="Type a message…"
+                placeholder="Say something direct."
                 autoComplete="off"
                 className="w-full text-sm px-5 py-3 rounded-full focus:outline-none transition-all duration-200"
                 style={{
@@ -1080,17 +1161,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 type="submit"
                 disabled={!input.trim() || sending}
                 aria-label="Send message"
-                className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
-                style={{
-                  background: 'linear-gradient(135deg, #C4832A, #8B4513)',
-                  boxShadow: '0 2px 12px rgba(196,131,42,0.4)',
-                }}
+                className="flex-shrink-0 rounded-full px-5 py-2.5 text-sm font-bold mr-cta-gradient transition-all duration-200 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed min-h-[46px]"
               >
-                {sending ? (
-                  <PulseRing size={16} label="Sending" />
-                ) : (
-                  <SendIcon className="w-4 h-4 text-white" />
-                )}
+                {sending ? <PulseRing size={16} label="Sending" /> : 'Send'}
               </button>
             ) : (
               <button
@@ -1099,13 +1172,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 disabled={uploadingMedia}
                 aria-label="Record voice note"
                 title="Record voice note"
-                className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40"
-                style={{
-                  background: 'linear-gradient(135deg, #C4832A, #8B4513)',
-                  boxShadow: '0 2px 12px rgba(196,131,42,0.4)',
-                }}
+                className="flex-shrink-0 w-[46px] h-[46px] rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 mr-cta-gradient text-[#FFF6E6] shadow-[0_2px_12px_rgba(196,131,42,0.4)]"
               >
-                <MicIcon className="w-4 h-4 text-white" />
+                <MicIcon className="w-4 h-4" />
               </button>
             )}
           </form>
@@ -1148,7 +1217,7 @@ const LocationBubble: React.FC<LocationBubbleProps> = ({ msg, isMine, showTail, 
 
   const bubbleStyle = isMine
     ? {
-        background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+        background: 'linear-gradient(135deg, #C4832A, #A45E18)',
         color: '#FFF5E6',
         borderRadius: showTail ? '18px 18px 4px 18px' : '18px',
         boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
@@ -1165,7 +1234,7 @@ const LocationBubble: React.FC<LocationBubbleProps> = ({ msg, isMine, showTail, 
       <div className="flex items-start gap-2">
         <LocationPinIcon className="w-5 h-5 shrink-0 mt-0.5" />
         <div>
-          <p className="font-semibold">📍 {label}</p>
+          <p className="font-semibold">{label}</p>
           {coords ? (
             <p className="mt-1 text-[11px] opacity-80">
               {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
@@ -1526,7 +1595,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
           data-testid="image-composer-send"
           className="text-xs font-semibold px-5 py-2 rounded-full disabled:opacity-50 active:scale-95"
           style={{
-            background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+            background: 'linear-gradient(135deg, #C4832A, #A45E18)',
             color: '#FFF5E6',
             boxShadow: '0 2px 12px rgba(196,131,42,0.4)',
           }}
@@ -1657,7 +1726,7 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
           className="px-4 py-3 flex items-center gap-3 text-xs"
           data-testid="image-sent-status"
           style={{
-            background: 'linear-gradient(135deg, #C4832A, #8B4513)',
+            background: 'linear-gradient(135deg, #C4832A, #A45E18)',
             color: '#FFF5E6',
             borderRadius: radius,
             minWidth: 200,
@@ -1821,7 +1890,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
             data-testid="image-viewer-retry"
             onClick={handleRetry}
             className="text-xs font-semibold px-5 py-2 rounded-full mt-1"
-            style={{ background: 'linear-gradient(135deg, #C4832A, #8B4513)', color: '#FFF5E6' }}
+            style={{ background: 'linear-gradient(135deg, #C4832A, #A45E18)', color: '#FFF5E6' }}
           >
             Retry
           </button>
@@ -1949,7 +2018,7 @@ const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail, onWith
       <div
         className="flex items-center gap-3 px-3 py-2.5"
       style={{
-        background: isMine ? 'linear-gradient(135deg, #C4832A, #8B4513)' : '#1E1508',
+        background: isMine ? 'linear-gradient(135deg, #C4832A, #A45E18)' : '#1E1508',
         border: isMine ? 'none' : '1px solid #3D2B0E',
         color: isMine ? '#FFF5E6' : '#F0E0C0',
         borderRadius: radius,

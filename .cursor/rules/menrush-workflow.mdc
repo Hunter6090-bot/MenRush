@@ -1,0 +1,79 @@
+---
+description: MenRush real stack, architecture, privacy guardrails, and Cursor workflow — do not scaffold Prisma/Redis/H3
+alwaysApply: true
+---
+
+# MenRush workflow and coding standards
+
+This repo is a **mature monorepo**, not a greenfield scaffold. Follow what exists; do not replace the backend with Prisma, Redis, H3, or jsonwebtoken refresh-token flows unless explicitly requested.
+
+## Actual tech stack
+
+| Layer | What MenRush uses |
+| --- | --- |
+| Frontend | React 18, Vite, TypeScript, Tailwind, Zustand, React Query, React Router, Socket.IO client, Mapbox GL / Leaflet |
+| Backend | Node.js, **Express 4**, TypeScript (`tsc` → `dist/`), **Socket.IO** on shared HTTP server |
+| Database | **PostgreSQL 16 + PostGIS** via **`pg` Pool** — raw SQL in services, **no ORM** |
+| Migrations | SQL files in `database/migrations/`; `npm run db:migrate` from `backend/` |
+| Validation | **Zod** in `backend/src/types/validation.ts` |
+| Auth | **Custom JWT** (HMAC-SHA256 in `auth.service.ts`), 7-day TTL, stored in `localStorage` — **no refresh tokens**, no `jsonwebtoken` package |
+| 2FA | TOTP via `otplib` + encrypted secrets (`two-factor.service.ts`) |
+| Realtime | In-memory `userSockets` map in `server.ts`; no Redis |
+| Location | PostGIS `GEOGRAPHY(POINT)` + `lat`/`lng` columns; `ST_DWithin` / `ST_Distance` — **not H3** |
+| Email | Resend + Zoho SMTP fallback (`mailer.service.ts`) |
+| Observability | Sentry + Statsig (privacy-filtered) — see `docs/observability-privacy.md` |
+| E2E | Playwright in `frontend/` (`npm run test:e2e`) |
+| Deploy | Docker Compose locally; Railway (backend), Vercel (frontend) |
+
+## Backend layout (`backend/src/`)
+
+- `routes/` — thin Express routers; validate with Zod; delegate to services
+- `services/` — business logic + SQL via `db.ts`
+- `middleware/auth.ts` — Bearer JWT → `req.userId`; exports `errorHandler`
+- `security/` — CORS, uploads, access control, TOTP crypto
+- Entry: `server.ts` (not a separate `app.ts`)
+
+## Privacy and location (actual behavior)
+
+- **Discovery map/list**: returns **bucketed distance labels** and **obfuscated map points** via `privateMapPoint()` + stable bearing — not raw stored coordinates of other users. See `user.service.ts`.
+- **Own profile**: user sees their real `lat`/`lng`.
+- **Match live location**: opt-in; mutual matches may receive real coords over Socket.IO when sharing is enabled (`match-location.service.ts`).
+- **Analytics (Statsig/Sentry)**: never collect coords, messages, photos, tokens, or PII — full contract in `docs/observability-privacy.md`.
+- **ID verification**: native pipeline in `services/verification/`; files under `uploads/verification/`; dedup hashes — not an external Onfido webhook + Redis staging pattern from generic guides.
+
+## Security guardrails
+
+- Rate-limit auth and public routes (`express-rate-limit` in route files).
+- Validate all request bodies with Zod before SQL.
+- Use centralized `errorHandler` — register after routes in `server.ts`.
+- Never leak stack traces or raw DB errors to clients.
+- **Before any git push**, audit `frontend/src/api/client.ts` and `backend/src/server.ts` for unexplained outbound HTTP (MCP injection history).
+
+## Related Cursor rules
+
+- **Logo**: `.cursor/rules/menrush-logo.mdc` — canonical medallion; never swap or regenerate.
+- **Public marketing pages**: `.cursor/rules/public-marketing-pages.mdc` — design lock for `/`, `/coming-soon`, `/login`, `/register`; run `npm run test:e2e -- public-design-lock` before merging UI changes there.
+
+## Local dev commands
+
+```bash
+docker-compose up postgres    # PostGIS only
+cd backend && npm run dev     # :3000
+cd frontend && npm run dev    # :5173
+```
+
+## Multi-agent coordination (Grok, Cursor, Claude)
+
+**Do not duplicate work** already done by another agent. Before any commit or push:
+
+1. `git fetch origin` and compare to `origin/mvp-complete`
+2. Read `docs/ai-coordination.md` — work ledger + pre-commit checklist
+3. Search `git log` for the feature; if it exists on remote, stop
+4. Stage narrowly; tag commits with `(cursor)` in the message
+5. Audit `frontend/src/api/client.ts` and `backend/src/server.ts` before push
+
+## Cursor usage
+
+- Set `.env` before asking the Agent to wire new features (see `docs/cursor-workflow-guide.md`).
+- Use **Agent mode** for multi-file work; **Cmd+K** for single-function edits.
+- Reject any Agent diff that touches `.env` or introduces Prisma/Redis/H3 without explicit approval.

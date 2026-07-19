@@ -101,7 +101,7 @@ export const Albums = () => {
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#C4832A]">Private sharing</p>
           <h1 className="text-2xl font-bold text-[#F0E0C0]">Albums</h1>
-          <p className="mt-1 text-sm text-[#A89070]">
+          <p className="mt-1 text-sm text-[var(--cream-muted)]">
             {photoTotal}/{freeCap} free photos used. Tap an album to view photos and grant access.
           </p>
         </div>
@@ -118,7 +118,7 @@ export const Albums = () => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Weekend, Travel, Favourites..."
-              className="flex-1 rounded-xl border border-[#3D2B0E] bg-[#0D0A06] px-4 py-3 text-sm text-[#F0E0C0] placeholder:text-[#A89070]/50 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/40"
+              className="flex-1 rounded-xl border border-[#3D2B0E] bg-[#0D0A06] px-4 py-3 text-sm text-[#F0E0C0] placeholder:text-[var(--cream-muted)]/50 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/40"
             />
             <button
               type="submit"
@@ -131,7 +131,7 @@ export const Albums = () => {
         </form>
 
         {error && (
-          <div className="rounded-2xl border border-[#8B4513]/40 bg-[#1E1508] p-4 text-sm text-[#F0E0C0]">
+          <div className="rounded-2xl border border-[#A45E18]/40 bg-[#1E1508] p-4 text-sm text-[#F0E0C0]">
             {error}
           </div>
         )}
@@ -142,11 +142,11 @@ export const Albums = () => {
         )}
 
         {loading ? (
-          <div className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-5 text-sm text-[#A89070]">
+          <div className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-5 text-sm text-[var(--cream-muted)]">
             Loading albums…
           </div>
         ) : albums.length === 0 ? (
-          <div className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-5 text-sm text-[#A89070]">
+          <div className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-5 text-sm text-[var(--cream-muted)]">
             No albums yet. Create one above to start building your private library.
           </div>
         ) : (

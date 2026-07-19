@@ -3,22 +3,50 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
 import { consumePostAuthRedirect, safeNextPath, savePostAuthRedirect } from '../lib/profileLinks';
-import { CoinFlip } from '../components/CoinFlip';
-import { PublicHeroBlock, PublicMarketingShell } from '../components/PublicMarketingShell';
+import {
+  AUTH_BACKGROUNDS,
+  PublicAuthHero,
+  PublicAuthShell,
+} from '../components/PublicAuthShell';
 import { PulseRing } from '../components/PulseRing';
 import {
-  publicHeroLogoClass,
+  publicErrorClass,
   publicInputClass,
   publicLabelClass,
-  publicNavLinkPrimary,
-  publicNavLinkSecondary,
+  publicLinkClass,
   publicPanelClass,
   publicPrimaryButtonClass,
 } from '../lib/publicStyles';
+import { BETA_INVITE_REQUIRED } from '../lib/betaInvite';
+import { FEATURES } from '../lib/featureFlags';
+import { PasswordInput } from '../components/PasswordInput';
+import { loginErrorMessage } from '../lib/authErrors';
+
+type LoginUser = {
+  email?: string;
+  is_verified?: boolean;
+  verification_status?: string;
+};
+
+function routeAfterLogin(navigate: ReturnType<typeof useNavigate>, user: LoginUser, nextPath: string | null) {
+  if (nextPath) savePostAuthRedirect(nextPath);
+  if (!FEATURES.requireIdVerification || user?.is_verified) {
+    navigate(consumePostAuthRedirect('/discover'));
+  } else if (user?.verification_status === 'pending') {
+    navigate('/verify/pending');
+  } else if (user?.verification_status === 'rejected') {
+    navigate('/verify/rejected');
+  } else {
+    navigate('/verify');
+  }
+}
 
 export const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [pendingToken, setPendingToken] = useState<string | null>(null);
+  const [pendingUser, setPendingUser] = useState<LoginUser | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -31,120 +59,149 @@ export const Login = () => {
     setError('');
     setLoading(true);
     try {
-      const res = await authAPI.login({ email, password });
-      setAuth(res.data.user, res.data.token);
-      if (nextPath) savePostAuthRedirect(nextPath);
-      if (res.data.user?.is_verified) {
-        navigate(consumePostAuthRedirect('/discover'));
-      } else if (res.data.user?.verification_status === 'pending') {
-        navigate('/verify/pending');
-      } else {
-        navigate('/verify');
+      if (pendingToken) {
+        const res = await authAPI.verifyTwoFactorLogin({
+          pendingToken,
+          code: twoFactorCode,
+        });
+        setAuth(res.data.user, res.data.token);
+        routeAfterLogin(navigate, res.data.user, nextPath);
+        return;
       }
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Login failed. Please try again.');
+
+      const res = await authAPI.login({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+      if (res.data.requires2fa) {
+        setPendingToken(res.data.pendingToken);
+        setPendingUser(res.data.user);
+        setTwoFactorCode('');
+        return;
+      }
+
+      setAuth(res.data.user, res.data.token);
+      routeAfterLogin(navigate, res.data.user, nextPath);
+    } catch (err: unknown) {
+      setError(loginErrorMessage(err));
     } finally {
       setLoading(false);
     }
   };
 
+  const registerPath = BETA_INVITE_REQUIRED ? '/beta' : '/register';
+
   return (
-    <PublicMarketingShell
-      header={
-        <nav className="flex items-center gap-2 text-sm font-semibold">
-          <Link to="/register" className={publicNavLinkPrimary}>
-            Sign up
-          </Link>
-          <Link to="/coming-soon#waitlist" className={publicNavLinkSecondary}>
-            Waitlist
-          </Link>
-        </nav>
-      }
-      hero={
-        <>
-          <Link to="/" className="inline-block hover:opacity-80 transition-opacity">
-            <CoinFlip qrValue="https://menrush.com" sizeClass={publicHeroLogoClass} noFlip />
-          </Link>
-          <PublicHeroBlock
-            title="Sign in and see who's"
-            accent="near you right now."
-            copy="New here? Create an account, then verify with a government ID and matching selfie before you can discover or chat."
-          />
-        </>
-      }
-      panel={
-        <div className={publicPanelClass}>
-          {error && (
-            <div className="mb-4 flex items-start gap-2.5 rounded-2xl border border-[#8B4513]/30 bg-[#8B4513]/12 px-4 py-3 text-sm text-[#F0E0C0]/90 backdrop-blur-md animate-fade-in">
-              <AlertIcon className="mt-0.5 h-4 w-4 flex-shrink-0" />
-              {error}
+    <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.login}>
+      <PublicAuthHero
+        title={pendingToken ? 'Enter your' : "Sign in and see who's"}
+        accent={pendingToken ? 'authenticator code.' : 'near you right now.'}
+        copy={
+          pendingToken
+            ? `Two-factor authentication is on for ${pendingUser?.email ?? 'your account'}. Open your authenticator app and enter the current 6-digit code.`
+            : 'For invite holders only. Use the email and password from your invite.'
+        }
+      />
+
+      <div className={publicPanelClass}>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          {!pendingToken ? (
+            <>
+              <div className="flex flex-col gap-2.5">
+                <label htmlFor="login-email" className={publicLabelClass}>
+                  Username / Email
+                </label>
+                <input
+                  id="login-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setError('');
+                  }}
+                  placeholder="you@example.com"
+                  required
+                  className={publicInputClass}
+                />
+              </div>
+
+              <div className="flex flex-col gap-2.5">
+                <label htmlFor="login-password" className={publicLabelClass}>
+                  Password
+                </label>
+                <PasswordInput
+                  id="login-password"
+                  value={password}
+                  onChange={(value) => {
+                    setPassword(value);
+                    setError('');
+                  }}
+                  className={publicInputClass}
+                />
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              <label htmlFor="login-2fa" className={publicLabelClass}>
+                Authenticator code
+              </label>
+              <input
+                id="login-2fa"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={twoFactorCode}
+                onChange={(e) => {
+                  setTwoFactorCode(e.target.value.replace(/\D/g, '').slice(0, 6));
+                  setError('');
+                }}
+                placeholder="000000"
+                required
+                className={`${publicInputClass} text-center text-lg font-bold tracking-[0.35em]`}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingToken(null);
+                  setPendingUser(null);
+                  setTwoFactorCode('');
+                  setError('');
+                }}
+                className="self-start text-sm font-semibold text-[var(--cream-muted)] transition-colors hover:text-[#C4832A]"
+              >
+                Use a different account
+              </button>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="login-email" className={publicLabelClass}>
-                Username / Email
-              </label>
-              <input
-                id="login-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                required
-                className={publicInputClass}
-              />
-            </div>
+          {error ? <p className={publicErrorClass}>{error}</p> : null}
 
-            <div>
-              <label htmlFor="login-password" className={publicLabelClass}>
-                Password
-              </label>
-              <input
-                id="login-password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                className={publicInputClass}
-              />
-            </div>
+          <button type="submit" disabled={loading} className={publicPrimaryButtonClass}>
+            {loading ? (
+              <>
+                <PulseRing size={16} /> {pendingToken ? 'Verifying…' : 'Signing in…'}
+              </>
+            ) : pendingToken ? (
+              'Verify and sign in'
+            ) : (
+              'Sign In'
+            )}
+          </button>
 
-            <button type="submit" disabled={loading} className={publicPrimaryButtonClass}>
-              {loading ? (
-                <>
-                  <PulseRing size={16} /> Signing in…
-                </>
-              ) : (
-                'Sign In'
-              )}
-            </button>
-          </form>
-
-          <div className="mt-5 flex flex-col gap-3 text-sm text-[#F0E0C0]/72 sm:flex-row sm:items-center sm:justify-between">
-            <p>
-              New here?{' '}
-              <Link to="/register" className="font-semibold text-[#C4832A] transition-colors hover:text-[#D4943B]">
+          <div className="flex flex-col gap-3 text-[15px] text-[var(--cream-muted)]">
+            <p className="m-0">
+              Selected for beta?{' '}
+              <Link to={registerPath} className={publicLinkClass}>
                 Create an account
               </Link>
             </p>
-            <Link
-              to="/forgot-password"
-              className="shrink-0 font-medium text-[#C4832A] transition-colors hover:text-[#D4943B]"
-            >
+            <Link to="/forgot-password" className={publicLinkClass}>
               Forgot password?
             </Link>
           </div>
-        </div>
-      }
-    />
+        </form>
+      </div>
+    </PublicAuthShell>
   );
 };
-
-const AlertIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-  </svg>
-);

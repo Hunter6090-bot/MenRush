@@ -49,7 +49,7 @@ export function ProfileViewersCard({
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-[#F0E0C0]">Who viewed you</p>
-          <p className="mt-0.5 text-xs text-[#A89070]">
+          <p className="mt-0.5 text-xs text-[var(--cream-muted)]">
             {isPremium
               ? 'Full viewer history'
               : `Last ${Math.min(5, total || 5)} viewers · Premium unlocks all`}
@@ -69,7 +69,7 @@ export function ProfileViewersCard({
           ))}
         </div>
       ) : viewers.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-[#3D2B0E] px-4 py-6 text-center text-sm text-[#A89070]">
+        <p className="rounded-xl border border-dashed border-[#3D2B0E] px-4 py-6 text-center text-sm text-[var(--cream-muted)]">
           No profile views yet. Stay visible on the map and Pulse when you&apos;re out.
         </p>
       ) : (
@@ -89,9 +89,9 @@ export function ProfileViewersCard({
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-[#F0E0C0]">
                     {viewer.name}
-                    <span className="font-normal text-[#A89070]"> · {viewer.age}</span>
+                    <span className="font-normal text-[var(--cream-muted)]"> · {viewer.age}</span>
                   </p>
-                  <p className="text-[11px] text-[#A89070]">Viewed {formatViewedAt(viewer.viewed_at)}</p>
+                  <p className="text-[11px] text-[var(--cream-muted)]">Viewed {formatViewedAt(viewer.viewed_at)}</p>
                 </div>
               </Link>
             </li>

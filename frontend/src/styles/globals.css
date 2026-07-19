@@ -26,7 +26,7 @@ input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus {
   -webkit-text-fill-color: #2A1C0A;
-  box-shadow: 0 0 0 1000px #F7EFE0 inset;
+  box-shadow: 0 0 0 1000px #F5EBD8 inset;
   transition: background-color 9999s ease-in-out 0s;
 }
 
@@ -73,10 +73,67 @@ input:-webkit-autofill:focus {
 .mr-hero-accent {
   display: block;
   margin-top: 0.08em;
-  background: linear-gradient(90deg, #F0E0C0 0%, #C4832A 58%, #8B4513 100%);
+  background: linear-gradient(90deg, #F0E0C0 0%, #C4832A 58%, #A45E18 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/* Auth pages — inline copper accent (beta-launch-handoff) */
+.mr-auth-heading {
+  margin: 0;
+  color: #F0E0C0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: clamp(38px, 7vw, 62px);
+  font-weight: 900;
+  line-height: 1.04;
+  letter-spacing: -0.01em;
+}
+
+.mr-auth-accent {
+  color: #C4832A;
+}
+
+/* Coming soon — centered pre-launch */
+.mr-coming-soon-overline {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  color: #C4832A;
+}
+
+.mr-coming-soon-heading {
+  margin: 0;
+  color: #F0E0C0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: clamp(34px, 6vw, 64px);
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mr-coming-soon-accent {
+  color: #C4832A;
+}
+
+@keyframes mr-radar {
+  0% { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(3); opacity: 0; }
+}
+
+.mr-radar-ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid var(--nn-copper);
+  animation: mr-radar 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  pointer-events: none;
+}
+
+.mr-radar-ring--delayed {
+  opacity: 0.3;
+  animation-delay: 1.2s;
 }
 
 .mr-hero-heading--landing {
