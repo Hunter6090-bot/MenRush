@@ -4,11 +4,11 @@ import { useSocket } from './useSocket';
 import { useCallStore } from './store';
 import {
   acquireLocalMedia,
-  acquireVideoTrackForFacing,
+  attachLocalTracks,
   canFlipCamera,
   createPeerConnection,
+  flipLocalCamera,
   getIceServers,
-  replaceLocalVideoTrack,
   waitForSocket,
   type CameraFacing,
 } from '../lib/webrtcCall';
@@ -34,6 +34,15 @@ function sessionDescriptionPayload(
   return { type: desc.type, sdp: desc.sdp };
 }
 
+function isUsableIceCandidate(candidate: RTCIceCandidateInit | null | undefined): boolean {
+  if (!candidate) return false;
+  // Safari sometimes emits empty-string candidates that throw on addIceCandidate.
+  if (typeof candidate.candidate === 'string' && candidate.candidate.trim() === '') {
+    return false;
+  }
+  return true;
+}
+
 export function useWebRTC() {
   const socket = useSocket();
   const { callStatus, peerId, setConnected, resetCall, setCallSetupError } = useCallStore();
@@ -46,6 +55,9 @@ export function useWebRTC() {
   /** ICE that arrived before answer/start created a PC (common on callee). */
   const earlyIceByPeerRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const remotePeerRef = useRef<string | null>(null);
+  /** Only the caller creates offers — prevents glare if both somehow initiate. */
+  const isCallerRef = useRef(false);
+  const iceRestartAttemptedRef = useRef(false);
 
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -67,6 +79,7 @@ export function useWebRTC() {
     const pending = pendingIceRef.current;
     pendingIceRef.current = [];
     for (const candidate of pending) {
+      if (!isUsableIceCandidate(candidate)) continue;
       try {
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
       } catch {
@@ -98,12 +111,12 @@ export function useWebRTC() {
     pcRef.current = null;
 
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
-    // Do not stop remote tracks that may still be owned by the peer connection receivers —
-    // closing PC is enough; stop only local.
     localStreamRef.current = null;
     remoteStreamRef.current = null;
     remotePeerRef.current = null;
     pendingIceRef.current = [];
+    isCallerRef.current = false;
+    iceRestartAttemptedRef.current = false;
     setLocalStream(null);
     setRemoteStream(null);
     setIsMuted(false);
@@ -119,13 +132,34 @@ export function useWebRTC() {
     setRemoteStream(new MediaStream(stream.getTracks()));
   }, []);
 
+  const tryIceRestart = useCallback(async () => {
+    const pc = pcRef.current;
+    const activeSocket = socket;
+    const remotePeerId = remotePeerRef.current;
+    if (!pc || !activeSocket || !remotePeerId || !isCallerRef.current) return;
+    if (iceRestartAttemptedRef.current) return;
+    if (pc.signalingState !== 'stable') return;
+
+    iceRestartAttemptedRef.current = true;
+    try {
+      const offer = await pc.createOffer({ iceRestart: true });
+      await pc.setLocalDescription(offer);
+      activeSocket.emit('call:initiate', {
+        to: remotePeerId,
+        offer: sessionDescriptionPayload(pc.localDescription ?? offer),
+      });
+    } catch (err) {
+      console.error('[webrtc] ICE restart failed', err);
+    }
+  }, [socket]);
+
   const bindPeerConnection = useCallback(
     (remotePeerId: string, activeSocket: Socket, iceServers: RTCIceServer[]) => {
       remotePeerRef.current = remotePeerId;
       pendingIceRef.current = [];
+      iceRestartAttemptedRef.current = false;
 
       const pc = createPeerConnection(iceServers);
-      // Start with null remote — UI shows waiting until ontrack fires with real media.
       remoteStreamRef.current = null;
       setRemoteStream(null);
 
@@ -133,7 +167,6 @@ export function useWebRTC() {
         const track = ev.track;
         if (!track) return;
 
-        // Prefer the browser-provided remote stream (audio+video together).
         let inbound = ev.streams[0] ?? remoteStreamRef.current ?? new MediaStream();
         if (!inbound.getTracks().some((t) => t.id === track.id)) {
           try {
@@ -145,7 +178,6 @@ export function useWebRTC() {
 
         publishRemoteStream(inbound);
 
-        // Some devices fire muted tracks first; re-publish when media actually flows.
         track.addEventListener('unmute', () => {
           const current = remoteStreamRef.current;
           if (current) publishRemoteStream(current);
@@ -153,7 +185,7 @@ export function useWebRTC() {
       };
 
       pc.onicecandidate = (ev) => {
-        if (!ev.candidate) return;
+        if (!ev.candidate || !isUsableIceCandidate(iceCandidatePayload(ev.candidate))) return;
         activeSocket.emit('call:ice-candidate', {
           to: remotePeerId,
           candidate: iceCandidatePayload(ev.candidate),
@@ -162,44 +194,42 @@ export function useWebRTC() {
 
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === 'failed') {
-          setCallSetupError(
-            'Could not connect the call across networks. Check Wi‑Fi or mobile data and try again.',
-          );
-          releaseMedia();
-          resetCall();
+          void (async () => {
+            await tryIceRestart();
+            // Allow ICE restart a short window before giving up.
+            await new Promise((r) => window.setTimeout(r, 4000));
+            if (pcRef.current === pc && pc.connectionState === 'failed') {
+              setCallSetupError(
+                'Could not connect the call across networks. Check Wi‑Fi or mobile data and try again.',
+              );
+              releaseMedia();
+              resetCall();
+            }
+          })();
         }
       };
 
       pc.oniceconnectionstatechange = () => {
         if (pc.iceConnectionState === 'failed') {
-          setCallSetupError(
-            'Video call could not get through your network. Try again in a moment.',
-          );
-          releaseMedia();
-          resetCall();
+          void tryIceRestart();
+        }
+        if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+          iceRestartAttemptedRef.current = false;
         }
       };
 
       pcRef.current = pc;
       return pc;
     },
-    [publishRemoteStream, releaseMedia, resetCall, setCallSetupError],
+    [publishRemoteStream, releaseMedia, resetCall, setCallSetupError, tryIceRestart],
   );
-
-  const attachLocalTracks = useCallback((pc: RTCPeerConnection, stream: MediaStream) => {
-    for (const track of stream.getTracks()) {
-      const already = pc.getSenders().some((sender) => sender.track?.id === track.id);
-      if (!already) {
-        pc.addTrack(track, stream);
-      }
-    }
-  }, []);
 
   const startCall = useCallback(
     async (targetPeerId: string, _peerName: string) => {
       if (!socket) throw new Error('signalling_unavailable');
       await waitForSocket(socket);
 
+      isCallerRef.current = true;
       const iceServers = await getIceServers();
       const pc = bindPeerConnection(targetPeerId, socket, iceServers);
       const stream = await acquireLocalMedia();
@@ -209,17 +239,15 @@ export function useWebRTC() {
       void canFlipCamera().then(setCanSwitchCamera);
       attachLocalTracks(pc, stream);
 
-      const offer = await pc.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: true,
-      });
+      // Caller-only offer; no offerToReceive* (Safari Unified Plan).
+      const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       socket.emit('call:initiate', {
         to: targetPeerId,
         offer: sessionDescriptionPayload(pc.localDescription ?? offer),
       });
     },
-    [socket, bindPeerConnection, attachLocalTracks],
+    [socket, bindPeerConnection],
   );
 
   const answerCall = useCallback(
@@ -230,6 +258,7 @@ export function useWebRTC() {
       if (!socket) throw new Error('signalling_unavailable');
       await waitForSocket(socket);
 
+      isCallerRef.current = false;
       const iceServers = await getIceServers();
       const pc = bindPeerConnection(remotePeerId, socket, iceServers);
       const stream = await acquireLocalMedia();
@@ -240,13 +269,12 @@ export function useWebRTC() {
       attachLocalTracks(pc, stream);
 
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
-      // Apply ICE that arrived while the phone was still ringing (before PC existed).
       await flushPendingIce(pc, remotePeerId);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       return sessionDescriptionPayload(pc.localDescription ?? answer);
     },
-    [socket, bindPeerConnection, attachLocalTracks, flushPendingIce],
+    [socket, bindPeerConnection, flushPendingIce],
   );
 
   const endCall = useCallback(() => {
@@ -286,30 +314,18 @@ export function useWebRTC() {
 
     const prevFacing = facingMode;
     const nextFacing: CameraFacing = facingMode === 'user' ? 'environment' : 'user';
-    const oldVideoTrack = stream.getVideoTracks()[0];
-    const wasEnabled = oldVideoTrack?.enabled ?? true;
 
     setIsSwitchingCamera(true);
     try {
-      // Must release the open lens before Android Chrome will honor facingMode.
-      if (oldVideoTrack) {
-        stream.removeTrack(oldVideoTrack);
-      }
-      const newTrack = await acquireVideoTrackForFacing(nextFacing, {
-        stopTrackFirst: oldVideoTrack ?? null,
-      });
-      newTrack.enabled = wasEnabled;
-      const nextStream = await replaceLocalVideoTrack(pc, stream, newTrack);
+      const nextStream = await flipLocalCamera(pc, stream, nextFacing);
       localStreamRef.current = nextStream;
       setLocalStream(nextStream);
       setFacingMode(nextFacing);
     } catch {
       try {
-        const restored = await acquireVideoTrackForFacing(prevFacing);
-        restored.enabled = wasEnabled;
-        const nextStream = await replaceLocalVideoTrack(pc, stream, restored);
-        localStreamRef.current = nextStream;
-        setLocalStream(nextStream);
+        const restored = await flipLocalCamera(pc, localStreamRef.current ?? stream, prevFacing);
+        localStreamRef.current = restored;
+        setLocalStream(restored);
         setFacingMode(prevFacing);
       } catch {
         /* keep stream without video if both fail */
@@ -326,8 +342,12 @@ export function useWebRTC() {
       const pc = pcRef.current;
       if (!pc) return;
       try {
+        // Ignore answers if we are not the caller (glare / duplicate).
+        if (!isCallerRef.current && pc.signalingState === 'stable' && pc.currentRemoteDescription) {
+          setConnected();
+          return;
+        }
         if (pc.signalingState === 'stable' && pc.currentRemoteDescription) {
-          // Already applied (duplicate event) — still mark connected.
           setConnected();
           return;
         }
@@ -350,11 +370,10 @@ export function useWebRTC() {
       candidate: RTCIceCandidateInit;
       from?: string;
     }) => {
-      if (!candidate) return;
+      if (!isUsableIceCandidate(candidate)) return;
       const pc = pcRef.current;
       const peerKey = from || remotePeerRef.current;
 
-      // No PC yet (callee still on ring screen) — buffer by peer for answerCall.
       if (!pc) {
         if (!peerKey) return;
         const list = earlyIceByPeerRef.current.get(peerKey) ?? [];
@@ -398,11 +417,40 @@ export function useWebRTC() {
       }
     };
 
+    // ICE restart reuses call:initiate → callee may receive a new offer while connected.
+    const onIncomingRenegotiate = async ({
+      from,
+      offer,
+    }: {
+      from: string;
+      fromName?: string;
+      offer: RTCSessionDescriptionInit;
+    }) => {
+      const pc = pcRef.current;
+      if (!pc || isCallerRef.current) return;
+      if (remotePeerRef.current && remotePeerRef.current !== from) return;
+      // Only handle renegotiation when already in a call (stable + remote set).
+      if (!pc.currentRemoteDescription || pc.signalingState === 'closed') return;
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        await flushPendingIce(pc, from);
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('call:answer', {
+          to: from,
+          answer: sessionDescriptionPayload(pc.localDescription ?? answer),
+        });
+      } catch (err) {
+        console.error('[webrtc] renegotiation answer failed', err);
+      }
+    };
+
     socket.on('call:answered', onAnswered);
     socket.on('call:ice-candidate', onIceCandidate);
     socket.on('call:ended', onEnded);
     socket.on('call:rejected', onRejected);
     socket.on('call:error', onCallError);
+    socket.on('call:incoming', onIncomingRenegotiate);
 
     return () => {
       socket.off('call:answered', onAnswered);
@@ -410,6 +458,7 @@ export function useWebRTC() {
       socket.off('call:ended', onEnded);
       socket.off('call:rejected', onRejected);
       socket.off('call:error', onCallError);
+      socket.off('call:incoming', onIncomingRenegotiate);
     };
   }, [socket, setConnected, resetCall, releaseMedia, setCallSetupError, flushPendingIce]);
 

@@ -135,8 +135,8 @@ export function NearbyProfileGrid({
     );
   }
 
+  // Mobile/tablet (Discover lg:hidden sheet): exactly 2 per row. Desktop sidebar: denser auto-fill.
   return (
-    {/* Mobile/tablet (Discover lg:hidden sheet): exactly 2 per row. Desktop sidebar: denser auto-fill. */}
     <div
       className="grid grid-cols-2 gap-3 lg:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] lg:gap-3.5"
       data-testid="nearby-profile-grid"

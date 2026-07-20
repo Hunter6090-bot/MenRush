@@ -55,13 +55,39 @@ async function installFakeMedia(context: BrowserContext) {
     class FakePeerConnection {
       ontrack: ((event: any) => void) | null = null;
       onicecandidate: ((event: any) => void) | null = null;
-      addTrack() {}
+      onconnectionstatechange: ((event: any) => void) | null = null;
+      oniceconnectionstatechange: ((event: any) => void) | null = null;
+      connectionState = 'new';
+      iceConnectionState = 'new';
+      signalingState = 'stable';
+      currentRemoteDescription: any = null;
+      private senders: any[] = [];
+      private transceivers: any[] = [];
+      addTrack(track: any, _stream?: any) {
+        const sender = { track, replaceTrack: async (next: any) => { sender.track = next; } };
+        this.senders.push(sender);
+        return sender;
+      }
+      addTransceiver(trackOrKind: any, init?: any) {
+        const track = typeof trackOrKind === 'string' ? null : trackOrKind;
+        const sender = { track, replaceTrack: async (next: any) => { sender.track = next; } };
+        const receiver = { track: track ? { kind: track.kind } : { kind: trackOrKind } };
+        const transceiver = { sender, receiver, mid: String(this.transceivers.length), ...init };
+        this.senders.push(sender);
+        this.transceivers.push(transceiver);
+        return transceiver;
+      }
+      getSenders() { return this.senders; }
+      getTransceivers() { return this.transceivers; }
       async createOffer() { return { type: 'offer', sdp: 'test-offer' }; }
       async createAnswer() { return { type: 'answer', sdp: 'test-answer' }; }
-      async setLocalDescription() {}
-      async setRemoteDescription() {}
+      async setLocalDescription() { this.signalingState = 'have-local-offer'; }
+      async setRemoteDescription(desc: any) {
+        this.currentRemoteDescription = desc;
+        this.signalingState = 'stable';
+      }
       async addIceCandidate() {}
-      close() {}
+      close() { this.connectionState = 'closed'; }
     }
 
     const tracks = [
@@ -127,6 +153,9 @@ async function installBlockedMedia(context: BrowserContext) {
     class FakePeerConnection {
       ontrack: any = null; onicecandidate: any = null;
       addTrack() {}
+      addTransceiver() { return { sender: { track: null, replaceTrack: async () => {} }, receiver: { track: null } }; }
+      getSenders() { return []; }
+      getTransceivers() { return []; }
       async createOffer() { return { type: 'offer', sdp: 'x' }; }
       async createAnswer() { return { type: 'answer', sdp: 'x' }; }
       async setLocalDescription() {}
