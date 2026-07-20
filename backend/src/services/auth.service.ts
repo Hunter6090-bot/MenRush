@@ -8,6 +8,7 @@ import {
   LoginInput,
   ResetPasswordInput,
   ChangePasswordInput,
+  ChangeEmailInput,
 } from '../types/validation';
 import { sendTransactionalEmail } from './mailer.service';
 import {
@@ -463,5 +464,45 @@ export const authService = {
     );
 
     return { ok: true };
+  },
+
+  async getAccountEmail(userId: string) {
+    const result = await query(`SELECT email FROM users WHERE id = $1`, [userId]);
+    if (result.rows.length === 0) {
+      throw new Error('User not found');
+    }
+    return { email: result.rows[0].email as string };
+  },
+
+  async changeEmail(userId: string, data: ChangeEmailInput) {
+    const result = await query(`SELECT email, password_hash FROM users WHERE id = $1`, [userId]);
+    if (result.rows.length === 0) {
+      throw new Error('User not found');
+    }
+
+    const valid = await bcryptjs.compare(data.current_password, result.rows[0].password_hash);
+    if (!valid) {
+      throw new Error('Current password is incorrect');
+    }
+
+    const currentEmail = String(result.rows[0].email).toLowerCase();
+    if (currentEmail === data.new_email) {
+      throw new Error('New email must be different from your current email');
+    }
+
+    const taken = await query(
+      `SELECT id FROM users WHERE LOWER(email) = $1 AND id <> $2`,
+      [data.new_email, userId],
+    );
+    if (taken.rows.length > 0) {
+      throw new Error('That email is already in use');
+    }
+
+    await query(
+      `UPDATE users SET email = $1, updated_at = NOW() WHERE id = $2`,
+      [data.new_email, userId],
+    );
+
+    return { ok: true, email: data.new_email };
   },
 };

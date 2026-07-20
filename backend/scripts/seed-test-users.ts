@@ -25,6 +25,11 @@ type SeedUser = {
   password?: string;
   /** Pin to Shoreditch test coords (for remote testers who should appear in London). */
   seedLondonLocation?: boolean;
+  /**
+   * Auth-only team login (no dating profile). Seed must not restore location / visibility.
+   * Pete uses Bigbear25 as his personal account.
+   */
+  authOnly?: boolean;
 };
 
 export const SEED_USERS: SeedUser[] = [
@@ -41,8 +46,8 @@ export const SEED_USERS: SeedUser[] = [
     email: 'petegreen69@hotmail.com',
     name: 'Pete',
     age: 32,
-    label: 'Marketing manager',
-    seedLondonLocation: true,
+    label: 'Marketing manager (auth-only — personal account is Bigbear25)',
+    authOnly: true,
   },
   {
     id: 'b2000003-0003-4003-8003-000000000003',
@@ -87,9 +92,24 @@ async function upsertUser(user: SeedUser, passwordHash: string): Promise<string>
   const userId = userRes.rows[0].id as string;
 
   const isE2eFixture = user.email.endsWith('@example.com');
-  const useLondonPin = isE2eFixture || user.seedLondonLocation === true;
+  const useLondonPin = !user.authOnly && (isE2eFixture || user.seedLondonLocation === true);
 
-  if (useLondonPin) {
+  if (user.authOnly) {
+    // Keep login; do not re-pin or make discoverable (profile intentionally cleared).
+    await query(
+      `INSERT INTO profiles (user_id, online, last_seen, is_visible, is_ghost)
+       VALUES ($1, FALSE, NOW(), FALSE, FALSE)
+       ON CONFLICT (user_id) DO UPDATE SET
+         location = NULL,
+         lat = NULL,
+         lng = NULL,
+         online = FALSE,
+         is_visible = FALSE,
+         is_ghost = FALSE,
+         updated_at = NOW()`,
+      [userId],
+    );
+  } else if (useLondonPin) {
     await query(
       `INSERT INTO profiles (user_id, location, lat, lng, online, last_seen, is_visible, is_ghost)
        VALUES ($1, ST_MakePoint($3, $2)::geography, $2, $3, TRUE, NOW(), TRUE, FALSE)

@@ -8,6 +8,7 @@ import {
   ForgotPasswordSchema,
   ResetPasswordSchema,
   ChangePasswordSchema,
+  ChangeEmailSchema,
   TwoFactorCodeSchema,
   TwoFactorVerifyLoginSchema,
 } from '../types/validation';
@@ -92,6 +93,29 @@ router.post('/change-password', authMiddleware, authLimiter, async (req: AuthReq
     res.json({ ok: true, message: 'Password updated.' });
   } catch (error: any) {
     const msg = error?.message || 'Could not change password';
+    const status =
+      msg === 'Current password is incorrect' || msg === 'User not found' ? 401 : 400;
+    res.status(status).json({ error: msg });
+  }
+});
+
+router.get('/account', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const account = await authService.getAccountEmail(req.userId!);
+    res.json(account);
+  } catch (error: any) {
+    const msg = error?.message || 'Could not load account';
+    res.status(msg === 'User not found' ? 404 : 400).json({ error: msg });
+  }
+});
+
+router.post('/change-email', authMiddleware, authLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const data = ChangeEmailSchema.parse(req.body);
+    const result = await authService.changeEmail(req.userId!, data);
+    res.json({ ok: true, email: result.email, message: 'Email updated.' });
+  } catch (error: any) {
+    const msg = error?.message || 'Could not change email';
     const status =
       msg === 'Current password is incorrect' || msg === 'User not found' ? 401 : 400;
     res.status(status).json({ error: msg });

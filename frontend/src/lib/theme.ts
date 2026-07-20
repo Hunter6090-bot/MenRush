@@ -7,6 +7,9 @@ export type ThemePreference = 'light' | 'dark' | 'system';
 export type ResolvedTheme = 'light' | 'dark';
 
 export const THEME_STORAGE_KEY = 'menrush_theme';
+export const THEME_CHANGED_EVENT = 'menrush:theme-changed';
+
+const THEME_CYCLE: ThemePreference[] = ['light', 'dark', 'system'];
 
 export function readThemePreference(): ThemePreference {
   try {
@@ -43,13 +46,37 @@ export function applyTheme(pref: ThemePreference): ResolvedTheme {
   return resolved;
 }
 
+function notifyThemeChanged(pref: ThemePreference): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent(THEME_CHANGED_EVENT, { detail: { preference: pref } }),
+  );
+}
+
 export function setThemePreference(pref: ThemePreference): ResolvedTheme {
   try {
     localStorage.setItem(THEME_STORAGE_KEY, pref);
   } catch {
     /* ignore */
   }
-  return applyTheme(pref);
+  const resolved = applyTheme(pref);
+  notifyThemeChanged(pref);
+  return resolved;
+}
+
+/** Cycle light → dark → system → light. */
+export function cycleThemePreference(): ThemePreference {
+  const current = readThemePreference();
+  const idx = THEME_CYCLE.indexOf(current);
+  const next = THEME_CYCLE[(idx + 1) % THEME_CYCLE.length];
+  setThemePreference(next);
+  return next;
+}
+
+export function themePreferenceLabel(pref: ThemePreference): string {
+  if (pref === 'light') return 'Light';
+  if (pref === 'dark') return 'Dark';
+  return 'System';
 }
 
 export function initThemeFromStorage(): ResolvedTheme {

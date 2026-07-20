@@ -4,7 +4,11 @@ const TRIBE_BEAR = new Set(['Bear', 'Cub', 'Daddy', 'Leather']);
 const BODY_SLIM = new Set(['Slim', 'Athletic', 'Smooth']);
 const BODY_STOCKY = new Set(['Chubby', 'Hairy', 'Stocky']);
 
-/** Small preset pool — users with similar age, tribe & body tags share the same avatar. */
+/**
+ * Small preset pool — users with similar age, tribe & body tags share the same avatar.
+ * Artwork lives at these stable paths; swap SVG files to restyle.
+ * Do NOT migrate users.photo_url when redesigning — custom uploads must never be overwritten.
+ */
 export const GENERIC_AVATAR_VARIANTS = [
   '/avatars/generic/01.svg',
   '/avatars/generic/02.svg',

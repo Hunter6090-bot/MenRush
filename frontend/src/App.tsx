@@ -43,6 +43,7 @@ import { readThemePreference, applyTheme } from './lib/theme';
 import { FEATURES } from './lib/featureFlags';
 import { VideoCallModal } from './components/VideoCallModal';
 import { ToastNotifications } from './components/ToastNotifications';
+import { ThemeToggleFab } from './components/ThemeToggleFab';
 import { savePostAuthRedirect } from './lib/profileLinks';
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
@@ -162,6 +163,7 @@ function AppShell() {
   return (
     <>
       <ToastNotifications />
+      <ThemeToggleFab />
       <Routes>
         <Route path="/" element={<ComingSoon />} />
         <Route path="/app" element={<AppEntry />} />
