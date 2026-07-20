@@ -1,13 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Generic avatar">
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Profile placeholder">
   <defs>
-    <radialGradient id="g9" cx="34%" cy="28%" r="72%">
-      <stop offset="0%" stop-color="#D4943B"/>
-      <stop offset="100%" stop-color="#6B4423"/>
+    <radialGradient id="g09" cx="34%" cy="28%" r="72%">
+      <stop offset="0%" stop-color="#C4832A"/>
+      <stop offset="100%" stop-color="#4A3018"/>
     </radialGradient>
   </defs>
-  <circle cx="48" cy="48" r="48" fill="url(#g9)"/>
-  <g fill="#F0E0C0" opacity="0.92">
-    <circle cx="48" cy="32.5" r="17.0"/>
-    <path d="M15.5 94 C15.5 67.0 19.5 59.0 38.6 59.0 L57.4 59.0 C76.5 59.0 80.5 67.0 80.5 94 Z"/>
+  <circle cx="48" cy="48" r="48" fill="url(#g09)"/>
+  <g fill="#F0E0C0">
+    <circle cx="48" cy="34.8" r="16.8"/>
+    <path d="M11.0 96 V66.5 C11.0 58.5 19.0 56.5 29.0 56.5 H67.0 C77.0 56.5 85.0 58.5 85.0 66.5 V96 Z"/>
   </g>
 </svg>

@@ -23,7 +23,7 @@ export function MobileHubTabs({ active }: MobileHubTabsProps) {
           onClick={() => active !== 'messages' && navigate('/conversations')}
           className={`flex-1 rounded-full px-3 py-2 text-[12px] font-extrabold uppercase tracking-[0.12em] transition-colors ${
             active === 'messages'
-              ? 'bg-[rgba(196,131,42,0.12)] text-[#E0A14A]'
+              ? 'bg-[rgba(196,131,42,0.12)] text-[var(--copper-light)]'
               : 'text-[var(--cream-muted)]'
           }`}
         >
@@ -36,7 +36,7 @@ export function MobileHubTabs({ active }: MobileHubTabsProps) {
           onClick={() => active !== 'rooms' && navigate('/rooms')}
           className={`flex-1 rounded-full px-3 py-2 text-[12px] font-extrabold uppercase tracking-[0.12em] transition-colors ${
             active === 'rooms'
-              ? 'bg-[rgba(196,131,42,0.12)] text-[#E0A14A]'
+              ? 'bg-[rgba(196,131,42,0.12)] text-[var(--copper-light)]'
               : 'text-[var(--cream-muted)]'
           }`}
         >

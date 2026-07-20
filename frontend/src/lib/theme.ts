@@ -39,6 +39,13 @@ export function applyTheme(pref: ThemePreference): ResolvedTheme {
   root.classList.toggle('theme-dark', resolved === 'dark');
   root.style.colorScheme = resolved;
 
+  // Keep <body> inline styles in sync — index.html boots with dark defaults that
+  // would otherwise make Messages/full-screen shells look like theme reverted.
+  if (document.body) {
+    document.body.style.background = resolved === 'light' ? '#F5EDE0' : '#0D0A06';
+    document.body.style.color = resolved === 'light' ? '#1A1208' : '#F0E0C0';
+  }
+
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) {
     meta.setAttribute('content', resolved === 'light' ? '#F5EDE0' : '#0D0A06');
