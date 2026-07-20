@@ -8,39 +8,61 @@ interface GhostToggleProps {
 }
 
 export const GhostToggle: React.FC<GhostToggleProps> = ({ isGhost, isPremium, onToggle }) => {
+  // Premium-gated when off and not subscribed — stay pressable so tap opens upgrade.
   const locked = !isPremium && !isGhost;
 
   return (
-    <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card">
+    <div
+      className="rounded-2xl border p-5 shadow-card"
+      style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-default)' }}
+    >
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <p className="text-[#F0E0C0]/80 text-sm font-semibold">Ghost mode</p>
-            <span className="rounded-full border border-[#C4832A]/30 bg-[#C4832A]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#C4832A]">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold" style={{ color: 'var(--cream)' }}>
+              Ghost mode
+            </p>
+            <span
+              className="rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+              style={{
+                borderColor: 'color-mix(in srgb, var(--copper) 35%, transparent)',
+                background: 'color-mix(in srgb, var(--copper) 12%, transparent)',
+                color: 'var(--copper)',
+              }}
+            >
               Premium
             </span>
           </div>
-          <p className="text-[var(--cream-muted)] text-xs mt-1">
+          <p className="mt-1 text-xs" style={{ color: 'var(--cream-muted)' }}>
             Browse quietly. When enabled, you stay off nearby discovery until you switch it back on.
           </p>
           {locked && (
-            <Link to="/premium" className="inline-block text-xs text-[#C4832A] hover:underline mt-2">
+            <Link
+              to="/premium"
+              className="mt-2 inline-block text-xs font-semibold hover:underline"
+              style={{ color: 'var(--copper)' }}
+            >
               Upgrade to unlock ghost mode
             </Link>
           )}
         </div>
         <button
           type="button"
-          disabled={locked}
           onClick={() => void onToggle(!isGhost)}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed ${
-            isGhost ? 'bg-[#C4832A]' : 'bg-[#3D2B0E]'
+          className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
+            locked ? 'cursor-pointer opacity-80' : 'cursor-pointer'
           }`}
+          style={{
+            background: isGhost ? 'var(--copper)' : 'var(--border-default)',
+            outlineColor: 'var(--copper)',
+          }}
           aria-pressed={isGhost}
-          aria-label="Toggle ghost mode"
+          aria-disabled={locked || undefined}
+          aria-label={locked ? 'Ghost mode — Premium required. Tap to upgrade' : 'Toggle ghost mode'}
+          title={locked ? 'Premium feature — tap to upgrade' : undefined}
         >
           <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
               isGhost ? 'translate-x-6' : 'translate-x-1'
             }`}
           />
