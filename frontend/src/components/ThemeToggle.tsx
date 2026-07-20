@@ -60,7 +60,7 @@ export function ThemeToggle({
         lg:bottom-[max(1.25rem,env(safe-area-inset-bottom,0px))]
       `
       : `
-        flex h-10 w-10 items-center justify-center rounded-full
+        shrink-0 flex h-10 w-10 items-center justify-center rounded-full
         text-[var(--cream-soft)]
         active:bg-[var(--bg-card)]
         transition-colors

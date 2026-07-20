@@ -117,7 +117,7 @@ export const RoomList: React.FC<RoomListProps> = ({
               >
                 <RoomsIcon className="h-5 w-5 text-white" />
               </div>
-              <h1 className="flex-1 text-xl font-bold tracking-wide" style={{ color: '#F0E0C0' }}>
+              <h1 className="flex-1 text-xl font-bold tracking-wide" style={{ color: 'var(--cream)' }}>
                 Chat Rooms
               </h1>
             </>
@@ -157,9 +157,9 @@ export const RoomList: React.FC<RoomListProps> = ({
             placeholder="Search rooms..."
             className="w-full rounded-2xl py-3 pl-10 pr-4 text-sm transition-all duration-200 focus:outline-none"
             style={{
-              background: '#1E1508',
-              border: '1px solid #3D2B0E',
-              color: '#F0E0C0',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-default)',
+              color: 'var(--cream)',
               caretColor: '#C4832A',
             }}
           />
@@ -170,18 +170,18 @@ export const RoomList: React.FC<RoomListProps> = ({
         {loading ? (
           <div className="flex flex-col gap-2">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-16 animate-pulse rounded-2xl" style={{ background: '#1E1508' }} />
+              <div key={i} className="h-16 animate-pulse rounded-2xl" style={{ background: 'var(--bg-card)' }} />
             ))}
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex select-none flex-col items-center justify-center py-20">
             <div
               className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl"
-              style={{ background: '#1E1508', border: '1px solid #3D2B0E' }}
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
             >
               <RoomsIcon className="h-8 w-8" style={{ color: '#C4832A', opacity: 0.5 } as React.CSSProperties} />
             </div>
-            <p className="text-sm font-medium" style={{ color: '#A89070' }}>
+            <p className="text-sm font-medium" style={{ color: 'var(--cream-muted)' }}>
               {search ? 'No rooms match your search' : 'No rooms yet'}
             </p>
             {!search && (
@@ -214,7 +214,7 @@ export const RoomList: React.FC<RoomListProps> = ({
                   style={
                     isSidebar && active
                       ? undefined
-                      : { background: '#1E1508', border: '1px solid #3D2B0E' }
+                      : { background: 'var(--bg-card)', border: '1px solid var(--border-default)' }
                   }
                 >
                   <div
@@ -230,7 +230,7 @@ export const RoomList: React.FC<RoomListProps> = ({
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-semibold" style={{ color: '#F0E0C0' }}>
+                      <span className="truncate text-sm font-semibold" style={{ color: 'var(--cream)' }}>
                         {room.name}
                       </span>
                       <span className="flex-shrink-0 text-[10px]" style={{ color: '#6B5035' }}>

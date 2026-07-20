@@ -826,7 +826,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
           style={{
             background:
               safetyNotice.tone === 'success' ? 'rgba(143,199,115,0.12)' : 'rgba(139,69,19,0.15)',
-            borderColor: '#3D2B0E',
+            borderColor: 'var(--border-default)',
             color: safetyNotice.tone === 'success' ? '#8FC773' : '#F0E0C0',
           }}
         >
@@ -856,14 +856,14 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
           >
             <div
               className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
-              style={{ background: '#1E1508', border: '1px solid #3D2B0E' }}
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
             >
-              <BubbleIcon className="w-8 h-8" style={{ color: '#C4832A', opacity: 0.5 }} />
+              <BubbleIcon className="w-8 h-8" style={{ color: 'var(--copper)', opacity: 0.5 }} />
             </div>
-            <p className="font-medium text-sm" style={{ color: '#A89070' }}>
+            <p className="font-medium text-sm text-[var(--cream-muted)]">
               No messages yet
             </p>
-            <p className="text-xs mt-1 mb-4 text-center" style={{ color: '#6B5840' }}>
+            <p className="text-xs mt-1 mb-4 text-center text-[var(--cream-muted)]">
               Be direct. Consent first.
             </p>
             <div className="flex flex-col gap-2 w-full max-w-sm">
@@ -895,19 +895,19 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               <React.Fragment key={msg.id ?? i}>
                 {showDateSep && (
                   <div className="flex items-center gap-3 my-5">
-                    <div className="flex-1 h-px" style={{ background: '#3D2B0E' }} />
+                    <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
                     <span
                       className="text-[10px] font-semibold px-3 py-1 rounded-full"
                       style={{
-                        background: '#1E1508',
-                        border: '1px solid #3D2B0E',
-                        color: '#A89070',
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border-default)',
+                        color: 'var(--cream-muted)',
                         letterSpacing: '0.06em',
                       }}
                     >
                       {formatDateLabel(msg.created_at)}
                     </span>
-                    <div className="flex-1 h-px" style={{ background: '#3D2B0E' }} />
+                    <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
                   </div>
                 )}
                 <div className="flex justify-center my-4" data-testid="missed-call-log">
@@ -935,19 +935,19 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               {/* Date separator */}
               {showDateSep && (
                 <div className="flex items-center gap-3 my-5">
-                  <div className="flex-1 h-px" style={{ background: '#3D2B0E' }} />
+                  <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
                   <span
                     className="text-[10px] font-semibold px-3 py-1 rounded-full"
                     style={{
-                      background: '#1E1508',
-                      border: '1px solid #3D2B0E',
-                      color: '#A89070',
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border-default)',
+                      color: 'var(--cream-muted)',
                       letterSpacing: '0.06em',
                     }}
                   >
                     {formatDateLabel(msg.created_at)}
                   </span>
-                  <div className="flex-1 h-px" style={{ background: '#3D2B0E' }} />
+                  <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
                 </div>
               )}
 
@@ -964,7 +964,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                       otherUser?.photo_url ? (
                         <div
                           className="w-7 h-7 rounded-full overflow-hidden"
-                          style={{ border: '1px solid #3D2B0E', flexShrink: 0 }}
+                          style={{ border: '1px solid var(--border-default)', flexShrink: 0 }}
                         >
                           <img
                             src={otherUser.photo_url}
@@ -1040,9 +1040,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                               boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
                             }
                           : {
-                              background: '#1E1508',
-                              border: '1px solid #3D2B0E',
-                              color: '#F0E0C0',
+                              background: 'var(--bg-card)',
+                              border: '1px solid var(--border-default)',
+                              color: 'var(--cream)',
                               borderRadius: showTail
                                 ? '18px 18px 18px 4px'
                                 : '18px 18px 18px 18px',
@@ -1074,8 +1074,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             <div
               className="px-4 py-3 rounded-[18px] rounded-bl-[4px] flex items-center gap-1.5"
               style={{
-                background: '#1E1508',
-                border: '1px solid #3D2B0E',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-default)',
               }}
             >
               <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
@@ -1090,13 +1090,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
       {/* ── Input bar ─────────────────────────────────────────────────────── */}
       <div
-        className="flex-shrink-0 border-t px-4 py-3"
-        style={{
-          borderColor: '#3D2B0E',
-          background: 'rgba(13,10,6,0.94)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-        }}
+        className="flex-shrink-0 border-t border-[var(--border-default)] px-4 py-3 bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl"
       >
         {mediaError && (
           <div
@@ -1104,7 +1098,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             style={{
               background: 'rgba(196,131,42,0.12)',
               border: '1px solid rgba(196,131,42,0.35)',
-              color: '#F0E0C0',
+              color: 'var(--cream)',
             }}
           >
             {mediaError}
@@ -1181,19 +1175,19 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               }}
               aria-label="Cancel recording"
               className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
-              style={{ background: '#1E1508', border: '1px solid #3D2B0E', color: '#A89070' }}
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', color: 'var(--cream-muted)' }}
             >
               <CloseIcon className="w-4 h-4" />
             </button>
             <div
               className="flex-1 flex items-center gap-2 px-4 py-3 rounded-full"
-              style={{ background: '#1E1508', border: '1px solid rgba(196,131,42,0.4)' }}
+              style={{ background: 'var(--bg-card)', border: '1px solid rgba(196,131,42,0.4)' }}
             >
               <span
                 className="w-2.5 h-2.5 rounded-full"
                 style={{ background: '#E5484D', boxShadow: '0 0 8px #E5484D' }}
               />
-              <span className="text-xs" style={{ color: '#F0E0C0' }}>
+              <span className="text-xs" style={{ color: 'var(--cream)' }}>
                 Recording… {formatDuration(recordSeconds * 1000)}
               </span>
             </div>
@@ -1263,9 +1257,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 autoComplete="off"
                 className="w-full text-sm px-5 py-3 rounded-full focus:outline-none transition-all duration-200"
                 style={{
-                  background: '#1E1508',
-                  border: '1px solid #3D2B0E',
-                  color: '#F0E0C0',
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border-default)',
+                  color: 'var(--cream)',
                   caretColor: '#C4832A',
                 }}
                 onFocus={(e) => {
@@ -1273,7 +1267,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                   e.currentTarget.style.boxShadow = '0 0 0 3px rgba(196,131,42,0.12)';
                 }}
                 onBlur={(e) => {
-                  e.currentTarget.style.border = '1px solid #3D2B0E';
+                  e.currentTarget.style.border = '1px solid var(--border-default)';
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               />
@@ -1347,9 +1341,9 @@ const LocationBubble: React.FC<LocationBubbleProps> = ({ msg, isMine, showTail, 
         boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
       }
     : {
-        background: '#1E1508',
-        border: '1px solid #3D2B0E',
-        color: '#F0E0C0',
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-default)',
+        color: 'var(--cream)',
         borderRadius: showTail ? '18px 18px 18px 4px' : '18px',
       };
 
@@ -1407,7 +1401,7 @@ const MeetConsentBar: React.FC<MeetConsentBarProps> = ({
     return (
       <div
         className="flex-shrink-0 px-4 py-2.5 border-b text-center"
-        style={{ borderColor: '#3D2B0E', background: 'rgba(22,163,74,0.12)' }}
+        style={{ borderColor: 'var(--border-default)', background: 'rgba(22,163,74,0.12)' }}
         data-testid="meet-consent-mutual"
       >
         <p className="text-xs font-semibold" style={{ color: '#86EFAC' }}>
@@ -1420,13 +1414,13 @@ const MeetConsentBar: React.FC<MeetConsentBarProps> = ({
   return (
     <div
       className="flex-shrink-0 px-4 py-3 border-b"
-      style={{ borderColor: '#3D2B0E', background: 'rgba(30,21,8,0.95)' }}
+      style={{ borderColor: 'var(--border-default)', background: 'color-mix(in srgb, var(--bg-card) 95%, transparent)' }}
       data-testid="meet-consent-bar"
     >
-      <p className="text-xs font-semibold" style={{ color: '#F0E0C0' }}>
+      <p className="text-xs font-semibold" style={{ color: 'var(--cream)' }}>
         Ready to meet?
       </p>
-      <p className="text-[11px] mt-1 leading-relaxed" style={{ color: '#A89070' }}>
+      <p className="text-[11px] mt-1 leading-relaxed" style={{ color: 'var(--cream-muted)' }}>
         Confirm only when you&apos;re happy to arrange a meet-up with {peerName}. Both of you must
         agree before this shows as mutual.
       </p>
@@ -1442,7 +1436,7 @@ const MeetConsentBar: React.FC<MeetConsentBarProps> = ({
               onClick={onRevoke}
               disabled={submitting}
               className="text-[11px] font-semibold underline disabled:opacity-50"
-              style={{ color: '#A89070' }}
+              style={{ color: 'var(--cream-muted)' }}
             >
               Undo
             </button>
@@ -1478,7 +1472,7 @@ const WithdrawMediaButton: React.FC<{ onClick: () => void; loading?: boolean }> 
     disabled={loading}
     data-testid="withdraw-media"
     className="text-[10px] font-semibold underline disabled:opacity-50"
-    style={{ color: '#A89070' }}
+    style={{ color: 'var(--cream-muted)' }}
   >
     {loading ? 'Withdrawing…' : 'Withdraw media'}
   </button>
@@ -1635,7 +1629,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
     <div
       className="mb-3 p-3 rounded-2xl"
       data-testid="image-composer"
-      style={{ background: '#1E1508', border: '1px solid #3D2B0E' }}
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
     >
       <div className="flex gap-3">
         <img
@@ -1643,10 +1637,10 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
           alt="Selected photo preview"
           data-testid="image-composer-preview"
           className="w-20 h-20 rounded-xl object-cover flex-shrink-0"
-          style={{ border: '1px solid #3D2B0E' }}
+          style={{ border: '1px solid var(--border-default)' }}
         />
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold mb-2" style={{ color: '#F0E0C0' }}>
+          <p className="text-xs font-semibold mb-2" style={{ color: 'var(--cream)' }}>
             Photo · <span data-testid="image-composer-rule">{VIEW_RULE_LABELS[rule]}</span>
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -1661,7 +1655,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
                   aria-pressed={active}
                   className="text-[11px] px-2.5 py-1 rounded-full transition-all active:scale-95"
                   style={{
-                    background: active ? 'rgba(196,131,42,0.22)' : '#0D0A06',
+                    background: active ? 'rgba(196,131,42,0.22)' : 'var(--bg-primary)',
                     border: `1px solid ${active ? '#C4832A' : '#3D2B0E'}`,
                     color: active ? '#F0E0C0' : '#A89070',
                   }}
@@ -1678,11 +1672,11 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
                 aria-label="Fewer views"
                 onClick={() => onCustomViewsChange(Math.max(2, customViews - 1))}
                 className="w-6 h-6 rounded-full flex items-center justify-center"
-                style={{ background: '#0D0A06', border: '1px solid #3D2B0E', color: '#C4832A' }}
+                style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', color: '#C4832A' }}
               >
                 −
               </button>
-              <span className="text-xs tabular-nums" style={{ color: '#F0E0C0' }}>
+              <span className="text-xs tabular-nums" style={{ color: 'var(--cream)' }}>
                 {customViews} views
               </span>
               <button
@@ -1690,7 +1684,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
                 aria-label="More views"
                 onClick={() => onCustomViewsChange(Math.min(20, customViews + 1))}
                 className="w-6 h-6 rounded-full flex items-center justify-center"
-                style={{ background: '#0D0A06', border: '1px solid #3D2B0E', color: '#C4832A' }}
+                style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', color: '#C4832A' }}
               >
                 +
               </button>
@@ -1708,7 +1702,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
           disabled={uploading}
           data-testid="image-composer-cancel"
           className="text-xs px-4 py-2 rounded-full disabled:opacity-40"
-          style={{ background: '#0D0A06', border: '1px solid #3D2B0E', color: '#A89070' }}
+          style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', color: 'var(--cream-muted)' }}
         >
           Cancel
         </button>
@@ -1767,9 +1761,9 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
           className="px-4 py-3 flex items-center gap-2 text-xs"
           data-testid="media-withdrawn"
           style={{
-            background: '#1E1508',
-            border: '1px solid #3D2B0E',
-            color: '#A89070',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-default)',
+            color: 'var(--cream-muted)',
             borderRadius: radius,
             minWidth: 200,
           }}
@@ -1792,9 +1786,9 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
         className="px-4 py-3 flex items-center gap-2 text-xs"
         data-testid="image-unavailable"
         style={{
-          background: '#1E1508',
-          border: '1px solid #3D2B0E',
-          color: '#A89070',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-default)',
+          color: 'var(--cream-muted)',
           borderRadius: radius,
           minWidth: 200,
         }}
@@ -1814,7 +1808,7 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
           className="relative overflow-hidden"
           data-testid="image-permanent"
           style={{
-            background: '#1E1508',
+            background: 'var(--bg-card)',
             border: isMine ? 'none' : '1px solid #3D2B0E',
             borderRadius: radius,
             boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
@@ -1881,8 +1875,8 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
       style={{
         width: 220,
         height: 220,
-        background: 'linear-gradient(135deg, #1E1508 0%, #0D0A06 100%)',
-        border: '1px solid #3D2B0E',
+        background: 'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-primary) 100%)',
+        border: '1px solid var(--border-default)',
         borderRadius: radius,
       }}
       aria-label={`Tap to view photo (${remainingLabel})`}
@@ -1894,10 +1888,10 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
         >
           <FlameIcon className="w-5 h-5" style={{ color: '#C4832A' }} />
         </div>
-        <p className="text-xs font-semibold" style={{ color: '#F0E0C0' }}>
+        <p className="text-xs font-semibold" style={{ color: 'var(--cream)' }}>
           Tap to view
         </p>
-        <p className="text-[10px]" style={{ color: '#A89070' }} data-testid="image-remaining">
+        <p className="text-[10px]" style={{ color: 'var(--cream-muted)' }} data-testid="image-remaining">
           {remainingLabel}
         </p>
       </div>
@@ -1995,7 +1989,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
         aria-label="Close photo"
         data-testid="image-viewer-close"
         className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center"
-        style={{ background: 'rgba(30,21,8,0.9)', border: '1px solid #3D2B0E', color: '#F0E0C0' }}
+        style={{ background: 'rgba(30,21,8,0.9)', border: '1px solid var(--border-default)', color: 'var(--cream)' }}
       >
         <CloseIcon className="w-5 h-5" />
       </button>
@@ -2003,10 +1997,10 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
       {status === 'error' ? (
         <div className="flex flex-col items-center gap-3 text-center px-8">
           <FlameIcon className="w-8 h-8" style={{ color: '#C4832A' }} />
-          <p className="text-sm" style={{ color: '#F0E0C0' }}>
+          <p className="text-sm" style={{ color: 'var(--cream)' }}>
             Couldn’t load this photo.
           </p>
-          <p className="text-xs" style={{ color: '#A89070' }}>
+          <p className="text-xs" style={{ color: 'var(--cream-muted)' }}>
             No view was used. Check your connection and try again.
           </p>
           <button
@@ -2049,7 +2043,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
                 style={{
                   background: 'rgba(30,21,8,0.9)',
                   border: '1px solid rgba(196,131,42,0.45)',
-                  color: '#F0E0C0',
+                  color: 'var(--cream)',
                 }}
               >
                 {remainingViewsLabel(meta.remaining, meta.max)} · closes in {secondsLeft}s

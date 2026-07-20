@@ -41,9 +41,9 @@ export function SilhouetteAvatar({
         opacity={variant === "map" ? 0.95 : 0.85}
         xmlns="http://www.w3.org/2000/svg"
       >
-        {/* Classical bust — head + shoulders, profile-facing */}
-        <circle cx="12" cy="9" r="4" />
-        <path d="M3 22 L3 18 C3 14.5 7 13 12 13 C17 13 21 14.5 21 18 L21 22 Z" />
+        {/* Classical bust — round head + broad shoulders */}
+        <circle cx="12" cy="8.5" r="4.25" />
+        <path d="M4 22 V16.5 C4 14.2 6.2 13 9 13 H15 C17.8 13 20 14.2 20 16.5 V22 Z" />
       </svg>
     </div>
   );

@@ -68,7 +68,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           }`}
         >
           {!isSidebar ? (
-            <h2 className="text-xl font-bold text-[#F0E0C0]">Messages</h2>
+            <h2 className="text-xl font-bold text-[var(--cream)]">Messages</h2>
           ) : (
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)]">
@@ -81,7 +81,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             <button
               type="button"
               onClick={() => setGroupOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl border border-[#C4832A]/35 bg-[#C4832A]/15 px-3 py-2 text-xs font-semibold text-[#F0E0C0] transition-all hover:bg-[#C4832A]/25 active:scale-95"
+              className="flex items-center gap-1.5 rounded-xl border border-[#C4832A]/35 bg-[#C4832A]/15 px-3 py-2 text-xs font-semibold text-[var(--cream)] transition-all hover:bg-[#C4832A]/25 active:scale-95"
             >
               <GroupPlusIcon className="h-4 w-4" />
               {isSidebar ? 'Group' : 'New group'}
@@ -96,7 +96,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             {[...Array(5)].map((_, i) => (
               <div
                 key={i}
-                className={`animate-pulse rounded-2xl border border-[#3D2B0E] bg-[#1E1508] ${
+                className={`animate-pulse rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] ${
                   isSidebar ? 'h-16' : 'h-[70px]'
                 }`}
               />
@@ -110,7 +110,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[rgba(196,131,42,0.08)]">
               <ChatIcon className="h-8 w-8 text-[#C4832A]/60" />
             </div>
-            <p className="mb-1 text-[15px] font-extrabold text-[#F0E0C0]">No conversations yet</p>
+            <p className="mb-1 text-[15px] font-extrabold text-[var(--cream)]">No conversations yet</p>
             <p className="mx-auto mb-5 max-w-xs text-sm leading-relaxed text-nn-muted">
               Match someone nearby, then open chat. Be direct. Consent first.
             </p>
