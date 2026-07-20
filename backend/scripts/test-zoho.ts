@@ -66,7 +66,7 @@ async function main() {
     console.log('--- sending test email ---');
     try {
       const info = await transporter.sendMail({
-        from: `"MenRush SMTP Test" <${from}>`,
+        from: { name: 'MenRush', address: from },
         to: to || from,
         subject: '[MenRush] SMTP smoke test',
         text: 'If you see this, Zoho SMTP from MenRush backend works.',
