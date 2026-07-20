@@ -48,7 +48,7 @@ export async function sendContactInquiryEmail(data: ContactFormInput): Promise<v
   `.trim();
 
   await transporter.sendMail({
-    from: `"MenRush Contact" <${from}>`,
+    from: { name: 'MenRush', address: from },
     to,
     replyTo: data.email,
     subject: `[MenRush] ${label}: ${data.name}`.slice(0, 200),
