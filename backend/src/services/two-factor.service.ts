@@ -73,6 +73,9 @@ export const twoFactorService = {
       [userId],
     );
 
+    const { trustedDeviceService } = await import('./trusted-device.service');
+    await trustedDeviceService.revokeAll(userId);
+
     return { ok: true };
   },
 
