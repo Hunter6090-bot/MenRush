@@ -24,6 +24,13 @@ MenRush is a full-stack monorepo: React 18 + Vite frontend (`frontend/`, port 51
 - **Discovery hides `@example.com` emails** unless `INCLUDE_E2E_FIXTURES=true`. Use non-example emails (e.g. `@menrushdemo.io`) for seed/test users you want to appear in Nearby.
 - **Nearby filters**: a user only appears if they have a non-empty `photo_url` (a generic avatar is auto-assigned on registration), `is_visible = true`, not ghosted, and within radius.
 
+### Optional integrations (env-gated; all degrade gracefully when unset)
+These activate only when their env vars are present. Credentials are provided via the Cursor Secrets panel (injected as env vars, which `dotenv` does not override, so injected values win over `.env`). Non-secret config lives in `backend/.env`.
+- **Mapbox** (discovery map): `VITE_MAPBOX_TOKEN` (frontend, read via `import.meta.env`; a `__SET_ME__` value counts as missing). Without it the Nearby **list** still works; only the map is blank.
+- **Email**: Resend is primary (`RESEND_API_KEY` secret + `RESEND_FROM_EMAIL`/`RESEND_REPLY_TO` config); Zoho SMTP is the contact-form/fallback path (`ZOHO_SMTP_PASS` secret + `ZOHO_SMTP_USER`/host/port config). `ZOHO_SMTP_USER` must match the mailbox the app password belongs to.
+- **ID-verification AI pre-checks**: `HF_TOKEN` (or `HUGGINGFACE_API_KEY`); models default to CLIP/TrOCR. Without it, basic checks run and AI validation is skipped.
+- **CCBill** (`CCBILL_*`): premium billing — intentionally left unconfigured.
+
 ### Lint / test / build
 - **Lint**: none configured (no ESLint in this repo).
 - **Build**: backend `npm run build` (tsc → `dist/`); frontend `npm run build` (brand-guard + tsc + vite build).
