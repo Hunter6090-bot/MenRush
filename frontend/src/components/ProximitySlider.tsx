@@ -36,6 +36,9 @@ export function ProximitySlider({
   const atMax = index >= RADIUS_OPTIONS.length - 1;
   const isMap = variant === 'map';
   const radiusLabel = formatRadiusFromKm(value, resolveDistanceUnitSystem());
+  const mapChip =
+    'border-[rgba(196,131,42,0.45)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] text-[#3D2B0E] shadow-md';
+  const cardChip = 'border-[var(--border-default)] bg-[var(--bg-card)]/90 text-[var(--cream)]';
 
   const setIndex = (next: number) => {
     const clamped = Math.max(0, Math.min(RADIUS_OPTIONS.length - 1, next));
@@ -49,8 +52,8 @@ export function ProximitySlider({
         aria-label="Decrease search radius"
         disabled={atMin}
         onClick={() => setIndex(index - 1)}
-        className={`flex shrink-0 items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--bg-card)]/90 font-black leading-none text-[var(--cream)] transition-colors enabled:hover:border-[var(--copper)] enabled:hover:text-[var(--copper)] disabled:opacity-35 ${
-          isMap ? 'h-9 w-9 text-lg' : 'h-8 w-8 text-lg'
+        className={`flex shrink-0 items-center justify-center rounded-full border font-black leading-none transition-colors enabled:hover:border-[var(--copper)] disabled:opacity-35 ${
+          isMap ? `h-9 w-9 text-lg ${mapChip}` : `h-8 w-8 text-lg ${cardChip}`
         }`}
       >
         −
@@ -75,19 +78,24 @@ export function ProximitySlider({
         aria-label="Increase search radius"
         disabled={atMax}
         onClick={() => setIndex(index + 1)}
-        className={`flex shrink-0 items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--bg-card)]/90 font-black leading-none text-[var(--cream)] transition-colors enabled:hover:border-[var(--copper)] enabled:hover:text-[var(--copper)] disabled:opacity-35 ${
-          isMap ? 'h-9 w-9 text-lg' : 'h-8 w-8 text-lg'
+        className={`flex shrink-0 items-center justify-center rounded-full border font-black leading-none transition-colors enabled:hover:border-[var(--copper)] disabled:opacity-35 ${
+          isMap ? `h-9 w-9 text-lg ${mapChip}` : `h-8 w-8 text-lg ${cardChip}`
         }`}
       >
         +
       </button>
+      {isMap ? (
+        <span className={`rounded-full border px-2.5 py-1.5 text-[11px] font-extrabold tabular-nums tracking-wide ${mapChip}`}>
+          {radiusLabel}
+        </span>
+      ) : null}
     </div>
   );
 
   if (isMap) {
     return (
       <div
-        className={`flex items-center gap-1.5 rounded-full border border-[var(--border-default)]/70 bg-[var(--bg-elevated)]/75 p-1.5 shadow-lg backdrop-blur-md ${className}`}
+        className={`flex items-center gap-1.5 rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_88%,transparent)] p-1.5 shadow-lg backdrop-blur-md ${className}`}
         data-testid="proximity-slider"
         aria-label={`Search radius ${radiusLabel}`}
       >
@@ -105,9 +113,7 @@ export function ProximitySlider({
         <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--cream-muted)]">
           Nearby radius
         </p>
-        <p className="text-[11px] font-black text-[var(--copper)] tabular-nums">
-          {radiusLabel}
-        </p>
+        <p className="text-[11px] font-black text-[var(--copper)] tabular-nums">{radiusLabel}</p>
       </div>
       {controls}
     </div>

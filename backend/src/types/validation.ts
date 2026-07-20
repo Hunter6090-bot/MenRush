@@ -81,12 +81,12 @@ export const LocationMessageSchema = z.object({
   lng: z.number().min(-180).max(180),
 });
 
-export const MEDIA_KINDS = ['image', 'audio'] as const;
-export const MESSAGE_MEDIA_KINDS = ['image', 'audio', 'location'] as const;
+export const MEDIA_KINDS = ['image', 'audio', 'video'] as const;
+export const MESSAGE_MEDIA_KINDS = ['image', 'audio', 'video', 'location'] as const;
 export const MediaMessageFormSchema = z.object({
   receiver_id: z.string().uuid(),
   kind: z.enum(MEDIA_KINDS),
-  /** Optional caption when sending an image. Ignored for audio. */
+  /** Optional caption when sending an image/video. Ignored for audio. */
   caption: z.string().max(500).optional(),
   /** Whether the image is disappearing (view-limited) vs. kept permanently. */
   disappearing: z
@@ -103,7 +103,7 @@ export const MediaMessageFormSchema = z.object({
    * the image is permanent. Capped to keep "disappearing" meaningful.
    */
   max_views: z.coerce.number().int().min(1).max(99).optional(),
-  /** Duration in ms — required for audio kind. */
+  /** Duration in ms — required for audio/video kinds. */
   duration_ms: z.coerce.number().int().min(0).max(180_000).optional(),
 });
 

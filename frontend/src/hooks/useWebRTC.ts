@@ -284,20 +284,36 @@ export function useWebRTC() {
     const stream = localStreamRef.current;
     if (!pc || !stream || isSwitchingCamera) return;
 
+    const prevFacing = facingMode;
     const nextFacing: CameraFacing = facingMode === 'user' ? 'environment' : 'user';
     const oldVideoTrack = stream.getVideoTracks()[0];
     const wasEnabled = oldVideoTrack?.enabled ?? true;
 
     setIsSwitchingCamera(true);
     try {
-      const newTrack = await acquireVideoTrackForFacing(nextFacing);
+      // Must release the open lens before Android Chrome will honor facingMode.
+      if (oldVideoTrack) {
+        stream.removeTrack(oldVideoTrack);
+      }
+      const newTrack = await acquireVideoTrackForFacing(nextFacing, {
+        stopTrackFirst: oldVideoTrack ?? null,
+      });
       newTrack.enabled = wasEnabled;
       const nextStream = await replaceLocalVideoTrack(pc, stream, newTrack);
       localStreamRef.current = nextStream;
       setLocalStream(nextStream);
       setFacingMode(nextFacing);
     } catch {
-      /* keep current camera if switch fails */
+      try {
+        const restored = await acquireVideoTrackForFacing(prevFacing);
+        restored.enabled = wasEnabled;
+        const nextStream = await replaceLocalVideoTrack(pc, stream, restored);
+        localStreamRef.current = nextStream;
+        setLocalStream(nextStream);
+        setFacingMode(prevFacing);
+      } catch {
+        /* keep stream without video if both fail */
+      }
     } finally {
       setIsSwitchingCamera(false);
     }

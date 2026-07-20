@@ -1,9 +1,7 @@
-import { useState } from 'react';
 import type { NearbyUser } from './ProfileCard';
 import { SilhouetteAvatar } from './SilhouetteAvatar';
 import { VerifiedBadge } from './VerifiedBadge';
-import { getPhotoUrl } from './UserAvatar';
-import { fallbackAvatarForAge, resolveAssetUrl } from '../lib/assetUrl';
+import { useResolvingPhotoSrc } from './UserAvatar';
 import { formatActiveStatus, formatDistanceMiles, getTribeTag } from '../lib/discoveryFormat';
 
 interface NearbyProfileGridProps {
@@ -137,7 +135,6 @@ export function NearbyProfileGrid({
   return (
     <div className="grid grid-cols-2 gap-3" data-testid="nearby-profile-grid">
       {users.map((user) => {
-        const photo = getPhotoUrl(user.photo_url);
         const meta = `${formatDistanceMiles(user)} · ${getTribeTag(user)} · ${formatActiveStatus(user)}`;
         const liked = likedUserIds?.has(user.id) ?? false;
         const mutual = mutualUserIds?.has(user.id) ?? false;
@@ -159,21 +156,23 @@ export function NearbyProfileGrid({
                   name={user.name}
                   photoUrl={user.photo_url}
                   age={user.age}
-                  resolved={photo}
                 />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.92)] to-transparent px-2.5 pb-2 pt-8">
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent px-2.5 pb-2 pt-10">
                   <div className="flex items-center gap-1">
                     <span
-                      className={`h-2 w-2 shrink-0 rounded-full ${user.online ? 'bg-[var(--status-online)]' : 'bg-[var(--cream-muted)]'}`}
+                      className={`h-2 w-2 shrink-0 rounded-full ${user.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
                     />
-                    <span className="truncate text-[14px] font-bold text-[var(--cream)]">
+                    {/* Fixed light cream on photo gradient — theme tokens invert in light mode */}
+                    <span className="truncate text-[14px] font-bold text-[#FFF6E6]">
                       {user.name} {user.age}
                     </span>
                     {user.is_verified ? <VerifiedBadge size="sm" /> : null}
                   </div>
-                  <p className="mt-0.5 truncate text-[11px] text-[var(--cream-muted)]">{meta}</p>
+                  <p className="mt-0.5 truncate text-[11px] font-semibold text-[#F0E0C0]">
+                    {meta}
+                  </p>
                   {user.looking_for ? (
-                    <p className="mt-0.5 truncate text-[10px] font-semibold text-[#E0A14A]">
+                    <p className="mt-0.5 truncate text-[10px] font-bold text-[#E0A14A]">
                       {user.looking_for}
                     </p>
                   ) : null}
@@ -212,15 +211,14 @@ export function NearbyProfileGrid({
 function GridPhoto({
   name,
   age,
-  resolved,
+  photoUrl,
 }: {
   name: string;
   photoUrl?: string;
   age?: number;
   resolved?: string;
 }) {
-  const [src, setSrc] = useState(resolved);
-  const [failed, setFailed] = useState(false);
+  const { src, onError } = useResolvingPhotoSrc(photoUrl, age);
 
   if (!src) {
     return (
@@ -236,17 +234,7 @@ function GridPhoto({
       alt={name}
       className="h-full w-full object-cover"
       loading="lazy"
-      onError={() => {
-        if (failed) {
-          setSrc(undefined);
-          return;
-        }
-        setFailed(true);
-        setSrc(
-          resolveAssetUrl(fallbackAvatarForAge(age)) ??
-            resolveAssetUrl('/avatars/generic/05.svg'),
-        );
-      }}
+      onError={onError}
     />
   );
 }

@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import type { Root } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client';
 import { Link, useNavigate } from 'react-router-dom';
 import { EventDTO, Mood, profileMetaAPI, pulseAPI, usersAPI } from '../api/client';
-import { useLocationStore } from '../hooks/store';
+import { useLocationStore, useAuthStore } from '../hooks/store';
 import { NearbyUser } from '../components/ProfileCard';
 import { Layout } from '../components/Layout';
 import { PulseFab } from '../components/PulseFab';
@@ -128,6 +128,7 @@ const MAP_PAN_MIN_METERS = 50;
 const NEARBY_REFETCH_MIN_METERS = 80;
 
 export const Discover = () => {
+  const authUser = useAuthStore((s) => s.user);
   const [users, setUsers] = useState<NearbyUser[]>([]);
   const [likedUsers, setLikedUsers] = useState<Set<string>>(new Set());
   /** Mutual only — messaging requires match both ways. */
@@ -199,6 +200,7 @@ export const Discover = () => {
   const markersRef = useRef<Map<string, { marker: mapboxgl.Marker; root: Root; user: NearbyUser }>>(new Map());
   const selfMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const selfDotRef = useRef<HTMLDivElement | null>(null);
+  const selfRootRef = useRef<Root | null>(null);
   const navigate = useNavigate();
   const isDesktopLayout = useIsDesktopLayout();
 
@@ -761,8 +763,22 @@ export const Discover = () => {
     window.setTimeout(resizeMap, 500);
 
     const selfEl = document.createElement('div');
-    selfEl.className = 'map-self-dot';
+    selfEl.style.width = '48px';
+    selfEl.style.height = '48px';
     selfDotRef.current = selfEl;
+    const selfRoot = createRoot(selfEl);
+    selfRootRef.current = selfRoot;
+    selfRoot.render(
+      <MapMarker
+        user={{
+          id: 'self',
+          name: 'You',
+          photo_url: undefined,
+          isPulsing: false,
+        }}
+        size={48}
+      />,
+    );
     selfMarkerRef.current = new mapboxgl.Marker({ element: selfEl })
       .setLngLat([startCenter[1], startCenter[0]])
       .addTo(map);
@@ -781,6 +797,9 @@ export const Discover = () => {
       mapRef.current = null;
       selfMarkerRef.current = null;
       selfDotRef.current = null;
+      const root = selfRootRef.current;
+      selfRootRef.current = null;
+      if (root) setTimeout(() => root.unmount(), 0);
       setMapLoaded(false);
     };
     // Depend on "has center" not every GPS tick — later moves use easeTo in applyLiveGps.
@@ -801,6 +820,7 @@ export const Discover = () => {
         id: user.id,
         name: user.name,
         photo_url: user.photo_url,
+        age: user.age,
         isPulsing,
         isVerified: !!(user as any).is_verified,
       };
@@ -863,10 +883,27 @@ export const Discover = () => {
   }, [mapLoaded, lat, lng]);
 
   useEffect(() => {
-    const dot = selfDotRef.current;
-    if (!dot) return;
-    dot.className = pulseUntil ? 'map-self-dot map-self-dot--pulsing' : 'map-self-dot';
-  }, [pulseUntil]);
+    const root = selfRootRef.current;
+    if (!root || !mapLoaded) return;
+    const size = pulseUntil ? 56 : 48;
+    const el = selfDotRef.current;
+    if (el) {
+      el.style.width = `${size}px`;
+      el.style.height = `${size}px`;
+    }
+    root.render(
+      <MapMarker
+        user={{
+          id: authUser?.id ?? 'self',
+          name: authUser?.name ?? 'You',
+          photo_url: authUser?.photo_url,
+          age: authUser?.age,
+          isPulsing: !!pulseUntil,
+        }}
+        size={size}
+      />,
+    );
+  }, [mapLoaded, pulseUntil, authUser?.id, authUser?.name, authUser?.photo_url, authUser?.age]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1130,13 +1167,13 @@ export const Discover = () => {
               />
             </div>
           </div>
-          <div className="pointer-events-none absolute bottom-3 left-3 z-10 flex items-center gap-2 rounded-full border border-[var(--border-default)] bg-[rgba(30,21,8,0.85)] px-4 py-2 text-[13px] text-[var(--cream-muted)] backdrop-blur-sm">
-            <span className="inline-flex h-2 w-2 rounded-full bg-[var(--status-online)]" />
+          <div className="pointer-events-none absolute bottom-3 left-3 z-10 flex items-center gap-2 rounded-full border border-[rgba(196,131,42,0.45)] bg-[color-mix(in_srgb,#FFF8F0_90%,transparent)] px-4 py-2 text-[13px] font-semibold text-[#3D2B0E] shadow-md backdrop-blur-sm">
+            <span className="inline-flex h-2 w-2 rounded-full bg-[#3D7A2E]" />
             {nearbyCount} in your radius · {formatRadiusMiles(radius)}
             {nearbyCount === 0 && radius < MAX_RADIUS_KM - 0.5 ? (
               <button
                 type="button"
-                className="pointer-events-auto ml-1 font-extrabold text-[var(--copper)] underline-offset-2 hover:underline"
+                className="pointer-events-auto ml-1 font-extrabold text-[#B8732A] underline-offset-2 hover:underline"
                 onClick={handleRadiusCycle}
               >
                 Expand
@@ -1230,7 +1267,7 @@ export const Discover = () => {
                       setMapPanel(mapPanelMode === 'expanded' ? 'default' : 'expanded')
                     }
                     data-testid="map-expand-toggle"
-                    className="rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[var(--cream)] shadow-md backdrop-blur-md"
+                    className="rounded-full border border-[rgba(196,131,42,0.45)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#3D2B0E] shadow-md backdrop-blur-md"
                   >
                     {mapPanelMode === 'expanded' ? 'Shrink map' : 'Expand map'}
                   </button>
@@ -1238,7 +1275,7 @@ export const Discover = () => {
                     type="button"
                     onClick={() => setMapPanel('hidden')}
                     data-testid="map-hide"
-                    className="rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)] shadow-md backdrop-blur-md"
+                    className="rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#5C4A32] shadow-md backdrop-blur-md"
                   >
                     Hide map
                   </button>
@@ -1247,8 +1284,8 @@ export const Discover = () => {
             ) : null}
 
             {mapPanelMode !== 'hidden' ? (
-              <div className="pointer-events-none absolute bottom-10 left-3 z-10 flex items-center gap-2 rounded-full border border-[var(--border-default)] bg-[rgba(30,21,8,0.85)] px-3 py-1.5 text-[12px] text-[var(--cream-muted)] backdrop-blur-sm">
-                <span className="inline-flex h-2 w-2 rounded-full bg-[var(--status-online)]" />
+              <div className="pointer-events-none absolute bottom-10 left-3 z-10 flex items-center gap-2 rounded-full border border-[rgba(196,131,42,0.45)] bg-[color-mix(in_srgb,#FFF8F0_90%,transparent)] px-3 py-1.5 text-[12px] font-semibold text-[#3D2B0E] shadow-md backdrop-blur-sm">
+                <span className="inline-flex h-2 w-2 rounded-full bg-[#3D7A2E]" />
                 {nearbyCount} nearby · {formatRadiusMiles(radius)}
               </div>
             ) : null}
@@ -1271,9 +1308,9 @@ export const Discover = () => {
                 className="absolute inset-x-0 bottom-0 z-20 flex cursor-grab touch-none flex-col items-center active:cursor-grabbing"
                 style={{ touchAction: 'none' }}
               >
-                <div className="flex w-full flex-col items-center bg-gradient-to-t from-[rgba(13,10,6,0.85)] to-transparent pb-2 pt-6">
-                  <span className="mb-1 h-1 w-10 rounded-full bg-[var(--cream-muted)]/70" />
-                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--cream-muted)]">
+                <div className="flex w-full flex-col items-center bg-gradient-to-t from-[rgba(13,10,6,0.75)] via-[rgba(13,10,6,0.35)] to-transparent pb-2 pt-6">
+                  <span className="mb-1 h-1.5 w-10 rounded-full bg-[#F0E0C0]/90 shadow-sm" />
+                  <span className="rounded-full bg-[color-mix(in_srgb,#FFF8F0_88%,transparent)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#3D2B0E]">
                     Swipe up to hide · down to enlarge
                   </span>
                 </div>

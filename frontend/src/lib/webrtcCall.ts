@@ -40,7 +40,14 @@ export async function getIceServers(): Promise<RTCIceServer[]> {
 }
 
 export function videoConstraintsForFacing(facingMode: CameraFacing): MediaTrackConstraints {
-  return { ...MOBILE_VIDEO_CONSTRAINTS, facingMode };
+  // Prefer exact on mobile so Android Chrome does not soft-match the current lens.
+  if (isMobileCallDevice()) {
+    return {
+      ...MOBILE_VIDEO_CONSTRAINTS,
+      facingMode: { exact: facingMode },
+    };
+  }
+  return { ...MOBILE_VIDEO_CONSTRAINTS, facingMode: { ideal: facingMode } };
 }
 
 export function isMobileCallDevice(): boolean {
@@ -60,6 +67,23 @@ export async function canFlipCamera(): Promise<boolean> {
   }
 }
 
+async function pickDeviceIdForFacing(facingMode: CameraFacing): Promise<string | undefined> {
+  if (!navigator.mediaDevices?.enumerateDevices) return undefined;
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cams = devices.filter((d) => d.kind === 'videoinput');
+    if (cams.length < 2) return undefined;
+    const needle = facingMode === 'environment' ? /back|rear|environment|world/i : /front|user|face/i;
+    const match = cams.find((d) => needle.test(d.label));
+    if (match?.deviceId) return match.deviceId;
+    // Heuristic: many Androids list front first, rear second.
+    if (facingMode === 'environment' && cams.length >= 2) return cams[cams.length - 1]?.deviceId;
+    return cams[0]?.deviceId;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function acquireLocalMedia(facingMode: CameraFacing = 'user'): Promise<MediaStream> {
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
     throw new Error('insecure_media_context');
@@ -70,7 +94,7 @@ export async function acquireLocalMedia(facingMode: CameraFacing = 'user'): Prom
       video: videoConstraintsForFacing(facingMode),
       audio: { echoCancellation: true, noiseSuppression: true },
     },
-    { video: { facingMode }, audio: true },
+    { video: { facingMode: { ideal: facingMode } }, audio: true },
     { video: true, audio: true },
   ];
 
@@ -87,15 +111,37 @@ export async function acquireLocalMedia(facingMode: CameraFacing = 'user'): Prom
   throw lastError ?? new Error('media_unavailable');
 }
 
-export async function acquireVideoTrackForFacing(facingMode: CameraFacing): Promise<MediaStreamTrack> {
+/**
+ * Acquire a video track for the requested facing mode.
+ * Stops any prior track first (caller) — Android often ignores facingMode while the
+ * previous camera is still open. Prefer exact facingMode, then deviceId, then ideal.
+ */
+export async function acquireVideoTrackForFacing(
+  facingMode: CameraFacing,
+  options?: { stopTrackFirst?: MediaStreamTrack | null },
+): Promise<MediaStreamTrack> {
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
     throw new Error('insecure_media_context');
   }
 
+  // Release the current lens before requesting another — critical on Samsung Chrome.
+  const prior = options?.stopTrackFirst;
+  if (prior) {
+    try {
+      prior.stop();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const deviceId = await pickDeviceIdForFacing(facingMode);
   const attempts: MediaStreamConstraints[] = [
     { video: videoConstraintsForFacing(facingMode), audio: false },
-    { video: { facingMode }, audio: false },
-    { video: true, audio: false },
+    { video: { facingMode: { exact: facingMode } }, audio: false },
+    ...(deviceId
+      ? [{ video: { deviceId: { exact: deviceId } }, audio: false } as MediaStreamConstraints]
+      : []),
+    { video: { facingMode: { ideal: facingMode } }, audio: false },
   ];
 
   let lastError: unknown;
@@ -104,11 +150,23 @@ export async function acquireVideoTrackForFacing(facingMode: CameraFacing): Prom
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       const track = stream.getVideoTracks()[0];
       stream.getAudioTracks().forEach((audioTrack) => audioTrack.stop());
-      if (track) return track;
+      if (track) {
+        // Confirm we actually flipped when labels are available.
+        const label = track.label || '';
+        if (label && facingMode === 'environment' && /front|user|face/i.test(label) && !/back|rear|environment/i.test(label)) {
+          track.stop();
+          continue;
+        }
+        if (label && facingMode === 'user' && /back|rear|environment|world/i.test(label) && !/front|user|face/i.test(label)) {
+          track.stop();
+          continue;
+        }
+        return track;
+      }
     } catch (error) {
       lastError = error;
       const name = (error as { name?: string }).name;
-      if (name === 'NotAllowedError' || name === 'NotFoundError') break;
+      if (name === 'NotAllowedError') break;
     }
   }
   throw lastError ?? new Error('media_unavailable');
@@ -128,11 +186,13 @@ export async function replaceLocalVideoTrack(
     pc.addTrack(newTrack, stream);
   }
 
-  if (oldTrack) {
+  if (oldTrack && oldTrack !== newTrack && oldTrack.readyState !== 'ended') {
     stream.removeTrack(oldTrack);
     oldTrack.stop();
   }
-  stream.addTrack(newTrack);
+  if (!stream.getVideoTracks().includes(newTrack)) {
+    stream.addTrack(newTrack);
+  }
 
   return new MediaStream(stream.getTracks());
 }

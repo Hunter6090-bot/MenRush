@@ -235,7 +235,7 @@ export const pulseAPI = {
   stop: () => apiClient.post<{ ok: true }>('/pulse/stop'),
 };
 
-export type MediaKind = 'image' | 'audio';
+export type MediaKind = 'image' | 'audio' | 'video';
 export type MessageMediaKind = MediaKind | 'location';
 
 export interface MessageDTO {
@@ -296,7 +296,9 @@ export const messagesAPI = {
     const filename =
       file instanceof File
         ? file.name
-        : `${opts.kind}-${Date.now()}.${opts.kind === 'audio' ? 'webm' : 'jpg'}`;
+        : `${opts.kind}-${Date.now()}.${
+            opts.kind === 'audio' ? 'webm' : opts.kind === 'video' ? 'webm' : 'jpg'
+          }`;
     fd.append('media', file, filename);
     return apiClient.post<MessageDTO>('/messages/media', fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
