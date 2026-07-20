@@ -15,6 +15,7 @@ import {
   THEME_CHANGED_EVENT,
   type ThemePreference,
 } from '../lib/theme';
+import { clearDeviceTrustToken } from '../lib/deviceTrust';
 
 const RADIUS_KEY = 'menrush_default_radius_km';
 
@@ -201,6 +202,7 @@ export const Settings = () => {
         current_password: currentPassword,
         new_password: newPassword,
       });
+      clearDeviceTrustToken();
       setPwSuccess('Password updated.');
       setCurrentPassword('');
       setNewPassword('');
