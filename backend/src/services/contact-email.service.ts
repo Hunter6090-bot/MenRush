@@ -1,7 +1,6 @@
 import type { ContactFormInput } from '../types/validation';
 import {
-  getMailer,
-  getMailerFromAddress,
+  sendTransactionalEmail,
   MailerNotConfiguredError,
 } from './mailer.service';
 
@@ -28,9 +27,7 @@ function escapeHtml(s: string): string {
 export const ContactEmailNotConfiguredError = MailerNotConfiguredError;
 
 export async function sendContactInquiryEmail(data: ContactFormInput): Promise<void> {
-  const transporter = getMailer();
   const to = (process.env.CONTACT_TO_EMAIL || 'privacy@menrush.com').trim();
-  const from = getMailerFromAddress();
   const label = ENQUIRY_LABEL[data.enquiryType];
 
   const textBody = [
@@ -47,8 +44,10 @@ export async function sendContactInquiryEmail(data: ContactFormInput): Promise<v
     <pre style="font-family:system-ui,sans-serif;white-space:pre-wrap">${escapeHtml(data.message)}</pre>
   `.trim();
 
-  await transporter.sendMail({
-    from: `"MenRush Contact" <${from}>`,
+  // Prefer Resend (verified menrush.com domain); falls back to Zoho SMTP if
+  // that is ever configured. Reply-To is the submitter so the team can reply
+  // directly from the notification.
+  await sendTransactionalEmail({
     to,
     replyTo: data.email,
     subject: `[MenRush] ${label}: ${data.name}`.slice(0, 200),

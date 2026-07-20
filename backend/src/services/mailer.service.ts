@@ -92,6 +92,8 @@ export interface SendEmailParams {
   subject: string;
   html: string;
   text?: string;
+  /** Overrides the default RESEND_REPLY_TO (e.g. contact form → reply to the sender). */
+  replyTo?: string;
 }
 
 export interface EmailStatus {
@@ -190,7 +192,7 @@ async function sendViaZohoSmtp(params: SendEmailParams): Promise<{ id: string }>
     process.env.CONTACT_FROM_EMAIL ||
     getMailerFromAddress()
   ).trim();
-  const replyTo = (process.env.RESEND_REPLY_TO || 'hello@menrush.com').trim();
+  const replyTo = (params.replyTo || process.env.RESEND_REPLY_TO || 'hello@menrush.com').trim();
   const recipients = Array.isArray(params.to) ? params.to : [params.to];
   const text = params.text || stripHtmlToText(params.html);
 
@@ -272,7 +274,7 @@ export async function sendWaitlistCampaignEmail(
 
 export async function sendEmail(params: SendEmailParams): Promise<{ id: string }> {
   const from = process.env.RESEND_FROM_EMAIL?.trim();
-  const replyTo = process.env.RESEND_REPLY_TO?.trim();
+  const replyTo = params.replyTo?.trim() || process.env.RESEND_REPLY_TO?.trim();
 
   if (!from) {
     throw new Error('[mailer] RESEND_FROM_EMAIL is not set');
