@@ -91,6 +91,9 @@ export const authAPI = {
   resetPassword: (data: { token: string; password: string }) => apiClient.post('/auth/reset-password', data),
   changePassword: (data: { current_password: string; new_password: string }) =>
     apiClient.post('/auth/change-password', data),
+  getAccount: () => apiClient.get<{ email: string }>('/auth/account'),
+  changeEmail: (data: { current_password: string; new_email: string }) =>
+    apiClient.post<{ ok: boolean; email: string; message: string }>('/auth/change-email', data),
 };
 
 export const betaAPI = {

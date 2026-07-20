@@ -72,7 +72,7 @@ export const MessagingHub = () => {
           </div>
         </aside>
 
-        <section className="flex min-w-0 flex-1 flex-col bg-[#0D0A06]">
+        <section className="flex min-w-0 flex-1 flex-col bg-[var(--bg-primary)]">
           {tab === 'messages' ? (
             otherId ? (
               <Messages embedded />

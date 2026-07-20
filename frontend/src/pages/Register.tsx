@@ -287,7 +287,7 @@ export const Register = () => {
               <Link to="/privacy" className={`${publicLinkClass} underline-offset-2 hover:underline`}>
                 Privacy Policy
               </Link>
-              , including live location sharing with other verified members.
+              , including sharing your location for Nearby discovery.
             </span>
           </label>
 

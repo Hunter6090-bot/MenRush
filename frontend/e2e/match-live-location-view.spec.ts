@@ -23,8 +23,8 @@ async function authenticate(context: BrowserContext, result: { token: string; us
   }, result);
 }
 
-test.describe('match live location in chat', () => {
-  test('collapsed bar visible and expands to full map', async ({ browser }) => {
+test.describe('chat location privacy', () => {
+  test('no continuous live pin bar; one-shot send location remains', async ({ browser }) => {
     const auth = await login(ALICE.email);
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
     await authenticate(ctx, auth);
@@ -32,16 +32,14 @@ test.describe('match live location in chat', () => {
 
     await page.goto(`/messages/${BOB.id}`);
 
-    const bar = page.getByTestId('match-live-location-bar');
-    await expect(bar).toBeVisible({ timeout: 15000 });
-    await expect(bar.getByText(/Live location/i)).toBeVisible();
-    await expect(bar.getByText(/Bob is/i)).toBeVisible();
-    await expect(bar.getByText(/Show map/i)).toBeVisible();
+    // Continuous live tracking UI must be gone.
+    await expect(page.getByTestId('match-live-location-bar')).toHaveCount(0);
+    await expect(page.getByTestId('match-live-location-map')).toHaveCount(0);
 
-    await bar.getByRole('button', { name: /Show map/i }).click();
-    await expect(page.getByTestId('match-live-location-map')).toBeVisible();
-    await expect(bar.getByText(/Get directions/i)).toBeVisible();
-    await expect(bar.getByText(/Open in maps/i)).toBeVisible();
+    // WhatsApp-style one-shot current location send stays available.
+    await expect(page.getByRole('button', { name: /Send current location/i })).toBeVisible({
+      timeout: 15000,
+    });
 
     await ctx.close();
   });

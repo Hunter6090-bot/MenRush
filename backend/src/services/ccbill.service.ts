@@ -18,10 +18,13 @@ export class CCBillNotConfiguredError extends Error {
   }
 }
 
+// Locked display/checkout price for now — do not read from env until pricing is revisited.
+const PREMIUM_PRICE = '6.99';
+
 const TIER_PRICING = {
-  initialPrice: process.env.CCBILL_PREMIUM_INITIAL_PRICE || '4.99',
+  initialPrice: PREMIUM_PRICE,
   initialPeriod: Number(process.env.CCBILL_PREMIUM_INITIAL_PERIOD_DAYS || '30'),
-  recurringPrice: process.env.CCBILL_PREMIUM_RECURRING_PRICE || '4.99',
+  recurringPrice: PREMIUM_PRICE,
   recurringPeriod: Number(process.env.CCBILL_PREMIUM_RECURRING_PERIOD_DAYS || '30'),
 };
 

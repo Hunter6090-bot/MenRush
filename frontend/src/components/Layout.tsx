@@ -157,7 +157,7 @@ function LayoutInner({ children }: LayoutProps) {
                 <NotificationDot
                   count={notificationUnread}
                   visible={notificationUnread > 0}
-                  className="-top-0.5 -right-0.5 min-w-[16px] h-4 text-[9px] bg-[var(--copper)] border-[#0D0A06]"
+                  className="-top-0.5 -right-0.5 min-w-[16px] h-4 text-[9px] bg-[var(--copper)] border-[var(--bg-primary)]"
                 />
               </Link>
             </div>
@@ -224,7 +224,7 @@ function LayoutInner({ children }: LayoutProps) {
           className="lg:hidden fixed bottom-0 left-0 right-0 z-50 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] pt-2"
           aria-label="Primary"
         >
-          <div className="flex items-stretch rounded-[1.35rem] border border-[var(--border-default)] bg-[#12100C]/95 shadow-[0_12px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+          <div className="flex items-stretch rounded-[1.35rem] border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-elevated)_95%,transparent)] shadow-[var(--shadow-lg)] backdrop-blur-xl">
             {mobileTabs.map((item) => {
               const active = isNavActive(location.pathname, item.to);
               const badge = badgeFor(item, unreadCount, notificationUnread, matchCount);
@@ -244,7 +244,7 @@ function LayoutInner({ children }: LayoutProps) {
                       count={badge}
                       visible={badge > 0}
                       data-testid={`badge-mobile-${item.to.replace(/\//g, '')}`}
-                      className="-top-2 -right-2.5 min-w-[16px] h-[16px] text-[9px] bg-[var(--copper)] border-[#12100C]"
+                      className="-top-2 -right-2.5 min-w-[16px] h-[16px] text-[9px] bg-[var(--copper)] border-[var(--bg-elevated)]"
                     />
                   </span>
                   <span className="text-[9px] font-bold leading-none tracking-wide">

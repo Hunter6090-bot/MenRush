@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Generic avatar">
   <defs>
-    <radialGradient id="g9" cx="32%" cy="28%" r="72%">
+    <radialGradient id="g9" cx="34%" cy="28%" r="72%">
       <stop offset="0%" stop-color="#D4943B"/>
       <stop offset="100%" stop-color="#6B4423"/>
     </radialGradient>
   </defs>
   <circle cx="48" cy="48" r="48" fill="url(#g9)"/>
-  <g fill="#F0E0C0" opacity="0.88">
-    <circle cx="48" cy="36" r="5.2"/>
-    <path d="M16 88 C16 68 30 17.0 48 17.0 C66 17.0 80 68 80 88 Z"/>
+  <g fill="#F0E0C0" opacity="0.92">
+    <circle cx="48" cy="32.5" r="17.0"/>
+    <path d="M15.5 94 C15.5 67.0 19.5 59.0 38.6 59.0 L57.4 59.0 C76.5 59.0 80.5 67.0 80.5 94 Z"/>
   </g>
 </svg>
