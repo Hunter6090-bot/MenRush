@@ -46,7 +46,10 @@ export function NearbyProfileGrid({
 }: NearbyProfileGridProps) {
   if (loading && users.length === 0) {
     return (
-      <div className="grid grid-cols-2 gap-3" data-testid="nearby-profile-grid-loading">
+      <div
+        className="grid grid-cols-2 gap-3 lg:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] lg:gap-3.5"
+        data-testid="nearby-profile-grid-loading"
+      >
         {[...Array(6)].map((_, i) => (
           <div key={i} className="aspect-square animate-pulse rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]" />
         ))}
@@ -133,7 +136,11 @@ export function NearbyProfileGrid({
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3" data-testid="nearby-profile-grid">
+    {/* Mobile/tablet (Discover lg:hidden sheet): exactly 2 per row. Desktop sidebar: denser auto-fill. */}
+    <div
+      className="grid grid-cols-2 gap-3 lg:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] lg:gap-3.5"
+      data-testid="nearby-profile-grid"
+    >
       {users.map((user) => {
         const meta = `${formatDistanceMiles(user)} · ${getTribeTag(user)} · ${formatActiveStatus(user)}`;
         const liked = likedUserIds?.has(user.id) ?? false;
