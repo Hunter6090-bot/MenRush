@@ -21,6 +21,11 @@ import { BETA_INVITE_REQUIRED } from '../lib/betaInvite';
 import { FEATURES } from '../lib/featureFlags';
 import { PasswordInput } from '../components/PasswordInput';
 import { loginErrorMessage } from '../lib/authErrors';
+import {
+  clearDeviceTrustToken,
+  getDeviceTrustToken,
+  saveDeviceTrustToken,
+} from '../lib/deviceTrust';
 
 type LoginUser = {
   email?: string;
@@ -37,7 +42,7 @@ function routeAfterLogin(navigate: ReturnType<typeof useNavigate>, user: LoginUs
   } else if (user?.verification_status === 'rejected') {
     navigate('/verify/rejected');
   } else {
-    navigate('/verify');
+    navigate('/verify/id');
   }
 }
 
@@ -45,6 +50,7 @@ export const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [trustThisDevice, setTrustThisDevice] = useState(true);
   const [pendingToken, setPendingToken] = useState<string | null>(null);
   const [pendingUser, setPendingUser] = useState<LoginUser | null>(null);
   const [error, setError] = useState('');
@@ -63,23 +69,39 @@ export const Login = () => {
         const res = await authAPI.verifyTwoFactorLogin({
           pendingToken,
           code: twoFactorCode,
+          trustThisDevice,
         });
+        const trustEmail = pendingUser?.email || email;
+        if (res.data.deviceTrustToken && trustEmail) {
+          saveDeviceTrustToken(trustEmail, res.data.deviceTrustToken);
+        } else if (!trustThisDevice) {
+          clearDeviceTrustToken();
+        }
         setAuth(res.data.user, res.data.token);
         routeAfterLogin(navigate, res.data.user, nextPath);
         return;
       }
 
+      const normalizedEmail = email.trim().toLowerCase();
+      const deviceTrustToken = getDeviceTrustToken(normalizedEmail);
       const res = await authAPI.login({
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         password,
+        ...(deviceTrustToken ? { deviceTrustToken } : {}),
       });
       if (res.data.requires2fa) {
+        // Stale or revoked trust token — drop it so we don't keep sending it.
+        if (deviceTrustToken) clearDeviceTrustToken();
         setPendingToken(res.data.pendingToken);
         setPendingUser(res.data.user);
         setTwoFactorCode('');
+        setTrustThisDevice(true);
         return;
       }
 
+      if (res.data.deviceTrustToken) {
+        saveDeviceTrustToken(normalizedEmail, res.data.deviceTrustToken);
+      }
       setAuth(res.data.user, res.data.token);
       routeAfterLogin(navigate, res.data.user, nextPath);
     } catch (err: unknown) {
@@ -166,12 +188,33 @@ export const Login = () => {
                   setPendingToken(null);
                   setPendingUser(null);
                   setTwoFactorCode('');
+                  setTrustThisDevice(true);
                   setError('');
                 }}
                 className="self-start text-sm font-semibold text-[var(--cream-muted)] transition-colors hover:text-[#C4832A]"
               >
                 Use a different account
               </button>
+              <label
+                htmlFor="login-trust-device"
+                className="mt-1 flex cursor-pointer items-start gap-3 rounded-xl border border-[rgba(196,131,42,0.22)] bg-[rgba(196,131,42,0.06)] px-3.5 py-3"
+              >
+                <input
+                  id="login-trust-device"
+                  type="checkbox"
+                  checked={trustThisDevice}
+                  onChange={(e) => setTrustThisDevice(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-[#C4832A]/50 accent-[#C4832A]"
+                />
+                <span className="text-left">
+                  <span className="block text-sm font-semibold text-[var(--cream)]">
+                    Trust this device
+                  </span>
+                  <span className="mt-0.5 block text-[12px] leading-snug text-[var(--cream-muted)]">
+                    Skip the authenticator code on this browser for 30 days. Password still required.
+                  </span>
+                </span>
+              </label>
             </div>
           )}
 

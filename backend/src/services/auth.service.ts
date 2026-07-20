@@ -201,6 +201,19 @@ export const authService = {
     };
 
     if (user.totp_enabled) {
+      const { trustedDeviceService } = await import('./trusted-device.service');
+      const trusted = await trustedDeviceService.isTrusted(user.id, data.deviceTrustToken);
+      if (trusted) {
+        return {
+          requires2fa: false as const,
+          skipped2fa: true as const,
+          user: publicUser,
+          token: signToken(user.id),
+          // Echo back so client keeps the same trust token (already valid).
+          deviceTrustToken: data.deviceTrustToken,
+        };
+      }
+
       return {
         requires2fa: true as const,
         pendingToken: this.signTwoFactorPendingToken(user.id),
@@ -263,7 +276,11 @@ export const authService = {
     return { userId: payload.userId };
   },
 
-  async completeTwoFactorLogin(pendingToken: string, code: string) {
+  async completeTwoFactorLogin(
+    pendingToken: string,
+    code: string,
+    options?: { trustThisDevice?: boolean; userAgent?: string },
+  ) {
     const { userId } = this.verifyTwoFactorPendingToken(pendingToken);
     const { twoFactorService } = await import('./two-factor.service');
     const valid = await twoFactorService.verifyForLogin(userId, code);
@@ -283,6 +300,13 @@ export const authService = {
     }
 
     const user = result.rows[0];
+    let deviceTrustToken: string | undefined;
+    if (options?.trustThisDevice) {
+      const { trustedDeviceService } = await import('./trusted-device.service');
+      const created = await trustedDeviceService.create(userId, options.userAgent);
+      deviceTrustToken = created.rawToken;
+    }
+
     return {
       user: {
         id: user.id,
@@ -295,6 +319,7 @@ export const authService = {
         premium_tier: user.premium_tier ?? 'free',
       },
       token: signToken(user.id),
+      ...(deviceTrustToken ? { deviceTrustToken } : {}),
     };
   },
 
@@ -432,6 +457,9 @@ export const authService = {
     );
     await query(`UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1`, [tokenId]);
 
+    const { trustedDeviceService } = await import('./trusted-device.service');
+    await trustedDeviceService.revokeAll(userId);
+
     return { ok: true };
   },
 
@@ -462,6 +490,9 @@ export const authService = {
        WHERE user_id = $1 AND used_at IS NULL`,
       [userId],
     );
+
+    const { trustedDeviceService } = await import('./trusted-device.service');
+    await trustedDeviceService.revokeAll(userId);
 
     return { ok: true };
   },

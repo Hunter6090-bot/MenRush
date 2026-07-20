@@ -16,6 +16,8 @@ export const RegisterSchema = z.object({
 export const LoginSchema = z.object({
   email: normalizedEmail,
   password: z.string(),
+  /** Opaque trusted-device token from a prior "Trust this device" login. */
+  deviceTrustToken: z.string().min(32).max(128).optional(),
 });
 
 export const ForgotPasswordSchema = z.object({
@@ -49,6 +51,7 @@ export const TwoFactorCodeSchema = z.object({
 export const TwoFactorVerifyLoginSchema = z.object({
   pendingToken: z.string().min(1),
   code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code from your authenticator app'),
+  trustThisDevice: z.boolean().optional(),
 });
 
 export const ProfileSchema = z.object({

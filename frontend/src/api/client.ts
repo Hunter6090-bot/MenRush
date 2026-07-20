@@ -79,14 +79,32 @@ apiClient.interceptors.response.use(
 
 export const authAPI = {
   register: (data: unknown) => apiClient.post('/auth/register', data),
-  login: (data: { email: string; password: string }) => apiClient.post('/auth/login', data),
-  verifyTwoFactorLogin: (data: { pendingToken: string; code: string }) =>
-    apiClient.post('/auth/2fa/verify', data),
+  login: (data: { email: string; password: string; deviceTrustToken?: string }) =>
+    apiClient.post('/auth/login', data),
+  verifyTwoFactorLogin: (data: {
+    pendingToken: string;
+    code: string;
+    trustThisDevice?: boolean;
+  }) => apiClient.post('/auth/2fa/verify', data),
   getTwoFactorStatus: () => apiClient.get<{ enabled: boolean; enabledAt: string | null }>('/auth/2fa/status'),
   setupTwoFactor: () =>
     apiClient.post<{ secret: string; otpauthUrl: string }>('/auth/2fa/setup'),
   enableTwoFactor: (code: string) => apiClient.post('/auth/2fa/enable', { code }),
   disableTwoFactor: (code: string) => apiClient.post('/auth/2fa/disable', { code }),
+  listTrustedDevices: (currentToken?: string) =>
+    apiClient.get<{
+      devices: Array<{
+        id: string;
+        label: string | null;
+        lastUsedAt: string;
+        expiresAt: string;
+        createdAt: string;
+        isCurrent?: boolean;
+      }>;
+    }>('/auth/2fa/trusted-devices', {
+      headers: currentToken ? { 'X-Device-Trust-Token': currentToken } : undefined,
+    }),
+  revokeTrustedDevice: (id: string) => apiClient.delete(`/auth/2fa/trusted-devices/${id}`),
   forgotPassword: (data: { email: string }) => apiClient.post('/auth/forgot-password', data),
   resetPassword: (data: { token: string; password: string }) => apiClient.post('/auth/reset-password', data),
   changePassword: (data: { current_password: string; new_password: string }) =>

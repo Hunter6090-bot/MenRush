@@ -2,11 +2,24 @@ import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { authAPI } from '../api/client';
 import { PulseRing } from './PulseRing';
+import {
+  clearDeviceTrustToken,
+  getStoredDeviceTrustToken,
+} from '../lib/deviceTrust';
 
 type SetupState = {
   secret: string;
   otpauthUrl: string;
 } | null;
+
+type TrustedDevice = {
+  id: string;
+  label: string | null;
+  lastUsedAt: string;
+  expiresAt: string;
+  createdAt: string;
+  isCurrent?: boolean;
+};
 
 export function TwoFactorSettings() {
   const [enabled, setEnabled] = useState(false);
@@ -17,6 +30,21 @@ export function TwoFactorSettings() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<'idle' | 'setup' | 'disable'>('idle');
+  const [devices, setDevices] = useState<TrustedDevice[]>([]);
+  const [devicesLoading, setDevicesLoading] = useState(false);
+
+  const loadTrustedDevices = async () => {
+    setDevicesLoading(true);
+    try {
+      const current = getStoredDeviceTrustToken();
+      const res = await authAPI.listTrustedDevices(current);
+      setDevices(res.data.devices ?? []);
+    } catch {
+      setDevices([]);
+    } finally {
+      setDevicesLoading(false);
+    }
+  };
 
   const loadStatus = async () => {
     setLoading(true);
@@ -24,6 +52,11 @@ export function TwoFactorSettings() {
       const res = await authAPI.getTwoFactorStatus();
       setEnabled(!!res.data.enabled);
       setEnabledAt(res.data.enabledAt ?? null);
+      if (res.data.enabled) {
+        await loadTrustedDevices();
+      } else {
+        setDevices([]);
+      }
     } catch {
       setError('Could not load two-factor status.');
     } finally {
@@ -80,13 +113,29 @@ export function TwoFactorSettings() {
     setBusy(true);
     try {
       await authAPI.disableTwoFactor(code);
+      clearDeviceTrustToken();
       setEnabled(false);
       setEnabledAt(null);
+      setDevices([]);
       setMode('idle');
       setCode('');
       setSetup(null);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Invalid code. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const revokeDevice = async (device: TrustedDevice) => {
+    setError('');
+    setBusy(true);
+    try {
+      await authAPI.revokeTrustedDevice(device.id);
+      if (device.isCurrent) clearDeviceTrustToken();
+      await loadTrustedDevices();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Could not revoke device.');
     } finally {
       setBusy(false);
     }
@@ -256,6 +305,56 @@ export function TwoFactorSettings() {
             >
               {busy ? 'Preparing…' : 'Set up authenticator app'}
             </button>
+          )}
+        </div>
+      ) : null}
+
+      {enabled && mode === 'idle' ? (
+        <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)]/40 p-4">
+          <p className="text-[13px] font-semibold text-[var(--cream)]">Trusted devices</p>
+          <p className="mt-1 text-[12px] leading-relaxed text-[var(--cream-muted)]">
+            Browsers you chose to trust can skip the authenticator code for 30 days. Password is always required.
+          </p>
+          {devicesLoading ? (
+            <p className="mt-3 flex items-center gap-2 text-[12px] text-[var(--cream-muted)]">
+              <PulseRing size={14} /> Loading…
+            </p>
+          ) : devices.length === 0 ? (
+            <p className="mt-3 text-[12px] text-[var(--cream-muted)]">
+              No trusted devices yet. Check “Trust this device” the next time you enter an authenticator code.
+            </p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {devices.map((device) => (
+                <li
+                  key={device.id}
+                  className="flex items-start justify-between gap-3 rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)]/60 px-3 py-2.5"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-semibold text-[var(--cream)]">
+                      {device.label || 'Trusted browser'}
+                      {device.isCurrent ? (
+                        <span className="ml-2 text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--copper)]">
+                          This device
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-[var(--cream-muted)]">
+                      Last used {new Date(device.lastUsedAt).toLocaleDateString()} · Expires{' '}
+                      {new Date(device.expiresAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void revokeDevice(device)}
+                    className="shrink-0 text-[12px] font-semibold text-[#B0432E] transition-colors hover:text-[#D96A52] disabled:opacity-50"
+                  >
+                    Revoke
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       ) : null}
