@@ -405,6 +405,8 @@ export const Profile = () => {
                 <h2 className="text-2xl font-extrabold text-[var(--cream)]">{profile.name}</h2>
                 {(profile as ProfileData & { is_verified?: boolean }).is_verified ? (
                   <VerifiedBadge />
+                ) : (profile as ProfileData & { authenticity_status?: string }).authenticity_status === 'verified' ? (
+                  <VerifiedBadge level="authentic_person" />
                 ) : null}
               </div>
               <p className="mt-1 text-sm text-[var(--cream-muted)]">Age {profile.age}</p>

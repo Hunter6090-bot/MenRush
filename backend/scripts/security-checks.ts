@@ -28,7 +28,7 @@ async function rejectsWithCode(run: () => Promise<unknown>, code: string) {
   });
 }
 
-test('server-side verification rejects unverified accounts', async () => {
+test('legacy ID gate cannot deny unverified accounts', async () => {
   const prev = process.env.REQUIRE_ID_VERIFICATION;
   process.env.REQUIRE_ID_VERIFICATION = 'true';
   try {
@@ -36,14 +36,14 @@ test('server-side verification rejects unverified accounts', async () => {
       rows: [{ actor_verified: false }],
       rowCount: 1,
     }));
-    await rejectsWithCode(() => access.requireVerified('actor'), 'verification_required');
+    await access.requireVerified('actor');
   } finally {
     if (prev === undefined) delete process.env.REQUIRE_ID_VERIFICATION;
     else process.env.REQUIRE_ID_VERIFICATION = prev;
   }
 });
 
-test('interaction authorization enforces verification, bilateral blocks, and matches', async () => {
+test('interaction authorization enforces bilateral blocks and matches', async () => {
   const prev = process.env.REQUIRE_ID_VERIFICATION;
   process.env.REQUIRE_ID_VERIFICATION = 'true';
   try {
@@ -76,7 +76,7 @@ test('interaction authorization enforces verification, bilateral blocks, and mat
   }
 });
 
-test('profile visibility denies hidden, ghost, blocked, and unverified targets', async () => {
+test('profile visibility denies hidden, ghost, and blocked targets but permits optional-ID users', async () => {
   const prev = process.env.REQUIRE_ID_VERIFICATION;
   process.env.REQUIRE_ID_VERIFICATION = 'true';
   try {
@@ -98,14 +98,14 @@ test('profile visibility denies hidden, ghost, blocked, and unverified targets',
     await rejectsWithCode(() => access.assertProfileView('actor', 'target'), 'interaction_blocked');
 
     state = { ...state, blocked: false, target_verified: false };
-    await rejectsWithCode(() => access.assertProfileView('actor', 'target'), 'target_unavailable');
+    await access.assertProfileView('actor', 'target');
   } finally {
     if (prev === undefined) delete process.env.REQUIRE_ID_VERIFICATION;
     else process.env.REQUIRE_ID_VERIFICATION = prev;
   }
 });
 
-test('beta mode skips ID verification gate', async () => {
+test('ID verification remains optional with no legacy environment setting', async () => {
   const prev = process.env.REQUIRE_ID_VERIFICATION;
   delete process.env.REQUIRE_ID_VERIFICATION;
   try {

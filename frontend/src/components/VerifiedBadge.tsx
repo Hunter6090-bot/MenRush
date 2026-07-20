@@ -1,10 +1,11 @@
 interface VerifiedBadgeProps {
   size?: 'sm' | 'lg';
   className?: string;
+  level?: 'authentic_person' | 'identity_checked';
 }
 
-/** ID verified — free for all users, copper trust signal. */
-export function VerifiedBadge({ size = 'sm', className = '' }: VerifiedBadgeProps) {
+/** Precise trust claim — free for all users and separate from Premium. */
+export function VerifiedBadge({ size = 'sm', className = '', level = 'identity_checked' }: VerifiedBadgeProps) {
   const pad = size === 'lg' ? 'px-3 py-1.5 text-xs' : 'px-2 py-0.5 text-[10.5px]';
   const iconSize = size === 'lg' ? 13 : 11;
 
@@ -13,7 +14,7 @@ export function VerifiedBadge({ size = 'sm', className = '' }: VerifiedBadgeProp
       className={`inline-flex items-center gap-1 rounded-full bg-nn-copper/13 text-nn-copper border border-nn-copper/50 font-semibold tracking-wide ${pad} ${className}`}
     >
       <CheckIcon size={iconSize} />
-      ID verified
+      {level === 'identity_checked' ? 'Identity checked' : 'Authentic person'}
     </span>
   );
 }

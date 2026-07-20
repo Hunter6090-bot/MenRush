@@ -15,6 +15,7 @@ interface SelfieCaptureModalProps {
   filePrefix?: string;
   captureLabel?: string;
   aspectClassName?: string;
+  instruction?: string;
 }
 
 const SELFIE_CHECKS = [
@@ -140,6 +141,7 @@ function VerificationSelfieCapture({
   mirror = facingMode === 'user',
   ariaLabel = 'Live selfie verification',
   filePrefix = 'selfie',
+  instruction,
 }: SelfieCaptureModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -361,8 +363,8 @@ function VerificationSelfieCapture({
       <div className="border-t border-[#3D2B0E]/80 bg-[#0D0A06] px-4 py-4">
         <p className="mb-3 text-center text-xs leading-relaxed text-[var(--cream-muted)]">
           {phase === 'preview'
-            ? 'We will compare this live photo to your ID'
-            : 'Centre your face in the oval. Look straight at the camera.'}
+            ? instruction ? `Captured: ${instruction}` : 'We will compare this live photo to your ID'
+            : instruction || 'Centre your face in the oval. Look straight at the camera.'}
         </p>
 
         {phase === 'preview' ? (

@@ -43,6 +43,7 @@ import { notificationService } from './services/notification.service';
 import { messageService } from './services/message.service';
 import { accessControl } from './security/access';
 import { logResendMailerStatus } from './services/mailer.service';
+import { startVerificationRetentionWorker } from './services/verification/retention.worker';
 import { Sentry } from './observability/sentry';
 import { corsOrigin } from './security/cors';
 import { query } from './db';
@@ -477,6 +478,7 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   startPulseExpiryCron();
+  startVerificationRetentionWorker();
   // Optional: in-process drip worker. Prefer an external cron in production
   // (POST /api/waitlist/admin/run); only enable in-process when running a
   // single backend instance without separate scheduling.

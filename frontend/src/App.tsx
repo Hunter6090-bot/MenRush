@@ -27,6 +27,8 @@ import { Verify } from './pages/Verify';
 import { VerifyScan } from './pages/VerifyScan';
 import { VerifyPending } from './pages/VerifyPending';
 import { VerifyRejected } from './pages/VerifyRejected';
+import { VerificationCentre } from './pages/VerificationCentre';
+import { AuthenticityVerify } from './pages/AuthenticityVerify';
 import { Premium } from './pages/Premium';
 import { Events } from './pages/Events';
 import { HotSpots } from './pages/HotSpots';
@@ -76,7 +78,7 @@ function RequireVerified({
     savePostAuthRedirect(returnPath);
     if (user?.verification_status === 'pending') return <Navigate to="/verify/pending" replace />;
     if (user?.verification_status === 'rejected') return <Navigate to="/verify/rejected" replace />;
-    return <Navigate to="/verify" replace />;
+    return <Navigate to="/verify/id" replace />;
   }
   if (allowIncompleteProfile) return children;
   return <RequireProfileSetup>{children}</RequireProfileSetup>;
@@ -117,7 +119,7 @@ function AppEntry() {
   if (FEATURES.requireIdVerification && !user?.is_verified) {
     if (user?.verification_status === 'pending') return <Navigate to="/verify/pending" replace />;
     if (user?.verification_status === 'rejected') return <Navigate to="/verify/rejected" replace />;
-    return <Navigate to="/verify" replace />;
+    return <Navigate to="/verify/id" replace />;
   }
   // Signed-in home: Nearby (Discover). Profile setup is gated by RequireProfileSetup.
   return <Navigate to="/discover" replace />;
@@ -178,7 +180,9 @@ function AppShell() {
         <Route path="/safety" element={<Safety />} />
         <Route path="/guidelines" element={<CommunityGuidelines />} />
         <Route path="/help" element={<Help />} />
-        <Route path="/verify" element={<ProtectedRoute><Verify /></ProtectedRoute>} />
+        <Route path="/verify" element={<ProtectedRoute><VerificationCentre /></ProtectedRoute>} />
+        <Route path="/verify/id" element={<ProtectedRoute><Verify /></ProtectedRoute>} />
+        <Route path="/verify/authentic" element={<ProtectedRoute><AuthenticityVerify /></ProtectedRoute>} />
         <Route path="/verify/scan/:sessionId" element={<VerifyScan />} />
         <Route path="/verify/pending" element={<ProtectedRoute><VerifyPending /></ProtectedRoute>} />
         <Route path="/verify/rejected" element={<ProtectedRoute><VerifyRejected /></ProtectedRoute>} />

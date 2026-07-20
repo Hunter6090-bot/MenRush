@@ -116,8 +116,9 @@ export const authService = {
       }
     }
 
-    // Signup always creates an unverified account. ID + matching selfie verification
-    // is the only path to access the app. Set DEV_AUTO_VERIFY=true only for local dev.
+    // Signup records DOB/age as self-attested only. Government-ID verification is
+    // optional and must never be treated as the access gate. DEV_AUTO_VERIFY is
+    // retained only for local identity-flow fixtures.
     const autoVerify = process.env.DEV_AUTO_VERIFY === 'true';
 
     const client = await pool.connect();
@@ -132,9 +133,12 @@ export const authService = {
       const defaultAvatar = defaultGenericAvatarUrl(data.age);
 
       const result = await client.query(
-        `INSERT INTO users (id, email, password_hash, name, age, photo_url, is_verified, verification_status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         RETURNING id, email, name, age, photo_url, is_verified, verification_status`,
+        `INSERT INTO users (
+           id, email, password_hash, name, age, photo_url,
+           is_verified, verification_status, age_assurance_status
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'self_attested')
+         RETURNING id, email, name, age, photo_url, is_verified, verification_status,
+                   age_assurance_status, authenticity_status`,
         [
           id,
           data.email,

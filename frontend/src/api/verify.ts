@@ -1,6 +1,8 @@
 import { apiClient } from './client';
 
 export type VerificationStatus = 'unverified' | 'pending' | 'verified' | 'rejected';
+export type AgeAssuranceStatus = 'pending' | 'self_attested' | 'confirmed' | 'failed';
+export type TrustLevel = 'unconfirmed' | 'adult_confirmed' | 'authentic_person' | 'identity_checked';
 export type IdDocumentType = 'passport' | 'driving_license';
 
 export interface VerifyStatus {
@@ -9,6 +11,17 @@ export interface VerifyStatus {
   provider: string | null;
   verified_at: string | null;
   rejection_reason: string | null;
+  age_assurance_status: AgeAssuranceStatus;
+  age_assured_at: string | null;
+  authenticity_status: VerificationStatus;
+  authenticity_verified_at: string | null;
+  trust_level: TrustLevel;
+}
+
+export interface AuthenticityChallenge {
+  challenge_id: string;
+  prompts: string[];
+  expires_at: string;
 }
 
 export interface VerifySubmitResult {
@@ -73,6 +86,17 @@ export interface IdPrecheckResult {
 }
 
 export const verifyAPI = {
+  createAuthenticityChallenge: () =>
+    apiClient.post<AuthenticityChallenge>('/verify/authenticity/challenge'),
+  submitAuthenticityChallenge: (challengeId: string, frames: File[]) => {
+    const form = new FormData();
+    form.append('challenge_id', challengeId);
+    frames.forEach((frame, index) => form.append(`frame_${index}`, frame));
+    return apiClient.post<{ id: string; status: 'pending' }>(
+      '/verify/authenticity/submit',
+      form,
+    );
+  },
   precheck: (idImage: File, template: IdPrecheckTemplate) => {
     const form = new FormData();
     form.append('id_image', idImage);

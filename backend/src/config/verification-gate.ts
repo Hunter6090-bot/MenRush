@@ -1,11 +1,10 @@
 /**
- * ID verification hard gate.
+ * Legacy ID verification hard gate.
  *
- * Beta default: OFF. Users can register and use the app without verifying.
- * Verification code remains available for grand opening — only re-enable by
- * explicitly setting REQUIRE_ID_VERIFICATION=true (and matching frontend
- * VITE_REQUIRE_ID_VERIFICATION=true). Do not set this on Railway for beta.
+ * Government-ID checking is now an optional trust tier. Keep this compatibility
+ * function while old middleware call sites are removed, but never use ID status
+ * to deny ordinary app access. Mandatory adult assurance is a separate system.
  */
 export function isIdVerificationRequired(): boolean {
-  return process.env.REQUIRE_ID_VERIFICATION === 'true';
+  return false;
 }

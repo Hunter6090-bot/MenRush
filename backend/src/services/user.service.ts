@@ -69,7 +69,7 @@ export const userService = {
     let queryStr = `
       SELECT
         u.id, u.name, u.age, u.bio, u.headline, u.looking_for, u.photo_url, u.cover_url, u.interests,
-        u.is_verified,
+        u.is_verified, u.authenticity_status,
         -- Presence must be fresh: stuck online=true from a crashed tab is not "Active now".
         (p.online = TRUE AND p.last_seen IS NOT NULL AND p.last_seen > NOW() - INTERVAL '20 minutes') AS online,
         p.last_seen, p.available_until,
@@ -252,7 +252,7 @@ export const userService = {
       `SELECT
         u.id, u.email, u.name, u.age, u.bio, u.headline, u.looking_for,
         u.photo_url, u.cover_url, u.cover_position_x, u.cover_position_y, u.cover_zoom, u.interests, u.created_at,
-        u.is_verified, u.verification_status,
+        u.is_verified, u.verification_status, u.authenticity_status,
         u.is_premium, u.premium_tier, u.premium_until,
         p.lat, p.lng, p.online, p.last_seen, p.is_visible, p.available_until,
         p.is_ghost,
@@ -277,7 +277,7 @@ export const userService = {
     const result = await query(
       `SELECT
         u.id, u.name, u.age, u.bio, u.headline, u.looking_for,
-        u.photo_url, u.cover_url, u.cover_position_x, u.cover_position_y, u.cover_zoom, u.interests, u.created_at, u.is_verified,
+        u.photo_url, u.cover_url, u.cover_position_x, u.cover_position_y, u.cover_zoom, u.interests, u.created_at, u.is_verified, u.authenticity_status,
         p.online, p.last_seen, p.available_until,
         CASE
           WHEN p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' THEN p.mood
@@ -502,7 +502,7 @@ export const userService = {
   async getMatches(userId: string) {
     const result = await query(
       `SELECT
-        u.id, u.name, u.age, u.bio, u.photo_url, u.is_verified,
+        u.id, u.name, u.age, u.bio, u.photo_url, u.is_verified, u.authenticity_status,
         p.online, p.last_seen,
         msg.message as last_message,
         msg.created_at as last_message_at,

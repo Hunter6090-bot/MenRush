@@ -28,6 +28,7 @@ export interface NearbyUser {
   lng?: number;
   available_until?: string | null;
   is_verified?: boolean;
+  authenticity_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
   is_pulsing?: boolean;
   pulse_expires_at?: string | null;
   /** Active mood (auto-expires after 6h server-side; null when unset/expired). */
@@ -169,7 +170,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         <div className="flex items-center gap-2 mb-1">
           <h3 className="font-bold text-[#F0E0C0] text-base">{user.name}</h3>
           <span className="text-[var(--cream-muted)] text-sm">{user.age}</span>
-          {user.is_verified ? <VerifiedBadge /> : null}
+          {user.is_verified ? <VerifiedBadge /> : user.authenticity_status === 'verified' ? <VerifiedBadge level="authentic_person" /> : null}
         </div>
 
         {user.headline && (

@@ -142,7 +142,7 @@ export const Register = () => {
         ...(BETA_INVITE_REQUIRED ? { invite_code: inviteCode } : {}),
       });
       setAuth(res.data.user, res.data.token);
-      navigate(FEATURES.requireIdVerification ? '/verify' : '/profile/setup');
+      navigate(FEATURES.requireIdVerification ? '/verify/id' : '/profile/setup');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed. Please try again.');
     } finally {

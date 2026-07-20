@@ -44,7 +44,15 @@ export const verificationService = {
   async getState(userId: string): Promise<VerificationStateRow> {
     const res = await query(
       `SELECT is_verified, verification_status, verification_session_id,
-              verification_provider, verified_at, rejection_reason
+              verification_provider, verified_at, rejection_reason,
+              age_assurance_status, age_assured_at,
+              authenticity_status, authenticity_verified_at,
+              CASE
+                WHEN is_verified THEN 'identity_checked'
+                WHEN authenticity_status = 'verified' THEN 'authentic_person'
+                WHEN age_assurance_status = 'confirmed' THEN 'adult_confirmed'
+                ELSE 'unconfirmed'
+              END AS trust_level
          FROM users WHERE id = $1`,
       [userId],
     );
@@ -167,6 +175,11 @@ export const verificationService = {
           WHERE id = $1`,
         [userId, submissionId, rejectionReason],
       );
+      await removeSubmissionFiles(files.idFrontKey, files.selfieKey, files.idBackKey);
+      await query(
+        `UPDATE verification_submissions SET sensitive_files_deleted_at = NOW() WHERE id = $1`,
+        [submissionId],
+      );
       return {
         provider: 'menrush',
         status: 'rejected',
@@ -216,6 +229,19 @@ export const verificationService = {
           WHERE id = $1`,
         [submissionId],
       );
+      const files = await query(
+        `SELECT id_front_key, id_back_key, selfie_key
+           FROM verification_submissions WHERE id = $1`,
+        [submissionId],
+      );
+      const row = files.rows[0];
+      if (row) {
+        await removeSubmissionFiles(row.id_front_key, row.selfie_key, row.id_back_key);
+        await query(
+          `UPDATE verification_submissions SET sensitive_files_deleted_at = NOW() WHERE id = $1`,
+          [submissionId],
+        );
+      }
     }
   },
 
@@ -239,6 +265,19 @@ export const verificationService = {
           WHERE id = $1`,
         [submissionId, reason],
       );
+      const files = await query(
+        `SELECT id_front_key, id_back_key, selfie_key
+           FROM verification_submissions WHERE id = $1`,
+        [submissionId],
+      );
+      const row = files.rows[0];
+      if (row) {
+        await removeSubmissionFiles(row.id_front_key, row.selfie_key, row.id_back_key);
+        await query(
+          `UPDATE verification_submissions SET sensitive_files_deleted_at = NOW() WHERE id = $1`,
+          [submissionId],
+        );
+      }
     }
   },
 
@@ -297,5 +336,39 @@ export const verificationService = {
       throw err;
     }
     await this.markRejected(row.user_id, reason, submissionId);
+  },
+
+  async purgeExpiredSensitiveFiles(): Promise<number> {
+    const result = await query(
+      `SELECT id, user_id, id_front_key, id_back_key, selfie_key, status
+         FROM verification_submissions
+        WHERE created_at < NOW() - INTERVAL '72 hours'
+          AND sensitive_files_deleted_at IS NULL`,
+    );
+
+    for (const row of result.rows) {
+      await removeSubmissionFiles(row.id_front_key, row.selfie_key, row.id_back_key);
+      await query(
+        `UPDATE verification_submissions SET sensitive_files_deleted_at = NOW() WHERE id = $1`,
+        [row.id],
+      );
+      if (row.status === 'pending') {
+        await query(
+          `UPDATE verification_submissions
+              SET status = 'rejected', rejection_reason = 'retention_window_expired',
+                  reviewed_by = 'retention-worker', reviewed_at = NOW()
+            WHERE id = $1 AND status = 'pending'`,
+          [row.id],
+        );
+        await query(
+          `UPDATE users
+              SET verification_status = 'rejected',
+                  rejection_reason = 'retention_window_expired', updated_at = NOW()
+            WHERE id = $1 AND verification_session_id = $2 AND verification_status = 'pending'`,
+          [row.user_id, row.id],
+        );
+      }
+    }
+    return result.rowCount ?? 0;
   },
 };

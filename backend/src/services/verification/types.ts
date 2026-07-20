@@ -1,4 +1,6 @@
 export type VerificationStatus = 'unverified' | 'pending' | 'verified' | 'rejected';
+export type AgeAssuranceStatus = 'pending' | 'self_attested' | 'confirmed' | 'failed';
+export type TrustLevel = 'unconfirmed' | 'adult_confirmed' | 'authentic_person' | 'identity_checked';
 
 export type VerificationProviderName = 'menrush';
 
@@ -9,6 +11,11 @@ export interface VerificationStateRow {
   verification_provider: string | null;
   verified_at: string | null;
   rejection_reason: string | null;
+  age_assurance_status: AgeAssuranceStatus;
+  age_assured_at: string | null;
+  authenticity_status: VerificationStatus;
+  authenticity_verified_at: string | null;
+  trust_level: TrustLevel;
 }
 
 export interface DocumentFingerprintInput {
