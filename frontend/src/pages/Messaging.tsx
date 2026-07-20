@@ -15,6 +15,7 @@ import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 import { placeOutgoingCall } from '../lib/callBridge';
 import { mapCallMediaError } from '../lib/callMedia';
 import { MobileBackButton } from '../components/MobileBackButton';
+import { ThemeToggle } from '../components/ThemeToggle';
 import { MissedCallIcon } from '../components/MissedCallIcon';
 import { isMissedCallMessage, MISSED_CALL_PREVIEW } from '../lib/missedCall';
 import { openMapsDirections } from '../lib/maps';
@@ -146,6 +147,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   // Recipient image viewer (transient full-screen view of a disappearing image).
   const [viewerMsg, setViewerMsg] = useState<Message | null>(null);
   const [selfieOpen, setSelfieOpen] = useState(false);
+  const [videoRecording, setVideoRecording] = useState(false);
+  const [videoRecordSeconds, setVideoRecordSeconds] = useState(0);
   const [meetState, setMeetState] = useState<MeetAgreementState | null>(null);
   const [meetSubmitting, setMeetSubmitting] = useState(false);
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
@@ -166,6 +169,15 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const recordStartRef = useRef<number>(0);
   const recordStreamRef = useRef<MediaStream | null>(null);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const videoRecorderRef = useRef<MediaRecorder | null>(null);
+  const videoChunksRef = useRef<BlobPart[]>([]);
+  const videoStreamRef = useRef<MediaStream | null>(null);
+  const videoStartRef = useRef<number>(0);
+  const videoTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cameraHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cameraHoldActiveRef = useRef(false);
+  const videoShouldSendRef = useRef(true);
+  const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     if (!otherId) return;
@@ -323,9 +335,125 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     setViewRule('once');
   };
 
-  // ── Media: gallery attach + in-app selfie camera ─────────────────────────
+  // ── Media: gallery attach + tap selfie / press-hold video ───────────────
   const handleAttachClick = () => fileInputRef.current?.click();
   const handleCameraClick = () => setSelfieOpen(true);
+
+  const stopVideoRecording = useCallback((send: boolean) => {
+    const mr = videoRecorderRef.current;
+    if (!mr) return;
+    videoShouldSendRef.current = send;
+    if (!send) {
+      videoChunksRef.current = [];
+    }
+    if (mr.state === 'recording') mr.stop();
+  }, []);
+
+  const startVideoRecording = useCallback(async () => {
+    if (videoRecording || uploadingMedia || recording || !otherId) return;
+    setMediaError('');
+    videoShouldSendRef.current = true;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'user' }, width: { ideal: 720 }, height: { ideal: 1280 } },
+        audio: true,
+      });
+      videoStreamRef.current = stream;
+      if (videoPreviewRef.current) {
+        videoPreviewRef.current.srcObject = stream;
+        void videoPreviewRef.current.play().catch(() => undefined);
+      }
+      const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+        ? 'video/webm;codecs=vp8,opus'
+        : MediaRecorder.isTypeSupported('video/webm')
+          ? 'video/webm'
+          : '';
+      const mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      videoRecorderRef.current = mr;
+      videoChunksRef.current = [];
+      mr.ondataavailable = (ev) => {
+        if (ev.data.size > 0) videoChunksRef.current.push(ev.data);
+      };
+      mr.onstop = async () => {
+        const duration = Date.now() - videoStartRef.current;
+        const shouldSend = videoShouldSendRef.current;
+        const blob = new Blob(videoChunksRef.current, { type: mr.mimeType || 'video/webm' });
+        videoStreamRef.current?.getTracks().forEach((t) => t.stop());
+        videoStreamRef.current = null;
+        if (videoPreviewRef.current) videoPreviewRef.current.srcObject = null;
+        if (videoTimerRef.current) {
+          window.clearInterval(videoTimerRef.current);
+          videoTimerRef.current = null;
+        }
+        setVideoRecording(false);
+        setVideoRecordSeconds(0);
+        videoRecorderRef.current = null;
+        if (!shouldSend || duration < 600 || blob.size < 2000) return;
+        setUploadingMedia(true);
+        try {
+          const res = await messagesAPI.sendMedia(otherId!, blob, {
+            kind: 'video',
+            durationMs: duration,
+          });
+          setMessages((prev) => [...prev, res.data]);
+        } catch (err: any) {
+          setMediaError(err?.response?.data?.error || 'Failed to send video');
+        } finally {
+          setUploadingMedia(false);
+        }
+      };
+      videoStartRef.current = Date.now();
+      mr.start(250);
+      setVideoRecording(true);
+      setVideoRecordSeconds(0);
+      videoTimerRef.current = window.setInterval(
+        () => setVideoRecordSeconds((s) => Math.min(60, s + 1)),
+        1000,
+      );
+      window.setTimeout(() => {
+        if (videoRecorderRef.current && videoRecorderRef.current.state === 'recording') {
+          videoRecorderRef.current.stop();
+        }
+      }, 60_000);
+    } catch {
+      setMediaError('Camera access denied.');
+      setVideoRecording(false);
+    }
+  }, [videoRecording, uploadingMedia, recording, otherId]);
+
+  const onCameraPointerDown = (e: React.PointerEvent) => {
+    if (uploadingMedia || pendingImage || recording || videoRecording) return;
+    e.preventDefault();
+    cameraHoldActiveRef.current = false;
+    cameraHoldTimerRef.current = window.setTimeout(() => {
+      cameraHoldActiveRef.current = true;
+      void startVideoRecording();
+    }, 380);
+  };
+
+  const onCameraPointerUp = () => {
+    if (cameraHoldTimerRef.current) {
+      window.clearTimeout(cameraHoldTimerRef.current);
+      cameraHoldTimerRef.current = null;
+    }
+    if (cameraHoldActiveRef.current || videoRecording) {
+      cameraHoldActiveRef.current = false;
+      stopVideoRecording(true);
+      return;
+    }
+    handleCameraClick();
+  };
+
+  const onCameraPointerCancel = () => {
+    if (cameraHoldTimerRef.current) {
+      window.clearTimeout(cameraHoldTimerRef.current);
+      cameraHoldTimerRef.current = null;
+    }
+    if (videoRecording) {
+      stopVideoRecording(false);
+    }
+    cameraHoldActiveRef.current = false;
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -414,7 +542,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         }
       };
       recordStartRef.current = Date.now();
-      mr.start();
+      // Timeslices keep WebM clusters seekable — avoids first-second-only playback on Chrome.
+      mr.start(250);
       setRecording(true);
       setRecordSeconds(0);
       recordTimerRef.current = window.setInterval(
@@ -603,34 +732,28 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <header
-        className={`flex-shrink-0 flex items-center gap-2 border-b px-3 sm:px-4 ${
+        className={`flex-shrink-0 flex items-center gap-1.5 border-b border-[var(--border-default)] px-2 sm:px-4 bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl ${
           embedded ? '' : 'pt-[env(safe-area-inset-top,0px)]'
         }`}
         style={{
           minHeight: embedded
             ? '4rem'
             : 'calc(4rem + env(safe-area-inset-top, 0px))',
-          background: 'rgba(13,10,6,0.94)',
-          borderColor: '#3D2B0E',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
           zIndex: 20,
         }}
       >
-        {!embedded ? (
-          <MobileBackButton
-            fallback="/conversations"
-            onClick={() => navigate('/conversations')}
-            className="-ml-1"
-          />
-        ) : null}
+        <MobileBackButton
+          fallback="/conversations"
+          onClick={() => navigate('/conversations')}
+          className="-ml-1"
+        />
 
         {/* Avatar + name block — centered, tappable to open profile */}
         <button
           type="button"
           onClick={() => otherId && navigate(`/profile/${otherId}`)}
           aria-label={otherUser ? `Open ${otherUser.name}'s profile` : 'Open profile'}
-          className="flex-1 flex items-center gap-3 min-w-0 text-left rounded-xl px-1 py-1 -mx-1 hover:bg-[#3D2B0E]/40 active:scale-[0.99] transition-all"
+          className="flex-1 flex items-center gap-3 min-w-0 text-left rounded-xl px-1 py-1 -mx-1 hover:bg-[var(--bg-card)] active:scale-[0.99] transition-all"
         >
           {otherUser ? (
             <>
@@ -642,8 +765,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               />
               <div className="min-w-0">
                 <p
-                  className="font-semibold text-sm leading-tight truncate"
-                  style={{ color: '#F0E0C0', letterSpacing: '0.01em' }}
+                  className="font-semibold text-sm leading-tight truncate text-[var(--cream)]"
+                  style={{ letterSpacing: '0.01em' }}
                 >
                   {otherUser.name}
                 </p>
@@ -655,11 +778,13 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               </div>
             </>
           ) : (
-            <p className="font-semibold text-sm" style={{ color: '#F0E0C0' }}>
+            <p className="font-semibold text-sm text-[var(--cream)]">
               Conversation
             </p>
           )}
         </button>
+
+        <ThemeToggle variant="chat" />
 
         {FEATURES.videoCalls && (
           <>
@@ -882,6 +1007,18 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                       }
                       withdrawing={withdrawingId === msg.id}
                     />
+                  ) : msg.media_type === 'video' ? (
+                    <VideoBubble
+                      msg={msg}
+                      isMine={isMine}
+                      showTail={showTail}
+                      onWithdraw={
+                        canWithdrawMedia(msg, user?.id)
+                          ? () => msg.id && handleWithdrawMedia(msg.id)
+                          : undefined
+                      }
+                      withdrawing={withdrawingId === msg.id}
+                    />
                   ) : msg.media_type === 'location' ? (
                     <LocationBubble
                       msg={msg}
@@ -998,6 +1135,41 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
           />
         )}
 
+        {videoRecording ? (
+          <div className="mb-3 overflow-hidden rounded-2xl border border-[var(--copper)]/50 bg-black">
+            <video
+              ref={videoPreviewRef}
+              muted
+              playsInline
+              autoPlay
+              className="h-48 w-full object-cover"
+            />
+            <div className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-elevated)]">
+              <span
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ background: '#E5484D', boxShadow: '0 0 8px #E5484D' }}
+              />
+              <span className="flex-1 text-xs font-semibold text-[var(--cream)]">
+                Recording video… {formatDuration(videoRecordSeconds * 1000)}
+              </span>
+              <button
+                type="button"
+                onClick={() => stopVideoRecording(false)}
+                className="rounded-lg px-2 py-1 text-xs font-bold text-[var(--cream-muted)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => stopVideoRecording(true)}
+                className="rounded-lg bg-[var(--copper)] px-3 py-1 text-xs font-bold text-[var(--nn-on-copper)]"
+              >
+                Send
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {recording ? (
           // Recording-only bar — Stop sends, Cancel discards.
           <div className="flex items-center gap-2">
@@ -1051,14 +1223,18 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               <LocationPinIcon className="w-4 h-4" />
             </button>
 
-            {/* Selfie — opens front camera on mobile */}
+            {/* Camera — tap selfie, press-and-hold video */}
             <button
               type="button"
-              onClick={handleCameraClick}
-              disabled={uploadingMedia || !!pendingImage}
-              aria-label="Take selfie"
-              title="Take selfie"
-              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper"
+              onPointerDown={onCameraPointerDown}
+              onPointerUp={onCameraPointerUp}
+              onPointerCancel={onCameraPointerCancel}
+              onContextMenu={(e) => e.preventDefault()}
+              disabled={uploadingMedia || !!pendingImage || recording}
+              aria-label="Take photo or hold for video"
+              title="Tap for photo · hold for video"
+              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper touch-none select-none"
+              style={{ touchAction: 'none' }}
             >
               <CameraIcon className="w-4 h-4" />
             </button>
@@ -1890,7 +2066,10 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
 };
 
 // ── AudioBubble ──────────────────────────────────────────────────────────────
-// Inline voice-note player with copper play/pause and duration tag.
+// Inline voice-note player. Fetches media into a blob URL so Chrome doesn't
+// stall after the first cluster on signed streaming URLs.
+
+const VOICE_PAUSE_EVENT = 'menrush:voice-pause';
 
 interface AudioBubbleProps {
   msg: Message;
@@ -1902,28 +2081,79 @@ interface AudioBubbleProps {
 
 const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail, onWithdraw, withdrawing }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
-  const url = getPhotoUrl(msg.media_url || undefined);
+  const [readySrc, setReadySrc] = useState<string | null>(null);
+  const remoteUrl = getPhotoUrl(msg.media_url || undefined);
   const duration = msg.audio_duration_ms ?? 0;
   const withdrawn = isWithdrawnMedia(msg);
 
   useEffect(() => {
+    if (withdrawn || !remoteUrl) {
+      setReadySrc(null);
+      return;
+    }
+    let cancelled = false;
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        const res = await fetch(remoteUrl, { signal: controller.signal, credentials: 'omit' });
+        if (!res.ok) throw new Error('fetch_failed');
+        const blob = await res.blob();
+        if (cancelled) return;
+        if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+        const objectUrl = URL.createObjectURL(blob);
+        blobUrlRef.current = objectUrl;
+        setReadySrc(objectUrl);
+      } catch {
+        if (!cancelled) {
+          // Fallback: stream directly (may still hit the short-play bug on some devices).
+          setReadySrc(remoteUrl);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+    };
+  }, [remoteUrl, withdrawn]);
+
+  useEffect(() => {
     if (withdrawn) return;
     const el = audioRef.current;
-    if (!el) return;
+    if (!el || !readySrc) return;
     const onTime = () => setPosition(el.currentTime * 1000);
     const onEnded = () => {
       setPlaying(false);
       setPosition(0);
     };
+    const onPause = () => setPlaying(false);
+    const onPlay = () => setPlaying(true);
+    const onForeignPause = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ except?: HTMLAudioElement }>).detail;
+      if (detail?.except === el) return;
+      el.pause();
+    };
     el.addEventListener('timeupdate', onTime);
     el.addEventListener('ended', onEnded);
+    el.addEventListener('pause', onPause);
+    el.addEventListener('play', onPlay);
+    window.addEventListener(VOICE_PAUSE_EVENT, onForeignPause);
     return () => {
       el.removeEventListener('timeupdate', onTime);
       el.removeEventListener('ended', onEnded);
+      el.removeEventListener('pause', onPause);
+      el.removeEventListener('play', onPlay);
+      window.removeEventListener(VOICE_PAUSE_EVENT, onForeignPause);
     };
-  }, [url, withdrawn]);
+  }, [readySrc, withdrawn]);
 
   const radius = showTail
     ? isMine
@@ -1937,9 +2167,9 @@ const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail, onWith
         className="px-4 py-3 text-xs"
         data-testid="media-withdrawn"
         style={{
-          background: '#1E1508',
-          border: '1px solid #3D2B0E',
-          color: '#A89070',
+          background: 'var(--bg-elevated)',
+          border: '1px solid var(--border-default)',
+          color: 'var(--cream-muted)',
           borderRadius: radius,
         }}
       >
@@ -1948,14 +2178,23 @@ const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail, onWith
     );
   }
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     const el = audioRef.current;
-    if (!el || !url) return;
-    if (playing) {
+    if (!el || !readySrc) return;
+    if (!el.paused) {
       el.pause();
       setPlaying(false);
-    } else {
-      el.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+      return;
+    }
+    window.dispatchEvent(new CustomEvent(VOICE_PAUSE_EVENT, { detail: { except: el } }));
+    try {
+      if (el.ended || el.currentTime > 0 && el.readyState < 2) {
+        el.currentTime = 0;
+      }
+      await el.play();
+      setPlaying(true);
+    } catch {
+      setPlaying(false);
     }
   };
 
@@ -1965,49 +2204,122 @@ const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail, onWith
     <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
       <div
         className="flex items-center gap-3 px-3 py-2.5"
-      style={{
-        background: isMine ? 'linear-gradient(135deg, #C4832A, #A45E18)' : '#1E1508',
-        border: isMine ? 'none' : '1px solid #3D2B0E',
-        color: isMine ? '#FFF5E6' : '#F0E0C0',
-        borderRadius: radius,
-        boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
-        minWidth: 200,
-      }}
-    >
-      <button
-        type="button"
-        onClick={togglePlay}
-        aria-label={playing ? 'Pause voice note' : 'Play voice note'}
-        className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center active:scale-95"
         style={{
-          background: isMine ? 'rgba(13,10,6,0.35)' : 'rgba(196,131,42,0.18)',
-          color: isMine ? '#FFF5E6' : '#C4832A',
+          background: isMine ? 'linear-gradient(135deg, #C4832A, #A45E18)' : 'var(--bg-elevated)',
+          border: isMine ? 'none' : '1px solid var(--border-default)',
+          color: isMine ? '#FFF5E6' : 'var(--cream)',
+          borderRadius: radius,
+          boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
+          minWidth: 200,
         }}
       >
-        {playing ? <PauseIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4 ml-0.5" />}
-      </button>
-      <div className="flex-1 flex flex-col gap-1">
-        <div
-          className="h-1.5 rounded-full overflow-hidden"
-          style={{ background: isMine ? 'rgba(13,10,6,0.35)' : 'rgba(196,131,42,0.18)' }}
+        <button
+          type="button"
+          onClick={() => void togglePlay()}
+          aria-label={playing ? 'Pause voice note' : 'Play voice note'}
+          className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center active:scale-95"
+          style={{
+            background: isMine ? 'rgba(13,10,6,0.35)' : 'rgba(196,131,42,0.18)',
+            color: isMine ? '#FFF5E6' : 'var(--copper)',
+          }}
         >
+          {playing ? <PauseIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4 ml-0.5" />}
+        </button>
+        <div className="flex-1 flex flex-col gap-1">
           <div
-            className="h-full"
-            style={{
-              width: `${progressPct}%`,
-              background: isMine ? '#FFF5E6' : '#C4832A',
-              transition: 'width 120ms linear',
-            }}
-          />
+            className="h-1.5 rounded-full overflow-hidden"
+            style={{ background: isMine ? 'rgba(13,10,6,0.35)' : 'rgba(196,131,42,0.18)' }}
+          >
+            <div
+              className="h-full"
+              style={{
+                width: `${progressPct}%`,
+                background: isMine ? '#FFF5E6' : 'var(--copper)',
+                transition: 'width 120ms linear',
+              }}
+            />
+          </div>
+          <span
+            className="text-[10px] tabular-nums"
+            style={{ color: isMine ? 'rgba(255,245,230,0.75)' : 'var(--cream-muted)' }}
+          >
+            {formatDuration(playing ? position : duration)}
+          </span>
         </div>
-        <span
-          className="text-[10px] tabular-nums"
-          style={{ color: isMine ? 'rgba(255,245,230,0.75)' : '#A89070' }}
-        >
-          {formatDuration(playing ? position : duration)}
-        </span>
+        {readySrc && (
+          <audio ref={audioRef} src={readySrc} preload="auto" playsInline />
+        )}
       </div>
-      {url && <audio ref={audioRef} src={url} preload="metadata" />}
+      {onWithdraw && isMine && (
+        <WithdrawMediaButton onClick={onWithdraw} loading={withdrawing} />
+      )}
+    </div>
+  );
+};
+
+// ── VideoBubble ──────────────────────────────────────────────────────────────
+
+interface VideoBubbleProps {
+  msg: Message;
+  isMine: boolean;
+  showTail: boolean;
+  onWithdraw?: () => void;
+  withdrawing?: boolean;
+}
+
+const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWithdraw, withdrawing }) => {
+  const url = getPhotoUrl(msg.media_url || undefined);
+  const withdrawn = isWithdrawnMedia(msg);
+  const radius = showTail
+    ? isMine
+      ? '18px 18px 4px 18px'
+      : '18px 18px 18px 4px'
+    : '18px';
+
+  if (withdrawn) {
+    return (
+      <div
+        className="px-4 py-3 text-xs"
+        data-testid="media-withdrawn"
+        style={{
+          background: 'var(--bg-elevated)',
+          border: '1px solid var(--border-default)',
+          color: 'var(--cream-muted)',
+          borderRadius: radius,
+        }}
+      >
+        {msg.message || 'Video withdrawn'}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
+      <div
+        className="overflow-hidden"
+        style={{
+          borderRadius: radius,
+          border: isMine ? 'none' : '1px solid var(--border-default)',
+          maxWidth: 260,
+          background: 'var(--bg-elevated)',
+        }}
+      >
+        {url ? (
+          <video
+            src={url}
+            controls
+            playsInline
+            preload="metadata"
+            className="block w-full max-h-[320px] bg-black"
+          />
+        ) : (
+          <div className="px-4 py-6 text-xs text-[var(--cream-muted)]">Video unavailable</div>
+        )}
+        {msg.audio_duration_ms ? (
+          <p className="px-2 py-1 text-[10px] tabular-nums text-[var(--cream-muted)]">
+            {formatDuration(msg.audio_duration_ms)}
+          </p>
+        ) : null}
       </div>
       {onWithdraw && isMine && (
         <WithdrawMediaButton onClick={onWithdraw} loading={withdrawing} />

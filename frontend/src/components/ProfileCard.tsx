@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fallbackAvatarForAge, resolveAssetUrl } from '../lib/assetUrl';
-import { getPhotoUrl } from './UserAvatar';
+import { useResolvingPhotoSrc } from './UserAvatar';
 import { StatusBadge } from './StatusBadge';
 import { SilhouetteAvatar } from './SilhouetteAvatar';
 import { IconMatches } from './icons';
@@ -55,14 +54,11 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   const [liking, setLiking] = useState(false);
   const distance = parseFloat(String(user.distance_km));
   const distanceLabel = getDistanceLabel(user);
-  const [fullPhotoUrl, setFullPhotoUrl] = useState(() => getPhotoUrl(user.photo_url));
-  const [photoFailed, setPhotoFailed] = useState(false);
+  const { src: fullPhotoUrl, onError: onPhotoError } = useResolvingPhotoSrc(
+    user.photo_url,
+    user.age,
+  );
   const isPulsing = isUserPulsing(user);
-
-  useEffect(() => {
-    setFullPhotoUrl(getPhotoUrl(user.photo_url));
-    setPhotoFailed(false);
-  }, [user.photo_url]);
 
   useEffect(() => {
     if (initiallyMutual || initiallyLiked) {
@@ -131,17 +127,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
             src={fullPhotoUrl}
             alt={user.name}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-            onError={() => {
-              if (photoFailed) {
-                setFullPhotoUrl(undefined);
-                return;
-              }
-              setPhotoFailed(true);
-              setFullPhotoUrl(
-                resolveAssetUrl(fallbackAvatarForAge(user.age)) ??
-                  resolveAssetUrl('/avatars/generic/05.svg'),
-              );
-            }}
+            onError={onPhotoError}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">

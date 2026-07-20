@@ -5,7 +5,7 @@ import { Layout } from '../components/Layout';
 import { IconMatches } from '../components/icons';
 import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
 import { VerifiedBadge } from '../components/VerifiedBadge';
-import { getPhotoUrl } from '../components/UserAvatar';
+import { useResolvingPhotoSrc } from '../components/UserAvatar';
 import { PremiumGate } from '../components/PremiumGate';
 
 interface Match {
@@ -35,7 +35,7 @@ function formatMatchedAgo(iso?: string): string | null {
 }
 
 function MatchGridCard({ match, onClick }: { match: Match; onClick: () => void }) {
-  const photo = getPhotoUrl(match.photo_url);
+  const { src: photo, onError } = useResolvingPhotoSrc(match.photo_url, match.age);
   return (
     <button
       type="button"
@@ -44,23 +44,23 @@ function MatchGridCard({ match, onClick }: { match: Match; onClick: () => void }
     >
       <div className="relative aspect-[3/3.6] w-full bg-[var(--bg-elevated)]">
         {photo ? (
-          <img src={photo} alt={match.name} className="h-full w-full object-cover" />
+          <img src={photo} alt={match.name} className="h-full w-full object-cover" onError={onError} />
         ) : (
           <div className="flex h-full items-center justify-center">
             <SilhouetteAvatar size={80} variant="card" />
           </div>
         )}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.92)] to-transparent px-3 pb-2.5 pt-10">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent px-3 pb-2.5 pt-10">
           <div className="flex items-center gap-1.5">
             <span
-              className={`h-2 w-2 shrink-0 rounded-full ${match.online ? 'bg-[var(--status-online)]' : 'bg-[var(--cream-muted)]'}`}
+              className={`h-2 w-2 shrink-0 rounded-full ${match.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
             />
-            <span className="truncate text-[15px] font-bold text-[var(--cream)]">
+            <span className="truncate text-[15px] font-bold text-[#FFF6E6]">
               {match.name} {match.age}
             </span>
             {match.is_verified ? <VerifiedBadge size="sm" /> : null}
           </div>
-          <p className="mt-0.5 truncate text-xs text-[#E0A14A]">
+          <p className="mt-0.5 truncate text-xs font-semibold text-[#F0E0C0]">
             {formatMatchedAgo(match.matched_at ?? match.last_message_at) ??
               (match.online ? 'Active now' : 'Last seen recently')}
           </p>

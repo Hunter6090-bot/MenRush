@@ -7,6 +7,7 @@ import { useRoomVideo } from '../hooks/useRoomVideo';
 import { RoomGalleryGrid } from '../components/RoomGalleryGrid';
 import { PulseRing } from '../components/PulseRing';
 import { MobileBackButton } from '../components/MobileBackButton';
+import { ThemeToggle } from '../components/ThemeToggle';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 
 interface RoomMessage {
@@ -383,13 +384,11 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           zIndex: 20,
         }}
       >
-        {!embedded ? (
-          <MobileBackButton
-            fallback="/rooms"
-            onClick={() => navigate('/rooms')}
-            className="-ml-1"
-          />
-        ) : null}
+        <MobileBackButton
+          fallback="/rooms"
+          onClick={() => navigate('/rooms')}
+          className="-ml-1"
+        />
 
         {/* Room avatar */}
         <div
@@ -405,14 +404,16 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
 
         {/* Room name + members */}
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm leading-tight truncate" style={{ color: '#F0E0C0' }}>
+          <p className="font-semibold text-sm leading-tight truncate text-[var(--cream)]">
             {room?.name ?? 'Room'}
           </p>
-          <p className="text-[10px] mt-0.5" style={{ color: '#6B5035' }}>
+          <p className="text-[10px] mt-0.5 text-[var(--cream-muted)]">
             <GroupIcon className="w-3 h-3 inline mr-0.5" />
             {liveCount > 0 ? `${liveCount} live` : `${room?.member_count ?? '—'} members`}
           </p>
         </div>
+
+        <ThemeToggle variant="chat" />
 
         <button
           type="button"

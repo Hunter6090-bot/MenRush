@@ -43,7 +43,7 @@ const mediaUpload = multer({
       }
     },
   }),
-  limits: { fileSize: 12 * 1024 * 1024 },
+  limits: { fileSize: 40 * 1024 * 1024 },
   fileFilter: uploadFileFilter('message'),
 });
 
@@ -151,6 +151,10 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
     try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
     return res.status(400).json({ error: 'Expected an audio upload' });
   }
+  if (kind === 'video' && !req.file.mimetype.startsWith('video/')) {
+    try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+    return res.status(400).json({ error: 'Expected a video upload' });
+  }
 
   try {
     const message = await messageService.sendMediaMessage(req.userId!, receiver_id, {
@@ -168,11 +172,13 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
       'message',
       messageService.forViewer(message, receiver_id),
     );
+    const pushBody =
+      kind === 'image' ? '\u{1F4F7} Photo' : kind === 'video' ? '\u{1F3AC} Video' : '\u{1F3A4} Voice note';
     pushNewMessage(
       receiver_id,
       message.sender_name ?? '',
       req.userId!,
-      kind === 'image' ? '\u{1F4F7} Photo' : '\u{1F3A4} Voice note',
+      pushBody,
     );
 
     try {
@@ -183,7 +189,9 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
         title:
           kind === 'image'
             ? `${message.sender_name ?? 'Someone'} sent a photo`
-            : `${message.sender_name ?? 'Someone'} sent a voice note`,
+            : kind === 'video'
+              ? `${message.sender_name ?? 'Someone'} sent a video`
+              : `${message.sender_name ?? 'Someone'} sent a voice note`,
         body: caption || undefined,
         linkPath: `/messages/${req.userId}`,
       });

@@ -14,6 +14,7 @@ import { getNavItems, isNavActive, mobilePageTitle, type NavItem } from '../lib/
 import { DiscoveryShellProvider, useDiscoveryShell } from '../context/DiscoveryShellContext';
 import { LocationPresenceStrip } from './LocationPresenceStrip';
 import { ProfileDepthStrip } from './ProfileDepthStrip';
+import { ThemeToggle } from './ThemeToggle';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -139,7 +140,8 @@ function LayoutInner({ children }: LayoutProps) {
                 <p className="truncate text-sm font-bold tracking-wide text-[var(--cream)]">{pageTitle}</p>
               )}
             </div>
-            <div className="flex w-[4.5rem] shrink-0 items-center justify-end gap-0.5">
+            <div className="flex min-w-[7.75rem] shrink-0 items-center justify-end gap-0.5">
+              <ThemeToggle variant="header" />
               <button
                 type="button"
                 onClick={() => setSearchOpen(true)}
@@ -180,6 +182,7 @@ function LayoutInner({ children }: LayoutProps) {
             </span>
           </button>
           <div className="flex-1" />
+          <ThemeToggle variant="header" className="text-nn-muted hover:text-nn-copper" />
           <div className="flex items-center gap-2 text-[13px] text-nn-muted">
             <span className="inline-flex h-2 w-2 rounded-full bg-nn-online" />
             {discoveryShell.nearbyCount} in your radius

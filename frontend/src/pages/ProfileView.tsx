@@ -242,7 +242,7 @@ export const ProfileView = () => {
                 {user.interests.map((tag) => (
                   <span
                     key={tag}
-                    className="px-2.5 py-1 rounded-full bg-[#C4832A]/10 text-[#C4832A] text-xs font-medium border border-[#C4832A]/20"
+                    className="px-2.5 py-1 rounded-full bg-[rgba(196,131,42,0.10)] text-[var(--copper)] text-xs font-medium border border-[rgba(196,131,42,0.25)]"
                   >
                     {tag}
                   </span>
@@ -258,7 +258,7 @@ export const ProfileView = () => {
           <button
             type="button"
             onClick={handlePass}
-            className="flex-1 min-w-[5.5rem] py-3 rounded-xl border border-[#3D2B0E] text-[#F0E0C0]/80 font-bold text-sm hover:border-[#C4832A]/50 hover:text-[#F0E0C0] transition-all"
+            className="flex-1 min-w-[5.5rem] py-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] font-bold text-sm hover:border-[var(--copper)] hover:text-[var(--copper)] transition-all"
           >
             Pass
           </button>
@@ -269,10 +269,10 @@ export const ProfileView = () => {
             data-testid="profile-view-match"
             className={`flex-[1.4] min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide active:scale-[0.98] transition-all disabled:opacity-60 ${
               mutual
-                ? 'border border-[#C4832A]/55 bg-[rgba(196,131,42,0.18)] text-[#E0A14A]'
+                ? 'border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] text-[var(--copper)]'
                 : liked
-                  ? 'border border-[#C4832A]/50 bg-transparent text-[#C4832A]'
-                  : 'bg-[#C4832A] text-[#0D0A06] hover:bg-[#E0A14A]'
+                  ? 'border border-[var(--copper)]/50 bg-transparent text-[var(--copper)]'
+                  : 'bg-[var(--copper)] text-[var(--nn-on-copper)] hover:bg-[var(--copper-light,#E0A14A)]'
             }`}
           >
             {matching ? 'Sending…' : mutual ? 'Open chat' : liked ? 'Matched' : 'Match'}
@@ -283,8 +283,8 @@ export const ProfileView = () => {
             data-testid="profile-view-message"
             className={`flex-1 min-w-[5.5rem] py-3 rounded-xl font-bold text-sm transition-all ${
               mutual
-                ? 'border border-[#C4832A]/40 text-[#C4832A] hover:bg-[rgba(196,131,42,0.12)]'
-                : 'border border-[#3D2B0E] text-[var(--cream-muted)] hover:border-[#C4832A]/40 hover:text-[#C4832A]'
+                ? 'border border-[var(--copper)]/40 text-[var(--copper)] hover:bg-[rgba(196,131,42,0.12)]'
+                : 'border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] hover:border-[var(--copper)]/40 hover:text-[var(--copper)]'
             }`}
           >
             Message

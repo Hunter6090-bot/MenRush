@@ -81,11 +81,16 @@ app.use(
   express.static(uploadsRoot, {
     dotfiles: 'deny',
     fallthrough: true,
-    immutable: true,
-    maxAge: '30d',
+    // Do not immutable-cache — profile photos are replaced; avoid sticky 404s in CDNs.
+    maxAge: '1h',
+    setHeaders(res) {
+      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    },
   }),
 );
 app.use('/uploads', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   res.status(404).json({ error: 'media_not_found' });
 });
 app.set('io', io);
