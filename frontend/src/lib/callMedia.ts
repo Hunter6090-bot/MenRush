@@ -55,8 +55,17 @@ export function streamHasAnyTrack(stream: MediaStream | null | undefined): boole
  * Attach a MediaStream to a video element.
  * Always rebinds when track membership changes (empty → tracks is the remote-call path).
  * For remote (unmuted) video, falls back to muted play if autoplay policy blocks audio,
- * then retries unmuted after a user gesture via resumePlayback().
+ * then retries unmuted after a user gesture via resumeRemotePlayback().
  */
+
+/** Ensure iOS Safari treats the element as inline (autoplay-friendly). */
+export function ensureInlinePlayback(el: HTMLMediaElement | null): void {
+  if (!el) return;
+  el.setAttribute('playsinline', 'true');
+  el.setAttribute('webkit-playsinline', 'true');
+  (el as HTMLVideoElement).playsInline = true;
+}
+
 export async function attachStreamToVideo(
   video: HTMLVideoElement | null,
   stream: MediaStream | null,
@@ -67,6 +76,8 @@ export async function attachStreamToVideo(
     detachStreamFromVideo(video);
     return 'cleared';
   }
+
+  ensureInlinePlayback(video);
 
   const preferUnmuted = options?.preferUnmuted ?? false;
   const prev = video.srcObject as MediaStream | null;
@@ -81,6 +92,8 @@ export async function attachStreamToVideo(
   // Local preview must stay muted (echo). Remote tries unmuted for audio.
   if (!preferUnmuted) {
     video.muted = true;
+  } else {
+    video.muted = false;
   }
 
   try {
@@ -101,8 +114,58 @@ export async function attachStreamToVideo(
   }
 }
 
-/** After user taps, unmute remote audio if autoplay had forced mute. */
-export async function resumeRemotePlayback(video: HTMLVideoElement | null): Promise<boolean> {
+/** Dedicated remote audio path for iOS Safari (video element audio is flaky). */
+export async function attachRemoteAudio(
+  audio: HTMLAudioElement | null,
+  stream: MediaStream | null,
+): Promise<'playing' | 'blocked' | 'cleared' | 'failed'> {
+  if (!audio) return 'failed';
+  if (!stream) {
+    audio.pause();
+    audio.srcObject = null;
+    return 'cleared';
+  }
+
+  const audioTracks = stream.getAudioTracks();
+  if (audioTracks.length === 0) {
+    audio.srcObject = null;
+    return 'cleared';
+  }
+
+  ensureInlinePlayback(audio);
+  const audioOnly = new MediaStream(audioTracks);
+  audio.srcObject = audioOnly;
+  audio.muted = false;
+  try {
+    await audio.play();
+    return 'playing';
+  } catch {
+    return 'blocked';
+  }
+}
+
+/** After user taps, start remote audio (prefer dedicated <audio>; keep <video> muted). */
+export async function resumeRemotePlayback(
+  video: HTMLVideoElement | null,
+  audio?: HTMLAudioElement | null,
+): Promise<boolean> {
+  if (audio?.srcObject) {
+    audio.muted = false;
+    try {
+      await audio.play();
+      if (video?.srcObject) {
+        video.muted = true;
+        try {
+          await video.play();
+        } catch {
+          /* ignore */
+        }
+      }
+      return true;
+    } catch {
+      /* fall through — unmute video as last resort */
+    }
+  }
   if (!video || !video.srcObject) return false;
   video.muted = false;
   try {
