@@ -20,6 +20,7 @@ interface Match {
   last_message_at?: string;
   matched_at?: string;
   is_verified?: boolean;
+  authenticity_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
 }
 
 function formatMatchedAgo(iso?: string): string | null {
@@ -58,7 +59,7 @@ function MatchGridCard({ match, onClick }: { match: Match; onClick: () => void }
             <span className="truncate text-[15px] font-bold text-[#FFF6E6]">
               {match.name} {match.age}
             </span>
-            {match.is_verified ? <VerifiedBadge size="sm" /> : null}
+            {match.is_verified ? <VerifiedBadge size="sm" /> : match.authenticity_status === 'verified' ? <VerifiedBadge size="sm" level="authentic_person" /> : null}
           </div>
           <p className="mt-0.5 truncate text-xs font-semibold text-[#F0E0C0]">
             {formatMatchedAgo(match.matched_at ?? match.last_message_at) ??

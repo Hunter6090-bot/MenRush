@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { getEmailStatus, sendEmail } from '../services/mailer.service';
 import { verificationService } from '../services/verification.service';
+import { authenticityService } from '../services/verification/authenticity.service';
 import { inviteCodeService } from '../services/invite-code.service';
 import {
   buildTransactionalEmail,
@@ -183,6 +184,62 @@ router.post('/verification/:id/reject', async (req: Request, res: Response) => {
     }
     console.error('[admin] verification reject error:', err);
     return res.status(500).json({ error: 'verification_reject_failed' });
+  }
+});
+
+router.get('/authenticity/pending', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    return res.json({ submissions: await authenticityService.listPending() });
+  } catch (err) {
+    console.error('[admin] authenticity pending error:', err);
+    return res.status(500).json({ error: 'authenticity_list_failed' });
+  }
+});
+
+router.get('/authenticity/:id/frame/:index', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const index = Number(req.params.index);
+  if (!Number.isInteger(index) || index < 0 || index > 2) {
+    return res.status(400).json({ error: 'invalid_frame' });
+  }
+  try {
+    const filePath = await authenticityService.getFramePath(req.params.id, index);
+    if (!filePath) return res.status(404).json({ error: 'submission_not_found' });
+    return res.sendFile(filePath);
+  } catch (err) {
+    console.error('[admin] authenticity frame error:', err);
+    return res.status(500).json({ error: 'authenticity_frame_failed' });
+  }
+});
+
+router.post('/authenticity/:id/approve', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    await authenticityService.review(req.params.id, true);
+    return res.json({ ok: true });
+  } catch (err: any) {
+    if (err?.code === 'submission_not_found') {
+      return res.status(404).json({ error: 'submission_not_found' });
+    }
+    console.error('[admin] authenticity approve error:', err);
+    return res.status(500).json({ error: 'authenticity_approve_failed' });
+  }
+});
+
+router.post('/authenticity/:id/reject', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const parsed = RejectBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: 'validation_error' });
+  try {
+    await authenticityService.review(req.params.id, false, parsed.data.reason);
+    return res.json({ ok: true });
+  } catch (err: any) {
+    if (err?.code === 'submission_not_found') {
+      return res.status(404).json({ error: 'submission_not_found' });
+    }
+    console.error('[admin] authenticity reject error:', err);
+    return res.status(500).json({ error: 'authenticity_reject_failed' });
   }
 });
 

@@ -4,7 +4,6 @@ import { verifyAPI } from '../api/verify';
 import { useAuthStore } from '../hooks/store';
 import { PulseRing } from '../components/PulseRing';
 import { consumePostAuthRedirect } from '../lib/profileLinks';
-import { FEATURES } from '../lib/featureFlags';
 import { trackEventOnce } from '../observability/analytics';
 import { VerifySignOut } from '../components/VerifySignOut';
 import {
@@ -17,12 +16,14 @@ import {
   publicMutedCopyClass,
   publicPanelClass,
   publicPrimaryButtonClass,
+  publicSecondaryButtonClass,
 } from '../lib/publicStyles';
 
 export const VerifyPending: React.FC = () => {
   const navigate = useNavigate();
   const setVerified = useAuthStore((s) => s.setVerified);
   const [tick, setTick] = useState(0);
+  const [authenticityConfirmed, setAuthenticityConfirmed] = useState(false);
   const stoppedRef = useRef(false);
 
   useEffect(() => {
@@ -32,7 +33,8 @@ export const VerifyPending: React.FC = () => {
       try {
         const res = await verifyAPI.status();
         if (cancelled) return;
-        const { status, is_verified } = res.data;
+        const { status, is_verified, authenticity_status } = res.data;
+        setAuthenticityConfirmed(authenticity_status === 'verified');
         if (is_verified || status === 'verified') {
           trackEventOnce('verification_transition', { state: 'verified' }, 'verification_verified');
           stoppedRef.current = true;
@@ -51,7 +53,7 @@ export const VerifyPending: React.FC = () => {
           trackEventOnce('verification_transition', { state: 'reset' }, 'verification_reset');
           stoppedRef.current = true;
           setVerified('unverified', false);
-          navigate('/verify');
+          navigate('/verify/id');
           return;
         }
       } catch {
@@ -72,9 +74,9 @@ export const VerifyPending: React.FC = () => {
   return (
     <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.verify} homeTo="/discover">
       <PublicAuthHero
-        title="Checking your"
-        accent="ID."
-        copy="Usually under 2 minutes. You'll go visible the moment you're verified."
+        title="Identity check"
+        accent="submitted."
+        copy="Government-ID checking is optional. You can continue using MenRush while the private review finishes."
       />
 
       <div className={publicPanelClass}>
@@ -93,15 +95,27 @@ export const VerifyPending: React.FC = () => {
           We'll update your profile the moment review finishes. Last checked {tick * 5}s ago.
         </p>
 
-        {!FEATURES.requireIdVerification ? (
-          <button
-            type="button"
-            onClick={() => navigate(consumePostAuthRedirect('/profile/setup'))}
-            className={publicPrimaryButtonClass}
-          >
-            Skip for now — continue to the app
-          </button>
+        {authenticityConfirmed ? (
+          <p className="rounded-xl border border-[#22C55E]/40 bg-[#22C55E]/10 p-3 text-sm font-semibold text-[#86EFAC]">
+            Your Authentic person badge is already active. This ID review is a separate, stronger trust tier.
+          </p>
         ) : null}
+
+        <button
+          type="button"
+          onClick={() => navigate(consumePostAuthRedirect('/discover'))}
+          className={publicPrimaryButtonClass}
+        >
+          Continue to MenRush
+        </button>
+
+        <button
+          type="button"
+          onClick={() => navigate('/verify')}
+          className={publicSecondaryButtonClass}
+        >
+          Back to Trust centre
+        </button>
 
         <VerifySignOut />
       </div>

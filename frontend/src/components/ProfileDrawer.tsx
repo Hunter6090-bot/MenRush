@@ -291,7 +291,7 @@ export function ProfileDrawer({
               {user.name}
             </h2>
             {user.age ? <span className="text-[var(--cream-soft)] text-lg font-semibold">{user.age}</span> : null}
-            {(user as { is_verified?: boolean }).is_verified && <VerifiedBadge />}
+            {(user as { is_verified?: boolean }).is_verified ? <VerifiedBadge /> : (user as { authenticity_status?: string }).authenticity_status === 'verified' ? <VerifiedBadge level="authentic_person" /> : null}
           </div>
           <p className="text-sm font-medium text-[var(--cream-soft)]">
             {user.online ? "Active now" : "Offline"} · {distLabel} away
