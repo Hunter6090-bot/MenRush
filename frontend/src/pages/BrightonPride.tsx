@@ -34,8 +34,12 @@ export function BrightonPride() {
       <div style={styles.rainbow} />
 
       <div style={styles.container}>
-        {/* Brand */}
-        <div style={styles.brand}>MENRUSH</div>
+        {/* Logo */}
+        <img
+          src="/brand/medallion-transparent.png"
+          alt="MenRush"
+          style={styles.logoImg}
+        />
 
         {/* Event badge */}
         <div style={styles.badge}>Brighton Pride · August 2026</div>
@@ -152,6 +156,15 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     alignItems: 'center',
     textAlign: 'center',
+  },
+
+  logoImg: {
+    width: '72px',
+    height: '72px',
+    borderRadius: '50%',
+    objectFit: 'cover' as const,
+    marginBottom: '16px',
+    display: 'block',
   },
 
   brand: {
