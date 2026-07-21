@@ -218,6 +218,12 @@ export const Discover = () => {
       .then((res) => {
         setActivationProfile(res.data as ProfileSetupSnapshot);
         if (res.data?.mood) setMood(res.data.mood as Mood);
+        const d = res.data as { name?: string; photo_url?: string | null; age?: number };
+        useAuthStore.getState().patchUser({
+          name: d.name,
+          photo_url: d.photo_url ?? undefined,
+          age: d.age,
+        });
       })
       .catch(() => {});
     profileMetaAPI
@@ -773,12 +779,14 @@ export const Discover = () => {
     selfDotRef.current = selfEl;
     const selfRoot = createRoot(selfEl);
     selfRootRef.current = selfRoot;
+    const selfUser = useAuthStore.getState().user;
     selfRoot.render(
       <MapMarker
         user={{
-          id: 'self',
-          name: 'You',
-          photo_url: undefined,
+          id: selfUser?.id ?? 'self',
+          name: selfUser?.name ?? 'You',
+          photo_url: selfUser?.photo_url,
+          age: selfUser?.age,
           isPulsing: false,
         }}
         size={48}
