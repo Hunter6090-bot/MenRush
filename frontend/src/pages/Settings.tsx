@@ -62,6 +62,47 @@ export const Settings = () => {
   const storeLat = useLocationStore((s) => s.lat);
   const storeLng = useLocationStore((s) => s.lng);
 
+  const [blocked, setBlocked] = useState<
+    Array<{ id: string; name: string; photo_url?: string | null; blocked_at: string }>
+  >([]);
+  const [blockedLoading, setBlockedLoading] = useState(true);
+  const [unblockingId, setUnblockingId] = useState<string | null>(null);
+
+  const [isTeam, setIsTeam] = useState(false);
+  const [reports, setReports] = useState<
+    Array<{
+      id: string;
+      reason: string;
+      details?: string | null;
+      status: string;
+      created_at: string;
+      reporter_name: string;
+      reporter_email: string;
+      reported_name?: string | null;
+      reported_email?: string | null;
+    }>
+  >([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportBusyId, setReportBusyId] = useState<string | null>(null);
+
+  const refreshBlocked = useCallback(() => {
+    setBlockedLoading(true);
+    usersAPI
+      .getBlockedUsers()
+      .then((res) => setBlocked(res.data.blocked ?? []))
+      .catch(() => setBlocked([]))
+      .finally(() => setBlockedLoading(false));
+  }, []);
+
+  const refreshReports = useCallback(() => {
+    setReportsLoading(true);
+    usersAPI
+      .listReports()
+      .then((res) => setReports(res.data.reports ?? []))
+      .catch(() => setReports([]))
+      .finally(() => setReportsLoading(false));
+  }, []);
+
   useEffect(() => {
     usersAPI
       .getMe()
@@ -83,7 +124,17 @@ export const Settings = () => {
         }
       })
       .catch(() => {});
-  }, [setLocation, patchUser]);
+
+    refreshBlocked();
+    usersAPI
+      .getTeamStatus()
+      .then((res) => {
+        const team = Boolean(res.data?.is_team);
+        setIsTeam(team);
+        if (team) refreshReports();
+      })
+      .catch(() => setIsTeam(false));
+  }, [setLocation, patchUser, refreshBlocked, refreshReports]);
 
   useEffect(() => {
     if (storeEmail) setAccountEmail(storeEmail);
@@ -221,6 +272,35 @@ export const Settings = () => {
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const handleUnblock = async (userId: string) => {
+    setUnblockingId(userId);
+    try {
+      await usersAPI.unblockUser(userId);
+      setBlocked((prev) => prev.filter((b) => b.id !== userId));
+    } catch {
+      /* keep row; user can retry */
+    } finally {
+      setUnblockingId(null);
+    }
+  };
+
+  const handleReportStatus = async (
+    reportId: string,
+    status: 'open' | 'reviewing' | 'actioned' | 'dismissed',
+  ) => {
+    setReportBusyId(reportId);
+    try {
+      await usersAPI.updateReportStatus(reportId, status);
+      setReports((prev) =>
+        prev.map((r) => (r.id === reportId ? { ...r, status } : r)),
+      );
+    } catch {
+      /* ignore */
+    } finally {
+      setReportBusyId(null);
+    }
   };
 
   return (
@@ -536,6 +616,109 @@ export const Settings = () => {
               Edit in profile →
             </Link>
           </section>
+
+          <section className="mr-card p-4" data-testid="settings-blocked">
+            <p className="text-[15px] font-bold text-[var(--cream)]">Blocked people</p>
+            <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
+              Unblock someone to message or see them again.
+            </p>
+            {blockedLoading ? (
+              <p className="mt-3 text-[13px] text-[var(--cream-muted)]">Loading…</p>
+            ) : blocked.length === 0 ? (
+              <p className="mt-3 text-[13px] text-[var(--cream-muted)]">No one blocked.</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {blocked.map((person) => (
+                  <li
+                    key={person.id}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2.5"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-[14px] font-semibold text-[var(--cream)]">
+                        {person.name}
+                      </p>
+                      <p className="text-[11px] text-[var(--cream-muted)]">
+                        Blocked {new Date(person.blocked_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={unblockingId === person.id}
+                      onClick={() => void handleUnblock(person.id)}
+                      className="shrink-0 rounded-full border border-[var(--border-default)] px-3 py-1.5 text-[12px] font-bold text-[var(--copper)] hover:border-[var(--copper)] disabled:opacity-50"
+                    >
+                      {unblockingId === person.id ? '…' : 'Unblock'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {isTeam ? (
+            <section className="mr-card p-4" data-testid="settings-reports">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[15px] font-bold text-[var(--cream)]">Safety reports</p>
+                  <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
+                    Team inbox — new reports also email the team.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => refreshReports()}
+                  className="text-[12px] font-bold uppercase tracking-wide text-[var(--copper)]"
+                >
+                  Refresh
+                </button>
+              </div>
+              {reportsLoading ? (
+                <p className="mt-3 text-[13px] text-[var(--cream-muted)]">Loading…</p>
+              ) : reports.length === 0 ? (
+                <p className="mt-3 text-[13px] text-[var(--cream-muted)]">No reports yet.</p>
+              ) : (
+                <ul className="mt-3 max-h-80 space-y-2 overflow-y-auto">
+                  {reports.map((report) => (
+                    <li
+                      key={report.id}
+                      className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2.5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-[13px] font-bold text-[var(--cream)]">
+                          {report.reason.replace(/_/g, ' ')}
+                          <span className="ml-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--cream-muted)]">
+                            {report.status}
+                          </span>
+                        </p>
+                        <p className="shrink-0 text-[11px] text-[var(--cream-muted)]">
+                          {new Date(report.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                      <p className="mt-1 text-[12px] text-[var(--cream-muted)]">
+                        {report.reporter_name} → {report.reported_name ?? 'unknown'}
+                      </p>
+                      {report.details ? (
+                        <p className="mt-1 text-[12px] text-[var(--cream)]">{report.details}</p>
+                      ) : null}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {(['reviewing', 'actioned', 'dismissed'] as const).map((status) => (
+                          <button
+                            key={status}
+                            type="button"
+                            disabled={reportBusyId === report.id || report.status === status}
+                            onClick={() => void handleReportStatus(report.id, status)}
+                            className="rounded-full border border-[var(--border-default)] px-2.5 py-1 text-[11px] font-bold capitalize text-[var(--cream-muted)] hover:border-[var(--copper)] hover:text-[var(--copper)] disabled:opacity-40"
+                          >
+                            {status}
+                          </button>
+                        ))}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ) : null}
 
           <SectionLabel>Notifications</SectionLabel>
 

@@ -364,6 +364,15 @@ router.delete('/block/:id', async (req: AuthRequest, res: Response) => {
   }
 });
 
+router.get('/blocks', async (req: AuthRequest, res: Response) => {
+  try {
+    const blocked = await userService.getBlockedUsers(req.userId!);
+    res.json({ blocked });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 const ReportSchema = z.object({
   reason: z.enum(['spam', 'harassment', 'fake_profile', 'inappropriate_content', 'underage', 'other']),
   details: z.string().max(1000).optional(),
@@ -378,8 +387,58 @@ router.post('/report/:id', async (req: AuthRequest, res: Response) => {
     return res.status(400).json({ error: parsed.error.errors[0].message });
   }
   try {
-    await userService.reportUser(req.userId!, req.params.id, parsed.data.reason, parsed.data.details);
-    res.json({ reported: true });
+    const report = await userService.reportUser(
+      req.userId!,
+      req.params.id,
+      parsed.data.reason,
+      parsed.data.details,
+    );
+    res.json({ reported: true, id: report.id });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/me/team', async (req: AuthRequest, res: Response) => {
+  try {
+    const isTeam = await userService.isTeamMember(req.userId!);
+    res.json({ is_team: isTeam });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/reports', async (req: AuthRequest, res: Response) => {
+  try {
+    const isTeam = await userService.isTeamMember(req.userId!);
+    if (!isTeam) {
+      return res.status(403).json({ error: 'team_only' });
+    }
+    const limit = req.query.limit ? parseInt(String(req.query.limit), 10) : 50;
+    const reports = await userService.listReports(limit);
+    res.json({ reports });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+const ReportStatusSchema = z.object({
+  status: z.enum(['open', 'reviewing', 'actioned', 'dismissed']),
+});
+
+router.patch('/reports/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const isTeam = await userService.isTeamMember(req.userId!);
+    if (!isTeam) {
+      return res.status(403).json({ error: 'team_only' });
+    }
+    const parsed = ReportStatusSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0].message });
+    }
+    const updated = await userService.updateReportStatus(req.params.id, parsed.data.status);
+    if (!updated) return res.status(404).json({ error: 'Report not found' });
+    res.json(updated);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
