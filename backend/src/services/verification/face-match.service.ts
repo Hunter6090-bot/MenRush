@@ -43,15 +43,14 @@ async function loadEngine(): Promise<FaceApiModule | null> {
   if (!engineReady) {
     engineReady = (async () => {
       try {
-        const [{ Canvas, Image, ImageData }, faceapi] = await Promise.all([
-          import('@napi-rs/canvas'),
-          import('@vladmandic/face-api'),
-        ]);
-        faceapi.env.monkeyPatch({
-          Canvas: Canvas as any,
-          Image: Image as any,
-          ImageData: ImageData as any,
-        });
+        // The default Node entrypoint hard-depends on tfjs-node's large native
+        // binary. The WASM build is portable across local macOS and production
+        // Linux while providing the same descriptor and distance APIs.
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const faceapi = require(
+          '@vladmandic/face-api/dist/face-api.node-wasm.js'
+        ) as FaceApiModule;
+        await (faceapi as any).tf.ready();
         await faceapi.nets.ssdMobilenetv1.loadFromDisk(MODEL_DIR);
         await faceapi.nets.faceLandmark68Net.loadFromDisk(MODEL_DIR);
         await faceapi.nets.faceRecognitionNet.loadFromDisk(MODEL_DIR);
@@ -68,24 +67,32 @@ async function loadEngine(): Promise<FaceApiModule | null> {
   return engineReady;
 }
 
-async function loadFaceImage(ImageCtor: any, filePath: string): Promise<any> {
-  const buffer = await sharp(filePath).rotate().jpeg({ quality: 92 }).toBuffer();
-  const image = new ImageCtor();
-  image.src = buffer;
-  return image;
-}
-
 async function extractDescriptor(
   faceapi: FaceApiModule,
-  ImageCtor: any,
   filePath: string,
 ): Promise<Float32Array | null> {
-  const image = await loadFaceImage(ImageCtor, filePath);
-  const detection = await faceapi
-    .detectSingleFace(image)
-    .withFaceLandmarks()
-    .withFaceDescriptor();
-  return detection?.descriptor ?? null;
+  const { data, info } = await sharp(filePath)
+    .rotate()
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const tensor = (faceapi as any).tf.tensor3d(
+    new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
+    [info.height, info.width, info.channels],
+    'int32',
+  );
+  try {
+    const detection = await faceapi
+      .detectSingleFace(
+        tensor as any,
+        new faceapi.SsdMobilenetv1Options({ minConfidence: 0.2, maxResults: 1 }),
+      )
+      .withFaceLandmarks()
+      .withFaceDescriptor();
+    return detection?.descriptor ?? null;
+  } finally {
+    tensor.dispose();
+  }
 }
 
 export const faceMatchService = {
@@ -102,8 +109,7 @@ export const faceMatchService = {
     }
 
     try {
-      const { Image } = await import('@napi-rs/canvas');
-      const descriptor = await extractDescriptor(faceapi, Image, filePath);
+      const descriptor = await extractDescriptor(faceapi, filePath);
       return { found: Boolean(descriptor), engineAvailable: true };
     } catch (err) {
       console.warn(
@@ -127,10 +133,9 @@ export const faceMatchService = {
     }
 
     try {
-      const { Image } = await import('@napi-rs/canvas');
       const [idDescriptor, selfieDescriptor] = await Promise.all([
-        extractDescriptor(faceapi, Image, idFrontPath),
-        extractDescriptor(faceapi, Image, selfiePath),
+        extractDescriptor(faceapi, idFrontPath),
+        extractDescriptor(faceapi, selfiePath),
       ]);
 
       if (!idDescriptor || !selfieDescriptor) {

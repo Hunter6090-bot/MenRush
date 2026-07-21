@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { messagesAPI, usersAPI, meetAPI, MediaKind, MessageMediaKind, MessageDTO, MeetAgreementState } from '../api/client';
 import { trackEventOnce } from '../observability/analytics';
 import { useSocket } from '../hooks/useSocket';
-import { useAuthStore, useCallStore, useLocationStore, useUnreadStore } from '../hooks/store';
+import { useAuthStore, useCallStore, useUnreadStore } from '../hooks/store';
 import { UserAvatar } from '../components/UserAvatar';
 import { StatusBadge } from '../components/StatusBadge';
 import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
@@ -15,12 +15,11 @@ import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 import { placeOutgoingCall } from '../lib/callBridge';
 import { mapCallMediaError } from '../lib/callMedia';
 import { MobileBackButton } from '../components/MobileBackButton';
+import { ThemeToggle } from '../components/ThemeToggle';
 import { MissedCallIcon } from '../components/MissedCallIcon';
 import { isMissedCallMessage, MISSED_CALL_PREVIEW } from '../lib/missedCall';
 import { openMapsDirections } from '../lib/maps';
 import { parseLocationPayload } from '../lib/locationMessage';
-import { getMatchCoordinates, hasVisibleMatchLocation } from '../lib/matchLiveLocation';
-import { MatchChatLiveLocation } from '../components/MatchChatLiveLocation';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
 interface Message extends Partial<MessageDTO> {
@@ -85,11 +84,6 @@ interface OtherUser {
   photo_url?: string;
   online?: boolean;
   last_seen?: string;
-  live_location_sharing?: boolean;
-  live_lat?: number | string | null;
-  live_lng?: number | string | null;
-  live_distance_km?: number | string | null;
-  live_location_updated_at?: string | null;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -153,6 +147,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   // Recipient image viewer (transient full-screen view of a disappearing image).
   const [viewerMsg, setViewerMsg] = useState<Message | null>(null);
   const [selfieOpen, setSelfieOpen] = useState(false);
+  const [videoRecording, setVideoRecording] = useState(false);
+  const [videoRecordSeconds, setVideoRecordSeconds] = useState(0);
   const [meetState, setMeetState] = useState<MeetAgreementState | null>(null);
   const [meetSubmitting, setMeetSubmitting] = useState(false);
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
@@ -161,7 +157,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const [, setBurnTick] = useState(0);
   const socket = useSocket();
   const user = useAuthStore((s) => s.user);
-  const { lat: selfLat, lng: selfLng } = useLocationStore();
   const { setCalling, setCallSetupError, resetCall } = useCallStore();
   const navigate = useNavigate();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -174,6 +169,15 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const recordStartRef = useRef<number>(0);
   const recordStreamRef = useRef<MediaStream | null>(null);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const videoRecorderRef = useRef<MediaRecorder | null>(null);
+  const videoChunksRef = useRef<BlobPart[]>([]);
+  const videoStreamRef = useRef<MediaStream | null>(null);
+  const videoStartRef = useRef<number>(0);
+  const videoTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cameraHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cameraHoldActiveRef = useRef(false);
+  const videoShouldSendRef = useRef(true);
+  const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     if (!otherId) return;
@@ -188,38 +192,11 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   }, [messages, isOtherTyping]);
 
   useEffect(() => {
-    if (!socket || !otherId) return;
-    const onMatchLocation = (payload: {
-      user_id: string;
-      lat: number;
-      lng: number;
-      updated_at: string;
-    }) => {
-      if (payload.user_id !== otherId) return;
-      setOtherUser((current) =>
-        current
-          ? {
-              ...current,
-              live_location_sharing: true,
-              live_lat: payload.lat,
-              live_lng: payload.lng,
-              live_location_updated_at: payload.updated_at,
-            }
-          : current,
-      );
-    };
-    socket.on('match:location', onMatchLocation);
-    return () => {
-      socket.off('match:location', onMatchLocation);
-    };
-  }, [socket, otherId]);
-
-  useEffect(() => {
     if (!otherId) return;
     const refreshProfile = () => {
       usersAPI.getProfile(otherId).then((r) => setOtherUser(r.data)).catch(() => {});
     };
-    const id = window.setInterval(refreshProfile, 20000);
+    const id = window.setInterval(refreshProfile, 60000);
     return () => window.clearInterval(id);
   }, [otherId]);
 
@@ -358,9 +335,125 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     setViewRule('once');
   };
 
-  // ── Media: gallery attach + in-app selfie camera ─────────────────────────
+  // ── Media: gallery attach + tap selfie / press-hold video ───────────────
   const handleAttachClick = () => fileInputRef.current?.click();
   const handleCameraClick = () => setSelfieOpen(true);
+
+  const stopVideoRecording = useCallback((send: boolean) => {
+    const mr = videoRecorderRef.current;
+    if (!mr) return;
+    videoShouldSendRef.current = send;
+    if (!send) {
+      videoChunksRef.current = [];
+    }
+    if (mr.state === 'recording') mr.stop();
+  }, []);
+
+  const startVideoRecording = useCallback(async () => {
+    if (videoRecording || uploadingMedia || recording || !otherId) return;
+    setMediaError('');
+    videoShouldSendRef.current = true;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'user' }, width: { ideal: 720 }, height: { ideal: 1280 } },
+        audio: true,
+      });
+      videoStreamRef.current = stream;
+      if (videoPreviewRef.current) {
+        videoPreviewRef.current.srcObject = stream;
+        void videoPreviewRef.current.play().catch(() => undefined);
+      }
+      const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+        ? 'video/webm;codecs=vp8,opus'
+        : MediaRecorder.isTypeSupported('video/webm')
+          ? 'video/webm'
+          : '';
+      const mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      videoRecorderRef.current = mr;
+      videoChunksRef.current = [];
+      mr.ondataavailable = (ev) => {
+        if (ev.data.size > 0) videoChunksRef.current.push(ev.data);
+      };
+      mr.onstop = async () => {
+        const duration = Date.now() - videoStartRef.current;
+        const shouldSend = videoShouldSendRef.current;
+        const blob = new Blob(videoChunksRef.current, { type: mr.mimeType || 'video/webm' });
+        videoStreamRef.current?.getTracks().forEach((t) => t.stop());
+        videoStreamRef.current = null;
+        if (videoPreviewRef.current) videoPreviewRef.current.srcObject = null;
+        if (videoTimerRef.current) {
+          window.clearInterval(videoTimerRef.current);
+          videoTimerRef.current = null;
+        }
+        setVideoRecording(false);
+        setVideoRecordSeconds(0);
+        videoRecorderRef.current = null;
+        if (!shouldSend || duration < 600 || blob.size < 2000) return;
+        setUploadingMedia(true);
+        try {
+          const res = await messagesAPI.sendMedia(otherId!, blob, {
+            kind: 'video',
+            durationMs: duration,
+          });
+          setMessages((prev) => [...prev, res.data]);
+        } catch (err: any) {
+          setMediaError(err?.response?.data?.error || 'Failed to send video');
+        } finally {
+          setUploadingMedia(false);
+        }
+      };
+      videoStartRef.current = Date.now();
+      mr.start(250);
+      setVideoRecording(true);
+      setVideoRecordSeconds(0);
+      videoTimerRef.current = window.setInterval(
+        () => setVideoRecordSeconds((s) => Math.min(60, s + 1)),
+        1000,
+      );
+      window.setTimeout(() => {
+        if (videoRecorderRef.current && videoRecorderRef.current.state === 'recording') {
+          videoRecorderRef.current.stop();
+        }
+      }, 60_000);
+    } catch {
+      setMediaError('Camera access denied.');
+      setVideoRecording(false);
+    }
+  }, [videoRecording, uploadingMedia, recording, otherId]);
+
+  const onCameraPointerDown = (e: React.PointerEvent) => {
+    if (uploadingMedia || pendingImage || recording || videoRecording) return;
+    e.preventDefault();
+    cameraHoldActiveRef.current = false;
+    cameraHoldTimerRef.current = window.setTimeout(() => {
+      cameraHoldActiveRef.current = true;
+      void startVideoRecording();
+    }, 380);
+  };
+
+  const onCameraPointerUp = () => {
+    if (cameraHoldTimerRef.current) {
+      window.clearTimeout(cameraHoldTimerRef.current);
+      cameraHoldTimerRef.current = null;
+    }
+    if (cameraHoldActiveRef.current || videoRecording) {
+      cameraHoldActiveRef.current = false;
+      stopVideoRecording(true);
+      return;
+    }
+    handleCameraClick();
+  };
+
+  const onCameraPointerCancel = () => {
+    if (cameraHoldTimerRef.current) {
+      window.clearTimeout(cameraHoldTimerRef.current);
+      cameraHoldTimerRef.current = null;
+    }
+    if (videoRecording) {
+      stopVideoRecording(false);
+    }
+    cameraHoldActiveRef.current = false;
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -449,7 +542,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         }
       };
       recordStartRef.current = Date.now();
-      mr.start();
+      // Timeslices keep WebM clusters seekable — avoids first-second-only playback on Chrome.
+      mr.start(250);
       setRecording(true);
       setRecordSeconds(0);
       recordTimerRef.current = window.setInterval(
@@ -633,39 +727,33 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
           ? 'flex h-full min-h-0 flex-col'
           : 'fixed inset-0 flex flex-col'
       }
-      style={{ background: '#0D0A06' }}
+      style={{ background: 'var(--bg-primary)' }}
     >
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <header
-        className={`flex-shrink-0 flex items-center gap-2 border-b px-3 sm:px-4 ${
+        className={`flex-shrink-0 flex items-center gap-1.5 border-b border-[var(--border-default)] px-2 sm:px-4 bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl ${
           embedded ? '' : 'pt-[env(safe-area-inset-top,0px)]'
         }`}
         style={{
           minHeight: embedded
             ? '4rem'
             : 'calc(4rem + env(safe-area-inset-top, 0px))',
-          background: 'rgba(13,10,6,0.94)',
-          borderColor: '#3D2B0E',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
           zIndex: 20,
         }}
       >
-        {!embedded ? (
-          <MobileBackButton
-            fallback="/conversations"
-            onClick={() => navigate('/conversations')}
-            className="-ml-1"
-          />
-        ) : null}
+        <MobileBackButton
+          fallback="/conversations"
+          onClick={() => navigate('/conversations')}
+          className="-ml-1"
+        />
 
         {/* Avatar + name block — centered, tappable to open profile */}
         <button
           type="button"
           onClick={() => otherId && navigate(`/profile/${otherId}`)}
           aria-label={otherUser ? `Open ${otherUser.name}'s profile` : 'Open profile'}
-          className="flex-1 flex items-center gap-3 min-w-0 text-left rounded-xl px-1 py-1 -mx-1 hover:bg-[#3D2B0E]/40 active:scale-[0.99] transition-all"
+          className="flex-1 flex items-center gap-3 min-w-0 text-left rounded-xl px-1 py-1 -mx-1 hover:bg-[var(--bg-card)] active:scale-[0.99] transition-all"
         >
           {otherUser ? (
             <>
@@ -677,8 +765,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               />
               <div className="min-w-0">
                 <p
-                  className="font-semibold text-sm leading-tight truncate"
-                  style={{ color: '#F0E0C0', letterSpacing: '0.01em' }}
+                  className="font-semibold text-sm leading-tight truncate text-[var(--cream)]"
+                  style={{ letterSpacing: '0.01em' }}
                 >
                   {otherUser.name}
                 </p>
@@ -690,11 +778,13 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               </div>
             </>
           ) : (
-            <p className="font-semibold text-sm" style={{ color: '#F0E0C0' }}>
+            <p className="font-semibold text-sm text-[var(--cream)]">
               Conversation
             </p>
           )}
         </button>
+
+        <ThemeToggle variant="chat" />
 
         {FEATURES.videoCalls && (
           <>
@@ -736,30 +826,13 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
           style={{
             background:
               safetyNotice.tone === 'success' ? 'rgba(143,199,115,0.12)' : 'rgba(139,69,19,0.15)',
-            borderColor: '#3D2B0E',
+            borderColor: 'var(--border-default)',
             color: safetyNotice.tone === 'success' ? '#8FC773' : '#F0E0C0',
           }}
         >
           {safetyNotice.msg}
         </div>
       )}
-
-      {otherUser && hasVisibleMatchLocation(otherUser) ? (() => {
-        const coords = getMatchCoordinates(otherUser);
-        if (!coords) return null;
-        return (
-          <MatchChatLiveLocation
-            peerName={otherUser.name}
-            photoUrl={otherUser.photo_url}
-            lat={coords.lat}
-            lng={coords.lng}
-            distanceKm={otherUser.live_distance_km}
-            updatedAt={otherUser.live_location_updated_at}
-            selfLat={selfLat}
-            selfLng={selfLng}
-          />
-        );
-      })() : null}
 
       {otherId && meetState && (
         <MeetConsentBar
@@ -783,14 +856,14 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
           >
             <div
               className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
-              style={{ background: '#1E1508', border: '1px solid #3D2B0E' }}
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
             >
-              <BubbleIcon className="w-8 h-8" style={{ color: '#C4832A', opacity: 0.5 }} />
+              <BubbleIcon className="w-8 h-8" style={{ color: 'var(--copper)', opacity: 0.5 }} />
             </div>
-            <p className="font-medium text-sm" style={{ color: '#A89070' }}>
+            <p className="font-medium text-sm text-[var(--cream-muted)]">
               No messages yet
             </p>
-            <p className="text-xs mt-1 mb-4 text-center" style={{ color: '#6B5840' }}>
+            <p className="text-xs mt-1 mb-4 text-center text-[var(--cream-muted)]">
               Be direct. Consent first.
             </p>
             <div className="flex flex-col gap-2 w-full max-w-sm">
@@ -822,19 +895,19 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               <React.Fragment key={msg.id ?? i}>
                 {showDateSep && (
                   <div className="flex items-center gap-3 my-5">
-                    <div className="flex-1 h-px" style={{ background: '#3D2B0E' }} />
+                    <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
                     <span
                       className="text-[10px] font-semibold px-3 py-1 rounded-full"
                       style={{
-                        background: '#1E1508',
-                        border: '1px solid #3D2B0E',
-                        color: '#A89070',
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border-default)',
+                        color: 'var(--cream-muted)',
                         letterSpacing: '0.06em',
                       }}
                     >
                       {formatDateLabel(msg.created_at)}
                     </span>
-                    <div className="flex-1 h-px" style={{ background: '#3D2B0E' }} />
+                    <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
                   </div>
                 )}
                 <div className="flex justify-center my-4" data-testid="missed-call-log">
@@ -862,19 +935,19 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               {/* Date separator */}
               {showDateSep && (
                 <div className="flex items-center gap-3 my-5">
-                  <div className="flex-1 h-px" style={{ background: '#3D2B0E' }} />
+                  <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
                   <span
                     className="text-[10px] font-semibold px-3 py-1 rounded-full"
                     style={{
-                      background: '#1E1508',
-                      border: '1px solid #3D2B0E',
-                      color: '#A89070',
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border-default)',
+                      color: 'var(--cream-muted)',
                       letterSpacing: '0.06em',
                     }}
                   >
                     {formatDateLabel(msg.created_at)}
                   </span>
-                  <div className="flex-1 h-px" style={{ background: '#3D2B0E' }} />
+                  <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
                 </div>
               )}
 
@@ -891,7 +964,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                       otherUser?.photo_url ? (
                         <div
                           className="w-7 h-7 rounded-full overflow-hidden"
-                          style={{ border: '1px solid #3D2B0E', flexShrink: 0 }}
+                          style={{ border: '1px solid var(--border-default)', flexShrink: 0 }}
                         >
                           <img
                             src={otherUser.photo_url}
@@ -934,6 +1007,18 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                       }
                       withdrawing={withdrawingId === msg.id}
                     />
+                  ) : msg.media_type === 'video' ? (
+                    <VideoBubble
+                      msg={msg}
+                      isMine={isMine}
+                      showTail={showTail}
+                      onWithdraw={
+                        canWithdrawMedia(msg, user?.id)
+                          ? () => msg.id && handleWithdrawMedia(msg.id)
+                          : undefined
+                      }
+                      withdrawing={withdrawingId === msg.id}
+                    />
                   ) : msg.media_type === 'location' ? (
                     <LocationBubble
                       msg={msg}
@@ -955,9 +1040,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                               boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
                             }
                           : {
-                              background: '#1E1508',
-                              border: '1px solid #3D2B0E',
-                              color: '#F0E0C0',
+                              background: 'var(--bg-card)',
+                              border: '1px solid var(--border-default)',
+                              color: 'var(--cream)',
                               borderRadius: showTail
                                 ? '18px 18px 18px 4px'
                                 : '18px 18px 18px 18px',
@@ -989,8 +1074,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             <div
               className="px-4 py-3 rounded-[18px] rounded-bl-[4px] flex items-center gap-1.5"
               style={{
-                background: '#1E1508',
-                border: '1px solid #3D2B0E',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-default)',
               }}
             >
               <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
@@ -1005,13 +1090,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
       {/* ── Input bar ─────────────────────────────────────────────────────── */}
       <div
-        className="flex-shrink-0 border-t px-4 py-3"
-        style={{
-          borderColor: '#3D2B0E',
-          background: 'rgba(13,10,6,0.94)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-        }}
+        className="flex-shrink-0 border-t border-[var(--border-default)] px-4 py-3 bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl"
       >
         {mediaError && (
           <div
@@ -1019,7 +1098,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             style={{
               background: 'rgba(196,131,42,0.12)',
               border: '1px solid rgba(196,131,42,0.35)',
-              color: '#F0E0C0',
+              color: 'var(--cream)',
             }}
           >
             {mediaError}
@@ -1050,6 +1129,41 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
           />
         )}
 
+        {videoRecording ? (
+          <div className="mb-3 overflow-hidden rounded-2xl border border-[var(--copper)]/50 bg-black">
+            <video
+              ref={videoPreviewRef}
+              muted
+              playsInline
+              autoPlay
+              className="h-48 w-full object-cover"
+            />
+            <div className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-elevated)]">
+              <span
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ background: '#E5484D', boxShadow: '0 0 8px #E5484D' }}
+              />
+              <span className="flex-1 text-xs font-semibold text-[var(--cream)]">
+                Recording video… {formatDuration(videoRecordSeconds * 1000)}
+              </span>
+              <button
+                type="button"
+                onClick={() => stopVideoRecording(false)}
+                className="rounded-lg px-2 py-1 text-xs font-bold text-[var(--cream-muted)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => stopVideoRecording(true)}
+                className="rounded-lg bg-[var(--copper)] px-3 py-1 text-xs font-bold text-[var(--nn-on-copper)]"
+              >
+                Send
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {recording ? (
           // Recording-only bar — Stop sends, Cancel discards.
           <div className="flex items-center gap-2">
@@ -1061,19 +1175,19 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               }}
               aria-label="Cancel recording"
               className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
-              style={{ background: '#1E1508', border: '1px solid #3D2B0E', color: '#A89070' }}
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', color: 'var(--cream-muted)' }}
             >
               <CloseIcon className="w-4 h-4" />
             </button>
             <div
               className="flex-1 flex items-center gap-2 px-4 py-3 rounded-full"
-              style={{ background: '#1E1508', border: '1px solid rgba(196,131,42,0.4)' }}
+              style={{ background: 'var(--bg-card)', border: '1px solid rgba(196,131,42,0.4)' }}
             >
               <span
                 className="w-2.5 h-2.5 rounded-full"
                 style={{ background: '#E5484D', boxShadow: '0 0 8px #E5484D' }}
               />
-              <span className="text-xs" style={{ color: '#F0E0C0' }}>
+              <span className="text-xs" style={{ color: 'var(--cream)' }}>
                 Recording… {formatDuration(recordSeconds * 1000)}
               </span>
             </div>
@@ -1096,21 +1210,25 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               type="button"
               onClick={handleShareLocation}
               disabled={uploadingMedia || sharingLocation || !!pendingImage}
-              aria-label="Share location"
-              title="Share location"
+              aria-label="Send current location"
+              title="Send current location"
               className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper"
             >
               <LocationPinIcon className="w-4 h-4" />
             </button>
 
-            {/* Selfie — opens front camera on mobile */}
+            {/* Camera — tap selfie, press-and-hold video */}
             <button
               type="button"
-              onClick={handleCameraClick}
-              disabled={uploadingMedia || !!pendingImage}
-              aria-label="Take selfie"
-              title="Take selfie"
-              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper"
+              onPointerDown={onCameraPointerDown}
+              onPointerUp={onCameraPointerUp}
+              onPointerCancel={onCameraPointerCancel}
+              onContextMenu={(e) => e.preventDefault()}
+              disabled={uploadingMedia || !!pendingImage || recording}
+              aria-label="Take photo or hold for video"
+              title="Tap for photo · hold for video"
+              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper touch-none select-none"
+              style={{ touchAction: 'none' }}
             >
               <CameraIcon className="w-4 h-4" />
             </button>
@@ -1139,9 +1257,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 autoComplete="off"
                 className="w-full text-sm px-5 py-3 rounded-full focus:outline-none transition-all duration-200"
                 style={{
-                  background: '#1E1508',
-                  border: '1px solid #3D2B0E',
-                  color: '#F0E0C0',
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border-default)',
+                  color: 'var(--cream)',
                   caretColor: '#C4832A',
                 }}
                 onFocus={(e) => {
@@ -1149,7 +1267,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                   e.currentTarget.style.boxShadow = '0 0 0 3px rgba(196,131,42,0.12)';
                 }}
                 onBlur={(e) => {
-                  e.currentTarget.style.border = '1px solid #3D2B0E';
+                  e.currentTarget.style.border = '1px solid var(--border-default)';
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               />
@@ -1223,9 +1341,9 @@ const LocationBubble: React.FC<LocationBubbleProps> = ({ msg, isMine, showTail, 
         boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
       }
     : {
-        background: '#1E1508',
-        border: '1px solid #3D2B0E',
-        color: '#F0E0C0',
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-default)',
+        color: 'var(--cream)',
         borderRadius: showTail ? '18px 18px 18px 4px' : '18px',
       };
 
@@ -1283,7 +1401,7 @@ const MeetConsentBar: React.FC<MeetConsentBarProps> = ({
     return (
       <div
         className="flex-shrink-0 px-4 py-2.5 border-b text-center"
-        style={{ borderColor: '#3D2B0E', background: 'rgba(22,163,74,0.12)' }}
+        style={{ borderColor: 'var(--border-default)', background: 'rgba(22,163,74,0.12)' }}
         data-testid="meet-consent-mutual"
       >
         <p className="text-xs font-semibold" style={{ color: '#86EFAC' }}>
@@ -1296,13 +1414,13 @@ const MeetConsentBar: React.FC<MeetConsentBarProps> = ({
   return (
     <div
       className="flex-shrink-0 px-4 py-3 border-b"
-      style={{ borderColor: '#3D2B0E', background: 'rgba(30,21,8,0.95)' }}
+      style={{ borderColor: 'var(--border-default)', background: 'color-mix(in srgb, var(--bg-card) 95%, transparent)' }}
       data-testid="meet-consent-bar"
     >
-      <p className="text-xs font-semibold" style={{ color: '#F0E0C0' }}>
+      <p className="text-xs font-semibold" style={{ color: 'var(--cream)' }}>
         Ready to meet?
       </p>
-      <p className="text-[11px] mt-1 leading-relaxed" style={{ color: '#A89070' }}>
+      <p className="text-[11px] mt-1 leading-relaxed" style={{ color: 'var(--cream-muted)' }}>
         Confirm only when you&apos;re happy to arrange a meet-up with {peerName}. Both of you must
         agree before this shows as mutual.
       </p>
@@ -1318,7 +1436,7 @@ const MeetConsentBar: React.FC<MeetConsentBarProps> = ({
               onClick={onRevoke}
               disabled={submitting}
               className="text-[11px] font-semibold underline disabled:opacity-50"
-              style={{ color: '#A89070' }}
+              style={{ color: 'var(--cream-muted)' }}
             >
               Undo
             </button>
@@ -1354,7 +1472,7 @@ const WithdrawMediaButton: React.FC<{ onClick: () => void; loading?: boolean }> 
     disabled={loading}
     data-testid="withdraw-media"
     className="text-[10px] font-semibold underline disabled:opacity-50"
-    style={{ color: '#A89070' }}
+    style={{ color: 'var(--cream-muted)' }}
   >
     {loading ? 'Withdrawing…' : 'Withdraw media'}
   </button>
@@ -1511,7 +1629,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
     <div
       className="mb-3 p-3 rounded-2xl"
       data-testid="image-composer"
-      style={{ background: '#1E1508', border: '1px solid #3D2B0E' }}
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
     >
       <div className="flex gap-3">
         <img
@@ -1519,10 +1637,10 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
           alt="Selected photo preview"
           data-testid="image-composer-preview"
           className="w-20 h-20 rounded-xl object-cover flex-shrink-0"
-          style={{ border: '1px solid #3D2B0E' }}
+          style={{ border: '1px solid var(--border-default)' }}
         />
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold mb-2" style={{ color: '#F0E0C0' }}>
+          <p className="text-xs font-semibold mb-2" style={{ color: 'var(--cream)' }}>
             Photo · <span data-testid="image-composer-rule">{VIEW_RULE_LABELS[rule]}</span>
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -1537,7 +1655,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
                   aria-pressed={active}
                   className="text-[11px] px-2.5 py-1 rounded-full transition-all active:scale-95"
                   style={{
-                    background: active ? 'rgba(196,131,42,0.22)' : '#0D0A06',
+                    background: active ? 'rgba(196,131,42,0.22)' : 'var(--bg-primary)',
                     border: `1px solid ${active ? '#C4832A' : '#3D2B0E'}`,
                     color: active ? '#F0E0C0' : '#A89070',
                   }}
@@ -1554,11 +1672,11 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
                 aria-label="Fewer views"
                 onClick={() => onCustomViewsChange(Math.max(2, customViews - 1))}
                 className="w-6 h-6 rounded-full flex items-center justify-center"
-                style={{ background: '#0D0A06', border: '1px solid #3D2B0E', color: '#C4832A' }}
+                style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', color: '#C4832A' }}
               >
                 −
               </button>
-              <span className="text-xs tabular-nums" style={{ color: '#F0E0C0' }}>
+              <span className="text-xs tabular-nums" style={{ color: 'var(--cream)' }}>
                 {customViews} views
               </span>
               <button
@@ -1566,7 +1684,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
                 aria-label="More views"
                 onClick={() => onCustomViewsChange(Math.min(20, customViews + 1))}
                 className="w-6 h-6 rounded-full flex items-center justify-center"
-                style={{ background: '#0D0A06', border: '1px solid #3D2B0E', color: '#C4832A' }}
+                style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', color: '#C4832A' }}
               >
                 +
               </button>
@@ -1584,7 +1702,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
           disabled={uploading}
           data-testid="image-composer-cancel"
           className="text-xs px-4 py-2 rounded-full disabled:opacity-40"
-          style={{ background: '#0D0A06', border: '1px solid #3D2B0E', color: '#A89070' }}
+          style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', color: 'var(--cream-muted)' }}
         >
           Cancel
         </button>
@@ -1643,9 +1761,9 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
           className="px-4 py-3 flex items-center gap-2 text-xs"
           data-testid="media-withdrawn"
           style={{
-            background: '#1E1508',
-            border: '1px solid #3D2B0E',
-            color: '#A89070',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-default)',
+            color: 'var(--cream-muted)',
             borderRadius: radius,
             minWidth: 200,
           }}
@@ -1668,9 +1786,9 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
         className="px-4 py-3 flex items-center gap-2 text-xs"
         data-testid="image-unavailable"
         style={{
-          background: '#1E1508',
-          border: '1px solid #3D2B0E',
-          color: '#A89070',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-default)',
+          color: 'var(--cream-muted)',
           borderRadius: radius,
           minWidth: 200,
         }}
@@ -1690,7 +1808,7 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
           className="relative overflow-hidden"
           data-testid="image-permanent"
           style={{
-            background: '#1E1508',
+            background: 'var(--bg-card)',
             border: isMine ? 'none' : '1px solid #3D2B0E',
             borderRadius: radius,
             boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
@@ -1757,8 +1875,8 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
       style={{
         width: 220,
         height: 220,
-        background: 'linear-gradient(135deg, #1E1508 0%, #0D0A06 100%)',
-        border: '1px solid #3D2B0E',
+        background: 'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-primary) 100%)',
+        border: '1px solid var(--border-default)',
         borderRadius: radius,
       }}
       aria-label={`Tap to view photo (${remainingLabel})`}
@@ -1770,10 +1888,10 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
         >
           <FlameIcon className="w-5 h-5" style={{ color: '#C4832A' }} />
         </div>
-        <p className="text-xs font-semibold" style={{ color: '#F0E0C0' }}>
+        <p className="text-xs font-semibold" style={{ color: 'var(--cream)' }}>
           Tap to view
         </p>
-        <p className="text-[10px]" style={{ color: '#A89070' }} data-testid="image-remaining">
+        <p className="text-[10px]" style={{ color: 'var(--cream-muted)' }} data-testid="image-remaining">
           {remainingLabel}
         </p>
       </div>
@@ -1871,7 +1989,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
         aria-label="Close photo"
         data-testid="image-viewer-close"
         className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center"
-        style={{ background: 'rgba(30,21,8,0.9)', border: '1px solid #3D2B0E', color: '#F0E0C0' }}
+        style={{ background: 'rgba(30,21,8,0.9)', border: '1px solid var(--border-default)', color: 'var(--cream)' }}
       >
         <CloseIcon className="w-5 h-5" />
       </button>
@@ -1879,10 +1997,10 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
       {status === 'error' ? (
         <div className="flex flex-col items-center gap-3 text-center px-8">
           <FlameIcon className="w-8 h-8" style={{ color: '#C4832A' }} />
-          <p className="text-sm" style={{ color: '#F0E0C0' }}>
+          <p className="text-sm" style={{ color: 'var(--cream)' }}>
             Couldn’t load this photo.
           </p>
-          <p className="text-xs" style={{ color: '#A89070' }}>
+          <p className="text-xs" style={{ color: 'var(--cream-muted)' }}>
             No view was used. Check your connection and try again.
           </p>
           <button
@@ -1925,7 +2043,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
                 style={{
                   background: 'rgba(30,21,8,0.9)',
                   border: '1px solid rgba(196,131,42,0.45)',
-                  color: '#F0E0C0',
+                  color: 'var(--cream)',
                 }}
               >
                 {remainingViewsLabel(meta.remaining, meta.max)} · closes in {secondsLeft}s
@@ -1942,7 +2060,10 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
 };
 
 // ── AudioBubble ──────────────────────────────────────────────────────────────
-// Inline voice-note player with copper play/pause and duration tag.
+// Inline voice-note player. Fetches media into a blob URL so Chrome doesn't
+// stall after the first cluster on signed streaming URLs.
+
+const VOICE_PAUSE_EVENT = 'menrush:voice-pause';
 
 interface AudioBubbleProps {
   msg: Message;
@@ -1954,28 +2075,79 @@ interface AudioBubbleProps {
 
 const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail, onWithdraw, withdrawing }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
-  const url = getPhotoUrl(msg.media_url || undefined);
+  const [readySrc, setReadySrc] = useState<string | null>(null);
+  const remoteUrl = getPhotoUrl(msg.media_url || undefined);
   const duration = msg.audio_duration_ms ?? 0;
   const withdrawn = isWithdrawnMedia(msg);
 
   useEffect(() => {
+    if (withdrawn || !remoteUrl) {
+      setReadySrc(null);
+      return;
+    }
+    let cancelled = false;
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        const res = await fetch(remoteUrl, { signal: controller.signal, credentials: 'omit' });
+        if (!res.ok) throw new Error('fetch_failed');
+        const blob = await res.blob();
+        if (cancelled) return;
+        if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+        const objectUrl = URL.createObjectURL(blob);
+        blobUrlRef.current = objectUrl;
+        setReadySrc(objectUrl);
+      } catch {
+        if (!cancelled) {
+          // Fallback: stream directly (may still hit the short-play bug on some devices).
+          setReadySrc(remoteUrl);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+    };
+  }, [remoteUrl, withdrawn]);
+
+  useEffect(() => {
     if (withdrawn) return;
     const el = audioRef.current;
-    if (!el) return;
+    if (!el || !readySrc) return;
     const onTime = () => setPosition(el.currentTime * 1000);
     const onEnded = () => {
       setPlaying(false);
       setPosition(0);
     };
+    const onPause = () => setPlaying(false);
+    const onPlay = () => setPlaying(true);
+    const onForeignPause = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ except?: HTMLAudioElement }>).detail;
+      if (detail?.except === el) return;
+      el.pause();
+    };
     el.addEventListener('timeupdate', onTime);
     el.addEventListener('ended', onEnded);
+    el.addEventListener('pause', onPause);
+    el.addEventListener('play', onPlay);
+    window.addEventListener(VOICE_PAUSE_EVENT, onForeignPause);
     return () => {
       el.removeEventListener('timeupdate', onTime);
       el.removeEventListener('ended', onEnded);
+      el.removeEventListener('pause', onPause);
+      el.removeEventListener('play', onPlay);
+      window.removeEventListener(VOICE_PAUSE_EVENT, onForeignPause);
     };
-  }, [url, withdrawn]);
+  }, [readySrc, withdrawn]);
 
   const radius = showTail
     ? isMine
@@ -1989,9 +2161,9 @@ const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail, onWith
         className="px-4 py-3 text-xs"
         data-testid="media-withdrawn"
         style={{
-          background: '#1E1508',
-          border: '1px solid #3D2B0E',
-          color: '#A89070',
+          background: 'var(--bg-elevated)',
+          border: '1px solid var(--border-default)',
+          color: 'var(--cream-muted)',
           borderRadius: radius,
         }}
       >
@@ -2000,14 +2172,23 @@ const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail, onWith
     );
   }
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     const el = audioRef.current;
-    if (!el || !url) return;
-    if (playing) {
+    if (!el || !readySrc) return;
+    if (!el.paused) {
       el.pause();
       setPlaying(false);
-    } else {
-      el.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+      return;
+    }
+    window.dispatchEvent(new CustomEvent(VOICE_PAUSE_EVENT, { detail: { except: el } }));
+    try {
+      if (el.ended || el.currentTime > 0 && el.readyState < 2) {
+        el.currentTime = 0;
+      }
+      await el.play();
+      setPlaying(true);
+    } catch {
+      setPlaying(false);
     }
   };
 
@@ -2017,49 +2198,122 @@ const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail, onWith
     <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
       <div
         className="flex items-center gap-3 px-3 py-2.5"
-      style={{
-        background: isMine ? 'linear-gradient(135deg, #C4832A, #A45E18)' : '#1E1508',
-        border: isMine ? 'none' : '1px solid #3D2B0E',
-        color: isMine ? '#FFF5E6' : '#F0E0C0',
-        borderRadius: radius,
-        boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
-        minWidth: 200,
-      }}
-    >
-      <button
-        type="button"
-        onClick={togglePlay}
-        aria-label={playing ? 'Pause voice note' : 'Play voice note'}
-        className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center active:scale-95"
         style={{
-          background: isMine ? 'rgba(13,10,6,0.35)' : 'rgba(196,131,42,0.18)',
-          color: isMine ? '#FFF5E6' : '#C4832A',
+          background: isMine ? 'linear-gradient(135deg, #C4832A, #A45E18)' : 'var(--bg-elevated)',
+          border: isMine ? 'none' : '1px solid var(--border-default)',
+          color: isMine ? '#FFF5E6' : 'var(--cream)',
+          borderRadius: radius,
+          boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
+          minWidth: 200,
         }}
       >
-        {playing ? <PauseIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4 ml-0.5" />}
-      </button>
-      <div className="flex-1 flex flex-col gap-1">
-        <div
-          className="h-1.5 rounded-full overflow-hidden"
-          style={{ background: isMine ? 'rgba(13,10,6,0.35)' : 'rgba(196,131,42,0.18)' }}
+        <button
+          type="button"
+          onClick={() => void togglePlay()}
+          aria-label={playing ? 'Pause voice note' : 'Play voice note'}
+          className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center active:scale-95"
+          style={{
+            background: isMine ? 'rgba(13,10,6,0.35)' : 'rgba(196,131,42,0.18)',
+            color: isMine ? '#FFF5E6' : 'var(--copper)',
+          }}
         >
+          {playing ? <PauseIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4 ml-0.5" />}
+        </button>
+        <div className="flex-1 flex flex-col gap-1">
           <div
-            className="h-full"
-            style={{
-              width: `${progressPct}%`,
-              background: isMine ? '#FFF5E6' : '#C4832A',
-              transition: 'width 120ms linear',
-            }}
-          />
+            className="h-1.5 rounded-full overflow-hidden"
+            style={{ background: isMine ? 'rgba(13,10,6,0.35)' : 'rgba(196,131,42,0.18)' }}
+          >
+            <div
+              className="h-full"
+              style={{
+                width: `${progressPct}%`,
+                background: isMine ? '#FFF5E6' : 'var(--copper)',
+                transition: 'width 120ms linear',
+              }}
+            />
+          </div>
+          <span
+            className="text-[10px] tabular-nums"
+            style={{ color: isMine ? 'rgba(255,245,230,0.75)' : 'var(--cream-muted)' }}
+          >
+            {formatDuration(playing ? position : duration)}
+          </span>
         </div>
-        <span
-          className="text-[10px] tabular-nums"
-          style={{ color: isMine ? 'rgba(255,245,230,0.75)' : '#A89070' }}
-        >
-          {formatDuration(playing ? position : duration)}
-        </span>
+        {readySrc && (
+          <audio ref={audioRef} src={readySrc} preload="auto" playsInline />
+        )}
       </div>
-      {url && <audio ref={audioRef} src={url} preload="metadata" />}
+      {onWithdraw && isMine && (
+        <WithdrawMediaButton onClick={onWithdraw} loading={withdrawing} />
+      )}
+    </div>
+  );
+};
+
+// ── VideoBubble ──────────────────────────────────────────────────────────────
+
+interface VideoBubbleProps {
+  msg: Message;
+  isMine: boolean;
+  showTail: boolean;
+  onWithdraw?: () => void;
+  withdrawing?: boolean;
+}
+
+const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWithdraw, withdrawing }) => {
+  const url = getPhotoUrl(msg.media_url || undefined);
+  const withdrawn = isWithdrawnMedia(msg);
+  const radius = showTail
+    ? isMine
+      ? '18px 18px 4px 18px'
+      : '18px 18px 18px 4px'
+    : '18px';
+
+  if (withdrawn) {
+    return (
+      <div
+        className="px-4 py-3 text-xs"
+        data-testid="media-withdrawn"
+        style={{
+          background: 'var(--bg-elevated)',
+          border: '1px solid var(--border-default)',
+          color: 'var(--cream-muted)',
+          borderRadius: radius,
+        }}
+      >
+        {msg.message || 'Video withdrawn'}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
+      <div
+        className="overflow-hidden"
+        style={{
+          borderRadius: radius,
+          border: isMine ? 'none' : '1px solid var(--border-default)',
+          maxWidth: 260,
+          background: 'var(--bg-elevated)',
+        }}
+      >
+        {url ? (
+          <video
+            src={url}
+            controls
+            playsInline
+            preload="metadata"
+            className="block w-full max-h-[320px] bg-black"
+          />
+        ) : (
+          <div className="px-4 py-6 text-xs text-[var(--cream-muted)]">Video unavailable</div>
+        )}
+        {msg.audio_duration_ms ? (
+          <p className="px-2 py-1 text-[10px] tabular-nums text-[var(--cream-muted)]">
+            {formatDuration(msg.audio_duration_ms)}
+          </p>
+        ) : null}
       </div>
       {onWithdraw && isMine && (
         <WithdrawMediaButton onClick={onWithdraw} loading={withdrawing} />

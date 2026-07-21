@@ -5,8 +5,10 @@ import { useSocket } from '../hooks/useSocket';
 import { createCallTone, type CallToneKind } from '../lib/callTones';
 import { registerOutgoingCallHandler } from '../lib/callBridge';
 import {
+  attachRemoteAudio,
   attachStreamToVideo,
   detachStreamFromVideo,
+  ensureInlinePlayback,
   mapCallMediaError,
   resumeRemotePlayback,
   streamHasAnyTrack,
@@ -79,6 +81,7 @@ export function VideoCallModal() {
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const primaryVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const pipVideoRef = useRef<HTMLVideoElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
 
@@ -100,21 +103,35 @@ export function VideoCallModal() {
     detachStreamFromVideo(localVideoRef.current);
     detachStreamFromVideo(primaryVideoRef.current);
     detachStreamFromVideo(pipVideoRef.current);
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.pause();
+      remoteAudioRef.current.srcObject = null;
+    }
   }, []);
+
+  useEffect(() => {
+    ensureInlinePlayback(localVideoRef.current);
+    ensureInlinePlayback(primaryVideoRef.current);
+    ensureInlinePlayback(pipVideoRef.current);
+    ensureInlinePlayback(remoteAudioRef.current);
+  }, [callStatus]);
 
   useEffect(() => {
     if (callStatus === 'calling') {
       void attachStreamToVideo(localVideoRef.current, localStream, { preferUnmuted: false });
       detachStreamFromVideo(primaryVideoRef.current);
       detachStreamFromVideo(pipVideoRef.current);
+      void attachRemoteAudio(remoteAudioRef.current, null);
       return;
     }
 
     if (callStatus === 'connected') {
+      // Keep remote <video> muted on iOS — audio plays via dedicated <audio>.
       void attachStreamToVideo(primaryVideoRef.current, remoteStream, {
-        preferUnmuted: true,
-      }).then((result) => {
-        if (result === 'muted-fallback') setRemoteAudioBlocked(true);
+        preferUnmuted: false,
+      });
+      void attachRemoteAudio(remoteAudioRef.current, remoteStream).then((result) => {
+        if (result === 'blocked') setRemoteAudioBlocked(true);
         else if (result === 'playing') setRemoteAudioBlocked(false);
       });
       void attachStreamToVideo(pipVideoRef.current, localStream, { preferUnmuted: false });
@@ -168,6 +185,11 @@ export function VideoCallModal() {
       fromName: string;
       offer: RTCSessionDescriptionInit;
     }) => {
+      // ICE restart reuses call:incoming while already connected — do not reset UI to ringing.
+      const status = useCallStore.getState().callStatus;
+      if (status === 'connected' || status === 'calling') {
+        return;
+      }
       setCallSetupError(null);
       setIncoming(from, fromName, offer);
     };
@@ -466,6 +488,7 @@ export function VideoCallModal() {
           ref={primaryVideoRef}
           autoPlay
           playsInline
+          muted
           className="absolute inset-0 h-full w-full object-cover"
           style={{ background: '#0D0A06' }}
         />
@@ -498,7 +521,7 @@ export function VideoCallModal() {
             type="button"
             data-testid="enable-call-audio"
             onClick={() => {
-              void resumeRemotePlayback(primaryVideoRef.current).then((ok) => {
+              void resumeRemotePlayback(primaryVideoRef.current, remoteAudioRef.current).then((ok) => {
                 if (ok) setRemoteAudioBlocked(false);
               });
             }}
@@ -508,6 +531,9 @@ export function VideoCallModal() {
             Tap for sound
           </button>
         ) : null}
+
+        {/* iOS Safari: remote audio is more reliable on a dedicated element */}
+        <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
 
         {/* Draggable + resizable local PiP */}
         <div

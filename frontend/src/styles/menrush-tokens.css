@@ -168,9 +168,10 @@
 
 /*
  * Light appearance — same copper brand, warmer paper surfaces.
- * Applied via data-theme="light" on <html> (see lib/theme.ts).
+ * Applied via data-theme="light" (and theme-light class) on <html> — see lib/theme.ts.
  */
-html[data-theme='light'] {
+html[data-theme='light'],
+html.theme-light {
   --nn-bg: #F5EDE0;
   --nn-card: #FFF8F0;
   --nn-elevated: #FFFFFF;

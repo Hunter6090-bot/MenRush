@@ -16,6 +16,8 @@ export const RegisterSchema = z.object({
 export const LoginSchema = z.object({
   email: normalizedEmail,
   password: z.string(),
+  /** Opaque trusted-device token from a prior "Trust this device" login. */
+  deviceTrustToken: z.string().min(32).max(128).optional(),
 });
 
 export const ForgotPasswordSchema = z.object({
@@ -37,6 +39,11 @@ export const ChangePasswordSchema = z
     path: ['new_password'],
   });
 
+export const ChangeEmailSchema = z.object({
+  current_password: z.string().min(1, 'Current password is required'),
+  new_email: normalizedEmail,
+});
+
 export const TwoFactorCodeSchema = z.object({
   code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code from your authenticator app'),
 });
@@ -44,6 +51,7 @@ export const TwoFactorCodeSchema = z.object({
 export const TwoFactorVerifyLoginSchema = z.object({
   pendingToken: z.string().min(1),
   code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code from your authenticator app'),
+  trustThisDevice: z.boolean().optional(),
 });
 
 export const ProfileSchema = z.object({
@@ -76,12 +84,12 @@ export const LocationMessageSchema = z.object({
   lng: z.number().min(-180).max(180),
 });
 
-export const MEDIA_KINDS = ['image', 'audio'] as const;
-export const MESSAGE_MEDIA_KINDS = ['image', 'audio', 'location'] as const;
+export const MEDIA_KINDS = ['image', 'audio', 'video'] as const;
+export const MESSAGE_MEDIA_KINDS = ['image', 'audio', 'video', 'location'] as const;
 export const MediaMessageFormSchema = z.object({
   receiver_id: z.string().uuid(),
   kind: z.enum(MEDIA_KINDS),
-  /** Optional caption when sending an image. Ignored for audio. */
+  /** Optional caption when sending an image/video. Ignored for audio. */
   caption: z.string().max(500).optional(),
   /** Whether the image is disappearing (view-limited) vs. kept permanently. */
   disappearing: z
@@ -98,7 +106,7 @@ export const MediaMessageFormSchema = z.object({
    * the image is permanent. Capped to keep "disappearing" meaningful.
    */
   max_views: z.coerce.number().int().min(1).max(99).optional(),
-  /** Duration in ms — required for audio kind. */
+  /** Duration in ms — required for audio/video kinds. */
   duration_ms: z.coerce.number().int().min(0).max(180_000).optional(),
 });
 
@@ -169,6 +177,7 @@ export type LoginInput = z.infer<typeof LoginSchema>;
 export type ForgotPasswordInput = z.infer<typeof ForgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
 export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
+export type ChangeEmailInput = z.infer<typeof ChangeEmailSchema>;
 export type ProfileInput = z.infer<typeof ProfileSchema>;
 export type LocationInput = z.infer<typeof LocationSchema>;
 export type MessageInput = z.infer<typeof MessageSchema>;

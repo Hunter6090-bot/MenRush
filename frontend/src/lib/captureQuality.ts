@@ -64,11 +64,13 @@ function sampleRegion(
 
 export type DocumentTemplateKind = 'passport' | 'licence';
 
+type FrameBounds = { left: number; top: number; width: number; height: number };
+
 export function documentFrameBounds(
   w: number,
   h: number,
   template: DocumentTemplateKind = 'licence',
-): { left: number; top: number; width: number; height: number } {
+): FrameBounds {
   if (template === 'passport') {
     const width = w * 0.76;
     const height = h * 0.7;
@@ -77,6 +79,88 @@ export function documentFrameBounds(
   const width = w * 0.86;
   const height = width / 1.58;
   return { left: (w - width) / 2, top: (h - height) / 2, width, height };
+}
+
+export function selfieFrameBounds(w: number, h: number): FrameBounds {
+  const height = h * 0.68;
+  const width = Math.min(height * 0.75, w * 0.68);
+  return { left: (w - width) / 2, top: (h - height) / 2, width, height };
+}
+
+function coverFrameSourceBounds(
+  videoWidth: number,
+  videoHeight: number,
+  displayWidth: number,
+  displayHeight: number,
+  displayedFrame: FrameBounds,
+): FrameBounds | null {
+  if (!videoWidth || !videoHeight || !displayWidth || !displayHeight) return null;
+
+  const scale = Math.max(displayWidth / videoWidth, displayHeight / videoHeight);
+  const renderedWidth = videoWidth * scale;
+  const renderedHeight = videoHeight * scale;
+  const hiddenLeft = (renderedWidth - displayWidth) / 2;
+  const hiddenTop = (renderedHeight - displayHeight) / 2;
+  const left = (displayedFrame.left + hiddenLeft) / scale;
+  const top = (displayedFrame.top + hiddenTop) / scale;
+  const right = (displayedFrame.left + displayedFrame.width + hiddenLeft) / scale;
+  const bottom = (displayedFrame.top + displayedFrame.height + hiddenTop) / scale;
+  const clampedLeft = Math.max(0, Math.min(videoWidth, left));
+  const clampedTop = Math.max(0, Math.min(videoHeight, top));
+  const clampedRight = Math.max(0, Math.min(videoWidth, right));
+  const clampedBottom = Math.max(0, Math.min(videoHeight, bottom));
+  const width = clampedRight - clampedLeft;
+  const height = clampedBottom - clampedTop;
+
+  if (width < 1 || height < 1) return null;
+  return { left: clampedLeft, top: clampedTop, width, height };
+}
+
+/**
+ * Map the scanner guide shown over an object-cover video back to source-camera pixels.
+ * This prevents saving anything outside the area the user was told would be captured.
+ */
+export function documentFrameSourceBounds(
+  videoWidth: number,
+  videoHeight: number,
+  displayWidth: number,
+  displayHeight: number,
+  template: DocumentTemplateKind = 'licence',
+): FrameBounds | null {
+  const displayedFrame = documentFrameBounds(displayWidth, displayHeight, template);
+  return coverFrameSourceBounds(
+    videoWidth,
+    videoHeight,
+    displayWidth,
+    displayHeight,
+    displayedFrame,
+  );
+}
+
+export function selfieFrameSourceBounds(source: HTMLVideoElement): FrameBounds | null {
+  return coverFrameSourceBounds(
+    source.videoWidth,
+    source.videoHeight,
+    source.clientWidth,
+    source.clientHeight,
+    selfieFrameBounds(source.clientWidth, source.clientHeight),
+  );
+}
+
+function frameBoundsForSource(
+  source: HTMLVideoElement | HTMLCanvasElement,
+  template: DocumentTemplateKind,
+): FrameBounds | null {
+  if (source instanceof HTMLVideoElement) {
+    return documentFrameSourceBounds(
+      source.videoWidth,
+      source.videoHeight,
+      source.clientWidth,
+      source.clientHeight,
+      template,
+    );
+  }
+  return documentFrameBounds(source.width, source.height, template);
 }
 
 /** Crop the aligned ID region from a live camera frame (matches overlay + quality checks). */
@@ -88,13 +172,52 @@ export function captureDocumentRegion(
   const h = source.videoHeight;
   if (!w || !h) return null;
 
-  const { left, top, width, height } = documentFrameBounds(w, h, template);
+  const frame = documentFrameSourceBounds(
+    w,
+    h,
+    source.clientWidth,
+    source.clientHeight,
+    template,
+  );
+  if (!frame) return null;
+  const { left, top, width, height } = frame;
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(width);
   canvas.height = Math.round(height);
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
   ctx.drawImage(source, left, top, width, height, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+/** Capture only the portrait region represented by the verification selfie oval. */
+export function captureSelfieRegion(
+  source: HTMLVideoElement,
+  mirror = false,
+): HTMLCanvasElement | null {
+  const frame = selfieFrameSourceBounds(source);
+  if (!frame) return null;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(frame.width);
+  canvas.height = Math.round(frame.height);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  if (mirror) {
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+  }
+  ctx.drawImage(
+    source,
+    frame.left,
+    frame.top,
+    frame.width,
+    frame.height,
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  );
   return canvas;
 }
 
@@ -115,7 +238,10 @@ export function assessDocumentAlignment(
     return { ok: false, brightness: 0, sharpness: 0, message: 'Could not read camera.' };
   }
 
-  const frame = documentFrameBounds(w, h, template);
+  const frame = frameBoundsForSource(source, template);
+  if (!frame) {
+    return { ok: false, brightness: 0, sharpness: 0, message: 'Could not map camera frame.' };
+  }
   const patchW = frame.width * 0.18;
   const patchH = frame.height * 0.18;
   const insetX = frame.width * 0.06;
@@ -240,11 +366,13 @@ export function assessFrameQuality(
     return { ok: false, brightness: 0, sharpness: 0, message: 'Could not read camera.' };
   }
 
-  const cropW = w * 0.55;
-  const cropH = h * 0.62;
-  const sx = (w - cropW) / 2;
-  const sy = (h - cropH) / 2;
-  ctx.drawImage(source, sx, sy, cropW, cropH, 0, 0, size, size);
+  const frame = source instanceof HTMLVideoElement
+    ? selfieFrameSourceBounds(source)
+    : selfieFrameBounds(source.width, source.height);
+  if (!frame) {
+    return { ok: false, brightness: 0, sharpness: 0, message: 'Could not map camera frame.' };
+  }
+  ctx.drawImage(source, frame.left, frame.top, frame.width, frame.height, 0, 0, size, size);
 
   const { data } = ctx.getImageData(0, 0, size, size);
   let brightnessSum = 0;

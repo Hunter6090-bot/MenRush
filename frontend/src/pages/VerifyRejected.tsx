@@ -82,12 +82,12 @@ export const VerifyRejected: React.FC = () => {
             >
               Continue to the app
             </button>
-            <button type="button" onClick={() => navigate('/verify')} className={publicSecondaryButtonClass}>
+            <button type="button" onClick={() => navigate('/verify/id')} className={publicSecondaryButtonClass}>
               Try verification again
             </button>
           </>
         ) : (
-          <button type="button" onClick={() => navigate('/verify')} className={publicPrimaryButtonClass}>
+          <button type="button" onClick={() => navigate('/verify/id')} className={publicPrimaryButtonClass}>
             Try again
           </button>
         )}

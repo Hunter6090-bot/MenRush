@@ -65,10 +65,30 @@ export function getMailer(): Transporter {
   return cached;
 }
 
+/** Pull a bare email from `addr`, `"Name" <addr>`, or `Name <addr>`. */
+export function extractEmailAddress(raw: string): string {
+  const value = raw.trim();
+  if (!value) return value;
+  const angled = value.match(/<([^>]+)>/);
+  const candidate = (angled?.[1] || value).trim().replace(/^mailto:/i, '');
+  const match = candidate.match(/[\w.+-]+@[\w.-]+\.\w+/);
+  return (match?.[0] || candidate).trim();
+}
+
+/**
+ * Force the visible From name to MenRush. Strips any prior display name
+ * (e.g. "Bronze Apps UK Limited") so inbox clients don't show the legal entity.
+ */
+export function formatMenRushFromAddress(raw: string, displayName = 'MenRush'): string {
+  const email = extractEmailAddress(raw);
+  if (!email) return raw.trim();
+  return `"${displayName}" <${email}>`;
+}
+
 export function getMailerFromAddress(): string {
   const user = (process.env.ZOHO_SMTP_USER || '').trim();
   const from = (process.env.MAIL_FROM_EMAIL || process.env.CONTACT_FROM_EMAIL || user).trim();
-  return from;
+  return extractEmailAddress(from) || from;
 }
 
 export function resetMailer(): void {
@@ -160,16 +180,6 @@ function formatToForLog(to: string | string[]): string {
   return Array.isArray(to) ? to.join(', ') : to;
 }
 
-function formatMenRushFromAddress(raw: string): string {
-  const value = raw.trim();
-  if (!value) return value;
-  if (/^"?MenRush"?\s*</i.test(value)) return value;
-
-  const angleMatch = value.match(/<([^>]+)>/);
-  const email = angleMatch?.[1]?.trim() || value;
-  return `"MenRush" <${email}>`;
-}
-
 /**
  * Send a transactional email via Resend. Not wired into contact/drip yet —
  * used by POST /api/admin/test-email and future flows.
@@ -185,17 +195,20 @@ function stripHtmlToText(html: string): string {
 
 async function sendViaZohoSmtp(params: SendEmailParams): Promise<{ id: string }> {
   const transporter = getMailer();
-  const from = (
+  const fromRaw = (
     process.env.MAIL_FROM_EMAIL ||
     process.env.CONTACT_FROM_EMAIL ||
     getMailerFromAddress()
   ).trim();
+  const fromEmail = extractEmailAddress(fromRaw) || fromRaw;
   const replyTo = (process.env.RESEND_REPLY_TO || 'hello@menrush.com').trim();
   const recipients = Array.isArray(params.to) ? params.to : [params.to];
   const text = params.text || stripHtmlToText(params.html);
 
+  // Object form avoids nested `"MenRush" <Name <email>>` when env already
+  // includes a legal-entity display name (e.g. Bronze Apps UK Limited).
   const info = await transporter.sendMail({
-    from: `"MenRush" <${from}>`,
+    from: { name: 'MenRush', address: fromEmail },
     to: recipients,
     replyTo,
     subject: params.subject,

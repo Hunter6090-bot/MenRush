@@ -20,7 +20,7 @@ export function PremiumGate({
     'Boost — top of nearby for 30 min',
     'Incognito · advanced filters',
   ],
-  ctaLabel = 'Unlock — £9.99/mo',
+  ctaLabel = 'Unlock — £6.99/mo',
   onClose,
   onUnlock,
 }: PremiumGateProps) {

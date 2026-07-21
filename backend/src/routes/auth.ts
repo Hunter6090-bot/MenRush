@@ -2,17 +2,20 @@ import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { authService } from '../services/auth.service';
 import { twoFactorService } from '../services/two-factor.service';
+import { trustedDeviceService } from '../services/trusted-device.service';
 import {
   RegisterSchema,
   LoginSchema,
   ForgotPasswordSchema,
   ResetPasswordSchema,
   ChangePasswordSchema,
+  ChangeEmailSchema,
   TwoFactorCodeSchema,
   TwoFactorVerifyLoginSchema,
 } from '../types/validation';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 import { query } from '../db';
+import { z } from 'zod';
 
 const router = Router();
 
@@ -98,13 +101,62 @@ router.post('/change-password', authMiddleware, authLimiter, async (req: AuthReq
   }
 });
 
+router.get('/account', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const account = await authService.getAccountEmail(req.userId!);
+    res.json(account);
+  } catch (error: any) {
+    const msg = error?.message || 'Could not load account';
+    res.status(msg === 'User not found' ? 404 : 400).json({ error: msg });
+  }
+});
+
+router.post('/change-email', authMiddleware, authLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const data = ChangeEmailSchema.parse(req.body);
+    const result = await authService.changeEmail(req.userId!, data);
+    res.json({ ok: true, email: result.email, message: 'Email updated.' });
+  } catch (error: any) {
+    const msg = error?.message || 'Could not change email';
+    const status =
+      msg === 'Current password is incorrect' || msg === 'User not found' ? 401 : 400;
+    res.status(status).json({ error: msg });
+  }
+});
+
 router.post('/2fa/verify', authLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = TwoFactorVerifyLoginSchema.parse(req.body);
-    const result = await authService.completeTwoFactorLogin(data.pendingToken, data.code);
+    const result = await authService.completeTwoFactorLogin(data.pendingToken, data.code, {
+      trustThisDevice: !!data.trustThisDevice,
+      userAgent: req.get('user-agent') || undefined,
+    });
     res.json(result);
   } catch (error: any) {
     res.status(401).json({ error: error.message });
+  }
+});
+
+router.get('/2fa/trusted-devices', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const headerToken = req.get('x-device-trust-token') || undefined;
+    const devices = await trustedDeviceService.list(req.userId!, headerToken);
+    res.json({ devices });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.delete('/2fa/trusted-devices/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const revoked = await trustedDeviceService.revoke(req.userId!, id);
+    if (!revoked) {
+      return res.status(404).json({ error: 'Trusted device not found' });
+    }
+    res.json({ ok: true });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
   }
 });
 

@@ -3,9 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { TwoFactorSettings } from '../components/TwoFactorSettings';
-import { LiveLocationSharingToggle } from '../components/LiveLocationSharingToggle';
 import { PasswordInput } from '../components/PasswordInput';
-import { authAPI, profileMetaAPI, usersAPI } from '../api/client';
+import { authAPI, usersAPI } from '../api/client';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { RadiusMilesSelect } from '../components/RadiusMilesSelect';
 import { clampRadiusKm, formatRadiusMiles } from '../lib/discoveryFormat';
@@ -13,17 +12,19 @@ import { ROUTE_LABELS } from '../lib/routeLabels';
 import {
   readThemePreference,
   setThemePreference,
+  THEME_CHANGED_EVENT,
   type ThemePreference,
 } from '../lib/theme';
+import { clearDeviceTrustToken } from '../lib/deviceTrust';
 
 const RADIUS_KEY = 'menrush_default_radius_km';
 
 const fieldClass =
-  'w-full rounded-xl border border-[rgba(196,131,42,0.28)] bg-[#1A1208] px-3.5 py-2.5 text-[14px] text-[var(--cream)] placeholder:text-[#6B5340] outline-none focus:border-[var(--copper)]';
+  'w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3.5 py-2.5 text-[14px] text-[var(--cream)] placeholder:text-[var(--cream-faded)] outline-none focus:border-[var(--copper)]';
 
 function SectionLabel({ children }: { children: string }) {
   return (
-    <p className="mb-2 mt-5 first:mt-0 px-0.5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#8B6B42]">
+    <p className="mb-2 mt-5 first:mt-0 px-0.5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[var(--cream-muted)]">
       {children}
     </p>
   );
@@ -32,14 +33,23 @@ function SectionLabel({ children }: { children: string }) {
 export const Settings = () => {
   const navigate = useNavigate();
   const logout = useAuthStore((s) => s.logout);
+  const patchUser = useAuthStore((s) => s.patchUser);
+  const storeEmail = useAuthStore((s) => s.user?.email);
   const setLocation = useLocationStore((s) => s.setLocation);
   const [savedRadius, setSavedRadius] = useState(() =>
     clampRadiusKm(Number(localStorage.getItem(RADIUS_KEY) ?? 5)),
   );
-  const [sharingLiveLocation, setSharingLiveLocation] = useState(true);
   const [hasPin, setHasPin] = useState<boolean | null>(null);
   const [locating, setLocating] = useState(false);
   const [locNotice, setLocNotice] = useState('');
+
+  const [accountEmail, setAccountEmail] = useState(storeEmail ?? '');
+  const [showChangeEmail, setShowChangeEmail] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [emailPassword, setEmailPassword] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [emailSuccess, setEmailSuccess] = useState('');
+  const [emailBusy, setEmailBusy] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -53,10 +63,6 @@ export const Settings = () => {
   const storeLng = useLocationStore((s) => s.lng);
 
   useEffect(() => {
-    profileMetaAPI
-      .getLiveLocationSharing()
-      .then((res) => setSharingLiveLocation(res.data.enabled !== false))
-      .catch(() => {});
     usersAPI
       .getMe()
       .then((res) => {
@@ -67,7 +73,31 @@ export const Settings = () => {
         if (ready) setLocation(lat, lng);
       })
       .catch(() => setHasPin(null));
-  }, [setLocation]);
+
+    authAPI
+      .getAccount()
+      .then((res) => {
+        if (res.data?.email) {
+          setAccountEmail(res.data.email);
+          patchUser({ email: res.data.email });
+        }
+      })
+      .catch(() => {});
+  }, [setLocation, patchUser]);
+
+  useEffect(() => {
+    if (storeEmail) setAccountEmail(storeEmail);
+  }, [storeEmail]);
+
+  useEffect(() => {
+    const onTheme = (e: Event) => {
+      const detail = (e as CustomEvent<{ preference?: ThemePreference }>).detail;
+      if (detail?.preference) setThemePref(detail.preference);
+      else setThemePref(readThemePreference());
+    };
+    window.addEventListener(THEME_CHANGED_EVENT, onTheme);
+    return () => window.removeEventListener(THEME_CHANGED_EVENT, onTheme);
+  }, []);
 
   // Keep Settings status in sync if GPS is published elsewhere.
   useEffect(() => {
@@ -106,6 +136,48 @@ export const Settings = () => {
     setSavedRadius(clamped);
   };
 
+  const handleChangeEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEmailError('');
+    setEmailSuccess('');
+
+    const trimmed = newEmail.trim().toLowerCase();
+    if (!trimmed || !trimmed.includes('@')) {
+      setEmailError('Enter a valid email address.');
+      return;
+    }
+    if (trimmed === accountEmail.trim().toLowerCase()) {
+      setEmailError('New email must be different from your current email.');
+      return;
+    }
+    if (!emailPassword) {
+      setEmailError('Enter your current password to confirm.');
+      return;
+    }
+
+    setEmailBusy(true);
+    try {
+      const res = await authAPI.changeEmail({
+        current_password: emailPassword,
+        new_email: trimmed,
+      });
+      const next = res.data.email ?? trimmed;
+      setAccountEmail(next);
+      patchUser({ email: next });
+      setEmailSuccess('Email updated.');
+      setNewEmail('');
+      setEmailPassword('');
+      setShowChangeEmail(false);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+        'Could not change email.';
+      setEmailError(msg);
+    } finally {
+      setEmailBusy(false);
+    }
+  };
+
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPwError('');
@@ -130,6 +202,7 @@ export const Settings = () => {
         current_password: currentPassword,
         new_password: newPassword,
       });
+      clearDeviceTrustToken();
       setPwSuccess('Password updated.');
       setCurrentPassword('');
       setNewPassword('');
@@ -160,6 +233,90 @@ export const Settings = () => {
 
         <div className="space-y-2.5">
           <SectionLabel>Account</SectionLabel>
+
+          <section className="mr-card p-4" data-testid="settings-email">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[15px] font-bold text-[var(--cream)]">Email</p>
+                <p className="mt-1 break-all text-[13px] text-[var(--cream-muted)]">
+                  {accountEmail || 'Loading…'}
+                </p>
+              </div>
+              {!showChangeEmail ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowChangeEmail(true);
+                    setEmailError('');
+                    setEmailSuccess('');
+                    setNewEmail('');
+                    setEmailPassword('');
+                  }}
+                  className="shrink-0 rounded-full border border-[rgba(196,131,42,0.4)] px-3.5 py-1.5 text-[12px] font-extrabold uppercase tracking-wide text-[#E0A14A] transition-colors hover:border-[var(--copper)] hover:bg-[rgba(196,131,42,0.1)]"
+                >
+                  Change
+                </button>
+              ) : null}
+            </div>
+
+            {emailSuccess && !showChangeEmail ? (
+              <p className="mt-3 text-[13px] font-semibold text-[#8FC773]">{emailSuccess}</p>
+            ) : null}
+
+            {showChangeEmail ? (
+              <form onSubmit={(e) => void handleChangeEmail(e)} className="mt-4 space-y-3">
+                <div>
+                  <label htmlFor="settings-new-email" className="mb-1.5 block text-[12px] font-semibold text-[var(--cream-muted)]">
+                    New email
+                  </label>
+                  <input
+                    id="settings-new-email"
+                    type="email"
+                    autoComplete="email"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    className={fieldClass}
+                    placeholder="you@example.com"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="settings-email-password" className="mb-1.5 block text-[12px] font-semibold text-[var(--cream-muted)]">
+                    Current password
+                  </label>
+                  <PasswordInput
+                    id="settings-email-password"
+                    value={emailPassword}
+                    onChange={setEmailPassword}
+                    autoComplete="current-password"
+                    className={fieldClass}
+                  />
+                </div>
+                {emailError ? <p className="text-[13px] text-[#E0A14A]">{emailError}</p> : null}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button
+                    type="submit"
+                    disabled={emailBusy}
+                    className="rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] disabled:opacity-60"
+                  >
+                    {emailBusy ? 'Saving…' : 'Update email'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={emailBusy}
+                    onClick={() => {
+                      setShowChangeEmail(false);
+                      setNewEmail('');
+                      setEmailPassword('');
+                      setEmailError('');
+                    }}
+                    className="rounded-full border border-[var(--border-default)] px-4 py-2 text-[12px] font-bold text-[var(--cream-muted)] transition-colors hover:border-[var(--cream-muted)] disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : null}
+          </section>
 
           <section className="mr-card p-4" data-testid="settings-change-password">
             <div className="flex items-start justify-between gap-3">
@@ -249,7 +406,7 @@ export const Settings = () => {
                       setConfirmPassword('');
                       setPwError('');
                     }}
-                    className="rounded-full border border-[var(--border-default)] px-4 py-2 text-[12px] font-bold text-[var(--cream-muted)] transition-colors hover:border-[#A89070] disabled:opacity-60"
+                    className="rounded-full border border-[var(--border-default)] px-4 py-2 text-[12px] font-bold text-[var(--cream-muted)] transition-colors hover:border-[var(--cream-muted)] disabled:opacity-60"
                   >
                     Cancel
                   </button>
@@ -273,7 +430,7 @@ export const Settings = () => {
           <section className="mr-card p-4" data-testid="settings-appearance">
             <p className="text-[15px] font-bold text-[var(--cream)]">Theme</p>
             <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
-              Light, dark, or match your device.
+              Light, dark, or match your device. Same control as the sun/bulb button on every screen.
             </p>
             <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Theme">
               {(
@@ -321,6 +478,7 @@ export const Settings = () => {
             <p className="text-[15px] font-bold text-[var(--cream)]">Device location</p>
             <p className="mt-1 text-[13px] leading-relaxed text-[var(--cream-muted)]">
               Needed for Nearby. Others see approximate distance only — not your exact public pin.
+              In chat you can still send a one-time location message when you choose.
             </p>
             <p className="mt-2 text-[12px] font-semibold text-[var(--cream-muted)]">
               Status:{' '}
@@ -354,21 +512,6 @@ export const Settings = () => {
             >
               {locating ? 'Locating…' : hasPin ? 'Refresh location' : 'Allow location'}
             </button>
-          </section>
-
-          <section className="mr-card p-4">
-            <p className="mb-3 text-[15px] font-bold text-[var(--cream)]">Live pin with matches</p>
-            <LiveLocationSharingToggle
-              enabled={sharingLiveLocation}
-              onToggle={async (enabled) => {
-                setSharingLiveLocation(enabled);
-                try {
-                  await profileMetaAPI.setLiveLocationSharing(enabled);
-                } catch {
-                  setSharingLiveLocation((current) => !current);
-                }
-              }}
-            />
           </section>
 
           <SectionLabel>Discovery</SectionLabel>

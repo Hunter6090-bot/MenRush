@@ -43,6 +43,7 @@ import { notificationService } from './services/notification.service';
 import { messageService } from './services/message.service';
 import { accessControl } from './security/access';
 import { logResendMailerStatus } from './services/mailer.service';
+import { startVerificationRetentionWorker } from './services/verification/retention.worker';
 import { Sentry } from './observability/sentry';
 import { corsOrigin } from './security/cors';
 import { query } from './db';
@@ -81,11 +82,16 @@ app.use(
   express.static(uploadsRoot, {
     dotfiles: 'deny',
     fallthrough: true,
-    immutable: true,
-    maxAge: '30d',
+    // Do not immutable-cache — profile photos are replaced; avoid sticky 404s in CDNs.
+    maxAge: '1h',
+    setHeaders(res) {
+      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    },
   }),
 );
 app.use('/uploads', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   res.status(404).json({ error: 'media_not_found' });
 });
 app.set('io', io);
@@ -472,6 +478,7 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   startPulseExpiryCron();
+  startVerificationRetentionWorker();
   // Optional: in-process drip worker. Prefer an external cron in production
   // (POST /api/waitlist/admin/run); only enable in-process when running a
   // single backend instance without separate scheduling.

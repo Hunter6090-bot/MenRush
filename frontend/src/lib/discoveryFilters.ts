@@ -92,7 +92,7 @@ export const STATUS_FILTER_OPTIONS = [
   { id: 'online', label: 'Online now' },
   { id: 'pulsing', label: 'Pulsing now' },
   { id: 'hasPhoto', label: 'Has photo' },
-  { id: 'verified', label: 'Verified' },
+  { id: 'verified', label: 'Trust checked' },
 ] as const;
 
 export type StatusFilterId = (typeof STATUS_FILTER_OPTIONS)[number]['id'];
@@ -186,7 +186,7 @@ export function applyDiscoveryClientFilters(users: NearbyUser[], state: Discover
     result = result.filter((u) => !!u.photo_url);
   }
   if (state.status.includes('verified')) {
-    result = result.filter((u) => u.is_verified);
+    result = result.filter((u) => u.is_verified || u.authenticity_status === 'verified');
   }
 
   const { minAge, maxAge } = getAgeRange(state.agePreset);

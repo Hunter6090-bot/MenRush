@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { fallbackAvatarForAge, isUploadPath, resolveAssetUrl } from '../lib/assetUrl';
+import {
+  fallbackAvatarForAge,
+  isUploadPath,
+  resolveAssetUrl,
+  resolveUploadUrlCandidates,
+} from '../lib/assetUrl';
 
 type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
@@ -23,6 +28,48 @@ const sizes: Record<Size, { outer: string; text: string; dot: string; dotPos: st
 
 export const getPhotoUrl = (url?: string) => resolveAssetUrl(url);
 
+/**
+ * Walk upload URL candidates (API host ↔ same-origin rewrite) before generic fallback.
+ * Keeps real /uploads photos visible when Vercel rewrite and VITE_API_URL disagree.
+ */
+export function useResolvingPhotoSrc(
+  photoUrl?: string | null,
+  age?: number,
+): { src: string | undefined; onError: () => void } {
+  const [candidateIdx, setCandidateIdx] = useState(0);
+  const [phase, setPhase] = useState<'candidates' | 'generic' | 'empty'>('candidates');
+
+  const candidates = resolveUploadUrlCandidates(photoUrl);
+
+  useEffect(() => {
+    setCandidateIdx(0);
+    setPhase('candidates');
+  }, [photoUrl]);
+
+  let src: string | undefined;
+  if (phase === 'empty') src = undefined;
+  else if (phase === 'generic') src = resolveAssetUrl(fallbackAvatarForAge(age));
+  else src = candidates[candidateIdx] ?? resolveAssetUrl(photoUrl);
+
+  const onError = () => {
+    if (phase === 'candidates' && candidateIdx + 1 < candidates.length) {
+      setCandidateIdx((i) => i + 1);
+      return;
+    }
+    if (phase === 'candidates' && (isUploadPath(photoUrl) || photoUrl)) {
+      setPhase('generic');
+      return;
+    }
+    if (phase === 'generic') {
+      setPhase('empty');
+      return;
+    }
+    setPhase('empty');
+  };
+
+  return { src, onError };
+}
+
 export const UserAvatar: React.FC<UserAvatarProps> = ({
   name,
   photoUrl,
@@ -34,27 +81,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
 }) => {
   const s = sizes[size];
   const initial = name?.[0]?.toUpperCase() ?? '?';
-  const [src, setSrc] = useState<string | undefined>(() => resolveAssetUrl(photoUrl));
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    setFailed(false);
-    setSrc(resolveAssetUrl(photoUrl));
-  }, [photoUrl]);
-
-  const handleError = () => {
-    if (failed) {
-      setSrc(undefined);
-      return;
-    }
-    setFailed(true);
-    // Broken upload → generic avatar so the grid never shows empty rings.
-    if (isUploadPath(photoUrl) || photoUrl) {
-      setSrc(resolveAssetUrl(fallbackAvatarForAge(age)));
-      return;
-    }
-    setSrc(undefined);
-  };
+  const { src, onError } = useResolvingPhotoSrc(photoUrl, age);
 
   return (
     <div className={`relative flex-shrink-0 ${className}`}>
@@ -66,7 +93,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
             src={src}
             alt={name}
             className="w-full h-full object-cover"
-            onError={handleError}
+            onError={onError}
             loading="lazy"
           />
         ) : (

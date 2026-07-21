@@ -48,12 +48,13 @@
           var resolved = dark ? 'dark' : 'light';
           document.documentElement.dataset.theme = resolved;
           document.documentElement.style.colorScheme = resolved;
+          document.documentElement.classList.toggle('theme-light', !dark);
+          document.documentElement.classList.toggle('theme-dark', dark);
           var meta = document.querySelector('meta[name="theme-color"]');
           if (meta) meta.setAttribute('content', dark ? '#0D0A06' : '#F5EDE0');
-          if (!dark) {
-            document.documentElement.classList.add('theme-light');
-            document.body && (document.body.style.background = '#F5EDE0');
-            document.body && (document.body.style.color = '#1A1208');
+          if (document.body) {
+            document.body.style.background = dark ? '#0D0A06' : '#F5EDE0';
+            document.body.style.color = dark ? '#F0E0C0' : '#1A1208';
           }
         } catch (e) { /* ignore */ }
 
@@ -72,7 +73,7 @@
       })();
     </script>
   </head>
-  <body style="margin:0;background:#0D0A06;color:#F0E0C0;">
+  <body style="margin:0">
     <div id="root"></div>
     <noscript>
       <div style="padding:2rem;font-family:system-ui,sans-serif;text-align:center;">
