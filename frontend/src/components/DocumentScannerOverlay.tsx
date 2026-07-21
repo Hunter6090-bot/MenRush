@@ -26,7 +26,7 @@ export function DocumentScannerOverlay({
   const isPassport = template === 'passport';
   const frameClass =
     mode === 'selfie'
-      ? 'h-[58%] w-[72%] rounded-[999px]'
+      ? 'h-[68%] aspect-[3/4] max-w-[68%] rounded-[50%]'
       : isPassport
         ? 'h-[70%] w-[76%] rounded-lg'
         : 'aspect-[1.58/1] w-[86%] rounded-xl';
@@ -36,23 +36,14 @@ export function DocumentScannerOverlay({
   const bracketClass = aligned ? 'border-[#22C55E]' : 'border-[#EF4444]';
 
   return (
-    <div className="pointer-events-none absolute inset-0">
-      {/* Vignette outside scan area */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(ellipse 68% 52% at 50% 48%, transparent 55%, rgba(0,0,0,0.72) 100%)',
-        }}
-      />
-
-      <div className="absolute inset-0 flex items-center justify-center p-5">
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div className="absolute inset-0 flex items-center justify-center">
         <div
           className={`relative transition-shadow duration-200 ${frameClass}`}
           style={{
             boxShadow: aligned
-              ? `0 0 0 2px ${frameColor}, 0 0 28px ${frameColor}66`
-              : `0 0 0 2px ${frameColor}99`,
+              ? `0 0 0 9999px rgba(0,0,0,0.72), 0 0 0 2px ${frameColor}, 0 0 28px ${frameColor}66`
+              : `0 0 0 9999px rgba(0,0,0,0.72), 0 0 0 2px ${frameColor}99`,
           }}
         >
           <CornerBracket colorClass={bracketClass} className="left-0 top-0 border-l-[3px] border-t-[3px] rounded-tl-md" />
@@ -72,6 +63,12 @@ export function DocumentScannerOverlay({
               className="absolute inset-x-[6%] h-[2px] bg-gradient-to-r from-transparent via-[#22C55E] to-transparent shadow-[0_0_12px_#22C55E]"
               style={{ animation: 'scan-line 0.9s ease-in-out infinite' }}
             />
+          ) : null}
+
+          {mode === 'document' ? (
+            <span className="absolute inset-x-0 -bottom-8 text-center text-[11px] font-semibold text-white/85">
+              Only the area inside this frame is saved
+            </span>
           ) : null}
         </div>
       </div>

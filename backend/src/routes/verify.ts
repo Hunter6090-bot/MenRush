@@ -44,10 +44,14 @@ const upload = multer({
   fileFilter: uploadFileFilter('verification'),
 });
 
-function emitHandoffUpdate(req: AuthRequest, payload: Record<string, unknown>) {
+function emitHandoffUpdate(
+  req: HandoffRequest,
+  userId: string,
+  payload: Record<string, unknown>,
+) {
   const io = req.app.get('io');
-  if (io && req.userId) {
-    io.to(`user:${req.userId}`).emit('verify:handoff', payload);
+  if (io) {
+    io.to(`user:${userId}`).emit('verify:handoff', payload);
   }
 }
 
@@ -173,7 +177,7 @@ router.post(
         id_back_key: idBack?.filename ?? null,
       });
 
-      emitHandoffUpdate({ ...req, userId: updated.user_id } as AuthRequest, {
+      emitHandoffUpdate(req, updated.user_id, {
         session_id: updated.id,
         status: updated.status,
         nationality: updated.nationality,

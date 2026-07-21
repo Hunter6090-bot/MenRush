@@ -15,7 +15,7 @@ import { IdDocumentUploadButton } from '../components/IdDocumentUploadButton';
 import { VerificationQr } from '../components/VerificationQr';
 import { NATIONALITIES } from '../lib/nationalities';
 import { isPhoneDevice } from '../lib/device';
-import { consumePostAuthRedirect } from '../lib/profileLinks';
+import { consumePostAuthRedirect, profileShareBase } from '../lib/profileLinks';
 import { FEATURES } from '../lib/featureFlags';
 import { trackEvent } from '../observability/analytics';
 import {
@@ -68,7 +68,7 @@ export const Verify: React.FC = () => {
 
   const handoffUrl = useMemo(() => {
     if (!handoffSessionId || typeof window === 'undefined') return '';
-    return `${window.location.origin}/verify/scan/${handoffSessionId}`;
+    return `${profileShareBase()}/verify/scan/${handoffSessionId}`;
   }, [handoffSessionId]);
 
   const isLicense = idType === 'driving_license';
@@ -115,7 +115,7 @@ export const Verify: React.FC = () => {
   }, [step]);
 
   useEffect(() => {
-    if (!showPhoneQr || step !== 'id-front' || !idType || handoffSessionId || handoffLoading) {
+    if (!showPhoneQr || step !== 'id-front' || !idType || handoffSessionId) {
       return;
     }
 
@@ -141,7 +141,7 @@ export const Verify: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [showPhoneQr, step, idType, nationality, handoffSessionId, handoffLoading]);
+  }, [showPhoneQr, step, idType, nationality, handoffSessionId]);
 
   useEffect(() => {
     if (!socket || !handoffSessionId) return;
