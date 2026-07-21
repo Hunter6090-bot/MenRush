@@ -20,6 +20,7 @@ import { getPhotoUrl } from '../components/UserAvatar';
 import { PROFILE_TAG_GROUPS, toggleProfileInterest } from '../lib/profileTags';
 import { clearProfileSetupSkip, isProfileSetupComplete } from '../lib/profileSetup';
 import { isGenericAvatarUrl } from '../lib/genericAvatar';
+import { IconSettings } from '../components/icons';
 
 interface ProfileData {
   id: string;
@@ -556,7 +557,17 @@ export const Profile = () => {
                   </span>
                 </button>
               </div>
-              <StatusBadge online={!!profile.online} lastSeen={profile.last_seen} />
+              <div className="flex items-center gap-2">
+                <StatusBadge online={!!profile.online} lastSeen={profile.last_seen} />
+                <Link
+                  to="/settings"
+                  aria-label="Open settings"
+                  title="Settings"
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream-soft)] shadow-sm transition-colors active:bg-[var(--copper)]/15 active:text-[var(--copper)]"
+                >
+                  <IconSettings size={20} />
+                </Link>
+              </div>
             </div>
             <h2 className="text-xl font-bold text-[#F0E0C0]">{profile.name}</h2>
             <p className="text-[var(--cream-muted)] text-sm mt-0.5">Age {profile.age}</p>
