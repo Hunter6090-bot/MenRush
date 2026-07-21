@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { normalizeIdImageFile } from '../lib/imageUpload';
 
 interface IdDocumentUploadButtonProps {
@@ -9,7 +9,7 @@ interface IdDocumentUploadButtonProps {
   className?: string;
 }
 
-/** Pick a JPEG/PNG/WebP from the device instead of using the live camera. */
+/** Pick an ID photo from the device, converting Apple HEIC/HEIF images to JPEG. */
 export function IdDocumentUploadButton({
   label = 'Upload photo from device',
   filePrefix,
@@ -18,21 +18,27 @@ export function IdDocumentUploadButton({
   className,
 }: IdDocumentUploadButtonProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [preparing, setPreparing] = useState(false);
 
-  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const raw = event.target.files?.[0];
     event.target.value = '';
     if (!raw) return;
 
-    const { file, error } = normalizeIdImageFile(raw);
-    if (!file) {
-      onError(error ?? 'Could not use that file.');
-      return;
-    }
+    setPreparing(true);
+    try {
+      const { file, error } = await normalizeIdImageFile(raw);
+      if (!file) {
+        onError(error ?? 'Could not use that file.');
+        return;
+      }
 
-    const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
-    const renamed = new File([file], `${filePrefix}-${Date.now()}.${ext}`, { type: file.type });
-    onCapture(renamed);
+      const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+      const renamed = new File([file], `${filePrefix}-${Date.now()}.${ext}`, { type: file.type });
+      onCapture(renamed);
+    } finally {
+      setPreparing(false);
+    }
   };
 
   return (
@@ -40,16 +46,17 @@ export function IdDocumentUploadButton({
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+        accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif"
         className="sr-only"
         onChange={handleChange}
       />
       <button
         type="button"
+        disabled={preparing}
         onClick={() => inputRef.current?.click()}
         className={className}
       >
-        {label}
+        {preparing ? 'Preparing photo…' : label}
       </button>
     </>
   );

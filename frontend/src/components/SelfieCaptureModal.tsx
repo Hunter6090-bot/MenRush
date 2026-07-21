@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { assessFrameQuality } from '../lib/captureQuality';
+import { assessFrameQuality, captureSelfieRegion } from '../lib/captureQuality';
 import { DocumentScannerOverlay } from './DocumentScannerOverlay';
 
 interface SelfieCaptureModalProps {
@@ -232,19 +232,11 @@ function VerificationSelfieCapture({
     const video = videoRef.current;
     if (!video || !ready || video.videoWidth === 0) return;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
+    const canvas = captureSelfieRegion(video, mirror);
+    if (!canvas) {
       onErrorRef.current('Could not capture the photo.');
       return;
     }
-    if (mirror) {
-      ctx.translate(canvas.width, 0);
-      ctx.scale(-1, 1);
-    }
-    ctx.drawImage(video, 0, 0);
     canvas.toBlob(
       (blob) => {
         if (!blob) {

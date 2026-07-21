@@ -55,6 +55,7 @@ export function IdCaptureModal({
   const [qualityOk, setQualityOk] = useState(false);
   const [precheckPhase, setPrecheckPhase] = useState<PrecheckPhase>('idle');
   const [precheckResult, setPrecheckResult] = useState<IdPrecheckResult | null>(null);
+  const [filePreparing, setFilePreparing] = useState(false);
   const precheckRequestRef = useRef(0);
 
   useEffect(() => {
@@ -73,6 +74,7 @@ export function IdCaptureModal({
       setQualityOk(false);
       setPrecheckPhase('idle');
       setPrecheckResult(null);
+      setFilePreparing(false);
     }
   }, [open]);
 
@@ -185,20 +187,25 @@ export function IdCaptureModal({
     return () => window.clearInterval(tick);
   }, [open, phase, ready, template]);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const raw = event.target.files?.[0];
     event.target.value = '';
     if (!raw) return;
 
-    const { file, error } = normalizeIdImageFile(raw);
-    if (!file) {
-      onErrorRef.current(error ?? 'Could not use that file.');
-      return;
-    }
+    setFilePreparing(true);
+    try {
+      const { file, error } = await normalizeIdImageFile(raw);
+      if (!file) {
+        onErrorRef.current(error ?? 'Could not use that file.');
+        return;
+      }
 
-    const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
-    const renamed = new File([file], `${filePrefix}-${Date.now()}.${ext}`, { type: file.type });
-    showPreview(renamed, URL.createObjectURL(renamed));
+      const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+      const renamed = new File([file], `${filePrefix}-${Date.now()}.${ext}`, { type: file.type });
+      showPreview(renamed, URL.createObjectURL(renamed));
+    } finally {
+      setFilePreparing(false);
+    }
   };
 
   useEffect(() => {
@@ -263,10 +270,10 @@ export function IdCaptureModal({
 
   return (
     <div
-      className="fixed inset-0 z-[110] flex flex-col bg-[#050403]"
+      className="fixed inset-0 z-[110] flex h-[100dvh] flex-col overflow-hidden bg-[#050403]"
       role="presentation"
     >
-      <div className="flex items-center justify-between border-b border-[#3D2B0E]/80 px-4 py-3">
+      <div className="flex shrink-0 items-center justify-between border-b border-[#3D2B0E]/80 px-4 py-3">
         <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#C4832A]">
           ID scanner
         </p>
@@ -283,9 +290,9 @@ export function IdCaptureModal({
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}
-        className="relative mx-auto w-full max-w-lg flex-1"
+        className="relative mx-auto min-h-0 w-full max-w-lg flex-1"
       >
-        <div className="relative h-full min-h-[60dvh] bg-black">
+        <div className="relative h-full min-h-0 bg-black">
           {phase === 'camera' ? (
             <>
               <video
@@ -323,7 +330,7 @@ export function IdCaptureModal({
         </div>
       </div>
 
-      <div className="border-t border-[#3D2B0E]/80 bg-[#0D0A06] px-4 py-4">
+      <div className="max-h-[56dvh] shrink-0 overflow-y-auto border-t border-[#3D2B0E]/80 bg-[#0D0A06] px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <p className="mb-3 text-center text-xs leading-relaxed text-[var(--cream-muted)]">
           {phase === 'preview'
             ? precheckPhase === 'checking'
@@ -335,7 +342,7 @@ export function IdCaptureModal({
         </p>
 
         {phase === 'preview' ? (
-          <div className="mb-4">
+          <>
             {precheckPhase === 'checking' ? (
               <div className="flex items-center justify-center gap-2 py-2 text-xs text-[var(--cream-muted)]">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#3D2B0E] border-t-[#C4832A]" />
@@ -344,7 +351,7 @@ export function IdCaptureModal({
             ) : null}
 
             {precheckResult ? (
-              <>
+              <div>
                 <p
                   className={`mb-3 text-center text-xs font-semibold ${
                     precheckResult.acceptable ? 'text-[#22C55E]' : 'text-[#FCA5A5]'
@@ -352,29 +359,16 @@ export function IdCaptureModal({
                 >
                   {precheckResult.message}
                 </p>
-                <ul className="space-y-1.5 text-[11px] text-[#D4C4A8]">
-                  {precheckResult.checks.map((check) => (
-                    <li key={check.id} className="flex gap-2">
-                      <span className={check.passed ? 'text-[#22C55E]' : 'text-[#EF4444]'}>
-                        {check.passed ? '✓' : '✕'}
-                      </span>
-                      <span>
-                        <span className="font-semibold text-[#F0E0C0]">{check.label}</span>
-                        {check.detail ? (
-                          <span className="text-[var(--cream-muted)]"> — {check.detail}</span>
-                        ) : null}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </>
+              </div>
             ) : null}
-          </div>
-        ) : null}
 
-        <div className="flex items-center justify-center gap-3">
-          {phase === 'preview' ? (
-            <>
+            {precheckAdvisory ? (
+              <p className="mb-3 text-center text-[11px] text-[#FCA5A5]">
+                Automated checks flagged this image — submit anyway only if your ID is clearly visible.
+              </p>
+            ) : null}
+
+            <div className="flex items-center justify-center gap-3">
               <button
                 type="button"
                 onClick={handleRetake}
@@ -382,22 +376,36 @@ export function IdCaptureModal({
               >
                 Rescan
               </button>
-              {precheckAdvisory ? (
-                <p className="mb-3 text-center text-[11px] text-[#FCA5A5]">
-                  Automated checks flagged this image — submit anyway only if your ID is clearly visible.
-                </p>
-              ) : null}
               <button
                 type="button"
                 onClick={handleUsePhoto}
                 disabled={!previewFile}
                 className="flex-1 rounded-xl bg-[#C4832A] py-3 text-sm font-bold text-[#0D0A06] disabled:opacity-40"
               >
-                Use this photo
+                Confirm and continue
               </button>
-            </>
-          ) : (
-            <div className="flex w-full flex-col gap-2">
+            </div>
+
+            {precheckResult?.checks.length ? (
+              <ul className="mt-4 space-y-1.5 border-t border-[#3D2B0E]/60 pt-4 text-[11px] text-[#D4C4A8]">
+                {precheckResult.checks.map((check) => (
+                  <li key={check.id} className="flex gap-2">
+                    <span className={check.passed ? 'text-[#22C55E]' : 'text-[#EF4444]'}>
+                      {check.passed ? '✓' : '✕'}
+                    </span>
+                    <span>
+                      <span className="font-semibold text-[#F0E0C0]">{check.label}</span>
+                      {check.detail ? (
+                        <span className="text-[var(--cream-muted)]"> — {check.detail}</span>
+                      ) : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </>
+        ) : (
+          <div className="flex w-full flex-col gap-2">
               <button
                 type="button"
                 onClick={captureFrame}
@@ -409,20 +417,20 @@ export function IdCaptureModal({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif"
                 className="sr-only"
                 onChange={handleFileUpload}
               />
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
+                disabled={filePreparing}
                 className="w-full rounded-xl border border-[#3D2B0E] py-3 text-sm font-semibold text-[#F0E0C0]"
               >
-                Upload from device
+                {filePreparing ? 'Preparing photo…' : 'Upload from device'}
               </button>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
