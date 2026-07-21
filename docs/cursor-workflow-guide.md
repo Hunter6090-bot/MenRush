@@ -90,7 +90,7 @@ VITE_STATSIG_CLIENT_KEY=
 | `SENTRY_DSN` | Error reporting (PII scrubbed) |
 | `BETA_INVITE_REQUIRED` | Gate registration with invite codes |
 | `DEV_AUTO_VERIFY` | Skip verification in dev only |
-| `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` | WebRTC |
+| `TURN_URL`, `TURN_SECRET` (or `TURN_USERNAME`+`TURN_CREDENTIAL`) | WebRTC TURN; omit to use Metered Open Relay static-auth default |
 | `ADMIN_TOKEN` | Admin route smoke tests |
 
 There is **no** `REDIS_URL`, `JWT_REFRESH_SECRET`, or `prisma/schema.prisma` in this repo.
