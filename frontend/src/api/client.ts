@@ -213,8 +213,37 @@ export const usersAPI = {
   stopPulse: () => apiClient.post<{ available_until: null }>('/users/pulse/stop'),
   blockUser: (id: string) => apiClient.post(`/users/block/${id}`),
   unblockUser: (id: string) => apiClient.delete(`/users/block/${id}`),
+  getBlockedUsers: () =>
+    apiClient.get<{
+      blocked: Array<{
+        id: string;
+        name: string;
+        photo_url?: string | null;
+        blocked_at: string;
+      }>;
+    }>('/users/blocks'),
   reportUser: (id: string, reason: string, details?: string) =>
     apiClient.post(`/users/report/${id}`, { reason, details }),
+  getTeamStatus: () => apiClient.get<{ is_team: boolean }>('/users/me/team'),
+  listReports: () =>
+    apiClient.get<{
+      reports: Array<{
+        id: string;
+        reason: string;
+        details?: string | null;
+        status: string;
+        created_at: string;
+        resolved_at?: string | null;
+        reporter_id: string;
+        reporter_name: string;
+        reporter_email: string;
+        reported_id?: string | null;
+        reported_name?: string | null;
+        reported_email?: string | null;
+      }>;
+    }>('/users/reports'),
+  updateReportStatus: (id: string, status: 'open' | 'reviewing' | 'actioned' | 'dismissed') =>
+    apiClient.patch(`/users/reports/${id}`, { status }),
 };
 
 export const notificationsAPI = {

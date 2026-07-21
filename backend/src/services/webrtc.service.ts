@@ -3,7 +3,10 @@
  * advertise routable host candidates (typical Android Chrome). iOS Safari only
  * advertises mDNS `.local` hosts, so iPhone↔iPhone / cross-NAT needs TURN.
  *
- * Railway (production) optional env — prefer a paid/dedicated relay when traffic grows:
+ * Railway (production) — set explicitly (defaults match Open Relay if unset):
+ *   TURN_URL=turn:staticauth.openrelay.metered.ca:80,turn:staticauth.openrelay.metered.ca:443,turn:staticauth.openrelay.metered.ca:443?transport=tcp,turns:staticauth.openrelay.metered.ca:443
+ *   TURN_SECRET=openrelayprojectsecret
+ * Or a paid Metered/Twilio relay:
  *   TURN_URL        comma-separated turn:/turns: URLs
  *   TURN_SECRET     static-auth HMAC secret (TURN REST) — preferred
  *   TURN_USERNAME + TURN_CREDENTIAL  long-lived user/pass (if provider does not use REST)
@@ -67,6 +70,7 @@ export function getIceServers(): IceServerConfig[] {
     if (secret) {
       const { username, credential } = createTurnRestCredentials(secret);
       servers.push({ urls, username, credential });
+      console.log('[webrtc] ICE: STUN + TURN REST (TURN_URL + TURN_SECRET)');
       return servers;
     }
 
@@ -74,6 +78,7 @@ export function getIceServers(): IceServerConfig[] {
     const credential = process.env.TURN_CREDENTIAL?.trim();
     if (username && credential) {
       servers.push({ urls, username, credential });
+      console.log('[webrtc] ICE: STUN + TURN long-lived credentials');
       return servers;
     }
 
@@ -91,6 +96,7 @@ export function getIceServers(): IceServerConfig[] {
     username,
     credential,
   });
+  console.log('[webrtc] ICE: STUN + Open Relay TURN (default static-auth)');
 
   return servers;
 }

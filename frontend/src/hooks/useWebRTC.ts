@@ -193,6 +193,9 @@ export function useWebRTC() {
       };
 
       pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'connected') {
+          setConnected();
+        }
         if (pc.connectionState === 'failed') {
           void (async () => {
             await tryIceRestart();
@@ -221,7 +224,7 @@ export function useWebRTC() {
       pcRef.current = pc;
       return pc;
     },
-    [publishRemoteStream, releaseMedia, resetCall, setCallSetupError, tryIceRestart],
+    [publishRemoteStream, releaseMedia, resetCall, setCallSetupError, setConnected, tryIceRestart],
   );
 
   const startCall = useCallback(
@@ -238,7 +241,7 @@ export function useWebRTC() {
       setFacingMode('user');
       void canFlipCamera().then(setCanSwitchCamera);
       // Offerer: attach first so createOffer advertises sendrecv A/V.
-      attachLocalTracks(pc, stream);
+      await attachLocalTracks(pc, stream);
 
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -271,7 +274,8 @@ export function useWebRTC() {
       // Pre-offer addTransceiver/addTrack creates extra m-lines → blank remote A/V.
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
       await flushPendingIce(pc, remotePeerId);
-      attachLocalTracks(pc, stream);
+      // Await track attach so createAnswer advertises sendrecv (not recvonly).
+      await attachLocalTracks(pc, stream);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       return sessionDescriptionPayload(pc.localDescription ?? answer);

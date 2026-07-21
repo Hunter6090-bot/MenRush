@@ -338,44 +338,50 @@ export function waitForSocket(socket: Socket, timeoutMs = 10_000): Promise<void>
 }
 
 export function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
+  // Prefer relay when available so cross-network / mobile carrier NAT works.
+  // Still allows host/srflx for same-LAN; browsers will pick the best candidate pair.
   return new RTCPeerConnection({
     iceServers,
-    // Bundle audio+video; helps Safari negotiate a single ICE transport.
     bundlePolicy: 'max-bundle',
     rtcpMuxPolicy: 'require',
-    iceCandidatePoolSize: 4,
+    iceCandidatePoolSize: 8,
   });
 }
 
 /**
- * Attach local A/V via addTrack (Unified Plan).
+ * Attach local A/V via addTrack / replaceTrack (Unified Plan).
  *
- * Prefer addTrack over addTransceiver:
+ * Prefer reusing the offer's transceivers on the answerer:
  * - On the offerer, addTrack creates sendrecv m-lines.
- * - On the answerer (after setRemoteDescription), addTrack reuses the offer's
- *   transceivers instead of inserting extra m-lines.
+ * - On the answerer (after setRemoteDescription), replaceTrack on the
+ *   matching recvonly transceiver keeps m-line order aligned.
  *
- * Calling addTransceiver(sendrecv) *before* setRemoteDescription on the
- * answerer doubles audio/video m-lines and yields blank remote A/V after answer
- * (Desktop↔iPhone and Android↔iPhone).
+ * MUST be awaited before createAnswer — a fire-and-forget replaceTrack races
+ * SDP generation and yields blank remote A/V (Desktop↔mobile / cross-NAT).
+ *
+ * Never call addTransceiver(sendrecv) *before* setRemoteDescription on the
+ * answerer — that doubles audio/video m-lines.
  */
-export function attachLocalTracks(pc: RTCPeerConnection, stream: MediaStream): void {
+export async function attachLocalTracks(
+  pc: RTCPeerConnection,
+  stream: MediaStream,
+): Promise<void> {
   for (const track of stream.getTracks()) {
     if (pc.getSenders().some((sender) => sender.track?.id === track.id)) continue;
 
-    const idle = pc
-      .getTransceivers()
-      .find(
-        (t) =>
-          t.receiver.track?.kind === track.kind &&
-          (!t.sender.track || t.sender.track.readyState === 'ended') &&
-          t.direction !== 'inactive',
-      );
+    const idle = pc.getTransceivers().find(
+      (t) =>
+        t.receiver.track?.kind === track.kind &&
+        (!t.sender.track || t.sender.track.readyState === 'ended') &&
+        t.direction !== 'inactive',
+    );
 
     if (idle?.sender) {
-      void idle.sender.replaceTrack(track);
+      await idle.sender.replaceTrack(track);
       try {
-        idle.direction = 'sendrecv';
+        if (idle.direction === 'recvonly' || idle.direction === 'inactive') {
+          idle.direction = 'sendrecv';
+        }
       } catch {
         /* Safari may throw if direction is already negotiated */
       }

@@ -275,4 +275,17 @@ router.get('/invite-codes', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/reports', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const limit = Number(req.query.limit ?? 100);
+  try {
+    const { userService } = await import('../services/user.service');
+    const reports = await userService.listReports(Number.isFinite(limit) ? limit : 100);
+    return res.json({ ok: true, reports });
+  } catch (err) {
+    console.error('[admin] reports list error:', err);
+    return res.status(500).json({ error: 'reports_list_failed' });
+  }
+});
+
 export default router;
