@@ -1,5 +1,6 @@
 import { createRoot, Root } from 'react-dom/client';
 import { PulsingAvatar } from './PulsingAvatar';
+import { SilhouetteAvatar } from './SilhouetteAvatar';
 import { useResolvingPhotoSrc } from './UserAvatar';
 
 export interface MapMarkerUser {
@@ -40,7 +41,7 @@ export function MapMarker({ user, size = 44 }: MapMarkerProps) {
               : '0 3px 10px rgba(196,131,42,0.45)',
           }}
         >
-          <MapPhoto name={user.name} photoUrl={user.photo_url} age={user.age} />
+          <MapPhoto name={user.name} photoUrl={user.photo_url} age={user.age} size={size} />
         </div>
       </PulsingAvatar>
     </div>
@@ -51,21 +52,16 @@ function MapPhoto({
   name,
   photoUrl,
   age,
+  size,
 }: {
   name: string;
   photoUrl?: string;
   age?: number;
+  size: number;
 }) {
   const { src, onError } = useResolvingPhotoSrc(photoUrl, age);
   if (!src) {
-    return (
-      <span
-        className="flex h-full w-full items-center justify-center text-sm font-extrabold uppercase text-[var(--copper)]"
-        aria-hidden
-      >
-        {name.trim().charAt(0) || '?'}
-      </span>
-    );
+    return <SilhouetteAvatar size={size} variant="map" />;
   }
   return (
     <img
