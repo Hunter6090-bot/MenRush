@@ -82,29 +82,26 @@ export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalP
     setCreating(true);
     setError(null);
     try {
+      const memberIds = Array.from(selected);
       const res = await roomsAPI.createRoom({
         name: name.trim(),
         description: description.trim() || undefined,
         is_location_based: false,
+        member_ids: memberIds.length ? memberIds : undefined,
       });
       const roomId = res.data.id as string;
+      const rawErrors: string[] = Array.isArray(res.data.member_errors)
+        ? res.data.member_errors
+        : [];
 
-      const addErrors: string[] = [];
-      for (const userId of selected) {
-        try {
-          await roomsAPI.addMember(roomId, userId);
-        } catch (err: unknown) {
-          const code = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-          const candidate = candidates.find((c) => c.id === userId);
-          if (code === 'member_premium_required') {
-            addErrors.push(`${candidate?.name ?? 'Member'} needs Premium to join groups.`);
-          } else {
-            addErrors.push(
-              `${candidate?.name ?? 'Member'} could not be added${code ? `: ${code}` : '.'}`,
-            );
-          }
+      const addErrors: string[] = rawErrors.map((entry: string) => {
+        const [uid, code] = entry.split(':');
+        const candidate = candidates.find((c) => c.id === uid);
+        if (code === 'member_premium_required') {
+          return `${candidate?.name ?? 'Member'} needs Premium to join groups.`;
         }
-      }
+        return `${candidate?.name ?? 'Member'} could not be added${code ? `: ${code}` : '.'}`;
+      });
 
       onClose();
       onCreated?.(roomId);
