@@ -21,6 +21,7 @@ import { Contact } from './pages/Contact';
 import { Safety } from './pages/Safety';
 import { CommunityGuidelines } from './pages/CommunityGuidelines';
 import { Help } from './pages/Help';
+import { BrightonPride } from './pages/BrightonPride';
 import { MessagingRoute } from './components/MessagingRoute';
 import { RoomsRoute } from './components/RoomsRoute';
 import { Verify } from './pages/Verify';
@@ -168,6 +169,7 @@ function AppShell() {
         <Route path="/" element={<ComingSoon />} />
         <Route path="/app" element={<AppEntry />} />
         <Route path="/coming-soon" element={<ComingSoon />} />
+        <Route path="/brightonpride" element={<BrightonPride />} />
         <Route path="/beta" element={<BetaAccess />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
