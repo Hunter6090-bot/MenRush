@@ -468,11 +468,158 @@ export const userService = {
     );
   },
 
-  async reportUser(reporterId: string, reportedId: string, reason: string, details?: string) {
-    await query(
-      `INSERT INTO reports (reporter_id, reported_id, reason, details) VALUES ($1, $2, $3, $4)`,
-      [reporterId, reportedId, reason, details ?? null]
+  async getBlockedUsers(blockerId: string) {
+    const result = await query(
+      `SELECT u.id, u.name, u.photo_url, b.created_at AS blocked_at
+       FROM blocks b
+       JOIN users u ON u.id = b.blocked_id
+       WHERE b.blocker_id = $1
+       ORDER BY b.created_at DESC`,
+      [blockerId],
     );
+    return result.rows;
+  },
+
+  async reportUser(reporterId: string, reportedId: string, reason: string, details?: string) {
+    const result = await query(
+      `INSERT INTO reports (reporter_id, reported_id, reason, details)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, created_at`,
+      [reporterId, reportedId, reason, details ?? null],
+    );
+    const report = result.rows[0] as { id: string; created_at: string };
+
+    // Best-effort notify team — never fail the report submission if mail is down.
+    void this.notifyTeamOfReport(reporterId, reportedId, reason, details, report.id).catch(
+      (err) => console.error('[reports] notify failed', err),
+    );
+
+    return report;
+  },
+
+  async notifyTeamOfReport(
+    reporterId: string,
+    reportedId: string,
+    reason: string,
+    details: string | undefined,
+    reportId: string,
+  ) {
+    const { sendEmail } = await import('./mailer.service');
+    const { getReportNotifyEmails } = await import('./team.service');
+    const {
+      buildTransactionalEmail,
+      transactionalParagraph,
+    } = await import('./transactional-email.template');
+
+    const esc = (value: string) =>
+      value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+
+    const people = await query(
+      `SELECT id, name, email FROM users WHERE id = ANY($1::uuid[])`,
+      [[reporterId, reportedId]],
+    );
+    const byId = new Map(people.rows.map((r: { id: string }) => [r.id, r]));
+    const reporter = byId.get(reporterId) as { name?: string; email?: string } | undefined;
+    const reported = byId.get(reportedId) as { name?: string; email?: string } | undefined;
+
+    const recipients = getReportNotifyEmails();
+    if (!recipients.length) return;
+
+    const subject = `[MenRush] Report: ${reason} — ${reported?.name ?? reportedId}`;
+    const bodyHtml =
+      transactionalParagraph(
+        `<strong style="color:#F0E0C0;">Reason:</strong> ${esc(reason)}`,
+        true,
+      ) +
+      transactionalParagraph(
+        `<strong style="color:#F0E0C0;">Reporter:</strong> ${esc(reporter?.name ?? 'unknown')} (${esc(reporter?.email ?? reporterId)})`,
+        true,
+      ) +
+      transactionalParagraph(
+        `<strong style="color:#F0E0C0;">Reported:</strong> ${esc(reported?.name ?? 'unknown')} (${esc(reported?.email ?? reportedId)})`,
+        true,
+      ) +
+      (details
+        ? transactionalParagraph(
+            `<strong style="color:#F0E0C0;">Details:</strong> ${esc(details)}`,
+            true,
+          )
+        : '') +
+      transactionalParagraph(`Report id: ${esc(reportId)}`, true);
+
+    const html = buildTransactionalEmail({
+      title: 'New MenRush safety report',
+      preheader: `${reason} report needs review`,
+      headlineHtml: '<span style="color:#C4832A;">New safety report</span>',
+      subheadline: 'A member submitted a report that needs review.',
+      bodyHtml,
+      ctaUrl: 'https://menrush.com/settings',
+      ctaLabel: 'Open Settings',
+    });
+
+    for (const to of recipients) {
+      try {
+        await sendEmail({
+          to,
+          subject,
+          html,
+          text: `MenRush report ${reportId}: ${reason}. Reporter ${reporter?.email ?? reporterId} → ${reported?.email ?? reportedId}. ${details ?? ''}`.trim(),
+        });
+      } catch (err) {
+        console.error('[reports] email to', to, 'failed', err);
+      }
+    }
+  },
+
+  async listReports(limit = 50) {
+    const result = await query(
+      `SELECT
+         r.id,
+         r.reason,
+         r.details,
+         r.status,
+         r.created_at,
+         r.resolved_at,
+         reporter.id AS reporter_id,
+         reporter.name AS reporter_name,
+         reporter.email AS reporter_email,
+         reported.id AS reported_id,
+         reported.name AS reported_name,
+         reported.email AS reported_email
+       FROM reports r
+       JOIN users reporter ON reporter.id = r.reporter_id
+       LEFT JOIN users reported ON reported.id = r.reported_id
+       ORDER BY
+         CASE WHEN r.status = 'open' THEN 0
+              WHEN r.status = 'reviewing' THEN 1
+              ELSE 2 END,
+         r.created_at DESC
+       LIMIT $1`,
+      [Math.min(Math.max(limit, 1), 200)],
+    );
+    return result.rows;
+  },
+
+  async updateReportStatus(reportId: string, status: 'open' | 'reviewing' | 'actioned' | 'dismissed') {
+    const result = await query(
+      `UPDATE reports
+       SET status = $2,
+           resolved_at = CASE WHEN $2 IN ('actioned', 'dismissed') THEN NOW() ELSE resolved_at END
+       WHERE id = $1
+       RETURNING id, status, resolved_at`,
+      [reportId, status],
+    );
+    return result.rows[0] ?? null;
+  },
+
+  async isTeamMember(userId: string): Promise<boolean> {
+    const { isTeamEmail } = await import('./team.service');
+    const result = await query(`SELECT email FROM users WHERE id = $1`, [userId]);
+    return isTeamEmail(result.rows[0]?.email);
   },
 
   async searchProfiles(viewerId: string, q: string) {

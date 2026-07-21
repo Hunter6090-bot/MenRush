@@ -59,7 +59,14 @@ export const RoomList: React.FC<RoomListProps> = ({
     roomsAPI
       .getRooms()
       .then((r) => {
-        const list = Array.isArray(r.data) ? r.data : (r.data?.rooms ?? []);
+        // Backend returns { member_rooms, nearby_rooms } — not a bare array / rooms.
+        const data = r.data as
+          | RoomRow[]
+          | { member_rooms?: RoomRow[]; rooms?: RoomRow[]; nearby_rooms?: RoomRow[] }
+          | undefined;
+        const list = Array.isArray(data)
+          ? data
+          : (data?.member_rooms ?? data?.rooms ?? []);
         setRooms(list);
       })
       .catch(() => setRooms([]))
