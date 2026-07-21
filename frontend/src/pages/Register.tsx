@@ -142,7 +142,7 @@ export const Register = () => {
         ...(BETA_INVITE_REQUIRED ? { invite_code: inviteCode } : {}),
       });
       setAuth(res.data.user, res.data.token);
-      navigate(FEATURES.requireIdVerification ? '/verify' : '/profile/setup');
+      navigate(FEATURES.requireIdVerification ? '/verify/id' : '/profile/setup');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed. Please try again.');
     } finally {
@@ -287,7 +287,7 @@ export const Register = () => {
               <Link to="/privacy" className={`${publicLinkClass} underline-offset-2 hover:underline`}>
                 Privacy Policy
               </Link>
-              , including live location sharing with other verified members.
+              , including sharing your location for Nearby discovery.
             </span>
           </label>
 

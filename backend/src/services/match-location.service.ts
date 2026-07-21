@@ -3,22 +3,21 @@ import { query } from '../db';
 
 export const matchLocationService = {
   async getSharingEnabled(userId: string): Promise<boolean> {
-    const res = await query(
-      `SELECT COALESCE(share_live_location_with_matches, TRUE) AS enabled
-         FROM profiles WHERE user_id = $1`,
-      [userId],
-    );
-    return res.rows[0]?.enabled !== false;
+    // Continuous live sharing with matches is retired — always off.
+    void userId;
+    return false;
   },
 
   async setSharingEnabled(userId: string, enabled: boolean): Promise<void> {
+    // Persist as disabled regardless of requested value (privacy default).
+    void enabled;
     await query(
       `INSERT INTO profiles (user_id, share_live_location_with_matches, updated_at)
-       VALUES ($1, $2, NOW())
+       VALUES ($1, FALSE, NOW())
        ON CONFLICT (user_id) DO UPDATE
-         SET share_live_location_with_matches = EXCLUDED.share_live_location_with_matches,
+         SET share_live_location_with_matches = FALSE,
              updated_at = NOW()`,
-      [userId, enabled],
+      [userId],
     );
   },
 
@@ -39,31 +38,13 @@ export const matchLocationService = {
   },
 
   async broadcastLocation(
-    io: SocketIOServer | undefined,
-    userId: string,
-    lat: number,
-    lng: number,
+    _io: SocketIOServer | undefined,
+    _userId: string,
+    _lat: number,
+    _lng: number,
   ): Promise<void> {
-    if (!io) return;
-
-    try {
-      const sharing = await this.getSharingEnabled(userId);
-      if (!sharing) return;
-
-      const matchIds = await this.getMutualMatchIds(userId);
-      const payload = {
-        user_id: userId,
-        lat,
-        lng,
-        updated_at: new Date().toISOString(),
-      };
-
-      for (const matchId of matchIds) {
-        io.to(`user:${matchId}`).emit('match:location', payload);
-      }
-    } catch (err) {
-      // Never let a location fan-out kill the API process (login/API go 502).
-      console.error('[match-location] broadcast failed:', err);
-    }
+    // Disabled: continuous live pins to matches removed for privacy.
+    // Chat still supports one-shot location messages.
+    return;
   },
 };

@@ -14,8 +14,8 @@ html {
 }
 
 body {
-  background-color: #0D0A06;
-  color: #F0E0C0;
+  background-color: var(--nn-bg, #0D0A06);
+  color: var(--nn-text, #F0E0C0);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

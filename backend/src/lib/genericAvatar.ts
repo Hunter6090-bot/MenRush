@@ -2,6 +2,10 @@
  * Shared generic avatar pool — mirrors frontend/src/lib/genericAvatar.ts.
  * Paths are public static assets served by the frontend origin.
  * Used to keep map density alive when a man has not uploaded a photo yet.
+ *
+ * SAFETY: Changing avatar artwork = replace files under /avatars/generic/*.svg only.
+ * Never mass-UPDATE users.photo_url. Custom uploads (/uploads/...) must stay untouched.
+ * ensureDefaultAvatar only writes when photo_url is NULL/empty.
  */
 
 export const GENERIC_AVATAR_VARIANTS = [

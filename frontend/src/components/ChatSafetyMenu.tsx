@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { usersAPI } from '../api/client';
 
 const REPORT_REASONS = [
@@ -91,8 +92,7 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
           aria-label="Chat options"
           aria-haspopup="menu"
           aria-expanded={menuOpen}
-          className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[#3D2B0E]/50 active:scale-95"
-          style={{ color: '#A89070' }}
+          className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[var(--bg-card)] active:scale-95 text-[var(--cream-muted)]"
         >
           <MoreIcon className="w-5 h-5" />
         </button>
@@ -100,8 +100,7 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
         {menuOpen && (
           <div
             role="menu"
-            className="absolute right-0 top-full mt-2 w-52 rounded-2xl border py-1.5 shadow-2xl z-50"
-            style={{ background: '#1E1508', borderColor: '#3D2B0E' }}
+            className="absolute right-0 top-full mt-2 w-52 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] py-1.5 shadow-2xl z-50"
           >
             <button
               type="button"
@@ -110,8 +109,7 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
                 setMenuOpen(false);
                 setReportOpen(true);
               }}
-              className="w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[#3D2B0E]/40"
-              style={{ color: '#F0E0C0' }}
+              className="w-full px-4 py-2.5 text-left text-sm text-[var(--cream)] transition-colors hover:bg-[var(--bg-card)]"
             >
               Report {peerName}
             </button>
@@ -122,8 +120,7 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
                 setMenuOpen(false);
                 setBlockOpen(true);
               }}
-              className="w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[#A45E18]/15"
-              style={{ color: '#EF4444' }}
+              className="w-full px-4 py-2.5 text-left text-sm text-[var(--nn-danger)] transition-colors hover:bg-[rgba(155,58,40,0.12)]"
             >
               Block {peerName}
             </button>
@@ -135,37 +132,60 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
         <SafetyModal
           title={`Block ${peerName}?`}
           onClose={() => !submitting && setBlockOpen(false)}
+          footer={
+            <>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => setBlockOpen(false)}
+                className="flex-1 h-11 rounded-xl text-sm font-semibold border border-[var(--border-default)] text-[var(--cream)] transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => void handleBlock()}
+                className="flex-1 h-11 rounded-xl text-sm font-semibold bg-[var(--nn-danger)] text-white disabled:opacity-50"
+              >
+                {submitting ? 'Blocking…' : 'Block'}
+              </button>
+            </>
+          }
         >
-          <p className="text-sm leading-relaxed" style={{ color: '#A89070' }}>
+          <p className="text-sm leading-relaxed text-[var(--cream-muted)]">
             They won&apos;t be able to message you, call you, or see your profile. Blocking is private —
             they won&apos;t be notified.
           </p>
-          <div className="mt-6 flex gap-3">
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={() => setBlockOpen(false)}
-              className="flex-1 h-11 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50"
-              style={{ borderColor: '#3D2B0E', color: '#F0E0C0' }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={() => void handleBlock()}
-              className="flex-1 h-11 rounded-xl text-sm font-semibold disabled:opacity-50"
-              style={{ background: '#dc2626', color: '#fff' }}
-            >
-              {submitting ? 'Blocking…' : 'Block'}
-            </button>
-          </div>
         </SafetyModal>
       )}
 
       {reportOpen && (
-        <SafetyModal title={`Report ${peerName}`} onClose={() => !submitting && setReportOpen(false)}>
-          <p className="text-sm leading-relaxed mb-4" style={{ color: '#A89070' }}>
+        <SafetyModal
+          title={`Report ${peerName}`}
+          onClose={() => !submitting && setReportOpen(false)}
+          footer={
+            <>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => setReportOpen(false)}
+                className="flex-1 h-11 rounded-xl text-sm font-semibold border border-[var(--border-default)] text-[var(--cream)] transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => void handleReport()}
+                className="flex-1 h-11 rounded-xl text-sm font-semibold bg-[var(--copper)] text-[var(--nn-on-copper)] disabled:opacity-50"
+              >
+                {submitting ? 'Sending…' : 'Submit report'}
+              </button>
+            </>
+          }
+        >
+          <p className="text-sm leading-relaxed mb-4 text-[var(--cream-muted)]">
             Tell us what happened. Reports are reviewed by our moderation team.
           </p>
           <fieldset className="space-y-2">
@@ -173,11 +193,11 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
             {REPORT_REASONS.map((option) => (
               <label
                 key={option.value}
-                className="flex items-center gap-3 rounded-xl px-3 py-2.5 cursor-pointer border transition-colors"
-                style={{
-                  borderColor: reportReason === option.value ? '#C4832A' : '#3D2B0E',
-                  background: reportReason === option.value ? 'rgba(196,131,42,0.08)' : 'transparent',
-                }}
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 cursor-pointer border transition-colors ${
+                  reportReason === option.value
+                    ? 'border-[var(--copper)] bg-[rgba(196,131,42,0.08)]'
+                    : 'border-[var(--border-default)]'
+                }`}
               >
                 <input
                   type="radio"
@@ -185,16 +205,14 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
                   value={option.value}
                   checked={reportReason === option.value}
                   onChange={() => setReportReason(option.value)}
-                  className="accent-[#C4832A]"
+                  className="accent-[var(--copper)]"
                 />
-                <span className="text-sm" style={{ color: '#F0E0C0' }}>
-                  {option.label}
-                </span>
+                <span className="text-sm text-[var(--cream)]">{option.label}</span>
               </label>
             ))}
           </fieldset>
           <label className="block mt-4">
-            <span className="text-xs font-medium uppercase tracking-wide" style={{ color: '#A89070' }}>
+            <span className="text-xs font-medium uppercase tracking-wide text-[var(--cream-muted)]">
               Details (optional)
             </span>
             <textarea
@@ -203,34 +221,9 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
               maxLength={1000}
               rows={3}
               placeholder="Anything else we should know?"
-              className="mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50"
-              style={{
-                background: '#0D0A06',
-                border: '1px solid #3D2B0E',
-                color: '#F0E0C0',
-              }}
+              className="mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm resize-none bg-[var(--bg-primary)] border border-[var(--border-default)] text-[var(--cream)] focus:outline-none focus:ring-2 focus:ring-[var(--copper)]/50"
             />
           </label>
-          <div className="mt-6 flex gap-3">
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={() => setReportOpen(false)}
-              className="flex-1 h-11 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50"
-              style={{ borderColor: '#3D2B0E', color: '#F0E0C0' }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={() => void handleReport()}
-              className="flex-1 h-11 rounded-xl text-sm font-semibold disabled:opacity-50"
-              style={{ background: '#C4832A', color: '#0D0A06' }}
-            >
-              {submitting ? 'Sending…' : 'Submit report'}
-            </button>
-          </div>
         </SafetyModal>
       )}
     </>
@@ -240,32 +233,53 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
 function SafetyModal({
   title,
   children,
+  footer,
   onClose,
 }: {
   title: string;
   children: React.ReactNode;
+  footer: React.ReactNode;
   onClose: () => void;
 }) {
-  return (
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-4"
+      className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4"
       style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }}
       onClick={onClose}
+      role="presentation"
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="safety-modal-title"
-        className="w-full max-w-md rounded-3xl p-6 shadow-2xl"
-        style={{ background: '#1E1508', border: '1px solid #3D2B0E' }}
+        className="flex w-full max-w-md max-h-[min(92dvh,40rem)] flex-col overflow-hidden rounded-3xl border border-[var(--border-default)] bg-[var(--bg-elevated)] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="safety-modal-title" className="text-lg font-bold" style={{ color: '#F0E0C0' }}>
-          {title}
-        </h2>
-        <div className="mt-4">{children}</div>
+        <div className="shrink-0 border-b border-[var(--border-default)] px-5 pt-5 pb-3">
+          <h2 id="safety-modal-title" className="text-lg font-bold text-[var(--cream)]">
+            {title}
+          </h2>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">{children}</div>
+        <div className="shrink-0 flex gap-3 border-t border-[var(--border-default)] bg-[var(--bg-elevated)] px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          {footer}
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

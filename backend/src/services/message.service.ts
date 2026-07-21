@@ -50,7 +50,11 @@ const MESSAGE_COLUMNS = `id, sender_id, receiver_id, message, created_at,
 function scrubExpired<T extends ConversationRow>(row: T): T {
   if (row.withdrawn_at) {
     const label =
-      row.media_type === 'audio' ? 'Voice note withdrawn' : 'Photo withdrawn';
+      row.media_type === 'audio'
+        ? 'Voice note withdrawn'
+        : row.media_type === 'video'
+          ? 'Video withdrawn'
+          : 'Photo withdrawn';
     return {
       ...row,
       media_url: null,
@@ -70,7 +74,13 @@ function scrubExpired<T extends ConversationRow>(row: T): T {
     ...row,
     media_url: null,
     message: row.media_type
-      ? `(${row.media_type === 'image' ? 'photo' : 'voice note'} no longer available)`
+      ? `(${
+          row.media_type === 'image'
+            ? 'photo'
+            : row.media_type === 'video'
+              ? 'video'
+              : 'voice note'
+        } no longer available)`
       : '(message expired)',
     remaining_views: 0,
     expired: true,
@@ -176,7 +186,13 @@ export const messageService = {
     const id = uuidv4();
     const caption = (opts.caption ?? '').replace(/<script[^>]*>.*?<\/script>/gi, '').trim();
     // Default body — UI uses this if media fails to load.
-    const fallbackBody = caption || (opts.mediaType === 'image' ? '📷 Photo' : '🎤 Voice note');
+    const fallbackBody =
+      caption ||
+      (opts.mediaType === 'image'
+        ? '📷 Photo'
+        : opts.mediaType === 'video'
+          ? '🎬 Video'
+          : '🎤 Voice note');
     // Only images can be disappearing. A disappearing image is view-limited:
     // max_views defaults to 1 ("view once") when the sender didn't specify.
     const isDisappearing = opts.mediaType === 'image' && opts.disappearing === true;
@@ -201,7 +217,9 @@ export const messageService = {
         `/api/messages/${id}/media`,
         opts.storageKey,
         opts.mimeType,
-        opts.mediaType === 'audio' ? opts.audioDurationMs ?? null : null,
+        opts.mediaType === 'audio' || opts.mediaType === 'video'
+          ? opts.audioDurationMs ?? null
+          : null,
         isDisappearing,
         maxViews,
       ]
@@ -273,7 +291,11 @@ export const messageService = {
       /* file may already be gone */
     }
 
-    const label = row.media_type === 'audio' ? 'Voice note withdrawn' : 'Photo withdrawn';
+    const label = row.media_type === 'audio'
+      ? 'Voice note withdrawn'
+      : row.media_type === 'video'
+        ? 'Video withdrawn'
+        : 'Photo withdrawn';
     const result = await query(
       `UPDATE messages SET
          media_url = NULL,

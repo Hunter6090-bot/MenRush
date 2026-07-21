@@ -9,6 +9,11 @@ import { SiteFooter } from '../components/SiteFooter';
 import { formatRadiusFromKm } from '../lib/localeUnits';
 import { PasswordInput } from '../components/PasswordInput';
 import { loginErrorMessage } from '../lib/authErrors';
+import {
+  clearDeviceTrustToken,
+  getDeviceTrustToken,
+  saveDeviceTrustToken,
+} from '../lib/deviceTrust';
 
 const stats = [
   { value: formatRadiusFromKm(5), label: 'Discovery radius' },
@@ -24,6 +29,7 @@ export const Landing = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [trustThisDevice, setTrustThisDevice] = useState(true);
   const [pendingToken, setPendingToken] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -41,19 +47,36 @@ export const Landing = () => {
         const res = await authAPI.verifyTwoFactorLogin({
           pendingToken,
           code: twoFactorCode,
+          trustThisDevice,
         });
+        if (res.data.deviceTrustToken) {
+          saveDeviceTrustToken(email, res.data.deviceTrustToken);
+        } else if (!trustThisDevice) {
+          clearDeviceTrustToken();
+        }
         setAuth(res.data.user, res.data.token);
         navigate('/discover');
         return;
       }
 
-      const res = await authAPI.login({ email: email.trim().toLowerCase(), password });
+      const normalizedEmail = email.trim().toLowerCase();
+      const deviceTrustToken = getDeviceTrustToken(normalizedEmail);
+      const res = await authAPI.login({
+        email: normalizedEmail,
+        password,
+        ...(deviceTrustToken ? { deviceTrustToken } : {}),
+      });
       if (res.data.requires2fa) {
+        if (deviceTrustToken) clearDeviceTrustToken();
         setPendingToken(res.data.pendingToken);
         setTwoFactorCode('');
+        setTrustThisDevice(true);
         return;
       }
 
+      if (res.data.deviceTrustToken) {
+        saveDeviceTrustToken(normalizedEmail, res.data.deviceTrustToken);
+      }
       setAuth(res.data.user, res.data.token);
       navigate('/discover');
     } catch (err: unknown) {
@@ -182,12 +205,33 @@ export const Landing = () => {
                       onClick={() => {
                         setPendingToken(null);
                         setTwoFactorCode('');
+                        setTrustThisDevice(true);
                         setError('');
                       }}
                       className="mt-2 text-sm font-semibold text-[var(--cream-muted)] transition-colors hover:text-[#C4832A]"
                     >
                       Use a different account
                     </button>
+                    <label
+                      htmlFor="landing-trust-device"
+                      className="mt-3 flex cursor-pointer items-start gap-3 rounded-2xl border border-[#C4832A]/26 bg-[#C4832A]/08 px-3.5 py-3"
+                    >
+                      <input
+                        id="landing-trust-device"
+                        type="checkbox"
+                        checked={trustThisDevice}
+                        onChange={(e) => setTrustThisDevice(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-[#C4832A]/50 accent-[#C4832A]"
+                      />
+                      <span className="text-left">
+                        <span className="block text-sm font-semibold text-[#F0E0C0]">
+                          Trust this device
+                        </span>
+                        <span className="mt-0.5 block text-[12px] leading-snug text-[var(--cream-muted)]">
+                          Skip the authenticator code on this browser for 30 days. Password still required.
+                        </span>
+                      </span>
+                    </label>
                   </div>
                 )}
 

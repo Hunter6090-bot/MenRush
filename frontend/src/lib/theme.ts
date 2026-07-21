@@ -7,6 +7,9 @@ export type ThemePreference = 'light' | 'dark' | 'system';
 export type ResolvedTheme = 'light' | 'dark';
 
 export const THEME_STORAGE_KEY = 'menrush_theme';
+export const THEME_CHANGED_EVENT = 'menrush:theme-changed';
+
+const THEME_CYCLE: ThemePreference[] = ['light', 'dark', 'system'];
 
 export function readThemePreference(): ThemePreference {
   try {
@@ -36,11 +39,25 @@ export function applyTheme(pref: ThemePreference): ResolvedTheme {
   root.classList.toggle('theme-dark', resolved === 'dark');
   root.style.colorScheme = resolved;
 
+  // Keep <body> inline styles in sync — index.html boots with dark defaults that
+  // would otherwise make Messages/full-screen shells look like theme reverted.
+  if (document.body) {
+    document.body.style.background = resolved === 'light' ? '#F5EDE0' : '#0D0A06';
+    document.body.style.color = resolved === 'light' ? '#1A1208' : '#F0E0C0';
+  }
+
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) {
     meta.setAttribute('content', resolved === 'light' ? '#F5EDE0' : '#0D0A06');
   }
   return resolved;
+}
+
+function notifyThemeChanged(pref: ThemePreference): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent(THEME_CHANGED_EVENT, { detail: { preference: pref } }),
+  );
 }
 
 export function setThemePreference(pref: ThemePreference): ResolvedTheme {
@@ -49,7 +66,24 @@ export function setThemePreference(pref: ThemePreference): ResolvedTheme {
   } catch {
     /* ignore */
   }
-  return applyTheme(pref);
+  const resolved = applyTheme(pref);
+  notifyThemeChanged(pref);
+  return resolved;
+}
+
+/** Cycle light → dark → system → light. */
+export function cycleThemePreference(): ThemePreference {
+  const current = readThemePreference();
+  const idx = THEME_CYCLE.indexOf(current);
+  const next = THEME_CYCLE[(idx + 1) % THEME_CYCLE.length];
+  setThemePreference(next);
+  return next;
+}
+
+export function themePreferenceLabel(pref: ThemePreference): string {
+  if (pref === 'light') return 'Light';
+  if (pref === 'dark') return 'Dark';
+  return 'System';
 }
 
 export function initThemeFromStorage(): ResolvedTheme {

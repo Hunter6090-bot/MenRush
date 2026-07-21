@@ -69,7 +69,7 @@ export const userService = {
     let queryStr = `
       SELECT
         u.id, u.name, u.age, u.bio, u.headline, u.looking_for, u.photo_url, u.cover_url, u.interests,
-        u.is_verified,
+        u.is_verified, u.authenticity_status,
         -- Presence must be fresh: stuck online=true from a crashed tab is not "Active now".
         (p.online = TRUE AND p.last_seen IS NOT NULL AND p.last_seen > NOW() - INTERVAL '20 minutes') AS online,
         p.last_seen, p.available_until,
@@ -204,16 +204,31 @@ export const userService = {
    * Assign a shared generic avatar by age so they appear on the map.
    * Users can still replace it with a real photo in profile setup.
    * 18+ only — age is validated at registration (min 18).
+   *
+   * CRITICAL: Only fills NULL/empty photo_url. Never overwrite custom uploads
+   * or existing generic paths (artwork updates are static file swaps only).
+   * Skips auth-only team logins that are intentionally non-discoverable.
    */
   async ensureDefaultAvatar(userId: string): Promise<string | null> {
     const existing = await query(
-      `SELECT photo_url, age FROM users WHERE id = $1`,
+      `SELECT u.photo_url, u.age, COALESCE(p.is_visible, TRUE) AS is_visible
+         FROM users u
+         LEFT JOIN profiles p ON p.user_id = u.id
+        WHERE u.id = $1`,
       [userId],
     );
-    const row = existing.rows[0] as { photo_url?: string | null; age?: number } | undefined;
+    const row = existing.rows[0] as {
+      photo_url?: string | null;
+      age?: number;
+      is_visible?: boolean;
+    } | undefined;
     if (!row) return null;
     if (row.photo_url && String(row.photo_url).trim()) {
       return row.photo_url;
+    }
+    // Auth-only / hidden staff: leave photo unset (initials fallback) — do not invent a dating avatar.
+    if (row.is_visible === false) {
+      return null;
     }
     // Refuse under-18 even if data is corrupt — safety hard stop.
     if (row.age != null && row.age < 18) return null;
@@ -237,7 +252,7 @@ export const userService = {
       `SELECT
         u.id, u.email, u.name, u.age, u.bio, u.headline, u.looking_for,
         u.photo_url, u.cover_url, u.cover_position_x, u.cover_position_y, u.cover_zoom, u.interests, u.created_at,
-        u.is_verified, u.verification_status,
+        u.is_verified, u.verification_status, u.authenticity_status,
         u.is_premium, u.premium_tier, u.premium_until,
         p.lat, p.lng, p.online, p.last_seen, p.is_visible, p.available_until,
         p.is_ghost,
@@ -262,7 +277,7 @@ export const userService = {
     const result = await query(
       `SELECT
         u.id, u.name, u.age, u.bio, u.headline, u.looking_for,
-        u.photo_url, u.cover_url, u.cover_position_x, u.cover_position_y, u.cover_zoom, u.interests, u.created_at, u.is_verified,
+        u.photo_url, u.cover_url, u.cover_position_x, u.cover_position_y, u.cover_zoom, u.interests, u.created_at, u.is_verified, u.authenticity_status,
         p.online, p.last_seen, p.available_until,
         CASE
           WHEN p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' THEN p.mood
@@ -276,62 +291,9 @@ export const userService = {
         EXISTS (
           SELECT 1 FROM likes l
           WHERE l.liker_id = $2 AND l.liked_id = $1
-        ) AS is_liked,
-        COALESCE(p.share_live_location_with_matches, TRUE) AS live_location_sharing,
-        CASE
-          WHEN EXISTS (
-            SELECT 1 FROM likes l1
-            JOIN likes l2 ON l1.liker_id = l2.liked_id AND l1.liked_id = l2.liker_id
-            WHERE l1.liker_id = $2 AND l1.liked_id = $1
-          )
-          AND COALESCE(p.share_live_location_with_matches, TRUE) = TRUE
-          AND p.lat IS NOT NULL AND p.lng IS NOT NULL
-          THEN p.lat
-          ELSE NULL
-        END AS live_lat,
-        CASE
-          WHEN EXISTS (
-            SELECT 1 FROM likes l1
-            JOIN likes l2 ON l1.liker_id = l2.liked_id AND l1.liked_id = l2.liker_id
-            WHERE l1.liker_id = $2 AND l1.liked_id = $1
-          )
-          AND COALESCE(p.share_live_location_with_matches, TRUE) = TRUE
-          AND p.lat IS NOT NULL AND p.lng IS NOT NULL
-          THEN p.lng
-          ELSE NULL
-        END AS live_lng,
-        CASE
-          WHEN EXISTS (
-            SELECT 1 FROM likes l1
-            JOIN likes l2 ON l1.liker_id = l2.liked_id AND l1.liked_id = l2.liker_id
-            WHERE l1.liker_id = $2 AND l1.liked_id = $1
-          )
-          AND COALESCE(p.share_live_location_with_matches, TRUE) = TRUE
-          AND p.lat IS NOT NULL AND p.lng IS NOT NULL
-          THEN p.updated_at
-          ELSE NULL
-        END AS live_location_updated_at,
-        CASE
-          WHEN viewer.lat IS NOT NULL AND viewer.lng IS NOT NULL
-           AND EXISTS (
-            SELECT 1 FROM likes l1
-            JOIN likes l2 ON l1.liker_id = l2.liked_id AND l1.liked_id = l2.liker_id
-            WHERE l1.liker_id = $2 AND l1.liked_id = $1
-          )
-          AND COALESCE(p.share_live_location_with_matches, TRUE) = TRUE
-          AND p.lat IS NOT NULL AND p.lng IS NOT NULL
-          THEN ROUND(
-            (ST_Distance(
-              ST_MakePoint(viewer.lng, viewer.lat)::geography,
-              ST_MakePoint(p.lng, p.lat)::geography
-            ) / 1000.0)::numeric,
-            1
-          )
-          ELSE NULL
-        END AS live_distance_km
+        ) AS is_liked
        FROM users u
        LEFT JOIN profiles p ON p.user_id = u.id
-       LEFT JOIN profiles viewer ON viewer.user_id = $2
        WHERE u.id = $1`,
       [targetId, viewerId],
     );
@@ -540,46 +502,13 @@ export const userService = {
   async getMatches(userId: string) {
     const result = await query(
       `SELECT
-        u.id, u.name, u.age, u.bio, u.photo_url, u.is_verified,
+        u.id, u.name, u.age, u.bio, u.photo_url, u.is_verified, u.authenticity_status,
         p.online, p.last_seen,
-        COALESCE(p.share_live_location_with_matches, TRUE) AS live_location_sharing,
-        CASE
-          WHEN COALESCE(p.share_live_location_with_matches, TRUE) = TRUE
-           AND p.lat IS NOT NULL AND p.lng IS NOT NULL
-          THEN p.lat
-          ELSE NULL
-        END AS lat,
-        CASE
-          WHEN COALESCE(p.share_live_location_with_matches, TRUE) = TRUE
-           AND p.lat IS NOT NULL AND p.lng IS NOT NULL
-          THEN p.lng
-          ELSE NULL
-        END AS lng,
-        CASE
-          WHEN COALESCE(p.share_live_location_with_matches, TRUE) = TRUE
-           AND p.lat IS NOT NULL AND p.lng IS NOT NULL
-          THEN p.updated_at
-          ELSE NULL
-        END AS location_updated_at,
-        CASE
-          WHEN viewer.lat IS NOT NULL AND viewer.lng IS NOT NULL
-           AND COALESCE(p.share_live_location_with_matches, TRUE) = TRUE
-           AND p.lat IS NOT NULL AND p.lng IS NOT NULL
-          THEN ROUND(
-            (ST_Distance(
-              ST_MakePoint(viewer.lng, viewer.lat)::geography,
-              ST_MakePoint(p.lng, p.lat)::geography
-            ) / 1000.0)::numeric,
-            1
-          )
-          ELSE NULL
-        END AS distance_km,
         msg.message as last_message,
         msg.created_at as last_message_at,
         GREATEST(l1.created_at, l2.created_at) AS matched_at
        FROM users u
        JOIN profiles p ON u.id = p.user_id
-       JOIN profiles viewer ON viewer.user_id = $1
        JOIN likes l1 ON l1.liker_id = $1 AND l1.liked_id = u.id
        JOIN likes l2 ON l2.liker_id = u.id AND l2.liked_id = $1
        LEFT JOIN LATERAL (

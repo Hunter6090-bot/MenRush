@@ -254,7 +254,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
                   <button
                     type="button"
                     onClick={() => handlePass(hit)}
-                    className="rounded-full border border-[#3D2B0E] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-[var(--cream-muted)] hover:border-[#C4832A]/40 hover:text-[#F0E0C0]"
+                    className="rounded-full border border-[var(--border-default)] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-[var(--cream)] hover:border-[var(--copper)]/40 hover:text-[var(--copper)]"
                   >
                     Pass
                   </button>

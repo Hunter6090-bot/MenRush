@@ -6,6 +6,7 @@ import { BETA_INVITE_REQUIRED } from '../lib/betaInvite';
 import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
 import { MobileBackButton } from '../components/MobileBackButton';
+import { ThemeToggle } from '../components/ThemeToggle';
 const FEATURES = [
   'See who already matched you',
   'See everyone who viewed your profile',
@@ -62,8 +63,9 @@ export const Premium: React.FC = () => {
       <RandomBackground />
       <div className="absolute inset-0 bg-black/75" />
 
-      <div className="fixed left-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 sm:absolute">
+      <div className="fixed left-3 right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex items-center justify-between sm:absolute sm:left-3 sm:right-3">
         <MobileBackButton fallback="/profile" onClick={() => navigate('/profile')} />
+        <ThemeToggle variant="header" />
       </div>
 
       <div className="relative z-10 w-full max-w-lg animate-slide-up">

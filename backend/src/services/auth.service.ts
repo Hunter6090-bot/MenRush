@@ -8,6 +8,7 @@ import {
   LoginInput,
   ResetPasswordInput,
   ChangePasswordInput,
+  ChangeEmailInput,
 } from '../types/validation';
 import { sendTransactionalEmail } from './mailer.service';
 import {
@@ -115,8 +116,9 @@ export const authService = {
       }
     }
 
-    // Signup always creates an unverified account. ID + matching selfie verification
-    // is the only path to access the app. Set DEV_AUTO_VERIFY=true only for local dev.
+    // Signup records DOB/age as self-attested only. Government-ID verification is
+    // optional and must never be treated as the access gate. DEV_AUTO_VERIFY is
+    // retained only for local identity-flow fixtures.
     const autoVerify = process.env.DEV_AUTO_VERIFY === 'true';
 
     const client = await pool.connect();
@@ -131,9 +133,12 @@ export const authService = {
       const defaultAvatar = defaultGenericAvatarUrl(data.age);
 
       const result = await client.query(
-        `INSERT INTO users (id, email, password_hash, name, age, photo_url, is_verified, verification_status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         RETURNING id, email, name, age, photo_url, is_verified, verification_status`,
+        `INSERT INTO users (
+           id, email, password_hash, name, age, photo_url,
+           is_verified, verification_status, age_assurance_status
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'self_attested')
+         RETURNING id, email, name, age, photo_url, is_verified, verification_status,
+                   age_assurance_status, authenticity_status`,
         [
           id,
           data.email,
@@ -200,6 +205,19 @@ export const authService = {
     };
 
     if (user.totp_enabled) {
+      const { trustedDeviceService } = await import('./trusted-device.service');
+      const trusted = await trustedDeviceService.isTrusted(user.id, data.deviceTrustToken);
+      if (trusted) {
+        return {
+          requires2fa: false as const,
+          skipped2fa: true as const,
+          user: publicUser,
+          token: signToken(user.id),
+          // Echo back so client keeps the same trust token (already valid).
+          deviceTrustToken: data.deviceTrustToken,
+        };
+      }
+
       return {
         requires2fa: true as const,
         pendingToken: this.signTwoFactorPendingToken(user.id),
@@ -262,7 +280,11 @@ export const authService = {
     return { userId: payload.userId };
   },
 
-  async completeTwoFactorLogin(pendingToken: string, code: string) {
+  async completeTwoFactorLogin(
+    pendingToken: string,
+    code: string,
+    options?: { trustThisDevice?: boolean; userAgent?: string },
+  ) {
     const { userId } = this.verifyTwoFactorPendingToken(pendingToken);
     const { twoFactorService } = await import('./two-factor.service');
     const valid = await twoFactorService.verifyForLogin(userId, code);
@@ -282,6 +304,13 @@ export const authService = {
     }
 
     const user = result.rows[0];
+    let deviceTrustToken: string | undefined;
+    if (options?.trustThisDevice) {
+      const { trustedDeviceService } = await import('./trusted-device.service');
+      const created = await trustedDeviceService.create(userId, options.userAgent);
+      deviceTrustToken = created.rawToken;
+    }
+
     return {
       user: {
         id: user.id,
@@ -294,6 +323,7 @@ export const authService = {
         premium_tier: user.premium_tier ?? 'free',
       },
       token: signToken(user.id),
+      ...(deviceTrustToken ? { deviceTrustToken } : {}),
     };
   },
 
@@ -431,6 +461,9 @@ export const authService = {
     );
     await query(`UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1`, [tokenId]);
 
+    const { trustedDeviceService } = await import('./trusted-device.service');
+    await trustedDeviceService.revokeAll(userId);
+
     return { ok: true };
   },
 
@@ -462,6 +495,49 @@ export const authService = {
       [userId],
     );
 
+    const { trustedDeviceService } = await import('./trusted-device.service');
+    await trustedDeviceService.revokeAll(userId);
+
     return { ok: true };
+  },
+
+  async getAccountEmail(userId: string) {
+    const result = await query(`SELECT email FROM users WHERE id = $1`, [userId]);
+    if (result.rows.length === 0) {
+      throw new Error('User not found');
+    }
+    return { email: result.rows[0].email as string };
+  },
+
+  async changeEmail(userId: string, data: ChangeEmailInput) {
+    const result = await query(`SELECT email, password_hash FROM users WHERE id = $1`, [userId]);
+    if (result.rows.length === 0) {
+      throw new Error('User not found');
+    }
+
+    const valid = await bcryptjs.compare(data.current_password, result.rows[0].password_hash);
+    if (!valid) {
+      throw new Error('Current password is incorrect');
+    }
+
+    const currentEmail = String(result.rows[0].email).toLowerCase();
+    if (currentEmail === data.new_email) {
+      throw new Error('New email must be different from your current email');
+    }
+
+    const taken = await query(
+      `SELECT id FROM users WHERE LOWER(email) = $1 AND id <> $2`,
+      [data.new_email, userId],
+    );
+    if (taken.rows.length > 0) {
+      throw new Error('That email is already in use');
+    }
+
+    await query(
+      `UPDATE users SET email = $1, updated_at = NOW() WHERE id = $2`,
+      [data.new_email, userId],
+    );
+
+    return { ok: true, email: data.new_email };
   },
 };

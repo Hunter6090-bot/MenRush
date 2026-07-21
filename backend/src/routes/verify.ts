@@ -15,6 +15,7 @@ import {
   idPrecheckService,
   type IdPrecheckTemplate,
 } from '../services/verification/id-precheck.service';
+import { authenticityService } from '../services/verification/authenticity.service';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
 
 const PRECHECK_TEMPLATES = new Set<IdPrecheckTemplate>([
@@ -43,10 +44,14 @@ const upload = multer({
   fileFilter: uploadFileFilter('verification'),
 });
 
-function emitHandoffUpdate(req: AuthRequest, payload: Record<string, unknown>) {
+function emitHandoffUpdate(
+  req: HandoffRequest,
+  userId: string,
+  payload: Record<string, unknown>,
+) {
   const io = req.app.get('io');
-  if (io && req.userId) {
-    io.to(`user:${req.userId}`).emit('verify:handoff', payload);
+  if (io) {
+    io.to(`user:${userId}`).emit('verify:handoff', payload);
   }
 }
 
@@ -172,7 +177,7 @@ router.post(
         id_back_key: idBack?.filename ?? null,
       });
 
-      emitHandoffUpdate({ ...req, userId: updated.user_id } as AuthRequest, {
+      emitHandoffUpdate(req, updated.user_id, {
         session_id: updated.id,
         status: updated.status,
         nationality: updated.nationality,
@@ -195,6 +200,64 @@ router.post(
 );
 
 router.use(authMiddleware);
+
+router.post('/authenticity/challenge', async (req: AuthRequest, res: Response) => {
+  try {
+    const challenge = await authenticityService.createChallenge(req.userId!);
+    return res.status(201).json({
+      challenge_id: challenge.id,
+      prompts: challenge.prompts,
+      expires_at: challenge.expires_at,
+    });
+  } catch (err) {
+    console.error('[verify] authenticity challenge error:', err);
+    return res.status(500).json({ error: 'challenge_create_failed' });
+  }
+});
+
+router.post(
+  '/authenticity/submit',
+  upload.fields([
+    { name: 'frame_0', maxCount: 1 },
+    { name: 'frame_1', maxCount: 1 },
+    { name: 'frame_2', maxCount: 1 },
+  ]),
+  async (req: AuthRequest, res: Response) => {
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    const frames = [files?.frame_0?.[0], files?.frame_1?.[0], files?.frame_2?.[0]].filter(
+      (file): file is Express.Multer.File => Boolean(file),
+    );
+    const challengeId = String(req.body?.challenge_id || '').trim();
+
+    if (!challengeId || frames.length !== 3) {
+      await Promise.allSettled(frames.map((file) => fsPromises.unlink(file.path)));
+      return res.status(400).json({ error: 'missing_challenge_frames' });
+    }
+
+    try {
+      const signatures = await Promise.all(
+        frames.map((file) => validateFileSignature(file.path, file.mimetype)),
+      );
+      if (signatures.some((valid) => !valid)) {
+        await Promise.allSettled(frames.map((file) => fsPromises.unlink(file.path)));
+        return res.status(400).json({ error: 'invalid_file_signature' });
+      }
+      const result = await authenticityService.submitChallenge(
+        req.userId!,
+        challengeId,
+        frames.map((file) => file.filename),
+      );
+      return res.status(202).json(result);
+    } catch (err: any) {
+      await Promise.allSettled(frames.map((file) => fsPromises.unlink(file.path)));
+      if (err?.code === 'challenge_invalid_or_expired') {
+        return res.status(409).json({ error: 'challenge_invalid_or_expired' });
+      }
+      console.error('[verify] authenticity submit error:', err);
+      return res.status(500).json({ error: 'authenticity_submit_failed' });
+    }
+  },
+);
 
 router.post('/handoff', async (req: AuthRequest, res: Response) => {
   const nationality = String(req.body?.nationality || '').trim();
@@ -398,6 +461,11 @@ router.get('/status', async (req: AuthRequest, res: Response) => {
       provider: state.verification_provider,
       verified_at: state.verified_at,
       rejection_reason: state.rejection_reason,
+      age_assurance_status: state.age_assurance_status,
+      age_assured_at: state.age_assured_at,
+      authenticity_status: state.authenticity_status,
+      authenticity_verified_at: state.authenticity_verified_at,
+      trust_level: state.trust_level,
     });
   } catch (err) {
     console.error('[verify] status error:', err);

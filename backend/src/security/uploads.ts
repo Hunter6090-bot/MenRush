@@ -13,6 +13,8 @@ const MIME_EXTENSIONS: Record<string, string> = {
   'audio/ogg': '.ogg',
   'audio/mpeg': '.mp3',
   'audio/mp4': '.m4a',
+  'video/webm': '.webm',
+  'video/mp4': '.mp4',
 };
 
 const CONTEXT_MIMES: Record<UploadContext, Set<string>> = {
@@ -66,6 +68,7 @@ export async function validateFileSignature(filePath: string, mimetype: string):
         return bytes.subarray(0, 4).toString('ascii') === 'RIFF'
           && bytes.subarray(8, 12).toString('ascii') === 'WEBP';
       case 'audio/webm':
+      case 'video/webm':
         return bytes.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
       case 'audio/ogg':
         return bytes.subarray(0, 4).toString('ascii') === 'OggS';
@@ -73,6 +76,7 @@ export async function validateFileSignature(filePath: string, mimetype: string):
         return bytes.subarray(0, 3).toString('ascii') === 'ID3'
           || (bytes.length >= 2 && bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0);
       case 'audio/mp4':
+      case 'video/mp4':
         return bytes.length >= 12 && bytes.subarray(4, 8).toString('ascii') === 'ftyp';
       default:
         return false;

@@ -7,6 +7,7 @@ import { useRoomVideo } from '../hooks/useRoomVideo';
 import { RoomGalleryGrid } from '../components/RoomGalleryGrid';
 import { PulseRing } from '../components/PulseRing';
 import { MobileBackButton } from '../components/MobileBackButton';
+import { ThemeToggle } from '../components/ThemeToggle';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 
 interface RoomMessage {
@@ -367,29 +368,23 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   return (
     <div
       className={embedded ? 'flex h-full min-h-0 flex-col' : 'fixed inset-0 flex flex-col'}
-      style={{ background: '#050403' }}
+      style={{ background: 'var(--bg-primary)' }}
     >
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header
-        className={`flex-shrink-0 flex items-center gap-2 border-b px-3 sm:px-4 ${
+        className={`flex-shrink-0 flex items-center gap-2 border-b border-[var(--border-default)] px-3 sm:px-4 bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl ${
           embedded ? '' : 'pt-[env(safe-area-inset-top,0px)]'
         }`}
         style={{
           minHeight: embedded ? '4rem' : 'calc(4rem + env(safe-area-inset-top, 0px))',
-          background: 'rgba(13,10,6,0.94)',
-          borderColor: '#3D2B0E',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
           zIndex: 20,
         }}
       >
-        {!embedded ? (
-          <MobileBackButton
-            fallback="/rooms"
-            onClick={() => navigate('/rooms')}
-            className="-ml-1"
-          />
-        ) : null}
+        <MobileBackButton
+          fallback="/rooms"
+          onClick={() => navigate('/rooms')}
+          className="-ml-1"
+        />
 
         {/* Room avatar */}
         <div
@@ -405,14 +400,16 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
 
         {/* Room name + members */}
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm leading-tight truncate" style={{ color: '#F0E0C0' }}>
+          <p className="font-semibold text-sm leading-tight truncate text-[var(--cream)]">
             {room?.name ?? 'Room'}
           </p>
-          <p className="text-[10px] mt-0.5" style={{ color: '#6B5035' }}>
+          <p className="text-[10px] mt-0.5 text-[var(--cream-muted)]">
             <GroupIcon className="w-3 h-3 inline mr-0.5" />
             {liveCount > 0 ? `${liveCount} live` : `${room?.member_count ?? '—'} members`}
           </p>
         </div>
+
+        <ThemeToggle variant="chat" />
 
         <button
           type="button"
@@ -468,8 +465,8 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           <div
             className="absolute right-4 top-16 w-72 max-h-[70vh] overflow-y-auto rounded-2xl overflow-hidden animate-scale-up"
             style={{
-              background: '#1E1508',
-              border: '1px solid #3D2B0E',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-default)',
               boxShadow: '0 12px 40px rgba(0,0,0,0.6)',
             }}
             onClick={(e) => e.stopPropagation()}
@@ -477,7 +474,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             {room?.description && (
               <div
                 className="px-4 py-3 text-xs border-b"
-                style={{ color: '#A89070', borderColor: '#3D2B0E' }}
+                style={{ color: '#A89070', borderColor: 'var(--border-default)' }}
               >
                 {room.description}
               </div>
@@ -486,20 +483,20 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             {settingsNotice && (
               <div
                 className="px-4 py-2 text-xs border-b"
-                style={{ color: '#F0E0C0', borderColor: '#3D2B0E', background: 'rgba(196,131,42,0.08)' }}
+                style={{ color: 'var(--cream)', borderColor: 'var(--border-default)', background: 'rgba(196,131,42,0.08)' }}
               >
                 {settingsNotice}
               </div>
             )}
 
-            <div className="px-4 py-3 border-b" style={{ borderColor: '#3D2B0E' }}>
+            <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border-default)' }}>
               <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: '#6B5035' }}>
                 Members
               </p>
               <div className="space-y-1">
                 {members.map((member) => (
                   <div key={member.id} className="flex items-center gap-2">
-                    <span className="flex-1 text-sm truncate" style={{ color: '#F0E0C0' }}>
+                    <span className="flex-1 text-sm truncate" style={{ color: 'var(--cream)' }}>
                       {member.name}
                       {member.role === 'owner' ? (
                         <span className="ml-1 text-[10px]" style={{ color: '#C4832A' }}>
@@ -520,7 +517,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             </div>
 
             {isOwner && isPrivateGroup && (
-              <div className="border-b" style={{ borderColor: '#3D2B0E' }}>
+              <div className="border-b" style={{ borderColor: 'var(--border-default)' }}>
                 <button
                   type="button"
                   onClick={() => setAddPanelOpen((v) => !v)}
@@ -543,7 +540,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                           disabled={addingMemberId === candidate.id}
                           onClick={() => void handleAddMember(candidate.id, candidate.name)}
                           className="w-full text-left px-2 py-2 rounded-lg text-sm hover:bg-[#3D2B0E]/40 disabled:opacity-50"
-                          style={{ color: '#F0E0C0' }}
+                          style={{ color: 'var(--cream)' }}
                         >
                           {addingMemberId === candidate.id ? 'Adding…' : candidate.name}
                         </button>
@@ -576,7 +573,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       {videoError && (
         <div
           className="mx-3 mt-2 rounded-xl border px-3 py-2 text-xs"
-          style={{ borderColor: 'rgba(196,131,42,0.35)', background: 'rgba(196,131,42,0.1)', color: '#F0E0C0' }}
+          style={{ borderColor: 'rgba(196,131,42,0.35)', background: 'rgba(196,131,42,0.1)', color: 'var(--cream)' }}
         >
           {videoError}
         </div>
@@ -599,14 +596,14 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
         className={`flex shrink-0 flex-col border-t transition-[height] duration-300 ease-out ${
           chatOpen ? 'h-[42vh] min-h-[220px]' : 'h-0 overflow-hidden border-transparent'
         }`}
-        style={{ borderColor: '#3D2B0E', background: '#0D0A06' }}
+        style={{ borderColor: 'var(--border-default)', background: 'var(--bg-primary)' }}
       >
         <div className="flex-1 overflow-y-auto px-4 py-3" style={{ scrollbarWidth: 'thin' }}>
         {messages.length === 0 && !sending && (
           <div className="flex flex-col items-center justify-center h-full select-none">
             <div
               className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
-              style={{ background: '#1E1508', border: '1px solid #3D2B0E' }}
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
             >
               <BubbleIcon className="w-8 h-8" style={{ color: '#C4832A', opacity: 0.5 }} />
             </div>
@@ -634,19 +631,19 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
               {/* Date separator */}
               {showDateSep && (
                 <div className="flex items-center gap-3 my-5">
-                  <div className="flex-1 h-px" style={{ background: '#3D2B0E' }} />
+                  <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
                   <span
                     className="text-[10px] font-semibold px-3 py-1 rounded-full"
                     style={{
-                      background: '#1E1508',
-                      border: '1px solid #3D2B0E',
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border-default)',
                       color: '#A89070',
                       letterSpacing: '0.06em',
                     }}
                   >
                     {formatDateLabel(msg.created_at)}
                   </span>
-                  <div className="flex-1 h-px" style={{ background: '#3D2B0E' }} />
+                  <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
                 </div>
               )}
 
@@ -701,9 +698,9 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                             boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
                           }
                         : {
-                            background: '#1E1508',
-                            border: '1px solid #3D2B0E',
-                            color: '#F0E0C0',
+                            background: 'var(--bg-card)',
+                            border: '1px solid var(--border-default)',
+                            color: 'var(--cream)',
                             borderRadius: showTail
                               ? '18px 18px 18px 4px'
                               : '18px 18px 18px 18px',
@@ -728,7 +725,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           <div className="flex justify-start mt-3 items-center gap-2 pl-10">
             <div
               className="px-4 py-2.5 rounded-[18px] rounded-bl-[4px] flex items-center gap-1.5"
-              style={{ background: '#1E1508', border: '1px solid #3D2B0E' }}
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
             >
               <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
               <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
@@ -745,13 +742,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
 
       {/* ── Input bar ─────────────────────────────────────────────────────── */}
       <div
-        className="flex-shrink-0 border-t px-4 py-3"
-        style={{
-          borderColor: '#3D2B0E',
-          background: 'rgba(13,10,6,0.94)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-        }}
+        className="flex-shrink-0 border-t border-[var(--border-default)] px-4 py-3 bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl"
       >
         <form onSubmit={handleSend} className="flex items-center gap-2">
           {/* Attachment icon */}
@@ -777,9 +768,9 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             autoComplete="off"
             className="flex-1 text-sm px-5 py-3 rounded-full focus:outline-none transition-all duration-200"
             style={{
-              background: '#1E1508',
-              border: '1px solid #3D2B0E',
-              color: '#F0E0C0',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-default)',
+              color: 'var(--cream)',
               caretColor: '#C4832A',
             }}
             onFocus={(e) => {
@@ -787,7 +778,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
               e.currentTarget.style.boxShadow = '0 0 0 3px rgba(196,131,42,0.12)';
             }}
             onBlur={(e) => {
-              e.currentTarget.style.border = '1px solid #3D2B0E';
+              e.currentTarget.style.border = '1px solid var(--border-default)';
               e.currentTarget.style.boxShadow = 'none';
             }}
           />

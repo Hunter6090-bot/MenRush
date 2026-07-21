@@ -6,6 +6,7 @@ import { RoomList } from './RoomList';
 import { Messages } from '../pages/Messaging';
 import { RoomChat } from '../pages/RoomChat';
 import { IconChat, IconRooms } from './icons';
+import { ThemeToggle } from './ThemeToggle';
 
 type HubTab = 'messages' | 'rooms';
 
@@ -26,9 +27,15 @@ export const MessagingHub = () => {
 
   return (
     <Layout>
-      <div className="flex h-[calc(100dvh-var(--desktop-workspace-header))] min-h-0 overflow-hidden">
-        <aside className="flex w-[320px] shrink-0 flex-col border-r border-[var(--border-default)] bg-[#0A0806]">
+      <div className="flex h-[calc(100dvh-var(--desktop-workspace-header))] min-h-0 overflow-hidden bg-[var(--bg-primary)]">
+        <aside className="flex w-[320px] shrink-0 flex-col border-r border-[var(--border-default)] bg-[var(--bg-primary)]">
           <div className="shrink-0 border-b border-[var(--border-default)] px-4 py-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)]">
+                Inbox
+              </p>
+              <ThemeToggle variant="header" />
+            </div>
             <div
               className="flex rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] p-1"
               role="tablist"
@@ -72,7 +79,7 @@ export const MessagingHub = () => {
           </div>
         </aside>
 
-        <section className="flex min-w-0 flex-1 flex-col bg-[#0D0A06]">
+        <section className="flex min-w-0 flex-1 flex-col bg-[var(--bg-primary)]">
           {tab === 'messages' ? (
             otherId ? (
               <Messages embedded />
