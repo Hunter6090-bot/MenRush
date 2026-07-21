@@ -26,6 +26,7 @@ import webrtcRoutes from './routes/webrtc';
 import dripRoutes from './routes/drip';
 import betaRoutes from './routes/beta';
 import adminRoutes from './routes/admin.routes';
+import campaignRoutes from './routes/campaigns';
 import { startPulseExpiryCron } from './services/pulse.service';
 import {
   hasWelcomeBeenSent,
@@ -75,7 +76,7 @@ app.use('/api/premium/webhook', premiumWebhookRoutes);
 app.use(express.json());
 app.use('/api/verify', verifyRoutes);
 // Profile / message / album media. fallthrough:true so missing files hit a clean 404
-// (not 500) — Railway ephemeral disk often loses uploads without a volume.
+// (not 500). Production mounts a Railway volume at /app/uploads (see Dockerfile).
 const uploadsRoot = path.join(__dirname, '../uploads');
 app.use(
   '/uploads',
@@ -115,6 +116,7 @@ app.use('/api/webrtc', webrtcRoutes);
 app.use('/api/waitlist', dripRoutes);
 app.use('/api/beta', betaRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/campaigns', campaignRoutes);
 
 // Waitlist signup — POSTs to /api/waitlist land here; the dripRoutes router
 // handles the rest (unsubscribe + admin endpoints). New signups get the
