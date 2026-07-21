@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Link, useNavigate } from 'react-router-dom';
-import { EventDTO, Mood, profileMetaAPI, pulseAPI, usersAPI } from '../api/client';
+import { EventDTO, HotSpotDTO, Mood, hotSpotsAPI, profileMetaAPI, pulseAPI, usersAPI } from '../api/client';
 import { useLocationStore, useAuthStore } from '../hooks/store';
 import { NearbyUser } from '../components/ProfileCard';
 import { Layout } from '../components/Layout';
@@ -14,6 +14,7 @@ import {
 } from '../lib/discoveryFormat';
 import { ProfileDrawer } from '../components/ProfileDrawer';
 import { createMapMarkerElement, MapMarker } from '../components/MapMarker';
+import { createHotSpotPinElement, HotSpotPin } from '../components/HotSpotPin';
 
 import { ActivationBanner } from '../components/ActivationBanner';
 import { DiscoveryFilterPills } from '../components/DiscoveryFilterPills';
@@ -198,9 +199,13 @@ export const Discover = () => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<Map<string, { marker: mapboxgl.Marker; root: Root; user: NearbyUser }>>(new Map());
+  const hotSpotMarkersRef = useRef<
+    Map<string, { marker: mapboxgl.Marker; root: Root; spot: HotSpotDTO }>
+  >(new Map());
   const selfMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const selfDotRef = useRef<HTMLDivElement | null>(null);
   const selfRootRef = useRef<Root | null>(null);
+  const [hotSpots, setHotSpots] = useState<HotSpotDTO[]>([]);
   const navigate = useNavigate();
   const isDesktopLayout = useIsDesktopLayout();
 
@@ -791,6 +796,11 @@ export const Discover = () => {
         setTimeout(() => root.unmount(), 0);
       });
       markersRef.current.clear();
+      hotSpotMarkersRef.current.forEach(({ marker, root }) => {
+        marker.remove();
+        setTimeout(() => root.unmount(), 0);
+      });
+      hotSpotMarkersRef.current.clear();
       if (map.getLayer(RADIUS_CIRCLE_LAYER)) map.removeLayer(RADIUS_CIRCLE_LAYER);
       if (map.getSource(RADIUS_CIRCLE_SOURCE)) map.removeSource(RADIUS_CIRCLE_SOURCE);
       map.remove();
@@ -876,6 +886,78 @@ export const Discover = () => {
       markersRef.current.delete(userId);
     });
   }, [users, mapLoaded]);
+
+  // Always show Hot Spot pins (dim when empty, solid when check-ins present).
+  useEffect(() => {
+    if (lat == null || lng == null) {
+      setHotSpots([]);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await hotSpotsAPI.listNearby(lat, lng, Math.max(radius, 25));
+        if (!cancelled) setHotSpots(res.data.spots ?? []);
+      } catch {
+        if (!cancelled) setHotSpots([]);
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => void load(), 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [lat, lng, radius]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+
+    const visibleIds = new Set<string>();
+
+    hotSpots.forEach((spot) => {
+      if (!Number.isFinite(spot.latitude) || !Number.isFinite(spot.longitude)) return;
+      visibleIds.add(spot.id);
+      const lngLat: [number, number] = [spot.longitude, spot.latitude];
+      const existing = hotSpotMarkersRef.current.get(spot.id);
+      const pinData = {
+        id: spot.id,
+        name: spot.name,
+        category_icon: spot.category_icon,
+        live_count_exact: spot.live_count_exact,
+      };
+
+      if (existing) {
+        existing.marker.setLngLat(lngLat);
+        const prevOccupied = existing.spot.live_count_exact > 0;
+        const nextOccupied = spot.live_count_exact > 0;
+        if (
+          prevOccupied !== nextOccupied ||
+          existing.spot.live_count_exact !== spot.live_count_exact ||
+          existing.spot.name !== spot.name ||
+          existing.spot.category_icon !== spot.category_icon
+        ) {
+          existing.root.render(<HotSpotPin spot={pinData} size={36} />);
+        }
+        existing.spot = spot;
+        return;
+      }
+
+      const { element, root } = createHotSpotPinElement(pinData, () => navigate('/hot-spots'), 36);
+      const marker = new mapboxgl.Marker({ element, anchor: 'center' })
+        .setLngLat(lngLat)
+        .addTo(map);
+      hotSpotMarkersRef.current.set(spot.id, { marker, root, spot });
+    });
+
+    hotSpotMarkersRef.current.forEach(({ marker, root }, spotId) => {
+      if (visibleIds.has(spotId)) return;
+      marker.remove();
+      setTimeout(() => root.unmount(), 0);
+      hotSpotMarkersRef.current.delete(spotId);
+    });
+  }, [hotSpots, mapLoaded, navigate]);
 
   useEffect(() => {
     if (!mapLoaded || lat == null || lng == null) return;

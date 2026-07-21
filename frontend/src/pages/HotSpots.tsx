@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { Link } from 'react-router-dom';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 import { hotSpotsAPI, type HotSpotCategoryDTO, type HotSpotDTO } from '../api/client';
 import { Layout } from '../components/Layout';
 import { PulseRing } from '../components/PulseRing';
+import { HotSpotPin, createHotSpotPinElement } from '../components/HotSpotPin';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { formatDistanceFromKm } from '../lib/localeUnits';
 
@@ -15,6 +19,17 @@ export const HotSpots = () => {
   const [loading, setLoading] = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<mapboxgl.Map | null>(null);
+  const markersRef = useRef<Map<string, { marker: mapboxgl.Marker; root: Root; spot: HotSpotDTO }>>(
+    new Map(),
+  );
+  const [mapLoaded, setMapLoaded] = useState(false);
+
+  const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
+  const tokenMissing = !mapboxToken || mapboxToken === '__SET_ME__';
 
   const loadSpots = useCallback(async () => {
     if (lat == null || lng == null) {
@@ -44,6 +59,88 @@ export const HotSpots = () => {
     setLoading(true);
     void loadSpots();
   }, [loadSpots]);
+
+  useEffect(() => {
+    if (tokenMissing || !mapContainerRef.current || lat == null || lng == null) return;
+    if (mapRef.current) return;
+
+    mapboxgl.accessToken = mapboxToken!;
+    const map = new mapboxgl.Map({
+      container: mapContainerRef.current,
+      style: 'mapbox://styles/mapbox/dark-v11',
+      center: [lng, lat],
+      zoom: 11,
+      attributionControl: false,
+    });
+    map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
+    map.on('load', () => setMapLoaded(true));
+    mapRef.current = map;
+
+    return () => {
+      markersRef.current.forEach(({ marker, root }) => {
+        marker.remove();
+        setTimeout(() => root.unmount(), 0);
+      });
+      markersRef.current.clear();
+      map.remove();
+      mapRef.current = null;
+      setMapLoaded(false);
+    };
+  }, [mapboxToken, tokenMissing, lat, lng]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+
+    const visibleIds = new Set<string>();
+
+    spots.forEach((spot) => {
+      if (!Number.isFinite(spot.latitude) || !Number.isFinite(spot.longitude)) return;
+      visibleIds.add(spot.id);
+      const lngLat: [number, number] = [spot.longitude, spot.latitude];
+      const existing = markersRef.current.get(spot.id);
+      const pinData = {
+        id: spot.id,
+        name: spot.name,
+        category_icon: spot.category_icon,
+        live_count_exact: spot.live_count_exact,
+      };
+
+      if (existing) {
+        existing.marker.setLngLat(lngLat);
+        if (
+          existing.spot.live_count_exact !== spot.live_count_exact ||
+          existing.spot.name !== spot.name ||
+          existing.spot.category_icon !== spot.category_icon
+        ) {
+          existing.root.render(<HotSpotPin spot={pinData} size={36} />);
+        }
+        existing.spot = spot;
+        return;
+      }
+
+      const { element, root } = createHotSpotPinElement(
+        pinData,
+        () => {
+          setSelectedId(spot.id);
+          const el = document.getElementById(`hotspot-card-${spot.id}`);
+          el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        },
+        36,
+      );
+      const marker = new mapboxgl.Marker({ element, anchor: 'center' })
+        .setLngLat(lngLat)
+        .addTo(map);
+      markersRef.current.set(spot.id, { marker, root, spot });
+    });
+
+    markersRef.current.forEach(({ marker, root }, spotId) => {
+      if (visibleIds.has(spotId)) return;
+      marker.remove();
+      setTimeout(() => root.unmount(), 0);
+      markersRef.current.delete(spotId);
+    });
+  }, [spots, mapLoaded]);
 
   const handleCheckIn = async (spot: HotSpotDTO, anonymous: boolean) => {
     setActingId(spot.id);
@@ -76,8 +173,22 @@ export const HotSpots = () => {
         </div>
         <p className="mb-5 max-w-2xl text-sm leading-relaxed text-[var(--cream-muted)]">
           See who&apos;s around popular venues and open areas across the UK. Check in anonymously or
-          with your profile. Free members see rounded live counts; Premium shows exact numbers.
+          with your profile. Map pins stay visible — dim when empty, solid when someone is checked in.
+          Free members see rounded live counts; Premium shows exact numbers.
         </p>
+
+        {lat != null && lng != null && !tokenMissing ? (
+          <div
+            className="relative mb-5 overflow-hidden rounded-2xl border border-[rgba(196,131,42,0.35)]"
+            style={{ height: 'min(42vh, 360px)' }}
+            data-testid="hotspots-map"
+          >
+            <div ref={mapContainerRef} className="absolute inset-0 h-full w-full" />
+            <div className="pointer-events-none absolute bottom-3 left-3 rounded-full border border-[rgba(196,131,42,0.4)] bg-[rgba(13,10,6,0.85)] px-3 py-1.5 text-[11px] font-semibold text-[var(--cream-muted)]">
+              Solid = checked in · Dim = empty
+            </div>
+          </div>
+        ) : null}
 
         <div className="mb-5 flex flex-wrap gap-1.5">
           <button
@@ -159,9 +270,10 @@ export const HotSpots = () => {
             {spots.map((spot) => (
               <article
                 key={spot.id}
+                id={`hotspot-card-${spot.id}`}
                 className={`mr-card flex flex-col p-4 transition-transform hover:-translate-y-0.5 ${
                   spot.is_checked_in ? 'border-[var(--copper)]/50' : ''
-                }`}
+                } ${selectedId === spot.id ? 'ring-2 ring-[#C4832A]/60' : ''}`}
               >
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <div>

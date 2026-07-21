@@ -223,6 +223,30 @@ export const hotSpotsService = {
       [spotId, userId, anonymous],
     );
 
+    await query(
+      `UPDATE hot_spots SET last_activity_at = NOW() WHERE id = $1`,
+      [spotId],
+    );
+
+    return this.getSpot(userId, spotId);
+  },
+
+  /** Record a comment and bump spot freshness (used by ops / future UI). */
+  async addComment(userId: string, spotId: string, body: string, anonymous = true) {
+    const spot = await query(`SELECT id FROM hot_spots WHERE id = $1 AND is_active = TRUE`, [spotId]);
+    if (!spot.rows[0]) {
+      throw new Error('Spot not found');
+    }
+    const trimmed = body.trim();
+    if (trimmed.length < 1 || trimmed.length > 500) {
+      throw new Error('Comment must be 1–500 characters');
+    }
+    await query(
+      `INSERT INTO hot_spot_comments (spot_id, user_id, body, is_anonymous)
+       VALUES ($1, $2, $3, $4)`,
+      [spotId, userId, trimmed, anonymous],
+    );
+    await query(`UPDATE hot_spots SET last_activity_at = NOW() WHERE id = $1`, [spotId]);
     return this.getSpot(userId, spotId);
   },
 
