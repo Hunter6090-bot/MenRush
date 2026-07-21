@@ -348,40 +348,40 @@ export function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnect
 }
 
 /**
- * Attach local A/V as sendrecv transceivers (Unified Plan).
- * Avoid deprecated offerToReceive* which can confuse Safari m-lines / glare.
+ * Attach local A/V via addTrack (Unified Plan).
+ *
+ * Prefer addTrack over addTransceiver:
+ * - On the offerer, addTrack creates sendrecv m-lines.
+ * - On the answerer (after setRemoteDescription), addTrack reuses the offer's
+ *   transceivers instead of inserting extra m-lines.
+ *
+ * Calling addTransceiver(sendrecv) *before* setRemoteDescription on the
+ * answerer doubles audio/video m-lines and yields blank remote A/V after answer
+ * (Desktop↔iPhone and Android↔iPhone).
  */
 export function attachLocalTracks(pc: RTCPeerConnection, stream: MediaStream): void {
-  if (typeof pc.addTransceiver !== 'function') {
-    for (const track of stream.getTracks()) {
-      if (!pc.getSenders?.().some((s) => s.track?.id === track.id)) {
-        pc.addTrack(track, stream);
+  for (const track of stream.getTracks()) {
+    if (pc.getSenders().some((sender) => sender.track?.id === track.id)) continue;
+
+    const idle = pc
+      .getTransceivers()
+      .find(
+        (t) =>
+          t.receiver.track?.kind === track.kind &&
+          (!t.sender.track || t.sender.track.readyState === 'ended') &&
+          t.direction !== 'inactive',
+      );
+
+    if (idle?.sender) {
+      void idle.sender.replaceTrack(track);
+      try {
+        idle.direction = 'sendrecv';
+      } catch {
+        /* Safari may throw if direction is already negotiated */
       }
+      continue;
     }
-    return;
-  }
 
-  if (pc.getSenders().some((s) => s.track)) {
-    for (const track of stream.getTracks()) {
-      if (!pc.getSenders().some((s) => s.track?.id === track.id)) {
-        pc.addTrack(track, stream);
-      }
-    }
-    return;
-  }
-
-  const audio = stream.getAudioTracks()[0];
-  const video = stream.getVideoTracks()[0];
-
-  if (audio) {
-    pc.addTransceiver(audio, { direction: 'sendrecv', streams: [stream] });
-  } else {
-    pc.addTransceiver('audio', { direction: 'recvonly' });
-  }
-
-  if (video) {
-    pc.addTransceiver(video, { direction: 'sendrecv', streams: [stream] });
-  } else {
-    pc.addTransceiver('video', { direction: 'recvonly' });
+    pc.addTrack(track, stream);
   }
 }
