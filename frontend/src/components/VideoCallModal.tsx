@@ -126,7 +126,9 @@ export function VideoCallModal() {
     }
 
     if (callStatus === 'connected') {
-      // Keep remote <video> muted on iOS — audio plays via dedicated <audio>.
+      // Remote <video> stays muted (iOS autoplay); A/V audio via dedicated <audio>.
+      // Still re-bind whenever remoteStream identity/tracks change so frames appear
+      // as soon as ontrack fires after answer.
       void attachStreamToVideo(primaryVideoRef.current, remoteStream, {
         preferUnmuted: false,
       });

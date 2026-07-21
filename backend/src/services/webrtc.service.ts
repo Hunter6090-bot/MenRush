@@ -1,12 +1,17 @@
 /**
  * ICE server list for WebRTC. STUN alone is enough on the same LAN when peers
  * advertise routable host candidates (typical Android Chrome). iOS Safari only
- * advertises mDNS `.local` hosts, so iPhone↔iPhone needs a working TURN relay
- * even on the same Wi‑Fi.
+ * advertises mDNS `.local` hosts, so iPhone↔iPhone / cross-NAT needs TURN.
  *
- * The old Metered static user/pass (`openrelayproject`) no longer authenticates.
- * Use TURN REST (time-limited HMAC) against `staticauth.openrelay.metered.ca`,
- * or set TURN_URL + TURN_USERNAME + TURN_CREDENTIAL / TURN_SECRET.
+ * Railway (production) optional env — prefer a paid/dedicated relay when traffic grows:
+ *   TURN_URL        comma-separated turn:/turns: URLs
+ *   TURN_SECRET     static-auth HMAC secret (TURN REST) — preferred
+ *   TURN_USERNAME + TURN_CREDENTIAL  long-lived user/pass (if provider does not use REST)
+ *
+ * Default fallback: Metered Open Relay static-auth
+ *   host  staticauth.openrelay.metered.ca
+ *   secret openrelayprojectsecret
+ * (legacy openrelayproject / openrelayproject password auth is dead.)
  */
 import crypto from 'crypto';
 
@@ -40,7 +45,15 @@ function stunServers(): IceServerConfig[] {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
+    // Open Relay STUN (helps when Google STUN is blocked).
+    { urls: 'stun:openrelay.metered.ca:80' },
   ];
+}
+
+function parseTurnUrls(turnUrl: string): string | string[] {
+  return turnUrl.includes(',')
+    ? turnUrl.split(',').map((entry) => entry.trim()).filter(Boolean)
+    : turnUrl;
 }
 
 export function getIceServers(): IceServerConfig[] {
@@ -48,10 +61,8 @@ export function getIceServers(): IceServerConfig[] {
 
   const turnUrl = process.env.TURN_URL?.trim();
   if (turnUrl) {
+    const urls = parseTurnUrls(turnUrl);
     const secret = process.env.TURN_SECRET?.trim();
-    const urls = turnUrl.includes(',')
-      ? turnUrl.split(',').map((entry) => entry.trim()).filter(Boolean)
-      : turnUrl;
 
     if (secret) {
       const { username, credential } = createTurnRestCredentials(secret);
@@ -59,11 +70,17 @@ export function getIceServers(): IceServerConfig[] {
       return servers;
     }
 
-    servers.push({
-      urls,
-      username: process.env.TURN_USERNAME || undefined,
-      credential: process.env.TURN_CREDENTIAL || undefined,
-    });
+    const username = process.env.TURN_USERNAME?.trim();
+    const credential = process.env.TURN_CREDENTIAL?.trim();
+    if (username && credential) {
+      servers.push({ urls, username, credential });
+      return servers;
+    }
+
+    // Misconfigured TURN_URL without creds — keep STUN so same-LAN host candidates still work.
+    console.warn(
+      '[webrtc] TURN_URL is set but TURN_SECRET (or TURN_USERNAME+TURN_CREDENTIAL) is missing; using STUN only',
+    );
     return servers;
   }
 

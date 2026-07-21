@@ -237,9 +237,9 @@ export function useWebRTC() {
       setLocalStream(stream);
       setFacingMode('user');
       void canFlipCamera().then(setCanSwitchCamera);
+      // Offerer: attach first so createOffer advertises sendrecv A/V.
       attachLocalTracks(pc, stream);
 
-      // Caller-only offer; no offerToReceive* (Safari Unified Plan).
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       socket.emit('call:initiate', {
@@ -266,10 +266,12 @@ export function useWebRTC() {
       setLocalStream(stream);
       setFacingMode('user');
       void canFlipCamera().then(setCanSwitchCamera);
-      attachLocalTracks(pc, stream);
 
+      // Answerer MUST apply the remote offer before attaching local tracks.
+      // Pre-offer addTransceiver/addTrack creates extra m-lines → blank remote A/V.
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
       await flushPendingIce(pc, remotePeerId);
+      attachLocalTracks(pc, stream);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       return sessionDescriptionPayload(pc.localDescription ?? answer);
@@ -434,6 +436,8 @@ export function useWebRTC() {
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
         await flushPendingIce(pc, from);
+        // Local tracks already on senders from the initial answer — do not
+        // addTransceiver again or renegotiation will duplicate m-lines.
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         socket.emit('call:answer', {
