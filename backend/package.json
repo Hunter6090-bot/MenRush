@@ -10,6 +10,7 @@
     "db:migrate": "ts-node src/scripts/migrate.ts",
     "db:seed-test-users": "ts-node scripts/seed-test-users.ts",
     "waitlist:import": "ts-node src/scripts/import-waitlist.ts",
+    "hotspots:import": "ts-node scripts/import-hot-spots.ts",
     "invite:generate": "ts-node src/scripts/generate-invite-codes.ts",
     "invite:send-wave-2": "ts-node src/scripts/send-wave-2-invites.ts",
     "notify:id-verification-paused": "ts-node src/scripts/send-id-verification-paused.ts",
