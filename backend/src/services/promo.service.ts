@@ -72,11 +72,9 @@ export interface PromoSignupResult {
   code: string;
 }
 
-export interface PromoValidateResult {
-  valid: true;
-  monthsFree: number;
-  campaign: string;
-} | { valid: false; reason: 'not_found' | 'email_mismatch' | 'already_redeemed' | 'expired' };
+export type PromoValidateResult =
+  | { valid: true; monthsFree: number; campaign: string }
+  | { valid: false; reason: 'not_found' | 'email_mismatch' | 'already_redeemed' | 'expired' };
 
 export const promoService = {
   /**
@@ -98,7 +96,7 @@ export const promoService = {
     const emailHash = hashEmail(normalised);
 
     // Check for existing code for this email+campaign
-    const existing = await query<{ code: string }>(
+    const existing = await query(
       `SELECT code FROM promo_codes
        WHERE email_hash = $1 AND campaign = $2
        LIMIT 1`,
@@ -106,7 +104,7 @@ export const promoService = {
     );
 
     if (existing.rows.length > 0) {
-      const code = existing.rows[0]!.code;
+      const code = (existing.rows[0] as { code: string }).code;
       await sendPromoEmail({ to: normalised, code, campaign });
       return { outcome: 'existing', code };
     }
@@ -155,13 +153,7 @@ export const promoService = {
     const normalised = code.trim().toUpperCase();
     const emailHash = hashEmail(email);
 
-    const result = await query<{
-      email_hash: string;
-      campaign: string;
-      months_free: number;
-      expires_at: Date | null;
-      redeemed_at: Date | null;
-    }>(
+    const result = await query(
       `SELECT email_hash, campaign, months_free, expires_at, redeemed_at
        FROM promo_codes
        WHERE code = $1`,
@@ -169,8 +161,15 @@ export const promoService = {
     );
 
     if (result.rows.length === 0) return { valid: false, reason: 'not_found' };
+    type PromoRow = {
+      email_hash: string;
+      campaign: string;
+      months_free: number;
+      expires_at: Date | null;
+      redeemed_at: Date | null;
+    };
 
-    const row = result.rows[0]!;
+    const row = result.rows[0] as PromoRow;
 
     if (row.email_hash !== emailHash) return { valid: false, reason: 'email_mismatch' };
     if (row.redeemed_at) return { valid: false, reason: 'already_redeemed' };
@@ -214,10 +213,7 @@ export const promoService = {
    * Admin: count codes issued and redeemed for a campaign.
    */
   async stats(campaignId: string) {
-    const result = await query<{
-      total: string;
-      redeemed: string;
-    }>(
+    const result = await query(
       `SELECT
          COUNT(*) AS total,
          COUNT(redeemed_at) AS redeemed
@@ -225,7 +221,7 @@ export const promoService = {
        WHERE campaign = $1`,
       [campaignId],
     );
-    const row = result.rows[0] ?? { total: '0', redeemed: '0' };
+    const row = (result.rows[0] as { total: string; redeemed: string } | undefined) ?? { total: '0', redeemed: '0' };
     return {
       campaign: campaignId,
       total: parseInt(row.total, 10),
