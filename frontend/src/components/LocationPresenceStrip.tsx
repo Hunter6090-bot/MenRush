@@ -88,7 +88,9 @@ export function LocationPresenceStrip() {
   useEffect(() => {
     if (hidden) return;
     if (storeReady) {
+      // Drop the strip the moment location lands (store update from Discover / GPS).
       setMissing(false);
+      setNotice('');
       return;
     }
     refresh();
