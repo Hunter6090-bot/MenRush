@@ -455,6 +455,101 @@ io.on('connection', (socket: Socket) => {
     });
   });
 
+  // Group video mesh signalling (1:1 style offer/answer/ICE, scoped to a room).
+  const authorizeRoomSignal = async (
+    data: { roomId?: string; room_id?: string; to?: string },
+  ): Promise<{ actorId: string; targetId: string; roomId: string } | null> => {
+    const actorId = socketToUser.get(socket.id);
+    const roomId = resolveRoomId(data);
+    const targetId = data?.to;
+    if (!actorId || !roomId || typeof targetId !== 'string' || !UUID_PATTERN.test(targetId)) {
+      return null;
+    }
+    if (actorId === targetId) return null;
+    try {
+      const [actorOk, targetOk] = await Promise.all([
+        roomService.isMember(actorId, roomId),
+        roomService.isMember(targetId, roomId),
+      ]);
+      if (!actorOk || !targetOk) return null;
+      return { actorId, targetId, roomId };
+    } catch {
+      return null;
+    }
+  };
+
+  socket.on(
+    'room:webrtc-offer',
+    async (data: { roomId?: string; room_id?: string; to?: string; offer?: unknown }) => {
+      const authorized = await authorizeRoomSignal(data);
+      if (!authorized || !data.offer) return;
+      io.to(`user:${authorized.targetId}`).emit('room:webrtc-offer', {
+        room_id: authorized.roomId,
+        from: authorized.actorId,
+        offer: data.offer,
+      });
+    },
+  );
+
+  socket.on(
+    'room:webrtc-answer',
+    async (data: { roomId?: string; room_id?: string; to?: string; answer?: unknown }) => {
+      const authorized = await authorizeRoomSignal(data);
+      if (!authorized || !data.answer) return;
+      io.to(`user:${authorized.targetId}`).emit('room:webrtc-answer', {
+        room_id: authorized.roomId,
+        from: authorized.actorId,
+        answer: data.answer,
+      });
+    },
+  );
+
+  socket.on(
+    'room:webrtc-ice',
+    async (data: { roomId?: string; room_id?: string; to?: string; candidate?: unknown }) => {
+      const authorized = await authorizeRoomSignal(data);
+      if (!authorized || !data.candidate) return;
+      io.to(`user:${authorized.targetId}`).emit('room:webrtc-ice', {
+        room_id: authorized.roomId,
+        from: authorized.actorId,
+        candidate: data.candidate,
+      });
+    },
+  );
+
+  socket.on(
+    'room:media-state',
+    async (data: {
+      roomId?: string;
+      room_id?: string;
+      muted?: boolean;
+      cameraOn?: boolean;
+      camera_on?: boolean;
+    }) => {
+      const userId = socketToUser.get(socket.id);
+      const roomId = resolveRoomId(data);
+      if (!userId || !roomId) return;
+      try {
+        const member = await roomService.isMember(userId, roomId);
+        if (!member) return;
+        const cameraOn =
+          typeof data.cameraOn === 'boolean'
+            ? data.cameraOn
+            : typeof data.camera_on === 'boolean'
+              ? data.camera_on
+              : undefined;
+        socket.to(`room:${roomId}`).emit('room:media-state', {
+          room_id: roomId,
+          user_id: userId,
+          muted: typeof data.muted === 'boolean' ? data.muted : undefined,
+          camera_on: cameraOn,
+        });
+      } catch {
+        /* ignore */
+      }
+    },
+  );
+
   socket.on('disconnect', () => {
     const userId = socketToUser.get(socket.id);
     if (userId) {
