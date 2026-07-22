@@ -270,7 +270,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
   useEffect(() => {
     if (!safetyNotice) return;
-    const id = window.setTimeout(() => setSafetyNotice(null), 4000);
+    const id = window.setTimeout(() => setSafetyNotice(null), 7000);
     return () => window.clearTimeout(id);
   }, [safetyNotice]);
 
@@ -815,7 +815,10 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             peerId={otherId}
             peerName={otherUser?.name ?? 'this user'}
             onNotice={(msg, tone = 'success') => setSafetyNotice({ msg, tone })}
-            onBlocked={() => navigate('/conversations')}
+            onBlocked={() => {
+              // Land on the unblock list so the action is obvious.
+              window.setTimeout(() => navigate('/settings#blocked'), 600);
+            }}
           />
         )}
       </header>

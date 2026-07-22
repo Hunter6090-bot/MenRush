@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { usersAPI } from '../api/client';
 
 const REPORT_REASONS = [
@@ -21,6 +22,7 @@ interface ChatSafetyMenuProps {
 }
 
 export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSafetyMenuProps) {
+  const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [blockOpen, setBlockOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -53,7 +55,10 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
       await usersAPI.blockUser(peerId);
       setBlockOpen(false);
       setMenuOpen(false);
-      onNotice?.(`${peerName} has been blocked.`, 'success');
+      onNotice?.(
+        `${peerName} has been blocked. Unblock anytime in Settings → Blocked people.`,
+        'success',
+      );
       onBlocked?.();
     } catch (err: unknown) {
       const message =
@@ -123,6 +128,17 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
               className="w-full px-4 py-2.5 text-left text-sm text-[var(--nn-danger)] transition-colors hover:bg-[rgba(155,58,40,0.12)]"
             >
               Block {peerName}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
+                navigate('/settings#blocked');
+              }}
+              className="w-full px-4 py-2.5 text-left text-sm text-[var(--cream-muted)] transition-colors hover:bg-[var(--bg-card)]"
+            >
+              Manage blocked people
             </button>
           </div>
         )}

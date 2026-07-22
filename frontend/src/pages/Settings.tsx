@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { TwoFactorSettings } from '../components/TwoFactorSettings';
@@ -32,6 +32,7 @@ function SectionLabel({ children }: { children: string }) {
 
 export const Settings = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const logout = useAuthStore((s) => s.logout);
   const patchUser = useAuthStore((s) => s.patchUser);
   const storeEmail = useAuthStore((s) => s.user?.email);
@@ -67,6 +68,7 @@ export const Settings = () => {
   >([]);
   const [blockedLoading, setBlockedLoading] = useState(true);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
+  const [unblockNotice, setUnblockNotice] = useState<string | null>(null);
 
   const [isTeam, setIsTeam] = useState(false);
   const [reports, setReports] = useState<
@@ -274,17 +276,34 @@ export const Settings = () => {
     navigate('/login');
   };
 
-  const handleUnblock = async (userId: string) => {
+  const handleUnblock = async (userId: string, name: string) => {
     setUnblockingId(userId);
+    setUnblockNotice(null);
     try {
       await usersAPI.unblockUser(userId);
       setBlocked((prev) => prev.filter((b) => b.id !== userId));
+      setUnblockNotice(`${name} unblocked. You can message or see them again.`);
     } catch {
-      /* keep row; user can retry */
+      setUnblockNotice('Could not unblock. Try again.');
     } finally {
       setUnblockingId(null);
     }
   };
+
+  useEffect(() => {
+    if (!unblockNotice) return;
+    const id = window.setTimeout(() => setUnblockNotice(null), 4000);
+    return () => window.clearTimeout(id);
+  }, [unblockNotice]);
+
+  useEffect(() => {
+    if (location.hash !== '#blocked' || blockedLoading) return;
+    const el = document.getElementById('blocked');
+    if (!el) return;
+    window.requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [location.hash, blockedLoading, blocked.length]);
 
   const handleReportStatus = async (
     reportId: string,
@@ -617,11 +636,20 @@ export const Settings = () => {
             </Link>
           </section>
 
-          <section className="mr-card p-4" data-testid="settings-blocked">
+          <SectionLabel>Safety</SectionLabel>
+
+          <section
+            id="blocked"
+            className="mr-card scroll-mt-24 p-4"
+            data-testid="settings-blocked"
+          >
             <p className="text-[15px] font-bold text-[var(--cream)]">Blocked people</p>
             <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
               Unblock someone to message or see them again.
             </p>
+            {unblockNotice ? (
+              <p className="mt-3 text-[13px] font-medium text-[#8FC773]">{unblockNotice}</p>
+            ) : null}
             {blockedLoading ? (
               <p className="mt-3 text-[13px] text-[var(--cream-muted)]">Loading…</p>
             ) : blocked.length === 0 ? (
@@ -644,7 +672,7 @@ export const Settings = () => {
                     <button
                       type="button"
                       disabled={unblockingId === person.id}
-                      onClick={() => void handleUnblock(person.id)}
+                      onClick={() => void handleUnblock(person.id, person.name)}
                       className="shrink-0 rounded-full border border-[var(--border-default)] px-3 py-1.5 text-[12px] font-bold text-[var(--copper)] hover:border-[var(--copper)] disabled:opacity-50"
                     >
                       {unblockingId === person.id ? '…' : 'Unblock'}

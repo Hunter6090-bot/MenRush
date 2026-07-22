@@ -802,6 +802,26 @@ export const Profile = () => {
           </div>
         </Link>
 
+        {/* ── Blocked people ── */}
+        <Link
+          to="/settings#blocked"
+          className="block rounded-2xl p-5 shadow-card border transition-colors hover:border-[var(--copper)]"
+          style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-default)' }}
+          data-testid="profile-blocked-link"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold" style={{ color: 'var(--cream)' }}>
+                Blocked people
+              </p>
+              <p className="text-xs mt-1" style={{ color: 'var(--cream-muted)' }}>
+                Unblock someone to message or see them again.
+              </p>
+            </div>
+            <span className="text-[var(--copper)] text-lg" aria-hidden>›</span>
+          </div>
+        </Link>
+
         {/* ── Visibility card ── */}
         <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 flex items-center justify-between shadow-card">
           <div>
