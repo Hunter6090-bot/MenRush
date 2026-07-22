@@ -128,9 +128,21 @@ export function useWebRTC() {
 
   const publishRemoteStream = useCallback((stream: MediaStream) => {
     remoteStreamRef.current = stream;
-    // New MediaStream wrapper so React always sees a reference change when tracks update.
+    // New MediaStream wrapper so React always sees a reference change when tracks update
+    // (including mute→unmute, which does not change track ids).
     setRemoteStream(new MediaStream(stream.getTracks()));
   }, []);
+
+  const bumpRemoteFromTrack = useCallback(
+    (track: MediaStreamTrack) => {
+      const current = remoteStreamRef.current;
+      if (!current) return;
+      publishRemoteStream(current);
+      // Some Safari builds keep track.muted sticky; still re-publish so <video> rebinds.
+      void track;
+    },
+    [publishRemoteStream],
+  );
 
   const tryIceRestart = useCallback(async () => {
     const pc = pcRef.current;
@@ -176,12 +188,13 @@ export function useWebRTC() {
           }
         }
 
+        remoteStreamRef.current = inbound;
         publishRemoteStream(inbound);
 
-        track.addEventListener('unmute', () => {
-          const current = remoteStreamRef.current;
-          if (current) publishRemoteStream(current);
-        });
+        // Muted→unmuted is when RTP actually arrives. Rebind UI then.
+        track.addEventListener('unmute', () => bumpRemoteFromTrack(track));
+        track.addEventListener('mute', () => bumpRemoteFromTrack(track));
+        track.addEventListener('ended', () => bumpRemoteFromTrack(track));
       };
 
       pc.onicecandidate = (ev) => {
@@ -224,7 +237,15 @@ export function useWebRTC() {
       pcRef.current = pc;
       return pc;
     },
-    [publishRemoteStream, releaseMedia, resetCall, setCallSetupError, setConnected, tryIceRestart],
+    [
+      bumpRemoteFromTrack,
+      publishRemoteStream,
+      releaseMedia,
+      resetCall,
+      setCallSetupError,
+      setConnected,
+      tryIceRestart,
+    ],
   );
 
   const startCall = useCallback(
@@ -497,6 +518,29 @@ export function useWebRTC() {
       releaseMedia();
     }
   }, [callStatus, releaseMedia]);
+
+  // Cross-NAT / iOS: ontrack often fires with muted tracks; if they never unmute,
+  // ICE never delivered media — restart once from the caller side.
+  useEffect(() => {
+    if (callStatus !== 'connected') return;
+    if (!isCallerRef.current) return;
+
+    const timer = window.setTimeout(() => {
+      const remote = remoteStreamRef.current;
+      const video = remote?.getVideoTracks()[0];
+      const audio = remote?.getAudioTracks()[0];
+      const mediaStuck =
+        !remote ||
+        remote.getTracks().length === 0 ||
+        ((video?.muted ?? true) && (audio?.muted ?? true));
+      if (mediaStuck && pcRef.current?.connectionState !== 'closed') {
+        console.warn('[webrtc] remote media still muted — attempting ICE restart');
+        void tryIceRestart();
+      }
+    }, 6000);
+
+    return () => window.clearTimeout(timer);
+  }, [callStatus, remoteStream, tryIceRestart]);
 
   return {
     localStream,

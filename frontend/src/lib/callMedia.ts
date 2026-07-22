@@ -47,8 +47,26 @@ export function streamHasLiveVideo(stream: MediaStream | null | undefined): bool
   return stream.getVideoTracks().some((t) => t.readyState !== 'ended');
 }
 
+/**
+ * True only when a remote video track is actually producing frames.
+ * Chrome/Safari fire ontrack with muted tracks before RTP arrives — treating
+ * those as "live" hides the waiting UI and leaves a black main video.
+ */
+export function streamHasRenderableVideo(stream: MediaStream | null | undefined): boolean {
+  if (!stream) return false;
+  return stream.getVideoTracks().some(
+    (t) => t.readyState === 'live' && t.enabled && !t.muted,
+  );
+}
+
 export function streamHasAnyTrack(stream: MediaStream | null | undefined): boolean {
   return Boolean(stream && stream.getTracks().length > 0);
+}
+
+/** True when a <video> element has decoded at least one frame. */
+export function videoElementHasFrames(video: HTMLVideoElement | null | undefined): boolean {
+  if (!video) return false;
+  return video.videoWidth > 0 && video.videoHeight > 0;
 }
 
 /**
