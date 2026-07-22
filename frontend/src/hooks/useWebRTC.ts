@@ -414,7 +414,15 @@ export function useWebRTC() {
     const onCallError = ({ error }: { error?: string }) => {
       releaseMedia();
       resetCall();
-      if (error === 'call_not_allowed' || error === 'target_not_authorized' || error === 'match_required') {
+      if (error === 'target_offline') {
+        setCallSetupError(
+          'They are offline. Ask them to open menrush.com, stay on the app, then try again.',
+        );
+      } else if (
+        error === 'call_not_allowed' ||
+        error === 'target_not_authorized' ||
+        error === 'match_required'
+      ) {
         setCallSetupError('You need a mutual match before video calling.');
       } else if (error === 'invalid_target') {
         setCallSetupError('Could not start the video call');
