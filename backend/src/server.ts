@@ -285,6 +285,11 @@ io.on('connection', (socket: Socket) => {
     const authorized = await authorizeCallTarget(socket, data?.to);
     if (!authorized || !data.offer) return;
     try {
+      // No live socket in user:{id} → they cannot answer WebRTC (push alone is not enough).
+      if (!userSockets.has(authorized.targetId)) {
+        socket.emit('call:error', { error: 'target_offline' });
+        return;
+      }
       const fromName = await userService.getDisplayName(authorized.actorId) ?? '';
       pendingCalls.set(pendingCallKey(authorized.actorId, authorized.targetId), {
         callerId: authorized.actorId,
