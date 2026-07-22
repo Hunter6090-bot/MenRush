@@ -14,6 +14,8 @@ import {
   resumeRemotePlayback,
   streamHasAnyTrack,
   streamHasLiveVideo,
+  streamHasRenderableVideo,
+  videoElementHasFrames,
 } from '../lib/callMedia';
 
 const CALL_TIMEOUT_MS =
@@ -87,6 +89,7 @@ export function VideoCallModal() {
   const shellRef = useRef<HTMLDivElement>(null);
 
   const [remoteAudioBlocked, setRemoteAudioBlocked] = useState(false);
+  const [remoteFramesReady, setRemoteFramesReady] = useState(false);
   const [pip, setPip] = useState<PipState>(() => defaultPipPosition(PIP_DEFAULT.w, PIP_DEFAULT.h));
   const dragRef = useRef<{
     mode: 'move' | 'resize';
@@ -97,6 +100,7 @@ export function VideoCallModal() {
 
   const resetLayout = useCallback(() => {
     setRemoteAudioBlocked(false);
+    setRemoteFramesReady(false);
     setPip(defaultPipPosition(PIP_DEFAULT.w, PIP_DEFAULT.h));
   }, []);
 
@@ -129,9 +133,13 @@ export function VideoCallModal() {
     if (callStatus === 'connected') {
       // Remote <video> stays muted (iOS autoplay); A/V audio via dedicated <audio>.
       // Still re-bind whenever remoteStream identity/tracks change so frames appear
-      // as soon as ontrack fires after answer.
+      // as soon as ontrack/unmute fires after answer.
       void attachStreamToVideo(primaryVideoRef.current, remoteStream, {
         preferUnmuted: false,
+      }).then(() => {
+        if (videoElementHasFrames(primaryVideoRef.current)) {
+          setRemoteFramesReady(true);
+        }
       });
       void attachRemoteAudio(remoteAudioRef.current, remoteStream).then((result) => {
         if (result === 'blocked') setRemoteAudioBlocked(true);
@@ -144,6 +152,41 @@ export function VideoCallModal() {
 
     detachAllVideos();
   }, [localStream, remoteStream, callStatus, detachAllVideos]);
+
+  // Safari often never flips track.muted; detect real frames on the <video> element.
+  useEffect(() => {
+    if (callStatus !== 'connected') {
+      setRemoteFramesReady(false);
+      return;
+    }
+    const video = primaryVideoRef.current;
+    if (!video) return;
+
+    let cancelled = false;
+    let raf = 0;
+    const tick = () => {
+      if (cancelled) return;
+      if (videoElementHasFrames(video) || streamHasRenderableVideo(remoteStream)) {
+        setRemoteFramesReady(true);
+        return;
+      }
+      raf = window.requestAnimationFrame(tick);
+    };
+    tick();
+
+    const onPlaying = () => {
+      if (videoElementHasFrames(video)) setRemoteFramesReady(true);
+    };
+    video.addEventListener('playing', onPlaying);
+    video.addEventListener('loadeddata', onPlaying);
+
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(raf);
+      video.removeEventListener('playing', onPlaying);
+      video.removeEventListener('loadeddata', onPlaying);
+    };
+  }, [callStatus, remoteStream]);
 
   useEffect(() => {
     if (callStatus === 'idle' || callStatus === 'ended') {
@@ -483,7 +526,10 @@ export function VideoCallModal() {
   if (callStatus === 'connected') {
     const remoteReady = streamHasAnyTrack(remoteStream);
     const remoteHasVideo = streamHasLiveVideo(remoteStream);
+    const remoteRenderable =
+      remoteFramesReady || streamHasRenderableVideo(remoteStream);
     const localHasVideo = streamHasLiveVideo(localStream) && !isCameraOff;
+    const showRemoteWaiting = !remoteRenderable;
 
     return (
       <div
@@ -501,9 +547,9 @@ export function VideoCallModal() {
           style={{ background: '#0D0A06' }}
         />
 
-        {(!remoteReady || !remoteHasVideo) && (
+        {showRemoteWaiting && (
           <div
-            className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6"
+            className="absolute inset-0 z-[5] flex flex-col items-center justify-center gap-3 px-6"
             style={{ background: 'rgba(13,10,6,0.92)' }}
             data-testid="remote-waiting"
           >
@@ -519,12 +565,17 @@ export function VideoCallModal() {
             <p className="text-center text-sm font-semibold" style={{ color: '#F0E0C0' }}>
               {!remoteReady
                 ? `Connecting to ${peerName ?? 'him'}…`
-                : 'Waiting for his camera…'}
+                : remoteHasVideo
+                  ? 'Almost there — waiting for his video…'
+                  : 'Waiting for his camera…'}
+            </p>
+            <p className="max-w-xs text-center text-xs" style={{ color: '#A89070' }}>
+              Your camera is the small window. The main view is him.
             </p>
           </div>
         )}
 
-        {remoteAudioBlocked && remoteReady ? (
+        {remoteAudioBlocked && remoteRenderable ? (
           <button
             type="button"
             data-testid="enable-call-audio"
@@ -617,7 +668,7 @@ export function VideoCallModal() {
         >
           <p className="truncate text-center text-sm font-semibold tracking-wide" style={{ color: '#F0E0C0' }}>
             {peerName ?? 'Call'}
-            {remoteReady ? '' : ' · connecting…'}
+            {remoteRenderable ? '' : ' · connecting…'}
           </p>
         </div>
 

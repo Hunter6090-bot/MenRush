@@ -27,6 +27,7 @@ export interface IceServerConfig {
 const OPEN_RELAY_STATIC_SECRET = 'openrelayprojectsecret';
 const OPEN_RELAY_URLS = [
   'turn:staticauth.openrelay.metered.ca:80',
+  'turn:staticauth.openrelay.metered.ca:80?transport=tcp',
   'turn:staticauth.openrelay.metered.ca:443',
   'turn:staticauth.openrelay.metered.ca:443?transport=tcp',
   'turns:staticauth.openrelay.metered.ca:443',
@@ -50,6 +51,7 @@ function stunServers(): IceServerConfig[] {
     { urls: 'stun:stun2.l.google.com:19302' },
     // Open Relay STUN (helps when Google STUN is blocked).
     { urls: 'stun:openrelay.metered.ca:80' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
   ];
 }
 
