@@ -305,17 +305,34 @@ export const Discover = () => {
     [],
   );
 
+  /** Drop every "allow location" surface the moment we have a usable pin. */
+  const clearLocationPrompts = useCallback((latitude: number, longitude: number) => {
+    if (fallbackTimerRef.current !== null) {
+      window.clearTimeout(fallbackTimerRef.current);
+      fallbackTimerRef.current = null;
+    }
+    setNeedsLocationGate(false);
+    setLocationNotice('');
+    setActivationProfile((prev) =>
+      prev ? { ...prev, lat: latitude, lng: longitude } : { lat: latitude, lng: longitude },
+    );
+  }, []);
+
   const useDiscoveryLocation = useCallback(
     (latitude: number, longitude: number, notice = '', forceRefresh = false) => {
       setLocation(latitude, longitude);
       setMapCenter([latitude, longitude]);
-      setLocationNotice(notice);
+      if (notice) {
+        setLocationNotice(notice);
+      } else {
+        clearLocationPrompts(latitude, longitude);
+      }
       if (forceRefresh || !hasFetchedRef.current) {
         hasFetchedRef.current = true;
         fetchNearbyUsers(latitude, longitude, radius, discoveryFilters);
       }
     },
-    [fetchNearbyUsers, radius, setLocation, discoveryFilters],
+    [clearLocationPrompts, fetchNearbyUsers, radius, setLocation, discoveryFilters],
   );
 
   const applyLiveGps = useCallback(
@@ -325,10 +342,9 @@ export const Discover = () => {
         usingFallbackLocationRef.current = false;
       }
       hasLiveGpsRef.current = true;
-      setNeedsLocationGate(false);
+      clearLocationPrompts(latitude, longitude);
 
       setLocation(latitude, longitude);
-      setLocationNotice('');
 
       const farFromPin =
         mapCenter != null &&
@@ -367,12 +383,14 @@ export const Discover = () => {
       lastGpsFetchRef.current = { lat: latitude, lng: longitude, at: now };
       fetchNearbyUsers(latitude, longitude, radius, discoveryFilters, { background: isBackground });
     },
-    [fetchNearbyUsers, mapCenter, radius, setLocation, discoveryFilters],
+    [clearLocationPrompts, fetchNearbyUsers, mapCenter, radius, setLocation, discoveryFilters],
   );
 
   // Customer-facing "enable location" — high accuracy then low-accuracy fallback.
   const handleEnableLocation = useCallback(() => {
     void (async () => {
+      setLocationNotice('');
+      setLoading(true);
       const { requestDeviceLocation } = await import('../lib/deviceLocation');
       const result = await requestDeviceLocation();
       if (!result.ok) {
@@ -381,11 +399,11 @@ export const Discover = () => {
         setLoading(false);
         return;
       }
-      setNeedsLocationGate(false);
-      setLocationNotice('');
-      useDiscoveryLocation(result.lat, result.lng, '', true);
+      // Always go through live-GPS path so gate + banner clear immediately.
+      applyLiveGps(result.lat, result.lng, { force: true });
+      setLoading(false);
     })();
-  }, [useDiscoveryLocation]);
+  }, [applyLiveGps]);
 
   const applyLocationFallback = useCallback(() => {
     if (hasFetchedRef.current || hasLiveGpsRef.current) return;
@@ -455,14 +473,16 @@ export const Discover = () => {
   }, [useDiscoveryLocation]);
 
   // Seed Nearby from last known pin immediately (store / prior session) — never London.
+  // Also clears the gate/banner the moment the shared location store gets a fix
+  // (e.g. from useLiveLocationPublisher on another screen).
   useEffect(() => {
     if (lat == null || lng == null) return;
+    clearLocationPrompts(lat, lng);
     if (hasLiveGpsRef.current) return;
     if (hasFetchedRef.current) return;
     savedProfileLocationRef.current = { lat, lng };
-    setNeedsLocationGate(false);
     useDiscoveryLocation(lat, lng, '', true);
-  }, [lat, lng, useDiscoveryLocation]);
+  }, [lat, lng, clearLocationPrompts, useDiscoveryLocation]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && !window.isSecureContext) {
@@ -497,21 +517,33 @@ export const Discover = () => {
       return;
     }
 
-    // Fast path: accept a recent cached fix so returning to Nearby is accurate immediately.
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
+    let cancelled = false;
+
+    // Prefer shared helper (cached → high → low) so mobile gets a fix faster.
+    void (async () => {
+      const { requestDeviceLocation } = await import('../lib/deviceLocation');
+      if (cancelled) return;
+      const result = await requestDeviceLocation();
+      if (cancelled) return;
+      if (result.ok) {
         trackEventOnce(
           'location_permission_outcome',
           { outcome: 'granted' },
           'location_permission_outcome',
         );
-        applyLiveGps(coords.latitude, coords.longitude, { force: true });
-      },
-      () => {
-        /* watchPosition / fallback handles permanent failures */
-      },
-      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
-    );
+        applyLiveGps(result.lat, result.lng, { force: true });
+        return;
+      }
+      if (result.error === 'denied' && window.isSecureContext) {
+        setLocationNotice(BROWSER_GPS_DENIED_NOTICE);
+      }
+      if (!hasFetchedRef.current && !hasLiveGpsRef.current) {
+        if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
+        fallbackTimerRef.current = window.setTimeout(() => {
+          applyLocationFallback();
+        }, window.isSecureContext ? 3500 : 2500);
+      }
+    })();
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       ({ coords }) => {
@@ -531,10 +563,15 @@ export const Discover = () => {
           },
           'location_permission_outcome',
         );
+        // Never leave a sticky error if we already have a live pin.
+        if (hasLiveGpsRef.current || hasFetchedRef.current) {
+          setLocationNotice('');
+          setNeedsLocationGate(false);
+          return;
+        }
         if (denied && window.isSecureContext) {
           setLocationNotice(BROWSER_GPS_DENIED_NOTICE);
         }
-        // Have a last pin? Keep map on it; only gate when we have nothing.
         if (!hasFetchedRef.current && !hasLiveGpsRef.current) {
           if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
           fallbackTimerRef.current = window.setTimeout(() => {
@@ -543,9 +580,10 @@ export const Discover = () => {
         }
         setError('');
       },
-      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 15_000 },
+      { enableHighAccuracy: true, timeout: 20_000, maximumAge: 15_000 },
     );
     return () => {
+      cancelled = true;
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
       if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
     };
@@ -1048,7 +1086,15 @@ export const Discover = () => {
       <h1 className="sr-only">Nearby discovery map</h1>
 
       {activationProfile ? (
-        <ActivationBanner profile={activationProfile} onEnableLocation={handleEnableLocation} />
+        <ActivationBanner
+          profile={{
+            ...activationProfile,
+            // Prefer live store coords so the banner drops the moment GPS works.
+            lat: lat ?? activationProfile.lat,
+            lng: lng ?? activationProfile.lng,
+          }}
+          onEnableLocation={handleEnableLocation}
+        />
       ) : null}
 
       {/* First Match coach — likes cold since July; no swipe, one tap. */}

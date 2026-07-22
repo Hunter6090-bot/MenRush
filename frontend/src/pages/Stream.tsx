@@ -30,41 +30,26 @@ export const Stream = () => {
 
   const requestLocation = useCallback(() => {
     setError('');
-    if (!window.isSecureContext) {
-      setNeedsLocation(true);
-      setLoading(false);
-      setError(
-        'Location needs HTTPS. Open menrush.com on your phone, then allow location.',
-      );
-      return;
-    }
-    if (!navigator.geolocation) {
-      setNeedsLocation(true);
-      setLoading(false);
-      setError('This browser cannot share location. Try Chrome or Safari.');
-      return;
-    }
-
     setLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      async ({ coords }) => {
-        try {
-          await loadNearby(coords.latitude, coords.longitude);
-        } catch {
-          setError('Could not load the live profile list right now.');
-        } finally {
-          setLoading(false);
-        }
-      },
-      () => {
+    void (async () => {
+      const { requestDeviceLocation } = await import('../lib/deviceLocation');
+      const result = await requestDeviceLocation();
+      if (!result.ok) {
         setNeedsLocation(true);
         setLoading(false);
-        setError(
-          'Allow location to see men near you. MenRush is live proximity — we never place you on a random map.',
-        );
-      },
-      { enableHighAccuracy: true, timeout: 12000 },
-    );
+        setError(result.message);
+        return;
+      }
+      try {
+        await loadNearby(result.lat, result.lng);
+        setNeedsLocation(false);
+        setError('');
+      } catch {
+        setError('Could not load the live profile list right now.');
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [loadNearby]);
 
   useEffect(() => {
@@ -106,44 +91,31 @@ export const Stream = () => {
       if (cancelled) return;
 
       // 2) Live GPS — never invent a city pin if both fail.
-      if (!window.isSecureContext || !navigator.geolocation) {
-        setNeedsLocation(true);
-        setLoading(false);
-        setError(
-          !window.isSecureContext
-            ? 'Location needs HTTPS. Open menrush.com, then allow location.'
-            : 'This browser cannot share location. Try Chrome or Safari.',
-        );
+      const { requestDeviceLocation } = await import('../lib/deviceLocation');
+      const result = await requestDeviceLocation();
+      if (cancelled) return;
+      if (result.ok) {
+        try {
+          await loadNearby(result.lat, result.lng);
+          setNeedsLocation(false);
+          setError('');
+        } catch {
+          if (!cancelled) setError('Could not load the live profile list right now.');
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
         return;
       }
 
-      navigator.geolocation.getCurrentPosition(
-        async ({ coords }) => {
-          if (cancelled) return;
-          try {
-            await loadNearby(coords.latitude, coords.longitude);
-          } catch {
-            if (!cancelled) setError('Could not load the live profile list right now.');
-          } finally {
-            if (!cancelled) setLoading(false);
-          }
-        },
-        () => {
-          if (cancelled) return;
-          // Keep saved-pin results if we already have users; only gate when empty.
-          setLoading(false);
-          setUsers((prev) => {
-            if (prev.length === 0) {
-              setNeedsLocation(true);
-              setError(
-                'Allow location to see men near you. MenRush is live proximity — we never place you on a random map.',
-              );
-            }
-            return prev;
-          });
-        },
-        { enableHighAccuracy: true, timeout: 12000 },
-      );
+      // Keep saved-pin results if we already have users; only gate when empty.
+      setLoading(false);
+      setUsers((prev) => {
+        if (prev.length === 0) {
+          setNeedsLocation(true);
+          setError(result.message);
+        }
+        return prev;
+      });
     })();
 
     return () => {

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { usersAPI } from '../api/client';
 import { FEATURES } from '../lib/featureFlags';
-import { requestDeviceLocation } from '../lib/deviceLocation';
+import { isGeolocationPermissionGranted, requestDeviceLocation } from '../lib/deviceLocation';
 import { useAuthStore, useLocationStore } from './store';
 
 const MIN_PUSH_MS = 20_000;
@@ -9,7 +9,7 @@ const MIN_MOVE_METERS = 40;
 /** Keep last_seen fresh while the app is open so Nearby "Active now" stays honest (20m window). */
 const HEARTBEAT_MS = 8 * 60 * 1000;
 /** Re-try when first fix fails (permission prompt, cold GPS). */
-const RETRY_MS = 25_000;
+const RETRY_MS = 12_000;
 
 function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number): number {
   const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -55,14 +55,21 @@ export function useLiveLocationPublisher() {
     };
 
     const acquire = async (force = false) => {
-      if (deniedRef.current) return;
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+
+      // User may have granted location in Settings after an earlier deny — re-check.
+      if (deniedRef.current) {
+        const granted = await isGeolocationPermissionGranted();
+        if (!granted) return;
+        deniedRef.current = false;
+      }
 
       const result = await requestDeviceLocation();
       if (!result.ok) {
         if (result.error === 'denied') deniedRef.current = true;
         return;
       }
+      deniedRef.current = false;
       pushCoords(result.lat, result.lng, force);
     };
 
@@ -72,11 +79,14 @@ export function useLiveLocationPublisher() {
     let watchId: number | null = null;
     if (window.isSecureContext && navigator.geolocation) {
       watchId = navigator.geolocation.watchPosition(
-        ({ coords }) => pushCoords(coords.latitude, coords.longitude),
+        ({ coords }) => {
+          deniedRef.current = false;
+          pushCoords(coords.latitude, coords.longitude);
+        },
         (err) => {
           if (err.code === err.PERMISSION_DENIED) deniedRef.current = true;
         },
-        { enableHighAccuracy: true, timeout: 12000, maximumAge: 5000 },
+        { enableHighAccuracy: true, timeout: 20_000, maximumAge: 10_000 },
       );
     }
 
@@ -93,13 +103,13 @@ export function useLiveLocationPublisher() {
 
     // Cold GPS / first prompt often fails once — retry while we have no pin.
     const retryId = window.setInterval(() => {
-      if (lastPushRef.current || deniedRef.current) return;
+      if (lastPushRef.current) return;
       void acquire(true);
     }, RETRY_MS);
 
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return;
-      if (!lastPushRef.current && !deniedRef.current) void acquire(true);
+      void acquire(true);
     };
     document.addEventListener('visibilitychange', onVisible);
 
