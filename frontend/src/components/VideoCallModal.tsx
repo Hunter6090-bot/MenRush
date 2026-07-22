@@ -4,6 +4,7 @@ import { useWebRTC } from '../hooks/useWebRTC';
 import { useSocket } from '../hooks/useSocket';
 import { createCallTone, type CallToneKind } from '../lib/callTones';
 import { registerOutgoingCallHandler } from '../lib/callBridge';
+import { getIceServers } from '../lib/webrtcCall';
 import {
   attachRemoteAudio,
   attachStreamToVideo,
@@ -157,6 +158,11 @@ export function VideoCallModal() {
     });
     return () => registerOutgoingCallHandler(null);
   }, [startCall]);
+
+  // Warm ICE/TURN credentials so startCall does not block on the network after getUserMedia.
+  useEffect(() => {
+    void getIceServers().catch(() => undefined);
+  }, []);
 
   const desiredTone: CallToneKind | null =
     callStatus === 'calling' ? 'outgoing' : callStatus === 'ringing' ? 'incoming' : null;
