@@ -230,27 +230,34 @@ export function useWebRTC() {
   const startCall = useCallback(
     async (targetPeerId: string, _peerName: string) => {
       if (!socket) throw new Error('signalling_unavailable');
-      await waitForSocket(socket);
 
       isCallerRef.current = true;
-      const iceServers = await getIceServers();
-      const pc = bindPeerConnection(targetPeerId, socket, iceServers);
+
+      // iOS Safari: getUserMedia must run in the user-gesture stack — no awaits before this.
       const stream = await acquireLocalMedia();
       localStreamRef.current = stream;
       setLocalStream(stream);
       setFacingMode('user');
       void canFlipCamera().then(setCanSwitchCamera);
-      // Offerer: attach first so createOffer advertises sendrecv A/V.
-      await attachLocalTracks(pc, stream);
 
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit('call:initiate', {
-        to: targetPeerId,
-        offer: sessionDescriptionPayload(pc.localDescription ?? offer),
-      });
+      try {
+        await waitForSocket(socket);
+        const iceServers = await getIceServers();
+        const pc = bindPeerConnection(targetPeerId, socket, iceServers);
+        await attachLocalTracks(pc, stream);
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('call:initiate', {
+          to: targetPeerId,
+          offer: sessionDescriptionPayload(pc.localDescription ?? offer),
+        });
+      } catch (error) {
+        releaseMedia();
+        throw error;
+      }
     },
-    [socket, bindPeerConnection],
+    [socket, bindPeerConnection, releaseMedia],
   );
 
   const answerCall = useCallback(
@@ -259,28 +266,35 @@ export function useWebRTC() {
       remotePeerId: string,
     ): Promise<RTCSessionDescriptionInit> => {
       if (!socket) throw new Error('signalling_unavailable');
-      await waitForSocket(socket);
 
       isCallerRef.current = false;
-      const iceServers = await getIceServers();
-      const pc = bindPeerConnection(remotePeerId, socket, iceServers);
+
+      // iOS Safari: getUserMedia must run in the user-gesture stack — no awaits before this.
       const stream = await acquireLocalMedia();
       localStreamRef.current = stream;
       setLocalStream(stream);
       setFacingMode('user');
       void canFlipCamera().then(setCanSwitchCamera);
 
-      // Answerer MUST apply the remote offer before attaching local tracks.
-      // Pre-offer addTransceiver/addTrack creates extra m-lines → blank remote A/V.
-      await pc.setRemoteDescription(new RTCSessionDescription(offer));
-      await flushPendingIce(pc, remotePeerId);
-      // Await track attach so createAnswer advertises sendrecv (not recvonly).
-      await attachLocalTracks(pc, stream);
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      return sessionDescriptionPayload(pc.localDescription ?? answer);
+      try {
+        await waitForSocket(socket);
+        const iceServers = await getIceServers();
+        const pc = bindPeerConnection(remotePeerId, socket, iceServers);
+
+        // Answerer MUST apply the remote offer before attaching local tracks.
+        // Pre-offer addTransceiver/addTrack creates extra m-lines → blank remote A/V.
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        await flushPendingIce(pc, remotePeerId);
+        await attachLocalTracks(pc, stream);
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        return sessionDescriptionPayload(pc.localDescription ?? answer);
+      } catch (error) {
+        releaseMedia();
+        throw error;
+      }
     },
-    [socket, bindPeerConnection, flushPendingIce],
+    [socket, bindPeerConnection, flushPendingIce, releaseMedia],
   );
 
   const endCall = useCallback(() => {
