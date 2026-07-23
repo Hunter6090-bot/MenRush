@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Link, useNavigate } from 'react-router-dom';
 import { EventDTO, HotSpotDTO, Mood, hotSpotsAPI, profileMetaAPI, pulseAPI, usersAPI } from '../api/client';
@@ -227,7 +227,7 @@ export const Discover = () => {
   const fallbackTimerRef = useRef<number | null>(null);
   const usingFallbackLocationRef = useRef(false);
   const hasLiveGpsRef = useRef(false);
-  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<Map<string, { marker: mapboxgl.Marker; root: Root; user: NearbyUser }>>(new Map());
   const hotSpotMarkersRef = useRef<
@@ -838,8 +838,9 @@ export const Discover = () => {
     if (fresh) setSelectedUser(fresh);
   }, [users, selectedUser]);
 
-  useEffect(() => {
-    if (tokenMissing || !mapContainerRef.current) return;
+  useLayoutEffect(() => {
+    const host = mapContainerRef.current;
+    if (tokenMissing || !host) return;
     if (mapRef.current) return;
     // Never open Mapbox on a fake city. Wait for last-known or live GPS.
     if (mapCenter == null) return;
@@ -848,7 +849,7 @@ export const Discover = () => {
     mapboxgl.accessToken = mapboxToken!;
     userMovedMapRef.current = false;
     const map = new mapboxgl.Map({
-      container: mapContainerRef.current,
+      container: host,
       style: 'mapbox://styles/mapbox/dark-v11',
       center: [startCenter[1], startCenter[0]],
       zoom: 14,
@@ -966,6 +967,7 @@ export const Discover = () => {
       setMapLoaded(false);
     };
     // Depend on "has center" not every GPS tick — later moves use easeTo in applyLiveGps.
+    // useLayoutEffect + isDesktopLayout: host is in the DOM before we construct Mapbox.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mapCenter coords intentionally excluded
   }, [mapboxToken, tokenMissing, isDesktopLayout, mapCenter != null]);
 
@@ -1405,6 +1407,7 @@ export const Discover = () => {
         <div
           className="discover-map-surface relative mb-4 h-[min(48vh,520px)] min-h-[300px] shrink-0 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[#11100E] shadow-[var(--shadow-md)]"
           data-testid="discover-map-panel"
+          onWheel={(e) => e.stopPropagation()}
         >
           <div
             ref={mapContainerRef}
