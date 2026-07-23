@@ -80,6 +80,27 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
       width: 100% !important;
       height: 100% !important;
     }
+    /* Keep pan / pinch / wheel on the map — parent scroll must not steal gestures. */
+    .discover-map-surface,
+    .discover-map-surface .mapboxgl-map,
+    .discover-map-surface .mapboxgl-canvas-container {
+      touch-action: none;
+      overscroll-behavior: contain;
+    }
+    .discover-map-surface .mapboxgl-canvas-container.mapboxgl-interactive,
+    .discover-map-surface .mapboxgl-canvas.mapboxgl-interactive {
+      cursor: grab;
+    }
+    .discover-map-surface .mapboxgl-canvas-container.mapboxgl-interactive:active,
+    .discover-map-surface .mapboxgl-canvas.mapboxgl-interactive:active {
+      cursor: grabbing;
+    }
+    .discover-map-drag-handle {
+      pointer-events: none;
+    }
+    .discover-map-drag-handle > * {
+      pointer-events: auto;
+    }
     .map-self-dot {
       width: 18px; height: 18px; border-radius: 50%;
       background: var(--copper);
@@ -193,6 +214,8 @@ export const Discover = () => {
   const savedProfileLocationRef = useRef<{ lat: number; lng: number } | null>(null);
   const lastGpsFetchRef = useRef<{ lat: number; lng: number; at: number } | null>(null);
   const lastMapPanRef = useRef<{ lat: number; lng: number } | null>(null);
+  /** Once the user pans/zooms, stop GPS from yanking the camera back. */
+  const userMovedMapRef = useRef(false);
   const fallbackTimerRef = useRef<number | null>(null);
   const usingFallbackLocationRef = useRef(false);
   const hasLiveGpsRef = useRef(false);
@@ -349,8 +372,11 @@ export const Discover = () => {
       const farFromPin =
         mapCenter != null &&
         distanceMeters(mapCenter[0], mapCenter[1], latitude, longitude) >= MAP_PAN_MIN_METERS;
+      // Never steal the camera after the user has navigated the map themselves.
       const shouldRecenter =
-        !mapRef.current || recoveringFromFallback || options?.force || farFromPin;
+        recoveringFromFallback ||
+        options?.force ||
+        (!userMovedMapRef.current && (!mapRef.current || farFromPin));
 
       if (!mapCenter || shouldRecenter) {
         setMapCenter([latitude, longitude]);
@@ -359,6 +385,9 @@ export const Discover = () => {
       if (mapRef.current) {
         selfMarkerRef.current?.setLngLat([longitude, latitude]);
         if (shouldRecenter) {
+          if (options?.force || recoveringFromFallback) {
+            userMovedMapRef.current = false;
+          }
           lastMapPanRef.current = { lat: latitude, lng: longitude };
           mapRef.current.easeTo({ center: [longitude, latitude], duration: 700 });
         }
@@ -785,24 +814,60 @@ export const Discover = () => {
 
     const startCenter = mapCenter;
     mapboxgl.accessToken = mapboxToken!;
+    userMovedMapRef.current = false;
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
       style: 'mapbox://styles/mapbox/dark-v11',
       center: [startCenter[1], startCenter[0]],
       zoom: 14,
       attributionControl: false,
+      // Explicit — never inherit a broken/disabled handler state from prior mounts.
+      interactive: true,
+      dragPan: true,
+      dragRotate: false,
+      scrollZoom: true,
+      boxZoom: true,
+      doubleClickZoom: true,
+      touchZoomRotate: true,
+      touchPitch: false,
+      keyboard: true,
+      // One-finger pan + wheel zoom must work; page scroll is handled outside the map.
+      cooperativeGestures: false,
     });
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
-    map.addControl(
-      new mapboxgl.GeolocateControl({
-        positionOptions: { enableHighAccuracy: true, maximumAge: 15_000 },
-        trackUserLocation: false,
-        showUserHeading: false,
-      }),
-      'bottom-right',
-    );
+    map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right');
+    const geolocate = new mapboxgl.GeolocateControl({
+      positionOptions: { enableHighAccuracy: true, maximumAge: 15_000 },
+      trackUserLocation: false,
+      showUserHeading: false,
+    });
+    map.addControl(geolocate, 'bottom-right');
+    geolocate.on('geolocate', () => {
+      userMovedMapRef.current = false;
+    });
+    map.on('dragstart', () => {
+      userMovedMapRef.current = true;
+    });
+    map.on('zoomstart', (e: mapboxgl.MapEvent | Event) => {
+      // Only user gestures (wheel / buttons / pinch) — not style load.
+      if (e && typeof e === 'object' && 'originalEvent' in e && (e as { originalEvent?: Event }).originalEvent) {
+        userMovedMapRef.current = true;
+      }
+    });
+    map.on('rotatestart', (e: mapboxgl.MapEvent | Event) => {
+      if (e && typeof e === 'object' && 'originalEvent' in e && (e as { originalEvent?: Event }).originalEvent) {
+        userMovedMapRef.current = true;
+      }
+    });
     const resizeMap = () => map.resize();
     map.on('load', () => {
+      // Re-assert handlers in case a prior layout left Mapbox in a dead state.
+      map.dragPan.enable();
+      map.scrollZoom.enable();
+      map.touchZoomRotate.enable();
+      map.doubleClickZoom.enable();
+      map.boxZoom.enable();
+      map.keyboard.enable();
       resizeMap();
       setMapLoaded(true);
     });
@@ -1292,7 +1357,7 @@ export const Discover = () => {
           onChange={handleDiscoveryFiltersChange}
           className="mb-4"
         />
-        <div className="relative mb-4 h-[min(48vh,520px)] min-h-[300px] overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[#11100E] shadow-[var(--shadow-md)]">
+        <div className="discover-map-surface relative mb-4 h-[min(48vh,520px)] min-h-[300px] overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[#11100E] shadow-[var(--shadow-md)]">
           <div ref={isDesktopLayout ? mapContainerRef : undefined} className="absolute inset-0" />
           <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-between gap-2 p-3">
             <div className="pointer-events-auto">
@@ -1337,97 +1402,100 @@ export const Discover = () => {
         ) : null}
       </div>
 
-      <div className="relative lg:hidden">
-        <div className="overflow-y-auto pb-24">
-          {/* ── Map first: clean, collapsible (swipe up hide / down show / expand) ── */}
-          <div
-            className={`discover-map-panel relative w-full overflow-hidden border-b border-[var(--border-default)] bg-[#11100E] ${
-              mapPanelMode === 'hidden' ? 'is-hidden' : ''
-            }`}
-            style={{
-              height: mapPanelHeightCss(mapPanelMode),
-              minHeight: mapPanelMode === 'hidden' ? 0 : 120,
-            }}
-            data-testid="discover-map-panel"
-            data-map-mode={mapPanelMode}
-          >
-            <div ref={isDesktopLayout ? undefined : mapContainerRef} className="absolute inset-0" />
+      <div className="relative flex h-full min-h-0 flex-col lg:hidden">
+        {/* Map outside the scroll region so pan/pinch aren't stolen by page scroll. */}
+        <div
+          className={`discover-map-panel discover-map-surface relative w-full shrink-0 overflow-hidden border-b border-[var(--border-default)] bg-[#11100E] ${
+            mapPanelMode === 'hidden' ? 'is-hidden' : ''
+          }`}
+          style={{
+            height: mapPanelHeightCss(mapPanelMode),
+            minHeight: mapPanelMode === 'hidden' ? 0 : 120,
+          }}
+          data-testid="discover-map-panel"
+          data-map-mode={mapPanelMode}
+        >
+          <div ref={isDesktopLayout ? undefined : mapContainerRef} className="absolute inset-0" />
 
-            {tokenMissing ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0D0A06] px-6 text-center">
-                <p className="text-sm font-bold text-[var(--cream)]">Map is taking a break</p>
-                <p className="mt-1 max-w-xs text-xs leading-relaxed text-[var(--cream-muted)]">
-                  Browse who&apos;s nearby below.
-                </p>
-              </div>
-            ) : null}
+          {tokenMissing ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0D0A06] px-6 text-center">
+              <p className="text-sm font-bold text-[var(--cream)]">Map is taking a break</p>
+              <p className="mt-1 max-w-xs text-xs leading-relaxed text-[var(--cream-muted)]">
+                Browse who&apos;s nearby below.
+              </p>
+            </div>
+          ) : null}
 
-            {!tokenMissing && !mapCenter ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0D0A06]/90 px-5 text-center backdrop-blur-sm">
-                {needsLocationGate ? (
-                  <>
-                    <p className="text-sm font-extrabold text-[var(--cream)]">Location required</p>
-                    <p className="mt-2 max-w-xs text-xs leading-relaxed text-[var(--cream-muted)]">
-                      Grant location to load the map around you.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleEnableLocation}
-                      className="mt-4 rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03]"
-                    >
-                      Allow location
-                    </button>
-                  </>
-                ) : (
-                  <p className="text-xs font-medium uppercase tracking-widest text-[var(--cream-muted)]">
-                    {error || 'Getting your location…'}
+          {!tokenMissing && !mapCenter ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0D0A06]/90 px-5 text-center backdrop-blur-sm">
+              {needsLocationGate ? (
+                <>
+                  <p className="text-sm font-extrabold text-[var(--cream)]">Location required</p>
+                  <p className="mt-2 max-w-xs text-xs leading-relaxed text-[var(--cream-muted)]">
+                    Grant location to load the map around you.
                   </p>
-                )}
-              </div>
-            ) : null}
-
-            {/* Floating map controls */}
-            {mapPanelMode !== 'hidden' ? (
-              <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 p-3">
-                <div className="pointer-events-auto">
-                  <ProximitySlider
-                    value={radius}
-                    onChange={(km) => handleRadiusChange(km)}
-                    variant="map"
-                  />
-                </div>
-                <div className="pointer-events-auto flex flex-col items-end gap-1.5">
                   <button
                     type="button"
-                    onClick={() =>
-                      setMapPanel(mapPanelMode === 'expanded' ? 'default' : 'expanded')
-                    }
-                    data-testid="map-expand-toggle"
-                    className="rounded-full border border-[rgba(196,131,42,0.45)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#3D2B0E] shadow-md backdrop-blur-md"
+                    onClick={handleEnableLocation}
+                    className="mt-4 rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03]"
                   >
-                    {mapPanelMode === 'expanded' ? 'Shrink map' : 'Expand map'}
+                    Allow location
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setMapPanel('hidden')}
-                    data-testid="map-hide"
-                    className="rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#5C4A32] shadow-md backdrop-blur-md"
-                  >
-                    Hide map
-                  </button>
-                </div>
-              </div>
-            ) : null}
+                </>
+              ) : (
+                <p className="text-xs font-medium uppercase tracking-widest text-[var(--cream-muted)]">
+                  {error || 'Getting your location…'}
+                </p>
+              )}
+            </div>
+          ) : null}
 
-            {mapPanelMode !== 'hidden' ? (
-              <div className="pointer-events-none absolute bottom-10 left-3 z-10 flex items-center gap-2 rounded-full border border-[rgba(196,131,42,0.45)] bg-[color-mix(in_srgb,#FFF8F0_90%,transparent)] px-3 py-1.5 text-[12px] font-semibold text-[#3D2B0E] shadow-md backdrop-blur-sm">
-                <span className="inline-flex h-2 w-2 rounded-full bg-[#3D7A2E]" />
-                {nearbyCount} nearby · {formatRadiusMiles(radius)}
+          {/* Floating map controls */}
+          {mapPanelMode !== 'hidden' ? (
+            <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 p-3">
+              <div className="pointer-events-auto">
+                <ProximitySlider
+                  value={radius}
+                  onChange={(km) => handleRadiusChange(km)}
+                  variant="map"
+                />
               </div>
-            ) : null}
+              <div className="pointer-events-auto flex flex-col items-end gap-1.5">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setMapPanel(mapPanelMode === 'expanded' ? 'default' : 'expanded')
+                  }
+                  data-testid="map-expand-toggle"
+                  className="rounded-full border border-[rgba(196,131,42,0.45)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#3D2B0E] shadow-md backdrop-blur-md"
+                >
+                  {mapPanelMode === 'expanded' ? 'Shrink map' : 'Expand map'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMapPanel('hidden')}
+                  data-testid="map-hide"
+                  className="rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#5C4A32] shadow-md backdrop-blur-md"
+                >
+                  Hide map
+                </button>
+              </div>
+            </div>
+          ) : null}
 
-            {/* Drag handle — swipe up to hide, swipe down to expand */}
-            {mapPanelMode !== 'hidden' ? (
+          {mapPanelMode !== 'hidden' ? (
+            <div className="pointer-events-none absolute bottom-10 left-3 z-10 flex items-center gap-2 rounded-full border border-[rgba(196,131,42,0.45)] bg-[color-mix(in_srgb,#FFF8F0_90%,transparent)] px-3 py-1.5 text-[12px] font-semibold text-[#3D2B0E] shadow-md backdrop-blur-sm">
+              <span className="inline-flex h-2 w-2 rounded-full bg-[#3D7A2E]" />
+              {nearbyCount} nearby · {formatRadiusMiles(radius)}
+            </div>
+          ) : null}
+
+          {/* Drag handle — small hit target only; must not cover the map canvas. */}
+          {mapPanelMode !== 'hidden' ? (
+            <div
+              className="discover-map-drag-handle absolute inset-x-0 bottom-0 z-20 flex justify-center"
+              aria-hidden={false}
+            >
               <div
                 role="slider"
                 aria-label="Map height. Swipe up to hide, swipe down to expand."
@@ -1441,35 +1509,35 @@ export const Discover = () => {
                 onPointerCancel={() => {
                   mapDragRef.current = null;
                 }}
-                className="absolute inset-x-0 bottom-0 z-20 flex cursor-grab touch-none flex-col items-center active:cursor-grabbing"
+                className="flex cursor-grab touch-none flex-col items-center px-6 pb-2 pt-3 active:cursor-grabbing"
                 style={{ touchAction: 'none' }}
               >
-                <div className="flex w-full flex-col items-center bg-gradient-to-t from-[rgba(13,10,6,0.75)] via-[rgba(13,10,6,0.35)] to-transparent pb-2 pt-6">
-                  <span className="mb-1 h-1.5 w-10 rounded-full bg-[#F0E0C0]/90 shadow-sm" />
-                  <span className="rounded-full bg-[color-mix(in_srgb,#FFF8F0_88%,transparent)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#3D2B0E]">
-                    Swipe up to hide · down to enlarge
-                  </span>
-                </div>
+                <span className="mb-1 h-1.5 w-10 rounded-full bg-[#F0E0C0]/90 shadow-sm" />
+                <span className="rounded-full bg-[color-mix(in_srgb,#FFF8F0_88%,transparent)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#3D2B0E]">
+                  Swipe up to hide · down to enlarge
+                </span>
               </div>
-            ) : null}
-          </div>
-
-          {/* When map hidden: show bar to pull it back */}
-          {mapPanelMode === 'hidden' ? (
-            <button
-              type="button"
-              data-testid="map-show-bar"
-              onClick={() => setMapPanel('default')}
-              onPointerDown={onMapHandlePointerDown}
-              onPointerUp={onMapHandlePointerUp}
-              className="flex w-full items-center justify-center gap-2 border-b border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-4 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[var(--copper)]"
-            >
-              <span className="h-1 w-8 rounded-full bg-[var(--copper)]/60" aria-hidden />
-              Show map
-              <span className="h-1 w-8 rounded-full bg-[var(--copper)]/60" aria-hidden />
-            </button>
+            </div>
           ) : null}
+        </div>
 
+        {/* When map hidden: show bar to pull it back */}
+        {mapPanelMode === 'hidden' ? (
+          <button
+            type="button"
+            data-testid="map-show-bar"
+            onClick={() => setMapPanel('default')}
+            onPointerDown={onMapHandlePointerDown}
+            onPointerUp={onMapHandlePointerUp}
+            className="flex w-full shrink-0 items-center justify-center gap-2 border-b border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-4 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[var(--copper)]"
+          >
+            <span className="h-1 w-8 rounded-full bg-[var(--copper)]/60" aria-hidden />
+            Show map
+            <span className="h-1 w-8 rounded-full bg-[var(--copper)]/60" aria-hidden />
+          </button>
+        ) : null}
+
+        <div className="min-h-0 flex-1 overflow-y-auto pb-24">
           <div className="space-y-3 px-4 pt-3">
             <div className="flex flex-wrap items-center gap-2">
               <div
