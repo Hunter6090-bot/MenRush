@@ -5,7 +5,7 @@ import { useAuthStore, useNotificationStore, useUnreadStore } from '../hooks/sto
 import { UserAvatar } from './UserAvatar';
 import { mobileBackFallback, shouldShowMobileBack } from '../lib/mobileBack';
 import { MobileBackButton } from './MobileBackButton';
-import { IconNotifications, IconPulse } from './icons';
+import { IconMapExpand, IconNotifications, IconPulse } from './icons';
 import { BrandMark } from './BrandMark';
 import { ProfileSearchModal } from './ProfileSearchModal';
 import { NotificationDot } from './NotificationDot';
@@ -18,6 +18,20 @@ import { ThemeToggle } from './ThemeToggle';
 
 interface LayoutProps {
   children: React.ReactNode;
+}
+
+const SIDEBAR_EXPANDED_KEY = 'menrush_desktop_sidebar_expanded';
+
+function readSidebarExpanded(): boolean {
+  try {
+    const raw = localStorage.getItem(SIDEBAR_EXPANDED_KEY);
+    if (raw === '0') return false;
+    if (raw === '1') return true;
+  } catch {
+    /* ignore */
+  }
+  // NordVPN-style: start icon-only; expand when you want labels.
+  return false;
 }
 
 function badgeFor(
@@ -40,6 +54,7 @@ function LayoutInner({ children }: LayoutProps) {
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
   const [matchCount, setMatchCount] = useState(0);
+  const [sidebarExpanded, setSidebarExpanded] = useState(readSidebarExpanded);
   const { state: discoveryShell } = useDiscoveryShell();
 
   useEffect(() => {
@@ -48,6 +63,15 @@ function LayoutInner({ children }: LayoutProps) {
       .then((res) => setMatchCount(res.data?.length ?? 0))
       .catch(() => setMatchCount(0));
   }, [location.pathname]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_EXPANDED_KEY, sidebarExpanded ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+    window.dispatchEvent(new CustomEvent('menrush:shell-resize'));
+  }, [sidebarExpanded]);
 
   const navItems = getNavItems();
   const mobileTabs = navItems.filter((item) => item.mobileTab);
@@ -61,18 +85,55 @@ function LayoutInner({ children }: LayoutProps) {
     navigate('/login');
   };
 
+  const sidebarWidth = sidebarExpanded
+    ? 'var(--desktop-sidebar-width-expanded)'
+    : 'var(--desktop-sidebar-width-collapsed)';
+
   return (
-    <div className="min-h-dvh bg-[var(--bg-primary)] lg:grid lg:grid-cols-[var(--desktop-sidebar-width)_minmax(0,1fr)]">
-      <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:w-[var(--desktop-sidebar-width)] lg:border-r lg:border-[var(--border-default)] lg:bg-nn-bg lg:px-3.5 lg:py-5">
-        {/* Single desktop brand control — links home (Nearby). Top bar has search only. */}
-        <Link
-          to="/discover"
-          aria-label="MenRush home — Nearby"
-          className="mb-4 flex items-center gap-2.5 rounded-xl px-1 py-1 transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--copper)]"
+    <div
+      className="min-h-dvh bg-[var(--bg-primary)] lg:grid lg:grid-cols-[var(--desktop-sidebar-width)_minmax(0,1fr)]"
+      style={{ ['--desktop-sidebar-width' as string]: sidebarWidth }}
+      data-sidebar={sidebarExpanded ? 'expanded' : 'collapsed'}
+    >
+      <aside
+        className={`hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:border-r lg:border-[var(--border-default)] lg:bg-nn-bg lg:py-5 transition-[width] duration-300 ease-[var(--ease-out)] ${
+          sidebarExpanded
+            ? 'lg:w-[var(--desktop-sidebar-width-expanded)] lg:px-3.5'
+            : 'lg:w-[var(--desktop-sidebar-width-collapsed)] lg:px-2'
+        }`}
+      >
+        <div
+          className={`mb-4 flex items-center ${
+            sidebarExpanded ? 'justify-between gap-2 px-1' : 'flex-col gap-2'
+          }`}
         >
-          <BrandMark size="sm" className="shadow-[0_0_0_2px_rgba(196,131,42,0.4)] rounded-full" />
-          <span className="font-display text-sm font-black tracking-[0.14em] text-nn-text">MENRUSH</span>
-        </Link>
+          <Link
+            to="/discover"
+            aria-label="MenRush home — Nearby"
+            title="MenRush"
+            className={`flex items-center rounded-xl py-1 transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--copper)] ${
+              sidebarExpanded ? 'gap-2.5 px-1' : 'justify-center'
+            }`}
+          >
+            <BrandMark size="sm" className="shadow-[0_0_0_2px_rgba(196,131,42,0.4)] rounded-full" />
+            {sidebarExpanded ? (
+              <span className="font-display text-sm font-black tracking-[0.14em] text-nn-text">
+                MENRUSH
+              </span>
+            ) : null}
+          </Link>
+          <button
+            type="button"
+            onClick={() => setSidebarExpanded((v) => !v)}
+            aria-label={sidebarExpanded ? 'Collapse navigation' : 'Expand navigation'}
+            aria-expanded={sidebarExpanded}
+            data-testid="desktop-sidebar-toggle"
+            title={sidebarExpanded ? 'Collapse' : 'Show labels'}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-muted transition-colors hover:border-nn-copper/45 hover:text-nn-copper-bright"
+          >
+            <IconMapExpand size={16} collapse={sidebarExpanded} />
+          </button>
+        </div>
 
         <nav className="flex-1 overflow-y-auto space-y-1">
           {desktopLinks.map((item) => {
@@ -82,7 +143,11 @@ function LayoutInner({ children }: LayoutProps) {
               <Link
                 key={item.to}
                 to={item.to}
-                className={`group flex items-center gap-3 rounded-[14px] px-3 py-3 text-[15px] font-bold transition-all duration-200 ${
+                title={item.label}
+                aria-label={item.label}
+                className={`group flex items-center rounded-[14px] text-[15px] font-bold transition-all duration-200 ${
+                  sidebarExpanded ? 'gap-3 px-3 py-3' : 'justify-center px-2 py-3'
+                } ${
                   active
                     ? 'bg-[rgba(196,131,42,0.14)] text-nn-copper-bright'
                     : 'text-nn-muted hover:bg-nn-card hover:text-nn-text'
@@ -96,21 +161,35 @@ function LayoutInner({ children }: LayoutProps) {
                     </span>
                   ) : null}
                 </span>
-                <span className="truncate flex-1">{item.label}</span>
+                {sidebarExpanded ? <span className="truncate flex-1">{item.label}</span> : null}
               </Link>
             );
           })}
         </nav>
 
-        <div className="mt-auto border-t border-nn-border pt-4">
-          <MenRushPlusPromo />
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="mt-3 w-full px-1 py-2 text-left text-sm text-nn-faint transition-colors hover:text-nn-danger"
-          >
-            Sign out.
-          </button>
+        <div className={`mt-auto border-t border-nn-border pt-4 ${sidebarExpanded ? '' : 'px-0'}`}>
+          <MenRushPlusPromo compact={!sidebarExpanded} />
+          {sidebarExpanded ? (
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="mt-3 w-full px-1 py-2 text-left text-sm text-nn-faint transition-colors hover:text-nn-danger"
+            >
+              Sign out.
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleLogout}
+              title="Sign out"
+              aria-label="Sign out"
+              className="mt-3 mx-auto flex h-9 w-9 items-center justify-center rounded-full text-nn-faint transition-colors hover:bg-nn-card hover:text-nn-danger"
+            >
+              <span className="text-lg leading-none" aria-hidden>
+                ⎋
+              </span>
+            </button>
+          )}
         </div>
       </aside>
 

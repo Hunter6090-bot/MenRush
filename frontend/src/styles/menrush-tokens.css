@@ -157,7 +157,9 @@
   --nav-height: 64px;
   --mobile-header-height: calc(3.25rem + env(safe-area-inset-top, 0px));
   --mobile-tab-bar-height: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
-  --desktop-sidebar-width: 232px;
+  --desktop-sidebar-width-collapsed: 72px;
+  --desktop-sidebar-width-expanded: 232px;
+  --desktop-sidebar-width: var(--desktop-sidebar-width-expanded);
   --desktop-workspace-header: 4rem;
   --content-max-width: 1280px;
   --map-min-height: 60vh;
