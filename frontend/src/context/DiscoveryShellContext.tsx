@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 
 export interface DiscoveryShellState {
   nearbyCount: number;
@@ -23,13 +23,17 @@ const DiscoveryShellContext = createContext<{
 
 export function DiscoveryShellProvider({ children }: { children: ReactNode }) {
   const [state, setFullState] = useState<DiscoveryShellState>(defaultState);
+  const patchState = useCallback(
+    (patch: Partial<DiscoveryShellState>) =>
+      setFullState((prev) => ({ ...prev, ...patch })),
+    [],
+  );
   const value = useMemo(
     () => ({
       state,
-      setState: (patch: Partial<DiscoveryShellState>) =>
-        setFullState((prev) => ({ ...prev, ...patch })),
+      setState: patchState,
     }),
-    [state],
+    [state, patchState],
   );
   return <DiscoveryShellContext.Provider value={value}>{children}</DiscoveryShellContext.Provider>;
 }
