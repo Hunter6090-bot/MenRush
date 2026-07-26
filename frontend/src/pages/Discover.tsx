@@ -45,10 +45,12 @@ import {
 import { ROUTE_LABELS } from '../lib/routeLabels';
 import { useIsDesktopLayout } from '../hooks/useMediaQuery';
 import { ProximitySlider } from '../components/ProximitySlider';
+import { IconMapExpand } from '../components/icons';
 
 /** Map panel: swipe up to hide, swipe down to show, expand for large map. */
 type MapPanelMode = 'hidden' | 'default' | 'expanded';
 const MAP_PANEL_STORAGE_KEY = 'menrush_nearby_map_panel';
+const DESKTOP_MAP_EXPAND_KEY = 'menrush_desktop_map_expanded';
 const DISCOVER_RADIUS_KEY = 'menrush_default_radius_km';
 
 function readMapPanelMode(): MapPanelMode {
@@ -61,10 +63,114 @@ function readMapPanelMode(): MapPanelMode {
   return 'default';
 }
 
+function readDesktopMapExpanded(): boolean {
+  try {
+    return localStorage.getItem(DESKTOP_MAP_EXPAND_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Mobile heights — expanded is near-fullscreen clean map (NordVPN-style). */
 function mapPanelHeightCss(mode: MapPanelMode): string {
   if (mode === 'hidden') return '0px';
-  if (mode === 'expanded') return 'min(72vh, 640px)';
+  if (mode === 'expanded') {
+    return 'calc(100dvh - var(--mobile-header-height) - var(--mobile-tab-bar-height) - 8px)';
+  }
   return 'min(38vh, 360px)';
+}
+
+function desktopMapHeightCss(expanded: boolean): string {
+  return expanded ? 'min(72vh, 760px)' : 'min(42vh, 480px)';
+}
+
+const mapChromeBtnClass =
+  'flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] text-[#3D2B0E] shadow-md backdrop-blur-md transition-transform active:scale-95';
+
+const mapStatusCardClass =
+  'pointer-events-none absolute bottom-3 left-3 z-10 flex items-center gap-2.5 rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[color-mix(in_srgb,#FFF8F0_94%,transparent)] px-3.5 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.18)] backdrop-blur-md';
+
+/** Shared NordVPN-style map chrome — identical on desktop and mobile. */
+function MapFloatingChrome({
+  expanded,
+  nearbyCount,
+  radiusLabel,
+  radiusKm,
+  onToggleExpand,
+  onRadiusChange,
+  onExpandRadius,
+  showHide = false,
+  onHide,
+  statusBottomClass = 'bottom-3',
+}: {
+  expanded: boolean;
+  nearbyCount: number;
+  radiusLabel: string;
+  radiusKm: number;
+  onToggleExpand: () => void;
+  onRadiusChange: (km: number) => void;
+  onExpandRadius: () => void;
+  showHide?: boolean;
+  onHide?: () => void;
+  statusBottomClass?: string;
+}) {
+  return (
+    <>
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 p-3">
+        {!expanded ? (
+          <div className="pointer-events-auto">
+            <ProximitySlider value={radiusKm} onChange={onRadiusChange} variant="map" />
+          </div>
+        ) : (
+          <span />
+        )}
+        <div className="pointer-events-auto flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onToggleExpand}
+            data-testid="map-expand-toggle"
+            aria-label={expanded ? 'Shrink map' : 'Expand map'}
+            title={expanded ? 'Shrink map' : 'Expand map'}
+            className={mapChromeBtnClass}
+          >
+            <IconMapExpand size={18} collapse={expanded} />
+          </button>
+          {showHide && !expanded && onHide ? (
+            <button
+              type="button"
+              onClick={onHide}
+              data-testid="map-hide"
+              aria-label="Hide map"
+              title="Hide map"
+              className={mapChromeBtnClass}
+            >
+              <span className="text-lg leading-none font-light" aria-hidden>
+                −
+              </span>
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <div className={`${mapStatusCardClass} ${statusBottomClass}`}>
+        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-[#3D7A2E]" />
+        <div className="min-w-0">
+          <p className="text-[13px] font-bold leading-tight text-[#1A1208]">{nearbyCount} nearby</p>
+          <p className="text-[11px] font-semibold text-[#3D7A2E]">
+            Live · {radiusLabel}
+            {nearbyCount === 0 && radiusKm < MAX_RADIUS_KM - 0.5 ? (
+              <button
+                type="button"
+                className="pointer-events-auto ml-1.5 font-extrabold text-[#B8732A] underline-offset-2 hover:underline"
+                onClick={onExpandRadius}
+              >
+                Expand radius
+              </button>
+            ) : null}
+          </p>
+        </div>
+      </div>
+    </>
+  );
 }
 
 const INJECT_ID = '__discover_styles_v2__';
@@ -176,6 +282,7 @@ export const Discover = () => {
     return DEFAULT_RADIUS_KM;
   });
   const [mapPanelMode, setMapPanelMode] = useState<MapPanelMode>(() => readMapPanelMode());
+  const [desktopMapExpanded, setDesktopMapExpanded] = useState(readDesktopMapExpanded);
   const mapDragRef = useRef<{ startY: number; mode: MapPanelMode } | null>(null);
   const [discoveryFilters, setDiscoveryFilters] = useState<DiscoveryFilterState>(DEFAULT_DISCOVERY_FILTERS);
   const [pulseUntil, setPulseUntil] = useState<Date | null>(null);
@@ -678,6 +785,18 @@ export const Discover = () => {
     }
   }, []);
 
+  const toggleDesktopMapExpanded = useCallback(() => {
+    setDesktopMapExpanded((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(DESKTOP_MAP_EXPAND_KEY, next ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
+
   const onMapHandlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       mapDragRef.current = { startY: e.clientY, mode: mapPanelMode };
@@ -704,7 +823,7 @@ export const Discover = () => {
     [setMapPanel],
   );
 
-  // Mapbox needs resize when the collapsible panel / breakpoint changes.
+  // Mapbox needs resize when the collapsible panel / breakpoint / sidebar changes.
   // Also re-assert interaction handlers — some layout thrash left Mapbox "dead".
   useEffect(() => {
     const map = mapRef.current;
@@ -734,11 +853,17 @@ export const Discover = () => {
     };
     const t1 = window.setTimeout(revive, 50);
     const t2 = window.setTimeout(revive, 320);
+    const onShellResize = () => {
+      window.setTimeout(revive, 50);
+      window.setTimeout(revive, 320);
+    };
+    window.addEventListener('menrush:shell-resize', onShellResize);
     return () => {
       window.clearTimeout(t1);
       window.clearTimeout(t2);
+      window.removeEventListener('menrush:shell-resize', onShellResize);
     };
-  }, [mapPanelMode, isDesktopLayout, mapLoaded]);
+  }, [mapPanelMode, desktopMapExpanded, isDesktopLayout, mapLoaded]);
 
   const handleDiscoveryFiltersChange = useCallback(
     (next: DiscoveryFilterState) => {
@@ -793,7 +918,7 @@ export const Discover = () => {
       }
       if (likedUsers.has(user.id)) {
         setSafetyNotice({
-          msg: `Match already sent to ${user.name}. Chat unlocks when he matches back · consent first.`,
+          msg: `Match already sent to ${user.name}. Chat and calling unlock when he matches back · consent first.`,
           tone: 'success',
         });
         window.setTimeout(() => setSafetyNotice(null), 4000);
@@ -809,7 +934,7 @@ export const Discover = () => {
           window.setTimeout(() => setMatchToast(null), 6000);
         } else {
           setSafetyNotice({
-            msg: `Match sent to ${user.name}. Chat unlocks if he matches back · consent first.`,
+            msg: `Match sent to ${user.name}. Chat and calling unlock if he matches back · consent first.`,
             tone: 'success',
           });
           window.setTimeout(() => setSafetyNotice(null), 4000);
@@ -1224,7 +1349,7 @@ export const Discover = () => {
                 Men nearby — tap Match on a card
               </p>
               <p className="mt-1 text-[12px] text-[var(--cream-muted)]">
-                No swiping. One tap sends interest. Chat unlocks when it&apos;s mutual · consent
+                No swiping. Tap Match to show interest. Chat and calling unlock when it&apos;s mutual · consent
                .
               </p>
             </div>
@@ -1379,34 +1504,36 @@ export const Discover = () => {
 
       {/* Desktop: only mount when layout matches — never attach Mapbox to a display:none node. */}
       {isDesktopLayout ? (
-      <div className="flex h-full min-h-0 flex-col px-6 py-6">
-        <div className="mb-4 flex shrink-0 flex-wrap items-center gap-3">
-          <h2 className="flex-1 text-2xl font-extrabold text-[var(--cream)]">Nearby</h2>
-          <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
-        </div>
-        {!needsLocationGate ? (
-          <div
-            className="mb-4 shrink-0 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/80 px-4 py-3"
-            data-testid="discover-mood-strip"
-          >
-            <p className="mb-2 text-[12px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]">
-              Your mood · shown nearby
-            </p>
-            <div className={moodSaving ? 'pointer-events-none opacity-60' : ''}>
-              <MoodPicker current={mood} onSelect={handleMoodSelect} />
-            </div>
+      <div className="flex h-full min-h-0 flex-col px-6 py-5">
+        {!desktopMapExpanded ? (
+          <div className="mb-3 flex shrink-0 flex-wrap items-center gap-3">
+            <h2 className="flex-1 text-2xl font-extrabold text-[var(--cream)]">Nearby</h2>
+            <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
           </div>
         ) : null}
-        <DiscoveryFilterPanel
-          variant="inline"
-          value={discoveryFilters}
-          onChange={handleDiscoveryFiltersChange}
-          className="mb-4 shrink-0"
-        />
-        {/* Map outside the scroll region so wheel zoom isn't stolen by page scroll. */}
+        {!desktopMapExpanded && !needsLocationGate ? (
+          <details className="mb-3 shrink-0 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/70 px-4 py-2.5">
+            <summary className="cursor-pointer text-[12px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]">
+              Mood & filters
+            </summary>
+            <div className="mt-3 space-y-3" data-testid="discover-mood-strip">
+              <div className={moodSaving ? 'pointer-events-none opacity-60' : ''}>
+                <MoodPicker current={mood} onSelect={handleMoodSelect} />
+              </div>
+              <DiscoveryFilterPanel
+                variant="inline"
+                value={discoveryFilters}
+                onChange={handleDiscoveryFiltersChange}
+              />
+            </div>
+          </details>
+        ) : null}
+        {/* Map grows on expand; profile grid stays visible below (NordVPN desktop pattern). */}
         <div
-          className="discover-map-surface relative mb-4 h-[min(48vh,520px)] min-h-[300px] shrink-0 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[#11100E] shadow-[var(--shadow-md)]"
+          className="discover-map-surface relative mb-3 min-h-[280px] shrink-0 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[#11100E] shadow-[var(--shadow-md)] transition-[height] duration-300 ease-[var(--ease-out)]"
+          style={{ height: desktopMapHeightCss(desktopMapExpanded) }}
           data-testid="discover-map-panel"
+          data-map-expanded={desktopMapExpanded ? '1' : '0'}
           onWheel={(e) => e.stopPropagation()}
         >
           <div
@@ -1414,28 +1541,15 @@ export const Discover = () => {
             className="discover-map-host absolute inset-0"
             data-testid="discover-map-canvas-host"
           />
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-between gap-2 p-3">
-            <div className="pointer-events-auto">
-              <ProximitySlider
-                value={radius}
-                onChange={(km) => handleRadiusChange(km)}
-                variant="map"
-              />
-            </div>
-          </div>
-          <div className="pointer-events-none absolute bottom-3 left-3 z-10 flex items-center gap-2 rounded-full border border-[rgba(196,131,42,0.45)] bg-[color-mix(in_srgb,#FFF8F0_90%,transparent)] px-4 py-2 text-[13px] font-semibold text-[#3D2B0E] shadow-md backdrop-blur-sm">
-            <span className="inline-flex h-2 w-2 rounded-full bg-[#3D7A2E]" />
-            {nearbyCount} in your radius · {formatRadiusMiles(radius)}
-            {nearbyCount === 0 && radius < MAX_RADIUS_KM - 0.5 ? (
-              <button
-                type="button"
-                className="pointer-events-auto ml-1 font-extrabold text-[#B8732A] underline-offset-2 hover:underline"
-                onClick={handleRadiusCycle}
-              >
-                Expand
-              </button>
-            ) : null}
-          </div>
+          <MapFloatingChrome
+            expanded={desktopMapExpanded}
+            nearbyCount={nearbyCount}
+            radiusLabel={formatRadiusMiles(radius)}
+            radiusKm={radius}
+            onToggleExpand={toggleDesktopMapExpanded}
+            onRadiusChange={handleRadiusChange}
+            onExpandRadius={handleRadiusCycle}
+          />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {!needsLocationGate ? (
@@ -1511,48 +1625,25 @@ export const Discover = () => {
             </div>
           ) : null}
 
-          {/* Floating map controls */}
           {mapPanelMode !== 'hidden' ? (
-            <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 p-3">
-              <div className="pointer-events-auto">
-                <ProximitySlider
-                  value={radius}
-                  onChange={(km) => handleRadiusChange(km)}
-                  variant="map"
-                />
-              </div>
-              <div className="pointer-events-auto flex flex-col items-end gap-1.5">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setMapPanel(mapPanelMode === 'expanded' ? 'default' : 'expanded')
-                  }
-                  data-testid="map-expand-toggle"
-                  className="rounded-full border border-[rgba(196,131,42,0.45)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#3D2B0E] shadow-md backdrop-blur-md"
-                >
-                  {mapPanelMode === 'expanded' ? 'Shrink map' : 'Expand map'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMapPanel('hidden')}
-                  data-testid="map-hide"
-                  className="rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#5C4A32] shadow-md backdrop-blur-md"
-                >
-                  Hide map
-                </button>
-              </div>
-            </div>
+            <MapFloatingChrome
+              expanded={mapPanelMode === 'expanded'}
+              nearbyCount={nearbyCount}
+              radiusLabel={formatRadiusMiles(radius)}
+              radiusKm={radius}
+              onToggleExpand={() =>
+                setMapPanel(mapPanelMode === 'expanded' ? 'default' : 'expanded')
+              }
+              onRadiusChange={handleRadiusChange}
+              onExpandRadius={handleRadiusCycle}
+              showHide
+              onHide={() => setMapPanel('hidden')}
+              statusBottomClass={mapPanelMode === 'expanded' ? 'bottom-4' : 'bottom-8'}
+            />
           ) : null}
 
-          {mapPanelMode !== 'hidden' ? (
-            <div className="pointer-events-none absolute bottom-10 left-3 z-10 flex items-center gap-2 rounded-full border border-[rgba(196,131,42,0.45)] bg-[color-mix(in_srgb,#FFF8F0_90%,transparent)] px-3 py-1.5 text-[12px] font-semibold text-[#3D2B0E] shadow-md backdrop-blur-sm">
-              <span className="inline-flex h-2 w-2 rounded-full bg-[#3D7A2E]" />
-              {nearbyCount} nearby · {formatRadiusMiles(radius)}
-            </div>
-          ) : null}
-
-          {/* Drag handle — small hit target only; must not cover the map canvas. */}
-          {mapPanelMode !== 'hidden' ? (
+          {/* Drag handle — pill only; no instructional clutter */}
+          {mapPanelMode !== 'hidden' && mapPanelMode !== 'expanded' ? (
             <div
               className="discover-map-drag-handle absolute inset-x-0 bottom-0 z-20 flex justify-center"
               aria-hidden={false}
@@ -1570,13 +1661,10 @@ export const Discover = () => {
                 onPointerCancel={() => {
                   mapDragRef.current = null;
                 }}
-                className="flex cursor-grab touch-none flex-col items-center px-6 pb-2 pt-3 active:cursor-grabbing"
+                className="flex cursor-grab touch-none flex-col items-center px-6 pb-2.5 pt-3 active:cursor-grabbing"
                 style={{ touchAction: 'none' }}
               >
-                <span className="mb-1 h-1.5 w-10 rounded-full bg-[#F0E0C0]/90 shadow-sm" />
-                <span className="rounded-full bg-[color-mix(in_srgb,#FFF8F0_88%,transparent)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#3D2B0E]">
-                  Swipe up to hide · down to enlarge
-                </span>
+                <span className="h-1.5 w-10 rounded-full bg-[#F0E0C0]/85 shadow-sm" />
               </div>
             </div>
           ) : null}

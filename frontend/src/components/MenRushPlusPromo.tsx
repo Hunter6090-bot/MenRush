@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { usersAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
 
-export function MenRushPlusPromo() {
+export function MenRushPlusPromo({ compact = false }: { compact?: boolean }) {
   const isPremium = useAuthStore((s) => s.user?.is_premium);
   const [count, setCount] = useState<number | null>(null);
 
@@ -20,6 +20,19 @@ export function MenRushPlusPromo() {
       : count === 0
         ? 'Boost your visibility.'
         : `${count} ${count === 1 ? 'man' : 'men'} liked you. See them.`;
+
+  if (compact) {
+    return (
+      <Link
+        to="/premium"
+        title="MenRush+"
+        aria-label="MenRush+"
+        className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.12)] text-[11px] font-black tracking-tight text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.22)]"
+      >
+        +
+      </Link>
+    );
+  }
 
   return (
     <Link
