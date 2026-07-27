@@ -97,7 +97,9 @@ function LayoutInner({ children }: LayoutProps) {
     >
       <aside
         className={`hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:border-r lg:border-[var(--border-default)] lg:bg-nn-bg lg:py-5 transition-[width] duration-300 ease-[var(--ease-out)] ${
-          sidebarExpanded ? 'lg:w-[var(--desktop-sidebar-width-expanded)] lg:px-3.5' : 'lg:w-[var(--desktop-sidebar-width-collapsed)] lg:px-2'
+          sidebarExpanded
+            ? 'lg:w-[var(--desktop-sidebar-width-expanded)] lg:px-3.5'
+            : 'lg:w-[var(--desktop-sidebar-width-collapsed)] lg:px-2'
         }`}
       >
         <div
