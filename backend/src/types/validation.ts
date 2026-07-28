@@ -64,6 +64,7 @@ export const ProfileSchema = z.object({
   cover_position_y: z.number().min(0).max(100).optional(),
   cover_zoom: z.number().min(1).max(3).optional(),
   interests: z.array(z.string().max(30)).max(10).optional(),
+  show_age: z.boolean().optional(),
 });
 
 export const LocationSchema = z.object({

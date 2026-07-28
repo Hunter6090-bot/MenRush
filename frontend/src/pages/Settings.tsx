@@ -34,6 +34,7 @@ export const Settings = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const logout = useAuthStore((s) => s.logout);
+  const refreshToken = useAuthStore((s) => s.refreshToken);
   const patchUser = useAuthStore((s) => s.patchUser);
   const storeEmail = useAuthStore((s) => s.user?.email);
   const setLocation = useLocationStore((s) => s.setLocation);
@@ -272,6 +273,7 @@ export const Settings = () => {
   };
 
   const handleLogout = () => {
+    void authAPI.logout(refreshToken).catch(() => undefined);
     logout();
     navigate('/login');
   };

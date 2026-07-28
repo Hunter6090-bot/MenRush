@@ -75,8 +75,8 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
   const [participants, setParticipants] = useState<RoomParticipant[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
-  const [cameraOn, setCameraOn] = useState(true);
-  const [micMuted, setMicMuted] = useState(false);
+  const [cameraOn, setCameraOn] = useState(false);
+  const [micMuted, setMicMuted] = useState(true);
   const [pinnedId, setPinnedId] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState('');
 
@@ -173,7 +173,7 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
       const rid = roomIdRef.current;
       const activeSocket = socketRef.current;
       const local = streamRef.current;
-      if (!myId || !rid || !activeSocket || !local || peerId === myId) return;
+      if (!myId || !rid || !activeSocket || peerId === myId) return;
 
       let slot = peersRef.current.get(peerId);
       if (!slot) {
@@ -231,8 +231,9 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
 
       slot.makingOffer = true;
       try {
-        // Offerer attaches local tracks before createOffer (m-line order).
-        await attachLocalTracks(slot.pc, local);
+        // A camera-off participant can still answer and receive. Local tracks
+        // are attached only after the member explicitly enables their camera.
+        if (local) await attachLocalTracks(slot.pc, local);
         const offer = await slot.pc.createOffer();
         await slot.pc.setLocalDescription(offer);
         activeSocket.emit('room:webrtc-offer', {
@@ -348,25 +349,29 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     }
   }, [enabled, roomId, replaceLocalTracksOnPeers, emitMediaState, ensurePeer, flushPendingIce]);
 
-  // Once local media is live, mesh to every other live participant.
+  // Once local media is live, mesh/renegotiate with every other live participant.
   useEffect(() => {
     if (!localStream || !userId) return;
     for (const p of participants) {
       if (p.isLive && p.user_id !== userId) {
-        void ensurePeer(p.user_id);
+        void ensurePeer(p.user_id, { initiate: true });
       }
     }
   }, [localStream, participants, userId, ensurePeer]);
 
   const stopCamera = useCallback(() => {
-    closeAllPeers();
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     setLocalStream(null);
-    setRemoteStreams({});
     setCameraOn(false);
+    setMicMuted(true);
+    for (const [, slot] of peersRef.current) {
+      for (const sender of slot.pc.getSenders()) {
+        if (sender.track) void sender.replaceTrack(null);
+      }
+    }
     emitMediaState(true, false);
-  }, [closeAllPeers, emitMediaState]);
+  }, [emitMediaState]);
 
   const toggleCamera = useCallback(() => {
     if (!localStream) {
@@ -392,13 +397,17 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
 
   useEffect(() => {
     if (!enabled || !roomId) return;
-    void startCamera();
+    // Privacy default: joining a group never requests camera or microphone.
+    // Members receive the room first and opt in from the camera control.
+    setCameraOn(false);
+    setMicMuted(true);
+    emitMediaState(true, false);
     return () => {
       closeAllPeers();
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     };
-    // Intentionally only re-run on room/enabled — not on startCamera identity.
+    // Intentionally only re-run on room/enabled.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, roomId]);
 
@@ -450,7 +459,8 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
         return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
       });
 
-      // Mesh: open a PC toward every other live peer once we have local media.
+      // Mesh once local media is enabled. Camera-off members can still answer
+      // incoming offers and receive other participants.
       if (streamRef.current && userId) {
         for (const entry of list) {
           if (entry.user_id !== userId) {
@@ -477,11 +487,6 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     }) => {
       if (room_id !== roomId || !from || from === userId || !offer) return;
       const local = streamRef.current;
-      if (!local) {
-        // Camera still starting — answer once local media is ready.
-        pendingOffersRef.current.set(from, offer);
-        return;
-      }
 
       try {
         await ensurePeer(from, { initiate: false });
@@ -511,7 +516,7 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
         // Answerer: setRemoteDescription BEFORE attachLocalTracks (m-line order).
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
         await flushPendingIce(from, pc);
-        await attachLocalTracks(pc, local);
+        if (local) await attachLocalTracks(pc, local);
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         socket.emit('room:webrtc-answer', {

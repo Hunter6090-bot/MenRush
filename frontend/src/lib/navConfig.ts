@@ -43,6 +43,7 @@ export function getNavItems(): NavItem[] {
       to: '/hot-spots',
       label: ROUTE_LABELS.hotSpots,
       Icon: IconHotSpots,
+      mobileTab: true,
       desktopNav: true,
     },
     {

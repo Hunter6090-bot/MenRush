@@ -95,7 +95,52 @@ async function extractDescriptor(
   }
 }
 
+async function countDetectedFaces(
+  faceapi: FaceApiModule,
+  filePath: string,
+): Promise<number> {
+  const { data, info } = await sharp(filePath)
+    .rotate()
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const tensor = (faceapi as any).tf.tensor3d(
+    new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
+    [info.height, info.width, info.channels],
+    'int32',
+  );
+  try {
+    const detections = await faceapi.detectAllFaces(
+      tensor as any,
+      new faceapi.SsdMobilenetv1Options({ minConfidence: 0.35, maxResults: 5 }),
+    );
+    return detections.length;
+  } finally {
+    tensor.dispose();
+  }
+}
+
 export const faceMatchService = {
+  async countFaces(filePath: string): Promise<{ count: number; engineAvailable: boolean }> {
+    let faceapi: FaceApiModule | null;
+    try {
+      faceapi = await loadEngine();
+    } catch {
+      return { count: 0, engineAvailable: false };
+    }
+    if (!faceapi) return { count: 0, engineAvailable: false };
+
+    try {
+      return { count: await countDetectedFaces(faceapi, filePath), engineAvailable: true };
+    } catch (err) {
+      console.warn(
+        '[profile-moderation] face count failed:',
+        err instanceof Error ? err.message : err,
+      );
+      return { count: 0, engineAvailable: false };
+    }
+  },
+
   async detectFace(filePath: string): Promise<{ found: boolean; engineAvailable: boolean }> {
     let faceapi: FaceApiModule | null;
     try {

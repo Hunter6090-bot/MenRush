@@ -41,7 +41,7 @@ export function AlbumViewerSheet({
   const [grantingId, setGrantingId] = useState<string | null>(null);
   const [deletingAlbum, setDeletingAlbum] = useState(false);
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<{ url: string; video: boolean } | null>(null);
 
   const isPrivateToViewer = mode === 'viewer' && album.is_locked && !album.unlocked;
 
@@ -119,7 +119,7 @@ export function AlbumViewerSheet({
     try {
       await albumsAPI.removePhoto(album.id, photoId);
       setPhotos((prev) => prev.filter((photo) => photo.id !== photoId));
-      if (lightboxUrl) setLightboxUrl(null);
+      if (lightbox) setLightbox(null);
       onPhotosChanged?.();
       onNotice?.('Photo removed.', 'success');
     } catch (err: unknown) {
@@ -213,18 +213,44 @@ export function AlbumViewerSheet({
                     key={photo.id}
                     className="relative aspect-square overflow-hidden rounded-xl border border-[#3D2B0E] bg-[#0D0A06]"
                   >
-                    <button
-                      type="button"
-                      onClick={() => setLightboxUrl(getPhotoUrl(photo.photo_url) ?? null)}
-                      className="h-full w-full active:scale-[0.98] transition-transform"
-                    >
-                      <img
-                        src={getPhotoUrl(photo.photo_url)}
-                        alt=""
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                      />
-                    </button>
+                    {photo.mime_type?.startsWith('video/') ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = getPhotoUrl(photo.photo_url);
+                          if (url) setLightbox({ url, video: true });
+                        }}
+                        className="relative h-full w-full bg-black active:scale-[0.98] transition-transform"
+                        aria-label="Play album video"
+                      >
+                        <video
+                          src={getPhotoUrl(photo.photo_url)}
+                          className="h-full w-full object-cover"
+                          muted
+                          playsInline
+                          preload="metadata"
+                        />
+                        <span className="absolute inset-0 flex items-center justify-center text-3xl text-white drop-shadow-lg">
+                          ▶
+                        </span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = getPhotoUrl(photo.photo_url);
+                          if (url) setLightbox({ url, video: false });
+                        }}
+                        className="h-full w-full active:scale-[0.98] transition-transform"
+                      >
+                        <img
+                          src={getPhotoUrl(photo.photo_url)}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      </button>
+                    )}
                     {mode === 'owner' && (
                       <button
                         type="button"
@@ -284,12 +310,28 @@ export function AlbumViewerSheet({
         </div>
       </div>
 
-      {lightboxUrl && (
+      {lightbox && (
         <div
           className="fixed inset-0 z-[140] flex items-center justify-center bg-black/95 p-4"
-          onClick={() => setLightboxUrl(null)}
+          onClick={() => setLightbox(null)}
         >
-          <img src={lightboxUrl} alt="" className="max-h-full max-w-full object-contain" />
+          {lightbox.video ? (
+            <video
+              src={lightbox.url}
+              className="max-h-full max-w-full object-contain"
+              controls
+              autoPlay
+              playsInline
+              onClick={(event) => event.stopPropagation()}
+            />
+          ) : (
+            <img
+              src={lightbox.url}
+              alt=""
+              className="max-h-full max-w-full object-contain"
+              onClick={(event) => event.stopPropagation()}
+            />
+          )}
         </div>
       )}
     </>
@@ -320,7 +362,7 @@ export function AlbumCard({
         }
       }}
       data-testid={`album-card-${album.id}`}
-      className="relative w-full cursor-pointer rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-4 text-left shadow-card transition-all hover:border-[#C4832A]/40 active:scale-[0.99]"
+      className="relative w-full cursor-pointer rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 text-left shadow-card transition-all hover:border-[#C4832A]/40 active:scale-[0.99]"
     >
       {onDelete && (
         <button
@@ -335,7 +377,7 @@ export function AlbumCard({
           ×
         </button>
       )}
-      <div className="relative mb-3 aspect-[4/3] overflow-hidden rounded-xl border border-[#3D2B0E] bg-[#0D0A06]">
+      <div className="relative mb-3 aspect-[4/3] overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)]">
         {cover && !lockedForViewer ? (
           <img src={cover} alt="" className="h-full w-full object-cover" />
         ) : (
@@ -353,7 +395,7 @@ export function AlbumCard({
       </div>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate font-semibold text-[#F0E0C0]">{album.name}</p>
+          <p className="truncate font-semibold text-[var(--cream)]">{album.name}</p>
           <p className="mt-0.5 text-xs text-[var(--cream-muted)]">
             {album.photo_count} {album.photo_count === 1 ? 'photo' : 'photos'}
           </p>
