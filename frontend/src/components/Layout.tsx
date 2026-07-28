@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { usersAPI } from '../api/client';
+import { authAPI, usersAPI } from '../api/client';
 import { useAuthStore, useNotificationStore, useUnreadStore } from '../hooks/store';
 import { UserAvatar } from './UserAvatar';
 import { mobileBackFallback, shouldShowMobileBack } from '../lib/mobileBack';
@@ -15,6 +15,7 @@ import { DiscoveryShellProvider, useDiscoveryShell } from '../context/DiscoveryS
 import { LocationPresenceStrip } from './LocationPresenceStrip';
 import { ProfileDepthStrip } from './ProfileDepthStrip';
 import { ThemeToggle } from './ThemeToggle';
+import { BetaFeedbackPrompt } from './BetaFeedbackPrompt';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -47,7 +48,7 @@ function badgeFor(
 }
 
 function LayoutInner({ children }: LayoutProps) {
-  const { user, logout } = useAuthStore();
+  const { user, refreshToken, logout } = useAuthStore();
   const unreadCount = useUnreadStore((s) => s.count);
   const notificationUnread = useNotificationStore((s) => s.unreadCount);
   const location = useLocation();
@@ -81,6 +82,7 @@ function LayoutInner({ children }: LayoutProps) {
   const pageTitle = mobilePageTitle(location.pathname);
 
   const handleLogout = () => {
+    void authAPI.logout(refreshToken).catch(() => undefined);
     logout();
     navigate('/login');
   };
@@ -242,6 +244,7 @@ function LayoutInner({ children }: LayoutProps) {
                 />
               </Link>
             </div>
+            <BetaFeedbackPrompt />
           </div>
         </header>
 

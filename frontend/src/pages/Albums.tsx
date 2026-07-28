@@ -12,6 +12,7 @@ export const Albums = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingAlbumId, setUploadingAlbumId] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [selected, setSelected] = useState<AlbumDTO | null>(null);
@@ -57,20 +58,25 @@ export const Albums = () => {
     }
   };
 
-  const handleUpload = async (albumId: string, file?: File) => {
-    if (!file) return;
+  const handleUpload = async (albumId: string, files: File[]) => {
+    if (files.length === 0) return;
     setUploadingAlbumId(albumId);
     setError('');
     try {
-      await albumsAPI.upload(albumId, file);
+      for (let index = 0; index < files.length; index += 1) {
+        setUploadProgress(`${index + 1}/${files.length}`);
+        await albumsAPI.upload(albumId, files[index]);
+      }
+      setNotice(`${files.length} ${files.length === 1 ? 'item' : 'items'} added.`);
       await loadAlbums();
     } catch (err: unknown) {
       setError(
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-          'Could not upload that photo.',
+          'Could not upload that photo or video.',
       );
     } finally {
       setUploadingAlbumId(null);
+      setUploadProgress('');
     }
   };
 
@@ -100,17 +106,17 @@ export const Albums = () => {
       <div className="mx-auto max-w-4xl px-4 py-6 space-y-5">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#C4832A]">Private sharing</p>
-          <h1 className="text-2xl font-bold text-[#F0E0C0]">Albums</h1>
+          <h1 className="text-2xl font-bold text-[var(--cream)]">Albums</h1>
           <p className="mt-1 text-sm text-[var(--cream-muted)]">
-            {photoTotal}/{freeCap} free photos used. Tap an album to view photos and grant access.
+            {photoTotal}/{freeCap} free media items used. Beta Premium includes unlimited uploads.
           </p>
         </div>
 
         <form
           onSubmit={handleCreate}
-          className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-5 shadow-card"
+          className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 shadow-card"
         >
-          <label className="block text-xs font-semibold uppercase tracking-[0.14em] text-[#F0E0C0]/85">
+          <label className="block text-xs font-semibold uppercase tracking-[0.14em] text-[var(--cream)]">
             New album
           </label>
           <div className="mt-3 flex gap-3">
@@ -118,12 +124,12 @@ export const Albums = () => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Weekend, Travel, Favourites..."
-              className="flex-1 rounded-xl border border-[#3D2B0E] bg-[#0D0A06] px-4 py-3 text-sm text-[#F0E0C0] placeholder:text-[var(--cream-muted)]/50 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/40"
+              className="flex-1 rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-4 py-3 text-sm text-[var(--cream)] placeholder:text-[var(--cream-muted)]/50 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/40"
             />
             <button
               type="submit"
               disabled={saving}
-              className="rounded-xl bg-[#C4832A] px-4 py-3 text-sm font-bold text-[#0D0A06] disabled:opacity-60"
+              className="rounded-xl bg-[#C4832A] px-4 py-3 text-sm font-bold text-[var(--nn-on-copper)] disabled:opacity-60"
             >
               {saving ? 'Creating…' : 'Create'}
             </button>
@@ -131,7 +137,7 @@ export const Albums = () => {
         </form>
 
         {error && (
-          <div className="rounded-2xl border border-[#A45E18]/40 bg-[#1E1508] p-4 text-sm text-[#F0E0C0]">
+          <div className="rounded-2xl border border-[#A45E18]/40 bg-[var(--bg-card)] p-4 text-sm text-[var(--cream)]">
             {error}
           </div>
         )}
@@ -142,11 +148,11 @@ export const Albums = () => {
         )}
 
         {loading ? (
-          <div className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-5 text-sm text-[var(--cream-muted)]">
+          <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 text-sm text-[var(--cream-muted)]">
             Loading albums…
           </div>
         ) : albums.length === 0 ? (
-          <div className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-5 text-sm text-[var(--cream-muted)]">
+          <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 text-sm text-[var(--cream-muted)]">
             No albums yet. Create one above to start building your private library.
           </div>
         ) : (
@@ -162,12 +168,13 @@ export const Albums = () => {
                   <input
                     id={`album-upload-${album.id}`}
                     type="file"
-                    accept="image/jpeg,image/png,image/webp"
+                    accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
+                    multiple
                     className="sr-only"
                     disabled={uploadingAlbumId === album.id}
                     onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      void handleUpload(album.id, file);
+                      const files = Array.from(event.target.files ?? []);
+                      void handleUpload(album.id, files);
                       event.currentTarget.value = '';
                     }}
                   />
@@ -177,7 +184,9 @@ export const Albums = () => {
                       uploadingAlbumId === album.id ? 'pointer-events-none opacity-60' : ''
                     }`}
                   >
-                    {uploadingAlbumId === album.id ? 'Uploading...' : 'Upload photo'}
+                    {uploadingAlbumId === album.id
+                      ? `Uploading ${uploadProgress}`
+                      : 'Add photos or videos'}
                   </label>
                 </div>
               </div>

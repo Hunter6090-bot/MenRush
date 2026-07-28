@@ -77,7 +77,7 @@ export const Login = () => {
         } else if (!trustThisDevice) {
           clearDeviceTrustToken();
         }
-        setAuth(res.data.user, res.data.token);
+        setAuth(res.data.user, res.data.token, res.data.refresh_token);
         routeAfterLogin(navigate, res.data.user, nextPath);
         return;
       }
@@ -102,7 +102,7 @@ export const Login = () => {
       if (res.data.deviceTrustToken) {
         saveDeviceTrustToken(normalizedEmail, res.data.deviceTrustToken);
       }
-      setAuth(res.data.user, res.data.token);
+      setAuth(res.data.user, res.data.token, res.data.refresh_token);
       routeAfterLogin(navigate, res.data.user, nextPath);
     } catch (err: unknown) {
       setError(loginErrorMessage(err));

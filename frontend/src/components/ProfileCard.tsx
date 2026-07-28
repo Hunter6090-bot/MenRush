@@ -86,7 +86,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         setShowMatch(true);
         setTimeout(() => setShowMatch(false), 3000);
       } else {
-        setLikeHint('Match sent — chat unlocks if he matches back · consent first.');
+        setLikeHint('Match sent — chat and calling unlock when he matches back · consent first.');
         setTimeout(() => setLikeHint(null), 4000);
       }
     } catch (err: unknown) {
@@ -155,6 +155,8 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         {/* Match button overlay */}
         <button
           onClick={handleLike}
+          aria-label={liked ? `Match sent to ${user.name}` : `Match with ${user.name}`}
+          title={liked ? 'Match sent' : 'Match'}
           className={`absolute bottom-3 right-3 w-11 h-11 rounded-full flex items-center justify-center transition-all ${
             liked
               ? 'bg-nn-copper text-nn-on-copper shadow-glow-copper'
@@ -169,7 +171,9 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
       <div className="p-4 flex-1 flex flex-col">
         <div className="flex items-center gap-2 mb-1">
           <h3 className="font-bold text-[#F0E0C0] text-base">{user.name}</h3>
-          <span className="text-[var(--cream-muted)] text-sm">{user.age}</span>
+          {user.age != null ? (
+            <span className="text-[var(--cream-muted)] text-sm">{user.age}</span>
+          ) : null}
           {user.is_verified ? <VerifiedBadge /> : user.authenticity_status === 'verified' ? <VerifiedBadge level="authentic_person" /> : null}
         </div>
 
@@ -227,7 +231,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           }
           className="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#A45E18] hover:from-[#D4943B] hover:to-[#C4832A] text-white text-sm font-semibold transition-all duration-200 hover:shadow-glow-blue active:scale-95 disabled:opacity-60"
         >
-          {liking ? 'Sending…' : isMutual ? 'Open chat' : liked ? 'Matched' : 'Match'}
+          {liking ? 'Sending…' : isMutual ? 'Open chat' : liked ? 'Match sent' : 'Match'}
         </button>
         {likeHint ? (
           <p className="mt-2 text-center text-[11px] text-[var(--cream-muted)]" role="status">
