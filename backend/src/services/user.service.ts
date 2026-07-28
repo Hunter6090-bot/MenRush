@@ -68,7 +68,8 @@ export const userService = {
     // been cron-swept yet doesn't masquerade as pulsing in the UI.
     let queryStr = `
       SELECT
-        u.id, u.name, u.age, u.bio, u.headline, u.looking_for, u.photo_url, u.cover_url, u.interests,
+        u.id, u.name, CASE WHEN u.show_age THEN u.age ELSE NULL END AS age,
+        u.bio, u.headline, u.looking_for, u.photo_url, u.cover_url, u.interests,
         u.is_verified, u.authenticity_status,
         -- Presence must be fresh: stuck online=true from a crashed tab is not "Active now".
         (p.online = TRUE AND p.last_seen IS NOT NULL AND p.last_seen > NOW() - INTERVAL '20 minutes') AS online,
@@ -250,8 +251,9 @@ export const userService = {
     await this.ensureDefaultAvatar(userId);
     const result = await query(
       `SELECT
-        u.id, u.email, u.name, u.age, u.bio, u.headline, u.looking_for,
-        u.photo_url, u.cover_url, u.cover_position_x, u.cover_position_y, u.cover_zoom, u.interests, u.created_at,
+        u.id, u.email, u.name, u.age, u.show_age, u.bio, u.headline, u.looking_for,
+        u.photo_url, u.cover_url, u.secondary_photo_urls,
+        u.cover_position_x, u.cover_position_y, u.cover_zoom, u.interests, u.created_at,
         u.is_verified, u.verification_status, u.authenticity_status,
         u.is_premium, u.premium_tier, u.premium_until,
         p.lat, p.lng, p.online, p.last_seen, p.is_visible, p.available_until,
@@ -276,8 +278,10 @@ export const userService = {
     await accessControl.assertProfileView(viewerId, targetId);
     const result = await query(
       `SELECT
-        u.id, u.name, u.age, u.bio, u.headline, u.looking_for,
-        u.photo_url, u.cover_url, u.cover_position_x, u.cover_position_y, u.cover_zoom, u.interests, u.created_at, u.is_verified, u.authenticity_status,
+        u.id, u.name, CASE WHEN u.show_age THEN u.age ELSE NULL END AS age,
+        u.bio, u.headline, u.looking_for,
+        u.photo_url, u.cover_url, u.secondary_photo_urls,
+        u.cover_position_x, u.cover_position_y, u.cover_zoom, u.interests, u.created_at, u.is_verified, u.authenticity_status,
         p.online, p.last_seen, p.available_until,
         CASE
           WHEN p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' THEN p.mood
@@ -366,10 +370,14 @@ export const userService = {
       updates.push(`interests = $${values.length + 1}`);
       values.push(data.interests);
     }
+    if (data.show_age !== undefined) {
+      updates.push(`show_age = $${values.length + 1}`);
+      values.push(data.show_age);
+    }
 
     if (updates.length === 0) {
       const res = await query(
-        `SELECT id, name, age, bio, headline, looking_for, photo_url, cover_url, cover_position_x, cover_position_y, cover_zoom, interests FROM users WHERE id = $1`,
+        `SELECT id, name, age, show_age, bio, headline, looking_for, photo_url, cover_url, cover_position_x, cover_position_y, cover_zoom, interests FROM users WHERE id = $1`,
         [userId]
       );
       return res.rows[0];
@@ -379,8 +387,24 @@ export const userService = {
 
     const result = await query(
       `UPDATE users SET ${updates.join(', ')} WHERE id = $1
-       RETURNING id, name, age, bio, headline, looking_for, photo_url, cover_url, cover_position_x, cover_position_y, cover_zoom, interests`,
+       RETURNING id, name, age, show_age, bio, headline, looking_for, photo_url, cover_url, cover_position_x, cover_position_y, cover_zoom, interests`,
       values
+    );
+    return result.rows[0];
+  },
+
+  async setSecondaryPhoto(userId: string, slot: number, photoUrl: string) {
+    if (!Number.isInteger(slot) || slot < 0 || slot > 2) {
+      throw new Error('Invalid photo slot');
+    }
+    const index = slot + 1;
+    const result = await query(
+      `UPDATE users
+          SET secondary_photo_urls[$2] = $3,
+              updated_at = NOW()
+        WHERE id = $1
+        RETURNING secondary_photo_urls`,
+      [userId, index, photoUrl],
     );
     return result.rows[0];
   },
@@ -628,7 +652,8 @@ export const userService = {
     if (term.length < 2) return [];
 
     const result = await query(
-      `SELECT u.id, u.name, u.age, u.photo_url, u.bio, u.headline
+      `SELECT u.id, u.name, CASE WHEN u.show_age THEN u.age ELSE NULL END AS age,
+              u.photo_url, u.bio, u.headline
        FROM users u
        JOIN profiles p ON p.user_id = u.id
        WHERE u.id != $1
@@ -649,7 +674,8 @@ export const userService = {
   async getMatches(userId: string) {
     const result = await query(
       `SELECT
-        u.id, u.name, u.age, u.bio, u.photo_url, u.is_verified, u.authenticity_status,
+        u.id, u.name, CASE WHEN u.show_age THEN u.age ELSE NULL END AS age,
+        u.bio, u.photo_url, u.is_verified, u.authenticity_status,
         p.online, p.last_seen,
         msg.message as last_message,
         msg.created_at as last_message_at,
@@ -706,19 +732,19 @@ export const userService = {
     );
     const count = countResult.rows[0]?.count ?? 0;
 
-    let preview: Array<{ id: string; name: string; age: number; photo_url: string | null }> = [];
+    let preview: Array<{ id: string; name: string; age: number | null; photo_url: string | null }> = [];
     if (isPremium && count > 0) {
       const previewResult = await query(
-        `SELECT u.id, u.name, u.age, u.photo_url
+        `SELECT u.id, u.name, CASE WHEN u.show_age THEN u.age ELSE NULL END AS age, u.photo_url
          FROM likes l
          JOIN users u ON u.id = l.liker_id
          WHERE l.liked_id = $1
            AND NOT EXISTS (
              SELECT 1 FROM likes l2
              WHERE l2.liker_id = $1 AND l2.liked_id = l.liker_id
-           )
+         )
          ORDER BY l.created_at DESC
-         LIMIT 3`,
+         LIMIT 200`,
         [userId],
       );
       preview = previewResult.rows;

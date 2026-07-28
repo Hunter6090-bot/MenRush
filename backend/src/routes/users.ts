@@ -10,6 +10,7 @@ import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/a
 import { SecurityError } from '../security/access';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
 import { LocationSchema, ProfileSchema } from '../types/validation';
+import { faceMatchService } from '../services/verification/face-match.service';
 
 const router = Router();
 const uploadsDir = path.resolve(__dirname, '../../uploads/profiles');
@@ -66,6 +67,14 @@ router.post('/photo', verifiedMiddleware, upload.single('photo'), async (req: Au
       fs.unlinkSync(req.file.path);
       return res.status(400).json({ error: 'File content does not match its type' });
     }
+    const moderation = await faceMatchService.countFaces(req.file.path);
+    if (moderation.engineAvailable && moderation.count > 1) {
+      fs.unlinkSync(req.file.path);
+      return res.status(422).json({
+        error: 'Use a photo containing only you. Other people cannot appear in profile photos.',
+        code: 'multiple_people_detected',
+      });
+    }
 
     const photo_url = `/uploads/profiles/${req.file.filename}`;
     const user = await userService.updateProfile(req.userId!, { photo_url });
@@ -94,6 +103,44 @@ router.post('/cover', verifiedMiddleware, uploadCover.single('cover'), async (re
     res.status(400).json({ error: error.message });
   }
 });
+
+router.post(
+  '/photo/secondary/:slot',
+  verifiedMiddleware,
+  upload.single('photo'),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const slot = z.coerce.number().int().min(0).max(2).parse(req.params.slot);
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+      if (!(await validateFileSignature(req.file.path, req.file.mimetype))) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ error: 'File content does not match its type' });
+      }
+      const moderation = await faceMatchService.countFaces(req.file.path);
+      if (moderation.engineAvailable && moderation.count > 1) {
+        fs.unlinkSync(req.file.path);
+        return res.status(422).json({
+          error: 'Use a photo containing only you. Other people cannot appear in profile photos.',
+          code: 'multiple_people_detected',
+        });
+      }
+      const photoUrl = `/uploads/profiles/${req.file.filename}`;
+      const result = await userService.setSecondaryPhoto(req.userId!, slot, photoUrl);
+      res.json(result);
+    } catch (error: any) {
+      if (req.file?.path) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch {
+          /* ignore cleanup failure */
+        }
+      }
+      res.status(400).json({ error: error.message });
+    }
+  },
+);
 
 router.get('/me', async (req: AuthRequest, res: Response) => {
   try {

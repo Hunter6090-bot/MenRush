@@ -2,7 +2,10 @@ import fs from 'fs';
 import path from 'path';
 import pool from '../db';
 
-const MIGRATIONS_DIR = path.resolve(__dirname, '../../database/migrations');
+// Migrations are canonical at the repository root (`database/migrations`).
+// The previous path resolved to a stale `backend/database` copy and silently
+// skipped every new migration added after 028.
+const MIGRATIONS_DIR = path.resolve(__dirname, '../../../database/migrations');
 
 async function main() {
   await pool.query(`
