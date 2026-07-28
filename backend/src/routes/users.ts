@@ -10,7 +10,10 @@ import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/a
 import { SecurityError } from '../security/access';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
 import { LocationSchema, ProfileSchema } from '../types/validation';
-import { faceMatchService } from '../services/verification/face-match.service';
+import {
+  decideProfilePhotoModeration,
+  faceMatchService,
+} from '../services/verification/face-match.service';
 
 const router = Router();
 const uploadsDir = path.resolve(__dirname, '../../uploads/profiles');
@@ -67,12 +70,14 @@ router.post('/photo', verifiedMiddleware, upload.single('photo'), async (req: Au
       fs.unlinkSync(req.file.path);
       return res.status(400).json({ error: 'File content does not match its type' });
     }
-    const moderation = await faceMatchService.countFaces(req.file.path);
-    if (moderation.engineAvailable && moderation.count > 1) {
+    const moderation = decideProfilePhotoModeration(
+      await faceMatchService.countFaces(req.file.path),
+    );
+    if (!moderation.allowed) {
       fs.unlinkSync(req.file.path);
-      return res.status(422).json({
-        error: 'Use a photo containing only you. Other people cannot appear in profile photos.',
-        code: 'multiple_people_detected',
+      return res.status(moderation.status).json({
+        error: moderation.message,
+        code: moderation.code,
       });
     }
 
@@ -118,12 +123,14 @@ router.post(
         fs.unlinkSync(req.file.path);
         return res.status(400).json({ error: 'File content does not match its type' });
       }
-      const moderation = await faceMatchService.countFaces(req.file.path);
-      if (moderation.engineAvailable && moderation.count > 1) {
+      const moderation = decideProfilePhotoModeration(
+        await faceMatchService.countFaces(req.file.path),
+      );
+      if (!moderation.allowed) {
         fs.unlinkSync(req.file.path);
-        return res.status(422).json({
-          error: 'Use a photo containing only you. Other people cannot appear in profile photos.',
-          code: 'multiple_people_detected',
+        return res.status(moderation.status).json({
+          error: moderation.message,
+          code: moderation.code,
         });
       }
       const photoUrl = `/uploads/profiles/${req.file.filename}`;
