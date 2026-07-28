@@ -15,6 +15,15 @@ export type FaceMatchResult = {
   review: boolean;
 };
 
+export type ProfilePhotoModerationDecision =
+  | { allowed: true }
+  | {
+      allowed: false;
+      status: 422 | 503;
+      code: 'no_face_detected' | 'multiple_people_detected' | 'photo_moderation_unavailable';
+      message: string;
+    };
+
 type FaceApiModule = typeof import('@vladmandic/face-api');
 
 let engineReady: Promise<FaceApiModule | null> | null = null;
@@ -118,6 +127,36 @@ async function countDetectedFaces(
   } finally {
     tensor.dispose();
   }
+}
+
+export function decideProfilePhotoModeration(
+  result: { count: number; engineAvailable: boolean },
+): ProfilePhotoModerationDecision {
+  if (!result.engineAvailable) {
+    return {
+      allowed: false,
+      status: 503,
+      code: 'photo_moderation_unavailable',
+      message: 'We could not check this photo right now. Please try again in a moment.',
+    };
+  }
+  if (result.count === 0) {
+    return {
+      allowed: false,
+      status: 422,
+      code: 'no_face_detected',
+      message: 'No face was detected. Upload a clear photo of yourself.',
+    };
+  }
+  if (result.count > 1) {
+    return {
+      allowed: false,
+      status: 422,
+      code: 'multiple_people_detected',
+      message: 'Profile photos must show only you. Other people cannot appear in the background.',
+    };
+  }
+  return { allowed: true };
 }
 
 export const faceMatchService = {
