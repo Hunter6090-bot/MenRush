@@ -52,7 +52,10 @@ function getPositionOnce(options: PositionOptions): Promise<GeolocationPosition>
 }
 
 /**
- * Request precise location with high accuracy, then network/Wi‑Fi fallback.
+ * Request device location. Order optimised for mobile:
+ * 1) Recent cached fix (instant — clears UI while GPS warms up)
+ * 2) High-accuracy fresh fix
+ * 3) Low-accuracy / network fallback
  * Does not write to the API — caller saves via usersAPI.updateLocation.
  */
 export async function requestDeviceLocation(): Promise<DeviceLocationResult> {
@@ -66,11 +69,31 @@ export async function requestDeviceLocation(): Promise<DeviceLocationResult> {
     return { ok: false, error: 'unsupported', message: ERROR_COPY.unsupported };
   }
 
+  // Instant path: use a recent fix so "Allow location" can dismiss immediately.
+  try {
+    const cached = await getPositionOnce({
+      enableHighAccuracy: false,
+      timeout: 4_000,
+      maximumAge: 5 * 60_000,
+    });
+    return {
+      ok: true,
+      lat: cached.coords.latitude,
+      lng: cached.coords.longitude,
+      accuracy: cached.coords.accuracy,
+    };
+  } catch (cachedErr) {
+    const cachedKind = mapGeoError(cachedErr as GeolocationPositionError);
+    if (cachedKind === 'denied') {
+      return { ok: false, error: 'denied', message: ERROR_COPY.denied };
+    }
+  }
+
   try {
     const high = await getPositionOnce({
       enableHighAccuracy: true,
-      timeout: 12_000,
-      maximumAge: 0,
+      timeout: 20_000,
+      maximumAge: 15_000,
     });
     return {
       ok: true,
@@ -89,7 +112,7 @@ export async function requestDeviceLocation(): Promise<DeviceLocationResult> {
   try {
     const low = await getPositionOnce({
       enableHighAccuracy: false,
-      timeout: 15_000,
+      timeout: 20_000,
       maximumAge: 60_000,
     });
     return {
@@ -101,6 +124,17 @@ export async function requestDeviceLocation(): Promise<DeviceLocationResult> {
   } catch (lowErr) {
     const kind = mapGeoError(lowErr as GeolocationPositionError);
     return { ok: false, error: kind, message: ERROR_COPY[kind] };
+  }
+}
+
+/** True when browser reports geolocation already granted (not all browsers support this). */
+export async function isGeolocationPermissionGranted(): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !navigator.permissions?.query) return false;
+  try {
+    const status = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+    return status.state === 'granted';
+  } catch {
+    return false;
   }
 }
 

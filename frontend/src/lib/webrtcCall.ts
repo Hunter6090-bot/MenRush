@@ -7,10 +7,53 @@ export type CameraFacing = 'user' | 'environment';
 const STATIC_ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:openrelay.metered.ca:80' },
 ];
+
+const OPEN_RELAY_URLS = [
+  'turn:staticauth.openrelay.metered.ca:80',
+  'turn:staticauth.openrelay.metered.ca:80?transport=tcp',
+  'turn:staticauth.openrelay.metered.ca:443',
+  'turn:staticauth.openrelay.metered.ca:443?transport=tcp',
+  'turns:staticauth.openrelay.metered.ca:443',
+];
+
+/** Public Open Relay static-auth secret (documented by Metered) — last-resort client fallback. */
+const OPEN_RELAY_STATIC_SECRET = 'openrelayprojectsecret';
 
 let cachedIceServers: RTCIceServer[] | null = null;
 let cacheExpiresAt = 0;
+
+async function hmacSha1Base64(secret: string, message: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-1' },
+    false,
+    ['sign'],
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
+  const bytes = new Uint8Array(sig);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
+  return btoa(binary);
+}
+
+/** STUN + Open Relay TURN when /webrtc/ice-servers is unreachable. */
+async function buildClientTurnFallback(): Promise<RTCIceServer[]> {
+  try {
+    const expiry = Math.floor(Date.now() / 1000) + 6 * 60 * 60;
+    const username = `${expiry}:menrush`;
+    const credential = await hmacSha1Base64(OPEN_RELAY_STATIC_SECRET, username);
+    return [
+      ...STATIC_ICE_SERVERS,
+      { urls: OPEN_RELAY_URLS, username, credential },
+    ];
+  } catch {
+    return STATIC_ICE_SERVERS;
+  }
+}
 
 /** Fetch TURN/STUN list from the backend so cross-network / iOS↔iOS calls can relay media. */
 export async function getIceServers(): Promise<RTCIceServer[]> {
@@ -21,13 +64,16 @@ export async function getIceServers(): Promise<RTCIceServer[]> {
 
   try {
     const res = await apiClient.get<{ iceServers: RTCIceServer[] }>('/webrtc/ice-servers');
-    const servers = res.data.iceServers?.length ? res.data.iceServers : STATIC_ICE_SERVERS;
+    const servers = res.data.iceServers?.length ? res.data.iceServers : await buildClientTurnFallback();
     cachedIceServers = servers;
     // Ephemeral TURN REST creds expire — refresh before TTL (backend uses 6h; cache 30m).
     cacheExpiresAt = now + 30 * 60_000;
     return servers;
   } catch {
-    return STATIC_ICE_SERVERS;
+    const fallback = await buildClientTurnFallback();
+    cachedIceServers = fallback;
+    cacheExpiresAt = now + 5 * 60_000;
+    return fallback;
   }
 }
 
@@ -338,44 +384,55 @@ export function waitForSocket(socket: Socket, timeoutMs = 10_000): Promise<void>
 }
 
 export function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
+  // Prefer relay when available so cross-network / mobile carrier NAT works.
+  // Still allows host/srflx for same-LAN; browsers will pick the best candidate pair.
   return new RTCPeerConnection({
     iceServers,
-    // Bundle audio+video; helps Safari negotiate a single ICE transport.
     bundlePolicy: 'max-bundle',
     rtcpMuxPolicy: 'require',
-    iceCandidatePoolSize: 4,
+    iceCandidatePoolSize: 8,
   });
 }
 
 /**
- * Attach local A/V via addTrack (Unified Plan).
+ * Attach local A/V via addTrack / replaceTrack (Unified Plan).
  *
- * Prefer addTrack over addTransceiver:
+ * Prefer reusing the offer's transceivers on the answerer:
  * - On the offerer, addTrack creates sendrecv m-lines.
- * - On the answerer (after setRemoteDescription), addTrack reuses the offer's
- *   transceivers instead of inserting extra m-lines.
+ * - On the answerer (after setRemoteDescription), replaceTrack on the
+ *   matching recvonly transceiver keeps m-line order aligned.
  *
- * Calling addTransceiver(sendrecv) *before* setRemoteDescription on the
- * answerer doubles audio/video m-lines and yields blank remote A/V after answer
- * (Desktop↔iPhone and Android↔iPhone).
+ * MUST be awaited before createAnswer — a fire-and-forget replaceTrack races
+ * SDP generation and yields blank remote A/V (Desktop↔mobile / cross-NAT).
+ *
+ * Never call addTransceiver(sendrecv) *before* setRemoteDescription on the
+ * answerer — that doubles audio/video m-lines.
  */
-export function attachLocalTracks(pc: RTCPeerConnection, stream: MediaStream): void {
+export async function attachLocalTracks(
+  pc: RTCPeerConnection,
+  stream: MediaStream,
+): Promise<void> {
   for (const track of stream.getTracks()) {
     if (pc.getSenders().some((sender) => sender.track?.id === track.id)) continue;
 
-    const idle = pc
-      .getTransceivers()
-      .find(
-        (t) =>
-          t.receiver.track?.kind === track.kind &&
-          (!t.sender.track || t.sender.track.readyState === 'ended') &&
-          t.direction !== 'inactive',
-      );
+    // Match by kind on an existing transceiver (answerer) — include inactive so
+    // we never fall through to addTrack and create a duplicate m-line.
+    const idle = pc.getTransceivers().find((t) => {
+      const kind = t.receiver?.track?.kind ?? t.sender?.track?.kind;
+      if (kind !== track.kind) return false;
+      const sending = t.sender?.track;
+      if (sending && sending.readyState !== 'ended' && sending.id !== track.id) {
+        return false;
+      }
+      return true;
+    });
 
     if (idle?.sender) {
-      void idle.sender.replaceTrack(track);
+      await idle.sender.replaceTrack(track);
       try {
-        idle.direction = 'sendrecv';
+        if (idle.direction !== 'sendrecv' && idle.direction !== 'sendonly') {
+          idle.direction = 'sendrecv';
+        }
       } catch {
         /* Safari may throw if direction is already negotiated */
       }

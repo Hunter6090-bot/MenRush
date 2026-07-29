@@ -104,7 +104,7 @@ export const promoService = {
     );
 
     if (existing.rows.length > 0) {
-      const code = existing.rows[0].code as string;
+      const code = (existing.rows[0] as { code: string }).code;
       await sendPromoEmail({ to: normalised, code, campaign });
       return { outcome: 'existing', code };
     }
@@ -161,14 +161,15 @@ export const promoService = {
     );
 
     if (result.rows.length === 0) return { valid: false, reason: 'not_found' };
-
-    const row = result.rows[0] as {
+    type PromoRow = {
       email_hash: string;
       campaign: string;
       months_free: number;
       expires_at: Date | null;
       redeemed_at: Date | null;
     };
+
+    const row = result.rows[0] as PromoRow;
 
     if (row.email_hash !== emailHash) return { valid: false, reason: 'email_mismatch' };
     if (row.redeemed_at) return { valid: false, reason: 'already_redeemed' };
@@ -220,10 +221,7 @@ export const promoService = {
        WHERE campaign = $1`,
       [campaignId],
     );
-    const row = (result.rows[0] ?? { total: '0', redeemed: '0' }) as {
-      total: string;
-      redeemed: string;
-    };
+    const row = (result.rows[0] as { total: string; redeemed: string } | undefined) ?? { total: '0', redeemed: '0' };
     return {
       campaign: campaignId,
       total: parseInt(row.total, 10),

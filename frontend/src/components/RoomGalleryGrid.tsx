@@ -1,5 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { RoomParticipant } from '../hooks/useRoomVideo';
+import {
+  attachRemoteAudio,
+  attachStreamToVideo,
+  ensureInlinePlayback,
+  streamHasRenderableVideo,
+  videoElementHasFrames,
+} from '../lib/callMedia';
 
 interface RoomGalleryGridProps {
   participants: RoomParticipant[];
@@ -26,17 +33,54 @@ function ParticipantTile({
   showVideo: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [framesReady, setFramesReady] = useState(false);
 
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
+
     if (showVideo && stream) {
-      el.srcObject = stream;
-      void el.play().catch(() => undefined);
+      ensureInlinePlayback(el);
+      void attachStreamToVideo(el, stream, { preferUnmuted: false }).then(() => {
+        if (videoElementHasFrames(el) || streamHasRenderableVideo(stream)) {
+          setFramesReady(true);
+        }
+      });
+      if (!participant.isSelf) {
+        void attachRemoteAudio(audioRef.current, stream);
+      } else if (audioRef.current) {
+        audioRef.current.srcObject = null;
+      }
     } else {
       el.srcObject = null;
+      if (audioRef.current) audioRef.current.srcObject = null;
+      setFramesReady(false);
     }
-  }, [stream, showVideo]);
+  }, [stream, showVideo, participant.isSelf]);
+
+  useEffect(() => {
+    if (!showVideo || participant.isSelf) return;
+    const el = videoRef.current;
+    if (!el) return;
+    let cancelled = false;
+    let raf = 0;
+    const tick = () => {
+      if (cancelled) return;
+      if (videoElementHasFrames(el) || streamHasRenderableVideo(stream)) {
+        setFramesReady(true);
+        return;
+      }
+      raf = window.requestAnimationFrame(tick);
+    };
+    tick();
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(raf);
+    };
+  }, [showVideo, stream, participant.isSelf]);
+
+  const renderVideo = showVideo && (participant.isSelf || framesReady || streamHasRenderableVideo(stream));
 
   return (
     <button
@@ -50,27 +94,38 @@ function ParticipantTile({
       aria-label={`${participant.name}${participant.isLive ? ', live' : ''}`}
     >
       {showVideo ? (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted={participant.isSelf}
-          className="absolute inset-0 h-full w-full object-cover"
-          style={participant.isSelf ? { transform: 'scaleX(-1)' } : undefined}
-        />
-      ) : photoUrl ? (
-        <img src={photoUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-90" />
-      ) : (
-        <div
-          className="absolute inset-0 flex items-center justify-center text-2xl font-black"
-          style={{
-            background: 'linear-gradient(145deg, #2A1C0A, #0D0A06)',
-            color: '#C4832A',
-          }}
-        >
-          {participant.name.slice(0, 2).toUpperCase()}
-        </div>
-      )}
+        <>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="absolute inset-0 h-full w-full object-cover"
+            style={{
+              transform: participant.isSelf ? 'scaleX(-1)' : undefined,
+              opacity: renderVideo ? 1 : 0,
+            }}
+          />
+          {!participant.isSelf && (
+            <audio ref={audioRef} autoPlay playsInline className="hidden" />
+          )}
+        </>
+      ) : null}
+
+      {(!showVideo || (!participant.isSelf && !renderVideo)) &&
+        (photoUrl ? (
+          <img src={photoUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-90" />
+        ) : (
+          <div
+            className="absolute inset-0 flex items-center justify-center text-2xl font-black"
+            style={{
+              background: 'linear-gradient(145deg, #2A1C0A, #0D0A06)',
+              color: '#C4832A',
+            }}
+          >
+            {participant.name.slice(0, 2).toUpperCase()}
+          </div>
+        ))}
 
       {!participant.isLive && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/45">

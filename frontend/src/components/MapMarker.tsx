@@ -61,7 +61,17 @@ function MapPhoto({
 }) {
   const { src, onError } = useResolvingPhotoSrc(photoUrl, age);
   if (!src) {
-    return <SilhouetteAvatar size={size} variant="map" />;
+    // Always show a pin face — initial letter, never a blank hole on the map.
+    const initial = (name?.trim()?.[0] || '?').toUpperCase();
+    return (
+      <div
+        className="flex h-full w-full items-center justify-center font-extrabold text-[#F0E0C0]"
+        style={{ fontSize: Math.max(14, Math.round(size * 0.38)) }}
+        aria-label={name}
+      >
+        {initial}
+      </div>
+    );
   }
   return (
     <img

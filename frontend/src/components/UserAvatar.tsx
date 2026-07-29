@@ -56,13 +56,8 @@ export function useResolvingPhotoSrc(
       setCandidateIdx((i) => i + 1);
       return;
     }
-    // Broken custom upload → empty (silhouette/initials). Never substitute a
-    // different generic egg for a missing /uploads file — that made the map
-    // look like everyone chose the shared avatar when files were wiped.
-    if (phase === 'candidates' && isUploadPath(photoUrl)) {
-      setPhase('empty');
-      return;
-    }
+    // Broken /uploads (volume wipe, 404) → age-based generic face so the map
+    // and list still show a person pin, not a blank hole.
     if (phase === 'candidates' && photoUrl) {
       setPhase('generic');
       return;

@@ -128,9 +128,21 @@ export function useWebRTC() {
 
   const publishRemoteStream = useCallback((stream: MediaStream) => {
     remoteStreamRef.current = stream;
-    // New MediaStream wrapper so React always sees a reference change when tracks update.
+    // New MediaStream wrapper so React always sees a reference change when tracks update
+    // (including mute→unmute, which does not change track ids).
     setRemoteStream(new MediaStream(stream.getTracks()));
   }, []);
+
+  const bumpRemoteFromTrack = useCallback(
+    (track: MediaStreamTrack) => {
+      const current = remoteStreamRef.current;
+      if (!current) return;
+      publishRemoteStream(current);
+      // Some Safari builds keep track.muted sticky; still re-publish so <video> rebinds.
+      void track;
+    },
+    [publishRemoteStream],
+  );
 
   const tryIceRestart = useCallback(async () => {
     const pc = pcRef.current;
@@ -176,12 +188,13 @@ export function useWebRTC() {
           }
         }
 
+        remoteStreamRef.current = inbound;
         publishRemoteStream(inbound);
 
-        track.addEventListener('unmute', () => {
-          const current = remoteStreamRef.current;
-          if (current) publishRemoteStream(current);
-        });
+        // Muted→unmuted is when RTP actually arrives. Rebind UI then.
+        track.addEventListener('unmute', () => bumpRemoteFromTrack(track));
+        track.addEventListener('mute', () => bumpRemoteFromTrack(track));
+        track.addEventListener('ended', () => bumpRemoteFromTrack(track));
       };
 
       pc.onicecandidate = (ev) => {
@@ -193,6 +206,9 @@ export function useWebRTC() {
       };
 
       pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'connected') {
+          setConnected();
+        }
         if (pc.connectionState === 'failed') {
           void (async () => {
             await tryIceRestart();
@@ -221,33 +237,48 @@ export function useWebRTC() {
       pcRef.current = pc;
       return pc;
     },
-    [publishRemoteStream, releaseMedia, resetCall, setCallSetupError, tryIceRestart],
+    [
+      bumpRemoteFromTrack,
+      publishRemoteStream,
+      releaseMedia,
+      resetCall,
+      setCallSetupError,
+      setConnected,
+      tryIceRestart,
+    ],
   );
 
   const startCall = useCallback(
     async (targetPeerId: string, _peerName: string) => {
       if (!socket) throw new Error('signalling_unavailable');
-      await waitForSocket(socket);
 
       isCallerRef.current = true;
-      const iceServers = await getIceServers();
-      const pc = bindPeerConnection(targetPeerId, socket, iceServers);
+
+      // iOS Safari: getUserMedia must run in the user-gesture stack — no awaits before this.
       const stream = await acquireLocalMedia();
       localStreamRef.current = stream;
       setLocalStream(stream);
       setFacingMode('user');
       void canFlipCamera().then(setCanSwitchCamera);
-      // Offerer: attach first so createOffer advertises sendrecv A/V.
-      attachLocalTracks(pc, stream);
 
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit('call:initiate', {
-        to: targetPeerId,
-        offer: sessionDescriptionPayload(pc.localDescription ?? offer),
-      });
+      try {
+        await waitForSocket(socket);
+        const iceServers = await getIceServers();
+        const pc = bindPeerConnection(targetPeerId, socket, iceServers);
+        await attachLocalTracks(pc, stream);
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('call:initiate', {
+          to: targetPeerId,
+          offer: sessionDescriptionPayload(pc.localDescription ?? offer),
+        });
+      } catch (error) {
+        releaseMedia();
+        throw error;
+      }
     },
-    [socket, bindPeerConnection],
+    [socket, bindPeerConnection, releaseMedia],
   );
 
   const answerCall = useCallback(
@@ -256,27 +287,35 @@ export function useWebRTC() {
       remotePeerId: string,
     ): Promise<RTCSessionDescriptionInit> => {
       if (!socket) throw new Error('signalling_unavailable');
-      await waitForSocket(socket);
 
       isCallerRef.current = false;
-      const iceServers = await getIceServers();
-      const pc = bindPeerConnection(remotePeerId, socket, iceServers);
+
+      // iOS Safari: getUserMedia must run in the user-gesture stack — no awaits before this.
       const stream = await acquireLocalMedia();
       localStreamRef.current = stream;
       setLocalStream(stream);
       setFacingMode('user');
       void canFlipCamera().then(setCanSwitchCamera);
 
-      // Answerer MUST apply the remote offer before attaching local tracks.
-      // Pre-offer addTransceiver/addTrack creates extra m-lines → blank remote A/V.
-      await pc.setRemoteDescription(new RTCSessionDescription(offer));
-      await flushPendingIce(pc, remotePeerId);
-      attachLocalTracks(pc, stream);
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      return sessionDescriptionPayload(pc.localDescription ?? answer);
+      try {
+        await waitForSocket(socket);
+        const iceServers = await getIceServers();
+        const pc = bindPeerConnection(remotePeerId, socket, iceServers);
+
+        // Answerer MUST apply the remote offer before attaching local tracks.
+        // Pre-offer addTransceiver/addTrack creates extra m-lines → blank remote A/V.
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        await flushPendingIce(pc, remotePeerId);
+        await attachLocalTracks(pc, stream);
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        return sessionDescriptionPayload(pc.localDescription ?? answer);
+      } catch (error) {
+        releaseMedia();
+        throw error;
+      }
     },
-    [socket, bindPeerConnection, flushPendingIce],
+    [socket, bindPeerConnection, flushPendingIce, releaseMedia],
   );
 
   const endCall = useCallback(() => {
@@ -410,7 +449,15 @@ export function useWebRTC() {
     const onCallError = ({ error }: { error?: string }) => {
       releaseMedia();
       resetCall();
-      if (error === 'call_not_allowed' || error === 'target_not_authorized' || error === 'match_required') {
+      if (error === 'target_offline') {
+        setCallSetupError(
+          'They are offline. Ask them to open menrush.com, stay on the app, then try again.',
+        );
+      } else if (
+        error === 'call_not_allowed' ||
+        error === 'target_not_authorized' ||
+        error === 'match_required'
+      ) {
         setCallSetupError('You need a mutual match before video calling.');
       } else if (error === 'invalid_target') {
         setCallSetupError('Could not start the video call');
@@ -471,6 +518,29 @@ export function useWebRTC() {
       releaseMedia();
     }
   }, [callStatus, releaseMedia]);
+
+  // Cross-NAT / iOS: ontrack often fires with muted tracks; if they never unmute,
+  // ICE never delivered media — restart once from the caller side.
+  useEffect(() => {
+    if (callStatus !== 'connected') return;
+    if (!isCallerRef.current) return;
+
+    const timer = window.setTimeout(() => {
+      const remote = remoteStreamRef.current;
+      const video = remote?.getVideoTracks()[0];
+      const audio = remote?.getAudioTracks()[0];
+      const mediaStuck =
+        !remote ||
+        remote.getTracks().length === 0 ||
+        ((video?.muted ?? true) && (audio?.muted ?? true));
+      if (mediaStuck && pcRef.current?.connectionState !== 'closed') {
+        console.warn('[webrtc] remote media still muted — attempting ICE restart');
+        void tryIceRestart();
+      }
+    }, 6000);
+
+    return () => window.clearTimeout(timer);
+  }, [callStatus, remoteStream, tryIceRestart]);
 
   return {
     localStream,

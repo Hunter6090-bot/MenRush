@@ -61,6 +61,16 @@ export function BrightonPride() {
           <div style={styles.offerText}>3 Months Free Premium</div>
         </div>
 
+        {/* QR code — visible on mobile so people can share the link */}
+        <div style={styles.qrBlock}>
+          <img
+            src="/brand/qr-brightonpride.png"
+            alt="Scan to claim your 3 months free"
+            style={styles.qrImg}
+          />
+          <div style={styles.qrHint}>menrush.com/brightonpride</div>
+        </div>
+
         {/* Form or success */}
         {stage === 'success' ? (
           <div style={styles.successBox}>
@@ -340,5 +350,27 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.7,
     maxWidth: '400px',
     margin: '0 auto',
+  },
+
+  qrBlock: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    gap: '10px',
+    marginBottom: '36px',
+  },
+
+  qrImg: {
+    width: '160px',
+    height: '160px',
+    border: '4px solid #C4832A',
+    display: 'block',
+  },
+
+  qrHint: {
+    fontSize: '10px',
+    letterSpacing: '2px',
+    textTransform: 'uppercase' as const,
+    color: '#3a2a1a',
   },
 };

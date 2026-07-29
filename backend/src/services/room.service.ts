@@ -11,6 +11,7 @@ interface CreateRoomData {
   lat?: number;
   lng?: number;
   max_members?: number;
+  member_ids?: string[];
 }
 
 interface GetRoomsOptions {
@@ -88,7 +89,23 @@ export const roomService = {
     // Add creator as 'owner' member
     await this.insertRoomMember(id, userId, 'owner');
 
-    return room;
+    const memberIds = (data.member_ids ?? []).filter((mid) => mid && mid !== userId);
+    const memberErrors: string[] = [];
+    for (const memberId of memberIds) {
+      try {
+        await this.addMember(userId, id, memberId);
+      } catch (err) {
+        const code =
+          err instanceof PremiumRequiredError
+            ? err.code
+            : err instanceof Error
+              ? err.message
+              : 'add_failed';
+        memberErrors.push(`${memberId}:${code}`);
+      }
+    }
+
+    return { ...room, member_errors: memberErrors.length ? memberErrors : undefined };
   },
 
   async getRoom(roomId: string, requestingUserId: string) {
