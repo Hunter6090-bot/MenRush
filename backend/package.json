@@ -17,8 +17,8 @@
     "verification:purge-sensitive": "ts-node src/scripts/purge-verification-files.ts",
     "test:security": "ts-node scripts/security-checks.ts",
     "test:push": "ts-node scripts/test-push.ts",
-    "test:features": "bash ../test-features.sh",
-    "predeploy": "npm run build && bash ../test-features.sh",
+    "test:features": "ALLOW_DESTRUCTIVE_TESTS=true bash ../test-features.sh",
+    "predeploy": "ALLOW_DESTRUCTIVE_TESTS=true bash ../scripts/predeploy.sh",
     "audit:safety": "bash ../scripts/audit-safety.sh"
   },
   "dependencies": {

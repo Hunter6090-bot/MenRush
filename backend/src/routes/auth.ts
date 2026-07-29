@@ -21,8 +21,9 @@ const router = Router();
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  // Higher ceiling in non-production so pre-deploy / local suites don't trip the gate.
-  max: process.env.NODE_ENV === 'production' ? 10 : 200,
+  // Explicit opt-in only — never infer from NODE_ENV (misspelled/missing production env
+  // must not silently relax auth limits).
+  max: process.env.ALLOW_RELAXED_AUTH_RATE_LIMIT === 'true' ? 200 : 10,
   message: { error: 'Too many attempts, please try again in 15 minutes' },
   standardHeaders: true,
   legacyHeaders: false,
