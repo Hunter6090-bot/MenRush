@@ -49,6 +49,14 @@ import { Sentry } from './observability/sentry';
 import { corsOrigin } from './security/cors';
 import { query } from './db';
 
+const NODE_ENV = process.env.NODE_ENV;
+if (NODE_ENV !== 'development' && NODE_ENV !== 'test' && NODE_ENV !== 'production') {
+  console.error(
+    `[boot] NODE_ENV must be development|test|production (got ${NODE_ENV === undefined ? 'undefined' : JSON.stringify(NODE_ENV)})`,
+  );
+  process.exit(1);
+}
+
 // Transient DB disconnects must not take down login/API.
 process.on('unhandledRejection', (reason) => {
   console.error('[process] unhandledRejection:', reason);
