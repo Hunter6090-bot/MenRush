@@ -143,6 +143,20 @@ test('extractProviderEventId prefers an explicit id field over the derived fallb
   assert.equal(none, null);
 });
 
+test('extractProviderEventId never returns subscriptionId alone', () => {
+  const activation = extractProviderEventId('NewSaleSuccess', {
+    subscriptionId: 'sub-1',
+    timestamp: '2026-01-01T00:00:00Z',
+  });
+  const renewal = extractProviderEventId('RenewalSuccess', {
+    subscriptionId: 'sub-1',
+    timestamp: '2026-02-01T00:00:00Z',
+  });
+  assert.notEqual(activation, renewal);
+  assert.notEqual(activation, 'subscriptionId:sub-1');
+  assert.notEqual(renewal, 'subscriptionId:sub-1');
+});
+
 test('extractOccurredAt parses a valid timestamp and rejects an invalid one', () => {
   const valid = extractOccurredAt({ timestamp: '2026-01-01T00:00:00Z' });
   assert.ok(valid instanceof Date && !Number.isNaN(valid.getTime()));
