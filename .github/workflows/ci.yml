@@ -34,6 +34,8 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
+        - name: Webhook security checks
+        run: npm run test:webhook-security
 
   frontend-build:
     name: Frontend build
