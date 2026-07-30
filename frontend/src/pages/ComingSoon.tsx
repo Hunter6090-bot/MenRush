@@ -57,7 +57,7 @@ export const ComingSoon = () => {
 
         const data = await response.json().catch(() => null);
         if (!response.ok) {
-          const message = data?.error || 'Could not join the waitlist right now. Please try again.';
+          const message = data?.error || 'Could not join the beta right now. Please try again.';
           throw new Error(message);
         }
 
@@ -70,8 +70,8 @@ export const ComingSoon = () => {
         });
         setSuccessMsg(
           alreadySubscribed
-            ? "You're already on the list. Check your inbox for the beta invite if you haven't used it yet."
-            : "You're on the list. Check your email — we'll send a link if you want to join the beta now.",
+            ? "You're already in. Check your inbox for your beta invite if you haven't used it yet."
+            : "Check your email — your beta invite is on the way.",
         );
         setEmail('');
 
@@ -83,7 +83,7 @@ export const ComingSoon = () => {
         }).catch(() => undefined);
       } catch (error) {
         trackEvent('waitlist_failed', { stage: 'request', transport: 'backend' });
-        const message = error instanceof Error ? error.message : 'Could not join the waitlist right now.';
+        const message = error instanceof Error ? error.message : 'Could not join the beta right now.';
         setErrorMsg(message);
       } finally {
         setSubmitting(false);
@@ -102,13 +102,13 @@ export const ComingSoon = () => {
       <div className="absolute inset-0" style={{ background: COMING_SOON_GRADIENT }} aria-hidden />
 
       <Link to="/login" className={`absolute right-6 top-6 z-20 ${publicNavLinkPrimary}`}>
-        Already have an invite? Sign in
+        Sign in
       </Link>
 
       <div className="relative z-10 flex w-full max-w-[900px] flex-col items-center">
         <BrandMark size="hero" className="mb-[34px]" />
 
-        <p className="mr-coming-soon-overline mb-[22px]">MENRUSH · COMING SOON</p>
+        <p className="mr-coming-soon-overline mb-[22px]">MENRUSH · BETA</p>
 
         <h1 className="mr-coming-soon-heading max-w-[900px] text-balance">
           Real men.
@@ -119,13 +119,8 @@ export const ComingSoon = () => {
         </h1>
 
         <p className="mt-[26px] max-w-[620px] text-pretty text-[clamp(15px,2vw,19px)] leading-[1.6] text-[#F0E0C0]">
-          MenRush checks every member with ID and selfie matching, so you know exactly who you&apos;re
-          meeting.{' '}
-          <strong className="font-bold text-[#E0A14A]">No bots. No catfish. No scam profiles.</strong>
-        </p>
-
-        <p className="mt-3.5 max-w-[560px] text-sm leading-[1.6] text-[var(--cream-muted)]">
-          Your identity stays private. Your profile stays discreet. No time wasters.
+          Beta is open. Leave your email and we&apos;ll send your invite — then you can join and meet
+          nearby, for real.
         </p>
 
         <div id="waitlist" className="relative mt-[38px] w-full max-w-[460px]">
@@ -157,12 +152,19 @@ export const ComingSoon = () => {
                 disabled={submitting}
                 className="shrink-0 rounded-full border-0 bg-[#C4832A] px-[22px] py-3 text-xs font-extrabold tracking-[0.12em] text-[#1A0E03] shadow-[0_0_24px_rgba(196,131,42,0.4)] transition-colors hover:bg-[#E0A14A] disabled:opacity-50"
               >
-                {submitting ? 'Joining…' : 'Join the verified waitlist'}
+                {submitting ? 'Sending…' : 'Join the beta'}
               </button>
             </form>
           )}
           {errorMsg ? <p className="mt-3 text-sm font-medium text-[#B0432E]">{errorMsg}</p> : null}
         </div>
+
+        <p className="relative mt-6 text-sm text-[var(--cream-muted)]">
+          Already have an invite?{' '}
+          <Link to="/beta" className={publicLinkClass}>
+            Enter your code
+          </Link>
+        </p>
 
         <p className="relative mt-11 text-[17px] font-bold uppercase tracking-[0.08em] text-[#F0E0C0]">
           &ldquo;Your next nearby meet is real.&rdquo;
@@ -170,16 +172,6 @@ export const ComingSoon = () => {
 
         <p className="relative mt-[26px] text-[11px] font-semibold tracking-[0.22em] text-[#6B5840]">
           LONDON · MANCHESTER · BIRMINGHAM · BRIGHTON
-        </p>
-        <p className="relative mt-3 text-[11px] text-[#6B5840]">
-          Every member ID verified and selfie matched.
-        </p>
-
-        <p className="relative mt-8 text-sm text-[var(--cream-muted)]">
-          Selected for beta?{' '}
-          <Link to="/beta" className={publicLinkClass}>
-            Enter your invite code
-          </Link>
         </p>
       </div>
     </div>
