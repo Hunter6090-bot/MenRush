@@ -44,6 +44,10 @@ export function classifyEventCategory(eventType: string): WebhookEventCategory {
   return 'other';
 }
 
+// subscriptionId is deliberately excluded: it is stable across many
+// distinct events (activation, each renewal, cancellation) for the same
+// subscription, so using it alone as the sole event id would make later
+// events collide with earlier ones and be wrongly treated as duplicates.
 const CANDIDATE_EVENT_ID_FIELDS = [
   'eventId',
   'event_id',
@@ -51,7 +55,6 @@ const CANDIDATE_EVENT_ID_FIELDS = [
   'denialId',
   'refundTransactionId',
   'chargebackTransactionId',
-  'subscriptionId',
   'transactionId',
   ];
 
