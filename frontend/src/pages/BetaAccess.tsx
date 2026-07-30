@@ -91,9 +91,9 @@ export const BetaAccess = () => {
   return (
     <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.beta} showFooter>
       <PublicAuthHero
-        title="Beta access is"
-        accent="invite-only."
-        copy="MenRush hasn't launched publicly yet. If you were selected for beta, enter the unique code from your invite email below."
+        title="You're in the"
+        accent="MenRush beta."
+        copy="Enter the invite code from your email to create your account and start meeting nearby."
       />
 
       <div className={publicPanelClass}>
