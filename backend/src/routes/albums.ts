@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
-import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
+import { AuthRequest, authMiddleware, verifiedMiddleware, adultAssuranceMiddleware } from '../middleware/auth';
 import { albumService, FREE_PHOTO_CAP } from '../services/album.service';
 import { premiumService } from '../services/premium.service';
 import { SecurityError } from '../security/access';
@@ -46,7 +46,7 @@ router.get('/media/:photoId', async (req, res) => {
   }
 });
 
-router.use(authMiddleware, verifiedMiddleware);
+router.use(authMiddleware, verifiedMiddleware, adultAssuranceMiddleware);
 
 // ── Owner: list my albums ───────────────────────────────────────────────────
 router.get('/mine', async (req: AuthRequest, res: Response) => {
