@@ -1,5 +1,9 @@
 import { query } from '../db';
 import { isIdVerificationRequired } from '../config/verification-gate';
+import {
+    evaluateAdultAssuranceAccess,
+    isAdultAssuranceGateEnabled,
+} from '../config/adult-assurance-gate';
 
 type QueryResult = { rows: any[]; rowCount?: number | null };
 type QueryFn = (text: string, values?: unknown[]) => Promise<QueryResult>;
@@ -78,6 +82,49 @@ export function createAccessControl(runQuery: QueryFn) {
         );
       }
     },
+
+        async requireAdultAssurance(userId: string): Promise<void> {
+                if (!isAdultAssuranceGateEnabled()) return;
+                const [userResult, configResult] = await Promise.all([
+                          runQuery(
+                                      `SELECT age_assurance_status, created_at FROM users WHERE id = $1`,
+                                      [userId],
+                                    ),
+                          runQuery(
+                                      `SELECT enforcement_started_at, grace_period_days FROM adult_assurance_config LIMIT 1`,
+                                      [],
+                                    ),
+                        ]);
+                const userRow = userResult.rows[0];
+                if (!userRow) {
+                          throw new SecurityError('account_unavailable', 401, 'Account unavailable');
+                }
+                const configRow = configResult.rows[0];
+                if (!configRow) {
+                          // Fail closed: a missing config row must never be read as "no gate".
+                          throw new SecurityError(
+                                      'adult_assurance_required',
+                                      403,
+                                      'Adult assurance is required',
+                                    );
+                }
+                const decision = evaluateAdultAssuranceAccess({
+                          ageAssuranceStatus: userRow.age_assurance_status,
+                          accountCreatedAt: new Date(userRow.created_at),
+                          now: new Date(),
+                          config: {
+                                      enforcementStartedAt: new Date(configRow.enforcement_started_at),
+                                      gracePeriodDays: Number(configRow.grace_period_days),
+                          },
+                });
+                if (!decision.allowed) {
+                          throw new SecurityError(
+                                      'adult_assurance_required',
+                                      403,
+                                      'Adult assurance is required',
+                                    );
+                }
+        },
 
     async assertInteraction(
       actorId: string,
