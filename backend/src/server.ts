@@ -258,6 +258,7 @@ io.on('connection', (socket: Socket) => {
     try {
       const decoded = authService.verifyToken(token);
       await accessControl.requireVerified(decoded.userId);
+      await accessControl.requireAdultAssurance(decoded.userId);
       const previousUserId = socketToUser.get(socket.id);
       if (previousUserId) userSockets.delete(previousUserId);
       userSockets.set(decoded.userId, socket.id);
