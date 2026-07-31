@@ -39,6 +39,22 @@ export const verifiedMiddleware = async (
   }
 };
 
+export const adultAssuranceMiddleware = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+          await accessControl.requireAdultAssurance(req.userId!);
+          next();
+    } catch (error) {
+          if (error instanceof SecurityError) {
+                  return res.status(error.status).json({ error: error.code });
+          }
+          next(error);
+    }
+};
+
 export const errorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
   console.error(err);
 
