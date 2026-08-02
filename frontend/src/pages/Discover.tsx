@@ -1304,6 +1304,12 @@ export const Discover = () => {
 
   const displayUsers = applyDiscoveryClientFilters(sortedUsers, discoveryFilters);
 
+  // Expanded mobile map must be near-fullscreen — dismissible banners above it push
+  // the map past the viewport, which reintroduces page-level scroll that fights the
+  // map's own pan/pinch handling. Hide them while expanded, restore on shrink.
+  const mobileMapExpanded =
+    !isDesktopLayout && mapPanelMode === 'expanded' && !needsLocationGate && mapCenter != null;
+
   const togglePulseHeader = useCallback(async () => {
     if (pulseUntil) await handleStopPulse();
     else await handleStartPulse(90);
@@ -1319,6 +1325,8 @@ export const Discover = () => {
       />
       <h1 className="sr-only">Nearby discovery map</h1>
 
+      {!mobileMapExpanded ? (
+      <>
       {activationProfile ? (
         <ActivationBanner
           profile={{
@@ -1500,6 +1508,8 @@ export const Discover = () => {
             <p className="mt-3 text-[11px] text-[var(--cream-muted)]">{locationNotice}</p>
           ) : null}
         </div>
+      ) : null}
+      </>
       ) : null}
 
       {/* Desktop: only mount when layout matches — never attach Mapbox to a display:none node. */}

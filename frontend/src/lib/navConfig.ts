@@ -22,6 +22,8 @@ export interface NavItem {
   badgeKey?: 'messages' | 'notifications' | 'matches';
   mobileTab?: boolean;
   desktopNav?: boolean;
+  /** Reachable on mobile via the "More" sheet instead of the primary tab row. */
+  mobileMore?: boolean;
 }
 
 export function getNavItems(): NavItem[] {
@@ -38,12 +40,14 @@ export function getNavItems(): NavItem[] {
       label: ROUTE_LABELS.events,
       Icon: IconEvents,
       desktopNav: true,
+      mobileMore: true,
     },
     {
       to: '/hot-spots',
       label: ROUTE_LABELS.hotSpots,
       Icon: IconHotSpots,
       desktopNav: true,
+      mobileMore: true,
     },
     {
       to: '/matches',
@@ -80,6 +84,7 @@ export function getNavItems(): NavItem[] {
       label: ROUTE_LABELS.settings,
       Icon: IconSettings,
       desktopNav: true,
+      mobileMore: true,
     },
     {
       to: '/notifications',
