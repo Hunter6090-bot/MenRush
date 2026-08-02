@@ -75,23 +75,39 @@ export const SEED_USERS: SeedUser[] = [
 
 async function upsertUser(user: SeedUser, passwordHash: string): Promise<string> {
   const email = user.email.toLowerCase();
+  const isE2eFixture = user.email.endsWith('@example.com');
 
   const userRes = await query(
-    `INSERT INTO users (id, email, password_hash, name, age, is_verified, verification_status)
-     VALUES ($1, $2, $3, $4, $5, TRUE, 'verified')
+    `INSERT INTO users (id, email, password_hash, name, age, bio, headline, looking_for, interests, is_verified, verification_status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE, 'verified')
      ON CONFLICT (email) DO UPDATE SET
        password_hash = EXCLUDED.password_hash,
        name = EXCLUDED.name,
        age = EXCLUDED.age,
+       bio = EXCLUDED.bio,
+       headline = EXCLUDED.headline,
+       looking_for = EXCLUDED.looking_for,
+       interests = EXCLUDED.interests,
        is_verified = TRUE,
        verification_status = 'verified',
        updated_at = NOW()
      RETURNING id`,
-    [user.id, email, passwordHash, user.name, user.age],
+    [
+      user.id,
+      email,
+      passwordHash,
+      user.name,
+      user.age,
+      // E2E fixtures need a Discover-ready profile (bio/looking_for/interests)
+      // so RequireProfileSetup doesn't redirect them into onboarding mid-test.
+      isE2eFixture ? 'E2E test fixture — do not message.' : null,
+      isE2eFixture ? 'Test account' : null,
+      isE2eFixture ? 'chat' : null,
+      isE2eFixture ? ['vers', 'bear', 'athletic'] : [],
+    ],
   );
   const userId = userRes.rows[0].id as string;
 
-  const isE2eFixture = user.email.endsWith('@example.com');
   const useLondonPin = !user.authOnly && (isE2eFixture || user.seedLondonLocation === true);
 
   if (user.authOnly) {
