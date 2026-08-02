@@ -85,7 +85,7 @@ function desktopMapHeightCss(expanded: boolean): string {
 }
 
 const mapChromeBtnClass =
-  'flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] text-[#3D2B0E] shadow-md backdrop-blur-md transition-transform active:scale-95';
+  'flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] text-[var(--border-default)] shadow-md backdrop-blur-md transition-transform active:scale-95';
 
 const mapStatusCardClass =
   'pointer-events-none absolute bottom-3 left-3 z-10 flex items-center gap-2.5 rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[color-mix(in_srgb,#FFF8F0_94%,transparent)] px-3.5 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.18)] backdrop-blur-md';
@@ -1345,7 +1345,7 @@ export const Discover = () => {
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-extrabold text-[#F0E0C0]">
+              <p className="text-[14px] font-extrabold text-[var(--cream)]">
                 Men nearby — tap Match on a card
               </p>
               <p className="mt-1 text-[12px] text-[var(--cream-muted)]">
@@ -1363,7 +1363,7 @@ export const Discover = () => {
                   /* ignore */
                 }
               }}
-              className="shrink-0 rounded-full border border-[rgba(196,131,42,0.45)] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)] hover:text-[#F0E0C0]"
+              className="shrink-0 rounded-full border border-[rgba(196,131,42,0.45)] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)] hover:text-[var(--cream)]"
             >
               Got it
             </button>
@@ -1380,7 +1380,7 @@ export const Discover = () => {
               safetyNotice.tone === 'success' ? 'rgba(143,199,115,0.4)' : 'rgba(196,131,42,0.45)',
             background:
               safetyNotice.tone === 'success' ? 'rgba(143,199,115,0.12)' : 'rgba(196,131,42,0.1)',
-            color: safetyNotice.tone === 'success' ? '#8FC773' : '#F0E0C0',
+            color: safetyNotice.tone === 'success' ? '#8FC773' : 'var(--cream)',
           }}
         >
           {safetyNotice.msg}
@@ -1394,7 +1394,7 @@ export const Discover = () => {
           className="mx-3 mb-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] px-4 py-3 shadow-[0_12px_28px_rgba(0,0,0,0.4)]"
         >
           <div>
-            <p className="text-[14px] font-extrabold text-[#F0E0C0]">Match with {matchToast.name}</p>
+            <p className="text-[14px] font-extrabold text-[var(--cream)]">Match with {matchToast.name}</p>
             <p className="mt-0.5 text-[12px] text-[var(--cream-muted)]">
               You both said yes. Chat when ready — consent first. Pulse to get seen by more men nearby.
             </p>
@@ -1481,7 +1481,7 @@ export const Discover = () => {
           aria-labelledby="location-gate-title"
           data-testid="location-gate"
         >
-          <p id="location-gate-title" className="text-[17px] font-extrabold text-[#F0E0C0]">
+          <p id="location-gate-title" className="text-[17px] font-extrabold text-[var(--cream)]">
             Allow location to unlock Nearby
           </p>
           <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--cream-muted)]">
@@ -1593,7 +1593,7 @@ export const Discover = () => {
           />
 
           {tokenMissing ? (
-            <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center bg-[#0D0A06] px-6 text-center">
+            <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center bg-[var(--bg-primary)] px-6 text-center">
               <p className="text-sm font-bold text-[var(--cream)]">Map is taking a break</p>
               <p className="mt-1 max-w-xs text-xs leading-relaxed text-[var(--cream-muted)]">
                 Browse who&apos;s nearby below.
@@ -1602,7 +1602,7 @@ export const Discover = () => {
           ) : null}
 
           {!tokenMissing && !mapCenter ? (
-            <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center bg-[#0D0A06]/90 px-5 text-center backdrop-blur-sm">
+            <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center bg-[var(--bg-primary)]/90 px-5 text-center backdrop-blur-sm">
               {needsLocationGate ? (
                 <>
                   <p className="text-sm font-extrabold text-[var(--cream)]">Location required</p>

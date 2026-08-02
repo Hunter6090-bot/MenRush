@@ -830,7 +830,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             background:
               safetyNotice.tone === 'success' ? 'rgba(143,199,115,0.12)' : 'rgba(139,69,19,0.15)',
             borderColor: 'var(--border-default)',
-            color: safetyNotice.tone === 'success' ? '#8FC773' : '#F0E0C0',
+            color: safetyNotice.tone === 'success' ? '#8FC773' : 'var(--cream)',
           }}
         >
           {safetyNotice.msg}
@@ -876,7 +876,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                   type="button"
                   disabled={sending}
                   onClick={() => void sendTextMessage(line)}
-                  className="rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-4 py-3 text-left text-[13px] font-medium text-[#F0E0C0] transition-colors hover:bg-[rgba(196,131,42,0.2)] disabled:opacity-50"
+                  className="rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-4 py-3 text-left text-[13px] font-medium text-[var(--cream)] transition-colors hover:bg-[rgba(196,131,42,0.2)] disabled:opacity-50"
                 >
                   {line}
                 </button>
@@ -1450,7 +1450,7 @@ const MeetConsentBar: React.FC<MeetConsentBarProps> = ({
             onClick={onConfirm}
             disabled={submitting}
             className="rounded-xl px-3 py-2 text-[11px] font-bold disabled:opacity-50"
-            style={{ background: '#C4832A', color: '#0D0A06' }}
+            style={{ background: '#C4832A', color: 'var(--nn-on-copper)' }}
           >
             {submitting ? 'Saving…' : "I'm ready to meet"}
           </button>
@@ -1659,8 +1659,8 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
                   className="text-[11px] px-2.5 py-1 rounded-full transition-all active:scale-95"
                   style={{
                     background: active ? 'rgba(196,131,42,0.22)' : 'var(--bg-primary)',
-                    border: `1px solid ${active ? '#C4832A' : '#3D2B0E'}`,
-                    color: active ? '#F0E0C0' : '#A89070',
+                    border: `1px solid ${active ? '#C4832A' : 'var(--border-default)'}`,
+                    color: active ? 'var(--cream)' : '#A89070',
                   }}
                 >
                   {VIEW_RULE_LABELS[r]}
@@ -1812,7 +1812,7 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
           data-testid="image-permanent"
           style={{
             background: 'var(--bg-card)',
-            border: isMine ? 'none' : '1px solid #3D2B0E',
+            border: isMine ? 'none' : '1px solid var(--border-default)',
             borderRadius: radius,
             boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
           }}

@@ -57,7 +57,7 @@ export const Notifications = () => {
       <div className="mx-auto flex min-h-0 max-w-xl flex-col gap-4 px-4 py-4 pb-10 lg:max-w-6xl lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] lg:items-start lg:gap-8 lg:px-8 lg:py-8">
         <div className="flex items-start justify-between gap-3 lg:col-span-2 lg:hidden">
           <div>
-            <h1 className="text-2xl font-bold text-[#F0E0C0]">Notifications</h1>
+            <h1 className="text-2xl font-bold text-[var(--cream)]">Notifications</h1>
             <p className="mt-1 text-sm text-[var(--cream-muted)]">
               Messages, matches, profile views and more.
             </p>
@@ -66,7 +66,7 @@ export const Notifications = () => {
             <button
               type="button"
               onClick={() => void handleMarkAllRead()}
-              className="shrink-0 rounded-xl border border-[#3D2B0E] px-3 py-2 text-[11px] font-bold text-[#C4832A] transition-colors hover:bg-[#C4832A]/10"
+              className="shrink-0 rounded-xl border border-[var(--border-default)] px-3 py-2 text-[11px] font-bold text-[#C4832A] transition-colors hover:bg-[#C4832A]/10"
             >
               Mark all read
             </button>
@@ -83,7 +83,7 @@ export const Notifications = () => {
               <button
                 type="button"
                 onClick={() => void handleMarkAllRead()}
-                className="shrink-0 rounded-xl border border-[#3D2B0E] px-3 py-2 text-[11px] font-bold text-[#C4832A] transition-colors hover:bg-[#C4832A]/10"
+                className="shrink-0 rounded-xl border border-[var(--border-default)] px-3 py-2 text-[11px] font-bold text-[#C4832A] transition-colors hover:bg-[#C4832A]/10"
               >
                 Mark all read
               </button>
@@ -114,7 +114,7 @@ export const Notifications = () => {
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#C4832A]/15 text-[#C4832A]">
               <IconNotifications size={28} />
             </div>
-            <p className="text-[#F0E0C0] font-extrabold">
+            <p className="text-[var(--cream)] font-extrabold">
               {loadError ? 'Could not load alerts' : 'No alerts yet'}
             </p>
             <p className="text-[var(--cream-muted)] text-sm mt-2 leading-relaxed mx-auto max-w-sm">
@@ -157,8 +157,8 @@ export const Notifications = () => {
                   onClick={() => void handleOpen(notification)}
                   className={`flex w-full items-start gap-3 rounded-2xl border px-4 py-3.5 text-left transition-colors ${
                     notification.read
-                      ? 'border-[#3D2B0E] bg-[#1E1508]/70 hover:border-[#C4832A]/30'
-                      : 'border-[#C4832A]/35 bg-[#1E1508] shadow-[0_0_0_1px_rgba(196,131,42,0.08)] hover:border-[#C4832A]/50'
+                      ? 'border-[var(--border-default)] bg-[var(--bg-card)]/70 hover:border-[#C4832A]/30'
+                      : 'border-[#C4832A]/35 bg-[var(--bg-card)] shadow-[0_0_0_1px_rgba(196,131,42,0.08)] hover:border-[#C4832A]/50'
                   }`}
                 >
                   <div className="relative shrink-0">
@@ -175,13 +175,13 @@ export const Notifications = () => {
                       </div>
                     )}
                     {!notification.read && (
-                      <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[#C4832A] ring-2 ring-[#1E1508]" />
+                      <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[#C4832A] ring-2 ring-[var(--bg-card)]" />
                     )}
                   </div>
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-semibold text-[#F0E0C0] leading-snug">
+                      <p className="text-sm font-semibold text-[var(--cream)] leading-snug">
                         {notification.message}
                       </p>
                       <span className="shrink-0 text-[10px] font-medium text-[var(--cream-muted)]">

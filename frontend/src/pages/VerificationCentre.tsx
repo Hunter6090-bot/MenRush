@@ -62,7 +62,7 @@ export function VerificationCentre() {
               <StatusPill label={authentic ? 'Confirmed' : state?.authenticity_status === 'pending' ? 'In review' : 'Optional'} complete={Boolean(authentic)} />
             </div>
             {!authentic && state?.authenticity_status !== 'pending' ? (
-              <Link to="/verify/authentic" className="mt-4 inline-flex rounded-xl bg-[var(--copper)] px-4 py-2.5 text-sm font-bold text-[#0D0A06]">
+              <Link to="/verify/authentic" className="mt-4 inline-flex rounded-xl bg-[var(--copper)] px-4 py-2.5 text-sm font-bold text-[var(--nn-on-copper)]">
                 Start live challenge
               </Link>
             ) : null}

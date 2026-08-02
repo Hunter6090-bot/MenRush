@@ -13,7 +13,7 @@ export function VerificationQr({
 }: VerificationQrProps) {
   return (
     <div
-      className={`rounded-xl border border-[#3D2B0E]/80 bg-[#0D0A06]/55 px-4 py-4 text-center ${className}`}
+      className={`rounded-xl border border-[var(--border-default)]/80 bg-[var(--bg-primary)]/55 px-4 py-4 text-center ${className}`}
     >
       <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#C4832A]">{label}</p>
       <p className="mt-1.5 text-xs leading-relaxed text-[var(--cream-muted)]">

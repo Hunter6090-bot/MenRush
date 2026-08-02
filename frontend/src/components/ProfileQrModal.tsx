@@ -80,14 +80,14 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
   if (scanning) {
     return (
       <div
-        className="fixed inset-0 z-[130] flex flex-col bg-[#0D0A06]"
+        className="fixed inset-0 z-[130] flex flex-col bg-[var(--bg-primary)]"
         role="dialog"
         aria-modal="true"
         aria-label="Scan profile QR code"
         data-testid="profile-qr-scan-screen"
       >
         <div
-          className="flex shrink-0 items-center justify-between gap-3 border-b border-[#3D2B0E] px-4 py-3"
+          className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border-default)] px-4 py-3"
           style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
         >
           <button
@@ -97,7 +97,7 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
           >
             ← Paste link
           </button>
-          <h2 className="text-sm font-bold text-[#F0E0C0]">Scan profile QR</h2>
+          <h2 className="text-sm font-bold text-[var(--cream)]">Scan profile QR</h2>
           <button
             type="button"
             onClick={onClose}
@@ -132,25 +132,25 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
         role="dialog"
         aria-modal="true"
         aria-label="Profile QR code"
-        className="max-h-[min(92dvh,720px)] w-full max-w-sm overflow-y-auto rounded-t-2xl border border-[#3D2B0E] bg-[#0D0A06] shadow-[0_24px_60px_rgba(0,0,0,0.55)] sm:rounded-2xl"
+        className="max-h-[min(92dvh,720px)] w-full max-w-sm overflow-y-auto rounded-t-2xl border border-[var(--border-default)] bg-[var(--bg-primary)] shadow-[0_24px_60px_rgba(0,0,0,0.55)] sm:rounded-2xl"
         style={{ paddingBottom: 'max(0px, env(safe-area-inset-bottom))' }}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-[#3D2B0E] px-4 py-3">
-          <h2 className="text-sm font-bold text-[#F0E0C0]">Profile QR</h2>
+        <div className="flex items-center justify-between border-b border-[var(--border-default)] px-4 py-3">
+          <h2 className="text-sm font-bold text-[var(--cream)]">Profile QR</h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-2 py-1 text-xs font-semibold text-[var(--cream-muted)] hover:text-[#F0E0C0]"
+            className="rounded-lg px-2 py-1 text-xs font-semibold text-[var(--cream-muted)] hover:text-[var(--cream)]"
           >
             Close
           </button>
         </div>
 
         <div className="space-y-5 p-5">
-          <div className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-4 text-center">
+          <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4 text-center">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--cream-muted)]">Your code</p>
-            <p className="mt-1 text-sm font-bold text-[#F0E0C0]">{user?.name ?? 'Your profile'}</p>
+            <p className="mt-1 text-sm font-bold text-[var(--cream)]">{user?.name ?? 'Your profile'}</p>
             {shareUrl ? (
               <div className="mx-auto mt-4 inline-flex rounded-2xl bg-white p-3">
                 <QRCodeSVG value={shareUrl} size={168} level="M" includeMargin={false} />
@@ -164,7 +164,7 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="mt-3 rounded-xl bg-[#C4832A] px-4 py-2 text-xs font-bold text-[#0D0A06] transition-opacity hover:opacity-90"
+                  className="mt-3 rounded-xl bg-[#C4832A] px-4 py-2 text-xs font-bold text-[var(--nn-on-copper)] transition-opacity hover:opacity-90"
                 >
                   {copied ? 'Copied' : 'Copy link'}
                 </button>
@@ -172,7 +172,7 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
             )}
           </div>
 
-          <div className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-4">
+          <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-4">
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--cream-muted)]">Open a profile</p>
               <button
@@ -192,13 +192,13 @@ export function ProfileQrModal({ open, onClose }: ProfileQrModalProps) {
               value={pasteValue}
               onChange={(event) => setPasteValue(event.target.value)}
               placeholder="Profile link or ID"
-              className="mt-3 w-full rounded-xl border border-[#3D2B0E] bg-[#0D0A06] px-3 py-2.5 text-sm text-[#F0E0C0] placeholder:text-[var(--cream-muted)]/70 focus:border-[#C4832A]/50 focus:outline-none"
+              className="mt-3 w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 py-2.5 text-sm text-[var(--cream)] placeholder:text-[var(--cream-muted)]/70 focus:border-[#C4832A]/50 focus:outline-none"
             />
             <button
               type="button"
               onClick={handleOpenPasted}
               disabled={!parseProfileId(pasteValue)}
-              className="mt-3 w-full rounded-xl border border-[#3D2B0E] px-4 py-2.5 text-sm font-semibold text-[#F0E0C0] transition-colors enabled:hover:border-[#C4832A]/50 enabled:hover:bg-[#3D2B0E]/40 disabled:opacity-40"
+              className="mt-3 w-full rounded-xl border border-[var(--border-default)] px-4 py-2.5 text-sm font-semibold text-[var(--cream)] transition-colors enabled:hover:border-[#C4832A]/50 enabled:hover:bg-[var(--border-default)]/40 disabled:opacity-40"
             >
               Open profile
             </button>

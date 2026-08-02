@@ -68,11 +68,11 @@ export function AuthenticityVerify() {
               {[0, 1, 2].map((index) => <span key={index} className={`h-2 flex-1 rounded-full ${index < frames.length ? 'bg-[var(--copper)]' : 'bg-[var(--border-default)]'}`} />)}
             </div>
             {frames.length < 3 ? (
-              <button type="button" onClick={() => setCameraOpen(true)} className="mt-5 w-full rounded-xl bg-[var(--copper)] py-3 text-sm font-bold text-[#0D0A06]">
+              <button type="button" onClick={() => setCameraOpen(true)} className="mt-5 w-full rounded-xl bg-[var(--copper)] py-3 text-sm font-bold text-[var(--nn-on-copper)]">
                 Open camera for this prompt
               </button>
             ) : (
-              <button type="button" onClick={submit} disabled={loading} className="mt-5 w-full rounded-xl bg-[var(--copper)] py-3 text-sm font-bold text-[#0D0A06] disabled:opacity-50">
+              <button type="button" onClick={submit} disabled={loading} className="mt-5 w-full rounded-xl bg-[var(--copper)] py-3 text-sm font-bold text-[var(--nn-on-copper)] disabled:opacity-50">
                 {loading ? 'Submitting…' : 'Submit challenge'}
               </button>
             )}
