@@ -3,7 +3,8 @@ import { guardAgainstSideEffects } from './support/network-guard';
 
 test.describe('public routes', () => {
   const routes = [
-    { path: '/', heading: 'MenRush' },
+    // Pre-launch: App.tsx renders <ComingSoon /> at "/" (see CLAUDE.md).
+    { path: '/', heading: 'Real men.' },
     { path: '/terms', heading: 'Terms and Conditions' },
     { path: '/privacy', heading: 'Private by design, clear by default.' },
     { path: '/cookies', heading: 'Cookies' },
@@ -71,7 +72,8 @@ test.describe('anonymous route protection', () => {
 
       await page.goto(path);
 
-      await expect(page).toHaveURL(/\/login$/);
+      // App.tsx appends `?next=<path>` so the user lands back where they started after signing in.
+      await expect(page).toHaveURL(/\/login(\?.*)?$/);
       await expect(page.getByRole('button', { name: 'Sign In' })).toBeVisible();
     });
   }
