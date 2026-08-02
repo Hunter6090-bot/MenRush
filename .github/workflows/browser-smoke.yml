@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - "frontend/**"
+      - "backend/**"
+      - "database/**"
       - ".github/workflows/browser-smoke.yml"
   workflow_dispatch:
 
@@ -20,24 +22,89 @@ jobs:
   smoke:
     name: Public routes and route protection
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: menrush
+          POSTGRES_PASSWORD: menrush123
+          POSTGRES_DB: menrush
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U menrush"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://menrush:menrush123@localhost:5432/menrush
+      JWT_SECRET: browser-smoke-ci-secret
+      PORT: 3000
+      NODE_ENV: development
+      FRONTEND_URL: http://localhost:4173
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install dependencies
+
+      - name: Install postgresql-client
+        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+
+      - name: Apply baseline schema
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/schema.sql
+
+      - name: Install backend dependencies
+        working-directory: backend
         run: npm ci
+
+      - name: Apply migrations
+        working-directory: backend
+        run: npm run db:migrate
+
+      - name: Seed test accounts
+        working-directory: backend
+        run: npm run db:seed-test-users
+
+      - name: Start backend
+        working-directory: backend
+        run: |
+          nohup npm run dev > /tmp/backend.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/api/health >/dev/null 2>&1 || curl -sf http://localhost:3000/ >/dev/null 2>&1; then
+              echo "Backend is up"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Backend did not become ready in time"
+          cat /tmp/backend.log
+          exit 1
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
       - name: Install Chromium
+        working-directory: frontend
         run: npx playwright install --with-deps chromium
+
       - name: Run browser smoke tests
+        working-directory: frontend
         run: npm run test:e2e
+
+      - name: Upload backend log
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-log
+          path: /tmp/backend.log
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
