@@ -1,7 +1,7 @@
 import { expect, test, request as apiRequest, type BrowserContext } from '@playwright/test';
 import { TEST_PASSWORD, ALICE, BOB } from './test-accounts';
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:5173';
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
 
 async function login(email: string) {
   const api = await apiRequest.newContext({ baseURL: BASE_URL });
