@@ -119,7 +119,7 @@ function ParticipantTile({
           <div
             className="absolute inset-0 flex items-center justify-center text-2xl font-black"
             style={{
-              background: 'linear-gradient(145deg, #2A1C0A, #0D0A06)',
+              background: 'linear-gradient(145deg, var(--bg-elevated), var(--bg-primary))',
               color: '#C4832A',
             }}
           >
@@ -139,7 +139,7 @@ function ParticipantTile({
         )}
         <span className="min-w-0 truncate text-[11px] font-semibold text-white">{participant.name}</span>
         {participant.isLive && (
-          <span className="ml-auto shrink-0 rounded bg-[#C4832A] px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#0D0A06]">
+          <span className="ml-auto shrink-0 rounded bg-[#C4832A] px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[var(--nn-on-copper)]">
             Live
           </span>
         )}
@@ -173,7 +173,7 @@ export function RoomGalleryGrid({
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
         <div>
-          <p className="text-sm font-semibold text-[#F0E0C0]">Waiting for people to join</p>
+          <p className="text-sm font-semibold text-[var(--cream)]">Waiting for people to join</p>
           <p className="mt-1 text-xs text-[var(--cream-muted)]">Share the room — members appear here in the gallery.</p>
         </div>
       </div>

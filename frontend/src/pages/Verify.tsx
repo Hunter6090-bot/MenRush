@@ -365,7 +365,7 @@ export const Verify: React.FC = () => {
                 <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#E0A14A]">
                   Your privacy
                 </p>
-                <ul className="mt-2 space-y-2 text-xs text-[#F0E0C0]/88">
+                <ul className="mt-2 space-y-2 text-xs text-[var(--cream)]/88">
                   <Bullet>Documents auto-deleted after your badge is issued</Bullet>
                   <Bullet>Automated face match first; unclear cases reviewed by our team only</Bullet>
                   <Bullet>Other users only see the copper checkmark, never your ID</Bullet>
@@ -391,12 +391,12 @@ export const Verify: React.FC = () => {
                 {INTRO_STEPS.map((item) => (
                   <div
                     key={item.n}
-                    className="flex items-center gap-3 rounded-xl border border-[#3D2B0E] bg-[#1E1508] px-4 py-3.5"
+                    className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] px-4 py-3.5"
                   >
                     <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-[rgba(196,131,42,0.15)] text-[13px] font-extrabold text-[#E0A14A]">
                       {item.n}
                     </span>
-                    <span className="text-sm text-[#F0E0C0]">{item.text}</span>
+                    <span className="text-sm text-[var(--cream)]">{item.text}</span>
                   </div>
                 ))}
               </div>
