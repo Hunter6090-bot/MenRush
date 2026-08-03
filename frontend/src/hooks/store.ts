@@ -67,6 +67,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.removeItem('user');
     localStorage.removeItem('token');
     set({ user: null, token: null });
+    // Private notification content (message previews, etc.) must not linger
+    // in memory once logged out — ToastNotifications is unmounted by the
+    // token gate in App.tsx, but the store itself can still be read elsewhere.
+    useNotificationStore.getState().setFromServer([], 0);
   },
 }));
 

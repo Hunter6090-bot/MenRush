@@ -54,7 +54,10 @@ export const ToastNotifications = () => {
   if (activeToasts.length === 0) return null;
 
   return (
-    <div className="fixed top-16 right-4 z-[3000] flex flex-col gap-3 max-w-[320px] w-full pointer-events-none">
+    <div
+      data-testid="toast-notifications"
+      className="fixed top-16 right-4 z-[3000] flex flex-col gap-3 max-w-[320px] w-full pointer-events-none"
+    >
       {activeToasts.map((toast) => (
         <div
           key={toast.id}
