@@ -23,7 +23,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { promoService } from '../services/promo.service';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 const router = Router();
 
@@ -35,11 +35,7 @@ const router = Router();
 const signupLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
   max: 5,
-  keyGenerator: (req) => {
-    const forwarded = req.headers['x-forwarded-for'];
-    const ip = Array.isArray(forwarded) ? forwarded[0] : (forwarded ?? req.ip ?? '');
-    return ip;
-  },
+  keyGenerator: (req) => ipKeyGenerator(req.ip || ''),
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests. Please wait a few minutes and try again.' },
@@ -49,11 +45,7 @@ const signupLimiter = rateLimit({
 const validateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
-  keyGenerator: (req) => {
-    const forwarded = req.headers['x-forwarded-for'];
-    const ip = Array.isArray(forwarded) ? forwarded[0] : (forwarded ?? req.ip ?? '');
-    return ip;
-  },
+  keyGenerator: (req) => ipKeyGenerator(req.ip || ''),
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests.' },

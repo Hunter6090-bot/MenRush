@@ -167,8 +167,28 @@ app.get('/api/health', healthHandler);
 app.get('/api/healthz', healthHandler);
 
 // Socket.IO
-const userSockets: Map<string, string> = new Map(); // userId → socketId
+const userSockets: Map<string, Set<string>> = new Map(); // userId → every live socket
 const socketToUser: Map<string, string> = new Map(); // socketId → userId
+
+function addUserSocket(userId: string, socketId: string) {
+  const sockets = userSockets.get(userId) ?? new Set<string>();
+  sockets.add(socketId);
+  userSockets.set(userId, sockets);
+}
+
+/** Returns true only when the user has no live sockets left. */
+function removeUserSocket(userId: string, socketId: string): boolean {
+  const sockets = userSockets.get(userId);
+  if (!sockets) return true;
+  sockets.delete(socketId);
+  if (sockets.size > 0) return false;
+  userSockets.delete(userId);
+  return true;
+}
+
+function hasLiveUserSocket(userId: string): boolean {
+  return (userSockets.get(userId)?.size ?? 0) > 0;
+}
 
 interface PendingCall {
   callerId: string;
@@ -261,8 +281,14 @@ io.on('connection', (socket: Socket) => {
       const decoded = authService.verifyToken(token);
       await accessControl.requireVerified(decoded.userId);
       const previousUserId = socketToUser.get(socket.id);
-      if (previousUserId) userSockets.delete(previousUserId);
-      userSockets.set(decoded.userId, socket.id);
+      if (previousUserId && previousUserId !== decoded.userId) {
+        socket.leave(`user:${previousUserId}`);
+        const previousUserWentOffline = removeUserSocket(previousUserId, socket.id);
+        if (previousUserWentOffline) {
+          await userService.setOnlineStatus(previousUserId, false);
+        }
+      }
+      addUserSocket(decoded.userId, socket.id);
       socketToUser.set(socket.id, decoded.userId);
       await userService.setOnlineStatus(decoded.userId, true);
       socket.join(`user:${decoded.userId}`);
@@ -288,7 +314,7 @@ io.on('connection', (socket: Socket) => {
     if (!authorized || !data.offer) return;
     try {
       // No live socket in user:{id} → they cannot answer WebRTC (push alone is not enough).
-      if (!userSockets.has(authorized.targetId)) {
+      if (!hasLiveUserSocket(authorized.targetId)) {
         socket.emit('call:error', { error: 'target_offline' });
         return;
       }
@@ -555,9 +581,11 @@ io.on('connection', (socket: Socket) => {
   socket.on('disconnect', () => {
     const userId = socketToUser.get(socket.id);
     if (userId) {
-      userSockets.delete(userId);
       socketToUser.delete(socket.id);
-      userService.setOnlineStatus(userId, false);
+      const userWentOffline = removeUserSocket(userId, socket.id);
+      if (userWentOffline) {
+        void userService.setOnlineStatus(userId, false);
+      }
       // Notify any group rooms this socket was in.
       for (const roomName of socket.rooms) {
         if (roomName.startsWith('room:')) {

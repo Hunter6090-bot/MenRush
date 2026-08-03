@@ -43,12 +43,12 @@ export function ProfileViewersCard({
 }: ProfileViewersCardProps) {
   return (
     <div
-      className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-5 shadow-card"
+      className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 shadow-card"
       data-testid="profile-viewers-card"
     >
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-[#F0E0C0]">Who viewed you</p>
+          <p className="text-sm font-semibold text-[var(--cream)]">Who viewed you</p>
           <p className="mt-0.5 text-xs text-[var(--cream-muted)]">
             {isPremium
               ? 'Full viewer history'
@@ -65,11 +65,11 @@ export function ProfileViewersCard({
       {loading ? (
         <div className="space-y-2">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-14 animate-pulse rounded-xl bg-[#3D2B0E]/40" />
+            <div key={i} className="h-14 animate-pulse rounded-xl bg-[var(--border-default)]/40" />
           ))}
         </div>
       ) : viewers.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-[#3D2B0E] px-4 py-6 text-center text-sm text-[var(--cream-muted)]">
+        <p className="rounded-xl border border-dashed border-[var(--border-default)] px-4 py-6 text-center text-sm text-[var(--cream-muted)]">
           No profile views yet. Stay visible on the map and Pulse when you&apos;re out.
         </p>
       ) : (
@@ -78,7 +78,7 @@ export function ProfileViewersCard({
             <li key={viewer.id}>
               <Link
                 to={`/profile/${viewer.id}`}
-                className="flex items-center gap-3 rounded-xl border border-transparent px-2 py-2 transition-colors hover:border-[#3D2B0E] hover:bg-[#3D2B0E]/35"
+                className="flex items-center gap-3 rounded-xl border border-transparent px-2 py-2 transition-colors hover:border-[var(--border-default)] hover:bg-[var(--bg-primary)]"
               >
                 <UserAvatar
                   name={viewer.name}
@@ -87,7 +87,7 @@ export function ProfileViewersCard({
                   size="sm"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-[#F0E0C0]">
+                  <p className="truncate text-sm font-semibold text-[var(--cream)]">
                     {viewer.name}
                     <span className="font-normal text-[var(--cream-muted)]"> · {viewer.age}</span>
                   </p>

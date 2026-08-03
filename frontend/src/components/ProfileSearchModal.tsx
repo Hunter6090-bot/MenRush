@@ -116,7 +116,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
       return;
     }
     if (likedIds.has(hit.id)) {
-      flash(`Match already sent to ${hit.name}. Chat unlocks when he matches back.`);
+        flash(`Match already sent to ${hit.name}. Chat and calling unlock when he matches back.`);
       return;
     }
     setMatchingId(hit.id);
@@ -127,7 +127,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
         setMutualIds((prev) => new Set([...prev, hit.id]));
         flash(`You matched with ${hit.name}.`);
       } else {
-        flash(`Match sent to ${hit.name}. Chat unlocks if he matches back · consent first.`);
+        flash(`Match sent to ${hit.name}. Chat and calling unlock if he matches back · consent first.`);
       }
     } catch (err: unknown) {
       const apiError = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -153,7 +153,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
       navigate(`/messages/${hit.id}`);
       return;
     }
-    flash('Chat unlocks after a mutual match. Tap Match first · consent first.');
+    flash('Chat and calling unlock after a mutual match. Tap Match first · consent first.');
   };
 
   return (
@@ -271,7 +271,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
                           : 'bg-[#C4832A] text-[#1A0E03] hover:bg-[#E0A14A]'
                     }`}
                   >
-                    {matching ? '…' : mutual ? 'Chat' : liked ? 'Matched' : 'Match'}
+                    {matching ? '…' : mutual ? 'Chat' : liked ? 'Match sent' : 'Match'}
                   </button>
                   <button
                     type="button"
@@ -286,7 +286,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
           })}
         </div>
         <p className="border-t border-[#3D2B0E] px-3 py-2 text-center text-[10px] text-[var(--cream-muted)]">
-          Match first · Chat unlocks when mutual
+          Match first · Chat and calls unlock when mutual
         </p>
       </div>
     </div>

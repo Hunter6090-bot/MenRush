@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { usersAPI, profileMetaAPI, Mood, MOOD_LABELS } from '../api/client';
+import { authAPI, usersAPI, profileMetaAPI, Mood, MOOD_LABELS } from '../api/client';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { Layout } from '../components/Layout';
 import { UserAvatar } from '../components/UserAvatar';
@@ -26,11 +26,13 @@ interface ProfileData {
   id: string;
   name: string;
   age: number;
+  show_age?: boolean;
   bio?: string;
   headline?: string;
   looking_for?: string;
   photo_url?: string;
   cover_url?: string;
+  secondary_photo_urls?: Array<string | null>;
   cover_position_x?: number;
   cover_position_y?: number;
   cover_zoom?: number;
@@ -48,7 +50,7 @@ interface ProfileData {
 type Toast = { type: 'success' | 'error'; msg: string };
 
 export const Profile = () => {
-  const { user, token, setAuth, patchUser, logout } = useAuthStore();
+  const { user, token, refreshToken, setAuth, patchUser, logout } = useAuthStore();
   const { lat, lng, setLocation } = useLocationStore();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<ProfileData | null>(null);
@@ -57,9 +59,13 @@ export const Profile = () => {
   const [lookingFor, setLookingFor] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
   const [coverUrl, setCoverUrl] = useState('');
+  const [secondaryPhotos, setSecondaryPhotos] = useState<Array<string | null>>([null, null, null]);
+  const [uploadingSecondary, setUploadingSecondary] = useState<number | null>(null);
+  const [photoViewerUrl, setPhotoViewerUrl] = useState<string | null>(null);
   const [coverFrame, setCoverFrame] = useState<CoverFrame>(DEFAULT_COVER_FRAME);
   const [coverEditorOpen, setCoverEditorOpen] = useState(false);
   const [interests, setInterests] = useState<string[]>([]);
+  const [showAge, setShowAge] = useState(true);
   const [isVisible, setIsVisible] = useState(true);
   const [mood, setMood] = useState<Mood | null>(null);
   const [isGhost, setIsGhost] = useState(false);
@@ -76,6 +82,7 @@ export const Profile = () => {
   const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const secondaryInputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   useEffect(() => {
     setProfileLoadError(null);
@@ -89,10 +96,16 @@ export const Profile = () => {
         setLookingFor(d.looking_for ?? '');
         setPhotoUrl(d.photo_url ?? '');
         setCoverUrl(d.cover_url ?? '');
+        setSecondaryPhotos([
+          d.secondary_photo_urls?.[0] ?? null,
+          d.secondary_photo_urls?.[1] ?? null,
+          d.secondary_photo_urls?.[2] ?? null,
+        ]);
         setCoverFrame(
           normalizeCoverFrame(d.cover_position_x, d.cover_position_y, d.cover_zoom),
         );
         setInterests(d.interests ?? []);
+        setShowAge(d.show_age !== false);
         if (typeof d.is_visible === 'boolean') setIsVisible(d.is_visible);
         if (d.mood !== undefined) setMood(d.mood ?? null);
         if (typeof d.is_ghost === 'boolean') setIsGhost(d.is_ghost);
@@ -135,7 +148,7 @@ export const Profile = () => {
   };
 
   const handleGhost = async (next: boolean) => {
-    if (next && !profile?.is_premium) {
+    if (next && !user?.is_premium) {
       navigate('/premium');
       return;
     }
@@ -227,6 +240,39 @@ export const Profile = () => {
     }
   };
 
+  const handleSecondaryUpload = async (
+    slot: number,
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const raw = event.target.files?.[0];
+    event.target.value = '';
+    if (!raw) return;
+    const { file, error } = normalizeProfileImageFile(raw);
+    if (!file) {
+      showToast('error', error || 'Photo upload failed');
+      return;
+    }
+
+    setUploadingSecondary(slot);
+    try {
+      const response = await usersAPI.uploadSecondaryPhoto(slot, file);
+      const next = [
+        response.data.secondary_photo_urls?.[0] ?? null,
+        response.data.secondary_photo_urls?.[1] ?? null,
+        response.data.secondary_photo_urls?.[2] ?? null,
+      ];
+      setSecondaryPhotos(next);
+      setProfile((current) =>
+        current ? { ...current, secondary_photo_urls: next } : current,
+      );
+      showToast('success', `Photo ${slot + 1} updated`);
+    } catch (err: any) {
+      showToast('error', err.response?.data?.error || 'Photo upload failed');
+    } finally {
+      setUploadingSecondary(null);
+    }
+  };
+
   const saveCoverFrame = async (frame: CoverFrame) => {
     try {
       const res = await usersAPI.updateProfile({
@@ -248,7 +294,14 @@ export const Profile = () => {
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await usersAPI.updateProfile({ bio, headline, looking_for: lookingFor, photo_url: photoUrl || undefined, interests });
+      const res = await usersAPI.updateProfile({
+        bio,
+        headline,
+        looking_for: lookingFor,
+        photo_url: photoUrl || undefined,
+        interests,
+        show_age: showAge,
+      });
       setProfile((p) => p ? { ...p, ...res.data } : p);
       if (user && token) setAuth({ ...user, bio, photo_url: photoUrl || undefined }, token);
       if (
@@ -293,7 +346,7 @@ export const Profile = () => {
   };
 
   const inputClass =
-    'w-full bg-[#1E1508]/60 border border-[#3D2B0E] text-[#F0E0C0] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all';
+    'w-full bg-[var(--bg-primary)] border border-[var(--border-default)] text-[var(--cream)] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all';
 
   if (!profile) {
     return (
@@ -301,7 +354,7 @@ export const Profile = () => {
         <div className="flex flex-col items-center justify-center py-24 px-4 text-center gap-4">
           {profileLoadError ? (
             <>
-              <p className="text-[#F0E0C0]/80 text-sm">{profileLoadError}</p>
+              <p className="text-[var(--cream)]/80 text-sm">{profileLoadError}</p>
               <button
                 type="button"
                 onClick={() => window.location.reload()}
@@ -359,24 +412,99 @@ export const Profile = () => {
           disabled={uploadingCover}
         />
 
+        {[0, 1, 2].map((slot) => (
+          <input
+            key={slot}
+            ref={(element) => {
+              secondaryInputRefs.current[slot] = element;
+            }}
+            type="file"
+            accept="image/*"
+            onChange={(event) => void handleSecondaryUpload(slot, event)}
+            className="hidden"
+            aria-label={`Upload secondary profile photo ${slot + 1}`}
+            disabled={uploadingSecondary !== null}
+          />
+        ))}
+
         {/* ── Desktop profile layout ── */}
         <div className="hidden lg:grid lg:grid-cols-[300px_1fr] lg:gap-8">
           <div>
-            <div className="relative aspect-[3/4] w-full max-w-[300px] overflow-hidden rounded-2xl border border-[#3D2B0E] bg-[#1E1508]">
-              {getPhotoUrl(photoUrl) ? (
-                <img src={getPhotoUrl(photoUrl)!} alt={profile.name} className="h-full w-full object-cover" />
+            <div className="relative h-40 w-full max-w-[300px] overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]">
+              {coverUrl ? (
+                <CoverBanner coverUrl={coverUrl} frame={coverFrame} />
               ) : (
-                <div className="flex h-full items-center justify-center">
-                  <UserAvatar name={profile.name} photoUrl={profile.photo_url} size="xl" showStatus={false} />
-                </div>
+                <div className="h-full bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#A45E18]/10" />
               )}
+              <button
+                type="button"
+                onClick={() => coverInputRef.current?.click()}
+                className="absolute right-3 top-3 rounded-full border border-white/20 bg-black/60 px-3 py-1.5 text-[11px] font-bold text-white backdrop-blur-sm"
+              >
+                {coverUrl ? 'Change cover' : 'Add cover'}
+              </button>
             </div>
+
+            <div className="-mt-12 ml-4 flex items-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const resolved = getPhotoUrl(photoUrl);
+                  if (resolved) setPhotoViewerUrl(resolved);
+                }}
+                className="relative rounded-full ring-4 ring-[var(--bg-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#C4832A]"
+                aria-label="Open profile photo full screen"
+              >
+                <UserAvatar
+                  name={profile.name}
+                  photoUrl={profile.photo_url}
+                  size="xl"
+                  showStatus={false}
+                />
+              </button>
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                className="mb-1 rounded-full bg-[#C4832A] px-3 py-2 text-[11px] font-extrabold text-[#1A0E03]"
+              >
+                {uploading ? 'Uploading…' : 'Change photo'}
+              </button>
+            </div>
+
             <div className="mt-3 grid max-w-[300px] grid-cols-3 gap-2">
-              {[photoUrl, coverUrl, photoUrl].filter(Boolean).slice(0, 3).map((src, i) => (
-                <div key={i} className="aspect-square overflow-hidden rounded-xl border border-[#3D2B0E] bg-[#1E1508]">
-                  {getPhotoUrl(src) ? (
-                    <img src={getPhotoUrl(src)!} alt="" className="h-full w-full object-cover" />
-                  ) : null}
+              {secondaryPhotos.map((src, slot) => (
+                <div
+                  key={slot}
+                  className="group relative aspect-square overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const resolved = getPhotoUrl(src ?? undefined);
+                      if (resolved) setPhotoViewerUrl(resolved);
+                      else secondaryInputRefs.current[slot]?.click();
+                    }}
+                    className="h-full w-full"
+                    aria-label={src ? `Open secondary photo ${slot + 1}` : `Add secondary photo ${slot + 1}`}
+                  >
+                    {getPhotoUrl(src ?? undefined) ? (
+                      <img
+                        src={getPhotoUrl(src ?? undefined)!}
+                        alt={`Profile photo ${slot + 2}`}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-full items-center justify-center text-2xl text-[var(--copper)]">+</span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => secondaryInputRefs.current[slot]?.click()}
+                    className="absolute inset-x-1 bottom-1 rounded-lg bg-black/75 px-1 py-1 text-[9px] font-bold text-white transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+                    aria-label={`${src ? 'Replace' : 'Add'} secondary photo ${slot + 1}`}
+                  >
+                    {uploadingSecondary === slot ? 'Uploading…' : src ? 'Replace' : 'Add photo'}
+                  </button>
                 </div>
               ))}
             </div>
@@ -385,7 +513,7 @@ export const Profile = () => {
                 className="mt-3 max-w-[300px] rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-3 py-3"
                 data-testid="photo-upgrade-nudge"
               >
-                <p className="text-[12px] font-extrabold text-[#F0E0C0]">Upgrade from a shared avatar</p>
+                <p className="text-[12px] font-extrabold text-[var(--cream)]">Upgrade from a shared avatar</p>
                 <p className="mt-1 text-[11px] leading-relaxed text-[var(--cream-muted)]">
                   Real photos get more matches. Upload a clear face or upper-body shot —
                 </p>
@@ -445,7 +573,7 @@ export const Profile = () => {
         </div>
 
         {/* ── Profile hero (mobile) ── */}
-        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl overflow-hidden shadow-card lg:hidden lg:rounded-3xl">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl overflow-hidden shadow-card lg:hidden lg:rounded-3xl">
           <div className="group relative">
             {coverUrl ? (
               <CoverBanner coverUrl={coverUrl} frame={coverFrame} />
@@ -532,12 +660,12 @@ export const Profile = () => {
               <div className="relative">
                 <button
                   type="button"
-                  aria-label="Upload profile photo"
-                  onClick={() => photoInputRef.current?.click()}
-                  disabled={uploading}
-                  className={`group relative block cursor-pointer rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C4832A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1E1508] ${
-                    uploading ? 'pointer-events-none opacity-70' : ''
-                  }`}
+                  aria-label="Open profile photo full screen"
+                  onClick={() => {
+                    const resolved = getPhotoUrl(photoUrl);
+                    if (resolved) setPhotoViewerUrl(resolved);
+                  }}
+                  className="group relative block cursor-pointer rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C4832A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-card)]"
                 >
                   <UserAvatar
                     name={profile.name}
@@ -548,13 +676,19 @@ export const Profile = () => {
                     className="ring-4 ring-[#1E1508] transition-opacity group-hover:opacity-90 group-active:opacity-80"
                   />
                   <span className="absolute inset-0 rounded-full bg-black/0 transition-colors group-hover:bg-black/20 group-active:bg-black/30" />
-                  <span className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#1E1508] bg-[#C4832A] text-[#0D0A06] shadow-lg transition-transform group-hover:scale-105 group-active:scale-95">
-                    {uploading ? (
-                      <Spinner className="w-4 h-4 text-[#0D0A06]" />
-                    ) : (
-                      <CameraIcon className="w-4 h-4" />
-                    )}
-                  </span>
+                </button>
+                <button
+                  type="button"
+                  aria-label="Change profile photo"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={uploading}
+                  className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-[var(--bg-card)] bg-[#C4832A] text-[#0D0A06] shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-60"
+                >
+                  {uploading ? (
+                    <Spinner className="w-4 h-4 text-[#0D0A06]" />
+                  ) : (
+                    <CameraIcon className="w-4 h-4" />
+                  )}
                 </button>
               </div>
               <div className="flex items-center gap-2">
@@ -569,14 +703,55 @@ export const Profile = () => {
                 </Link>
               </div>
             </div>
-            <h2 className="text-xl font-bold text-[#F0E0C0]">{profile.name}</h2>
+            <h2 className="text-xl font-bold text-[var(--cream)]">{profile.name}</h2>
             <p className="text-[var(--cream-muted)] text-sm mt-0.5">Age {profile.age}</p>
+            <div className="mt-4 grid grid-cols-3 gap-2" aria-label="Additional profile photos">
+              {secondaryPhotos.map((src, slot) => (
+                <div
+                  key={slot}
+                  className="relative aspect-square overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const resolved = getPhotoUrl(src ?? undefined);
+                      if (resolved) setPhotoViewerUrl(resolved);
+                      else secondaryInputRefs.current[slot]?.click();
+                    }}
+                    className="h-full w-full"
+                    aria-label={src ? `Open secondary photo ${slot + 1}` : `Add secondary photo ${slot + 1}`}
+                  >
+                    {getPhotoUrl(src ?? undefined) ? (
+                      <img
+                        src={getPhotoUrl(src ?? undefined)!}
+                        alt={`Profile photo ${slot + 2}`}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-full items-center justify-center text-2xl text-[var(--copper)]">+</span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => secondaryInputRefs.current[slot]?.click()}
+                    className="absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-full border border-black/30 bg-[#C4832A] text-[#0D0A06] shadow"
+                    aria-label={`${src ? 'Replace' : 'Add'} secondary photo ${slot + 1}`}
+                  >
+                    {uploadingSecondary === slot ? (
+                      <Spinner className="h-3.5 w-3.5 text-[#0D0A06]" />
+                    ) : (
+                      <CameraIcon className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
             {isGenericAvatarUrl(photoUrl) ? (
               <div
                 className="mt-3 rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-3 py-3 lg:hidden"
                 data-testid="photo-upgrade-nudge-mobile"
               >
-                <p className="text-[12px] font-extrabold text-[#F0E0C0]">Upgrade from a shared avatar</p>
+                <p className="text-[12px] font-extrabold text-[var(--cream)]">Upgrade from a shared avatar</p>
                 <p className="mt-1 text-[11px] leading-relaxed text-[var(--cream-muted)]">
                   Real photos get more matches. Clear face or upper body.
                 </p>
@@ -597,8 +772,8 @@ export const Profile = () => {
           {/* ── Left: Edit profile ── */}
           <div className="space-y-4">
         {/* ── Edit form ── */}
-        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card lg:rounded-3xl">
-          <h3 className="text-[#F0E0C0] font-semibold mb-4">Edit Profile</h3>
+        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 shadow-card lg:rounded-3xl">
+          <h3 className="text-[var(--cream)] font-semibold mb-4">Edit Profile</h3>
 
           <form onSubmit={handleSave} className="space-y-4">
             <div>
@@ -609,7 +784,7 @@ export const Profile = () => {
                 placeholder="Tell people about yourself…"
                 rows={3}
                 maxLength={500}
-                className="w-full bg-[#1E1508]/60 border border-[#3D2B0E] text-[#F0E0C0] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all resize-none"
+                className="w-full bg-[var(--bg-primary)] border border-[var(--border-default)] text-[var(--cream)] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all resize-none"
               />
               <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1 text-right">{bio.length}/500</p>
             </div>
@@ -636,6 +811,30 @@ export const Profile = () => {
                 maxLength={100}
                 className={inputClass}
               />
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-[var(--cream)]">Show my age</p>
+                <p className="mt-0.5 text-xs text-[var(--cream-muted)]">
+                  Hide your age from other members without changing your date of birth.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={showAge}
+                onClick={() => setShowAge((current) => !current)}
+                className={`relative ml-4 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                  showAge ? 'bg-[var(--copper)]' : 'bg-[var(--border-default)]'
+                }`}
+              >
+                <span
+                  className={`h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                    showAge ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
             </div>
 
             <div>
@@ -688,8 +887,8 @@ export const Profile = () => {
                             active
                               ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
                               : maxed
-                              ? 'bg-[#1E1508]/30 text-[var(--cream-muted)]/20 border-[#3D2B0E]/30 cursor-not-allowed'
-                              : 'bg-[#1E1508]/40 text-[var(--cream-muted)] border-[#3D2B0E] hover:bg-[#3D2B0E]/60 hover:text-[#F0E0C0]/80'
+                              ? 'bg-[var(--bg-primary)] text-[var(--cream-muted)]/35 border-[var(--border-default)] opacity-60 cursor-not-allowed'
+                              : 'bg-[var(--bg-primary)] text-[var(--cream-muted)] border-[var(--border-default)] hover:border-[#C4832A]/40 hover:text-[var(--cream)]'
                           }`}
                         >
                           {tag}
@@ -726,16 +925,16 @@ export const Profile = () => {
         <ProfileViewersCard
           viewers={profileViewers}
           total={profileViewsTotal}
-          isPremium={Boolean(profile.is_premium)}
+          isPremium={Boolean(user?.is_premium)}
           hasMore={profileViewsHasMore}
           hiddenCount={profileViewsHidden}
           loading={profileViewsLoading}
         />
 
         {/* ── Location card ── */}
-        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 flex items-center justify-between shadow-card">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 flex items-center justify-between shadow-card">
           <div>
-            <p className="text-[#F0E0C0]/80 text-sm font-semibold">Your location</p>
+            <p className="text-[var(--cream)]/80 text-sm font-semibold">Your location</p>
             {lat && lng ? (
               <p className="text-[var(--cream-muted)] text-xs mt-0.5">
                 {lat.toFixed(5)}, {lng.toFixed(5)}
@@ -755,10 +954,10 @@ export const Profile = () => {
         </div>
 
         {/* ── Mood card ── */}
-        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 shadow-card">
           <div className="flex items-end justify-between mb-3">
             <div>
-              <p className="text-[#F0E0C0]/80 text-sm font-semibold">Mood</p>
+              <p className="text-[var(--cream)]/80 text-sm font-semibold">Mood</p>
               <p className="text-[var(--cream-muted)] text-xs mt-0.5">
                 Auto-clears in 6 hours. Shows on your card.
               </p>
@@ -778,7 +977,7 @@ export const Profile = () => {
         {/* ── Ghost mode card ── */}
         <GhostToggle
           isGhost={isGhost}
-          isPremium={Boolean(profile?.is_premium)}
+          isPremium={Boolean(user?.is_premium)}
           onToggle={handleGhost}
         />
 
@@ -823,9 +1022,9 @@ export const Profile = () => {
         </Link>
 
         {/* ── Visibility card ── */}
-        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 flex items-center justify-between shadow-card">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 flex items-center justify-between shadow-card">
           <div>
-            <p className="text-[#F0E0C0]/80 text-sm font-semibold">Profile visibility</p>
+            <p className="text-[var(--cream)]/80 text-sm font-semibold">Profile visibility</p>
             <p className="text-[var(--cream-muted)] text-xs mt-0.5">
               {isVisible ? 'You appear in nearby discovery' : 'Hidden from nearby discovery'}
             </p>
@@ -857,11 +1056,15 @@ export const Profile = () => {
         </div>
 
         {/* ── Sign out (mobile only — desktop uses sidebar) ── */}
-        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card lg:hidden">
-          <p className="text-[#F0E0C0]/80 text-sm font-semibold">Sign out</p>
+        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 shadow-card lg:hidden">
+          <p className="text-[var(--cream)]/80 text-sm font-semibold">Sign out</p>
           <p className="text-[var(--cream-muted)] text-xs mt-0.5">You'll need to log back in</p>
           <button
-            onClick={() => { logout(); navigate('/login'); }}
+            onClick={() => {
+              void authAPI.logout(refreshToken).catch(() => undefined);
+              logout();
+              navigate('/login');
+            }}
             className="mt-4 flex w-full items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#A45E18]/10 hover:bg-[#A45E18]/20 text-[#F0E0C0]/80 text-xs font-semibold border border-[#A45E18]/20 transition-all"
           >
             <LogoutIcon className="w-3.5 h-3.5" />
@@ -877,6 +1080,31 @@ export const Profile = () => {
           onSave={saveCoverFrame}
           onCancel={() => setCoverEditorOpen(false)}
         />
+      )}
+
+      {photoViewerUrl && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Profile photo viewer"
+          onClick={() => setPhotoViewerUrl(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setPhotoViewerUrl(null)}
+            className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full border border-white/25 bg-black/65 text-2xl text-white"
+            aria-label="Close full-screen photo"
+          >
+            ×
+          </button>
+          <img
+            src={photoViewerUrl}
+            alt="Full-screen profile"
+            className="max-h-full max-w-full rounded-2xl object-contain"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
       )}
     </Layout>
   );
