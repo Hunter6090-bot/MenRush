@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, type FormEvent } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { BrandMark } from '../components/BrandMark';
-import { trackEvent, trackEventOnce } from '../observability/analytics';
+import { trackEvent, trackEventOnce, getAttributionParams } from '../observability/analytics';
 import { publicLinkClass, publicNavLinkPrimary } from '../lib/publicStyles';
 
 const API_BASE_URL = String(import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
@@ -22,7 +22,7 @@ export const ComingSoon = () => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    trackEventOnce('landing_viewed', { surface: 'coming_soon' });
+    trackEventOnce('landing_viewed', { surface: 'coming_soon', ...getAttributionParams() });
   }, []);
 
   useEffect(() => {
@@ -67,6 +67,7 @@ export const ComingSoon = () => {
         trackEvent('waitlist_succeeded', {
           transport: 'backend',
           already_subscribed: alreadySubscribed,
+          ...getAttributionParams(),
         });
         setSuccessMsg(
           alreadySubscribed
