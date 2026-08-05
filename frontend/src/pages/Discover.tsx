@@ -43,6 +43,7 @@ import {
   RADIUS_CIRCLE_SOURCE,
 } from '../lib/mapRadiusCircle';
 import { ROUTE_LABELS } from '../lib/routeLabels';
+import { mapboxStyleForTheme, resolvedThemeNow, THEME_CHANGED_EVENT } from '../lib/mapTheme';
 import { useIsDesktopLayout } from '../hooks/useMediaQuery';
 import { ProximitySlider } from '../components/ProximitySlider';
 import { IconMapExpand } from '../components/icons';
@@ -296,6 +297,8 @@ export const Discover = () => {
     lat != null && lng != null ? [lat, lng] : null,
   );
   const [mapLoaded, setMapLoaded] = useState(false);
+  /** Bumped whenever the basemap style is swapped so GL sources/layers (wiped by setStyle) re-add. */
+  const [mapStyleVersion, setMapStyleVersion] = useState(0);
   const [locationNotice, setLocationNotice] = useState('');
   /** True when no GPS and no saved pin — never invent a city centre. */
   const [needsLocationGate, setNeedsLocationGate] = useState(
@@ -975,7 +978,7 @@ export const Discover = () => {
     userMovedMapRef.current = false;
     const map = new mapboxgl.Map({
       container: host,
-      style: 'mapbox://styles/mapbox/dark-v11',
+      style: mapboxStyleForTheme(resolvedThemeNow()),
       center: [startCenter[1], startCenter[0]],
       zoom: 14,
       attributionControl: false,
@@ -1095,6 +1098,21 @@ export const Discover = () => {
     // useLayoutEffect + isDesktopLayout: host is in the DOM before we construct Mapbox.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mapCenter coords intentionally excluded
   }, [mapboxToken, tokenMissing, isDesktopLayout, mapCenter != null]);
+
+  // Keep the basemap in sync with explicit theme toggles while Discover stays mounted.
+  // setStyle wipes GL sources/layers (not DOM markers) — bump mapStyleVersion on style.load
+  // so the radius-circle effect below re-adds it.
+  useEffect(() => {
+    const onThemeChanged = () => {
+      const map = mapRef.current;
+      if (!map) return;
+      const nextStyle = mapboxStyleForTheme(resolvedThemeNow());
+      map.once('style.load', () => setMapStyleVersion((v) => v + 1));
+      map.setStyle(nextStyle);
+    };
+    window.addEventListener(THEME_CHANGED_EVENT, onThemeChanged);
+    return () => window.removeEventListener(THEME_CHANGED_EVENT, onThemeChanged);
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1291,7 +1309,8 @@ export const Discover = () => {
         'line-opacity': 0.75,
       },
     });
-  }, [mapLoaded, lat, lng, radius]);
+    // mapStyleVersion: setStyle() (theme swap) wipes this GL source/layer — re-add it.
+  }, [mapLoaded, lat, lng, radius, mapStyleVersion]);
 
   const onlineCount = users.filter((u) => u.online).length;
   const nearbyCount = users.length;
@@ -1345,7 +1364,7 @@ export const Discover = () => {
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-extrabold text-[#F0E0C0]">
+              <p className="text-[14px] font-extrabold text-[var(--cream)]">
                 Men nearby — tap Match on a card
               </p>
               <p className="mt-1 text-[12px] text-[var(--cream-muted)]">
@@ -1363,7 +1382,7 @@ export const Discover = () => {
                   /* ignore */
                 }
               }}
-              className="shrink-0 rounded-full border border-[rgba(196,131,42,0.45)] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)] hover:text-[#F0E0C0]"
+              className="shrink-0 rounded-full border border-[rgba(196,131,42,0.45)] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)] hover:text-[var(--cream)]"
             >
               Got it
             </button>
@@ -1380,7 +1399,7 @@ export const Discover = () => {
               safetyNotice.tone === 'success' ? 'rgba(143,199,115,0.4)' : 'rgba(196,131,42,0.45)',
             background:
               safetyNotice.tone === 'success' ? 'rgba(143,199,115,0.12)' : 'rgba(196,131,42,0.1)',
-            color: safetyNotice.tone === 'success' ? '#8FC773' : '#F0E0C0',
+            color: safetyNotice.tone === 'success' ? '#8FC773' : 'var(--cream)',
           }}
         >
           {safetyNotice.msg}
@@ -1394,7 +1413,7 @@ export const Discover = () => {
           className="mx-3 mb-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] px-4 py-3 shadow-[0_12px_28px_rgba(0,0,0,0.4)]"
         >
           <div>
-            <p className="text-[14px] font-extrabold text-[#F0E0C0]">Match with {matchToast.name}</p>
+            <p className="text-[14px] font-extrabold text-[var(--cream)]">Match with {matchToast.name}</p>
             <p className="mt-0.5 text-[12px] text-[var(--cream-muted)]">
               You both said yes. Chat when ready — consent first. Pulse to get seen by more men nearby.
             </p>
@@ -1481,7 +1500,7 @@ export const Discover = () => {
           aria-labelledby="location-gate-title"
           data-testid="location-gate"
         >
-          <p id="location-gate-title" className="text-[17px] font-extrabold text-[#F0E0C0]">
+          <p id="location-gate-title" className="text-[17px] font-extrabold text-[var(--cream)]">
             Allow location to unlock Nearby
           </p>
           <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--cream-muted)]">
@@ -1593,7 +1612,7 @@ export const Discover = () => {
           />
 
           {tokenMissing ? (
-            <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center bg-[#0D0A06] px-6 text-center">
+            <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center bg-[var(--bg-primary)] px-6 text-center">
               <p className="text-sm font-bold text-[var(--cream)]">Map is taking a break</p>
               <p className="mt-1 max-w-xs text-xs leading-relaxed text-[var(--cream-muted)]">
                 Browse who&apos;s nearby below.
@@ -1602,7 +1621,7 @@ export const Discover = () => {
           ) : null}
 
           {!tokenMissing && !mapCenter ? (
-            <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center bg-[#0D0A06]/90 px-5 text-center backdrop-blur-sm">
+            <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center bg-[var(--bg-primary)]/90 px-5 text-center backdrop-blur-sm">
               {needsLocationGate ? (
                 <>
                   <p className="text-sm font-extrabold text-[var(--cream)]">Location required</p>
@@ -1664,7 +1683,8 @@ export const Discover = () => {
                 className="flex cursor-grab touch-none flex-col items-center px-6 pb-2.5 pt-3 active:cursor-grabbing"
                 style={{ touchAction: 'none' }}
               >
-                <span className="h-1.5 w-10 rounded-full bg-[#F0E0C0]/85 shadow-sm" />
+                {/* var(--cream) inverts with theme (light text on dark map, dark text on light map) — stays visible on either basemap. */}
+                <span className="h-1.5 w-10 rounded-full bg-[var(--cream)]/85 shadow-sm" />
               </div>
             </div>
           ) : null}

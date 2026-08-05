@@ -100,7 +100,7 @@ export const Albums = () => {
       <div className="mx-auto max-w-4xl px-4 py-6 space-y-5">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#C4832A]">Private sharing</p>
-          <h1 className="text-2xl font-bold text-[#F0E0C0]">Albums</h1>
+          <h1 className="text-2xl font-bold text-[var(--cream)]">Albums</h1>
           <p className="mt-1 text-sm text-[var(--cream-muted)]">
             {photoTotal}/{freeCap} free photos used. Tap an album to view photos and grant access.
           </p>
@@ -108,9 +108,9 @@ export const Albums = () => {
 
         <form
           onSubmit={handleCreate}
-          className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-5 shadow-card"
+          className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 shadow-card"
         >
-          <label className="block text-xs font-semibold uppercase tracking-[0.14em] text-[#F0E0C0]/85">
+          <label className="block text-xs font-semibold uppercase tracking-[0.14em] text-[var(--cream)]/85">
             New album
           </label>
           <div className="mt-3 flex gap-3">
@@ -118,12 +118,12 @@ export const Albums = () => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Weekend, Travel, Favourites..."
-              className="flex-1 rounded-xl border border-[#3D2B0E] bg-[#0D0A06] px-4 py-3 text-sm text-[#F0E0C0] placeholder:text-[var(--cream-muted)]/50 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/40"
+              className="flex-1 rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-4 py-3 text-sm text-[var(--cream)] placeholder:text-[var(--cream-muted)]/50 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/40"
             />
             <button
               type="submit"
               disabled={saving}
-              className="rounded-xl bg-[#C4832A] px-4 py-3 text-sm font-bold text-[#0D0A06] disabled:opacity-60"
+              className="rounded-xl bg-[#C4832A] px-4 py-3 text-sm font-bold text-[var(--nn-on-copper)] disabled:opacity-60"
             >
               {saving ? 'Creating…' : 'Create'}
             </button>
@@ -131,7 +131,7 @@ export const Albums = () => {
         </form>
 
         {error && (
-          <div className="rounded-2xl border border-[#A45E18]/40 bg-[#1E1508] p-4 text-sm text-[#F0E0C0]">
+          <div className="rounded-2xl border border-[#A45E18]/40 bg-[var(--bg-card)] p-4 text-sm text-[var(--cream)]">
             {error}
           </div>
         )}
@@ -142,11 +142,11 @@ export const Albums = () => {
         )}
 
         {loading ? (
-          <div className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-5 text-sm text-[var(--cream-muted)]">
+          <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 text-sm text-[var(--cream-muted)]">
             Loading albums…
           </div>
         ) : albums.length === 0 ? (
-          <div className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-5 text-sm text-[var(--cream-muted)]">
+          <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 text-sm text-[var(--cream-muted)]">
             No albums yet. Create one above to start building your private library.
           </div>
         ) : (

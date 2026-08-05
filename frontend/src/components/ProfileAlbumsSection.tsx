@@ -39,7 +39,7 @@ export function ProfileAlbumsSection({ ownerId, ownerName }: ProfileAlbumsSectio
       </div>
 
       {notice && (
-        <p className="rounded-xl border border-[#3D2B0E] bg-[#0D0A06]/80 px-3 py-2 text-xs text-[#F0E0C0]">
+        <p className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)]/80 px-3 py-2 text-xs text-[var(--cream)]">
           {notice}
         </p>
       )}

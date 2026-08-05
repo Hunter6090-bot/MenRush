@@ -293,7 +293,7 @@ export const Profile = () => {
   };
 
   const inputClass =
-    'w-full bg-[#1E1508]/60 border border-[#3D2B0E] text-[#F0E0C0] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all';
+    'w-full bg-[var(--bg-card)]/60 border border-[var(--border-default)] text-[var(--cream)] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all';
 
   if (!profile) {
     return (
@@ -301,7 +301,7 @@ export const Profile = () => {
         <div className="flex flex-col items-center justify-center py-24 px-4 text-center gap-4">
           {profileLoadError ? (
             <>
-              <p className="text-[#F0E0C0]/80 text-sm">{profileLoadError}</p>
+              <p className="text-[var(--cream)]/80 text-sm">{profileLoadError}</p>
               <button
                 type="button"
                 onClick={() => window.location.reload()}
@@ -327,7 +327,7 @@ export const Profile = () => {
           className={`fixed top-[calc(var(--mobile-header-height)+0.5rem)] left-1/2 z-50 -translate-x-1/2 px-5 py-2.5 rounded-xl text-sm font-medium shadow-card border animate-slide-up lg:top-6 ${
             toast.type === 'success'
               ? 'bg-nn-online/15 border-nn-online/25 text-[#8FC773]'
-              : 'bg-[#A45E18]/15 border-[#A45E18]/25 text-[#F0E0C0]/80'
+              : 'bg-[#A45E18]/15 border-[#A45E18]/25 text-[var(--cream)]/80'
           }`}
         >
           {toast.msg}
@@ -362,7 +362,7 @@ export const Profile = () => {
         {/* ── Desktop profile layout ── */}
         <div className="hidden lg:grid lg:grid-cols-[300px_1fr] lg:gap-8">
           <div>
-            <div className="relative aspect-[3/4] w-full max-w-[300px] overflow-hidden rounded-2xl border border-[#3D2B0E] bg-[#1E1508]">
+            <div className="relative aspect-[3/4] w-full max-w-[300px] overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]">
               {getPhotoUrl(photoUrl) ? (
                 <img src={getPhotoUrl(photoUrl)!} alt={profile.name} className="h-full w-full object-cover" />
               ) : (
@@ -373,7 +373,7 @@ export const Profile = () => {
             </div>
             <div className="mt-3 grid max-w-[300px] grid-cols-3 gap-2">
               {[photoUrl, coverUrl, photoUrl].filter(Boolean).slice(0, 3).map((src, i) => (
-                <div key={i} className="aspect-square overflow-hidden rounded-xl border border-[#3D2B0E] bg-[#1E1508]">
+                <div key={i} className="aspect-square overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]">
                   {getPhotoUrl(src) ? (
                     <img src={getPhotoUrl(src)!} alt="" className="h-full w-full object-cover" />
                   ) : null}
@@ -385,7 +385,7 @@ export const Profile = () => {
                 className="mt-3 max-w-[300px] rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-3 py-3"
                 data-testid="photo-upgrade-nudge"
               >
-                <p className="text-[12px] font-extrabold text-[#F0E0C0]">Upgrade from a shared avatar</p>
+                <p className="text-[12px] font-extrabold text-[var(--cream)]">Upgrade from a shared avatar</p>
                 <p className="mt-1 text-[11px] leading-relaxed text-[var(--cream-muted)]">
                   Real photos get more matches. Upload a clear face or upper-body shot —
                 </p>
@@ -445,7 +445,7 @@ export const Profile = () => {
         </div>
 
         {/* ── Profile hero (mobile) ── */}
-        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl overflow-hidden shadow-card lg:hidden lg:rounded-3xl">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl overflow-hidden shadow-card lg:hidden lg:rounded-3xl">
           <div className="group relative">
             {coverUrl ? (
               <CoverBanner coverUrl={coverUrl} frame={coverFrame} />
@@ -468,7 +468,7 @@ export const Profile = () => {
                 <button
                   type="button"
                   onClick={() => setCoverEditorOpen(true)}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-[#1E1508]/40 bg-[#0D0A06]/55 px-3 py-1.5 text-[11px] font-semibold text-[#F0E0C0] backdrop-blur-sm hover:border-[#C4832A]/40"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--bg-card)]/40 bg-[var(--bg-primary)]/55 px-3 py-1.5 text-[11px] font-semibold text-[var(--cream)] backdrop-blur-sm hover:border-[#C4832A]/40"
                 >
                   Adjust cover
                 </button>
@@ -476,7 +476,7 @@ export const Profile = () => {
                   type="button"
                   onClick={() => coverInputRef.current?.click()}
                   disabled={uploadingCover}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-[#1E1508]/40 bg-[#0D0A06]/55 px-3 py-1.5 text-[11px] font-semibold text-[#F0E0C0] backdrop-blur-sm hover:border-[#C4832A]/40 disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--bg-card)]/40 bg-[var(--bg-primary)]/55 px-3 py-1.5 text-[11px] font-semibold text-[var(--cream)] backdrop-blur-sm hover:border-[#C4832A]/40 disabled:opacity-60"
                 >
                   {uploadingCover ? 'Uploading…' : 'Change photo'}
                 </button>
@@ -491,7 +491,7 @@ export const Profile = () => {
                 disabled={uploadingCover}
                 className="absolute inset-0 flex items-start justify-center pt-3"
               >
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#1E1508]/40 bg-[#0D0A06]/55 px-3 py-1.5 text-[11px] font-semibold text-[#F0E0C0] backdrop-blur-sm">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--bg-card)]/40 bg-[var(--bg-primary)]/55 px-3 py-1.5 text-[11px] font-semibold text-[var(--cream)] backdrop-blur-sm">
                   {uploadingCover ? (
                     <>
                       <Spinner className="w-3.5 h-3.5" />
@@ -513,10 +513,10 @@ export const Profile = () => {
                 aria-label="Change cover photo"
                 onClick={() => coverInputRef.current?.click()}
                 disabled={uploadingCover}
-                className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#1E1508] bg-[#C4832A] text-[#0D0A06] shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-60"
+                className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full border-2 border-[var(--bg-card)] bg-[#C4832A] text-[var(--nn-on-copper)] shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-60"
               >
                 {uploadingCover ? (
-                  <Spinner className="w-4 h-4 text-[#0D0A06]" />
+                  <Spinner className="w-4 h-4 text-[var(--nn-on-copper)]" />
                 ) : (
                   <ImageIcon className="w-4 h-4" />
                 )}
@@ -535,7 +535,7 @@ export const Profile = () => {
                   aria-label="Upload profile photo"
                   onClick={() => photoInputRef.current?.click()}
                   disabled={uploading}
-                  className={`group relative block cursor-pointer rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C4832A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1E1508] ${
+                  className={`group relative block cursor-pointer rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C4832A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-card)] ${
                     uploading ? 'pointer-events-none opacity-70' : ''
                   }`}
                 >
@@ -545,12 +545,12 @@ export const Profile = () => {
                     online={profile.online}
                     size="xl"
                     showStatus={false}
-                    className="ring-4 ring-[#1E1508] transition-opacity group-hover:opacity-90 group-active:opacity-80"
+                    className="ring-4 ring-[var(--bg-card)] transition-opacity group-hover:opacity-90 group-active:opacity-80"
                   />
                   <span className="absolute inset-0 rounded-full bg-black/0 transition-colors group-hover:bg-black/20 group-active:bg-black/30" />
-                  <span className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#1E1508] bg-[#C4832A] text-[#0D0A06] shadow-lg transition-transform group-hover:scale-105 group-active:scale-95">
+                  <span className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-[var(--bg-card)] bg-[#C4832A] text-[var(--nn-on-copper)] shadow-lg transition-transform group-hover:scale-105 group-active:scale-95">
                     {uploading ? (
-                      <Spinner className="w-4 h-4 text-[#0D0A06]" />
+                      <Spinner className="w-4 h-4 text-[var(--nn-on-copper)]" />
                     ) : (
                       <CameraIcon className="w-4 h-4" />
                     )}
@@ -569,14 +569,14 @@ export const Profile = () => {
                 </Link>
               </div>
             </div>
-            <h2 className="text-xl font-bold text-[#F0E0C0]">{profile.name}</h2>
+            <h2 className="text-xl font-bold text-[var(--cream)]">{profile.name}</h2>
             <p className="text-[var(--cream-muted)] text-sm mt-0.5">Age {profile.age}</p>
             {isGenericAvatarUrl(photoUrl) ? (
               <div
                 className="mt-3 rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-3 py-3 lg:hidden"
                 data-testid="photo-upgrade-nudge-mobile"
               >
-                <p className="text-[12px] font-extrabold text-[#F0E0C0]">Upgrade from a shared avatar</p>
+                <p className="text-[12px] font-extrabold text-[var(--cream)]">Upgrade from a shared avatar</p>
                 <p className="mt-1 text-[11px] leading-relaxed text-[var(--cream-muted)]">
                   Real photos get more matches. Clear face or upper body.
                 </p>
@@ -597,8 +597,8 @@ export const Profile = () => {
           {/* ── Left: Edit profile ── */}
           <div className="space-y-4">
         {/* ── Edit form ── */}
-        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card lg:rounded-3xl">
-          <h3 className="text-[#F0E0C0] font-semibold mb-4">Edit Profile</h3>
+        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 shadow-card lg:rounded-3xl">
+          <h3 className="text-[var(--cream)] font-semibold mb-4">Edit Profile</h3>
 
           <form onSubmit={handleSave} className="space-y-4">
             <div>
@@ -609,7 +609,7 @@ export const Profile = () => {
                 placeholder="Tell people about yourself…"
                 rows={3}
                 maxLength={500}
-                className="w-full bg-[#1E1508]/60 border border-[#3D2B0E] text-[#F0E0C0] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all resize-none"
+                className="w-full bg-[var(--bg-card)]/60 border border-[var(--border-default)] text-[var(--cream)] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all resize-none"
               />
               <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1 text-right">{bio.length}/500</p>
             </div>
@@ -688,8 +688,8 @@ export const Profile = () => {
                             active
                               ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
                               : maxed
-                              ? 'bg-[#1E1508]/30 text-[var(--cream-muted)]/20 border-[#3D2B0E]/30 cursor-not-allowed'
-                              : 'bg-[#1E1508]/40 text-[var(--cream-muted)] border-[#3D2B0E] hover:bg-[#3D2B0E]/60 hover:text-[#F0E0C0]/80'
+                              ? 'bg-[var(--bg-card)]/30 text-[var(--cream-muted)]/20 border-[var(--border-default)]/30 cursor-not-allowed'
+                              : 'bg-[var(--bg-card)]/40 text-[var(--cream-muted)] border-[var(--border-default)] hover:bg-[var(--border-default)]/60 hover:text-[var(--cream)]/80'
                           }`}
                         >
                           {tag}
@@ -733,9 +733,9 @@ export const Profile = () => {
         />
 
         {/* ── Location card ── */}
-        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 flex items-center justify-between shadow-card">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 flex items-center justify-between shadow-card">
           <div>
-            <p className="text-[#F0E0C0]/80 text-sm font-semibold">Your location</p>
+            <p className="text-[var(--cream)]/80 text-sm font-semibold">Your location</p>
             {lat && lng ? (
               <p className="text-[var(--cream-muted)] text-xs mt-0.5">
                 {lat.toFixed(5)}, {lng.toFixed(5)}
@@ -755,10 +755,10 @@ export const Profile = () => {
         </div>
 
         {/* ── Mood card ── */}
-        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 shadow-card">
           <div className="flex items-end justify-between mb-3">
             <div>
-              <p className="text-[#F0E0C0]/80 text-sm font-semibold">Mood</p>
+              <p className="text-[var(--cream)]/80 text-sm font-semibold">Mood</p>
               <p className="text-[var(--cream-muted)] text-xs mt-0.5">
                 Auto-clears in 6 hours. Shows on your card.
               </p>
@@ -823,9 +823,9 @@ export const Profile = () => {
         </Link>
 
         {/* ── Visibility card ── */}
-        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 flex items-center justify-between shadow-card">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 flex items-center justify-between shadow-card">
           <div>
-            <p className="text-[#F0E0C0]/80 text-sm font-semibold">Profile visibility</p>
+            <p className="text-[var(--cream)]/80 text-sm font-semibold">Profile visibility</p>
             <p className="text-[var(--cream-muted)] text-xs mt-0.5">
               {isVisible ? 'You appear in nearby discovery' : 'Hidden from nearby discovery'}
             </p>
@@ -843,7 +843,7 @@ export const Profile = () => {
               }
             }}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none ${
-              isVisible ? 'bg-[#C4832A]' : 'bg-[#3D2B0E]'
+              isVisible ? 'bg-[#C4832A]' : 'bg-[var(--border-default)]'
             }`}
           >
             <span
@@ -857,12 +857,12 @@ export const Profile = () => {
         </div>
 
         {/* ── Sign out (mobile only — desktop uses sidebar) ── */}
-        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 shadow-card lg:hidden">
-          <p className="text-[#F0E0C0]/80 text-sm font-semibold">Sign out</p>
+        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 shadow-card lg:hidden">
+          <p className="text-[var(--cream)]/80 text-sm font-semibold">Sign out</p>
           <p className="text-[var(--cream-muted)] text-xs mt-0.5">You'll need to log back in</p>
           <button
             onClick={() => { logout(); navigate('/login'); }}
-            className="mt-4 flex w-full items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#A45E18]/10 hover:bg-[#A45E18]/20 text-[#F0E0C0]/80 text-xs font-semibold border border-[#A45E18]/20 transition-all"
+            className="mt-4 flex w-full items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#A45E18]/10 hover:bg-[#A45E18]/20 text-[var(--cream)]/80 text-xs font-semibold border border-[#A45E18]/20 transition-all"
           >
             <LogoutIcon className="w-3.5 h-3.5" />
             Sign out
