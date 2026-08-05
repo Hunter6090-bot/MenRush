@@ -42,12 +42,13 @@ export function getNavItems(): NavItem[] {
       desktopNav: true,
       mobileMore: true,
     },
+    // #67: Hot Spots is now a layer on the Nearby map, not a separate destination —
+    // no desktopNav/mobileMore, so it no longer appears in the sidebar or "More" sheet.
+    // The `/hot-spots` route itself stays live (App.tsx) for existing deep links/bookmarks.
     {
       to: '/hot-spots',
       label: ROUTE_LABELS.hotSpots,
       Icon: IconHotSpots,
-      desktopNav: true,
-      mobileMore: true,
     },
     {
       to: '/matches',
