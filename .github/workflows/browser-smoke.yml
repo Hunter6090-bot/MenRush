@@ -73,7 +73,7 @@ jobs:
         working-directory: backend
         run: |
           nohup npm run dev > /tmp/backend.log 2>&1 &
-          for i in $(seq 1 30); do
+          for i in $(seq 1 60); do
             if curl -sf http://localhost:3000/api/health >/dev/null 2>&1 || curl -sf http://localhost:3000/ >/dev/null 2>&1; then
               echo "Backend is up"
               exit 0
@@ -92,6 +92,8 @@ jobs:
         working-directory: frontend
         run: npx playwright install --with-deps chromium
 
+      # Frontend is started by Playwright webServer (port 4173). Do not start a
+      # second Vite process here — --strictPort would fail the suite.
       - name: Run browser smoke tests
         working-directory: frontend
         run: npm run test:e2e

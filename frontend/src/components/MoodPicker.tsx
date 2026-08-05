@@ -27,9 +27,9 @@ export const MoodPicker: React.FC<MoodPickerProps> = ({ current, onSelect }) => 
           onClick={() => void onSelect(active ? null : item.value)}
           className="rounded-full border px-3 py-2 text-xs font-semibold transition-all"
           style={{
-            borderColor: active ? item.accent : '#3D2B0E',
-            background: active ? `${item.accent}22` : '#0D0A06',
-            color: active ? '#F0E0C0' : '#C4A878',
+            borderColor: active ? item.accent : 'var(--border-default)',
+            background: active ? `${item.accent}22` : 'var(--bg-primary)',
+            color: active ? 'var(--cream)' : '#C4A878',
           }}
         >
           {MOOD_LABELS[item.value]}
@@ -51,7 +51,7 @@ export const MoodBadge: React.FC<{ mood: Mood | null | undefined; small?: boolea
       style={{
         borderColor: meta?.accent || '#C4832A',
         background: `${meta?.accent || '#C4832A'}22`,
-        color: '#F0E0C0',
+        color: 'var(--cream)',
         fontSize: small ? 10 : 12,
         padding: small ? '0.2rem 0.45rem' : '0.3rem 0.65rem',
       }}

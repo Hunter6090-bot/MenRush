@@ -88,7 +88,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   return (
     <div className={`relative flex-shrink-0 ${className}`}>
       <div
-        className={`${s.outer} rounded-full overflow-hidden bg-gradient-to-br from-[#C4832A]/30 to-[#C4832A]/10 border border-[#3D2B0E] flex items-center justify-center font-semibold text-[#F0E0C0]`}
+        className={`${s.outer} rounded-full overflow-hidden bg-gradient-to-br from-[#C4832A]/30 to-[#C4832A]/10 border border-[var(--border-default)] flex items-center justify-center font-semibold text-[var(--cream)]`}
       >
         {src ? (
           <img

@@ -64,7 +64,7 @@ export function ProfileDepthStrip() {
     >
       <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-extrabold text-[#F0E0C0]">
+          <p className="text-[13px] font-extrabold text-[var(--cream)]">
             {primary === 'avatar'
               ? 'You need a photo to get matched'
               : 'Finish your profile — more views, more matches'}
