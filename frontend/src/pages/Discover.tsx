@@ -85,7 +85,7 @@ function desktopMapHeightCss(expanded: boolean): string {
 }
 
 const mapChromeBtnClass =
-  'flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] text-[var(--border-default)] shadow-md backdrop-blur-md transition-transform active:scale-95';
+  'flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] text-[#3D2B0E] shadow-md backdrop-blur-md transition-transform active:scale-95';
 
 const mapStatusCardClass =
   'pointer-events-none absolute bottom-3 left-3 z-10 flex items-center gap-2.5 rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[color-mix(in_srgb,#FFF8F0_94%,transparent)] px-3.5 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.18)] backdrop-blur-md';
