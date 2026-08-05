@@ -9,6 +9,7 @@ import { PulseRing } from '../components/PulseRing';
 import { HotSpotPin, createHotSpotPinElement } from '../components/HotSpotPin';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { formatDistanceFromKm } from '../lib/localeUnits';
+import { mapboxStyleForTheme, resolvedThemeNow, THEME_CHANGED_EVENT } from '../lib/mapTheme';
 
 export const HotSpots = () => {
   const { lat, lng } = useLocationStore();
@@ -67,7 +68,7 @@ export const HotSpots = () => {
     mapboxgl.accessToken = mapboxToken!;
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
-      style: 'mapbox://styles/mapbox/dark-v11',
+      style: mapboxStyleForTheme(resolvedThemeNow()),
       center: [lng, lat],
       zoom: 11,
       attributionControl: false,
@@ -76,7 +77,13 @@ export const HotSpots = () => {
     map.on('load', () => setMapLoaded(true));
     mapRef.current = map;
 
+    // Keep the basemap in sync with explicit theme toggles. No custom GL sources/layers
+    // here (hot spot pins are DOM markers, unaffected by setStyle) — nothing to re-add.
+    const onThemeChanged = () => map.setStyle(mapboxStyleForTheme(resolvedThemeNow()));
+    window.addEventListener(THEME_CHANGED_EVENT, onThemeChanged);
+
     return () => {
+      window.removeEventListener(THEME_CHANGED_EVENT, onThemeChanged);
       markersRef.current.forEach(({ marker, root }) => {
         marker.remove();
         setTimeout(() => root.unmount(), 0);

@@ -152,7 +152,7 @@ export const ProfileView = () => {
     return (
       <Layout>
         <div className="max-w-xl mx-auto px-4 py-10 text-center">
-          <p className="text-[#F0E0C0]/80 text-sm">{error || 'Profile not found.'}</p>
+          <p className="text-[var(--cream)]/80 text-sm">{error || 'Profile not found.'}</p>
           <button
             onClick={() => navigate('/discover')}
             className="mt-4 px-4 py-2 rounded-xl bg-[#C4832A]/10 hover:bg-[#C4832A]/20 text-[#C4832A] text-xs font-semibold border border-[#C4832A]/30"
@@ -176,14 +176,14 @@ export const ProfileView = () => {
                 safetyNotice.tone === 'success' ? 'rgba(143,199,115,0.4)' : 'rgba(196,131,42,0.45)',
               background:
                 safetyNotice.tone === 'success' ? 'rgba(143,199,115,0.12)' : 'rgba(196,131,42,0.1)',
-              color: safetyNotice.tone === 'success' ? '#8FC773' : '#F0E0C0',
+              color: safetyNotice.tone === 'success' ? '#8FC773' : 'var(--cream)',
             }}
           >
             {safetyNotice.msg}
           </div>
         ) : null}
 
-        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl overflow-hidden shadow-card">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl overflow-hidden shadow-card">
           {user.cover_url ? (
             <CoverBanner
               coverUrl={user.cover_url}
@@ -204,11 +204,11 @@ export const ProfileView = () => {
                 age={user.age}
                 online={user.online}
                 size="xl"
-                className="ring-4 ring-[#1E1508]"
+                className="ring-4 ring-[var(--bg-card)]"
               />
               <div className="flex items-center gap-1.5 pb-1">
                 <StatusBadge online={!!user.online} lastSeen={user.last_seen} />
-                <div className="rounded-full border border-[#3D2B0E] bg-[#0D0A06]/60">
+                <div className="rounded-full border border-[var(--border-default)] bg-[var(--bg-primary)]/60">
                   <ChatSafetyMenu
                     peerId={user.id}
                     peerName={user.name}
@@ -221,20 +221,20 @@ export const ProfileView = () => {
                 </div>
               </div>
             </div>
-            <h2 className="text-xl font-bold text-[#F0E0C0]">{user.name}</h2>
+            <h2 className="text-xl font-bold text-[var(--cream)]">{user.name}</h2>
             {typeof user.age === 'number' && (
               <p className="text-[var(--cream-muted)] text-sm mt-0.5">Age {user.age}</p>
             )}
             {user.headline && (
-              <p className="text-[#F0E0C0]/80 text-sm mt-3 italic">{user.headline}</p>
+              <p className="text-[var(--cream)]/80 text-sm mt-3 italic">{user.headline}</p>
             )}
             {user.bio && (
-              <p className="text-[#F0E0C0]/65 text-sm mt-3 leading-relaxed">{user.bio}</p>
+              <p className="text-[var(--cream)]/65 text-sm mt-3 leading-relaxed">{user.bio}</p>
             )}
             {user.looking_for && (
               <p className="text-[var(--cream-muted)] text-xs mt-3">
                 <span className="uppercase tracking-wide font-semibold">Looking for:</span>{' '}
-                <span className="text-[#F0E0C0]/80">{user.looking_for}</span>
+                <span className="text-[var(--cream)]/80">{user.looking_for}</span>
               </p>
             )}
             {user.interests && user.interests.length > 0 && (
