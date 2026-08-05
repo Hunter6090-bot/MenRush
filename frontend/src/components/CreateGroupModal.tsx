@@ -134,13 +134,13 @@ export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalP
       <div
         className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-3xl p-6"
         style={{
-          background: '#1E1508',
-          border: '1px solid #3D2B0E',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-default)',
           boxShadow: '0 24px 80px rgba(0,0,0,0.7)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-bold mb-1" style={{ color: '#F0E0C0' }}>
+        <h2 className="text-lg font-bold mb-1" style={{ color: 'var(--cream)' }}>
           Create group
         </h2>
         <p className="text-xs mb-5 leading-relaxed" style={{ color: '#A89070' }}>
@@ -149,7 +149,7 @@ export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalP
 
         {!isPremium ? (
           <div className="space-y-4">
-            <p className="text-sm" style={{ color: '#F0E0C0' }}>
+            <p className="text-sm" style={{ color: 'var(--cream)' }}>
               Upgrade to Premium to create groups and invite other Premium members.
             </p>
             <div className="flex gap-3">
@@ -157,7 +157,7 @@ export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalP
                 type="button"
                 onClick={onClose}
                 className="flex-1 py-3 rounded-xl text-sm font-semibold border"
-                style={{ borderColor: '#3D2B0E', color: '#A89070' }}
+                style={{ borderColor: 'var(--border-default)', color: '#A89070' }}
               >
                 Cancel
               </button>
@@ -189,9 +189,9 @@ export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalP
                 maxLength={60}
                 className="w-full text-sm px-4 py-3 rounded-xl focus:outline-none"
                 style={{
-                  background: '#0D0A06',
-                  border: '1px solid #3D2B0E',
-                  color: '#F0E0C0',
+                  background: 'var(--bg-primary)',
+                  border: '1px solid var(--border-default)',
+                  color: 'var(--cream)',
                 }}
               />
             </div>
@@ -206,9 +206,9 @@ export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalP
                 maxLength={200}
                 className="w-full text-sm px-4 py-3 rounded-xl resize-none focus:outline-none"
                 style={{
-                  background: '#0D0A06',
-                  border: '1px solid #3D2B0E',
-                  color: '#F0E0C0',
+                  background: 'var(--bg-primary)',
+                  border: '1px solid var(--border-default)',
+                  color: 'var(--cream)',
                 }}
               />
             </div>
@@ -222,19 +222,19 @@ export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalP
                   Loading matches…
                 </p>
               ) : candidates.length === 0 ? (
-                <p className="text-xs py-3 px-3 rounded-xl" style={{ color: '#6B5035', background: '#0D0A06' }}>
+                <p className="text-xs py-3 px-3 rounded-xl" style={{ color: '#6B5035', background: 'var(--bg-primary)' }}>
                   Match with someone first, then invite them here.
                 </p>
               ) : (
                 <div
                   className="max-h-40 overflow-y-auto rounded-xl border"
-                  style={{ borderColor: '#3D2B0E' }}
+                  style={{ borderColor: 'var(--border-default)' }}
                 >
                   {candidates.map((c) => (
                     <label
                       key={c.id}
-                      className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-[#3D2B0E]/30 border-b last:border-b-0"
-                      style={{ borderColor: '#3D2B0E' }}
+                      className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-[var(--border-default)]/30 border-b last:border-b-0"
+                      style={{ borderColor: 'var(--border-default)' }}
                     >
                       <input
                         type="checkbox"
@@ -242,7 +242,7 @@ export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalP
                         onChange={() => toggleMember(c.id)}
                         className="accent-[#C4832A]"
                       />
-                      <span className="text-sm truncate" style={{ color: '#F0E0C0' }}>
+                      <span className="text-sm truncate" style={{ color: 'var(--cream)' }}>
                         {c.name}
                       </span>
                     </label>
@@ -263,7 +263,7 @@ export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalP
                 disabled={creating}
                 onClick={onClose}
                 className="flex-1 py-3 rounded-xl text-sm font-semibold border disabled:opacity-50"
-                style={{ borderColor: '#3D2B0E', color: '#A89070' }}
+                style={{ borderColor: 'var(--border-default)', color: '#A89070' }}
               >
                 Cancel
               </button>

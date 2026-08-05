@@ -129,14 +129,14 @@ export const Stream = () => {
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#C4832A]">Live view</p>
-            <h1 className="text-2xl font-bold text-[#F0E0C0]">{ROUTE_LABELS.liveProfileList}</h1>
+            <h1 className="text-2xl font-bold text-[var(--cream)]">{ROUTE_LABELS.liveProfileList}</h1>
             <p className="text-sm text-[var(--cream-muted)] mt-1">
               Who is around right now — list view.
             </p>
           </div>
           <Link
             to="/discover"
-            className="rounded-full border border-[#3D2B0E] px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-[#F0E0C0] transition-colors hover:border-[#C4832A] hover:text-[#C4832A]"
+            className="rounded-full border border-[var(--border-default)] px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-[var(--cream)] transition-colors hover:border-[#C4832A] hover:text-[#C4832A]"
           >
             Back to map
           </Link>
@@ -153,7 +153,7 @@ export const Stream = () => {
             role="dialog"
             aria-labelledby="stream-location-title"
           >
-            <p id="stream-location-title" className="text-[17px] font-extrabold text-[#F0E0C0]">
+            <p id="stream-location-title" className="text-[17px] font-extrabold text-[var(--cream)]">
               We need your location for the live list
             </p>
             <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--cream-muted)]">
@@ -170,7 +170,7 @@ export const Stream = () => {
             <p className="mt-4 text-[11px] text-[var(--cream-muted)]">Consent first · Report anytime</p>
           </div>
         ) : error ? (
-          <div className="rounded-2xl border border-[#A45E18]/40 bg-[#1E1508] p-5 text-sm text-[#F0E0C0]">
+          <div className="rounded-2xl border border-[#A45E18]/40 bg-[var(--bg-card)] p-5 text-sm text-[var(--cream)]">
             {error}
           </div>
         ) : users.length === 0 ? (
@@ -178,7 +178,7 @@ export const Stream = () => {
             className="rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[rgba(196,131,42,0.08)] px-6 py-10 text-center"
             data-testid="stream-empty"
           >
-            <p className="text-[16px] font-extrabold text-[#F0E0C0]">No one nearby yet</p>
+            <p className="text-[16px] font-extrabold text-[var(--cream)]">No one nearby yet</p>
             <p className="mx-auto mt-2 max-w-sm text-[13px] text-[var(--cream-muted)]">
               Expand radius on the map, start Pulse, or check Hot Spots for live venues.
             </p>

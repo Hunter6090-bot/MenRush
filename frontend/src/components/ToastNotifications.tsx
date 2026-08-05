@@ -59,7 +59,7 @@ export const ToastNotifications = () => {
         <div
           key={toast.id}
           onClick={() => handleToastClick(toast)}
-          className="pointer-events-auto cursor-pointer bg-[#1E1508]/95 backdrop-blur-md border border-[#3D2B0E] rounded-2xl p-4 shadow-2xl animate-slide-in-right hover:border-[#C4832A]/50 transition-all flex items-start gap-3 group"
+          className="pointer-events-auto cursor-pointer bg-[var(--bg-card)]/95 backdrop-blur-md border border-[var(--border-default)] rounded-2xl p-4 shadow-2xl animate-slide-in-right hover:border-[#C4832A]/50 transition-all flex items-start gap-3 group"
         >
           <div
             className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
@@ -78,7 +78,7 @@ export const ToastNotifications = () => {
           </div>
 
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-[#F0E0C0] leading-tight group-hover:text-[#C4832A] transition-colors">
+            <p className="text-sm font-bold text-[var(--cream)] leading-tight group-hover:text-[#C4832A] transition-colors">
               {toast.message}
             </p>
             {toast.body && (

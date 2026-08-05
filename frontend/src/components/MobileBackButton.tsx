@@ -26,7 +26,7 @@ export function MobileBackButton({
       onClick={onClick ?? (() => goBack(navigate, fallback))}
       aria-label={label}
       data-testid="mobile-back"
-      className={`inline-flex min-h-[44px] shrink-0 items-center gap-0.5 rounded-xl px-2 text-[#C4832A] transition-colors hover:bg-[#3D2B0E]/45 active:scale-[0.98] ${className}`}
+      className={`inline-flex min-h-[44px] shrink-0 items-center gap-0.5 rounded-xl px-2 text-[#C4832A] transition-colors hover:bg-[var(--border-default)]/45 active:scale-[0.98] ${className}`}
     >
       <ChevronLeftIcon className="h-6 w-6 shrink-0" />
       {showLabel && <span className="text-sm font-bold leading-none pr-1">{label}</span>}

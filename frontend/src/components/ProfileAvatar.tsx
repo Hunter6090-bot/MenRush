@@ -26,7 +26,7 @@ const ProfileAvatar = ({
   if (resolved) {
     return (
       <div
-        className={`rounded-full border-4 border-[#C4832A] overflow-hidden bg-[#0D0A06] shadow-inner flex-shrink-0 ${className}`.trim()}
+        className={`rounded-full border-4 border-[#C4832A] overflow-hidden bg-[var(--bg-primary)] shadow-inner flex-shrink-0 ${className}`.trim()}
         style={{ width: dimension, height: dimension }}
       >
         <img src={resolved} alt="Profile" className="h-full w-full object-cover" />
@@ -37,7 +37,7 @@ const ProfileAvatar = ({
   // Simple uniform silhouette (same for everyone without a photo)
   return (
     <div
-      className={`rounded-full border-4 border-[#C4832A] bg-[#0D0A06] flex items-center justify-center shadow-inner flex-shrink-0 ${className}`.trim()}
+      className={`rounded-full border-4 border-[#C4832A] bg-[var(--bg-primary)] flex items-center justify-center shadow-inner flex-shrink-0 ${className}`.trim()}
       style={{ width: dimension, height: dimension }}
     >
       <svg
