@@ -175,7 +175,7 @@ export function NearbyProfileGrid({
                     </span>
                     {user.is_verified ? <VerifiedBadge size="sm" /> : null}
                   </div>
-                  <p className="mt-0.5 truncate text-[11px] font-semibold text-[#F0E0C0]">
+                  <p className="mt-0.5 truncate text-[11px] font-semibold text-[var(--cream)]">
                     {meta}
                   </p>
                   {user.looking_for ? (

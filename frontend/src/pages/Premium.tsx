@@ -69,12 +69,12 @@ export const Premium: React.FC = () => {
       </div>
 
       <div className="relative z-10 w-full max-w-lg animate-slide-up">
-        <div className="bg-[#1E1508]/90 backdrop-blur-xl border border-[#3D2B0E] rounded-2xl p-7 shadow-card text-[#F0E0C0]">
+        <div className="bg-[var(--bg-card)]/90 backdrop-blur-xl border border-[var(--border-default)] rounded-2xl p-7 shadow-card text-[var(--cream)]">
           <div className="flex justify-center mb-4">
             <PulseRing size={40} label="Premium" />
           </div>
 
-          <h1 className="text-2xl font-black text-center tracking-tight mb-1 text-[#F0E0C0]">
+          <h1 className="text-2xl font-black text-center tracking-tight mb-1 text-[var(--cream)]">
             MenRush Premium
           </h1>
           <p className="text-sm text-[var(--cream-muted)] text-center mb-6">
@@ -123,7 +123,7 @@ export const Premium: React.FC = () => {
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-left">
-                      <p className="font-bold text-[#F0E0C0]">{plan.name}</p>
+                      <p className="font-bold text-[var(--cream)]">{plan.name}</p>
                       <p className="text-xs text-[var(--cream-muted)] mt-1">{plan.tagline}</p>
                     </div>
                     <div className="text-right shrink-0">

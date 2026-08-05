@@ -3,7 +3,8 @@ import { guardAgainstSideEffects } from './support/network-guard';
 
 test.describe('public routes', () => {
   const routes = [
-    { path: '/', heading: 'MenRush' },
+    // Pre-launch: App.tsx renders <ComingSoon /> at "/" (see CLAUDE.md).
+    { path: '/', heading: 'Real men.' },
     { path: '/terms', heading: 'Terms and Conditions' },
     { path: '/privacy', heading: 'Private by design, clear by default.' },
     { path: '/cookies', heading: 'Cookies' },
@@ -30,11 +31,14 @@ test('waitlist rejects invalid input without making a request', async ({ page })
   const network = await guardAgainstSideEffects(page);
 
   await page.goto('/');
-  await page.getByLabel('Email').fill('not-an-email');
-  await page.getByRole('button', { name: 'Join waitlist' }).click();
+  // ComingSoon uses #waitlist-email (no associated <label>); CTA copy is "Join the beta".
+  const emailInput = page.locator('#waitlist-email');
+  await expect(emailInput).toBeVisible();
+  await emailInput.fill('not-an-email');
+  await page.getByRole('button', { name: /Join the beta/i }).click();
 
   await expect(page.getByText('Please enter a valid email address.')).toBeVisible();
-  await expect(page.getByLabel('Email')).toHaveValue('not-an-email');
+  await expect(emailInput).toHaveValue('not-an-email');
   expect(network.expectNoSideEffects()).toEqual([]);
 });
 
@@ -71,7 +75,8 @@ test.describe('anonymous route protection', () => {
 
       await page.goto(path);
 
-      await expect(page).toHaveURL(/\/login$/);
+      // App.tsx appends `?next=<path>` so the user lands back where they started after signing in.
+      await expect(page).toHaveURL(/\/login(\?.*)?$/);
       await expect(page.getByRole('button', { name: 'Sign In' })).toBeVisible();
     });
   }

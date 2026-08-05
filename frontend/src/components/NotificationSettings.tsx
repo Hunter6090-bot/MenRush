@@ -53,11 +53,11 @@ export const NotificationSettings: React.FC = () => {
 
   return (
     <div
-      className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl p-5 flex items-center justify-between shadow-card"
+      className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 flex items-center justify-between shadow-card"
       data-testid="notification-settings"
     >
       <div className="pr-4">
-        <p className="text-[#F0E0C0]/80 text-sm font-semibold">Push notifications</p>
+        <p className="text-[var(--cream)]/80 text-sm font-semibold">Push notifications</p>
         <p className="text-[var(--cream-muted)] text-xs mt-0.5" data-testid="notification-settings-status">
           {description}
         </p>
@@ -70,7 +70,7 @@ export const NotificationSettings: React.FC = () => {
         aria-label="Toggle push notifications"
         data-testid="notification-settings-toggle"
         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none disabled:opacity-40 ${
-          enabled ? 'bg-[#C4832A]' : 'bg-[#3D2B0E]'
+          enabled ? 'bg-[#C4832A]' : 'bg-[var(--border-default)]'
         }`}
       >
         <span
