@@ -43,6 +43,7 @@ import {
   RADIUS_CIRCLE_SOURCE,
 } from '../lib/mapRadiusCircle';
 import { ROUTE_LABELS } from '../lib/routeLabels';
+import { mapboxStyleForTheme, resolvedThemeNow, THEME_CHANGED_EVENT } from '../lib/mapTheme';
 import { useIsDesktopLayout } from '../hooks/useMediaQuery';
 import { ProximitySlider } from '../components/ProximitySlider';
 import { IconMapExpand } from '../components/icons';
@@ -296,6 +297,8 @@ export const Discover = () => {
     lat != null && lng != null ? [lat, lng] : null,
   );
   const [mapLoaded, setMapLoaded] = useState(false);
+  /** Bumped whenever the basemap style is swapped so GL sources/layers (wiped by setStyle) re-add. */
+  const [mapStyleVersion, setMapStyleVersion] = useState(0);
   const [locationNotice, setLocationNotice] = useState('');
   /** True when no GPS and no saved pin — never invent a city centre. */
   const [needsLocationGate, setNeedsLocationGate] = useState(
@@ -975,7 +978,7 @@ export const Discover = () => {
     userMovedMapRef.current = false;
     const map = new mapboxgl.Map({
       container: host,
-      style: 'mapbox://styles/mapbox/dark-v11',
+      style: mapboxStyleForTheme(resolvedThemeNow()),
       center: [startCenter[1], startCenter[0]],
       zoom: 14,
       attributionControl: false,
@@ -1095,6 +1098,21 @@ export const Discover = () => {
     // useLayoutEffect + isDesktopLayout: host is in the DOM before we construct Mapbox.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mapCenter coords intentionally excluded
   }, [mapboxToken, tokenMissing, isDesktopLayout, mapCenter != null]);
+
+  // Keep the basemap in sync with explicit theme toggles while Discover stays mounted.
+  // setStyle wipes GL sources/layers (not DOM markers) — bump mapStyleVersion on style.load
+  // so the radius-circle effect below re-adds it.
+  useEffect(() => {
+    const onThemeChanged = () => {
+      const map = mapRef.current;
+      if (!map) return;
+      const nextStyle = mapboxStyleForTheme(resolvedThemeNow());
+      map.once('style.load', () => setMapStyleVersion((v) => v + 1));
+      map.setStyle(nextStyle);
+    };
+    window.addEventListener(THEME_CHANGED_EVENT, onThemeChanged);
+    return () => window.removeEventListener(THEME_CHANGED_EVENT, onThemeChanged);
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1291,7 +1309,8 @@ export const Discover = () => {
         'line-opacity': 0.75,
       },
     });
-  }, [mapLoaded, lat, lng, radius]);
+    // mapStyleVersion: setStyle() (theme swap) wipes this GL source/layer — re-add it.
+  }, [mapLoaded, lat, lng, radius, mapStyleVersion]);
 
   const onlineCount = users.filter((u) => u.online).length;
   const nearbyCount = users.length;
@@ -1664,7 +1683,8 @@ export const Discover = () => {
                 className="flex cursor-grab touch-none flex-col items-center px-6 pb-2.5 pt-3 active:cursor-grabbing"
                 style={{ touchAction: 'none' }}
               >
-                <span className="h-1.5 w-10 rounded-full bg-[#F0E0C0]/85 shadow-sm" />
+                {/* var(--cream) inverts with theme (light text on dark map, dark text on light map) — stays visible on either basemap. */}
+                <span className="h-1.5 w-10 rounded-full bg-[var(--cream)]/85 shadow-sm" />
               </div>
             </div>
           ) : null}
