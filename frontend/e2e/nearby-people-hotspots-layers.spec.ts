@@ -1,28 +1,60 @@
-import { expect, test, request as apiRequest, type BrowserContext } from '@playwright/test';
-import { TEST_PASSWORD, ALICE } from './test-accounts';
+import { expect, test, request as apiRequest, type APIRequestContext, type BrowserContext } from '@playwright/test';
+import { ALICE, BOB, HOTSPOT_FILLERS, PREMIUM_TESTER, TEST_HOT_SPOT, TEST_PASSWORD } from './test-accounts';
 
 // #67: unify Nearby into one map with independent People / Hot Spots layers.
 test.describe.configure({ mode: 'serial' });
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
+// Matches backend/scripts/seed-test-users.ts's TEST_LAT/TEST_LNG — the deterministic
+// e2e fixture Hot Spot (TEST_HOT_SPOT) always exists at this exact coordinate.
+const FIXTURE_GEO = { latitude: TEST_HOT_SPOT.lat, longitude: TEST_HOT_SPOT.lng };
 
 type LoginResult = {
   token: string;
   user: { id: string; email: string; name: string; is_verified: boolean; verification_status: string };
 };
 
-async function login(request: any, email: string): Promise<LoginResult> {
+async function login(request: APIRequestContext, email: string): Promise<LoginResult> {
   const response = await request.post('/api/auth/login', { data: { email, password: TEST_PASSWORD } });
   expect(response.ok()).toBeTruthy();
   return response.json();
 }
 
+async function checkOut(request: APIRequestContext, token: string) {
+  // Best-effort — tolerate "not checked in anywhere" so this is safe to call unconditionally.
+  await request
+    .post(`/api/hot-spots/${TEST_HOT_SPOT.id}/check-out`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    .catch(() => undefined);
+}
+
+async function checkIn(request: APIRequestContext, token: string, anonymous: boolean) {
+  const res = await request.post(`/api/hot-spots/${TEST_HOT_SPOT.id}/check-in`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { anonymous },
+  });
+  expect(res.ok()).toBeTruthy();
+  return res.json();
+}
+
 let alice: LoginResult;
+let premium: LoginResult;
+let fillers: LoginResult[];
 
 test.beforeAll(async () => {
   const api = await apiRequest.newContext({ baseURL: BASE_URL });
   try {
     alice = await login(api, ALICE.email);
+    premium = await login(api, PREMIUM_TESTER.email);
+    fillers = await Promise.all(HOTSPOT_FILLERS.map((f) => login(api, f.email)));
+    const bob = await login(api, BOB.email);
+
+    // Deterministic slate: whatever a previous run left checked in at the fixture Hot
+    // Spot, clear it — don't skip/weaken assertions because of leftover state instead.
+    await Promise.all(
+      [alice, premium, bob, ...fillers].map((r) => checkOut(api, r.token)),
+    );
   } finally {
     await api.dispose();
   }
@@ -38,10 +70,7 @@ async function authenticate(context: BrowserContext, result: LoginResult) {
 test('People and Hot Spots layer toggles default on and are independently switchable', async ({
   browser,
 }) => {
-  const ctx = await browser.newContext({
-    geolocation: { latitude: 40.7128, longitude: -74.006 },
-    permissions: ['geolocation'],
-  });
+  const ctx = await browser.newContext({ geolocation: FIXTURE_GEO, permissions: ['geolocation'] });
   await authenticate(ctx, alice);
   const page = await ctx.newPage();
   await page.goto('/discover');
@@ -55,26 +84,29 @@ test('People and Hot Spots layer toggles default on and are independently switch
   await expect(peopleToggle).toHaveAttribute('aria-pressed', 'true');
   await expect(hotSpotsToggle).toHaveAttribute('aria-pressed', 'true');
 
+  // Hot Spot pins are ALSO `.mapboxgl-marker` elements (same Mapbox marker class) —
+  // isolate person/self markers by excluding anything wrapping a `.hotspot-pin`, so
+  // this assertion isn't skewed by however many real venues are in range.
+  const personMarkers = page.locator('.mapboxgl-marker:not(:has(.hotspot-pin))');
+
   // Give the nearby-users fetch + marker mount time to land before sampling the
   // baseline — otherwise this races the self-marker-only initial paint.
   await page.waitForResponse((r) => r.url().includes('/api/users/nearby'), { timeout: 20_000 });
   await page.waitForTimeout(3_000);
-  const markerCountBefore = await page.locator('.mapboxgl-marker').count();
+  const markerCountBefore = await personMarkers.count();
   test.skip(markerCountBefore <= 1, 'No other seeded people within range for this fixture location.');
 
-  // Toggling People off hides person markers but the self marker stays — the map
-  // itself must not be recreated (no new tile/style request), just markers hidden.
+  // Toggling People off hides person markers but the self marker stays, and Hot Spot
+  // pins are untouched — the map itself must not be recreated (no new tile/style
+  // request), just markers hidden.
   const requestsBefore = new Set<string>();
   page.on('request', (r) => requestsBefore.add(r.url()));
+  const hotSpotCountBefore = await page.locator('.hotspot-pin').count();
 
   await peopleToggle.click();
   await expect(peopleToggle).toHaveAttribute('aria-pressed', 'false');
-  await expect
-    .poll(() => page.locator('.mapboxgl-marker').count())
-    .toBe(1); // only the self marker remains
-  const markerCountAfter = await page.locator('.mapboxgl-marker').count();
-  expect(markerCountAfter).toBeLessThan(markerCountBefore);
-  expect(markerCountAfter).toBeGreaterThanOrEqual(1); // self marker remains
+  await expect.poll(() => personMarkers.count()).toBe(1); // only the self marker remains
+  expect(await page.locator('.hotspot-pin').count()).toBe(hotSpotCountBefore); // untouched
 
   // No new network calls fired by a pure client-side visibility toggle — nothing
   // about the viewer's own precise coordinates gets sent anywhere by toggling.
@@ -88,8 +120,7 @@ test('People and Hot Spots layer toggles default on and are independently switch
 
   await peopleToggle.click();
   await expect(peopleToggle).toHaveAttribute('aria-pressed', 'true');
-  await page.waitForTimeout(300);
-  expect(await page.locator('.mapboxgl-marker').count()).toBe(markerCountBefore);
+  await expect.poll(() => personMarkers.count()).toBe(markerCountBefore);
 
   // Hot Spots layer: same hide/restore contract, independent of People.
   await hotSpotsToggle.click();
@@ -104,10 +135,7 @@ test('People and Hot Spots layer toggles default on and are independently switch
 test('/hot-spots route still loads directly for compatibility (no nav entry, route unchanged)', async ({
   browser,
 }) => {
-  const ctx = await browser.newContext({
-    geolocation: { latitude: 40.7128, longitude: -74.006 },
-    permissions: ['geolocation'],
-  });
+  const ctx = await browser.newContext({ geolocation: FIXTURE_GEO, permissions: ['geolocation'] });
   await authenticate(ctx, alice);
   const page = await ctx.newPage();
   await page.goto('/hot-spots');
@@ -118,27 +146,145 @@ test('/hot-spots route still loads directly for compatibility (no nav entry, rou
   await ctx.close();
 });
 
-test('Hot Spot sheet opens on the map without leaving /discover, and closes cleanly', async ({
+// Full in-map Hot Spot sheet flow against the deterministic TEST_HOT_SPOT fixture —
+// never skipped for lack of data: the fixture is seeded by
+// backend/scripts/seed-test-users.ts, not dependent on real curated venue data being
+// in range. Desktop-only by design (not by data availability): this mutates shared
+// Alice/premium/filler check-in state against one shared fixture Hot Spot, which
+// races if `desktop-chromium` and `mobile-chromium` run it concurrently (Playwright
+// projects run in parallel, `describe.configure({mode:'serial'})` only orders tests
+// within one project). The HotSpotSheet component itself is plain shared/responsive
+// CSS with no viewport-specific logic — same pattern ProfileDrawer already uses.
+test('Hot Spot sheet: select, check in, check in anonymously, check out, close — map position preserved', async ({
   browser,
 }) => {
-  const ctx = await browser.newContext({
-    geolocation: { latitude: 40.7128, longitude: -74.006 },
-    permissions: ['geolocation'],
-  });
+  test.skip(
+    test.info().project.name !== 'desktop-chromium',
+    'Runs once on desktop-chromium to avoid racing mobile-chromium over the shared Hot Spot fixture/account.',
+  );
+  const ctx = await browser.newContext({ geolocation: FIXTURE_GEO, permissions: ['geolocation'] });
   await authenticate(ctx, alice);
   const page = await ctx.newPage();
   await page.goto('/discover');
-  await expect(page.getByTestId('layer-toggle-hotspots')).toBeVisible({ timeout: 20_000 });
 
-  const pin = page.locator('.hotspot-pin').first();
-  const pinCount = await pin.count();
-  test.skip(pinCount === 0, 'No seeded Hot Spots within range for this fixture location.');
+  const pin = page.locator(`[data-hotspot-id="${TEST_HOT_SPOT.id}"]`);
+  await expect(pin).toBeVisible({ timeout: 20_000 });
+  // Clean slate from beforeAll — starts dim (no one checked in).
+  await expect(pin).toHaveAttribute('data-occupied', '0');
 
+  const mapHost = page.getByTestId('discover-map-canvas-host');
+  const positionBefore = await mapHost.boundingBox();
+
+  // 1. Marker selection opens the sheet without navigating away.
   await pin.click();
   const sheet = page.getByTestId('hotspot-sheet');
   await expect(sheet).toBeVisible();
-  await expect(page).toHaveURL(/\/discover$/); // never navigated away
+  await expect(sheet).toContainText(TEST_HOT_SPOT.name);
+  await expect(page).toHaveURL(/\/discover$/);
 
+  // 2. Normal check-in.
+  await page.getByTestId('hotspot-sheet-checkin').click();
+  await expect(page.getByTestId('hotspot-sheet-checkout')).toBeVisible({ timeout: 10_000 });
+  await expect
+    .poll(async () => (await pin.getAttribute('data-occupied')) ?? '0')
+    .toBe('1');
+
+  // 3. Check out (returns to the pre-check-in state).
+  await page.getByTestId('hotspot-sheet-checkout').click();
+  await expect(page.getByTestId('hotspot-sheet-checkin')).toBeVisible({ timeout: 10_000 });
+  await expect
+    .poll(async () => (await pin.getAttribute('data-occupied')) ?? '0')
+    .toBe('0');
+
+  // 4. Anonymous check-in — same visible "checked in" state, but the anonymity flag
+  // must actually be set server-side (verified via API, not just the UI toggle).
+  await page.getByTestId('hotspot-sheet-checkin-anon').click();
+  await expect(page.getByTestId('hotspot-sheet-checkout')).toBeVisible({ timeout: 10_000 });
+  const meRes = await page.request.get(`/api/hot-spots/${TEST_HOT_SPOT.id}`, {
+    headers: { Authorization: `Bearer ${alice.token}` },
+  });
+  expect(meRes.ok()).toBeTruthy();
+  const meBody = await meRes.json();
+  expect(meBody.spot.my_checkin_anonymous).toBe(true);
+
+  // 5. Check out again, close the sheet.
+  await page.getByTestId('hotspot-sheet-checkout').click();
+  await expect(page.getByTestId('hotspot-sheet-checkin')).toBeVisible({ timeout: 10_000 });
   await page.getByTestId('hotspot-sheet-close').click();
   await expect(sheet).toHaveCount(0);
+
+  // 6. Map position preserved — opening/closing the sheet is an overlay, not a pan/re-mount.
+  const positionAfter = await mapHost.boundingBox();
+  expect(positionAfter).not.toBeNull();
+  expect(positionBefore).not.toBeNull();
+  expect(Math.abs(positionAfter!.x - positionBefore!.x)).toBeLessThan(2);
+  expect(Math.abs(positionAfter!.y - positionBefore!.y)).toBeLessThan(2);
+  expect(Math.abs(positionAfter!.width - positionBefore!.width)).toBeLessThan(2);
+  expect(Math.abs(positionAfter!.height - positionBefore!.height)).toBeLessThan(2);
+
+  await ctx.close();
+});
+
+// Free sees "5+" (rounded); Premium sees the exact number — backend's own
+// formatLiveCount() threshold (exact >= 5) drives this, so 5 simultaneous
+// check-ins is the minimum needed to actually exercise the distinction.
+test('Free sees rounded 5+ Hot Spot count; Premium sees the exact count', async ({ browser }) => {
+  // Desktop-only for the same shared-fixture-races-across-projects reason as the
+  // sheet-flow test above — this mutates 5 accounts' check-in state at once.
+  test.skip(
+    test.info().project.name !== 'desktop-chromium',
+    'Runs once on desktop-chromium to avoid racing mobile-chromium over the shared Hot Spot fixture/accounts.',
+  );
+  const api = await apiRequest.newContext({ baseURL: BASE_URL });
+  try {
+    // 5 distinct users checked in at once: alice + 3 fillers + premium tester itself
+    // (premium also needs to be checked in for its own "5" to be meaningful/testable).
+    await Promise.all(
+      [alice.token, premium.token, ...fillers.map((f) => f.token)].map((t) => checkIn(api, t, false)),
+    );
+
+    const freeCtx = await browser.newContext({ geolocation: FIXTURE_GEO, permissions: ['geolocation'] });
+    await authenticate(freeCtx, alice);
+    const freePage = await freeCtx.newPage();
+    await freePage.goto('/discover');
+    const freePin = freePage.locator(`[data-hotspot-id="${TEST_HOT_SPOT.id}"]`);
+    await expect(freePin).toBeVisible({ timeout: 20_000 });
+    await freePin.click();
+    await expect(freePage.getByTestId('hotspot-sheet')).toContainText('5+ live');
+
+    const freeApiRes = await freePage.request.get('/api/hot-spots', {
+      headers: { Authorization: `Bearer ${alice.token}` },
+      params: { lat: String(TEST_HOT_SPOT.lat), lng: String(TEST_HOT_SPOT.lng), radiusKm: '2' },
+    });
+    const freeSpot = (await freeApiRes.json()).spots.find((s: { id: string }) => s.id === TEST_HOT_SPOT.id);
+    expect(freeSpot.live_count).toBe('5+');
+    expect(freeSpot.live_count_exact).toBe(5);
+    await freeCtx.close();
+
+    const premiumCtx = await browser.newContext({ geolocation: FIXTURE_GEO, permissions: ['geolocation'] });
+    await authenticate(premiumCtx, premium);
+    const premiumPage = await premiumCtx.newPage();
+    await premiumPage.goto('/discover');
+    const premiumPin = premiumPage.locator(`[data-hotspot-id="${TEST_HOT_SPOT.id}"]`);
+    await expect(premiumPin).toBeVisible({ timeout: 20_000 });
+    await premiumPin.click();
+    await expect(premiumPage.getByTestId('hotspot-sheet')).toContainText('5 live');
+
+    const premiumApiRes = await premiumPage.request.get('/api/hot-spots', {
+      headers: { Authorization: `Bearer ${premium.token}` },
+      params: { lat: String(TEST_HOT_SPOT.lat), lng: String(TEST_HOT_SPOT.lng), radiusKm: '2' },
+    });
+    const premiumSpot = (await premiumApiRes.json()).spots.find(
+      (s: { id: string }) => s.id === TEST_HOT_SPOT.id,
+    );
+    expect(premiumSpot.live_count).toBe(5);
+    expect(premiumSpot.live_count_exact).toBe(5);
+    await premiumCtx.close();
+  } finally {
+    // Cleanup — leave the fixture at a clean slate for the next run.
+    await Promise.all(
+      [alice.token, premium.token, ...fillers.map((f) => f.token)].map((t) => checkOut(api, t)),
+    );
+    await api.dispose();
+  }
 });
