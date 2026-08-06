@@ -95,7 +95,7 @@ Cross-references this vision to actual GitHub state. Update as issues/PRs land.
 | 6. Premium — pricing, single Beta notice | Not started | New issue needed |
 | 7. Notifications — toast leak fix | In review | #68, PR #69 (open, not merged) |
 | 7. Notifications — badge-only redesign, mark-all-read, delete | In progress | #74 |
-| 8. Calls — remote video black / signalling investigation | **In progress — P0. Root cause diagnosed (no production TURN provider), being proven with real ICE stats evidence before any paid infra purchase** | #73, PR #75 (diagnostic logging only, draft) |
+| 8. Calls — remote video black / signalling investigation | **In progress — P0. Real ICE-gathering test (no mocks) confirms 0 relay candidates ever produced against the current TURN config, and 0 candidates of any kind with relay forced — strong evidence, one real-world validation step (chrome://webrtc-internals on two real networks) recommended before purchasing a paid TURN provider** | #73, PR #75 (diagnostic logging only, draft) |
 | 8. Calls — camera stays on after call ends | Tracked separately | #34 |
 | 25. Status — always-visible one-tap discovery signal, complements Pulse | Not started | New issue needed once design questions above are resolved |
 | 9. PWA install promotion | Not started | New issue needed |
