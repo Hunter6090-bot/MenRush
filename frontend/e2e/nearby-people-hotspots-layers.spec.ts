@@ -173,15 +173,69 @@ test('Hot Spot sheet: select, check in, check in anonymously, check out, close �
   await authenticate(ctx, alice);
   const page = await ctx.newPage();
   await page.goto('/discover');
-  // On a cold/contended CI runner, Mapbox WebGL init + tile/style load + the
-  // hot-spots fetch can outlast a flat 20s wait (confirmed on a real CI run: the
-  // whole marker layer, including the self marker, hadn't mounted yet at t+20s —
-  // not a data problem, the fixture and API were verified correct). Wait for the
-  // actual network response first, same pattern already used in the layer-toggle
-  // test above, then give the marker a longer window to mount.
-  await page.waitForResponse((r) => r.url().includes('/api/hot-spots') && r.request().method() === 'GET', {
-    timeout: 30_000,
-  });
+
+  // --- Diagnostic capture (3rd consecutive CI-only failure of this test; passes
+  // reliably locally). Safe/non-sensitive only: no tokens, no real user data — the
+  // account, coordinates, and Hot Spot here are all test fixtures. Printed
+  // unconditionally (pass or fail) so it lands in CI's own log either way. ---
+  const diag: string[] = [];
+  diag.push(`[diag] fixture coords: lat=${TEST_HOT_SPOT.lat} lng=${TEST_HOT_SPOT.lng}`);
+  diag.push(`[diag] test-user mocked coords: lat=${FIXTURE_GEO.latitude} lng=${FIXTURE_GEO.longitude}`);
+
+  let hotSpotsBody: { spots?: unknown[] } | null = null;
+  let hotSpotsStatus: number | null = null;
+  try {
+    const resp = await page.waitForResponse(
+      (r) => r.url().includes('/api/hot-spots') && r.request().method() === 'GET',
+      { timeout: 30_000 },
+    );
+    hotSpotsStatus = resp.status();
+    const reqUrl = new URL(resp.url());
+    diag.push(
+      `[diag] /api/hot-spots request params: lat=${reqUrl.searchParams.get('lat')} lng=${reqUrl.searchParams.get('lng')} radiusKm=${reqUrl.searchParams.get('radiusKm')}`,
+    );
+    hotSpotsBody = await resp.json().catch(() => null);
+  } catch (e) {
+    diag.push(`[diag] /api/hot-spots GET response NOT observed within 30s: ${(e as Error).message}`);
+  }
+
+  diag.push(`[diag] /api/hot-spots HTTP status: ${hotSpotsStatus ?? 'N/A — no response observed'}`);
+  if (hotSpotsBody) {
+    const spots = Array.isArray(hotSpotsBody.spots) ? (hotSpotsBody.spots as Array<Record<string, unknown>>) : null;
+    diag.push(`[diag] response shape keys: ${Object.keys(hotSpotsBody).join(', ')}`);
+    diag.push(`[diag] spots returned: ${spots ? spots.length : 'N/A — "spots" not an array'}`);
+    const fixtureEntry = spots?.find((s) => s.id === TEST_HOT_SPOT.id);
+    diag.push(`[diag] fixture present in response: ${!!fixtureEntry}`);
+    if (fixtureEntry) {
+      diag.push(
+        `[diag] fixture entry (fixture-only, safe fields): id=${fixtureEntry.id} name=${fixtureEntry.name} lat=${fixtureEntry.latitude} lng=${fixtureEntry.longitude} live_count_exact=${fixtureEntry.live_count_exact}`,
+      );
+    }
+  } else {
+    diag.push('[diag] response body unavailable (see "not observed" line above, if any)');
+  }
+
+  // Layer toggle state (both should default on).
+  const peoplePressed = await page.getByTestId('layer-toggle-people').getAttribute('aria-pressed').catch(() => 'unknown');
+  const hotSpotsPressed = await page.getByTestId('layer-toggle-hotspots').getAttribute('aria-pressed').catch(() => 'unknown');
+  diag.push(`[diag] layer state: peopleLayerOn=${peoplePressed} hotSpotsLayerOn=${hotSpotsPressed}`);
+
+  // Marker source/data state. Hot Spot pins are plain DOM markers (mapboxgl.Marker),
+  // not a GL source/layer, so DOM inspection fully answers "was the marker
+  // source/data updated" here — no internal Map API access needed or added.
+  const totalHotspotPinsInDom = await page.locator('.hotspot-pin').count();
+  const fixturePinCount = await page.locator(`[data-hotspot-id="${TEST_HOT_SPOT.id}"]`).count();
+  const fixturePinVisible =
+    fixturePinCount > 0
+      ? await page.locator(`[data-hotspot-id="${TEST_HOT_SPOT.id}"]`).first().isVisible().catch(() => false)
+      : false;
+  diag.push(`[diag] total .hotspot-pin elements in DOM: ${totalHotspotPinsInDom}`);
+  diag.push(`[diag] fixture pin element present in DOM: ${fixturePinCount > 0} (count=${fixturePinCount})`);
+  diag.push(`[diag] fixture pin element visible: ${fixturePinVisible}`);
+
+  // eslint-disable-next-line no-console -- deliberate CI diagnostic, not left permanently
+  console.log(diag.join('\n'));
+  await page.screenshot({ path: testInfo.outputPath('diagnostic-state.png') }).catch(() => {});
 
   const pin = page.locator(`[data-hotspot-id="${TEST_HOT_SPOT.id}"]`);
   await expect(pin).toBeVisible({ timeout: 30_000 });
