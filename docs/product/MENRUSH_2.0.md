@@ -72,12 +72,27 @@ Examples: 🟢 Available now · 🏠 Hosting · 🚗 Travelling · 🍺 Drinks �
 
 Rationale (product owner's own framing): asking users to constantly write Pulse posts is friction; Status is the near-zero-effort complement that still gives the map a useful discovery signal. The two coexist — Status is the "am I even open to this" baseline, Pulse is the richer "here's specifically what I'm doing" layer on top.
 
-Design questions to resolve before scoping (mirrors §2 Pulse's design-child-issue pattern given this also touches profile display, the map, and filters):
-- Data model: single `status` enum + optional `status_expires_at` on `profiles`, or does this share infrastructure with Pulse/Community (§54 epic)?
-- Does setting a Status ever imply a Pulse post (or vice versa), or are they fully independent user actions?
+### Approved product decisions (2026-08-06)
+
+Not implemented yet — decisions only, to unblock future design/scoping work:
+
+- **Status is separate from Pulse.** Two distinct concepts, two distinct data surfaces — not a shared/merged model.
+- **Users may have one Status and one Pulse simultaneously.** Setting one never clears or implies the other; they're independent, coexisting states.
+- **Status is structured and lightweight.** A fixed, curated set of options (see examples above) — not free text.
+- **Pulse remains temporary free-text/community activity.** Pulse's own nature (per §2 and the Community epic, #54) is unchanged by Status existing alongside it.
+- **Status appears on profile cards and the profile drawer** — both surfaces that already exist for the People layer (`ProfileCard`/`ProfileDrawer`), not just the map.
+- **Map representation must stay subtle to avoid clutter.** A badge/accent on the existing person marker (`MapMarker.tsx`), not a competing full-size marker or separate layer — consistent with keeping the map legible as more layers are added (§1, §20).
+- **Core Status filtering is free.** Filtering Discover by Status is a baseline discovery feature, not gated.
+- **Saved Status filters and advanced combinations may be Premium** — mirrors §4's existing "saved searches (Premium)" pattern; the filter *capability* stays free, saving/combining it is the Premium value-add.
+
+### Design questions still open before scoping
+
+(mirrors §2 Pulse's design-child-issue pattern given this also touches profile display, the map, and filters)
+- Data model: single `status` enum + optional `status_expires_at` on `profiles`, or does this share infrastructure with Pulse/Community (§54 epic)? (Given the decisions above — Status and Pulse are explicitly separate — this likely argues for its own lightweight column/table rather than folding into Community's schema, but should be confirmed during design.)
 - Expiry rules per status (e.g. does "Do not disturb" expire automatically at all, vs "Looking now" auto-expiring after N hours)?
-- Map representation: badge on the existing person marker (`MapMarker.tsx`), vs. a separate visual treatment?
+- Exact visual treatment for "subtle" on the map marker (color dot vs. icon vs. ring) — needs a design pass, not just a product decision.
 - Filter integration: extends §4's existing filter categories (`discoveryFilters.ts`) or is a new filter dimension?
+- Saved-filter/advanced-combination boundary: which specific combinations count as "advanced" (Premium) vs. core (free)?
 
 ## Delivery ledger
 
