@@ -94,7 +94,7 @@ Cross-references this vision to actual GitHub state. Update as issues/PRs land.
 | 5. Messaging 2.0 — voice/video notes, voice calls, gallery | Not started | New issue needed |
 | 6. Premium — pricing, single Beta notice | Not started | New issue needed |
 | 7. Notifications — toast leak fix | In review | #68, PR #69 (open, not merged) |
-| 7. Notifications — badge-only redesign, mark-all-read, delete | In progress | #74 |
+| 7. Notifications — badge-only redesign, mark-all-read, delete | In progress — badge-only tap-to-open, mark-read/mark-all-read, delete, and unread/all filter shipped; settings-page audit still open | #74, PR #76 (draft) |
 | 8. Calls — remote video black / signalling investigation | **In progress — P0. Real ICE-gathering test (no mocks) confirms 0 relay candidates ever produced against the current TURN config, and 0 candidates of any kind with relay forced — strong evidence, one real-world validation step (chrome://webrtc-internals on two real networks) recommended before purchasing a paid TURN provider** | #73, PR #75 (diagnostic logging only, draft) |
 | 8. Calls — camera stays on after call ends | Tracked separately | #34 |
 | 25. Status — always-visible one-tap discovery signal, complements Pulse | Not started | New issue needed once design questions above are resolved |
