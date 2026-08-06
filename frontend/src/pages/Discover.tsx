@@ -13,6 +13,7 @@ import {
   clampRadiusKm,
 } from '../lib/discoveryFormat';
 import { ProfileDrawer } from '../components/ProfileDrawer';
+import { HotSpotSheet } from '../components/HotSpotSheet';
 import { createMapMarkerElement, MapMarker } from '../components/MapMarker';
 import { createHotSpotPinElement, HotSpotPin } from '../components/HotSpotPin';
 
@@ -44,9 +45,10 @@ import {
 } from '../lib/mapRadiusCircle';
 import { ROUTE_LABELS } from '../lib/routeLabels';
 import { mapboxStyleForTheme, resolvedThemeNow, THEME_CHANGED_EVENT } from '../lib/mapTheme';
+import { readLayerVisible, writeLayerVisible } from '../lib/discoveryLayers';
 import { useIsDesktopLayout } from '../hooks/useMediaQuery';
 import { ProximitySlider } from '../components/ProximitySlider';
-import { IconMapExpand } from '../components/icons';
+import { IconMapExpand, IconDiscover, IconHotSpots } from '../components/icons';
 
 /** Map panel: swipe up to hide, swipe down to show, expand for large map. */
 type MapPanelMode = 'hidden' | 'default' | 'expanded';
@@ -103,6 +105,10 @@ function MapFloatingChrome({
   showHide = false,
   onHide,
   statusBottomClass = 'bottom-3',
+  peopleLayerOn,
+  hotSpotsLayerOn,
+  onTogglePeopleLayer,
+  onToggleHotSpotsLayer,
 }: {
   expanded: boolean;
   nearbyCount: number;
@@ -114,6 +120,10 @@ function MapFloatingChrome({
   showHide?: boolean;
   onHide?: () => void;
   statusBottomClass?: string;
+  peopleLayerOn: boolean;
+  hotSpotsLayerOn: boolean;
+  onTogglePeopleLayer: () => void;
+  onToggleHotSpotsLayer: () => void;
 }) {
   return (
     <>
@@ -126,6 +136,29 @@ function MapFloatingChrome({
           <span />
         )}
         <div className="pointer-events-auto flex items-center gap-1.5">
+          {/* #67: compact independent People / Hot Spots layer control. */}
+          <button
+            type="button"
+            onClick={onTogglePeopleLayer}
+            data-testid="layer-toggle-people"
+            aria-label={peopleLayerOn ? 'Hide people' : 'Show people'}
+            aria-pressed={peopleLayerOn}
+            title={peopleLayerOn ? 'Hide people' : 'Show people'}
+            className={`${mapChromeBtnClass} ${peopleLayerOn ? '' : 'opacity-45'}`}
+          >
+            <IconDiscover size={18} />
+          </button>
+          <button
+            type="button"
+            onClick={onToggleHotSpotsLayer}
+            data-testid="layer-toggle-hotspots"
+            aria-label={hotSpotsLayerOn ? 'Hide Hot Spots' : 'Show Hot Spots'}
+            aria-pressed={hotSpotsLayerOn}
+            title={hotSpotsLayerOn ? 'Hide Hot Spots' : 'Show Hot Spots'}
+            className={`${mapChromeBtnClass} ${hotSpotsLayerOn ? '' : 'opacity-45'}`}
+          >
+            <IconHotSpots size={18} />
+          </button>
           <button
             type="button"
             onClick={onToggleExpand}
@@ -347,6 +380,20 @@ export const Discover = () => {
   const selfDotRef = useRef<HTMLDivElement | null>(null);
   const selfRootRef = useRef<Root | null>(null);
   const [hotSpots, setHotSpots] = useState<HotSpotDTO[]>([]);
+  // #67: independent People / Hot Spots layer toggles, session-only persistence.
+  const [peopleLayerOn, setPeopleLayerOnState] = useState(() => readLayerVisible('people', true));
+  const [hotSpotsLayerOn, setHotSpotsLayerOnState] = useState(() => readLayerVisible('hotSpots', true));
+  const setPeopleLayerOn = useCallback((visible: boolean) => {
+    setPeopleLayerOnState(visible);
+    writeLayerVisible('people', visible);
+  }, []);
+  const setHotSpotsLayerOn = useCallback((visible: boolean) => {
+    setHotSpotsLayerOnState(visible);
+    writeLayerVisible('hotSpots', visible);
+  }, []);
+  const [selectedHotSpot, setSelectedHotSpot] = useState<HotSpotDTO | null>(null);
+  const [hotSpotActing, setHotSpotActing] = useState(false);
+  const [hotSpotActionError, setHotSpotActionError] = useState('');
   const navigate = useNavigate();
   const isDesktopLayout = useIsDesktopLayout();
 
@@ -912,6 +959,31 @@ export const Discover = () => {
     }
   }, [lat, lng, radius, discoveryFilters, fetchNearbyUsers]);
 
+  // #67: check-in/out from the in-map Hot Spot sheet — same hotSpotsAPI calls as the
+  // standalone HotSpots page, refreshing this map's own hotSpots list on success.
+  const handleHotSpotCheckIn = useCallback(
+    async (spot: HotSpotDTO, anonymous: boolean) => {
+      setHotSpotActing(true);
+      setHotSpotActionError('');
+      try {
+        if (spot.is_checked_in) {
+          await hotSpotsAPI.checkOut(spot.id);
+        } else {
+          await hotSpotsAPI.checkIn(spot.id, anonymous);
+        }
+        if (lat != null && lng != null) {
+          const res = await hotSpotsAPI.listNearby(lat, lng, Math.max(radius, 25));
+          setHotSpots(res.data.spots ?? []);
+        }
+      } catch {
+        setHotSpotActionError('Check-in failed. Try again.');
+      } finally {
+        setHotSpotActing(false);
+      }
+    },
+    [lat, lng, radius],
+  );
+
   const handleLike = useCallback(
     async (user: NearbyUser) => {
       // Chat only when mutual — messaging API requires both-way match.
@@ -1120,7 +1192,9 @@ export const Discover = () => {
 
     const visibleIds = new Set<string>();
 
-    users.forEach((user) => {
+    // People layer off: leave visibleIds empty so the cleanup loop below removes every
+    // existing marker. Self marker is independent (selfMarkerRef) and stays regardless.
+    if (peopleLayerOn) users.forEach((user) => {
       if (user.lat == null || user.lng == null) return;
       visibleIds.add(user.id);
       const isPulsing = isUserPulsing(user);
@@ -1183,9 +1257,10 @@ export const Discover = () => {
       setTimeout(() => root.unmount(), 0);
       markersRef.current.delete(userId);
     });
-  }, [users, mapLoaded]);
+  }, [users, mapLoaded, peopleLayerOn]);
 
-  // Always show Hot Spot pins (dim when empty, solid when check-ins present).
+  // Hot Spot pins (dim when empty, solid when check-ins present) — hidden entirely
+  // when the Hot Spots layer is off, same visibleIds-empty-set pattern as People above.
   useEffect(() => {
     if (lat == null || lng == null) {
       setHotSpots([]);
@@ -1214,7 +1289,7 @@ export const Discover = () => {
 
     const visibleIds = new Set<string>();
 
-    hotSpots.forEach((spot) => {
+    if (hotSpotsLayerOn) hotSpots.forEach((spot) => {
       if (!Number.isFinite(spot.latitude) || !Number.isFinite(spot.longitude)) return;
       visibleIds.add(spot.id);
       const lngLat: [number, number] = [spot.longitude, spot.latitude];
@@ -1242,7 +1317,8 @@ export const Discover = () => {
         return;
       }
 
-      const { element, root } = createHotSpotPinElement(pinData, () => navigate('/hot-spots'), 36);
+      // Opens the in-map sheet (no navigation away) — see #67 acceptance criteria.
+      const { element, root } = createHotSpotPinElement(pinData, () => setSelectedHotSpot(spot), 36);
       const marker = new mapboxgl.Marker({ element, anchor: 'center' })
         .setLngLat(lngLat)
         .addTo(map);
@@ -1255,7 +1331,14 @@ export const Discover = () => {
       setTimeout(() => root.unmount(), 0);
       hotSpotMarkersRef.current.delete(spotId);
     });
-  }, [hotSpots, mapLoaded, navigate]);
+  }, [hotSpots, mapLoaded, hotSpotsLayerOn]);
+
+  // Keep the open sheet's data fresh as hotSpots re-polls (mirrors selectedUser above).
+  useEffect(() => {
+    if (!selectedHotSpot) return;
+    const fresh = hotSpots.find((spot) => spot.id === selectedHotSpot.id);
+    if (fresh) setSelectedHotSpot(fresh);
+  }, [hotSpots, selectedHotSpot]);
 
   useEffect(() => {
     if (!mapLoaded || lat == null || lng == null) return;
@@ -1323,6 +1406,12 @@ export const Discover = () => {
 
   const displayUsers = applyDiscoveryClientFilters(sortedUsers, discoveryFilters);
 
+  // Expanded mobile map must be near-fullscreen — dismissible banners above it push
+  // the map past the viewport, which reintroduces page-level scroll that fights the
+  // map's own pan/pinch handling. Hide them while expanded, restore on shrink.
+  const mobileMapExpanded =
+    !isDesktopLayout && mapPanelMode === 'expanded' && !needsLocationGate && mapCenter != null;
+
   const togglePulseHeader = useCallback(async () => {
     if (pulseUntil) await handleStopPulse();
     else await handleStartPulse(90);
@@ -1338,6 +1427,8 @@ export const Discover = () => {
       />
       <h1 className="sr-only">Nearby discovery map</h1>
 
+      {!mobileMapExpanded ? (
+      <>
       {activationProfile ? (
         <ActivationBanner
           profile={{
@@ -1520,6 +1611,8 @@ export const Discover = () => {
           ) : null}
         </div>
       ) : null}
+      </>
+      ) : null}
 
       {/* Desktop: only mount when layout matches — never attach Mapbox to a display:none node. */}
       {isDesktopLayout ? (
@@ -1568,6 +1661,10 @@ export const Discover = () => {
             onToggleExpand={toggleDesktopMapExpanded}
             onRadiusChange={handleRadiusChange}
             onExpandRadius={handleRadiusCycle}
+            peopleLayerOn={peopleLayerOn}
+            hotSpotsLayerOn={hotSpotsLayerOn}
+            onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
+            onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
           />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -1658,6 +1755,10 @@ export const Discover = () => {
               showHide
               onHide={() => setMapPanel('hidden')}
               statusBottomClass={mapPanelMode === 'expanded' ? 'bottom-4' : 'bottom-8'}
+              peopleLayerOn={peopleLayerOn}
+              hotSpotsLayerOn={hotSpotsLayerOn}
+              onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
+              onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
             />
           ) : null}
 
@@ -1868,6 +1969,18 @@ export const Discover = () => {
           setUsers((prev) => prev.filter((u) => u.id !== selectedUser.id));
           setSelectedUser(null);
         }}
+      />
+
+      <HotSpotSheet
+        spot={selectedHotSpot}
+        isPremium={!!authUser?.is_premium}
+        acting={hotSpotActing}
+        error={hotSpotActionError}
+        onClose={() => {
+          setSelectedHotSpot(null);
+          setHotSpotActionError('');
+        }}
+        onCheckIn={handleHotSpotCheckIn}
       />
     </Layout>
   );
