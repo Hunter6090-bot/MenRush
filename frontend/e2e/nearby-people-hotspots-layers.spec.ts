@@ -166,9 +166,18 @@ test('Hot Spot sheet: select, check in, check in anonymously, check out, close �
   await authenticate(ctx, alice);
   const page = await ctx.newPage();
   await page.goto('/discover');
+  // On a cold/contended CI runner, Mapbox WebGL init + tile/style load + the
+  // hot-spots fetch can outlast a flat 20s wait (confirmed on a real CI run: the
+  // whole marker layer, including the self marker, hadn't mounted yet at t+20s —
+  // not a data problem, the fixture and API were verified correct). Wait for the
+  // actual network response first, same pattern already used in the layer-toggle
+  // test above, then give the marker a longer window to mount.
+  await page.waitForResponse((r) => r.url().includes('/api/hot-spots') && r.request().method() === 'GET', {
+    timeout: 30_000,
+  });
 
   const pin = page.locator(`[data-hotspot-id="${TEST_HOT_SPOT.id}"]`);
-  await expect(pin).toBeVisible({ timeout: 20_000 });
+  await expect(pin).toBeVisible({ timeout: 30_000 });
   // Clean slate from beforeAll — starts dim (no one checked in).
   await expect(pin).toHaveAttribute('data-occupied', '0');
 
@@ -247,8 +256,13 @@ test('Free sees rounded 5+ Hot Spot count; Premium sees the exact count', async 
     await authenticate(freeCtx, alice);
     const freePage = await freeCtx.newPage();
     await freePage.goto('/discover');
+    // See the sheet-flow test above for why this wait exists (verified on real CI).
+    await freePage.waitForResponse(
+      (r) => r.url().includes('/api/hot-spots') && r.request().method() === 'GET',
+      { timeout: 30_000 },
+    );
     const freePin = freePage.locator(`[data-hotspot-id="${TEST_HOT_SPOT.id}"]`);
-    await expect(freePin).toBeVisible({ timeout: 20_000 });
+    await expect(freePin).toBeVisible({ timeout: 30_000 });
     await freePin.click();
     await expect(freePage.getByTestId('hotspot-sheet')).toContainText('5+ live');
 
@@ -265,8 +279,12 @@ test('Free sees rounded 5+ Hot Spot count; Premium sees the exact count', async 
     await authenticate(premiumCtx, premium);
     const premiumPage = await premiumCtx.newPage();
     await premiumPage.goto('/discover');
+    await premiumPage.waitForResponse(
+      (r) => r.url().includes('/api/hot-spots') && r.request().method() === 'GET',
+      { timeout: 30_000 },
+    );
     const premiumPin = premiumPage.locator(`[data-hotspot-id="${TEST_HOT_SPOT.id}"]`);
-    await expect(premiumPin).toBeVisible({ timeout: 20_000 });
+    await expect(premiumPin).toBeVisible({ timeout: 30_000 });
     await premiumPin.click();
     await expect(premiumPage.getByTestId('hotspot-sheet')).toContainText('5 live');
 
