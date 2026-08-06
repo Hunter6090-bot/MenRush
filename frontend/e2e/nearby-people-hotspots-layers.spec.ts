@@ -157,11 +157,18 @@ test('/hot-spots route still loads directly for compatibility (no nav entry, rou
 // CSS with no viewport-specific logic — same pattern ProfileDrawer already uses.
 test('Hot Spot sheet: select, check in, check in anonymously, check out, close — map position preserved', async ({
   browser,
-}) => {
+}, testInfo) => {
   test.skip(
-    test.info().project.name !== 'desktop-chromium',
+    testInfo.project.name !== 'desktop-chromium',
     'Runs once on desktop-chromium to avoid racing mobile-chromium over the shared Hot Spot fixture/account.',
   );
+  // A real CI run failed with a generic "Test timeout of 30000ms exceeded" (not a
+  // specific assertion) and zero markers rendered yet — the default 30s per-test
+  // budget doesn't leave room for Mapbox WebGL init + tile/style load + the
+  // hot-spots fetch on a slow/contended runner, on top of every step this test
+  // does afterward. Widen the whole-test budget rather than guessing at any one
+  // step's timeout.
+  testInfo.setTimeout(90_000);
   const ctx = await browser.newContext({ geolocation: FIXTURE_GEO, permissions: ['geolocation'] });
   await authenticate(ctx, alice);
   const page = await ctx.newPage();
@@ -237,13 +244,16 @@ test('Hot Spot sheet: select, check in, check in anonymously, check out, close �
 // Free sees "5+" (rounded); Premium sees the exact number — backend's own
 // formatLiveCount() threshold (exact >= 5) drives this, so 5 simultaneous
 // check-ins is the minimum needed to actually exercise the distinction.
-test('Free sees rounded 5+ Hot Spot count; Premium sees the exact count', async ({ browser }) => {
+test('Free sees rounded 5+ Hot Spot count; Premium sees the exact count', async ({ browser }, testInfo) => {
   // Desktop-only for the same shared-fixture-races-across-projects reason as the
   // sheet-flow test above — this mutates 5 accounts' check-in state at once.
   test.skip(
-    test.info().project.name !== 'desktop-chromium',
+    testInfo.project.name !== 'desktop-chromium',
     'Runs once on desktop-chromium to avoid racing mobile-chromium over the shared Hot Spot fixture/accounts.',
   );
+  // Same slow-CI-runner headroom as the sheet-flow test above — this does two full
+  // page loads plus 5 API check-ins on top of the same Mapbox/hot-spots wait.
+  testInfo.setTimeout(90_000);
   const api = await apiRequest.newContext({ baseURL: BASE_URL });
   try {
     // 5 distinct users checked in at once: alice + 3 fillers + premium tester itself
