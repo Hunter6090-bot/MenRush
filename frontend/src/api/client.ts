@@ -266,6 +266,9 @@ export const notificationsAPI = {
   markRead: (id: string) =>
     apiClient.patch<{ ok: boolean; unread_count: number }>(`/notifications/${id}/read`),
   markAllRead: () => apiClient.post<{ ok: boolean; unread_count: number }>('/notifications/read-all'),
+  delete: (id: string) =>
+    apiClient.delete<{ ok: boolean; unread_count: number }>(`/notifications/${id}`),
+  deleteAllRead: () => apiClient.delete<{ ok: boolean; removed: number }>('/notifications'),
 };
 
 export interface PulseStateDTO {
