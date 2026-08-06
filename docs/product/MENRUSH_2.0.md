@@ -50,10 +50,34 @@ Do not build this in one PR. Four phases, each independently shippable:
 22. Chat improvements — pinned chats, unread filters, media gallery, search, reactions (future), scheduled messages (future), voice/video notes, video attachments
 23. Beta dashboard — Beta-only: latest updates, known issues, roadmap, feedback, idea voting, referral status, Premium Beta notice
 24. Brainstorming / future roadmap (not MVP blockers) — Travel Mode, Venue Verification, Live Venue Occupancy, AI Discovery Assistant, Smart Notifications, Nearby Icebreakers, Private Trip Planner, Premium Collections, Anonymous Activity Heat Map, Safety Check-in, Event RSVP, Club & Venue Partnerships, Seasonal Themes, Creator & Ambassador Programme
+25. Status — always-visible, one-tap, profile + map, auto-expiring where appropriate, filterable discovery signal; complements Pulse rather than replacing it (see below)
 
 ## "Tonight" Mode
 
 A toggle on the Discover map. When enabled, temporarily prioritises: people looking now, active Hot Spots, live Pulse posts, tonight's events, open venues, users currently hosting. Reframes the app from "who exists nearby" to "what can I do in the next few hours?" — tracked as a Phase 2+ candidate once Pulse/Events layers exist to prioritise.
+
+## Status (§25)
+
+Not Pulse. Not Profile. Just Status — a lightweight, always-on discovery signal, distinct from and complementary to Pulse:
+
+| | Status | Pulse |
+|---|---|---|
+| Visibility | Always visible | Time-limited post |
+| Effort | One tap | Writing a short update |
+| Where shown | Profile + map | Map/feed only |
+| Expiry | Automatic where appropriate | Always expires |
+| Filterable | Yes | Yes |
+
+Examples: 🟢 Available now · 🏠 Hosting · 🚗 Travelling · 🍺 Drinks · ❤️ Dating · 🔥 Looking now · 😴 Busy · ⛔ Do not disturb.
+
+Rationale (product owner's own framing): asking users to constantly write Pulse posts is friction; Status is the near-zero-effort complement that still gives the map a useful discovery signal. The two coexist — Status is the "am I even open to this" baseline, Pulse is the richer "here's specifically what I'm doing" layer on top.
+
+Design questions to resolve before scoping (mirrors §2 Pulse's design-child-issue pattern given this also touches profile display, the map, and filters):
+- Data model: single `status` enum + optional `status_expires_at` on `profiles`, or does this share infrastructure with Pulse/Community (§54 epic)?
+- Does setting a Status ever imply a Pulse post (or vice versa), or are they fully independent user actions?
+- Expiry rules per status (e.g. does "Do not disturb" expire automatically at all, vs "Looking now" auto-expiring after N hours)?
+- Map representation: badge on the existing person marker (`MapMarker.tsx`), vs. a separate visual treatment?
+- Filter integration: extends §4's existing filter categories (`discoveryFilters.ts`) or is a new filter dimension?
 
 ## Delivery ledger
 
@@ -70,9 +94,10 @@ Cross-references this vision to actual GitHub state. Update as issues/PRs land.
 | 5. Messaging 2.0 — voice/video notes, voice calls, gallery | Not started | New issue needed |
 | 6. Premium — pricing, single Beta notice | Not started | New issue needed |
 | 7. Notifications — toast leak fix | In review | #68, PR #69 (open, not merged) |
-| 7. Notifications — badge-only redesign, mark-all-read, delete | Not started | New issue needed |
-| 8. Calls — remote video black / signalling investigation | **Not started — P0** | New issue needed |
+| 7. Notifications — badge-only redesign, mark-all-read, delete | In progress | #74 |
+| 8. Calls — remote video black / signalling investigation | **In progress — P0. Root cause diagnosed (no production TURN provider), being proven with real ICE stats evidence before any paid infra purchase** | #73, PR #75 (diagnostic logging only, draft) |
 | 8. Calls — camera stays on after call ends | Tracked separately | #34 |
+| 25. Status — always-visible one-tap discovery signal, complements Pulse | Not started | New issue needed once design questions above are resolved |
 | 9. PWA install promotion | Not started | New issue needed |
 | 10. Trusted devices | Not started | New issue needed |
 | 11. Settings review | Not started | New issue needed |
