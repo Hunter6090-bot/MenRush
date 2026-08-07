@@ -1,10 +1,10 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { notificationsAPI } from '../api/client';
 import { Layout } from '../components/Layout';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { UserAvatar } from '../components/UserAvatar';
-import { IconChat, IconMatches, IconNotifications, IconProfile } from '../components/icons';
+import { IconChat, IconClose, IconMatches, IconNotifications, IconProfile } from '../components/icons';
 import { MissedCallIcon } from '../components/MissedCallIcon';
 import {
   formatRelativeTime,
@@ -14,6 +14,8 @@ import {
 import { refreshNotifications } from '../hooks/useNotificationSync';
 import { useNotificationStore, type Notification } from '../hooks/store';
 
+type Filter = 'unread' | 'all';
+
 export const Notifications = () => {
   const navigate = useNavigate();
   const notifications = useNotificationStore((s) => s.notifications);
@@ -21,7 +23,19 @@ export const Notifications = () => {
   const loadError = useNotificationStore((s) => s.loadError);
   const markAsRead = useNotificationStore((s) => s.markAsRead);
   const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
+  const deleteNotification = useNotificationStore((s) => s.deleteNotification);
+  const deleteAllRead = useNotificationStore((s) => s.deleteAllRead);
   const setUnreadCount = useNotificationStore((s) => s.setUnreadCount);
+
+  // #74: badge-only on launch, tap opens this page; read items drop out of the
+  // default (unread) view rather than piling up — "All" is one tap away, so
+  // history isn't lost, just not the default.
+  const [filter, setFilter] = useState<Filter>('unread');
+  const readCount = notifications.length - unreadCount;
+  const visibleNotifications = useMemo(
+    () => (filter === 'unread' ? notifications.filter((n) => !n.read) : notifications),
+    [notifications, filter],
+  );
 
   useEffect(() => {
     void refreshNotifications();
@@ -43,10 +57,33 @@ export const Notifications = () => {
     [markAsRead, navigate, setUnreadCount],
   );
 
+  const handleDelete = useCallback(
+    async (event: React.MouseEvent, notification: Notification) => {
+      event.stopPropagation();
+      deleteNotification(notification.id);
+      try {
+        const res = await notificationsAPI.delete(notification.id);
+        setUnreadCount(res.data.unread_count ?? 0);
+      } catch {
+        /* local state already updated */
+      }
+    },
+    [deleteNotification, setUnreadCount],
+  );
+
   const handleMarkAllRead = async () => {
     markAllAsRead();
     try {
       await notificationsAPI.markAllRead();
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleDeleteAllRead = async () => {
+    deleteAllRead();
+    try {
+      await notificationsAPI.deleteAllRead();
     } catch {
       /* ignore */
     }
@@ -62,15 +99,26 @@ export const Notifications = () => {
               Messages, matches, profile views and more.
             </p>
           </div>
-          {unreadCount > 0 && (
-            <button
-              type="button"
-              onClick={() => void handleMarkAllRead()}
-              className="shrink-0 rounded-xl border border-[var(--border-default)] px-3 py-2 text-[11px] font-bold text-[#C4832A] transition-colors hover:bg-[#C4832A]/10"
-            >
-              Mark all read
-            </button>
-          )}
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            {unreadCount > 0 && (
+              <button
+                type="button"
+                onClick={() => void handleMarkAllRead()}
+                className="rounded-xl border border-[var(--border-default)] px-3 py-2 text-[11px] font-bold text-[#C4832A] transition-colors hover:bg-[#C4832A]/10"
+              >
+                Mark all read
+              </button>
+            )}
+            {readCount > 0 && (
+              <button
+                type="button"
+                onClick={() => void handleDeleteAllRead()}
+                className="rounded-xl px-3 py-1 text-[11px] font-semibold text-[var(--cream-muted)] hover:text-[var(--cream)]"
+              >
+                Delete read
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="space-y-4 lg:col-start-1 lg:row-start-1">
@@ -79,15 +127,55 @@ export const Notifications = () => {
               <p className="nn-overline mb-1">Activity</p>
               <p className="text-sm text-[var(--cream-muted)]">Recent alerts from your network.</p>
             </div>
-            {unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={() => void handleMarkAllRead()}
-                className="shrink-0 rounded-xl border border-[var(--border-default)] px-3 py-2 text-[11px] font-bold text-[#C4832A] transition-colors hover:bg-[#C4832A]/10"
-              >
-                Mark all read
-              </button>
-            )}
+            <div className="flex shrink-0 items-center gap-2">
+              {readCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteAllRead()}
+                  className="rounded-xl px-3 py-2 text-[11px] font-semibold text-[var(--cream-muted)] hover:text-[var(--cream)]"
+                >
+                  Delete read
+                </button>
+              )}
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void handleMarkAllRead()}
+                  className="rounded-xl border border-[var(--border-default)] px-3 py-2 text-[11px] font-bold text-[#C4832A] transition-colors hover:bg-[#C4832A]/10"
+                >
+                  Mark all read
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* #74: default view is unread-only — read items drop out here rather than
+              accumulating; "All" is one tap away so history isn't lost. */}
+          <div className="flex gap-1.5" role="tablist" aria-label="Filter notifications">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={filter === 'unread'}
+              data-testid="notifications-filter-unread"
+              onClick={() => setFilter('unread')}
+              className={
+                filter === 'unread'
+                  ? 'mr-pill mr-pill-active'
+                  : 'mr-pill mr-pill-inactive'
+              }
+            >
+              Unread{unreadCount > 0 ? ` (${unreadCount})` : ''}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={filter === 'all'}
+              data-testid="notifications-filter-all"
+              onClick={() => setFilter('all')}
+              className={filter === 'all' ? 'mr-pill mr-pill-active' : 'mr-pill mr-pill-inactive'}
+            >
+              All
+            </button>
           </div>
 
         {loadError && (
@@ -106,7 +194,7 @@ export const Notifications = () => {
           </div>
         )}
 
-        {notifications.length === 0 ? (
+        {visibleNotifications.length === 0 ? (
           <div
             data-testid="notifications-empty"
             className="rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[rgba(196,131,42,0.06)] px-6 py-12 text-center shadow-card"
@@ -115,14 +203,29 @@ export const Notifications = () => {
               <IconNotifications size={28} />
             </div>
             <p className="text-[var(--cream)] font-extrabold">
-              {loadError ? 'Could not load alerts' : 'No alerts yet'}
+              {loadError
+                ? 'Could not load alerts'
+                : filter === 'unread' && notifications.length > 0
+                  ? "You're all caught up"
+                  : 'No alerts yet'}
             </p>
             <p className="text-[var(--cream-muted)] text-sm mt-2 leading-relaxed mx-auto max-w-sm">
               {loadError
                 ? 'Pull to refresh or try again shortly.'
-                : 'Matches, messages, and profile views land here. Get seen on Nearby or the live list.'}
+                : filter === 'unread' && notifications.length > 0
+                  ? 'No unread alerts. Switch to All to see your history.'
+                  : 'Matches, messages, and profile views land here. Get seen on Nearby or the live list.'}
             </p>
-            {!loadError ? (
+            {filter === 'unread' && notifications.length > 0 && !loadError ? (
+              <button
+                type="button"
+                onClick={() => setFilter('all')}
+                className="mt-4 rounded-full border border-[rgba(196,131,42,0.5)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
+              >
+                View all
+              </button>
+            ) : null}
+            {!loadError && notifications.length === 0 ? (
               <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
                 <Link
                   to="/discover"
@@ -144,18 +247,20 @@ export const Notifications = () => {
                 </Link>
               </div>
             ) : null}
-            <p className="mt-4 text-[11px] font-medium tracking-wide text-[var(--cream-muted)]">
-              · Report abuse anytime
-            </p>
+            {notifications.length === 0 ? (
+              <p className="mt-4 text-[11px] font-medium tracking-wide text-[var(--cream-muted)]">
+                · Report abuse anytime
+              </p>
+            ) : null}
           </div>
         ) : (
           <ul className="space-y-2" data-testid="notifications-list">
-            {notifications.map((notification) => (
-              <li key={notification.id}>
+            {visibleNotifications.map((notification) => (
+              <li key={notification.id} className="group relative">
                 <button
                   type="button"
                   onClick={() => void handleOpen(notification)}
-                  className={`flex w-full items-start gap-3 rounded-2xl border px-4 py-3.5 text-left transition-colors ${
+                  className={`flex w-full items-start gap-3 rounded-2xl border py-3.5 pl-4 pr-11 text-left transition-colors ${
                     notification.read
                       ? 'border-[var(--border-default)] bg-[var(--bg-card)]/70 hover:border-[#C4832A]/30'
                       : 'border-[#C4832A]/35 bg-[var(--bg-card)] shadow-[0_0_0_1px_rgba(196,131,42,0.08)] hover:border-[#C4832A]/50'
@@ -195,6 +300,15 @@ export const Notifications = () => {
                       {notificationTypeLabel(notification.type)}
                     </p>
                   </div>
+                </button>
+                <button
+                  type="button"
+                  aria-label="Delete notification"
+                  data-testid={`notification-delete-${notification.id}`}
+                  onClick={(e) => void handleDelete(e, notification)}
+                  className="absolute right-2.5 top-3 flex h-7 w-7 items-center justify-center rounded-full text-[var(--cream-muted)] opacity-60 transition-opacity hover:bg-[var(--bg-elevated)] hover:text-[var(--cream)] hover:opacity-100 focus-visible:opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
+                >
+                  <IconClose size={14} />
                 </button>
               </li>
             ))}
