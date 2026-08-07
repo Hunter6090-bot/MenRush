@@ -168,6 +168,8 @@ export const usersAPI = {
       onlyPulse?: boolean;
       lookingFor?: string;
       mood?: string;
+      /** MenRush Status (§25) — free filter. */
+      status?: string;
     }
   ) =>
     apiClient.get('/users/nearby', {
@@ -181,6 +183,7 @@ export const usersAPI = {
         onlyPulse: filters?.onlyPulse ? 'true' : undefined,
         lookingFor: filters?.lookingFor,
         mood: filters?.mood,
+        status: filters?.status,
       },
     }),
   getProfile: (id: string) => apiClient.get(`/users/profile/${id}`),
@@ -477,6 +480,15 @@ export const profileMetaAPI = {
     apiClient.get<{ mood: Mood | null; mood_set_at: string | null }>('/profile-meta/mood'),
   setMood: (mood: Mood | null) =>
     apiClient.post<{ mood: Mood | null; mood_set_at: string | null }>('/profile-meta/mood', { mood }),
+  getStatus: () =>
+    apiClient.get<{ status: import('../lib/userStatus').UserStatus | null; status_expires_at: string | null }>(
+      '/profile-meta/status',
+    ),
+  setStatus: (status: import('../lib/userStatus').UserStatus | null) =>
+    apiClient.post<{ status: import('../lib/userStatus').UserStatus | null; status_expires_at: string | null }>(
+      '/profile-meta/status',
+      { status },
+    ),
   getGhost: () => apiClient.get<{ is_ghost: boolean }>('/profile-meta/ghost'),
   setGhost: (is_ghost: boolean) =>
     apiClient.post<{ is_ghost: boolean }>('/profile-meta/ghost', { is_ghost }),

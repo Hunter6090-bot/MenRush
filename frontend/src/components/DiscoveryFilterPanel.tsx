@@ -4,6 +4,7 @@ import {
   DISCOVERY_FILTER_CATEGORIES,
   MOOD_FILTER_OPTIONS,
   STATUS_FILTER_OPTIONS,
+  USER_STATUS_FILTER_OPTIONS,
   countActiveDiscoveryFilters,
   type DiscoveryFilterState,
 } from '../lib/discoveryFilters';
@@ -68,6 +69,7 @@ export function DiscoveryFilterPanel({
       agePreset: 'any',
       status: [],
       mood: undefined,
+      userStatus: undefined,
     });
   };
 
@@ -156,14 +158,25 @@ export function DiscoveryFilterPanel({
             </button>
             <button
               type="button"
-              onClick={() => setActiveCategory('status')}
+              onClick={() => setActiveCategory('presence')}
               className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold transition-colors ${
-                activeCategory === 'status'
+                activeCategory === 'presence'
                   ? 'bg-[var(--copper)] text-[var(--bg-primary)]'
                   : 'bg-[var(--bg-primary)]/60 text-[var(--cream-muted)] hover:text-[var(--cream)]'
               }`}
             >
-              Status{value.status.length > 0 ? ` · ${value.status.length}` : ''}
+              Presence{value.status.length > 0 ? ` · ${value.status.length}` : ''}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveCategory('user_status')}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold transition-colors ${
+                activeCategory === 'user_status'
+                  ? 'bg-[var(--copper)] text-[var(--bg-primary)]'
+                  : 'bg-[var(--bg-primary)]/60 text-[var(--cream-muted)] hover:text-[var(--cream)]'
+              }`}
+            >
+              Status{value.userStatus ? ' · 1' : ''}
             </button>
             <button
               type="button"
@@ -195,8 +208,8 @@ export function DiscoveryFilterPanel({
               </div>
             ) : null}
 
-            {activeCategory === 'status' ? (
-              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Status filters">
+            {activeCategory === 'presence' ? (
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Presence filters">
                 {STATUS_FILTER_OPTIONS.map((option) => (
                   <button
                     key={option.id}
@@ -204,6 +217,36 @@ export function DiscoveryFilterPanel({
                     aria-pressed={value.status.includes(option.id)}
                     onClick={() => toggleStatus(option.id)}
                     className={pillClass(value.status.includes(option.id))}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {activeCategory === 'user_status' ? (
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Status filters">
+                <button
+                  type="button"
+                  aria-pressed={!value.userStatus}
+                  onClick={() => onChange({ ...value, userStatus: undefined })}
+                  className={pillClass(!value.userStatus)}
+                >
+                  Any status
+                </button>
+                {USER_STATUS_FILTER_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={value.userStatus === option.value}
+                    onClick={() =>
+                      onChange({
+                        ...value,
+                        userStatus:
+                          value.userStatus === option.value ? undefined : option.value,
+                      })
+                    }
+                    className={pillClass(value.userStatus === option.value)}
                   >
                     {option.label}
                   </button>

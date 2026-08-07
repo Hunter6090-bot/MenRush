@@ -34,6 +34,8 @@ export const userService = {
       onlyPulse?: boolean;
       lookingFor?: string;
       mood?: string;
+      /** MenRush Status (§25) exact match; free filter. */
+      status?: string;
     },
     clientLocation?: { lat: number; lng: number },
   ) {
@@ -83,6 +85,16 @@ export const userService = {
           WHEN p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' THEN p.mood
           ELSE NULL
         END AS mood,
+        CASE
+          WHEN p.status IS NOT NULL AND p.status_expires_at IS NOT NULL AND p.status_expires_at > NOW()
+            THEN p.status
+          ELSE NULL
+        END AS status,
+        CASE
+          WHEN p.status IS NOT NULL AND p.status_expires_at IS NOT NULL AND p.status_expires_at > NOW()
+            THEN p.status_expires_at
+          ELSE NULL
+        END AS status_expires_at,
         ST_Distance(p.location, ST_MakePoint($2, $1)::geography) as distance_m
       FROM users u
       JOIN profiles p ON u.id = p.user_id
@@ -144,6 +156,10 @@ export const userService = {
     if (filters?.mood) {
       values.push(filters.mood);
       queryStr += ` AND p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' AND p.mood ILIKE $${values.length}`;
+    }
+    if (filters?.status) {
+      values.push(filters.status);
+      queryStr += ` AND p.status = $${values.length} AND p.status_expires_at IS NOT NULL AND p.status_expires_at > NOW()`;
     }
 
     // Spec: pulse first, then fresh presence. Real photos rank above shared
@@ -265,7 +281,17 @@ export const userService = {
         CASE
           WHEN p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' THEN p.mood_set_at
           ELSE NULL
-        END AS mood_set_at
+        END AS mood_set_at,
+        CASE
+          WHEN p.status IS NOT NULL AND p.status_expires_at IS NOT NULL AND p.status_expires_at > NOW()
+            THEN p.status
+          ELSE NULL
+        END AS status,
+        CASE
+          WHEN p.status IS NOT NULL AND p.status_expires_at IS NOT NULL AND p.status_expires_at > NOW()
+            THEN p.status_expires_at
+          ELSE NULL
+        END AS status_expires_at
        FROM users u
        LEFT JOIN profiles p ON u.id = p.user_id
        WHERE u.id = $1`,
@@ -287,6 +313,16 @@ export const userService = {
           WHEN p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' THEN p.mood
           ELSE NULL
         END AS mood,
+        CASE
+          WHEN p.status IS NOT NULL AND p.status_expires_at IS NOT NULL AND p.status_expires_at > NOW()
+            THEN p.status
+          ELSE NULL
+        END AS status,
+        CASE
+          WHEN p.status IS NOT NULL AND p.status_expires_at IS NOT NULL AND p.status_expires_at > NOW()
+            THEN p.status_expires_at
+          ELSE NULL
+        END AS status_expires_at,
         EXISTS (
           SELECT 1 FROM likes l1
           JOIN likes l2 ON l1.liker_id = l2.liked_id AND l1.liked_id = l2.liker_id

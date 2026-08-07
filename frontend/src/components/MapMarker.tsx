@@ -2,6 +2,7 @@ import { createRoot, Root } from 'react-dom/client';
 import { PulsingAvatar } from './PulsingAvatar';
 import { SilhouetteAvatar } from './SilhouetteAvatar';
 import { useResolvingPhotoSrc } from './UserAvatar';
+import { USER_STATUS_ACCENT, type UserStatus } from '../lib/userStatus';
 
 export interface MapMarkerUser {
   id: string;
@@ -10,6 +11,8 @@ export interface MapMarkerUser {
   age?: number;
   isPulsing: boolean;
   isVerified?: boolean;
+  /** Subtle Status accent (§25) — optional; never competes with Pulse ring. */
+  status?: UserStatus | null;
 }
 
 interface MapMarkerProps {
@@ -18,9 +21,11 @@ interface MapMarkerProps {
 }
 
 export function MapMarker({ user, size = 44 }: MapMarkerProps) {
+  const statusAccent = user.status ? USER_STATUS_ACCENT[user.status] : null;
+
   return (
     <div
-      className={`cursor-pointer transition-transform duration-150 hover:scale-110 ${
+      className={`relative cursor-pointer transition-transform duration-150 hover:scale-110 ${
         user.isPulsing ? 'animate-pulse-breathe' : ''
       }`}
       style={{ width: size, height: size }}
@@ -44,6 +49,23 @@ export function MapMarker({ user, size = 44 }: MapMarkerProps) {
           <MapPhoto name={user.name} photoUrl={user.photo_url} age={user.age} size={size} />
         </div>
       </PulsingAvatar>
+      {statusAccent ? (
+        <span
+          aria-hidden
+          data-testid="map-status-dot"
+          title={user.status ?? undefined}
+          className="pointer-events-none absolute rounded-full"
+          style={{
+            width: Math.max(8, Math.round(size * 0.2)),
+            height: Math.max(8, Math.round(size * 0.2)),
+            right: 1,
+            bottom: 1,
+            background: statusAccent,
+            border: '1.5px solid #1A0E03',
+            boxShadow: `0 0 6px ${statusAccent}99`,
+          }}
+        />
+      ) : null}
     </div>
   );
 }
