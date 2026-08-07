@@ -38,6 +38,7 @@ export function HotSpotPin({ spot, size = 36 }: HotSpotPinProps) {
       }}
       data-occupied={occupied ? '1' : '0'}
       data-testid={`hotspot-pin-${occupied ? 'solid' : 'dim'}`}
+      data-hotspot-id={spot.id}
     >
       <div
         className="flex h-full w-full items-center justify-center rounded-full"

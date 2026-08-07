@@ -13,10 +13,12 @@ type AnalyticsEvent =
 type MetadataValue = string | number | boolean;
 type EventMetadata = Record<string, MetadataValue | undefined>;
 
+const ATTRIBUTION_METADATA_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content'] as const;
+
 const ALLOWED_METADATA: Record<AnalyticsEvent, ReadonlySet<string>> = {
-  landing_viewed: new Set(['surface']),
+  landing_viewed: new Set(['surface', ...ATTRIBUTION_METADATA_KEYS]),
   waitlist_attempted: new Set(['transport']),
-  waitlist_succeeded: new Set(['transport', 'already_subscribed']),
+  waitlist_succeeded: new Set(['transport', 'already_subscribed', ...ATTRIBUTION_METADATA_KEYS]),
   waitlist_failed: new Set(['stage', 'transport']),
   verification_transition: new Set(['state']),
   location_permission_outcome: new Set(['outcome']),
@@ -94,6 +96,35 @@ export function checkFeatureGate(gateName: string, fallback = false): boolean {
   } catch {
     return fallback;
   }
+}
+
+/**
+ * First-touch, session-scoped UTM attribution — same sessionStorage pattern
+ * as getAnonymousSessionId. Captured once from the URL on first read, then
+ * cached for the session so it survives from landing through to signup even
+ * though those are two separate trackEvent calls.
+ */
+export function getAttributionParams(): Partial<Record<(typeof ATTRIBUTION_METADATA_KEYS)[number], string>> {
+  const storageKey = 'menrush_attribution';
+  try {
+    const existing = window.sessionStorage.getItem(storageKey);
+    if (existing) return JSON.parse(existing);
+  } catch {
+    // fall through to read from URL
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const captured: Record<string, string> = {};
+  for (const key of ATTRIBUTION_METADATA_KEYS) {
+    const value = params.get(key);
+    if (value) captured[key] = value.slice(0, 100); // bound length defensively
+  }
+  try {
+    window.sessionStorage.setItem(storageKey, JSON.stringify(captured));
+  } catch {
+    // Storage may be blocked; the caller still gets this call's values.
+  }
+  return captured;
 }
 
 export function discoveryResultBucket(count: number): string {

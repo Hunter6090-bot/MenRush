@@ -86,7 +86,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         setShowMatch(true);
         setTimeout(() => setShowMatch(false), 3000);
       } else {
-        setLikeHint('Match sent — chat and calling unlock when he matches back · consent first.');
+        setLikeHint('Match sent — chat unlocks if he matches back · consent first.');
         setTimeout(() => setLikeHint(null), 4000);
       }
     } catch (err: unknown) {
@@ -103,7 +103,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   };
 
   return (
-    <div className="group relative bg-[#1E1508] border border-[#3D2B0E] rounded-2xl shadow-card overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover hover:border-[#C4832A]/25 flex flex-col">
+    <div className="group relative bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl shadow-card overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover hover:border-[#C4832A]/25 flex flex-col">
       {/* Match Overlay */}
       {showMatch && (
         <div className="absolute inset-0 z-50 bg-[#C4832A]/90 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in text-[#1A0E03] p-4 text-center">
@@ -122,7 +122,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
       )}
 
       {/* Photo area */}
-      <div className="relative h-52 bg-gradient-to-br from-[#2A1C0A] to-[#1E1508] flex-shrink-0">
+      <div className="relative h-52 bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--bg-card)] flex-shrink-0">
         {fullPhotoUrl ? (
           <img
             src={fullPhotoUrl}
@@ -137,7 +137,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         )}
 
         {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#1E1508] via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-card)] via-transparent to-transparent" />
 
         {/* Status badge */}
         <div className="absolute top-3 left-3">
@@ -146,7 +146,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
 
         {/* Distance badge */}
         <div className="absolute top-3 right-3">
-          <span className="flex items-center gap-1 bg-black/50 backdrop-blur-sm text-[#F0E0C0]/80 text-xs font-medium px-2.5 py-1 rounded-full border border-[#3D2B0E]">
+          <span className="flex items-center gap-1 bg-black/50 backdrop-blur-sm text-[var(--cream)]/80 text-xs font-medium px-2.5 py-1 rounded-full border border-[var(--border-default)]">
             <PinIcon className="w-3 h-3 text-[#C4832A]" />
             {distanceLabel}
           </span>
@@ -155,8 +155,6 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         {/* Match button overlay */}
         <button
           onClick={handleLike}
-          aria-label={liked ? `Match sent to ${user.name}` : `Match with ${user.name}`}
-          title={liked ? 'Match sent' : 'Match'}
           className={`absolute bottom-3 right-3 w-11 h-11 rounded-full flex items-center justify-center transition-all ${
             liked
               ? 'bg-nn-copper text-nn-on-copper shadow-glow-copper'
@@ -170,10 +168,8 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
       {/* Content */}
       <div className="p-4 flex-1 flex flex-col">
         <div className="flex items-center gap-2 mb-1">
-          <h3 className="font-bold text-[#F0E0C0] text-base">{user.name}</h3>
-          {user.age != null ? (
-            <span className="text-[var(--cream-muted)] text-sm">{user.age}</span>
-          ) : null}
+          <h3 className="font-bold text-[var(--cream)] text-base">{user.name}</h3>
+          <span className="text-[var(--cream-muted)] text-sm">{user.age}</span>
           {user.is_verified ? <VerifiedBadge /> : user.authenticity_status === 'verified' ? <VerifiedBadge level="authentic_person" /> : null}
         </div>
 
@@ -194,7 +190,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         ) : null}
 
         {user.bio ? (
-          <p className="text-[#F0E0C0]/55 text-xs leading-relaxed line-clamp-2 flex-1">{user.bio}</p>
+          <p className="text-[var(--cream)]/55 text-xs leading-relaxed line-clamp-2 flex-1">{user.bio}</p>
         ) : user.headline || user.looking_for ? null : (
           <p className="text-[var(--cream-muted)]/50 text-xs italic flex-1">No bio yet</p>
         )}
@@ -211,7 +207,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               </span>
             ))}
             {user.interests.length > 3 && (
-              <span className="px-2 py-0.5 rounded-full bg-[#3D2B0E]/40 text-[var(--cream-muted)] text-[10px] border border-[#3D2B0E]">
+              <span className="px-2 py-0.5 rounded-full bg-[var(--border-default)]/40 text-[var(--cream-muted)] text-[10px] border border-[var(--border-default)]">
                 +{user.interests.length - 3}
               </span>
             )}
@@ -231,7 +227,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           }
           className="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#A45E18] hover:from-[#D4943B] hover:to-[#C4832A] text-white text-sm font-semibold transition-all duration-200 hover:shadow-glow-blue active:scale-95 disabled:opacity-60"
         >
-          {liking ? 'Sending…' : isMutual ? 'Open chat' : liked ? 'Match sent' : 'Match'}
+          {liking ? 'Sending…' : isMutual ? 'Open chat' : liked ? 'Matched' : 'Match'}
         </button>
         {likeHint ? (
           <p className="mt-2 text-center text-[11px] text-[var(--cream-muted)]" role="status">

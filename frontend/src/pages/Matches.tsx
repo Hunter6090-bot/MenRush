@@ -11,7 +11,7 @@ import { PremiumGate } from '../components/PremiumGate';
 interface Match {
   id: string;
   name: string;
-  age?: number | null;
+  age: number;
   bio?: string;
   photo_url?: string;
   online: boolean;
@@ -35,16 +35,8 @@ function formatMatchedAgo(iso?: string): string | null {
   return `Matched ${days}d ago`;
 }
 
-function MatchGridCard({
-  match,
-  onClick,
-  likedYou = false,
-}: {
-  match: Match;
-  onClick: () => void;
-  likedYou?: boolean;
-}) {
-  const { src: photo, onError } = useResolvingPhotoSrc(match.photo_url, match.age ?? undefined);
+function MatchGridCard({ match, onClick }: { match: Match; onClick: () => void }) {
+  const { src: photo, onError } = useResolvingPhotoSrc(match.photo_url, match.age);
   return (
     <button
       type="button"
@@ -65,15 +57,13 @@ function MatchGridCard({
               className={`h-2 w-2 shrink-0 rounded-full ${match.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
             />
             <span className="truncate text-[15px] font-bold text-[#FFF6E6]">
-              {match.name}{match.age != null ? ` ${match.age}` : ''}
+              {match.name} {match.age}
             </span>
             {match.is_verified ? <VerifiedBadge size="sm" /> : match.authenticity_status === 'verified' ? <VerifiedBadge size="sm" level="authentic_person" /> : null}
           </div>
-          <p className="mt-0.5 truncate text-xs font-semibold text-[#F0E0C0]">
-            {likedYou
-              ? 'Liked you — tap to view'
-              : formatMatchedAgo(match.matched_at ?? match.last_message_at) ??
-                (match.online ? 'Active now' : 'Last seen recently')}
+          <p className="mt-0.5 truncate text-xs font-semibold text-[var(--cream)]">
+            {formatMatchedAgo(match.matched_at ?? match.last_message_at) ??
+              (match.online ? 'Active now' : 'Last seen recently')}
           </p>
         </div>
       </div>
@@ -102,8 +92,6 @@ function PremiumUpsellTile({ count, onClick }: { count: number; onClick: () => v
 export const Matches = () => {
   const [matches, setMatches] = useState<Match[]>([]);
   const [likesCount, setLikesCount] = useState(0);
-  const [receivedLikes, setReceivedLikes] = useState<Match[]>([]);
-  const [canSeeReceivedLikes, setCanSeeReceivedLikes] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [premiumOpen, setPremiumOpen] = useState(false);
@@ -113,20 +101,10 @@ export const Matches = () => {
     try {
       const [matchesRes, likesRes] = await Promise.all([
         usersAPI.getMatches(),
-        usersAPI
-          .getReceivedLikesSummary()
-          .catch(() => ({ data: { count: 0, is_premium: false, preview: [] } })),
+        usersAPI.getReceivedLikesSummary().catch(() => ({ data: { count: 0, is_premium: false } })),
       ]);
       setMatches(matchesRes.data);
       setLikesCount(likesRes.data.count ?? 0);
-      setCanSeeReceivedLikes(Boolean(likesRes.data.is_premium));
-      setReceivedLikes(
-        (likesRes.data.preview ?? []).map((like) => ({
-          ...like,
-          photo_url: like.photo_url ?? undefined,
-          online: false,
-        })),
-      );
       setError('');
     } catch {
       setError('Could not load matches.');
@@ -196,19 +174,9 @@ export const Matches = () => {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] sm:gap-3.5">
-            {likesCount > 0 && !canSeeReceivedLikes ? (
+            {likesCount > 0 ? (
               <PremiumUpsellTile count={likesCount} onClick={() => setPremiumOpen(true)} />
             ) : null}
-            {canSeeReceivedLikes
-              ? receivedLikes.map((like) => (
-                  <MatchGridCard
-                    key={`liked-you-${like.id}`}
-                    match={like}
-                    likedYou
-                    onClick={() => navigate(`/profile/${like.id}`)}
-                  />
-                ))
-              : null}
             {matches.map((match) => (
               <MatchGridCard
                 key={match.id}

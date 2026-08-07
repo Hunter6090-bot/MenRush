@@ -22,6 +22,8 @@ export interface NavItem {
   badgeKey?: 'messages' | 'notifications' | 'matches';
   mobileTab?: boolean;
   desktopNav?: boolean;
+  /** Reachable on mobile via the "More" sheet instead of the primary tab row. */
+  mobileMore?: boolean;
 }
 
 export function getNavItems(): NavItem[] {
@@ -38,13 +40,15 @@ export function getNavItems(): NavItem[] {
       label: ROUTE_LABELS.events,
       Icon: IconEvents,
       desktopNav: true,
+      mobileMore: true,
     },
+    // #67: Hot Spots is now a layer on the Nearby map, not a separate destination —
+    // no desktopNav/mobileMore, so it no longer appears in the sidebar or "More" sheet.
+    // The `/hot-spots` route itself stays live (App.tsx) for existing deep links/bookmarks.
     {
       to: '/hot-spots',
       label: ROUTE_LABELS.hotSpots,
       Icon: IconHotSpots,
-      mobileTab: true,
-      desktopNav: true,
     },
     {
       to: '/matches',
@@ -81,6 +85,7 @@ export function getNavItems(): NavItem[] {
       label: ROUTE_LABELS.settings,
       Icon: IconSettings,
       desktopNav: true,
+      mobileMore: true,
     },
     {
       to: '/notifications',
