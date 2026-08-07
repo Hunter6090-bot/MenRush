@@ -393,7 +393,7 @@ export const ProfileSetup: React.FC = () => {
           <div className="flex flex-col gap-4">
             <div className={publicInfoBoxClass}>
               <p className="text-[13px] leading-relaxed text-[var(--cream-muted)]">
-                <span className="font-semibold text-[#F0E0C0]">Discreet?</span> A clear photo
+                <span className="font-semibold text-[var(--cream)]">Discreet?</span> A clear photo
                 still helps matches recognise you in chat — but it is your call. No photo means a
                 standard avatar picked from your profile tags; only a few variants exist so you may
                 look like other guys nearby.
@@ -433,7 +433,7 @@ export const ProfileSetup: React.FC = () => {
                     showStatus={false}
                     className="ring-4 ring-[rgba(240,224,192,0.2)]"
                   />
-                  <span className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#1E1508] bg-[#C4832A] text-[#1A0E03]">
+                  <span className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full border-2 border-[var(--bg-card)] bg-[#C4832A] text-[#1A0E03]">
                     {uploading ? <PulseRing size={16} /> : '+'}
                   </span>
                 </button>
@@ -667,7 +667,7 @@ function SetupChecklistItem({
       >
         {n}
       </span>
-      <span className={`text-[13.5px] ${done ? 'font-semibold text-[#F0E0C0]' : 'text-[var(--cream-muted)]'}`}>
+      <span className={`text-[13.5px] ${done ? 'font-semibold text-[var(--cream)]' : 'text-[var(--cream-muted)]'}`}>
         {text}
       </span>
     </div>

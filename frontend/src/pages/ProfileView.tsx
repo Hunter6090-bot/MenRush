@@ -8,7 +8,6 @@ import { CoverBanner, normalizeCoverFrame } from '../components/CoverBanner';
 import { StatusBadge } from '../components/StatusBadge';
 import { ProfileAlbumsSection } from '../components/ProfileAlbumsSection';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
-import { getPhotoUrl } from '../components/UserAvatar';
 
 interface ViewableUser {
   id: string;
@@ -19,7 +18,6 @@ interface ViewableUser {
   looking_for?: string;
   photo_url?: string;
   cover_url?: string;
-  secondary_photo_urls?: Array<string | null>;
   cover_position_x?: number;
   cover_position_y?: number;
   cover_zoom?: number;
@@ -59,7 +57,6 @@ export const ProfileView = () => {
   const [liked, setLiked] = useState(false);
   const [mutual, setMutual] = useState(false);
   const [matching, setMatching] = useState(false);
-  const [photoViewerUrl, setPhotoViewerUrl] = useState<string | null>(null);
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(
     null,
   );
@@ -99,7 +96,7 @@ export const ProfileView = () => {
       return;
     }
     if (liked) {
-      flash(`Match already sent to ${user.name}. Chat and calling unlock when he matches back · consent first.`);
+      flash(`Match already sent to ${user.name}. Chat unlocks when he matches back · consent first.`);
       return;
     }
     setMatching(true);
@@ -110,7 +107,7 @@ export const ProfileView = () => {
         setMutual(true);
         flash(`You matched with ${user.name}. Say hello.`);
       } else {
-        flash(`Match sent to ${user.name}. Chat and calling unlock if he matches back · consent first.`);
+        flash(`Match sent to ${user.name}. Chat unlocks if he matches back · consent first.`);
       }
     } catch (err: unknown) {
       const apiError = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -131,7 +128,7 @@ export const ProfileView = () => {
       navigate(`/messages/${user.id}`);
       return;
     }
-    flash('Chat and calling unlock after a mutual match. Tap Match first · consent first.');
+    flash('Chat unlocks after a mutual match. Tap Match first · consent first.');
   }, [user, mutual, navigate, flash]);
 
   const handlePass = useCallback(() => {
@@ -155,7 +152,7 @@ export const ProfileView = () => {
     return (
       <Layout>
         <div className="max-w-xl mx-auto px-4 py-10 text-center">
-          <p className="text-[#F0E0C0]/80 text-sm">{error || 'Profile not found.'}</p>
+          <p className="text-[var(--cream)]/80 text-sm">{error || 'Profile not found.'}</p>
           <button
             onClick={() => navigate('/discover')}
             className="mt-4 px-4 py-2 rounded-xl bg-[#C4832A]/10 hover:bg-[#C4832A]/20 text-[#C4832A] text-xs font-semibold border border-[#C4832A]/30"
@@ -179,14 +176,14 @@ export const ProfileView = () => {
                 safetyNotice.tone === 'success' ? 'rgba(143,199,115,0.4)' : 'rgba(196,131,42,0.45)',
               background:
                 safetyNotice.tone === 'success' ? 'rgba(143,199,115,0.12)' : 'rgba(196,131,42,0.1)',
-              color: safetyNotice.tone === 'success' ? '#8FC773' : '#F0E0C0',
+              color: safetyNotice.tone === 'success' ? '#8FC773' : 'var(--cream)',
             }}
           >
             {safetyNotice.msg}
           </div>
         ) : null}
 
-        <div className="bg-[#1E1508] border border-[#3D2B0E] rounded-2xl overflow-hidden shadow-card">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl overflow-hidden shadow-card">
           {user.cover_url ? (
             <CoverBanner
               coverUrl={user.cover_url}
@@ -201,27 +198,17 @@ export const ProfileView = () => {
           )}
           <div className="px-5 pb-5">
             <div className="-mt-10 mb-3 flex items-end justify-between gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const resolved = getPhotoUrl(user.photo_url);
-                  if (resolved) setPhotoViewerUrl(resolved);
-                }}
-                className="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--copper)]"
-                aria-label={`Open ${user.name}'s profile photo full screen`}
-              >
-                <UserAvatar
-                  name={user.name}
-                  photoUrl={user.photo_url}
-                  age={user.age}
-                  online={user.online}
-                  size="xl"
-                  className="ring-4 ring-[#1E1508]"
-                />
-              </button>
+              <UserAvatar
+                name={user.name}
+                photoUrl={user.photo_url}
+                age={user.age}
+                online={user.online}
+                size="xl"
+                className="ring-4 ring-[var(--bg-card)]"
+              />
               <div className="flex items-center gap-1.5 pb-1">
                 <StatusBadge online={!!user.online} lastSeen={user.last_seen} />
-                <div className="rounded-full border border-[#3D2B0E] bg-[#0D0A06]/60">
+                <div className="rounded-full border border-[var(--border-default)] bg-[var(--bg-primary)]/60">
                   <ChatSafetyMenu
                     peerId={user.id}
                     peerName={user.name}
@@ -234,20 +221,20 @@ export const ProfileView = () => {
                 </div>
               </div>
             </div>
-            <h2 className="text-xl font-bold text-[#F0E0C0]">{user.name}</h2>
+            <h2 className="text-xl font-bold text-[var(--cream)]">{user.name}</h2>
             {typeof user.age === 'number' && (
               <p className="text-[var(--cream-muted)] text-sm mt-0.5">Age {user.age}</p>
             )}
             {user.headline && (
-              <p className="text-[#F0E0C0]/80 text-sm mt-3 italic">{user.headline}</p>
+              <p className="text-[var(--cream)]/80 text-sm mt-3 italic">{user.headline}</p>
             )}
             {user.bio && (
-              <p className="text-[#F0E0C0]/65 text-sm mt-3 leading-relaxed">{user.bio}</p>
+              <p className="text-[var(--cream)]/65 text-sm mt-3 leading-relaxed">{user.bio}</p>
             )}
             {user.looking_for && (
               <p className="text-[var(--cream-muted)] text-xs mt-3">
                 <span className="uppercase tracking-wide font-semibold">Looking for:</span>{' '}
-                <span className="text-[#F0E0C0]/80">{user.looking_for}</span>
+                <span className="text-[var(--cream)]/80">{user.looking_for}</span>
               </p>
             )}
             {user.interests && user.interests.length > 0 && (
@@ -262,29 +249,6 @@ export const ProfileView = () => {
                 ))}
               </div>
             )}
-            {user.secondary_photo_urls?.some(Boolean) ? (
-              <div className="mt-4 grid grid-cols-3 gap-2" aria-label={`${user.name}'s additional photos`}>
-                {user.secondary_photo_urls.slice(0, 3).map((src, slot) => {
-                  const resolved = getPhotoUrl(src ?? undefined);
-                  if (!resolved) return null;
-                  return (
-                    <button
-                      key={`${resolved}-${slot}`}
-                      type="button"
-                      onClick={() => setPhotoViewerUrl(resolved)}
-                      className="aspect-square overflow-hidden rounded-xl border border-[var(--border-default)]"
-                      aria-label={`Open ${user.name}'s photo ${slot + 2} full screen`}
-                    >
-                      <img
-                        src={resolved}
-                        alt={`${user.name} profile photo ${slot + 2}`}
-                        className="h-full w-full object-cover"
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
           </div>
         </div>
 
@@ -311,7 +275,7 @@ export const ProfileView = () => {
                   : 'bg-[var(--copper)] text-[var(--nn-on-copper)] hover:bg-[var(--copper-light,#E0A14A)]'
             }`}
           >
-            {matching ? 'Sending…' : mutual ? 'Open chat' : liked ? 'Match sent' : 'Match'}
+            {matching ? 'Sending…' : mutual ? 'Open chat' : liked ? 'Matched' : 'Match'}
           </button>
           <button
             type="button"
@@ -327,33 +291,9 @@ export const ProfileView = () => {
           </button>
         </div>
         <p className="text-center text-[11px] text-[var(--cream-muted)]">
-          Chat and calling unlock when he matches back · Report anytime
+          Match is mutual interest · Chat unlocks when he matches back · Report anytime
         </p>
       </div>
-      {photoViewerUrl && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label={`${user.name} photo viewer`}
-          onClick={() => setPhotoViewerUrl(null)}
-        >
-          <button
-            type="button"
-            onClick={() => setPhotoViewerUrl(null)}
-            className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full border border-white/25 bg-black/65 text-2xl text-white"
-            aria-label="Close full-screen photo"
-          >
-            ×
-          </button>
-          <img
-            src={photoViewerUrl}
-            alt={`${user.name} full-screen profile`}
-            className="max-h-full max-w-full rounded-2xl object-contain"
-            onClick={(event) => event.stopPropagation()}
-          />
-        </div>
-      )}
     </Layout>
   );
 };

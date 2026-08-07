@@ -231,7 +231,7 @@ export function ProfileDrawer({
           style={{
             height: snap === "half" && !dragging ? 180 : 280,
             maxHeight: "38%",
-            background: "linear-gradient(135deg,#2A1C0A,#1E1508)",
+            background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
             transition: dragging ? "none" : "height 220ms ease",
           }}
         >
@@ -273,7 +273,7 @@ export function ProfileDrawer({
               <div
                 className="w-full h-full rounded-full overflow-hidden border-2 flex items-center justify-center"
                 style={{
-                  background: "linear-gradient(135deg,#2A1C0A,#1E1508)",
+                  background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
                   borderColor: "var(--copper)",
                 }}
               >

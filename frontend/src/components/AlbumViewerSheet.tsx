@@ -144,12 +144,12 @@ export function AlbumViewerSheet({
           aria-modal="true"
           aria-labelledby="album-sheet-title"
           className="w-full sm:max-w-lg max-h-[88vh] overflow-hidden rounded-t-3xl sm:rounded-3xl border shadow-2xl flex flex-col"
-          style={{ background: '#1E1508', borderColor: '#3D2B0E' }}
+          style={{ background: 'var(--bg-card)', borderColor: 'var(--border-default)' }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-[#3D2B0E]">
+          <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-[var(--border-default)]">
             <div className="min-w-0">
-              <h2 id="album-sheet-title" className="text-lg font-bold text-[#F0E0C0] truncate">
+              <h2 id="album-sheet-title" className="text-lg font-bold text-[var(--cream)] truncate">
                 {album.name}
               </h2>
               <p className="text-xs text-[var(--cream-muted)] mt-0.5">
@@ -173,7 +173,7 @@ export function AlbumViewerSheet({
                 type="button"
                 onClick={onClose}
                 aria-label="Close"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-[#3D2B0E] text-lg leading-none text-[var(--cream-muted)] hover:text-[#F0E0C0]"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--border-default)] text-lg leading-none text-[var(--cream-muted)] hover:text-[var(--cream)]"
               >
                 ×
               </button>
@@ -186,7 +186,7 @@ export function AlbumViewerSheet({
                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-[#C4832A]/30 bg-[#C4832A]/10">
                   <LockIcon className="h-8 w-8 text-[#C4832A]" />
                 </div>
-                <p className="text-sm font-semibold text-[#F0E0C0]">Private album</p>
+                <p className="text-sm font-semibold text-[var(--cream)]">Private album</p>
                 <p className="mt-2 text-sm leading-relaxed text-[var(--cream-muted)] max-w-xs mx-auto">
                   {ownerName} keeps this album locked. Ask in chat if you want access — they can
                   unlock it for you after you match.
@@ -197,7 +197,7 @@ export function AlbumViewerSheet({
                     onClose();
                     navigate(`/messages/${ownerId}`);
                   }}
-                  className="mt-6 w-full rounded-xl bg-[#C4832A] py-3 text-sm font-black text-[#0D0A06]"
+                  className="mt-6 w-full rounded-xl bg-[#C4832A] py-3 text-sm font-black text-[var(--nn-on-copper)]"
                 >
                   Message {ownerName}
                 </button>
@@ -211,7 +211,7 @@ export function AlbumViewerSheet({
                 {photos.map((photo) => (
                   <div
                     key={photo.id}
-                    className="relative aspect-square overflow-hidden rounded-xl border border-[#3D2B0E] bg-[#0D0A06]"
+                    className="relative aspect-square overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)]"
                   >
                     {photo.mime_type?.startsWith('video/') ? (
                       <button
@@ -271,7 +271,7 @@ export function AlbumViewerSheet({
             )}
 
             {mode === 'owner' && album.is_locked && !isPrivateToViewer && (
-              <div className="mt-6 rounded-2xl border border-[#3D2B0E] bg-[#0D0A06]/60 p-4">
+              <div className="mt-6 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-primary)]/60 p-4">
                 <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#C4832A]">
                   Share access
                 </p>
@@ -285,9 +285,9 @@ export function AlbumViewerSheet({
                     {matches.map((match) => (
                       <li
                         key={match.id}
-                        className="flex items-center justify-between gap-2 rounded-xl border border-[#3D2B0E] px-3 py-2"
+                        className="flex items-center justify-between gap-2 rounded-xl border border-[var(--border-default)] px-3 py-2"
                       >
-                        <span className="text-sm text-[#F0E0C0] truncate">{match.name}</span>
+                        <span className="text-sm text-[var(--cream)] truncate">{match.name}</span>
                         <button
                           type="button"
                           disabled={grantingId === match.id}
@@ -381,13 +381,13 @@ export function AlbumCard({
         {cover && !lockedForViewer ? (
           <img src={cover} alt="" className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#2A1C0A] to-[#0D0A06]">
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--bg-primary)]">
             <LockIcon className="h-10 w-10 text-[#C4832A]/70" />
           </div>
         )}
         {album.is_locked && album.unlocked !== true && (
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
-            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#F0E0C0]/90">
+            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--cream)]/90">
               {album.unlocked === false ? 'Tap to request access' : 'Tap to open'}
             </span>
           </div>

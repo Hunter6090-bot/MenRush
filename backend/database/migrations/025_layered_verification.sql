@@ -1,6 +1,7 @@
 -- 025_layered_verification.sql
--- Runtime copy: keep aligned with /database/migrations/025_layered_verification.sql.
 -- Separate adult assurance, live-person authenticity, and government-ID identity checks.
+-- The legacy users.is_verified flag remains the compatibility signal for the
+-- strongest (identity_checked) tier.
 
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS age_assurance_status TEXT NOT NULL DEFAULT 'pending',
@@ -23,6 +24,8 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+-- Existing DOB/age entry is recorded honestly. It is not promoted to the
+-- legally stronger "confirmed" state without a real age-assurance check.
 UPDATE users
 SET age_assurance_status = 'self_attested'
 WHERE age >= 18 AND age_assurance_status = 'pending';
