@@ -78,7 +78,7 @@ export function ProfileViewersCard({
             <li key={viewer.id}>
               <Link
                 to={`/profile/${viewer.id}`}
-                className="flex items-center gap-3 rounded-xl border border-transparent px-2 py-2 transition-colors hover:border-[var(--border-default)] hover:bg-[var(--bg-primary)]"
+                className="flex items-center gap-3 rounded-xl border border-transparent px-2 py-2 transition-colors hover:border-[var(--border-default)] hover:bg-[var(--border-default)]/35"
               >
                 <UserAvatar
                   name={viewer.name}
@@ -101,7 +101,7 @@ export function ProfileViewersCard({
 
       {hasMore && hiddenCount > 0 && (
         <div className="mt-4 rounded-xl border border-[#C4832A]/25 bg-[#C4832A]/8 px-4 py-3 text-center">
-          <p className="text-xs text-[#F0E0C0]/85">
+          <p className="text-xs text-[var(--cream)]/85">
             <span className="font-bold text-[#C4832A]">{hiddenCount} more</span> men viewed your profile.
           </p>
           <Link

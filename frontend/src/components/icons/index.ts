@@ -20,3 +20,4 @@ export { IconEvents } from "./IconEvents";
 export { IconHotSpots } from "./IconHotSpots";
 export { IconSettings } from "./IconSettings";
 export { IconMapExpand } from "./IconMapExpand";
+export { IconMore } from "./IconMore";

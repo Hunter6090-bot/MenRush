@@ -40,4 +40,27 @@ router.post('/read-all', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// #74 — user-initiated delete.
+router.delete('/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const deleted = await notificationService.remove(req.userId!, req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+    const unread_count = await notificationService.unreadCount(req.userId!);
+    res.json({ ok: true, unread_count });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete('/', async (req: AuthRequest, res: Response) => {
+  try {
+    const removed = await notificationService.removeAllRead(req.userId!);
+    res.json({ ok: true, removed });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

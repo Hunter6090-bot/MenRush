@@ -7,7 +7,6 @@ import { verifyAPI, type AuthenticityChallenge } from '../api/verify';
 export function AuthenticityVerify() {
   const [challenge, setChallenge] = useState<AuthenticityChallenge | null>(null);
   const [frames, setFrames] = useState<File[]>([]);
-  const [retakeIndex, setRetakeIndex] = useState<number | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitted, setSubmitted] = useState(false);
@@ -23,18 +22,9 @@ export function AuthenticityVerify() {
   const prompt = challenge?.prompts[frames.length] ?? '';
 
   const capture = (file: File) => {
-    setFrames((current) => {
-      if (retakeIndex === null) return [...current, file];
-      return current.map((frame, index) => index === retakeIndex ? file : frame);
-    });
-    setRetakeIndex(null);
+    setFrames((current) => [...current, file]);
     setCameraOpen(false);
     setError('');
-  };
-
-  const retake = (index: number) => {
-    setRetakeIndex(index);
-    setCameraOpen(true);
   };
 
   const submit = async () => {
@@ -66,15 +56,8 @@ export function AuthenticityVerify() {
 
         {submitted ? (
           <section className="mr-card mt-6 p-5">
-            <h2 className="font-bold text-[var(--cream)]">All 3 photos received</h2>
-            <p className="mt-2 text-sm leading-6 text-[var(--cream-muted)]">
-              Your upload is complete. This does not mean the challenge has passed yet. A reviewer will check
-              that each photo matches its assigned instruction.
-            </p>
-            <p className="mt-3 rounded-xl border border-[var(--border-default)] bg-black/10 p-3 text-xs leading-5 text-[var(--cream-muted)]">
-              Next status: <strong className="text-[var(--cream)]">Confirmed</strong> if the instructions match,
-              or <strong className="text-[var(--cream)]">Try again</strong> with a reason if they do not.
-            </p>
+            <h2 className="font-bold text-[var(--cream)]">Submitted for review</h2>
+            <p className="mt-2 text-sm text-[var(--cream-muted)]">Your badge will appear after the challenge is approved.</p>
             <Link to="/verify" className="mt-4 inline-flex text-sm font-bold text-[var(--copper)]">Back to Trust centre</Link>
           </section>
         ) : challenge ? (
@@ -85,36 +68,13 @@ export function AuthenticityVerify() {
               {[0, 1, 2].map((index) => <span key={index} className={`h-2 flex-1 rounded-full ${index < frames.length ? 'bg-[var(--copper)]' : 'bg-[var(--border-default)]'}`} />)}
             </div>
             {frames.length < 3 ? (
-              <button type="button" onClick={() => setCameraOpen(true)} className="mt-5 w-full rounded-xl bg-[var(--copper)] py-3 text-sm font-bold text-[#0D0A06]">
+              <button type="button" onClick={() => setCameraOpen(true)} className="mt-5 w-full rounded-xl bg-[var(--copper)] py-3 text-sm font-bold text-[var(--nn-on-copper)]">
                 Open camera for this prompt
               </button>
             ) : (
-              <div className="mt-5">
-                <p className="text-sm font-bold text-[var(--cream)]">Check each photo before submitting</p>
-                <p className="mt-1 text-xs leading-5 text-[var(--cream-muted)]">
-                  “Photo received” confirms the upload only. Make sure your pose visibly matches the instruction.
-                </p>
-                <ul className="mt-3 space-y-2">
-                  {challenge.prompts.map((challengePrompt, index) => (
-                    <li key={`${challengePrompt}-${index}`} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border-default)] px-3 py-2.5">
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-[var(--cream)]">{index + 1}. {challengePrompt}</p>
-                        <p className="mt-0.5 text-[11px] text-[#86EFAC]">✓ Photo received — not reviewed yet</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => retake(index)}
-                        className="shrink-0 rounded-lg border border-[var(--copper)]/50 px-3 py-1.5 text-xs font-bold text-[var(--copper)]"
-                      >
-                        Retake
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                <button type="button" onClick={submit} disabled={loading} className="mt-4 w-full rounded-xl bg-[var(--copper)] py-3 text-sm font-bold text-[#0D0A06] disabled:opacity-50">
-                  {loading ? 'Submitting…' : 'Submit all 3 for review'}
-                </button>
-              </div>
+              <button type="button" onClick={submit} disabled={loading} className="mt-5 w-full rounded-xl bg-[var(--copper)] py-3 text-sm font-bold text-[var(--nn-on-copper)] disabled:opacity-50">
+                {loading ? 'Submitting…' : 'Submit challenge'}
+              </button>
             )}
           </section>
         ) : loading ? <p className="mt-6 text-sm text-[var(--cream-muted)]">Preparing challenge…</p> : null}
@@ -125,9 +85,9 @@ export function AuthenticityVerify() {
         onClose={() => setCameraOpen(false)}
         onCapture={capture}
         onError={setError}
-        instruction={retakeIndex === null ? prompt : challenge?.prompts[retakeIndex] ?? prompt}
-        ariaLabel={`Authenticity prompt: ${retakeIndex === null ? prompt : challenge?.prompts[retakeIndex] ?? prompt}`}
-        filePrefix={`authenticity-${(retakeIndex ?? frames.length) + 1}`}
+        instruction={prompt}
+        ariaLabel={`Authenticity prompt: ${prompt}`}
+        filePrefix={`authenticity-${frames.length + 1}`}
       />
     </Layout>
   );

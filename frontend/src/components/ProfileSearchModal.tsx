@@ -116,7 +116,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
       return;
     }
     if (likedIds.has(hit.id)) {
-        flash(`Match already sent to ${hit.name}. Chat and calling unlock when he matches back.`);
+      flash(`Match already sent to ${hit.name}. Chat unlocks when he matches back.`);
       return;
     }
     setMatchingId(hit.id);
@@ -127,7 +127,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
         setMutualIds((prev) => new Set([...prev, hit.id]));
         flash(`You matched with ${hit.name}.`);
       } else {
-        flash(`Match sent to ${hit.name}. Chat and calling unlock if he matches back · consent first.`);
+        flash(`Match sent to ${hit.name}. Chat unlocks if he matches back · consent first.`);
       }
     } catch (err: unknown) {
       const apiError = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -153,7 +153,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
       navigate(`/messages/${hit.id}`);
       return;
     }
-    flash('Chat and calling unlock after a mutual match. Tap Match first · consent first.');
+    flash('Chat unlocks after a mutual match. Tap Match first · consent first.');
   };
 
   return (
@@ -167,10 +167,10 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
         role="dialog"
         aria-modal="true"
         aria-label="Search profiles"
-        className="w-full max-w-md overflow-hidden rounded-2xl border border-[#3D2B0E] bg-[#0D0A06] shadow-[0_24px_60px_rgba(0,0,0,0.55)]"
+        className="w-full max-w-md overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-primary)] shadow-[0_24px_60px_rgba(0,0,0,0.55)]"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center gap-2 border-b border-[#3D2B0E] px-3 py-3">
+        <div className="flex items-center gap-2 border-b border-[var(--border-default)] px-3 py-3">
           <SearchIcon className="w-4 h-4 shrink-0 text-[var(--cream-muted)]" />
           <input
             ref={inputRef}
@@ -178,12 +178,12 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search by name…"
-            className="min-w-0 flex-1 bg-transparent text-sm text-[#F0E0C0] placeholder:text-[var(--cream-muted)]/70 focus:outline-none"
+            className="min-w-0 flex-1 bg-transparent text-sm text-[var(--cream)] placeholder:text-[var(--cream-muted)]/70 focus:outline-none"
           />
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-2 py-1 text-xs font-semibold text-[var(--cream-muted)] hover:text-[#F0E0C0]"
+            className="rounded-lg px-2 py-1 text-xs font-semibold text-[var(--cream-muted)] hover:text-[var(--cream)]"
           >
             Close
           </button>
@@ -198,7 +198,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
                 notice.tone === 'success' ? 'rgba(143,199,115,0.4)' : 'rgba(196,131,42,0.45)',
               background:
                 notice.tone === 'success' ? 'rgba(143,199,115,0.12)' : 'rgba(196,131,42,0.1)',
-              color: notice.tone === 'success' ? '#8FC773' : '#F0E0C0',
+              color: notice.tone === 'success' ? '#8FC773' : 'var(--cream)',
             }}
           >
             {notice.msg}
@@ -225,7 +225,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
             return (
               <div
                 key={hit.id}
-                className="rounded-xl px-2 py-2.5 transition-colors hover:bg-[#3D2B0E]/35"
+                className="rounded-xl px-2 py-2.5 transition-colors hover:bg-[var(--border-default)]/35"
                 data-testid={`search-hit-${hit.id}`}
               >
                 <button
@@ -241,7 +241,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
                     showStatus={false}
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-[#F0E0C0]">
+                    <p className="truncate text-sm font-semibold text-[var(--cream)]">
                       {hit.name}
                       {hit.age ? <span className="font-normal text-[var(--cream-muted)]"> · {hit.age}</span> : null}
                     </p>
@@ -271,12 +271,12 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
                           : 'bg-[#C4832A] text-[#1A0E03] hover:bg-[#E0A14A]'
                     }`}
                   >
-                    {matching ? '…' : mutual ? 'Chat' : liked ? 'Match sent' : 'Match'}
+                    {matching ? '…' : mutual ? 'Chat' : liked ? 'Matched' : 'Match'}
                   </button>
                   <button
                     type="button"
                     onClick={() => handleMessage(hit)}
-                    className="rounded-full border border-[#3D2B0E] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-[var(--cream-muted)] hover:border-[#C4832A]/40 hover:text-[#C4832A]"
+                    className="rounded-full border border-[var(--border-default)] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-[var(--cream-muted)] hover:border-[#C4832A]/40 hover:text-[#C4832A]"
                   >
                     Message
                   </button>
@@ -285,8 +285,8 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
             );
           })}
         </div>
-        <p className="border-t border-[#3D2B0E] px-3 py-2 text-center text-[10px] text-[var(--cream-muted)]">
-          Match first · Chat and calls unlock when mutual
+        <p className="border-t border-[var(--border-default)] px-3 py-2 text-center text-[10px] text-[var(--cream-muted)]">
+          Match first · Chat unlocks when mutual
         </p>
       </div>
     </div>

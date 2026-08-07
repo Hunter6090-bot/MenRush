@@ -213,6 +213,8 @@ interface NotificationState {
   upsertNotification: (notification: Notification) => void;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
+  deleteNotification: (id: string) => void;
+  deleteAllRead: () => void;
   setUnreadCount: (count: number) => void;
   setLoadError: (message: string | null) => void;
 }
@@ -251,6 +253,17 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       notifications: s.notifications.map((n) => ({ ...n, read: true })),
       unreadCount: 0,
     })),
+  deleteNotification: (id) =>
+    set((s) => {
+      const target = s.notifications.find((n) => n.id === id);
+      if (!target) return s;
+      return {
+        notifications: s.notifications.filter((n) => n.id !== id),
+        unreadCount: target.read ? s.unreadCount : Math.max(0, s.unreadCount - 1),
+      };
+    }),
+  deleteAllRead: () =>
+    set((s) => ({ notifications: s.notifications.filter((n) => !n.read) })),
   setUnreadCount: (unreadCount) => set({ unreadCount }),
   setLoadError: (loadError) => set({ loadError }),
 }));

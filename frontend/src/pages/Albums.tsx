@@ -12,7 +12,6 @@ export const Albums = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingAlbumId, setUploadingAlbumId] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [selected, setSelected] = useState<AlbumDTO | null>(null);
@@ -58,25 +57,20 @@ export const Albums = () => {
     }
   };
 
-  const handleUpload = async (albumId: string, files: File[]) => {
-    if (files.length === 0) return;
+  const handleUpload = async (albumId: string, file?: File) => {
+    if (!file) return;
     setUploadingAlbumId(albumId);
     setError('');
     try {
-      for (let index = 0; index < files.length; index += 1) {
-        setUploadProgress(`${index + 1}/${files.length}`);
-        await albumsAPI.upload(albumId, files[index]);
-      }
-      setNotice(`${files.length} ${files.length === 1 ? 'item' : 'items'} added.`);
+      await albumsAPI.upload(albumId, file);
       await loadAlbums();
     } catch (err: unknown) {
       setError(
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-          'Could not upload that photo or video.',
+          'Could not upload that photo.',
       );
     } finally {
       setUploadingAlbumId(null);
-      setUploadProgress('');
     }
   };
 
@@ -108,7 +102,7 @@ export const Albums = () => {
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#C4832A]">Private sharing</p>
           <h1 className="text-2xl font-bold text-[var(--cream)]">Albums</h1>
           <p className="mt-1 text-sm text-[var(--cream-muted)]">
-            {photoTotal}/{freeCap} free media items used. Beta Premium includes unlimited uploads.
+            {photoTotal}/{freeCap} free photos used. Tap an album to view photos and grant access.
           </p>
         </div>
 
@@ -116,7 +110,7 @@ export const Albums = () => {
           onSubmit={handleCreate}
           className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 shadow-card"
         >
-          <label className="block text-xs font-semibold uppercase tracking-[0.14em] text-[var(--cream)]">
+          <label className="block text-xs font-semibold uppercase tracking-[0.14em] text-[var(--cream)]/85">
             New album
           </label>
           <div className="mt-3 flex gap-3">
@@ -168,13 +162,12 @@ export const Albums = () => {
                   <input
                     id={`album-upload-${album.id}`}
                     type="file"
-                    accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
-                    multiple
+                    accept="image/jpeg,image/png,image/webp"
                     className="sr-only"
                     disabled={uploadingAlbumId === album.id}
                     onChange={(event) => {
-                      const files = Array.from(event.target.files ?? []);
-                      void handleUpload(album.id, files);
+                      const file = event.target.files?.[0];
+                      void handleUpload(album.id, file);
                       event.currentTarget.value = '';
                     }}
                   />
@@ -184,9 +177,7 @@ export const Albums = () => {
                       uploadingAlbumId === album.id ? 'pointer-events-none opacity-60' : ''
                     }`}
                   >
-                    {uploadingAlbumId === album.id
-                      ? `Uploading ${uploadProgress}`
-                      : 'Add photos or videos'}
+                    {uploadingAlbumId === album.id ? 'Uploading...' : 'Upload photo'}
                   </label>
                 </div>
               </div>

@@ -415,7 +415,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           type="button"
           onClick={toggleMic}
           aria-label={micMuted ? 'Unmute microphone' : 'Mute microphone'}
-          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[#3D2B0E]/50 active:scale-95"
+          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[var(--border-default)]/50 active:scale-95"
           style={{ color: micMuted ? '#EF4444' : '#A89070' }}
         >
           {micMuted ? <MicOffIcon className="w-5 h-5" /> : <MicIcon className="w-5 h-5" />}
@@ -424,7 +424,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           type="button"
           onClick={toggleCamera}
           aria-label={cameraOn ? 'Turn camera off' : 'Turn camera on'}
-          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[#3D2B0E]/50 active:scale-95"
+          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[var(--border-default)]/50 active:scale-95"
           style={{ color: cameraOn ? '#C4832A' : '#EF4444' }}
         >
           <CamIcon className="w-5 h-5" />
@@ -433,7 +433,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           type="button"
           onClick={() => setChatOpen((v) => !v)}
           aria-label={chatOpen ? 'Hide chat' : 'Show chat'}
-          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[#3D2B0E]/50 active:scale-95"
+          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[var(--border-default)]/50 active:scale-95"
           style={{ color: chatOpen ? '#C4832A' : '#A89070' }}
         >
           <BubbleIcon className="w-5 h-5" />
@@ -443,9 +443,9 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
         <button
           onClick={() => setSettingsOpen((v) => !v)}
           aria-label="Room settings"
-          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[#3D2B0E]/50 active:scale-95"
+          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[var(--border-default)]/50 active:scale-95"
           style={{ color: '#A89070' }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#F0E0C0')}
+          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--cream)')}
           onMouseLeave={(e) => (e.currentTarget.style.color = '#A89070')}
         >
           <GearIcon className="w-5 h-5" />
@@ -521,7 +521,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                 <button
                   type="button"
                   onClick={() => setAddPanelOpen((v) => !v)}
-                  className="w-full px-4 py-3 text-sm text-left transition-all duration-150 hover:bg-[#3D2B0E]/50"
+                  className="w-full px-4 py-3 text-sm text-left transition-all duration-150 hover:bg-[var(--border-default)]/50"
                   style={{ color: '#C4832A' }}
                 >
                   {addPanelOpen ? 'Hide add member' : 'Add Premium member'}
@@ -539,7 +539,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                           type="button"
                           disabled={addingMemberId === candidate.id}
                           onClick={() => void handleAddMember(candidate.id, candidate.name)}
-                          className="w-full text-left px-2 py-2 rounded-lg text-sm hover:bg-[#3D2B0E]/40 disabled:opacity-50"
+                          className="w-full text-left px-2 py-2 rounded-lg text-sm hover:bg-[var(--border-default)]/40 disabled:opacity-50"
                           style={{ color: 'var(--cream)' }}
                         >
                           {addingMemberId === candidate.id ? 'Adding…' : candidate.name}
@@ -561,7 +561,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                   // ignore
                 }
               }}
-              className="w-full px-4 py-3 text-sm text-left transition-all duration-150 hover:bg-[#3D2B0E]/50"
+              className="w-full px-4 py-3 text-sm text-left transition-all duration-150 hover:bg-[var(--border-default)]/50"
               style={{ color: '#EF4444' }}
             >
               Leave Room
@@ -749,7 +749,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           <button
             type="button"
             aria-label="Attach file"
-            className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150 hover:bg-[#3D2B0E]/50 active:scale-95"
+            className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150 hover:bg-[var(--border-default)]/50 active:scale-95"
             style={{ color: '#6B5035' }}
             onMouseEnter={(e) => (e.currentTarget.style.color = '#A89070')}
             onMouseLeave={(e) => (e.currentTarget.style.color = '#6B5035')}
@@ -787,7 +787,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           <button
             type="button"
             aria-label="Emoji"
-            className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150 hover:bg-[#3D2B0E]/50 active:scale-95"
+            className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150 hover:bg-[var(--border-default)]/50 active:scale-95"
             style={{ color: '#6B5035' }}
             onMouseEnter={(e) => (e.currentTarget.style.color = '#A89070')}
             onMouseLeave={(e) => (e.currentTarget.style.color = '#6B5035')}

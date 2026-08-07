@@ -5,7 +5,7 @@ import { useAuthStore, useNotificationStore, useUnreadStore } from '../hooks/sto
 import { UserAvatar } from './UserAvatar';
 import { mobileBackFallback, shouldShowMobileBack } from '../lib/mobileBack';
 import { MobileBackButton } from './MobileBackButton';
-import { IconMapExpand, IconNotifications, IconPulse } from './icons';
+import { IconMapExpand, IconMore, IconNotifications, IconPulse } from './icons';
 import { BrandMark } from './BrandMark';
 import { ProfileSearchModal } from './ProfileSearchModal';
 import { NotificationDot } from './NotificationDot';
@@ -54,6 +54,7 @@ function LayoutInner({ children }: LayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [matchCount, setMatchCount] = useState(0);
   const [sidebarExpanded, setSidebarExpanded] = useState(readSidebarExpanded);
   const { state: discoveryShell } = useDiscoveryShell();
@@ -77,9 +78,15 @@ function LayoutInner({ children }: LayoutProps) {
   const navItems = getNavItems();
   const mobileTabs = navItems.filter((item) => item.mobileTab);
   const desktopLinks = navItems.filter((item) => item.desktopNav);
+  const mobileMoreItems = navItems.filter((item) => item.mobileMore);
+  const isMoreActive = mobileMoreItems.some((item) => isNavActive(location.pathname, item.to));
   const showMobileBack = shouldShowMobileBack(location.pathname);
   const mobileBackTarget = mobileBackFallback(location.pathname);
   const pageTitle = mobilePageTitle(location.pathname);
+
+  useEffect(() => {
+    setMoreMenuOpen(false);
+  }, [location.pathname]);
 
   const handleLogout = () => {
     void authAPI.logout(refreshToken).catch(() => undefined);
@@ -338,8 +345,32 @@ function LayoutInner({ children }: LayoutProps) {
                 </Link>
               );
             })}
+            {mobileMoreItems.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setMoreMenuOpen((v) => !v)}
+                aria-label="More"
+                aria-haspopup="true"
+                aria-expanded={moreMenuOpen}
+                data-testid="mobile-more-tab"
+                className={`relative flex flex-1 flex-col items-center justify-center gap-1 py-2.5 transition-all duration-200 first:rounded-l-[1.25rem] last:rounded-r-[1.25rem] ${
+                  isMoreActive || moreMenuOpen
+                    ? 'text-[var(--copper)] bg-[var(--copper)]/10'
+                    : 'text-[var(--cream-muted)] active:scale-95'
+                }`}
+              >
+                <IconMore size={22} className={isMoreActive || moreMenuOpen ? 'scale-110' : ''} />
+                <span className="text-[9px] font-bold leading-none tracking-wide">More</span>
+              </button>
+            ) : null}
           </div>
         </nav>
+
+        <MobileMoreMenu
+          open={moreMenuOpen}
+          items={mobileMoreItems}
+          onClose={() => setMoreMenuOpen(false)}
+        />
       </div>
 
       <ProfileSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
@@ -352,6 +383,65 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => (
     <LayoutInner>{children}</LayoutInner>
   </DiscoveryShellProvider>
 );
+
+/** Mobile-only sheet for nav destinations that don't fit the primary tab row. */
+function MobileMoreMenu({
+  open,
+  items,
+  onClose,
+}: {
+  open: boolean;
+  items: NavItem[];
+  onClose: () => void;
+}) {
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="lg:hidden fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="More">
+      <button
+        type="button"
+        aria-label="Close menu"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+      />
+      <div
+        data-testid="mobile-more-menu"
+        className="absolute inset-x-3 rounded-[1.35rem] border border-[var(--border-default)] bg-[var(--bg-elevated)] p-2 shadow-[var(--shadow-lg)]"
+        style={{ bottom: 'calc(var(--mobile-tab-bar-height) + 0.5rem)' }}
+      >
+        {items.map((item) => {
+          const active = isNavActive(location.pathname, item.to);
+          return (
+            <Link
+              key={item.to}
+              to={item.to}
+              onClick={onClose}
+              className={`flex items-center gap-3 rounded-2xl px-3.5 py-3 text-[15px] font-bold transition-colors ${
+                active
+                  ? 'text-[var(--copper)] bg-[var(--copper)]/10'
+                  : 'text-[var(--cream)] active:bg-[var(--bg-card)]'
+              }`}
+            >
+              <item.Icon size={20} />
+              {item.label}
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 const SearchIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
