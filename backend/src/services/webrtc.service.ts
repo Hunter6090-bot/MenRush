@@ -98,7 +98,31 @@ export function getIceServers(): IceServerConfig[] {
     username,
     credential,
   });
-  console.log('[webrtc] ICE: STUN + Open Relay TURN (default static-auth)');
+  warnOpenRelayFallbackOnce();
 
   return servers;
+}
+
+// This exact "openrelayprojectsecret" static-auth secret is published verbatim in Metered's
+// own public demo docs — every app that ever followed that quickstart shares this one TURN
+// relay, which is free, unauthenticated-by-app, and has no capacity guarantee. STUN alone only
+// works when at least one peer can advertise a routable host/srflx candidate; carrier NAT,
+// symmetric NAT, and iOS Safari's mDNS-only local candidates all require a *working* TURN
+// relay for media to flow at all — signalling (offer/answer/ICE exchange) completes normally
+// either way, so the failure mode is specifically "call goes to 'connected', remote video/audio
+// never arrives" — see #73. Warn loudly, once, so this misconfiguration is visible in
+// production logs instead of blending into a per-call console.log.
+let openRelayFallbackWarned = false;
+function warnOpenRelayFallbackOnce(): void {
+  if (openRelayFallbackWarned) return;
+  openRelayFallbackWarned = true;
+  const level = process.env.NODE_ENV === 'production' ? console.error : console.warn;
+  level(
+    '[webrtc] No TURN_URL configured — falling back to the free public Metered "Open Relay" ' +
+      'demo TURN service. That service is shared, rate-limited, and not a production-grade ' +
+      'dependency: calls between users who both need a TURN relay (common on mobile/carrier ' +
+      'networks and iOS Safari) can silently reach "connected" with signalling complete but ' +
+      'no media ever flowing (remote video stays black). Set TURN_URL + TURN_SECRET (or ' +
+      'TURN_USERNAME + TURN_CREDENTIAL) to a real TURN provider to fix this. See #73.',
+  );
 }
