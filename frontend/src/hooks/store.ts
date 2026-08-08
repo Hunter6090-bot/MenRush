@@ -11,6 +11,7 @@ interface User {
   is_verified?: boolean;
   verification_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
   is_premium?: boolean;
+  beta_premium_included?: boolean;
   premium_tier?: 'free' | 'premium' | 'premium_plus';
 }
 
