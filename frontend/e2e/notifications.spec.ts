@@ -42,6 +42,15 @@ test('notification permission is requested only by a clear user action', async (
   const ctx = await browser.newContext();
   await authenticate(ctx, alice);
 
+  // CI smoke has no VAPID keys — stub push as configured so we exercise permission UX.
+  await ctx.route('**/api/push/vapid-public', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ publicKey: 'browser-smoke-vapid-public-key', configured: true }),
+    });
+  });
+
   // Fake a fresh, supported browser with permission still at "default".
   await ctx.addInitScript(() => {
     const w = window as any;
