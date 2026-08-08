@@ -6,6 +6,8 @@ interface SelfieCaptureModalProps {
   open: boolean;
   onClose: () => void;
   onCapture: (file: File) => void;
+  /** In-chat video note — same portrait modal as photo capture. */
+  onVideoCapture?: (file: File, durationMs: number) => void;
   onError: (message: string) => void;
   /** Full ID-style flow for verification; compact for in-chat selfies. */
   variant?: 'verification' | 'compact';
@@ -25,10 +27,17 @@ const SELFIE_CHECKS = [
   'This is a live photo — not an old picture',
 ];
 
+function formatRecordSeconds(total: number): string {
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 function CompactSelfieCapture({
   open,
   onClose,
   onCapture,
+  onVideoCapture,
   onError,
   facingMode,
   mirror,
@@ -39,20 +48,44 @@ function CompactSelfieCapture({
 }: SelfieCaptureModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const recordStartRef = useRef(0);
+  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onCloseRef = useRef(onClose);
   const onErrorRef = useRef(onError);
   const onCaptureRef = useRef(onCapture);
+  const onVideoCaptureRef = useRef(onVideoCapture);
   const [ready, setReady] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const enableVideo = Boolean(onVideoCapture);
 
   useEffect(() => {
     onCloseRef.current = onClose;
     onErrorRef.current = onError;
     onCaptureRef.current = onCapture;
-  }, [onClose, onCapture, onError]);
+    onVideoCaptureRef.current = onVideoCapture;
+  }, [onClose, onCapture, onError, onVideoCapture]);
+
+  const stopStream = useCallback(() => {
+    if (recordTimerRef.current) {
+      window.clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
+    recorderRef.current = null;
+    chunksRef.current = [];
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setRecording(false);
+    setRecordSeconds(0);
+  }, []);
 
   useEffect(() => {
     if (!open) {
       setReady(false);
+      stopStream();
       return;
     }
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
@@ -62,7 +95,10 @@ function CompactSelfieCapture({
     }
     let cancelled = false;
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: facingMode ?? 'user' }, audio: false })
+      .getUserMedia({
+        video: { facingMode: facingMode ?? 'user' },
+        audio: enableVideo,
+      })
       .then((stream) => {
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
@@ -90,13 +126,12 @@ function CompactSelfieCapture({
       });
     return () => {
       cancelled = true;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-      if (videoRef.current) videoRef.current.srcObject = null;
+      stopStream();
     };
-  }, [open, facingMode]);
+  }, [open, facingMode, enableVideo, stopStream]);
 
   const handleCapture = () => {
+    if (recording) return;
     const video = videoRef.current;
     if (!video || !ready || video.videoWidth === 0) return;
     const canvas = document.createElement('canvas');
@@ -112,20 +147,125 @@ function CompactSelfieCapture({
     canvas.toBlob((blob) => {
       if (!blob) return;
       onCaptureRef.current(new File([blob], `${filePrefix ?? 'selfie'}-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+      stopStream();
       onCloseRef.current();
     }, 'image/jpeg', 0.92);
   };
 
+  const stopRecording = (send: boolean) => {
+    const mr = recorderRef.current;
+    if (!mr || mr.state !== 'recording') return;
+    const duration = Date.now() - recordStartRef.current;
+    mr.onstop = () => {
+      const mime = mr.mimeType || 'video/webm';
+      const blob = new Blob(chunksRef.current, { type: mime });
+      stopStream();
+      if (send && duration >= 600 && blob.size >= 2000 && onVideoCaptureRef.current) {
+        onVideoCaptureRef.current(
+          new File([blob], `${filePrefix ?? 'clip'}-${Date.now()}.webm`, { type: mime }),
+          duration,
+        );
+        onCloseRef.current();
+      } else if (!send) {
+        onCloseRef.current();
+      } else {
+        onErrorRef.current('Video too short — hold Record a little longer.');
+      }
+    };
+    mr.stop();
+  };
+
+  const handleStartRecording = () => {
+    if (!enableVideo || !ready || recording || !streamRef.current) return;
+    const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+      ? 'video/webm;codecs=vp8,opus'
+      : MediaRecorder.isTypeSupported('video/webm')
+        ? 'video/webm'
+        : '';
+    try {
+      const mr = mime
+        ? new MediaRecorder(streamRef.current, { mimeType: mime })
+        : new MediaRecorder(streamRef.current);
+      recorderRef.current = mr;
+      chunksRef.current = [];
+      mr.ondataavailable = (ev) => {
+        if (ev.data.size > 0) chunksRef.current.push(ev.data);
+      };
+      recordStartRef.current = Date.now();
+      mr.start(250);
+      setRecording(true);
+      setRecordSeconds(0);
+      recordTimerRef.current = window.setInterval(() => {
+        setRecordSeconds((s) => {
+          if (s >= 59) {
+            stopRecording(true);
+            return 60;
+          }
+          return s + 1;
+        });
+      }, 1000);
+    } catch {
+      onErrorRef.current('Could not start video recording on this device.');
+    }
+  };
+
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center px-4 bg-black/88 backdrop-blur-md" onClick={() => onCloseRef.current()} role="presentation">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center px-4 bg-black/88 backdrop-blur-md" onClick={() => !recording && onCloseRef.current()} role="presentation">
       <div role="dialog" aria-modal aria-label={ariaLabel ?? 'Take a selfie'} className="w-full max-w-sm overflow-hidden rounded-3xl border border-[#3D2B0E] bg-[#0D0A06]" onClick={(e) => e.stopPropagation()}>
         <div className={`relative ${aspectClassName ?? 'aspect-[3/4]'} bg-black`}>
           <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 h-full w-full object-cover" style={mirror ? { transform: 'scaleX(-1)' } : undefined} />
+          {recording ? (
+            <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full bg-black/65 px-3 py-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#E5484D]" style={{ boxShadow: '0 0 8px #E5484D' }} />
+              <span className="text-xs font-bold text-white">{formatRecordSeconds(recordSeconds)}</span>
+            </div>
+          ) : null}
         </div>
-        <div className="flex justify-center gap-4 px-4 py-4">
-          <button type="button" onClick={() => onCloseRef.current()} className="rounded-xl border border-[#3D2B0E] px-4 py-2 text-sm text-[var(--cream-muted)]">Cancel</button>
-          <button type="button" onClick={handleCapture} disabled={!ready} className="rounded-xl bg-[#C4832A] px-5 py-2 text-sm font-bold text-[#0D0A06] disabled:opacity-40">{captureLabel ?? 'Capture'}</button>
+        <div className="flex flex-wrap justify-center gap-2 px-4 py-4">
+          <button
+            type="button"
+            onClick={() => {
+              if (recording) stopRecording(false);
+              else {
+                stopStream();
+                onCloseRef.current();
+              }
+            }}
+            className="rounded-xl border border-[#3D2B0E] px-4 py-2 text-sm text-[var(--cream-muted)]"
+          >
+            Cancel
+          </button>
+          {recording ? (
+            <button
+              type="button"
+              onClick={() => stopRecording(true)}
+              className="rounded-xl bg-[#C4832A] px-5 py-2 text-sm font-bold text-[#0D0A06]"
+            >
+              Send video
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={handleCapture}
+                disabled={!ready}
+                className="rounded-xl bg-[#C4832A] px-5 py-2 text-sm font-bold text-[#0D0A06] disabled:opacity-40"
+              >
+                {captureLabel ?? 'Photo'}
+              </button>
+              {enableVideo ? (
+                <button
+                  type="button"
+                  onClick={handleStartRecording}
+                  disabled={!ready}
+                  className="rounded-xl border border-[#C4832A]/55 bg-[#C4832A]/15 px-4 py-2 text-sm font-bold text-[#E0A14A] disabled:opacity-40"
+                >
+                  Record
+                </button>
+              ) : null}
+            </>
+          )}
         </div>
       </div>
     </div>

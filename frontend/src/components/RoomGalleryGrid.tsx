@@ -128,8 +128,10 @@ function ParticipantTile({
         ))}
 
       {!participant.isLive && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/45">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--cream-muted)]">Away</span>
+        <div className="absolute inset-0 flex items-center justify-center bg-black/55">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-white drop-shadow-sm">
+            Away
+          </span>
         </div>
       )}
 
