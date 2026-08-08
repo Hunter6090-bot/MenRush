@@ -41,15 +41,15 @@ export const NotificationSettings: React.FC = () => {
   };
 
   const description =
-    !serverConfigured
-      ? 'Push alerts are not configured on this server yet.'
-      : support === 'unsupported'
-        ? 'Your browser doesn’t support push notifications.'
-        : support === 'denied'
-          ? 'Blocked in your browser settings. Re-enable notifications for this site to turn them on.'
-          : enabled
+    support === 'unsupported'
+      ? 'Your browser doesn’t support push notifications.'
+      : support === 'denied'
+        ? 'Blocked in your browser settings. Re-enable notifications for this site to turn them on.'
+        : enabled
+          ? serverConfigured
             ? 'Get alerts for new messages when MenRush is closed.'
-            : 'Turn on alerts for new messages when MenRush is closed.';
+            : 'Push alerts are not configured on this server yet.'
+          : 'Turn on alerts for new messages when MenRush is closed.';
 
   return (
     <div
@@ -65,7 +65,7 @@ export const NotificationSettings: React.FC = () => {
       <button
         type="button"
         onClick={toggle}
-        disabled={busy || !serverConfigured || support === 'unsupported' || support === 'denied'}
+        disabled={busy || support === 'unsupported' || support === 'denied'}
         aria-pressed={enabled}
         aria-label="Toggle push notifications"
         data-testid="notification-settings-toggle"

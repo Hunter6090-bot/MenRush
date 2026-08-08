@@ -31,11 +31,11 @@ test('waitlist rejects invalid input without making a request', async ({ page })
   const network = await guardAgainstSideEffects(page);
 
   await page.goto('/');
-  // ComingSoon uses #waitlist-email (no associated <label>); CTA copy is "Join the beta".
+  // ComingSoon uses #waitlist-email (no associated <label>); CTA matches design lock.
   const emailInput = page.locator('#waitlist-email');
   await expect(emailInput).toBeVisible();
   await emailInput.fill('not-an-email');
-  await page.getByRole('button', { name: /Join the beta/i }).click();
+  await page.getByRole('button', { name: /Join the verified waitlist/i }).click();
 
   await expect(page.getByText('Please enter a valid email address.')).toBeVisible();
   await expect(emailInput).toHaveValue('not-an-email');

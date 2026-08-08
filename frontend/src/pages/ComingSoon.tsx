@@ -103,7 +103,7 @@ export const ComingSoon = () => {
       <div className="absolute inset-0" style={{ background: COMING_SOON_GRADIENT }} aria-hidden />
 
       <Link to="/login" className={`absolute right-6 top-6 z-20 ${publicNavLinkPrimary}`}>
-        Sign in
+        Already have an invite? Sign in
       </Link>
 
       <div className="relative z-10 flex w-full max-w-[900px] flex-col items-center">
@@ -153,7 +153,7 @@ export const ComingSoon = () => {
                 disabled={submitting}
                 className="shrink-0 rounded-full border-0 bg-[#C4832A] px-[22px] py-3 text-xs font-extrabold tracking-[0.12em] text-[#1A0E03] shadow-[0_0_24px_rgba(196,131,42,0.4)] transition-colors hover:bg-[#E0A14A] disabled:opacity-50"
               >
-                {submitting ? 'Sending…' : 'Join the beta'}
+                {submitting ? 'Joining…' : 'Join the verified waitlist'}
               </button>
             </form>
           )}
@@ -161,9 +161,9 @@ export const ComingSoon = () => {
         </div>
 
         <p className="relative mt-6 text-sm text-[var(--cream-muted)]">
-          Already have an invite?{' '}
+          Selected for beta?{' '}
           <Link to="/beta" className={publicLinkClass}>
-            Enter your code
+            Enter your invite code
           </Link>
         </p>
 
