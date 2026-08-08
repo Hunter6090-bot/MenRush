@@ -219,6 +219,12 @@ test('the caller sees a full-screen local preview with controls while ringing', 
 });
 
 test('an unanswered call ends instead of ringing forever', async ({ browser }) => {
+  const bobContext = await browser.newContext();
+  await authenticate(bobContext, bob);
+  const bobPage = await bobContext.newPage();
+  await bobPage.goto('/discover');
+  await expect(bobPage.getByTestId('discover-map-panel')).toBeVisible({ timeout: 20_000 });
+
   const aliceContext = await browser.newContext();
 
   await authenticate(aliceContext, alice);
@@ -240,6 +246,7 @@ test('an unanswered call ends instead of ringing forever', async ({ browser }) =
   await expect(alicePage.getByTestId('call-tone')).toHaveCount(0);
 
   await aliceContext.close();
+  await bobContext.close();
 });
 
 test('blocked media shows an error and never leaves a fake ringing state', async ({

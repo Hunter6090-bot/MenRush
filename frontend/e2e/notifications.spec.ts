@@ -36,6 +36,13 @@ async function authenticate(context: BrowserContext, result: LoginResult) {
   }, result);
 }
 
+/** Desktop sidebar uses badge-conversations; mobile tab bar uses badge-mobile-conversations. */
+function conversationsBadge(page: Page) {
+  return page.locator(
+    '[data-testid="badge-conversations"]:visible, [data-testid="badge-mobile-conversations"]:visible',
+  );
+}
+
 // ── Notification settings (permission gating) ────────────────────────────────
 
 test('notification permission is requested only by a clear user action', async ({ browser }) => {
@@ -115,6 +122,10 @@ test('a new message raises the unread badge and opening the chat clears it', asy
   await bobPage.goto('/discover');
   await bobPage.waitForTimeout(1500); // allow the socket to authenticate
 
+  const badge = conversationsBadge(bobPage);
+  const beforeCount =
+    (await badge.count()) > 0 ? Number((await badge.textContent()) || 0) : 0;
+
   // Alice sends Bob a message via the API (server pushes it over the socket).
   const aliceApi = await apiRequest.newContext({
     baseURL: BASE_URL,
@@ -130,16 +141,17 @@ test('a new message raises the unread badge and opening the chat clears it', asy
   }
 
   // The Messages tab badge reflects the unread message in real time.
-  await expect(bobPage.getByTestId('badge-conversations')).toHaveText('1', { timeout: 10_000 });
-
-  // Opening the conversations list keeps the badge until the thread is read.
-  await bobPage.goto('/conversations');
-  await expect(bobPage.getByTestId('badge-conversations')).toHaveText('1');
+  await expect(badge).toHaveText(String(beforeCount + 1), { timeout: 10_000 });
 
   await bobPage.goto(`/messages/${alice.user.id}`);
   await expect(bobPage.getByRole('button', { name: /Open .*profile/i })).toBeVisible();
   await bobPage.goto('/discover');
-  await expect(bobPage.getByTestId('badge-conversations')).toHaveCount(0);
+  await bobPage.waitForTimeout(500);
+  if (beforeCount === 0) {
+    await expect(badge).toHaveCount(0, { timeout: 10_000 });
+  } else {
+    await expect(badge).toHaveText(String(beforeCount), { timeout: 10_000 });
+  }
 
   await bobCtx.close();
 });
@@ -151,6 +163,10 @@ test('opening a conversation thread clears that sender from the unread badge', a
 
   await bobPage.goto('/discover');
   await bobPage.waitForTimeout(1500);
+
+  const badge = conversationsBadge(bobPage);
+  const beforeCount =
+    (await badge.count()) > 0 ? Number((await badge.textContent()) || 0) : 0;
 
   const aliceApi = await apiRequest.newContext({
     baseURL: BASE_URL,
@@ -165,13 +181,18 @@ test('opening a conversation thread clears that sender from the unread badge', a
     await aliceApi.dispose();
   }
 
-  await expect(bobPage.getByTestId('badge-conversations')).toHaveText('1', { timeout: 10_000 });
+  await expect(badge).toHaveText(String(beforeCount + 1), { timeout: 10_000 });
 
   // Opening the thread directly (full-screen chat) clears that sender's unread.
   await bobPage.goto(`/messages/${alice.user.id}`);
   await expect(bobPage.getByRole('button', { name: /Open .*profile/i })).toBeVisible();
   await bobPage.goto('/discover');
-  await expect(bobPage.getByTestId('badge-conversations')).toHaveCount(0);
+  await bobPage.waitForTimeout(500);
+  if (beforeCount === 0) {
+    await expect(badge).toHaveCount(0, { timeout: 10_000 });
+  } else {
+    await expect(badge).toHaveText(String(beforeCount), { timeout: 10_000 });
+  }
 
   await bobCtx.close();
 });

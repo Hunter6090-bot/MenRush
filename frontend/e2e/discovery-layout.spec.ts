@@ -70,6 +70,16 @@ test('discover map canvas is not covered by a blocking overlay', async ({ browse
   const panel = page.getByTestId('discover-map-panel');
   await expect(panel).toBeVisible({ timeout: 20_000 });
 
+  // Mobile layout shows an honest fallback when Mapbox is not configured (CI smoke).
+  const tokenFallback = page.getByText('Map is taking a break');
+  const mapCanvas = panel.locator('canvas.mapboxgl-canvas');
+  await expect(mapCanvas.or(tokenFallback)).toBeVisible({ timeout: 30_000 });
+  if (await tokenFallback.isVisible()) {
+    await expect(tokenFallback).toBeVisible();
+    await ctx.close();
+    return;
+  }
+
   // Height-handle chip must not be a full-bleed veil over the canvas.
   const handle = page.getByTestId('map-drag-handle');
   if (await handle.isVisible().catch(() => false)) {
