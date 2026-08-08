@@ -457,6 +457,7 @@ export interface AlbumDTO {
 export interface AlbumPhotoDTO {
   id: string;
   photo_url: string;
+  mime_type?: string | null;
   position: number;
   created_at: string;
 }
@@ -476,7 +477,7 @@ export const albumsAPI = {
   upload: (albumId: string, file: File) => {
     const fd = new FormData();
     fd.append('photo', file);
-    return apiClient.post<{ photo_url: string }>(`/albums/${albumId}/upload`, fd, {
+    return apiClient.post<{ photo_url: string; mime_type?: string }>(`/albums/${albumId}/upload`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
