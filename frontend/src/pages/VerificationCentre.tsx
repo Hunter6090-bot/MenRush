@@ -59,8 +59,17 @@ export function VerificationCentre() {
                   Optional live randomised camera challenge. No government ID is needed.
                 </p>
               </div>
-              <StatusPill label={authentic ? 'Confirmed' : state?.authenticity_status === 'pending' ? 'In review' : 'Optional'} complete={Boolean(authentic)} />
+              <StatusPill label={authentic ? 'Confirmed' : state?.authenticity_status === 'pending' ? 'Review pending' : 'Optional'} complete={Boolean(authentic)} />
             </div>
+            {!authentic && state?.authenticity_status === 'pending' ? (
+              <div className="mt-4 rounded-xl border border-[var(--border-default)] bg-black/10 p-3">
+                <p className="text-xs font-bold text-[var(--cream)]">Your 3 photos were received.</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--cream-muted)]">
+                  They have not passed yet. A reviewer is checking whether every photo matches its random instruction.
+                  This will change to Confirmed or Try again after review.
+                </p>
+              </div>
+            ) : null}
             {!authentic && state?.authenticity_status !== 'pending' ? (
               <Link to="/verify/authentic" className="mt-4 inline-flex rounded-xl bg-[var(--copper)] px-4 py-2.5 text-sm font-bold text-[var(--nn-on-copper)]">
                 Start live challenge
