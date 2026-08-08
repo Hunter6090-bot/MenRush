@@ -211,12 +211,43 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
           });
         };
 
-        pc.onconnectionstatechange = () => {
-          if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-            // Keep slot for a soft reconnect attempt via re-offer from the impolite side.
-            if (pc.connectionState === 'closed') {
-              closePeer(peerId);
+        const tryPeerIceRestart = () => {
+          const currentSlot = peersRef.current.get(peerId);
+          const myIdNow = userIdRef.current;
+          const ridNow = roomIdRef.current;
+          if (!currentSlot || !myIdNow || !ridNow || !shouldCreateOffer(myIdNow, peerId)) return;
+          if (pc.signalingState !== 'stable' || currentSlot.makingOffer) return;
+          currentSlot.makingOffer = true;
+          void (async () => {
+            try {
+              const offer = await pc.createOffer({ iceRestart: true });
+              await pc.setLocalDescription(offer);
+              activeSocket.emit('room:webrtc-offer', {
+                roomId: ridNow,
+                to: peerId,
+                offer: sessionDescriptionPayload(pc.localDescription ?? offer),
+              });
+            } catch (err) {
+              console.error('[room-webrtc] ICE restart failed', peerId, err);
+            } finally {
+              const latest = peersRef.current.get(peerId);
+              if (latest) latest.makingOffer = false;
             }
+          })();
+        };
+
+        pc.onconnectionstatechange = () => {
+          if (pc.connectionState === 'failed') {
+            tryPeerIceRestart();
+          }
+          if (pc.connectionState === 'closed') {
+            closePeer(peerId);
+          }
+        };
+
+        pc.oniceconnectionstatechange = () => {
+          if (pc.iceConnectionState === 'failed') {
+            tryPeerIceRestart();
           }
         };
       }
@@ -272,13 +303,26 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
   );
 
   const replaceLocalTracksOnPeers = useCallback(async (stream: MediaStream) => {
-    for (const [, slot] of peersRef.current) {
+    const activeSocket = socketRef.current;
+    const rid = roomIdRef.current;
+    const myId = userIdRef.current;
+    if (!activeSocket || !rid || !myId) return;
+
+    for (const [peerId, slot] of peersRef.current) {
       try {
         await attachLocalTracks(slot.pc, stream);
-        for (const track of stream.getTracks()) {
-          const sender = slot.pc.getSenders().find((s) => s.track?.kind === track.kind);
-          if (sender && sender.track?.id !== track.id) {
-            await sender.replaceTrack(track);
+        if (slot.pc.remoteDescription && slot.pc.signalingState === 'stable' && !slot.makingOffer) {
+          slot.makingOffer = true;
+          try {
+            const offer = await slot.pc.createOffer();
+            await slot.pc.setLocalDescription(offer);
+            activeSocket.emit('room:webrtc-offer', {
+              roomId: rid,
+              to: peerId,
+              offer: sessionDescriptionPayload(slot.pc.localDescription ?? offer),
+            });
+          } finally {
+            slot.makingOffer = false;
           }
         }
       } catch {
