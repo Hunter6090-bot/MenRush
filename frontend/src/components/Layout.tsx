@@ -165,7 +165,10 @@ function LayoutInner({ children }: LayoutProps) {
                 <span className="relative inline-flex shrink-0">
                   <item.Icon size={22} />
                   {badge > 0 ? (
-                    <span className="absolute -right-2 -top-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-nn-copper px-1 text-[10px] font-bold text-nn-on-copper">
+                    <span
+                      data-testid={`badge-${item.to.replace(/\//g, '')}`}
+                      className="absolute -right-2 -top-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-nn-copper px-1 text-[10px] font-bold text-nn-on-copper"
+                    >
                       {badge > 99 ? '99+' : badge}
                     </span>
                   ) : null}
