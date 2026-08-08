@@ -176,7 +176,16 @@ async function setCallTimeout(context: BrowserContext, ms: number) {
 test('the caller sees a full-screen local preview with controls while ringing', async ({
   browser,
 }) => {
-  const aliceContext = await browser.newContext();
+  // Callee must have a live socket or the server rejects with target_offline.
+  const bobContext = await browser.newContext();
+  await authenticate(bobContext, bob);
+  const bobPage = await bobContext.newPage();
+  await bobPage.goto('/discover');
+  await expect(bobPage.getByTestId('discover-map-panel')).toBeVisible({ timeout: 20_000 });
+
+  const aliceContext = await browser.newContext({
+    permissions: ['microphone', 'camera'],
+  });
 
   await authenticate(aliceContext, alice);
   await installFakeMedia(aliceContext);
@@ -189,7 +198,7 @@ test('the caller sees a full-screen local preview with controls while ringing', 
 
   // Full-screen outgoing surface (not the small "Calling Bob" card).
   const surface = alicePage.getByTestId('outgoing-call');
-  await expect(surface).toBeVisible();
+  await expect(surface).toBeVisible({ timeout: 15_000 });
   await expect(surface.locator('video')).toBeAttached();
   await expect(alicePage.getByText('Calling Bob')).not.toBeVisible();
 
@@ -200,12 +209,13 @@ test('the caller sees a full-screen local preview with controls while ringing', 
   // Controls remain available while ringing.
   await expect(alicePage.getByRole('button', { name: /Cancel call/i })).toBeVisible();
   await expect(alicePage.getByRole('button', { name: /Mute|Unmute/ })).toBeVisible();
-  await expect(alicePage.getByRole('button', { name: /camera/i })).toBeVisible();
+  await expect(alicePage.getByTestId('call-camera-toggle')).toBeVisible();
 
   // Outgoing ringback tone is active.
   await expect(alicePage.getByTestId('call-tone')).toHaveAttribute('data-tone', 'outgoing');
 
   await aliceContext.close();
+  await bobContext.close();
 });
 
 test('an unanswered call ends instead of ringing forever', async ({ browser }) => {

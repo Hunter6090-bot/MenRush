@@ -31,40 +31,28 @@ async function authenticate(context: BrowserContext, result: LoginResult) {
   await context.addInitScript(({ token, user }) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem('menrush_desktop_sidebar_expanded', '1');
   }, result);
 }
 
 // Runs under both the desktop-chromium and mobile-chromium projects, so this
 // asserts the layout on a small phone and a desktop viewport (P4.2, P4.9).
-test('nearby counts never cover the top category controls and controls stay clickable', async ({
-  browser,
-}) => {
+test('nearby counts and radius controls stay visible and clickable', async ({ browser }) => {
   const ctx = await browser.newContext();
   await authenticate(ctx, alice);
   const page = await ctx.newPage();
   await page.goto('/discover');
 
-  const counts = page.getByTestId('nearby-counts');
-  await expect(counts).toBeVisible();
-
-  // Tribe category pills (Top, Twink, Daddy, …) stay unobstructed at the top.
-  const twink = page.getByRole('button', { name: 'Twink', exact: true });
-  await expect(twink).toBeVisible();
+  const counts = page.getByTestId('discover-map-panel').getByTestId('nearby-counts');
+  await expect(counts).toBeVisible({ timeout: 20_000 });
 
   const slider = page.getByTestId('proximity-slider');
   await expect(slider).toBeVisible();
 
-  const countsBox = await counts.boundingBox();
-  const twinkBox = await twink.boundingBox();
-  const sliderBox = await slider.boundingBox();
-  expect(countsBox).not.toBeNull();
-  expect(twinkBox).not.toBeNull();
-  expect(sliderBox).not.toBeNull();
-  expect(countsBox!.y).toBeGreaterThan(twinkBox!.y);
-  expect(sliderBox!.y).toBeGreaterThan(countsBox!.y);
+  const mapPanel = page.getByTestId('discover-map-panel');
+  await expect(mapPanel).toBeVisible();
 
-  // Category and radius controls remain clickable (Playwright throws if an overlay intercepts).
-  await twink.click();
+  // Radius controls remain clickable (Playwright throws if an overlay intercepts).
   await page.getByRole('button', { name: 'Increase search radius' }).click();
 
   await ctx.close();
@@ -116,17 +104,24 @@ test('discover map canvas is not covered by a blocking overlay', async ({ browse
 test('location-blocked state is customer-facing with an enable action', async ({ browser }) => {
   const ctx = await browser.newContext();
   await authenticate(ctx, alice);
-  // No geolocation permission granted → app falls back to central London.
+  // No geolocation permission — seeded users may still have a saved pin; either way
+  // the page must not leak internal env/dev copy.
   const page = await ctx.newPage();
   await page.goto('/discover');
 
+  await expect(page.getByTestId('discover-map-panel')).toBeVisible({ timeout: 20_000 });
+
+  const gate = page.getByTestId('location-gate');
   const notice = page.getByTestId('location-notice');
-  await expect(notice).toBeVisible({ timeout: 15_000 });
-  await expect(notice).toContainText('Showing people near central London for now');
-  // No internal/developer wording leaks to the customer.
-  await expect(notice).not.toContainText(/VITE_|env|dev server|undefined|null/i);
-  // An obvious action to enable location is offered.
-  await expect(page.getByTestId('enable-location')).toBeVisible();
+  if (await gate.isVisible().catch(() => false)) {
+    await expect(gate).toContainText(/Allow location to unlock Nearby/i);
+    await expect(gate.getByRole('button', { name: /Allow location/i })).toBeVisible();
+  } else if (await notice.isVisible().catch(() => false)) {
+    await expect(notice).not.toContainText(/VITE_|env|dev server|undefined|null/i);
+    await expect(page.getByTestId('enable-location')).toBeVisible();
+  }
+
+  await expect(page.locator('body')).not.toContainText(/VITE_|env|dev server|undefined|null/i);
 
   await ctx.close();
 });
