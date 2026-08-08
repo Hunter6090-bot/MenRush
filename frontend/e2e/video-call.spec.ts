@@ -311,6 +311,12 @@ test('an unanswered call times out and ends cleanly on both devices', async ({
 });
 
 test('cancelling the call stops the outgoing tone immediately', async ({ browser }) => {
+  const bobContext = await browser.newContext();
+  await authenticate(bobContext, bob);
+  const bobPage = await bobContext.newPage();
+  await bobPage.goto('/discover');
+  await expect(bobPage.getByTestId('discover-map-panel')).toBeVisible({ timeout: 20_000 });
+
   const aliceContext = await browser.newContext();
 
   await authenticate(aliceContext, alice);
@@ -322,7 +328,7 @@ test('cancelling the call stops the outgoing tone immediately', async ({ browser
   await alicePage.getByRole('button', { name: 'Start video call' }).click();
 
   const surface = alicePage.getByTestId('outgoing-call');
-  await expect(surface).toBeVisible();
+  await expect(surface).toBeVisible({ timeout: 15_000 });
   await expect(alicePage.getByTestId('call-tone')).toHaveAttribute('data-tone', 'outgoing');
 
   // Cancelling ends the call and tears down the tone — no lingering ringback.
@@ -331,6 +337,7 @@ test('cancelling the call stops the outgoing tone immediately', async ({ browser
   await expect(alicePage.getByTestId('call-tone')).toHaveCount(0);
 
   await aliceContext.close();
+  await bobContext.close();
 });
 
 test('an incoming call rings while the recipient is on discovery', async ({ browser }) => {

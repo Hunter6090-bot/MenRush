@@ -141,13 +141,15 @@ test('location-blocked state is customer-facing with an enable action', async ({
   await page.goto('/discover');
 
   await expect(page.getByTestId('discover-map-panel')).toBeVisible({ timeout: 20_000 });
+  // Seeded profile pins load asynchronously — wait before branching on gate vs notice.
+  await page.waitForTimeout(2500);
 
   const gate = page.getByTestId('location-gate');
   const notice = page.getByTestId('location-notice');
-  if (await gate.isVisible().catch(() => false)) {
+  if ((await gate.count()) > 0 && (await gate.isVisible())) {
     await expect(gate).toContainText(/Allow location to unlock Nearby/i);
     await expect(gate.getByRole('button', { name: /Allow location/i })).toBeVisible();
-  } else if (await notice.isVisible().catch(() => false)) {
+  } else if ((await notice.count()) > 0 && (await notice.isVisible())) {
     await expect(notice).not.toContainText(/VITE_|env|dev server|undefined|null/i);
     await expect(page.getByTestId('enable-location')).toBeVisible();
   }
