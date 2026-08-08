@@ -164,6 +164,7 @@ export const usersAPI = {
     cover_position_y?: number;
     cover_zoom?: number;
     interests?: string[];
+    show_age?: boolean;
   }) =>
     apiClient.post('/users/profile', data),
   uploadPhoto: (file: File) => {
@@ -180,6 +181,15 @@ export const usersAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  uploadSecondaryPhoto: (slot: number, file: File) => {
+    const formData = new FormData();
+    formData.append('photo', file);
+    return apiClient.post<{ secondary_photo_urls: Array<string | null> }>(
+      `/users/photo/secondary/${slot}`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+  },
   likeUser: (id: string) => apiClient.post(`/users/like/${id}`),
   updateVisibility: (isVisible: boolean) =>
     apiClient.patch('/users/visibility', { is_visible: isVisible }),
@@ -190,7 +200,7 @@ export const usersAPI = {
     apiClient.get<{
       count: number;
       is_premium: boolean;
-      preview?: Array<{ id: string; name: string; age: number; photo_url?: string | null }>;
+      preview?: Array<{ id: string; name: string; age?: number | null; photo_url?: string | null }>;
     }>('/users/likes/received/summary'),
   getProfileViews: () =>
     apiClient.get<{
