@@ -47,10 +47,32 @@ const AUTH_CHALLENGE_PATHS = [
   '/auth/2fa/verify',
   '/auth/forgot-password',
   '/auth/reset-password',
+  '/auth/refresh',
   '/beta/validate-invite',
 ];
 
 let sessionExpiredHandling = false;
+let refreshPromise: Promise<string> | null = null;
+
+async function refreshAccessToken(): Promise<string> {
+  if (refreshPromise) return refreshPromise;
+  const store = useAuthStore.getState();
+  const refreshToken = store.refreshToken ?? localStorage.getItem('refresh_token');
+  if (!refreshToken) throw new Error('No refresh session');
+
+  refreshPromise = axios
+    .post<{ token: string; refresh_token: string }>(`${API_BASE_URL}/auth/refresh`, {
+      refresh_token: refreshToken,
+    })
+    .then(({ data }) => {
+      store.setTokens(data.token, data.refresh_token);
+      return data.token;
+    })
+    .finally(() => {
+      refreshPromise = null;
+    });
+  return refreshPromise;
+}
 
 /**
  * Stale JWT → endless 401 spam on unread/notifications polls.
@@ -59,10 +81,23 @@ let sessionExpiredHandling = false;
  */
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     const status = error?.response?.status;
     const reqUrl = String(error?.config?.url ?? '');
     const isAuthChallenge = AUTH_CHALLENGE_PATHS.some((p) => reqUrl.includes(p));
+    const original = error?.config as (typeof error.config & { _sessionRetry?: boolean }) | undefined;
+
+    if (status === 401 && !isAuthChallenge && original && !original._sessionRetry) {
+      original._sessionRetry = true;
+      try {
+        const token = await refreshAccessToken();
+        original.headers = original.headers ?? {};
+        original.headers.Authorization = `Bearer ${token}`;
+        return apiClient.request(original);
+      } catch {
+        // The refresh session is genuinely unavailable or expired.
+      }
+    }
 
     if (status === 401 && !isAuthChallenge && !sessionExpiredHandling) {
       const store = useAuthStore.getState();
@@ -81,6 +116,8 @@ export const authAPI = {
   register: (data: unknown) => apiClient.post('/auth/register', data),
   login: (data: { email: string; password: string; deviceTrustToken?: string }) =>
     apiClient.post('/auth/login', data),
+  logout: (refreshToken?: string | null) =>
+    apiClient.post('/auth/logout', { refresh_token: refreshToken ?? undefined }),
   verifyTwoFactorLogin: (data: {
     pendingToken: string;
     code: string;

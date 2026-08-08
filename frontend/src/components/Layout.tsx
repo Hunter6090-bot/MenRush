@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { usersAPI } from '../api/client';
+import { authAPI, usersAPI } from '../api/client';
 import { useAuthStore, useNotificationStore, useUnreadStore } from '../hooks/store';
 import { UserAvatar } from './UserAvatar';
 import { mobileBackFallback, shouldShowMobileBack } from '../lib/mobileBack';
@@ -47,7 +47,7 @@ function badgeFor(
 }
 
 function LayoutInner({ children }: LayoutProps) {
-  const { user, logout } = useAuthStore();
+  const { user, refreshToken, logout } = useAuthStore();
   const unreadCount = useUnreadStore((s) => s.count);
   const notificationUnread = useNotificationStore((s) => s.unreadCount);
   const location = useLocation();
@@ -88,6 +88,7 @@ function LayoutInner({ children }: LayoutProps) {
   }, [location.pathname]);
 
   const handleLogout = () => {
+    void authAPI.logout(refreshToken).catch(() => undefined);
     logout();
     navigate('/login');
   };

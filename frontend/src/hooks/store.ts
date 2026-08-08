@@ -17,7 +17,9 @@ interface User {
 interface AuthState {
   user: User | null;
   token: string | null;
-  setAuth: (user: User, token: string) => void;
+  refreshToken: string | null;
+  setAuth: (user: User, token: string, refreshToken?: string) => void;
+  setTokens: (token: string, refreshToken: string) => void;
   setVerified: (status: NonNullable<User['verification_status']>, isVerified: boolean) => void;
   setPremium: (tier: NonNullable<User['premium_tier']>, isPremium: boolean) => void;
   patchUser: (updates: Partial<User>) => void;
@@ -37,10 +39,17 @@ function readStoredUser(): User | null {
 export const useAuthStore = create<AuthState>((set) => ({
   user: readStoredUser(),
   token: localStorage.getItem('token'),
-  setAuth: (user, token) => {
+  refreshToken: localStorage.getItem('refresh_token'),
+  setAuth: (user, token, refreshToken) => {
     localStorage.setItem('user', JSON.stringify(user));
     localStorage.setItem('token', token);
-    set({ user, token });
+    if (refreshToken) localStorage.setItem('refresh_token', refreshToken);
+    set((state) => ({ user, token, refreshToken: refreshToken ?? state.refreshToken }));
+  },
+  setTokens: (token, refreshToken) => {
+    localStorage.setItem('token', token);
+    localStorage.setItem('refresh_token', refreshToken);
+    set({ token, refreshToken });
   },
   setVerified: (status, isVerified) =>
     set((s) => {
@@ -66,7 +75,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: () => {
     localStorage.removeItem('user');
     localStorage.removeItem('token');
-    set({ user: null, token: null });
+    localStorage.removeItem('refresh_token');
+    set({ user: null, token: null, refreshToken: null });
   },
 }));
 
