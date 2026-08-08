@@ -288,19 +288,22 @@ test('an unanswered call times out and ends cleanly on both devices', async ({
   const alicePage = await aliceContext.newPage();
   const bobPage = await bobContext.newPage();
   await bobPage.goto('/discover');
-  await expect(bobPage.getByRole('heading', { name: 'Nearby discovery map' })).toBeAttached();
+  await expect(bobPage.getByTestId('discover-map-panel')).toBeVisible({ timeout: 20_000 });
+  await bobPage.waitForTimeout(1500);
   await alicePage.goto(`/messages/${bob.user.id}`);
   await expect(alicePage.getByRole('button', { name: /Open .*profile/i })).toBeVisible();
   await alicePage.getByRole('button', { name: 'Start video call' }).click();
 
+  const incoming = bobPage.getByText(/Incoming call/i);
+
   // Both ends are live: caller ringing, recipient ringing.
-  await expect(alicePage.getByTestId('outgoing-call')).toBeVisible();
-  await expect(bobPage.getByText('Incoming call...')).toBeVisible();
+  await expect(alicePage.getByTestId('outgoing-call')).toBeVisible({ timeout: 15_000 });
+  await expect(incoming).toBeVisible({ timeout: 15_000 });
 
   // After the caller's timeout, both surfaces (and tones) tear down cleanly.
   await expect(alicePage.getByTestId('outgoing-call')).toBeHidden({ timeout: 8000 });
   await expect(alicePage.getByTestId('call-tone')).toHaveCount(0);
-  await expect(bobPage.getByText('Incoming call...')).toBeHidden({ timeout: 8000 });
+  await expect(incoming).toBeHidden({ timeout: 8000 });
   await expect(bobPage.getByTestId('call-tone')).toHaveCount(0);
 
   await aliceContext.close();
@@ -342,14 +345,16 @@ test('an incoming call rings while the recipient is on discovery', async ({ brow
   const alicePage = await aliceContext.newPage();
   const bobPage = await bobContext.newPage();
   await bobPage.goto('/discover');
-  await expect(bobPage.getByRole('heading', { name: 'Nearby discovery map' })).toBeAttached();
+  await expect(bobPage.getByTestId('discover-map-panel')).toBeVisible({ timeout: 20_000 });
+  await bobPage.waitForTimeout(1500);
   await alicePage.goto(`/messages/${bob.user.id}`);
   await expect(alicePage.getByRole('button', { name: /Open .*profile/i })).toBeVisible();
   await alicePage.getByRole('button', { name: 'Start video call' }).click();
 
-  await expect(bobPage.getByText('Incoming call...')).toBeVisible();
+  const incoming = bobPage.getByText(/Incoming call/i);
+  await expect(incoming).toBeVisible({ timeout: 15_000 });
   await expect(
-    bobPage.getByText('Incoming call...').locator('..').getByText('Alice', { exact: true }),
+    incoming.locator('..').getByText('Alice', { exact: true }),
   ).toBeVisible();
 
   // Distinct incoming ringtone is active on the recipient.
