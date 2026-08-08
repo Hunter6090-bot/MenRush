@@ -70,12 +70,33 @@ test('discover map canvas is not covered by a blocking overlay', async ({ browse
   const panel = page.getByTestId('discover-map-panel');
   await expect(panel).toBeVisible({ timeout: 20_000 });
 
-  // Mobile layout shows an honest fallback when Mapbox is not configured (CI smoke).
+  // Mobile shows fallback when Mapbox token is absent (CI smoke); desktop keeps the host div.
   const tokenFallback = page.getByText('Map is taking a break');
-  const mapCanvas = panel.locator('canvas.mapboxgl-canvas');
-  await expect(mapCanvas.or(tokenFallback)).toBeVisible({ timeout: 30_000 });
-  if (await tokenFallback.isVisible()) {
+  if (await tokenFallback.isVisible().catch(() => false)) {
     await expect(tokenFallback).toBeVisible();
+    await ctx.close();
+    return;
+  }
+
+  const mapCanvas = panel.locator('canvas.mapboxgl-canvas');
+  if ((await mapCanvas.count()) === 0) {
+    // No Mapbox canvas (typical in CI) — verify the host is still exposed at center.
+    const hit = await panel.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const x = r.left + r.width * 0.5;
+      const y = r.top + r.height * 0.45;
+      const top = document.elementFromPoint(x, y) as HTMLElement | null;
+      if (!top) return { ok: false, tag: null, className: null };
+      const host = top.closest('[data-testid="discover-map-canvas-host"]');
+      const canvas = top.closest('canvas') || top.tagName.toLowerCase() === 'canvas';
+      const mapRoot = top.closest('.mapboxgl-map, .mapboxgl-canvas-container');
+      return {
+        ok: !!(host || canvas || mapRoot),
+        tag: top.tagName.toLowerCase(),
+        className: typeof top.className === 'string' ? top.className.slice(0, 120) : '',
+      };
+    });
+    expect(hit.ok, `map center hit ${hit.tag}.${hit.className}`).toBeTruthy();
     await ctx.close();
     return;
   }
