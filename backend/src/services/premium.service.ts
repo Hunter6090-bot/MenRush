@@ -17,7 +17,8 @@ export type PremiumFeature =
   | 'video_intro'
   | 'incognito'
   | 'advanced_filters'
-  | 'premium_rooms';
+  | 'premium_rooms'
+  | 'profile_notes';
 
 export const FREE_LIMITS = {
   likesPerDay: 20,
@@ -41,6 +42,7 @@ const PREMIUM_FEATURES: PremiumFeature[] = [
   'incognito',
   'advanced_filters',
   'premium_rooms',
+  'profile_notes',
 ];
 
 export class PremiumRequiredError extends Error {

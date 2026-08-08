@@ -187,6 +187,9 @@ export const usersAPI = {
       },
     }),
   getProfile: (id: string) => apiClient.get(`/users/profile/${id}`),
+  getProfileNote: (id: string) => apiClient.get<{ note: string }>(`/users/profile/${id}/note`),
+  saveProfileNote: (id: string, note: string) =>
+    apiClient.put<{ note: string }>(`/users/profile/${id}/note`, { note }),
   searchProfiles: (q: string) =>
     apiClient.get<Array<{ id: string; name: string; age?: number; photo_url?: string; bio?: string; headline?: string }>>(
       '/users/search',

@@ -788,4 +788,25 @@ export const userService = {
 
     return { count, is_premium: isPremium, preview };
   },
+
+  async getProfilePrivateNote(viewerId: string, targetId: string): Promise<string> {
+    const result = await query(
+      `SELECT note FROM profile_private_notes WHERE viewer_id = $1 AND target_id = $2`,
+      [viewerId, targetId],
+    );
+    return result.rows[0]?.note ?? '';
+  },
+
+  async setProfilePrivateNote(viewerId: string, targetId: string, note: string): Promise<string> {
+    const trimmed = note.trim().slice(0, 2000);
+    const result = await query(
+      `INSERT INTO profile_private_notes (viewer_id, target_id, note, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (viewer_id, target_id)
+       DO UPDATE SET note = EXCLUDED.note, updated_at = NOW()
+       RETURNING note`,
+      [viewerId, targetId, trimmed],
+    );
+    return result.rows[0]?.note ?? trimmed;
+  },
 };
