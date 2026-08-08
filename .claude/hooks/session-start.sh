@@ -9,5 +9,5 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
 
-cd "$CLAUDE_PROJECT_DIR/backend" && npm install
-cd "$CLAUDE_PROJECT_DIR/frontend" && npm install
+cd "$CLAUDE_PROJECT_DIR/backend" && npm ci
+cd "$CLAUDE_PROJECT_DIR/frontend" && npm ci
