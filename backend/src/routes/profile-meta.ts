@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { profileMetaService } from '../services/profile-meta.service';
 import { premiumService } from '../services/premium.service';
-import { MoodSchema, GhostSchema, LiveLocationSharingSchema } from '../types/validation';
+import { MoodSchema, UserStatusSchema, GhostSchema, LiveLocationSharingSchema } from '../types/validation';
 
 const router = Router();
 router.use(authMiddleware, verifiedMiddleware);
@@ -27,6 +27,33 @@ router.post('/mood', async (req: AuthRequest, res: Response) => {
   } catch (error: any) {
     if (error.message === 'invalid_mood') {
       return res.status(400).json({ error: 'Invalid mood' });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/** GET /api/profile-meta/status — active Status (§25); independent of Pulse/Mood. */
+router.get('/status', async (req: AuthRequest, res: Response) => {
+  try {
+    const status = await profileMetaService.getStatus(req.userId!);
+    res.json(status);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/** POST /api/profile-meta/status — set or clear Status. Never mutates Pulse. */
+router.post('/status', async (req: AuthRequest, res: Response) => {
+  const parsed = UserStatusSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.errors[0].message });
+  }
+  try {
+    const result = await profileMetaService.setStatus(req.userId!, parsed.data.status);
+    res.json(result);
+  } catch (error: any) {
+    if (error.message === 'invalid_status') {
+      return res.status(400).json({ error: 'Invalid status' });
     }
     res.status(500).json({ error: error.message });
   }

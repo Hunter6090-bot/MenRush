@@ -2,6 +2,7 @@ import type { Mood } from '../api/client';
 import { MOOD_LABELS } from '../api/client';
 import type { NearbyUser } from '../components/ProfileCard';
 import { INTENT_FILTERS, matchesIntentFilter, type IntentFilter } from './discoveryFormat';
+import { USER_STATUS_LABELS, USER_STATUS_VALUES, type UserStatus } from './userStatus';
 
 /** Profile tag groups — shared with Profile editor. */
 export const DISCOVERY_FILTER_CATEGORIES = [
@@ -88,6 +89,7 @@ export const AGE_PRESETS = [
 
 export type AgePresetId = (typeof AGE_PRESETS)[number]['id'];
 
+/** Presence / trust toggles (not MenRush Status §25). */
 export const STATUS_FILTER_OPTIONS = [
   { id: 'online', label: 'Online now' },
   { id: 'pulsing', label: 'Pulsing now' },
@@ -102,12 +104,20 @@ export const MOOD_FILTER_OPTIONS = Object.entries(MOOD_LABELS).map(([value, labe
   label,
 }));
 
+/** Free Status (§25) filter options — exact match. */
+export const USER_STATUS_FILTER_OPTIONS = USER_STATUS_VALUES.map((value) => ({
+  value,
+  label: USER_STATUS_LABELS[value],
+}));
+
 export interface DiscoveryFilterState {
   intent: string;
   interests: string[];
   agePreset: AgePresetId;
   status: StatusFilterId[];
   mood?: Mood;
+  /** MenRush Status (§25). Free single-select; saved combos are Premium (later). */
+  userStatus?: UserStatus;
 }
 
 export const DEFAULT_DISCOVERY_FILTERS: DiscoveryFilterState = {
@@ -116,6 +126,7 @@ export const DEFAULT_DISCOVERY_FILTERS: DiscoveryFilterState = {
   agePreset: 'any',
   status: [],
   mood: undefined,
+  userStatus: undefined,
 };
 
 export function countActiveDiscoveryFilters(state: DiscoveryFilterState): number {
@@ -125,6 +136,7 @@ export function countActiveDiscoveryFilters(state: DiscoveryFilterState): number
   if (state.agePreset !== 'any') count += 1;
   count += state.status.length;
   if (state.mood) count += 1;
+  if (state.userStatus) count += 1;
   return count;
 }
 
@@ -159,6 +171,7 @@ export function buildNearbyApiFilters(state: DiscoveryFilterState) {
     maxAge,
     onlyPulse: state.status.includes('pulsing') || undefined,
     mood: state.mood ? `%${state.mood}%` : undefined,
+    status: state.userStatus,
   };
 }
 
@@ -202,6 +215,10 @@ export function applyDiscoveryClientFilters(users: NearbyUser[], state: Discover
 
   if (state.mood) {
     result = result.filter((u) => u.mood === state.mood);
+  }
+
+  if (state.userStatus) {
+    result = result.filter((u) => u.status === state.userStatus);
   }
 
   return result;

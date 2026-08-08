@@ -152,7 +152,8 @@ export const RoomList: React.FC<RoomListProps> = ({
       )}
 
       <div className={`shrink-0 ${isSidebar ? 'px-3 pt-3' : 'mb-4'}`}>
-        <div className="relative">
+        <div className={`flex gap-2 ${!showHeader ? '' : ''}`}>
+          <div className="relative min-w-0 flex-1">
           <SearchIcon
             className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2"
             style={{ color: '#6B5035' }}
@@ -170,6 +171,23 @@ export const RoomList: React.FC<RoomListProps> = ({
               caretColor: '#C4832A',
             }}
           />
+          </div>
+          {!showHeader ? (
+            <button
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              aria-label="Create group"
+              title="Create group"
+              className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-2xl transition-all duration-150 active:scale-95"
+              style={{
+                background: 'linear-gradient(135deg, #C4832A, #A45E18)',
+                boxShadow: '0 2px 12px rgba(196,131,42,0.35)',
+                color: '#fff',
+              }}
+            >
+              <PlusIcon className="h-5 w-5" />
+            </button>
+          ) : null}
         </div>
       </div>
 

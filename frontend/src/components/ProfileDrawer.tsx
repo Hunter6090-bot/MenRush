@@ -6,6 +6,7 @@ import { PulsingAvatar } from "./PulsingAvatar";
 import { useResolvingPhotoSrc } from "./UserAvatar";
 import { IconPulse, IconClose } from "./icons";
 import { StatusBadge } from "./StatusBadge";
+import { UserStatusBadge } from "./UserStatusPicker";
 import { DistancePill } from "./DistancePill";
 import { VerifiedBadge } from "./VerifiedBadge";
 import { ChatSafetyMenu } from "./ChatSafetyMenu";
@@ -307,6 +308,15 @@ export function ProfileDrawer({
                 Looking for
               </p>
               <p className="text-sm font-semibold text-[var(--copper)]">{user.looking_for}</p>
+            </div>
+          ) : null}
+
+          {user.status ? (
+            <div className="mt-3" data-testid="drawer-user-status">
+              <p className="text-[10px] font-black text-[var(--cream-muted)] uppercase tracking-[.18em] mb-1">
+                Status
+              </p>
+              <UserStatusBadge status={user.status} />
             </div>
           ) : null}
 

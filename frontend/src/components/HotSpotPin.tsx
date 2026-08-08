@@ -18,7 +18,7 @@ interface HotSpotPinProps {
  * Empty (no live check-ins) → dim / transparent.
  * Occupied (any check-in) → full / solid icon.
  */
-export function HotSpotPin({ spot, size = 36 }: HotSpotPinProps) {
+export function HotSpotPin({ spot, size = 40 }: HotSpotPinProps) {
   const occupied = spot.live_count_exact > 0;
   return (
     <div
@@ -32,8 +32,8 @@ export function HotSpotPin({ spot, size = 36 }: HotSpotPinProps) {
         width: size,
         height: size,
         position: 'relative',
-        opacity: occupied ? 1 : 0.38,
-        filter: occupied ? 'none' : 'saturate(0.55)',
+        opacity: occupied ? 1 : 0.72,
+        filter: occupied ? 'none' : 'saturate(0.75) contrast(1.08)',
         transition: 'opacity 180ms ease, transform 150ms ease, filter 180ms ease',
       }}
       data-occupied={occupied ? '1' : '0'}
@@ -41,16 +41,16 @@ export function HotSpotPin({ spot, size = 36 }: HotSpotPinProps) {
       data-hotspot-id={spot.id}
     >
       <div
-        className="flex h-full w-full items-center justify-center rounded-full"
+        className="flex h-full w-full items-center justify-center rounded-full hotspot-pin__disc"
         style={{
           background: occupied
             ? 'linear-gradient(145deg, #C4832A 0%, #8B5A1A 100%)'
-            : 'linear-gradient(145deg, rgba(196,131,42,0.45) 0%, rgba(90,60,20,0.55) 100%)',
-          border: occupied ? '2px solid #F0E0C0' : '1.5px solid rgba(240,224,192,0.35)',
+            : 'linear-gradient(145deg, rgba(196,131,42,0.82) 0%, rgba(120,78,24,0.88) 100%)',
+          border: occupied ? '2.5px solid #F0E0C0' : '2px solid rgba(240,224,192,0.72)',
           boxShadow: occupied
-            ? '0 0 14px rgba(196,131,42,0.65), 0 3px 10px rgba(0,0,0,0.45)'
-            : '0 2px 6px rgba(0,0,0,0.35)',
-          fontSize: size * 0.42,
+            ? '0 0 16px rgba(196,131,42,0.7), 0 3px 10px rgba(0,0,0,0.45)'
+            : '0 0 10px rgba(196,131,42,0.45), 0 3px 8px rgba(0,0,0,0.35)',
+          fontSize: size * 0.44,
           lineHeight: 1,
         }}
       >

@@ -8,6 +8,7 @@ import { CoverBanner, normalizeCoverFrame } from '../components/CoverBanner';
 import { StatusBadge } from '../components/StatusBadge';
 import { ProfileAlbumsSection } from '../components/ProfileAlbumsSection';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
+import { ProfilePrivateNote } from '../components/ProfilePrivateNote';
 
 interface ViewableUser {
   id: string;
@@ -254,6 +255,8 @@ export const ProfileView = () => {
 
         <ProfileAlbumsSection ownerId={user.id} ownerName={user.name} />
 
+        <ProfilePrivateNote targetUserId={user.id} targetName={user.name} />
+
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -291,7 +294,7 @@ export const ProfileView = () => {
           </button>
         </div>
         <p className="text-center text-[11px] text-[var(--cream-muted)]">
-          Match is mutual interest · Chat unlocks when he matches back · Report anytime
+          Match sends a like · Chat unlocks when he matches back · Report anytime
         </p>
       </div>
     </Layout>

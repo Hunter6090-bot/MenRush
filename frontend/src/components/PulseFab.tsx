@@ -99,6 +99,7 @@ export function PulseFab({
         data-testid="pulse-fab"
         className={`
           fixed bottom-[calc(var(--fab-offset)+88px)] right-[var(--fab-offset)] z-40
+          lg:bottom-[calc(var(--fab-offset)+1rem)]
           flex flex-col items-center justify-center gap-0.5
           w-[var(--fab-size)] h-[var(--fab-size)]
           rounded-full

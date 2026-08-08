@@ -153,6 +153,22 @@ export const MoodSchema = z.object({
   mood: z.enum(MOOD_VALUES).nullable(),
 });
 
+/** MenRush 2.0 §25 Status — curated set, not free text. Independent of Pulse/Mood. */
+export const USER_STATUS_VALUES = [
+  'available_now',
+  'hosting',
+  'travelling',
+  'drinks',
+  'dating',
+  'looking_now',
+  'busy',
+  'do_not_disturb',
+] as const;
+
+export const UserStatusSchema = z.object({
+  status: z.enum(USER_STATUS_VALUES).nullable(),
+});
+
 export const GhostSchema = z.object({
   is_ghost: z.boolean(),
 });
@@ -189,6 +205,8 @@ export type RoomMessageInput = z.infer<typeof RoomMessageSchema>;
 export type ContactFormInput = z.infer<typeof ContactFormSchema>;
 export type Mood = (typeof MOOD_VALUES)[number];
 export type MoodInput = z.infer<typeof MoodSchema>;
+export type UserStatus = (typeof USER_STATUS_VALUES)[number];
+export type UserStatusInput = z.infer<typeof UserStatusSchema>;
 export type GhostInput = z.infer<typeof GhostSchema>;
 export type CreateAlbumInput = z.infer<typeof CreateAlbumSchema>;
 export type AddAlbumPhotoInput = z.infer<typeof AddAlbumPhotoSchema>;

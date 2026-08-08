@@ -7,6 +7,9 @@ import { NearbyUser } from '../components/ProfileCard';
 import { Layout } from '../components/Layout';
 import { PulseFab } from '../components/PulseFab';
 import { MoodPicker } from '../components/MoodPicker';
+import { UserStatusPicker } from '../components/UserStatusPicker';
+import type { UserStatus } from '../lib/userStatus';
+import { isUserStatus } from '../lib/userStatus';
 import {
   DEFAULT_RADIUS_KM,
   MAX_RADIUS_KM,
@@ -359,6 +362,8 @@ export const Discover = () => {
   });
   const [mood, setMood] = useState<Mood | null>(null);
   const [moodSaving, setMoodSaving] = useState(false);
+  const [userStatus, setUserStatus] = useState<UserStatus | null>(null);
+  const [userStatusSaving, setUserStatusSaving] = useState(false);
 
   const watchIdRef = useRef<number | null>(null);
   const hasFetchedRef = useRef(false);
@@ -406,6 +411,7 @@ export const Discover = () => {
       .then((res) => {
         setActivationProfile(res.data as ProfileSetupSnapshot);
         if (res.data?.mood) setMood(res.data.mood as Mood);
+        if (isUserStatus(res.data?.status)) setUserStatus(res.data.status);
         const d = res.data as { name?: string; photo_url?: string | null; age?: number };
         useAuthStore.getState().patchUser({
           name: d.name,
@@ -417,6 +423,10 @@ export const Discover = () => {
     profileMetaAPI
       .getMood()
       .then((res) => setMood(res.data.mood ?? null))
+      .catch(() => {});
+    profileMetaAPI
+      .getStatus()
+      .then((res) => setUserStatus(res.data.status ?? null))
       .catch(() => {});
     // Hydrate Match CTA after reload — outbound likes + mutual matches (separate).
     Promise.all([
@@ -444,6 +454,18 @@ export const Discover = () => {
       /* keep previous mood */
     } finally {
       setMoodSaving(false);
+    }
+  }, []);
+
+  const handleUserStatusSelect = useCallback(async (next: UserStatus | null) => {
+    setUserStatusSaving(true);
+    try {
+      const res = await profileMetaAPI.setStatus(next);
+      setUserStatus(res.data.status ?? null);
+    } catch {
+      /* keep previous status — never touches Pulse */
+    } finally {
+      setUserStatusSaving(false);
     }
   }, []);
 
@@ -1205,6 +1227,7 @@ export const Discover = () => {
         age: user.age,
         isPulsing,
         isVerified: !!(user as any).is_verified,
+        status: user.status ?? null,
       };
       const lngLat: [number, number] = [Number(user.lng), Number(user.lat)];
       const existing = markersRef.current.get(user.id);
@@ -1226,7 +1249,8 @@ export const Discover = () => {
           prev.name !== user.name ||
           prev.photo_url !== user.photo_url ||
           isUserPulsing(prev) !== isPulsing ||
-          !!(prev as any).is_verified !== !!(user as any).is_verified;
+          !!(prev as any).is_verified !== !!(user as any).is_verified ||
+          (prev.status ?? null) !== (user.status ?? null);
         if (visualChanged) {
           const markerSize = isPulsing ? 52 : 44;
           existing.root.render(<MapMarker user={markerUser} size={markerSize} />);
@@ -1311,14 +1335,14 @@ export const Discover = () => {
           existing.spot.name !== spot.name ||
           existing.spot.category_icon !== spot.category_icon
         ) {
-          existing.root.render(<HotSpotPin spot={pinData} size={36} />);
+          existing.root.render(<HotSpotPin spot={pinData} size={40} />);
         }
         existing.spot = spot;
         return;
       }
 
       // Opens the in-map sheet (no navigation away) — see #67 acceptance criteria.
-      const { element, root } = createHotSpotPinElement(pinData, () => setSelectedHotSpot(spot), 36);
+      const { element, root } = createHotSpotPinElement(pinData, () => setSelectedHotSpot(spot), 40);
       const marker = new mapboxgl.Marker({ element, anchor: 'center' })
         .setLngLat(lngLat)
         .addTo(map);
@@ -1626,10 +1650,19 @@ export const Discover = () => {
         {!desktopMapExpanded && !needsLocationGate ? (
           <details className="mb-3 shrink-0 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/70 px-4 py-2.5">
             <summary className="cursor-pointer text-[12px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]">
-              Mood & filters
+              Status, mood & filters
             </summary>
             <div className="mt-3 space-y-3" data-testid="discover-mood-strip">
+              <div className={userStatusSaving ? 'pointer-events-none opacity-60' : ''}>
+                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.14em] text-[var(--cream-muted)]">
+                  Status
+                </p>
+                <UserStatusPicker current={userStatus} onSelect={handleUserStatusSelect} />
+              </div>
               <div className={moodSaving ? 'pointer-events-none opacity-60' : ''}>
+                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.14em] text-[var(--cream-muted)]">
+                  Mood
+                </p>
                 <MoodPicker current={mood} onSelect={handleMoodSelect} />
               </div>
               <DiscoveryFilterPanel
@@ -1890,13 +1923,26 @@ export const Discover = () => {
             {/* Compact filters + mood under map, not above */}
             <details className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/60 px-3 py-2">
               <summary className="cursor-pointer text-[12px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]">
-                Filters & mood
+                Filters, status & mood
               </summary>
               <div className="mt-3 space-y-3">
                 {!needsLocationGate ? (
-                  <div data-testid="discover-mood-strip-mobile">
-                    <MoodPicker current={mood} onSelect={handleMoodSelect} />
-                  </div>
+                  <>
+                    <div data-testid="discover-status-strip-mobile">
+                      <p className="mb-2 text-[10px] font-black uppercase tracking-[0.14em] text-[var(--cream-muted)]">
+                        Status
+                      </p>
+                      <div className={userStatusSaving ? 'pointer-events-none opacity-60' : ''}>
+                        <UserStatusPicker current={userStatus} onSelect={handleUserStatusSelect} />
+                      </div>
+                    </div>
+                    <div data-testid="discover-mood-strip-mobile">
+                      <p className="mb-2 text-[10px] font-black uppercase tracking-[0.14em] text-[var(--cream-muted)]">
+                        Mood
+                      </p>
+                      <MoodPicker current={mood} onSelect={handleMoodSelect} />
+                    </div>
+                  </>
                 ) : null}
                 <DiscoveryFilterPanel
                   variant="inline"
@@ -1934,7 +1980,10 @@ export const Discover = () => {
             ) : null}
           </div>
         </div>
+      </div>
+      )}
 
+      {!needsLocationGate ? (
         <PulseFab
           isPulsing={!!pulseUntil}
           pulseExpiresAt={pulseUntil ? pulseUntil.toISOString() : undefined}
@@ -1943,8 +1992,7 @@ export const Discover = () => {
           onStartPulse={handleStartPulse}
           onStopPulse={handleStopPulse}
         />
-      </div>
-      )}
+      ) : null}
 
       <ProfileDrawer
         user={selectedUser}

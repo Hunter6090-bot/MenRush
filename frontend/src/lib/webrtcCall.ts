@@ -394,6 +394,52 @@ export function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnect
   });
 }
 
+function mediaKindFromMLine(mLine: string): 'audio' | 'video' | null {
+  if (mLine.startsWith('m=audio')) return 'audio';
+  if (mLine.startsWith('m=video')) return 'video';
+  return null;
+}
+
+/**
+ * Find an existing transceiver to attach a local track without adding m-lines.
+ * Safari answerers often have null receiver.track until RTP arrives — fall back
+ * to SDP m-line order so we replaceTrack instead of addTrack.
+ */
+function findIdleTransceiver(
+  pc: RTCPeerConnection,
+  track: MediaStreamTrack,
+): RTCRtpTransceiver | undefined {
+  const transceivers = pc.getTransceivers();
+
+  for (const t of transceivers) {
+    const kind = t.receiver?.track?.kind ?? t.sender?.track?.kind;
+    if (kind !== track.kind) continue;
+    const sending = t.sender?.track;
+    if (sending && sending.readyState !== 'ended' && sending.id !== track.id) continue;
+    return t;
+  }
+
+  const sdp = pc.remoteDescription?.sdp;
+  if (sdp) {
+    const mLines = sdp.split(/\r?\n/).filter((line) => line.startsWith('m='));
+    const kindsByIndex = mLines.map(mediaKindFromMLine);
+
+    for (let i = 0; i < transceivers.length; i++) {
+      const t = transceivers[i]!;
+      const sending = t.sender?.track;
+      if (sending && sending.readyState !== 'ended' && sending.id !== track.id) continue;
+      if (kindsByIndex[i] === track.kind) return t;
+    }
+
+    for (const t of transceivers) {
+      const sending = t.sender?.track;
+      if (!sending || sending.readyState === 'ended') return t;
+    }
+  }
+
+  return undefined;
+}
+
 /**
  * Attach local A/V via addTrack / replaceTrack (Unified Plan).
  *
@@ -415,17 +461,7 @@ export async function attachLocalTracks(
   for (const track of stream.getTracks()) {
     if (pc.getSenders().some((sender) => sender.track?.id === track.id)) continue;
 
-    // Match by kind on an existing transceiver (answerer) — include inactive so
-    // we never fall through to addTrack and create a duplicate m-line.
-    const idle = pc.getTransceivers().find((t) => {
-      const kind = t.receiver?.track?.kind ?? t.sender?.track?.kind;
-      if (kind !== track.kind) return false;
-      const sending = t.sender?.track;
-      if (sending && sending.readyState !== 'ended' && sending.id !== track.id) {
-        return false;
-      }
-      return true;
-    });
+    const idle = findIdleTransceiver(pc, track);
 
     if (idle?.sender) {
       await idle.sender.replaceTrack(track);
@@ -439,6 +475,17 @@ export async function attachLocalTracks(
       continue;
     }
 
-    pc.addTrack(track, stream);
+    // Offerer (no remoteDescription yet) — addTrack is correct.
+    if (!pc.remoteDescription) {
+      pc.addTrack(track, stream);
+      continue;
+    }
+
+    // Answerer with no matching transceiver — log and skip addTrack to avoid duplicate m-lines.
+    console.warn(
+      '[webrtc] no idle transceiver for',
+      track.kind,
+      '— skipping addTrack to preserve SDP',
+    );
   }
 }
