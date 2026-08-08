@@ -47,7 +47,7 @@ export function NearbyProfileGrid({
   if (loading && users.length === 0) {
     return (
       <div
-        className="grid grid-cols-2 gap-3 lg:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] lg:gap-3.5"
+        className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3 lg:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] lg:gap-3.5"
         data-testid="nearby-profile-grid-loading"
       >
         {[...Array(6)].map((_, i) => (
@@ -135,10 +135,11 @@ export function NearbyProfileGrid({
     );
   }
 
-  // Mobile/tablet (Discover lg:hidden sheet): exactly 2 per row. Desktop sidebar: denser auto-fill.
+  // Keep cards compact as the viewport grows: narrow phones naturally show two,
+  // while wider phones and tablets gain more columns instead of oversized cards.
   return (
     <div
-      className="grid grid-cols-2 gap-3 lg:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] lg:gap-3.5"
+      className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3 lg:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] lg:gap-3.5"
       data-testid="nearby-profile-grid"
     >
       {users.map((user) => {
@@ -171,7 +172,7 @@ export function NearbyProfileGrid({
                     />
                     {/* Fixed light cream on photo gradient — theme tokens invert in light mode */}
                     <span className="truncate text-[14px] font-bold text-[#FFF6E6]">
-                      {user.name} {user.age}
+                      {user.name}{user.age != null ? ` ${user.age}` : ''}
                     </span>
                     {user.is_verified ? <VerifiedBadge size="sm" /> : null}
                   </div>
@@ -204,7 +205,7 @@ export function NearbyProfileGrid({
                         : 'bg-[#C4832A] text-[#1A0E03] hover:bg-[#E0A14A]'
                   }`}
                 >
-                  {matching ? 'Sending…' : mutual ? 'Open chat' : liked ? 'Matched' : 'Match'}
+                  {matching ? 'Sending…' : mutual ? 'Open chat' : liked ? 'Match sent' : 'Match'}
                 </button>
               </div>
             ) : null}
