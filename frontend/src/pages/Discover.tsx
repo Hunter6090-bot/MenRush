@@ -48,6 +48,7 @@ import { mapboxStyleForTheme, resolvedThemeNow, THEME_CHANGED_EVENT } from '../l
 import { readLayerVisible, writeLayerVisible } from '../lib/discoveryLayers';
 import { useIsDesktopLayout } from '../hooks/useMediaQuery';
 import { ProximitySlider } from '../components/ProximitySlider';
+import { TribePillRow } from '../components/TribePillRow';
 import { IconMapExpand, IconDiscover, IconHotSpots } from '../components/icons';
 
 /** Map panel: swipe up to hide, swipe down to show, expand for large map. */
@@ -100,7 +101,6 @@ function MapFloatingChrome({
   radiusLabel,
   radiusKm,
   onToggleExpand,
-  onRadiusChange,
   onExpandRadius,
   showHide = false,
   onHide,
@@ -115,7 +115,6 @@ function MapFloatingChrome({
   radiusLabel: string;
   radiusKm: number;
   onToggleExpand: () => void;
-  onRadiusChange: (km: number) => void;
   onExpandRadius: () => void;
   showHide?: boolean;
   onHide?: () => void;
@@ -127,14 +126,7 @@ function MapFloatingChrome({
 }) {
   return (
     <>
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 p-3">
-        {!expanded ? (
-          <div className="pointer-events-auto">
-            <ProximitySlider value={radiusKm} onChange={onRadiusChange} variant="map" />
-          </div>
-        ) : (
-          <span />
-        )}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-end gap-2 p-3">
         <div className="pointer-events-auto flex items-center gap-1.5">
           {/* #67: compact independent People / Hot Spots layer control. */}
           <button
@@ -1397,6 +1389,57 @@ export const Discover = () => {
 
   const onlineCount = users.filter((u) => u.online).length;
   const nearbyCount = users.length;
+
+  const toggleTribeInterest = useCallback(
+    (tag: string) => {
+      const interests = discoveryFilters.interests.includes(tag)
+        ? discoveryFilters.interests.filter((t) => t !== tag)
+        : [...discoveryFilters.interests, tag];
+      handleDiscoveryFiltersChange({ ...discoveryFilters, interests });
+    },
+    [discoveryFilters, handleDiscoveryFiltersChange],
+  );
+
+  const discoveryControlsBand = (
+    <div className="shrink-0 space-y-2" data-testid="discovery-controls-band">
+      <TribePillRow
+        selected={discoveryFilters.interests}
+        onToggle={toggleTribeInterest}
+        onClear={() => handleDiscoveryFiltersChange({ ...discoveryFilters, interests: [] })}
+      />
+      <div className="flex flex-wrap items-center gap-2 px-3 lg:px-0">
+        <div
+          data-testid="nearby-counts"
+          className="inline-flex min-h-[36px] items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
+        >
+          <p className="whitespace-nowrap text-[11px] font-bold tracking-wide text-[var(--cream-soft)]">
+            {loading && nearbyCount === 0 ? (
+              <span className="text-[var(--cream-muted)]">Scanning…</span>
+            ) : nearbyCount === 0 ? (
+              <button
+                type="button"
+                onClick={handleRadiusCycle}
+                data-testid="expand-radius-chip"
+                className="text-[var(--copper)]"
+              >
+                EXPAND YOUR RADIUS →
+              </button>
+            ) : (
+              <>
+                <span className="font-black text-[var(--copper)]">{nearbyCount}</span> NEARBY
+                <span className="mx-1.5 text-[var(--cream-muted)]">·</span>
+                <span className="font-black text-[var(--copper)]">{onlineCount}</span> ONLINE
+              </>
+            )}
+          </p>
+        </div>
+      </div>
+      <div className="px-3 lg:px-0">
+        <ProximitySlider value={radius} onChange={handleRadiusChange} />
+      </div>
+    </div>
+  );
+
   const sortedUsers = [...users].sort((a, b) => {
     const ap = isUserPulsing(a) ? 1 : 0;
     const bp = isUserPulsing(b) ? 1 : 0;
@@ -1623,6 +1666,7 @@ export const Discover = () => {
             <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
           </div>
         ) : null}
+        <div className="mb-3">{discoveryControlsBand}</div>
         {!desktopMapExpanded && !needsLocationGate ? (
           <details className="mb-3 shrink-0 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/70 px-4 py-2.5">
             <summary className="cursor-pointer text-[12px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]">
@@ -1659,7 +1703,6 @@ export const Discover = () => {
             radiusLabel={formatRadiusMiles(radius)}
             radiusKm={radius}
             onToggleExpand={toggleDesktopMapExpanded}
-            onRadiusChange={handleRadiusChange}
             onExpandRadius={handleRadiusCycle}
             peopleLayerOn={peopleLayerOn}
             hotSpotsLayerOn={hotSpotsLayerOn}
@@ -1690,6 +1733,7 @@ export const Discover = () => {
       </div>
       ) : (
       <div className="relative flex h-full min-h-0 flex-col">
+        {!mobileMapExpanded ? <div className="pt-2">{discoveryControlsBand}</div> : null}
         {/* Map outside the scroll region so pan/pinch aren't stolen by page scroll. */}
         <div
           className={`discover-map-panel discover-map-surface relative w-full shrink-0 overflow-hidden border-b border-[var(--border-default)] bg-[#11100E] ${
@@ -1750,7 +1794,6 @@ export const Discover = () => {
               onToggleExpand={() =>
                 setMapPanel(mapPanelMode === 'expanded' ? 'default' : 'expanded')
               }
-              onRadiusChange={handleRadiusChange}
               onExpandRadius={handleRadiusCycle}
               showHide
               onHide={() => setMapPanel('hidden')}
@@ -1810,31 +1853,6 @@ export const Discover = () => {
         <div className="min-h-0 flex-1 overflow-y-auto pb-24">
           <div className="space-y-3 px-4 pt-3">
             <div className="flex flex-wrap items-center gap-2">
-              <div
-                data-testid="nearby-counts"
-                className="inline-flex min-h-[36px] items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
-              >
-                <p className="text-[11px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
-                  {loading && nearbyCount === 0 ? (
-                    <span className="text-[var(--cream-muted)]">Scanning…</span>
-                  ) : nearbyCount === 0 ? (
-                    <button
-                      type="button"
-                      onClick={handleRadiusCycle}
-                      data-testid="expand-radius-chip"
-                      className="text-[var(--copper)]"
-                    >
-                      EXPAND YOUR RADIUS →
-                    </button>
-                  ) : (
-                    <>
-                      <span className="font-black text-[var(--copper)]">{nearbyCount}</span> NEARBY
-                      <span className="mx-1.5 text-[var(--cream-muted)]">·</span>
-                      <span className="font-black text-[var(--copper)]">{onlineCount}</span> ONLINE
-                    </>
-                  )}
-                </p>
-              </div>
               <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
               <div
                 className="ml-auto flex items-center overflow-hidden rounded-full border bg-[var(--bg-elevated)]/85 backdrop-blur-sm"

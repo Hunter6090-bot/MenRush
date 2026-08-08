@@ -121,15 +121,19 @@ function LayoutInner({ children }: LayoutProps) {
             aria-label="MenRush home — Nearby"
             title="MenRush"
             className={`flex items-center rounded-xl py-1 transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--copper)] ${
-              sidebarExpanded ? 'gap-2.5 px-1' : 'justify-center'
+              sidebarExpanded ? 'gap-2.5 px-1' : 'flex-col justify-center gap-1'
             }`}
           >
             <BrandMark size="sm" className="shadow-[0_0_0_2px_rgba(196,131,42,0.4)] rounded-full" />
-            {sidebarExpanded ? (
-              <span className="font-display text-sm font-black tracking-[0.14em] text-nn-text">
-                MENRUSH
-              </span>
-            ) : null}
+            <span
+              className={`font-display font-black text-nn-text ${
+                sidebarExpanded
+                  ? 'text-sm tracking-[0.14em]'
+                  : 'text-[9px] tracking-[0.1em] leading-none'
+              }`}
+            >
+              MENRUSH
+            </span>
           </Link>
           <button
             type="button"
