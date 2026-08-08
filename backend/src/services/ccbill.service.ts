@@ -1,14 +1,22 @@
 import crypto from 'crypto';
+import { extractOccurredAt, extractProviderEventId } from './ccbill-webhook.service';
 
 export type CCBillTier = 'premium';
 
 export type CCBillWebhookEvent = {
   eventType: string;
+  eventId: string | null;
   userId: string | null;
   subscriptionId: string | null;
   customerId: string | null;
   periodEnd: Date | null;
+  occurredAt: Date | null;
   raw: Record<string, string>;
+};
+
+export type CCBillWebhookVerification = {
+  ok: boolean;
+  reason?: 'webhook_secret_not_configured' | 'signature_mismatch' | 'insecure_dev_bypass';
 };
 
 export class CCBillNotConfiguredError extends Error {
@@ -50,7 +58,7 @@ function buildFormDigest(
   recurringPrice: string,
   recurringPeriod: number,
   salt: string,
-): string {
+  ): string {
   const numRebills = '99';
   const currencyCode = process.env.CCBILL_CURRENCY_CODE || '826';
   const payload =
@@ -72,13 +80,30 @@ function firstString(body: Record<string, unknown>, keys: string[]): string | nu
   return null;
 }
 
+function isProduction(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
+/**
+ * Constant-time string comparison. crypto.timingSafeEqual requires
+ * equal-length buffers, so unequal-length inputs are rejected up front.
+ * That length check is not itself sensitive: an attacker who does not
+ * know the secret gains nothing from learning its length here.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, 'utf8');
+  const bufB = Buffer.from(b, 'utf8');
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
 export const ccbillService = {
   isConfigured(): boolean {
     return Boolean(
       process.env.CCBILL_FLEXFORM_ID &&
-        process.env.CCBILL_CLIENT_SUBACC &&
-        process.env.CCBILL_FORM_DIGEST_SALT,
-    );
+      process.env.CCBILL_CLIENT_SUBACC &&
+      process.env.CCBILL_FORM_DIGEST_SALT,
+      );
   },
 
   getPlans() {
@@ -90,7 +115,7 @@ export const ccbillService = {
         price: TIER_PRICING.recurringPrice,
         period_days: TIER_PRICING.recurringPeriod,
       },
-    ];
+      ];
   },
 
   buildFlexFormUrl(userId: string, tier: CCBillTier, returnUrl?: string): string {
@@ -102,77 +127,107 @@ export const ccbillService = {
       pricing.recurringPrice,
       pricing.recurringPeriod,
       salt,
-    );
+      );
 
-    const base =
-      process.env.CCBILL_FLEXFORM_BASE_URL ||
-      `https://api.ccbill.com/wap-frontflex/flexforms/${flexId}`;
+  const base =
+    process.env.CCBILL_FLEXFORM_BASE_URL ||
+    `https://api.ccbill.com/wap-frontflex/flexforms/${flexId}`;
 
-    const params = new URLSearchParams({
-      clientSubacc: subacc,
-      initialPrice: formatPrice(pricing.initialPrice),
-      initialPeriod: String(pricing.initialPeriod),
-      recurringPrice: formatPrice(pricing.recurringPrice),
-      recurringPeriod: String(pricing.recurringPeriod),
-      numRebills: '99',
-      currencyCode: process.env.CCBILL_CURRENCY_CODE || '840',
-      formDigest,
-      'X-userId': userId,
-      'X-tier': tier,
-    });
+  const params = new URLSearchParams({
+    clientSubacc: subacc,
+    initialPrice: formatPrice(pricing.initialPrice),
+    initialPeriod: String(pricing.initialPeriod),
+    recurringPrice: formatPrice(pricing.recurringPrice),
+    recurringPeriod: String(pricing.recurringPeriod),
+    numRebills: '99',
+    currencyCode: process.env.CCBILL_CURRENCY_CODE || '840',
+    formDigest,
+    'X-userId': userId,
+    'X-tier': tier,
+  });
 
-    if (returnUrl) {
-      params.set('successUrl', returnUrl);
-      params.set('failureUrl', returnUrl);
-    }
+  if (returnUrl) {
+    params.set('successUrl', returnUrl);
+    params.set('failureUrl', returnUrl);
+  }
 
-    return `${base}?${params.toString()}`;
+  return `${base}?${params.toString()}`;
   },
 
   parseWebhook(body: Record<string, unknown>): CCBillWebhookEvent {
     const eventType =
       firstString(body, ['eventType', 'eventGroupType', 'event_type']) || 'unknown';
 
-    const userId =
-      firstString(body, ['X-userId', 'x-userId', 'userId', 'custom1', 'X-custom1']) || null;
+  const userId =
+    firstString(body, ['X-userId', 'x-userId', 'userId', 'custom1', 'X-custom1']) || null;
 
-    const subscriptionId =
-      firstString(body, [
-        'subscriptionId',
-        'subscription_id',
-        'subscriptionId',
-        'transactionId',
-      ]) || null;
+  const subscriptionId =
+    firstString(body, ['subscriptionId', 'subscription_id', 'transactionId']) || null;
 
-    const customerId =
-      firstString(body, ['clientAccnum', 'customerId', 'consumerId']) || null;
+  const customerId =
+    firstString(body, ['clientAccnum', 'customerId', 'consumerId']) || null;
 
-    const nextRenewal =
-      firstString(body, ['nextRenewalDate', 'renewalDate', 'expirationDate']) || null;
+  const nextRenewal =
+    firstString(body, ['nextRenewalDate', 'renewalDate', 'expirationDate']) || null;
 
-    const periodEnd = nextRenewal ? new Date(nextRenewal) : null;
+  const periodEnd = nextRenewal ? new Date(nextRenewal) : null;
 
-    const raw: Record<string, string> = {};
+  const raw: Record<string, string> = {};
     for (const [key, value] of Object.entries(body)) {
       if (typeof value === 'string') raw[key] = value;
     }
 
-    return {
-      eventType,
-      userId,
-      subscriptionId,
-      customerId,
-      periodEnd: periodEnd && !Number.isNaN(periodEnd.getTime()) ? periodEnd : null,
-      raw,
-    };
+  return {
+    eventType,
+    eventId: extractProviderEventId(eventType, raw),
+    userId,
+    subscriptionId,
+    customerId,
+    periodEnd: periodEnd && !Number.isNaN(periodEnd.getTime()) ? periodEnd : null,
+    occurredAt: extractOccurredAt(raw),
+    raw,
+  };
   },
 
-  verifyWebhook(body: Record<string, unknown>): boolean {
-    const secret = process.env.CCBILL_WEBHOOK_SECRET;
-    if (!secret) return true;
+  /**
+     * Verifies webhook authenticity. Fails closed by default:
+   *
+     * - If CCBILL_WEBHOOK_SECRET is not configured, the request is REJECTED
+   *   in every environment, including local and dev, unless an operator
+   *   has explicitly opted into an insecure local bypass with
+   *   CCBILL_ALLOW_UNVERIFIED_WEBHOOKS_DEV=true. That bypass is ignored
+   *   whenever NODE_ENV is 'production', so it can never take effect in
+   *   production regardless of how the flag is set.
+   * - If the secret is configured, the value CCBill sends is compared to
+   *   it with a constant-time comparison instead of `===`.
+   *
+     * ASSUMPTION / RISK: the exact field CCBill uses to carry this shared
+   * value (webhookSecret / X-webhookSecret / digest) reflects the merchant
+   * configuration already in use before this change. This should be
+   * reconfirmed against CCBill's current webhook and DataLink signing
+   * documentation. See issue #48 for the open follow-up.
+   */
+  verifyWebhook(body: Record<string, unknown>): CCBillWebhookVerification {
+    const secret = process.env.CCBILL_WEBHOOK_SECRET?.trim();
 
-    const provided =
-      firstString(body, ['webhookSecret', 'X-webhookSecret', 'digest']) || '';
-    return provided === secret;
+  if (!secret) {
+    const devBypass =
+      !isProduction() && process.env.CCBILL_ALLOW_UNVERIFIED_WEBHOOKS_DEV === 'true';
+    if (devBypass) {
+      console.warn(
+        '[ccbill] CCBILL_WEBHOOK_SECRET is unset; accepting webhook unverified because ' +
+        'CCBILL_ALLOW_UNVERIFIED_WEBHOOKS_DEV=true and NODE_ENV is not production. ' +
+        'This must never be enabled in production.',
+        );
+      return { ok: true, reason: 'insecure_dev_bypass' };
+    }
+    return { ok: false, reason: 'webhook_secret_not_configured' };
+  }
+
+  const provided = firstString(body, ['webhookSecret', 'X-webhookSecret', 'digest']) || '';
+    if (!provided || !timingSafeEqual(provided, secret)) {
+      return { ok: false, reason: 'signature_mismatch' };
+    }
+    return { ok: true };
   },
 };
