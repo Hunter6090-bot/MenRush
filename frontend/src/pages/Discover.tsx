@@ -1335,14 +1335,14 @@ export const Discover = () => {
           existing.spot.name !== spot.name ||
           existing.spot.category_icon !== spot.category_icon
         ) {
-          existing.root.render(<HotSpotPin spot={pinData} size={36} />);
+          existing.root.render(<HotSpotPin spot={pinData} size={40} />);
         }
         existing.spot = spot;
         return;
       }
 
       // Opens the in-map sheet (no navigation away) — see #67 acceptance criteria.
-      const { element, root } = createHotSpotPinElement(pinData, () => setSelectedHotSpot(spot), 36);
+      const { element, root } = createHotSpotPinElement(pinData, () => setSelectedHotSpot(spot), 40);
       const marker = new mapboxgl.Marker({ element, anchor: 'center' })
         .setLngLat(lngLat)
         .addTo(map);
@@ -1980,7 +1980,10 @@ export const Discover = () => {
             ) : null}
           </div>
         </div>
+      </div>
+      )}
 
+      {!needsLocationGate ? (
         <PulseFab
           isPulsing={!!pulseUntil}
           pulseExpiresAt={pulseUntil ? pulseUntil.toISOString() : undefined}
@@ -1989,8 +1992,7 @@ export const Discover = () => {
           onStartPulse={handleStartPulse}
           onStopPulse={handleStopPulse}
         />
-      </div>
-      )}
+      ) : null}
 
       <ProfileDrawer
         user={selectedUser}
