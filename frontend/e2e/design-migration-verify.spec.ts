@@ -31,6 +31,8 @@ async function authenticate(context: BrowserContext, result: LoginResult) {
   await context.addInitScript(({ token, user }) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
+    // Nord-style sidebar defaults collapsed — expand so shell labels are visible in desktop tests.
+    localStorage.setItem('menrush_desktop_sidebar_expanded', '1');
   }, result);
 }
 
@@ -60,7 +62,7 @@ test.describe('desktop design migration @ 1440px', () => {
     await page.goto('/discover');
 
     await expect(page.getByText('MENRUSH').first()).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Nearby' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Nearby', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Nearby', exact: true })).toBeVisible();
     await expect(page.getByText(/in your radius/i).first()).toBeVisible();
     await expect(page.getByRole('button', { name: /Toggle pulse visibility/i })).toBeVisible();
@@ -133,7 +135,7 @@ test.describe('mobile design migration @ 390px', () => {
     const page = await ctx.newPage();
     await page.goto('/discover');
 
-    await expect(page.getByTestId('nearby-counts')).toBeVisible();
+    await expect(page.getByTestId('discover-map-panel').getByTestId('nearby-counts')).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
 
     await assertNoHorizontalOverflow(page);

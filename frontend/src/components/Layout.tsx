@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { usersAPI } from '../api/client';
+import { authAPI, usersAPI } from '../api/client';
 import { useAuthStore, useNotificationStore, useUnreadStore } from '../hooks/store';
 import { UserAvatar } from './UserAvatar';
 import { mobileBackFallback, shouldShowMobileBack } from '../lib/mobileBack';
@@ -15,6 +15,7 @@ import { DiscoveryShellProvider, useDiscoveryShell } from '../context/DiscoveryS
 import { LocationPresenceStrip } from './LocationPresenceStrip';
 import { ProfileDepthStrip } from './ProfileDepthStrip';
 import { ThemeToggle } from './ThemeToggle';
+import { BetaFeedbackPrompt } from './BetaFeedbackPrompt';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -47,7 +48,7 @@ function badgeFor(
 }
 
 function LayoutInner({ children }: LayoutProps) {
-  const { user, logout } = useAuthStore();
+  const { user, refreshToken, logout } = useAuthStore();
   const unreadCount = useUnreadStore((s) => s.count);
   const notificationUnread = useNotificationStore((s) => s.unreadCount);
   const location = useLocation();
@@ -88,6 +89,7 @@ function LayoutInner({ children }: LayoutProps) {
   }, [location.pathname]);
 
   const handleLogout = () => {
+    void authAPI.logout(refreshToken).catch(() => undefined);
     logout();
     navigate('/login');
   };
@@ -163,7 +165,10 @@ function LayoutInner({ children }: LayoutProps) {
                 <span className="relative inline-flex shrink-0">
                   <item.Icon size={22} />
                   {badge > 0 ? (
-                    <span className="absolute -right-2 -top-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-nn-copper px-1 text-[10px] font-bold text-nn-on-copper">
+                    <span
+                      data-testid={`badge-${item.to.replace(/\//g, '')}`}
+                      className="absolute -right-2 -top-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-nn-copper px-1 text-[10px] font-bold text-nn-on-copper"
+                    >
                       {badge > 99 ? '99+' : badge}
                     </span>
                   ) : null}
@@ -249,6 +254,7 @@ function LayoutInner({ children }: LayoutProps) {
                 />
               </Link>
             </div>
+            <BetaFeedbackPrompt />
           </div>
         </header>
 
