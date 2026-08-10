@@ -32,12 +32,13 @@ Unlike traditional dating apps that rely on swiping and delayed interactions, Me
 
 ## Current Status
 
-MenRush is in **pre-launch**. Landing page is live at **menrush.com** (Vercel), featuring:
-- Countdown to October 1, 2026 launch
-- Email waitlist (Formspree)
-- Rotating slideshow of imagery
+MenRush is in **open beta**. The full app is live and deployed as of 30 July 2026 (commit `441e36d`).
 
-The full app is not yet deployed. `App.tsx` currently renders only `<ComingSoon />`.
+- **Frontend** (Vercel): Full React app with 30+ routes — Discover, Register, Login, Profile, Messaging, Rooms, Video, Premium, Settings, Events, HotSpots, Verification, BrightonPride campaign, and legal pages. `<ComingSoon />` is still the public-facing homepage at `/` but the full authenticated app is accessible and in use.
+- **Backend** (Railway): Express + Socket.IO, connected to PostgreSQL/PostGIS on Railway.
+- **Launch date**: 1 October 2026.
+
+> ⚠️ The "pre-launch / ComingSoon only" language below this section in older versions of this file was stale as of ~21 July. The app shipped iteratively via Cursor and Codex commits. If you see a contradiction between CLAUDE.md and the actual code, trust the code and update this file.
 
 ---
 
