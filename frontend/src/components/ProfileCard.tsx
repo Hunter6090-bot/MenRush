@@ -7,7 +7,9 @@ import { IconMatches } from './icons';
 import { usersAPI } from '../api/client';
 import { VerifiedBadge } from './VerifiedBadge';
 import { MoodBadge } from './MoodPicker';
+import { UserStatusBadge } from './UserStatusPicker';
 import { getDistanceLabel, isUserPulsing } from '../lib/discovery';
+import type { UserStatus } from '../lib/userStatus';
 
 export interface NearbyUser {
   id: string;
@@ -33,6 +35,9 @@ export interface NearbyUser {
   pulse_expires_at?: string | null;
   /** Active mood (auto-expires after 6h server-side; null when unset/expired). */
   mood?: import('../api/client').Mood | null;
+  /** MenRush Status (§25) — independent of Pulse/Mood. */
+  status?: UserStatus | null;
+  status_expires_at?: string | null;
 }
 
 interface ProfileCardProps {
@@ -181,6 +186,12 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           <p className="text-[11px] font-semibold text-[#E0A14A] mb-1" data-testid="card-looking-for">
             Looking for: {user.looking_for}
           </p>
+        ) : null}
+
+        {user.status ? (
+          <div className="mb-1.5">
+            <UserStatusBadge status={user.status} small />
+          </div>
         ) : null}
 
         {user.mood ? (

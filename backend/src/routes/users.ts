@@ -14,6 +14,7 @@ import {
   decideProfilePhotoModeration,
   faceMatchService,
 } from '../services/verification/face-match.service';
+import { premiumService, PremiumRequiredError } from '../services/premium.service';
 
 const router = Router();
 const uploadsDir = path.resolve(__dirname, '../../uploads/profiles');
@@ -174,7 +175,7 @@ router.get('/search', verifiedMiddleware, async (req: AuthRequest, res: Response
 
 router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { radius, minAge, maxAge, interests, onlyPulse, lookingFor, mood } = req.query;
+    const { radius, minAge, maxAge, interests, onlyPulse, lookingFor, mood, status } = req.query;
     const requestedRadius = radius ? Number.parseFloat(radius as string) : 5;
     if (!Number.isFinite(requestedRadius)) {
       return res.status(400).json({ error: 'Invalid radius' });
@@ -187,6 +188,7 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
       onlyPulse: onlyPulse === 'true' || onlyPulse === '1',
       lookingFor: typeof lookingFor === 'string' ? lookingFor : undefined,
       mood: typeof mood === 'string' ? mood : undefined,
+      status: typeof status === 'string' ? status : undefined,
     };
 
     const queryLat = typeof req.query.lat === 'string' ? Number.parseFloat(req.query.lat) : NaN;
@@ -495,6 +497,47 @@ router.patch('/reports/:id', async (req: AuthRequest, res: Response) => {
     res.json(updated);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+const ProfileNoteSchema = z.object({
+  note: z.string().max(2000),
+});
+
+router.get('/profile/:id/note', async (req: AuthRequest, res: Response) => {
+  try {
+    await premiumService.requireFeature(req.userId!, 'profile_notes');
+    const note = await userService.getProfilePrivateNote(req.userId!, req.params.id);
+    res.json({ note });
+  } catch (error: unknown) {
+    if (error instanceof PremiumRequiredError) {
+      return res.status(402).json({ error: error.message, code: error.code, feature: error.feature });
+    }
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+router.put('/profile/:id/note', async (req: AuthRequest, res: Response) => {
+  try {
+    await premiumService.requireFeature(req.userId!, 'profile_notes');
+    const parsed = ProfileNoteSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0]?.message ?? 'Invalid note' });
+    }
+    if (req.params.id === req.userId) {
+      return res.status(400).json({ error: 'Cannot save a note on your own profile' });
+    }
+    const note = await userService.setProfilePrivateNote(
+      req.userId!,
+      req.params.id,
+      parsed.data.note,
+    );
+    res.json({ note });
+  } catch (error: unknown) {
+    if (error instanceof PremiumRequiredError) {
+      return res.status(402).json({ error: error.message, code: error.code, feature: error.feature });
+    }
+    res.status(500).json({ error: (error as Error).message });
   }
 });
 

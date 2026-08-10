@@ -37,6 +37,8 @@
   --nn-warning:   #D4A24C;
   --nn-danger:    #B0432E;
   --nn-verified:  #C4832A;
+  --nn-success-bg: rgba(22, 163, 74, 0.14);
+  --nn-success-text: #86EFAC;
 
   --nn-fg-1: var(--nn-text);
   --nn-fg-2: var(--nn-muted);
@@ -189,6 +191,8 @@ html.theme-light {
   --nn-online: #3D7A2E;
   --nn-warning: #B8860B;
   --nn-danger: #9B3A28;
+  --nn-success-bg: rgba(61, 122, 46, 0.12);
+  --nn-success-text: #1F4D12;
 
   --bg-primary: var(--nn-bg);
   --bg-elevated: var(--nn-elevated);
@@ -250,7 +254,15 @@ html.theme-light {
 }
 .nn-mono { font: var(--nn-mono-type); color: var(--nn-muted); }
 
-/* Radar pulse — brand signature */
+html[data-theme='light'] .hotspot-pin[data-occupied='0'] {
+  opacity: 0.88;
+  filter: saturate(0.92) contrast(1.12);
+}
+
+html[data-theme='light'] .hotspot-pin__disc {
+  box-shadow: 0 0 12px rgba(184, 115, 42, 0.55), 0 2px 8px rgba(60, 40, 10, 0.28) !important;
+}
+
 @keyframes nn-radar {
   0%   { transform: scale(1);   opacity: 0.6; }
   100% { transform: scale(3.5); opacity: 0;   }
