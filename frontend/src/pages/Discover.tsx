@@ -6,6 +6,7 @@ import { useLocationStore, useAuthStore } from '../hooks/store';
 import { NearbyUser } from '../components/ProfileCard';
 import { Layout } from '../components/Layout';
 import { PulseFab } from '../components/PulseFab';
+import { DiscoverChatDock, readDockOpen } from '../components/DiscoverChatDock';
 import { MoodPicker } from '../components/MoodPicker';
 import {
   DEFAULT_RADIUS_KM,
@@ -317,6 +318,7 @@ export const Discover = () => {
   });
   const [mapPanelMode, setMapPanelMode] = useState<MapPanelMode>(() => readMapPanelMode());
   const [desktopMapExpanded, setDesktopMapExpanded] = useState(readDesktopMapExpanded);
+  const [chatDockOpen, setChatDockOpen] = useState(readDockOpen);
   const mapDragRef = useRef<{ startY: number; mode: MapPanelMode } | null>(null);
   const [discoveryFilters, setDiscoveryFilters] = useState<DiscoveryFilterState>(DEFAULT_DISCOVERY_FILTERS);
   const [pulseUntil, setPulseUntil] = useState<Date | null>(null);
@@ -1666,6 +1668,7 @@ export const Discover = () => {
             onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
             onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
           />
+          <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {!needsLocationGate ? (
@@ -1760,6 +1763,9 @@ export const Discover = () => {
               onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
               onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
             />
+          ) : null}
+          {mapPanelMode !== 'hidden' ? (
+            <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
           ) : null}
 
           {/* Drag handle — pill only; no instructional clutter */}

@@ -551,21 +551,53 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
               </div>
             )}
 
-            <button
-              onClick={async () => {
-                if (!roomId) return;
-                try {
-                  await roomsAPI.leaveRoom(roomId);
-                  navigate('/rooms');
-                } catch {
-                  // ignore
-                }
-              }}
-              className="w-full px-4 py-3 text-sm text-left transition-all duration-150 hover:bg-[var(--border-default)]/50"
-              style={{ color: '#EF4444' }}
-            >
-              Leave Room
-            </button>
+            {isOwner ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!roomId) return;
+                  const ok = window.confirm(
+                    'Delete this group for everyone? This cannot be undone.',
+                  );
+                  if (!ok) return;
+                  try {
+                    await roomsAPI.deleteRoom(roomId);
+                    navigate('/rooms');
+                  } catch (err: unknown) {
+                    setSettingsNotice(
+                      (err as { response?: { data?: { error?: string } } })?.response?.data
+                        ?.error || 'Could not delete group.',
+                    );
+                  }
+                }}
+                className="w-full px-4 py-3 text-sm text-left transition-all duration-150 hover:bg-[var(--border-default)]/50"
+                style={{ color: '#EF4444' }}
+                data-testid="delete-group-button"
+              >
+                Delete group
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!roomId) return;
+                  try {
+                    await roomsAPI.leaveRoom(roomId);
+                    navigate('/rooms');
+                  } catch (err: unknown) {
+                    setSettingsNotice(
+                      (err as { response?: { data?: { error?: string } } })?.response?.data
+                        ?.error || 'Could not leave room.',
+                    );
+                  }
+                }}
+                className="w-full px-4 py-3 text-sm text-left transition-all duration-150 hover:bg-[var(--border-default)]/50"
+                style={{ color: '#EF4444' }}
+                data-testid="leave-group-button"
+              >
+                Leave Room
+              </button>
+            )}
           </div>
         </div>
       )}

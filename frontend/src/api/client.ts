@@ -386,6 +386,7 @@ export const roomsAPI = {
     apiClient.post(`/rooms/${roomId}/members`, { user_id: userId }),
   joinRoom: (roomId: string) => apiClient.post(`/rooms/${roomId}/join`),
   leaveRoom: (roomId: string) => apiClient.post(`/rooms/${roomId}/leave`),
+  deleteRoom: (roomId: string) => apiClient.delete(`/rooms/${roomId}`),
   getMessages: (roomId: string, before?: string) =>
     apiClient.get(`/rooms/${roomId}/messages`, { params: { before } }),
   sendMessage: (roomId: string, message: string, replyTo?: string) =>
