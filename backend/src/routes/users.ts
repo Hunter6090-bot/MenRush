@@ -10,9 +10,11 @@ import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/a
 import { SecurityError } from '../security/access';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
 import { LocationSchema, ProfileSchema } from '../types/validation';
+import { getUploadSubdir } from '../lib/uploads-root';
+import { finalizeLocalUpload } from '../services/media-storage.service';
 
 const router = Router();
-const uploadsDir = path.resolve(__dirname, '../../uploads/profiles');
+const uploadsDir = getUploadSubdir('profiles');
 
 fs.mkdirSync(uploadsDir, { recursive: true });
 
@@ -67,8 +69,8 @@ router.post('/photo', verifiedMiddleware, upload.single('photo'), async (req: Au
       return res.status(400).json({ error: 'File content does not match its type' });
     }
 
-    const photo_url = `/uploads/profiles/${req.file.filename}`;
-    const user = await userService.updateProfile(req.userId!, { photo_url });
+    const stored = await finalizeLocalUpload('profiles', req.file.filename, req.file.path);
+    const user = await userService.updateProfile(req.userId!, { photo_url: stored.publicUrl });
     
     res.json(user);
   } catch (error: any) {
@@ -86,8 +88,8 @@ router.post('/cover', verifiedMiddleware, uploadCover.single('cover'), async (re
       return res.status(400).json({ error: 'File content does not match its type' });
     }
 
-    const cover_url = `/uploads/profiles/${req.file.filename}`;
-    const user = await userService.updateProfile(req.userId!, { cover_url });
+    const stored = await finalizeLocalUpload('profiles', req.file.filename, req.file.path);
+    const user = await userService.updateProfile(req.userId!, { cover_url: stored.publicUrl });
 
     res.json(user);
   } catch (error: any) {

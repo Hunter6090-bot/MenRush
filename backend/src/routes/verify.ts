@@ -17,6 +17,7 @@ import {
 } from '../services/verification/id-precheck.service';
 import { authenticityService } from '../services/verification/authenticity.service';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
+import { getUploadSubdir } from '../lib/uploads-root';
 
 const PRECHECK_TEMPLATES = new Set<IdPrecheckTemplate>([
   'passport',
@@ -25,7 +26,7 @@ const PRECHECK_TEMPLATES = new Set<IdPrecheckTemplate>([
 ]);
 
 const router = Router();
-const verificationDir = path.resolve(__dirname, '../../uploads/verification');
+const verificationDir = getUploadSubdir('verification');
 fs.mkdirSync(verificationDir, { recursive: true });
 
 const upload = multer({

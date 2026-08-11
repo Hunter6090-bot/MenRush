@@ -1666,6 +1666,19 @@ export const Discover = () => {
             onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
             onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
           />
+          {!needsLocationGate && !tokenMissing ? (
+            <p
+              className="pointer-events-none absolute bottom-2 left-1/2 z-[4] max-w-[90%] -translate-x-1/2 rounded-full px-3 py-1 text-center text-[10px] font-medium leading-snug"
+              style={{
+                background: 'rgba(13,10,6,0.72)',
+                color: 'rgba(240,224,192,0.72)',
+                border: '1px solid rgba(196,131,42,0.22)',
+              }}
+              data-testid="map-privacy-note"
+            >
+              Map pins are approximate (~100–300 m) for privacy
+            </p>
+          ) : null}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {!needsLocationGate ? (
@@ -1760,6 +1773,21 @@ export const Discover = () => {
               onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
               onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
             />
+          ) : null}
+
+          {mapPanelMode !== 'hidden' && !needsLocationGate && !tokenMissing ? (
+            <p
+              className="pointer-events-none absolute left-1/2 z-[4] max-w-[92%] -translate-x-1/2 rounded-full px-3 py-1 text-center text-[10px] font-medium leading-snug"
+              style={{
+                bottom: mapPanelMode === 'expanded' ? 16 : 36,
+                background: 'rgba(13,10,6,0.72)',
+                color: 'rgba(240,224,192,0.72)',
+                border: '1px solid rgba(196,131,42,0.22)',
+              }}
+              data-testid="map-privacy-note"
+            >
+              Pins approximate (~100–300 m) for privacy
+            </p>
           ) : null}
 
           {/* Drag handle — pill only; no instructional clutter */}

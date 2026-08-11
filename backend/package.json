@@ -18,6 +18,7 @@
     "test:security": "ts-node scripts/security-checks.ts",
     "test:push": "ts-node scripts/test-push.ts",
     "test:features": "bash ../test-features.sh",
+    "test:smoke": "node ../scripts/smoke-critical-path.mjs",
     "predeploy": "npm run build && bash ../test-features.sh",
     "audit:safety": "bash ../scripts/audit-safety.sh"
   },
