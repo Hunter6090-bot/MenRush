@@ -28,6 +28,7 @@ import betaRoutes from './routes/beta';
 import adminRoutes from './routes/admin.routes';
 import campaignRoutes from './routes/campaigns';
 import socialRoutes from './routes/social';
+import mapFeedRoutes from './routes/map-feed';
 import { startPulseExpiryCron } from './services/pulse.service';
 import {
   hasWelcomeBeenSent,
@@ -119,6 +120,7 @@ app.use('/api/beta', betaRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/social', socialRoutes);
+app.use('/api/map-feed', mapFeedRoutes);
 
 // Waitlist signup — POSTs to /api/waitlist land here; the dripRoutes router
 // handles the rest (unsubscribe + admin endpoints). New signups get the
@@ -169,6 +171,7 @@ app.get('/api/healthz', healthHandler);
 // Socket.IO
 const userSockets: Map<string, string> = new Map(); // userId → socketId
 const socketToUser: Map<string, string> = new Map(); // socketId → userId
+app.set('userSockets', userSockets);
 
 interface PendingCall {
   callerId: string;
