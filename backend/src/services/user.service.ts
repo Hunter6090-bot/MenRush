@@ -3,6 +3,7 @@ import { query } from '../db';
 import { defaultGenericAvatarUrl } from '../lib/genericAvatar';
 import { accessControl } from '../security/access';
 import { ProfileInput } from '../types/validation';
+import { premiumService } from './premium.service';
 
 /**
  * Privacy fuzz for map pins: keep people near where they actually are, with a
@@ -289,7 +290,19 @@ export const userService = {
        WHERE u.id = $1`,
       [userId]
     );
-    return result.rows[0];
+    const row = result.rows[0];
+    if (!row) return row;
+
+    // Overlay beta / subscription entitlement so the client does not treat
+    // raw users.is_premium=false as "locked" while Premium is free in beta.
+    const status = await premiumService.getStatus(userId);
+    if (status) {
+      row.is_premium = status.is_premium;
+      row.premium_tier = status.tier;
+      row.premium_until = status.premium_until;
+      row.beta_premium_included = status.beta_premium_included;
+    }
+    return row;
   },
 
   async getPublicProfile(viewerId: string, targetId: string) {

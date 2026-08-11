@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { messagesAPI, roomsAPI, usersAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
+import { isBetaPremiumFree } from '../lib/betaInvite';
 
 interface Candidate {
   id: string;
@@ -17,7 +18,9 @@ interface CreateGroupModalProps {
 
 export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalProps) {
   const navigate = useNavigate();
-  const isPremium = useAuthStore((s) => Boolean(s.user?.is_premium));
+  const isPremium = useAuthStore((s) =>
+    Boolean(isBetaPremiumFree() || s.user?.is_premium || s.user?.beta_premium_included),
+  );
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [candidates, setCandidates] = useState<Candidate[]>([]);
