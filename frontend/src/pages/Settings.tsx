@@ -16,6 +16,8 @@ import {
   type ThemePreference,
 } from '../lib/theme';
 import { clearDeviceTrustToken } from '../lib/deviceTrust';
+import { isGenericAvatarUrl } from '../lib/genericAvatar';
+import { profileCompletionScore } from '../lib/profileDetails';
 
 const RADIUS_KEY = 'menrush_default_radius_km';
 
@@ -87,6 +89,15 @@ export const Settings = () => {
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportBusyId, setReportBusyId] = useState<string | null>(null);
 
+  const [completion, setCompletion] = useState<{ score: number; total: number; missing: string[] } | null>(
+    null,
+  );
+  const [showDelete, setShowDelete] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
   const refreshBlocked = useCallback(() => {
     setBlockedLoading(true);
     usersAPI
@@ -114,6 +125,26 @@ export const Settings = () => {
         const ready = Number.isFinite(lat) && Number.isFinite(lng);
         setHasPin(ready);
         if (ready) setLocation(lat, lng);
+
+        const photo = res.data?.photo_url as string | undefined;
+        setCompletion(
+          profileCompletionScore({
+            name: res.data?.name,
+            date_of_birth: res.data?.date_of_birth
+              ? String(res.data.date_of_birth).slice(0, 10)
+              : null,
+            age: res.data?.age,
+            bio: res.data?.bio,
+            headline: res.data?.headline,
+            looking_for: res.data?.looking_for,
+            photo_url: isGenericAvatarUrl(photo) ? null : photo,
+            interests: res.data?.interests,
+            height_cm: res.data?.height_cm,
+            weight_kg: res.data?.weight_kg,
+            relationship_status: res.data?.relationship_status,
+            hosting_status: res.data?.hosting_status,
+          }),
+        );
       })
       .catch(() => setHasPin(null));
 
@@ -276,6 +307,36 @@ export const Settings = () => {
     navigate('/login');
   };
 
+  const handleDeleteAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDeleteError('');
+    if (deleteConfirm !== 'DELETE') {
+      setDeleteError('Type DELETE to confirm.');
+      return;
+    }
+    if (!deletePassword) {
+      setDeleteError('Enter your current password.');
+      return;
+    }
+    setDeleteBusy(true);
+    try {
+      await authAPI.deleteAccount({
+        current_password: deletePassword,
+        confirmation: 'DELETE',
+      });
+      clearDeviceTrustToken();
+      logout();
+      navigate('/login', { replace: true });
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+        'Could not delete account.';
+      setDeleteError(msg);
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
   const handleUnblock = async (userId: string, name: string) => {
     setUnblockingId(userId);
     setUnblockNotice(null);
@@ -331,6 +392,48 @@ export const Settings = () => {
         </p>
 
         <div className="space-y-2.5">
+          <SectionLabel>Profile</SectionLabel>
+
+          <section className="mr-card p-4" data-testid="settings-profile-completion">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[15px] font-bold text-[var(--cream)]">Complete your profile</p>
+                <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
+                  Name, date of birth, height, looking for, tags, hosting, and the rest —
+                  edit everything after signup.
+                </p>
+                {completion ? (
+                  <p className="mt-2 text-[12px] font-semibold text-[var(--cream-soft)]">
+                    {completion.score}/{completion.total} profile essentials filled
+                    {completion.missing.length > 0
+                      ? ` · Missing: ${completion.missing.slice(0, 3).join(', ')}${
+                          completion.missing.length > 3 ? '…' : ''
+                        }`
+                      : ' · Looking sharp'}
+                  </p>
+                ) : null}
+              </div>
+              <Link
+                to="/profile"
+                className="shrink-0 rounded-full border border-[rgba(196,131,42,0.4)] px-3.5 py-1.5 text-[12px] font-extrabold uppercase tracking-wide text-[#E0A14A] transition-colors hover:border-[var(--copper)] hover:bg-[rgba(196,131,42,0.1)]"
+              >
+                Edit
+              </Link>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
+              <div
+                className="h-full rounded-full bg-[#C4832A] transition-all"
+                style={{
+                  width: `${
+                    completion && completion.total > 0
+                      ? Math.round((completion.score / completion.total) * 100)
+                      : 0
+                  }%`,
+                }}
+              />
+            </div>
+          </section>
+
           <SectionLabel>Account</SectionLabel>
 
           <section className="mr-card p-4" data-testid="settings-email">
@@ -792,6 +895,85 @@ export const Settings = () => {
             <p className="text-[15px] font-bold text-[var(--cream)]">{ROUTE_LABELS.profile} & Premium</p>
             <p className="mt-1 text-[13px] text-[var(--cream-muted)]">Manage subscription and profile editing.</p>
           </Link>
+
+          <section className="mr-card p-4" data-testid="settings-delete-account">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[15px] font-bold text-[var(--cream)]">Delete account</p>
+                <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
+                  Permanently remove your profile, messages, and likes. This cannot be undone.
+                </p>
+              </div>
+              {!showDelete ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDelete(true);
+                    setDeleteError('');
+                    setDeletePassword('');
+                    setDeleteConfirm('');
+                  }}
+                  className="shrink-0 rounded-full border border-[#B0432E]/50 px-3.5 py-1.5 text-[12px] font-extrabold uppercase tracking-wide text-[#B0432E] transition-colors hover:bg-[rgba(176,67,46,0.1)]"
+                >
+                  Delete
+                </button>
+              ) : null}
+            </div>
+
+            {showDelete ? (
+              <form onSubmit={(e) => void handleDeleteAccount(e)} className="mt-4 space-y-3">
+                <div>
+                  <label htmlFor="settings-delete-password" className="mb-1.5 block text-[12px] font-semibold text-[var(--cream-muted)]">
+                    Current password
+                  </label>
+                  <PasswordInput
+                    id="settings-delete-password"
+                    value={deletePassword}
+                    onChange={setDeletePassword}
+                    autoComplete="current-password"
+                    className={fieldClass}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="settings-delete-confirm" className="mb-1.5 block text-[12px] font-semibold text-[var(--cream-muted)]">
+                    Type DELETE to confirm
+                  </label>
+                  <input
+                    id="settings-delete-confirm"
+                    type="text"
+                    value={deleteConfirm}
+                    onChange={(e) => setDeleteConfirm(e.target.value)}
+                    className={fieldClass}
+                    autoComplete="off"
+                    placeholder="DELETE"
+                  />
+                </div>
+                {deleteError ? <p className="text-[13px] text-[#E0A14A]">{deleteError}</p> : null}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button
+                    type="submit"
+                    disabled={deleteBusy}
+                    className="rounded-full bg-[#B0432E] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-white transition-colors hover:bg-[#C4533E] disabled:opacity-60"
+                  >
+                    {deleteBusy ? 'Deleting…' : 'Delete forever'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deleteBusy}
+                    onClick={() => {
+                      setShowDelete(false);
+                      setDeletePassword('');
+                      setDeleteConfirm('');
+                      setDeleteError('');
+                    }}
+                    className="rounded-full border border-[var(--border-default)] px-4 py-2 text-[12px] font-bold text-[var(--cream-muted)] transition-colors hover:border-[var(--cream-muted)] disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : null}
+          </section>
 
           <button
             type="button"
