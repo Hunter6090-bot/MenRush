@@ -288,4 +288,162 @@ router.get('/reports', async (req: Request, res: Response) => {
   }
 });
 
+// ── Ops: media health, verify user, test pair, delete test user ──────────────
+
+router.get('/media/health', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const { probeUploadsWritable, getUploadsRoot } = await import('../lib/uploads-root');
+    const { mediaStorageMode } = await import('../services/media-storage.service');
+    const probe = await probeUploadsWritable();
+    return res.json({
+      ok: probe.ok,
+      root: probe.root || getUploadsRoot(),
+      storage: mediaStorageMode(),
+      error: probe.error ?? null,
+    });
+  } catch (err) {
+    console.error('[admin] media health error:', err);
+    return res.status(500).json({ error: 'media_health_failed' });
+  }
+});
+
+const VerifyUserBodySchema = z.object({
+  email: z.string().email(),
+  verified: z.boolean().default(true),
+});
+
+router.post('/users/verify', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const parsed = VerifyUserBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: 'validation_error' });
+  try {
+    const { query } = await import('../db');
+    const email = parsed.data.email.trim().toLowerCase();
+    const verified = parsed.data.verified;
+    const result = await query(
+      `UPDATE users SET
+         is_verified = $2,
+         verification_status = $3,
+         verified_at = CASE WHEN $2 THEN COALESCE(verified_at, NOW()) ELSE NULL END,
+         age_assurance_status = CASE WHEN $2 THEN 'confirmed' ELSE age_assurance_status END,
+         age_assured_at = CASE WHEN $2 THEN COALESCE(age_assured_at, NOW()) ELSE age_assured_at END,
+         authenticity_status = CASE WHEN $2 THEN 'verified' ELSE authenticity_status END
+       WHERE LOWER(email) = $1
+       RETURNING id, email, name, is_verified, verification_status`,
+      [email, verified, verified ? 'verified' : 'unverified'],
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'user_not_found' });
+    return res.json({ ok: true, user: result.rows[0] });
+  } catch (err) {
+    console.error('[admin] users/verify error:', err);
+    return res.status(500).json({ error: 'verify_user_failed' });
+  }
+});
+
+const TestPairBodySchema = z.object({
+  email_a: z.string().email().optional(),
+  email_b: z.string().email().optional(),
+  password: z.string().min(6).max(72).default('test1234'),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
+});
+
+router.post('/users/test-pair', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const parsed = TestPairBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: 'validation_error' });
+  try {
+    const { query } = await import('../db');
+    const bcrypt = await import('bcryptjs');
+    const { randomUUID } = await import('crypto');
+    const password = parsed.data.password;
+    const hash = await bcrypt.hash(password, 10);
+    const stamp = Date.now().toString(36);
+    const aEmail = (parsed.data.email_a || `call-a-${stamp}@menrush.test`).toLowerCase();
+    const bEmail = (parsed.data.email_b || `call-b-${stamp}@menrush.test`).toLowerCase();
+    const lat = parsed.data.lat ?? 50.8752;
+    const lng = parsed.data.lng ?? -1.268;
+    const accounts = [
+      { email: aEmail, name: 'Call A', lat, lng: lng, photo: '/avatars/generic/01.svg' },
+      { email: bEmail, name: 'Call B', lat: lat + 0.0004, lng: lng + 0.0003, photo: '/avatars/generic/05.svg' },
+    ];
+    const ids: string[] = [];
+    for (const a of accounts) {
+      const id = randomUUID();
+      await query(
+        `INSERT INTO users (
+           id, email, password_hash, name, age,
+           is_verified, verification_status, verified_at,
+           authenticity_status, authenticity_verified_at,
+           age_assurance_status, age_assured_at,
+           bio, looking_for, interests, photo_url
+         ) VALUES (
+           $1,$2,$3,$4,28,true,'verified',NOW(),'verified',NOW(),'confirmed',NOW(),
+           $5,'video call testing',ARRAY['chat'],$6
+         )
+         ON CONFLICT (email) DO UPDATE SET
+           password_hash = EXCLUDED.password_hash,
+           is_verified = true,
+           verification_status = 'verified',
+           name = EXCLUDED.name,
+           photo_url = EXCLUDED.photo_url`,
+        [id, a.email, hash, a.name, 'Ops test pair for video calls.', a.photo],
+      );
+      const u = await query(`SELECT id FROM users WHERE email = $1`, [a.email]);
+      const uid = u.rows[0].id as string;
+      ids.push(uid);
+      await query(
+        `INSERT INTO profiles (user_id, lat, lng, location, online, last_seen, is_visible)
+         VALUES ($1, $2::numeric, $3::numeric,
+           ST_SetSRID(ST_MakePoint($3::float8, $2::float8), 4326)::geography,
+           true, NOW(), true)
+         ON CONFLICT (user_id) DO UPDATE SET
+           lat = EXCLUDED.lat, lng = EXCLUDED.lng, location = EXCLUDED.location,
+           online = true, last_seen = NOW(), is_visible = true`,
+        [uid, a.lat, a.lng],
+      );
+    }
+    await query(
+      `INSERT INTO likes (liker_id, liked_id) VALUES ($1,$2),($2,$1) ON CONFLICT DO NOTHING`,
+      ids,
+    );
+    return res.status(201).json({
+      ok: true,
+      password,
+      accounts: [
+        { email: aEmail, name: 'Call A', id: ids[0] },
+        { email: bEmail, name: 'Call B', id: ids[1] },
+      ],
+    });
+  } catch (err) {
+    console.error('[admin] test-pair error:', err);
+    return res.status(500).json({ error: 'test_pair_failed' });
+  }
+});
+
+router.delete('/users/test/:email', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const email = String(req.params.email || '').trim().toLowerCase();
+  if (!email.endsWith('@menrush.test') && !email.endsWith('@example.com')) {
+    return res.status(400).json({ error: 'only_test_domain_allowed' });
+  }
+  try {
+    const { query } = await import('../db');
+    const u = await query(`SELECT id FROM users WHERE LOWER(email) = $1`, [email]);
+    if (!u.rows[0]) return res.status(404).json({ error: 'user_not_found' });
+    const uid = u.rows[0].id as string;
+    await query(`DELETE FROM likes WHERE liker_id = $1 OR liked_id = $1`, [uid]);
+    await query(`DELETE FROM messages WHERE sender_id = $1 OR receiver_id = $1`, [uid]);
+    await query(`DELETE FROM blocks WHERE blocker_id = $1 OR blocked_id = $1`, [uid]);
+    await query(`DELETE FROM hot_spot_checkins WHERE user_id = $1`, [uid]).catch(() => undefined);
+    await query(`DELETE FROM profiles WHERE user_id = $1`, [uid]);
+    await query(`DELETE FROM users WHERE id = $1`, [uid]);
+    return res.json({ ok: true, deleted: email });
+  } catch (err) {
+    console.error('[admin] delete test user error:', err);
+    return res.status(500).json({ error: 'delete_test_user_failed' });
+  }
+});
+
 export default router;
