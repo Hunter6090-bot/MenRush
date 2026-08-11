@@ -53,6 +53,10 @@ export const userService = {
          AND (last_seen IS NULL OR last_seen < NOW() - INTERVAL '20 minutes')`,
     ).catch(() => undefined);
 
+    // Density: assign generic avatars so men without photos still appear on the map.
+    await this.ensureDefaultAvatar(userId).catch(() => undefined);
+    await this.backfillMissingAvatarsNear(userId).catch(() => undefined);
+
     if (clientLocation) {
       await this.updateLocation(userId, clientLocation.lat, clientLocation.lng);
     }
@@ -218,6 +222,29 @@ export const userService = {
        ON CONFLICT (user_id) DO NOTHING`,
       [userId],
     );
+  },
+
+  /**
+   * Best-effort: fill empty photo_url for users near this viewer so Discover density
+   * does not hide real accounts. Capped for latency.
+   */
+  async backfillMissingAvatarsNear(viewerId: string): Promise<void> {
+    const nearbyMissing = await query(
+      `SELECT u.id
+         FROM users u
+         JOIN profiles p ON p.user_id = u.id
+         JOIN profiles me ON me.user_id = $1
+        WHERE u.id != $1
+          AND (u.photo_url IS NULL OR TRIM(u.photo_url) = '')
+          AND me.location IS NOT NULL
+          AND p.location IS NOT NULL
+          AND ST_DWithin(p.location, me.location, 50000)
+        LIMIT 25`,
+      [viewerId],
+    );
+    for (const row of nearbyMissing.rows as Array<{ id: string }>) {
+      await this.ensureDefaultAvatar(row.id).catch(() => undefined);
+    }
   },
 
   /**

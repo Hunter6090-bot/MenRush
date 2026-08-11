@@ -361,10 +361,18 @@ export function VideoCallModal() {
   });
 
   if (callSetupError) {
+    const offline = /offline/i.test(callSetupError);
+    const insecure = /HTTPS|secure|camera and microphone/i.test(callSetupError);
+    const hint = offline
+      ? 'Ask them to open menrush.com, stay on the chat screen, then try again. A push alone cannot answer the call.'
+      : insecure
+        ? 'Open MenRush from its secure HTTPS address, then allow camera and microphone access.'
+        : 'Check your connection and try again. Both of you need the app open.';
     return (
       <div
         className="fixed inset-0 z-[200] flex items-center justify-center px-6"
         style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(16px)' }}
+        data-testid="call-setup-error"
       >
         <div
           className="w-full max-w-sm rounded-3xl p-8 text-center"
@@ -374,7 +382,7 @@ export function VideoCallModal() {
             {callSetupError}
           </h2>
           <p className="mt-3 text-sm leading-relaxed" style={{ color: '#A89070' }}>
-            Open MenRush from its secure HTTPS address, then allow camera and microphone access.
+            {hint}
           </p>
           <button
             type="button"
@@ -570,10 +578,24 @@ export function VideoCallModal() {
                   : 'Waiting for his camera…'}
             </p>
             <p className="max-w-xs text-center text-xs" style={{ color: '#A89070' }}>
-              Your camera is the small window. The main view is him.
+              Status: connecting — not live yet. Your camera is the small window.
             </p>
           </div>
         )}
+
+        {!showRemoteWaiting ? (
+          <div
+            className="pointer-events-none absolute left-1/2 top-10 z-10 -translate-x-1/2 rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide"
+            style={{
+              background: 'rgba(22,163,74,0.25)',
+              border: '1px solid rgba(34,197,94,0.45)',
+              color: '#86EFAC',
+            }}
+            data-testid="call-connected-badge"
+          >
+            Connected
+          </div>
+        ) : null}
 
         {remoteAudioBlocked && remoteRenderable ? (
           <button

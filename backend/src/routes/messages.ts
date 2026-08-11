@@ -1,7 +1,6 @@
 import { Router, Response } from 'express';
 import fs from 'fs';
 import multer from 'multer';
-import path from 'path';
 import { messageService } from '../services/message.service';
 import { sendPushToUser } from '../services/push.service';
 import { notificationService } from '../services/notification.service';
@@ -10,6 +9,7 @@ import { SecurityError } from '../security/access';
 import { resolveMediaPath, verifyMediaAccess } from '../security/media';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
 import { MessageSchema, MediaMessageFormSchema, LocationMessageSchema } from '../types/validation';
+import { getUploadSubdir } from '../lib/uploads-root';
 
 const router = Router();
 
@@ -29,7 +29,7 @@ function pushNewMessage(receiverId: string, senderName: string, senderId: string
 }
 
 // ── Multer storage for message media (images + voice notes) ──────────────
-const mediaDir = path.resolve(__dirname, '../../uploads/messages');
+const mediaDir = getUploadSubdir('messages');
 fs.mkdirSync(mediaDir, { recursive: true });
 
 const mediaUpload = multer({
