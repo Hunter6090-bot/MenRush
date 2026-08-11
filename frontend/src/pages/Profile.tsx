@@ -20,6 +20,7 @@ import { getPhotoUrl } from '../components/UserAvatar';
 import { PROFILE_TAG_GROUPS, toggleProfileInterest } from '../lib/profileTags';
 import { clearProfileSetupSkip, isProfileSetupComplete } from '../lib/profileSetup';
 import { isGenericAvatarUrl } from '../lib/genericAvatar';
+import { isBetaPremiumFree } from '../lib/betaInvite';
 import { IconSettings } from '../components/icons';
 
 interface ProfileData {
@@ -41,6 +42,7 @@ interface ProfileData {
   last_seen?: string;
   is_visible?: boolean;
   is_premium?: boolean;
+  beta_premium_included?: boolean;
   available_until?: string | null;
   created_at?: string;
 }
@@ -49,6 +51,10 @@ type Toast = { type: 'success' | 'error'; msg: string };
 
 export const Profile = () => {
   const { user, token, setAuth, patchUser, logout } = useAuthStore();
+  const betaPremiumFree = isBetaPremiumFree();
+  const authIsPremium = Boolean(
+    betaPremiumFree || user?.is_premium || user?.beta_premium_included,
+  );
   const { lat, lng, setLocation } = useLocationStore();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<ProfileData | null>(null);
@@ -96,7 +102,14 @@ export const Profile = () => {
         if (typeof d.is_visible === 'boolean') setIsVisible(d.is_visible);
         if (d.mood !== undefined) setMood(d.mood ?? null);
         if (typeof d.is_ghost === 'boolean') setIsGhost(d.is_ghost);
-        patchUser({ name: d.name, photo_url: d.photo_url ?? undefined });
+        patchUser({
+          name: d.name,
+          photo_url: d.photo_url ?? undefined,
+          is_premium: d.is_premium,
+          beta_premium_included: Boolean(
+            (d as ProfileData & { beta_premium_included?: boolean }).beta_premium_included,
+          ),
+        });
       })
       .catch((err) => {
         setProfileLoadError(err?.response?.data?.error || 'Could not load your profile.');
@@ -135,7 +148,13 @@ export const Profile = () => {
   };
 
   const handleGhost = async (next: boolean) => {
-    if (next && !profile?.is_premium) {
+    const entitled = Boolean(
+      betaPremiumFree ||
+        authIsPremium ||
+        profile?.is_premium ||
+        profile?.beta_premium_included,
+    );
+    if (next && !entitled) {
       navigate('/premium');
       return;
     }
@@ -360,86 +379,224 @@ export const Profile = () => {
         />
 
         {/* ── Desktop profile layout ── */}
-        <div className="hidden lg:grid lg:grid-cols-[300px_1fr] lg:gap-8">
-          <div>
-            <div className="relative aspect-[3/4] w-full max-w-[300px] overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]">
-              {getPhotoUrl(photoUrl) ? (
-                <img src={getPhotoUrl(photoUrl)!} alt={profile.name} className="h-full w-full object-cover" />
+        <div className="hidden lg:block space-y-6">
+          <div className="overflow-hidden rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] shadow-card">
+            <div className="group relative">
+              {coverUrl ? (
+                <CoverBanner coverUrl={coverUrl} frame={coverFrame} heightClassName="h-52" />
               ) : (
-                <div className="flex h-full items-center justify-center">
-                  <UserAvatar name={profile.name} photoUrl={profile.photo_url} size="xl" showStatus={false} />
-                </div>
-              )}
-            </div>
-            <div className="mt-3 grid max-w-[300px] grid-cols-3 gap-2">
-              {[photoUrl, coverUrl, photoUrl].filter(Boolean).slice(0, 3).map((src, i) => (
-                <div key={i} className="aspect-square overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]">
-                  {getPhotoUrl(src) ? (
-                    <img src={getPhotoUrl(src)!} alt="" className="h-full w-full object-cover" />
-                  ) : null}
-                </div>
-              ))}
-            </div>
-            {isGenericAvatarUrl(photoUrl) ? (
-              <div
-                className="mt-3 max-w-[300px] rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-3 py-3"
-                data-testid="photo-upgrade-nudge"
-              >
-                <p className="text-[12px] font-extrabold text-[var(--cream)]">Upgrade from a shared avatar</p>
-                <p className="mt-1 text-[11px] leading-relaxed text-[var(--cream-muted)]">
-                  Real photos get more matches. Upload a clear face or upper-body shot —
-                </p>
                 <button
                   type="button"
-                  disabled={uploading}
-                  onClick={() => photoInputRef.current?.click()}
-                  className="mt-2 rounded-full bg-[#C4832A] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#1A0E03] hover:bg-[#E0A14A] disabled:opacity-60"
+                  aria-label="Upload cover photo"
+                  onClick={() => coverInputRef.current?.click()}
+                  disabled={uploadingCover}
+                  className={`relative block h-52 w-full overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#C4832A]/50 ${
+                    uploadingCover ? 'pointer-events-none opacity-80' : ''
+                  }`}
                 >
-                  {uploading ? 'Uploading…' : 'Add real photo'}
-                </button>
-              </div>
-            ) : null}
-          </div>
-          <div className="space-y-4">
-            <div className="mr-card p-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-2xl font-extrabold text-[var(--cream)]">{profile.name}</h2>
-                {(profile as ProfileData & { is_verified?: boolean }).is_verified ? (
-                  <VerifiedBadge />
-                ) : (profile as ProfileData & { authenticity_status?: string }).authenticity_status === 'verified' ? (
-                  <VerifiedBadge level="authentic_person" />
-                ) : null}
-              </div>
-              <p className="mt-1 text-sm text-[var(--cream-muted)]">Age {profile.age}</p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {interests.slice(0, 4).map((tag) => (
-                  <span key={tag} className="mr-pill mr-pill-inactive text-xs">
-                    {tag}
+                  <div className="absolute inset-0 bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#A45E18]/10" />
+                  <span className="absolute inset-0 flex items-start justify-center pt-4">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--bg-card)]/40 bg-[var(--bg-primary)]/55 px-3 py-1.5 text-[11px] font-semibold text-[var(--cream)] backdrop-blur-sm">
+                      {uploadingCover ? (
+                        <>
+                          <Spinner className="h-3.5 w-3.5" />
+                          Uploading cover…
+                        </>
+                      ) : (
+                        <>
+                          <ImageIcon className="h-3.5 w-3.5" />
+                          Add cover photo
+                        </>
+                      )}
+                    </span>
                   </span>
-                ))}
-                {mood ? (
-                  <span className="mr-pill mr-pill-active text-xs">{MOOD_LABELS[mood]}</span>
-                ) : null}
+                </button>
+              )}
+
+              {coverUrl ? (
+                <div className="absolute inset-x-0 top-3 flex justify-center gap-2 px-3 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                  <button
+                    type="button"
+                    onClick={() => setCoverEditorOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[var(--bg-card)]/40 bg-[var(--bg-primary)]/55 px-3 py-1.5 text-[11px] font-semibold text-[var(--cream)] backdrop-blur-sm hover:border-[#C4832A]/40"
+                  >
+                    Adjust cover
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => coverInputRef.current?.click()}
+                    disabled={uploadingCover}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[var(--bg-card)]/40 bg-[var(--bg-primary)]/55 px-3 py-1.5 text-[11px] font-semibold text-[var(--cream)] backdrop-blur-sm hover:border-[#C4832A]/40 disabled:opacity-60"
+                  >
+                    {uploadingCover ? 'Uploading…' : 'Change photo'}
+                  </button>
+                </div>
+              ) : null}
+
+              {coverUrl ? (
+                <button
+                  type="button"
+                  aria-label="Change cover photo"
+                  onClick={() => coverInputRef.current?.click()}
+                  disabled={uploadingCover}
+                  className="absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-full border-2 border-[var(--bg-card)] bg-[#C4832A] text-[var(--nn-on-copper)] shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-60"
+                >
+                  {uploadingCover ? (
+                    <Spinner className="h-4 w-4 text-[var(--nn-on-copper)]" />
+                  ) : (
+                    <ImageIcon className="h-4 w-4" />
+                  )}
+                </button>
+              ) : null}
+            </div>
+
+            <div className="px-6 pb-6">
+              <div className="-mt-12 flex items-end gap-5">
+                <button
+                  type="button"
+                  aria-label="Upload profile photo"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={uploading}
+                  className={`group relative block shrink-0 cursor-pointer rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C4832A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-card)] ${
+                    uploading ? 'pointer-events-none opacity-70' : ''
+                  }`}
+                >
+                  <UserAvatar
+                    name={profile.name}
+                    photoUrl={profile.photo_url}
+                    online={profile.online}
+                    size="xl"
+                    showStatus={false}
+                    className="ring-4 ring-[var(--bg-card)] transition-opacity group-hover:opacity-90"
+                  />
+                  <span className="absolute inset-0 rounded-full bg-black/0 transition-colors group-hover:bg-black/20" />
+                  <span className="absolute bottom-1 right-1 flex h-9 w-9 items-center justify-center rounded-full border-2 border-[var(--bg-card)] bg-[#C4832A] text-[var(--nn-on-copper)] shadow-lg transition-transform group-hover:scale-105">
+                    {uploading ? (
+                      <Spinner className="h-4 w-4 text-[var(--nn-on-copper)]" />
+                    ) : (
+                      <CameraIcon className="h-4 w-4" />
+                    )}
+                  </span>
+                </button>
+
+                <div className="min-w-0 flex-1 pb-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-2xl font-extrabold text-[var(--cream)]">{profile.name}</h2>
+                    {(profile as ProfileData & { is_verified?: boolean }).is_verified ? (
+                      <VerifiedBadge />
+                    ) : (profile as ProfileData & { authenticity_status?: string }).authenticity_status ===
+                      'verified' ? (
+                      <VerifiedBadge level="authentic_person" />
+                    ) : null}
+                    <StatusBadge online={!!profile.online} lastSeen={profile.last_seen} />
+                  </div>
+                  <p className="mt-1 text-sm text-[var(--cream-muted)]">Age {profile.age}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {interests.slice(0, 4).map((tag) => (
+                      <span key={tag} className="mr-pill mr-pill-inactive text-xs">
+                        {tag}
+                      </span>
+                    ))}
+                    {mood ? (
+                      <span className="mr-pill mr-pill-active text-xs">{MOOD_LABELS[mood]}</span>
+                    ) : null}
+                  </div>
+                </div>
               </div>
             </div>
-            {user?.id ? (
-              <div className="mr-card flex items-center gap-5 p-5">
-                <div className="rounded-xl border border-[var(--border-default)] bg-white p-2">
-                  <QRCodeSVG value={buildProfileUrl(user.id)} size={96} level="M" />
-                </div>
-                <div>
-                  <p className="text-[15px] font-bold text-[var(--cream)]">Your QR code</p>
-                  <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
-                    Scan to open your profile in person.
-                  </p>
-                </div>
+          </div>
+
+          <div className="grid grid-cols-[280px_1fr] gap-8">
+            <div className="space-y-3">
+              <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]">
+                {getPhotoUrl(photoUrl) ? (
+                  <img
+                    src={getPhotoUrl(photoUrl)!}
+                    alt={profile.name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center">
+                    <UserAvatar name={profile.name} photoUrl={profile.photo_url} size="xl" showStatus={false} />
+                  </div>
+                )}
+                <button
+                  type="button"
+                  aria-label="Change profile photo"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={uploading}
+                  className="absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-full border-2 border-[var(--bg-card)] bg-[#C4832A] text-[var(--nn-on-copper)] shadow-lg transition-transform hover:scale-105 disabled:opacity-60"
+                >
+                  {uploading ? (
+                    <Spinner className="h-4 w-4 text-[var(--nn-on-copper)]" />
+                  ) : (
+                    <CameraIcon className="h-4 w-4" />
+                  )}
+                </button>
               </div>
-            ) : null}
-            <div className="mr-card p-5">
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--cream-muted)]">About</p>
-              <p className="mt-2 text-sm leading-relaxed text-[var(--cream-soft)]">
-                {bio || 'Add a bio so nearby guys know what you are into.'}
-              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {[photoUrl, coverUrl].filter(Boolean).slice(0, 3).map((src, i) => (
+                  <div
+                    key={`${src}-${i}`}
+                    className="aspect-square overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]"
+                  >
+                    {getPhotoUrl(src) ? (
+                      <img src={getPhotoUrl(src)!} alt="" className="h-full w-full object-cover" />
+                    ) : null}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => coverInputRef.current?.click()}
+                  disabled={uploadingCover}
+                  className="flex aspect-square items-center justify-center rounded-xl border border-dashed border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.08)] text-[11px] font-bold text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.14)] disabled:opacity-60"
+                >
+                  {uploadingCover ? '…' : coverUrl ? 'Cover' : '+ Cover'}
+                </button>
+              </div>
+              {isGenericAvatarUrl(photoUrl) ? (
+                <div
+                  className="rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-3 py-3"
+                  data-testid="photo-upgrade-nudge"
+                >
+                  <p className="text-[12px] font-extrabold text-[var(--cream)]">Upgrade from a shared avatar</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-[var(--cream-muted)]">
+                    Real photos get more matches. Upload a clear face or upper-body shot —
+                  </p>
+                  <button
+                    type="button"
+                    disabled={uploading}
+                    onClick={() => photoInputRef.current?.click()}
+                    className="mt-2 rounded-full bg-[#C4832A] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#1A0E03] hover:bg-[#E0A14A] disabled:opacity-60"
+                  >
+                    {uploading ? 'Uploading…' : 'Add real photo'}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="space-y-4">
+              {user?.id ? (
+                <div className="mr-card flex items-center gap-5 p-5">
+                  <div className="rounded-xl border border-[var(--border-default)] bg-white p-2">
+                    <QRCodeSVG value={buildProfileUrl(user.id)} size={96} level="M" />
+                  </div>
+                  <div>
+                    <p className="text-[15px] font-bold text-[var(--cream)]">Your QR code</p>
+                    <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
+                      Scan to open your profile in person.
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+              <div className="mr-card p-5">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--cream-muted)]">
+                  About
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-[var(--cream-soft)]">
+                  {bio || 'Add a bio so nearby guys know what you are into.'}
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -726,7 +883,7 @@ export const Profile = () => {
         <ProfileViewersCard
           viewers={profileViewers}
           total={profileViewsTotal}
-          isPremium={Boolean(profile.is_premium)}
+          isPremium={Boolean(authIsPremium || profile?.is_premium)}
           hasMore={profileViewsHasMore}
           hiddenCount={profileViewsHidden}
           loading={profileViewsLoading}
@@ -778,7 +935,10 @@ export const Profile = () => {
         {/* ── Ghost mode card ── */}
         <GhostToggle
           isGhost={isGhost}
-          isPremium={Boolean(profile?.is_premium)}
+          isPremium={authIsPremium}
+          betaIncluded={Boolean(
+            betaPremiumFree || user?.beta_premium_included || profile?.beta_premium_included,
+          )}
           onToggle={handleGhost}
         />
 

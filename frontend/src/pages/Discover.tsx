@@ -1311,14 +1311,14 @@ export const Discover = () => {
           existing.spot.name !== spot.name ||
           existing.spot.category_icon !== spot.category_icon
         ) {
-          existing.root.render(<HotSpotPin spot={pinData} size={36} />);
+          existing.root.render(<HotSpotPin spot={pinData} size={52} />);
         }
         existing.spot = spot;
         return;
       }
 
       // Opens the in-map sheet (no navigation away) — see #67 acceptance criteria.
-      const { element, root } = createHotSpotPinElement(pinData, () => setSelectedHotSpot(spot), 36);
+      const { element, root } = createHotSpotPinElement(pinData, () => setSelectedHotSpot(spot), 52);
       const marker = new mapboxgl.Marker({ element, anchor: 'center' })
         .setLngLat(lngLat)
         .addTo(map);

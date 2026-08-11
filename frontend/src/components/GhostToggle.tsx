@@ -4,12 +4,20 @@ import { Link } from 'react-router-dom';
 interface GhostToggleProps {
   isGhost: boolean;
   isPremium: boolean;
+  /** When true (open beta), Ghost is unlocked for everyone — no upgrade gate. */
+  betaIncluded?: boolean;
   onToggle: (next: boolean) => void | Promise<void>;
 }
 
-export const GhostToggle: React.FC<GhostToggleProps> = ({ isGhost, isPremium, onToggle }) => {
-  // Premium-gated when off and not subscribed — stay pressable so tap opens upgrade.
-  const locked = !isPremium && !isGhost;
+export const GhostToggle: React.FC<GhostToggleProps> = ({
+  isGhost,
+  isPremium,
+  betaIncluded = false,
+  onToggle,
+}) => {
+  const entitled = isPremium || betaIncluded;
+  // Only gate when not entitled and ghost is off — stay pressable so tap can open upgrade.
+  const locked = !entitled && !isGhost;
 
   return (
     <div
@@ -30,7 +38,7 @@ export const GhostToggle: React.FC<GhostToggleProps> = ({ isGhost, isPremium, on
                 color: 'var(--copper)',
               }}
             >
-              Premium
+              {betaIncluded || entitled ? 'Included in beta' : 'Premium'}
             </span>
           </div>
           <p className="mt-1 text-xs" style={{ color: 'var(--cream-muted)' }}>
@@ -49,12 +57,11 @@ export const GhostToggle: React.FC<GhostToggleProps> = ({ isGhost, isPremium, on
         <button
           type="button"
           onClick={() => void onToggle(!isGhost)}
-          className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
-            locked ? 'cursor-pointer opacity-80' : 'cursor-pointer'
-          }`}
+          className="relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{
             background: isGhost ? 'var(--copper)' : 'var(--border-default)',
             outlineColor: 'var(--copper)',
+            opacity: locked ? 0.8 : 1,
           }}
           aria-pressed={isGhost}
           aria-disabled={locked || undefined}
