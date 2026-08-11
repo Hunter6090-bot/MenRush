@@ -12,6 +12,8 @@ interface User {
   verification_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
   is_premium?: boolean;
   premium_tier?: 'free' | 'premium' | 'premium_plus';
+  /** True when open-beta Premium entitlement is active for this user. */
+  beta_premium_included?: boolean;
 }
 
 interface AuthState {
