@@ -4,19 +4,24 @@ import { defaultGenericAvatarUrl } from '../lib/genericAvatar';
 import { accessControl } from '../security/access';
 import { ProfileInput } from '../types/validation';
 
-function stableBearing(seed: string) {
+/**
+ * Privacy fuzz for map pins: keep people near where they actually are, with a
+ * small deterministic offset so exact home/street is not public.
+ *
+ * Previous logic placed people on a RANDOM bearing at bucketed distance from
+ * the viewer — that put pins in the sea and far from known real locations.
+ */
+function privateMapPointAround(realLat: number, realLng: number, seed: string) {
   const hash = crypto.createHash('sha256').update(seed).digest();
-  return hash.readUInt32BE(0) % 360;
-}
-
-function privateMapPoint(originLat: number, originLng: number, distanceKm: number, seed: string) {
-  const bearing = stableBearing(seed) * (Math.PI / 180);
-  const latitudeOffset = (distanceKm / 111) * Math.cos(bearing);
-  const longitudeScale = Math.max(Math.cos(originLat * (Math.PI / 180)), 0.2);
-  const longitudeOffset = (distanceKm / (111 * longitudeScale)) * Math.sin(bearing);
+  // 80–320 m — enough to stop doorstep triangulation, small enough to stay on land.
+  const meters = 80 + (hash.readUInt16BE(0) % 241);
+  const bearing = ((hash.readUInt16BE(2) % 360) * Math.PI) / 180;
+  const dLat = (meters / 1000 / 111) * Math.cos(bearing);
+  const longitudeScale = Math.max(Math.cos((realLat * Math.PI) / 180), 0.2);
+  const dLng = (meters / 1000 / (111 * longitudeScale)) * Math.sin(bearing);
   return {
-    lat: Number((originLat + latitudeOffset).toFixed(6)),
-    lng: Number((originLng + longitudeOffset).toFixed(6)),
+    lat: Number((realLat + dLat).toFixed(6)),
+    lng: Number((realLng + dLng).toFixed(6)),
   };
 }
 
@@ -82,6 +87,8 @@ export const userService = {
           WHEN p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' THEN p.mood
           ELSE NULL
         END AS mood,
+        p.lat AS real_lat,
+        p.lng AS real_lng,
         ST_Distance(p.location, ST_MakePoint($2, $1)::geography) as distance_m
       FROM users u
       JOIN profiles p ON u.id = p.user_id
@@ -91,6 +98,8 @@ export const userService = {
         AND ST_DWithin(p.location, ST_MakePoint($2, $1)::geography, $4)
         AND p.is_visible = true
         AND p.is_ghost = false
+        AND p.lat IS NOT NULL
+        AND p.lng IS NOT NULL
         AND NOT EXISTS (
           SELECT 1 FROM blocks b
           WHERE (b.blocker_id = $3 AND b.blocked_id = u.id)
@@ -159,8 +168,7 @@ export const userService = {
 
     return result.rows.map((row) => {
       const km = row.distance_m / 1000;
-      // Distance bucketing and randomized bearings prevent triangulation while
-      // preserving an approximate map/list experience.
+      // Distance labels stay bucketed for list privacy; map pins stay near real coords.
       let bucketed: number;
       let label: string;
       if (km < 0.3) {
@@ -176,14 +184,26 @@ export const userService = {
         bucketed = Math.round(km); // 1km steps above 5km
         label = `${bucketed} km`;
       }
+
+      const realLat = Number(row.real_lat);
+      const realLng = Number(row.real_lng);
+      const mapPoint =
+        Number.isFinite(realLat) && Number.isFinite(realLng)
+          ? privateMapPointAround(
+              realLat,
+              realLng,
+              // Seed without viewer position so pin is stable for everyone viewing this person.
+              `map:${row.id}`,
+            )
+          : { lat: originLat, lng: originLng };
+
+      // Do not leak exact GPS in the API payload — only the fuzzed map pin.
+      const { real_lat: _rl, real_lng: _rg, ...publicRow } = row;
+
       return {
-        ...row,
-        ...privateMapPoint(
-          originLat,
-          originLng,
-          bucketed,
-          `${userId}:${row.id}:${originLat.toFixed(2)}:${originLng.toFixed(2)}:${bucketed}`,
-        ),
+        ...publicRow,
+        lat: mapPoint.lat,
+        lng: mapPoint.lng,
         distance_km: bucketed.toFixed(2),
         distance_label: label,
       };
