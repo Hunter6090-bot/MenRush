@@ -17,6 +17,7 @@ import {
 } from '../lib/genericAvatar';
 import { normalizeProfileImageFile } from '../lib/imageUpload';
 import { PROFILE_LOOKING_FOR_TAGS, PROFILE_TAG_GROUPS, toggleProfileInterest } from '../lib/profileTags';
+import { PROFILE_INTERESTS_MAX } from '../lib/profileDetails';
 import {
   clearProfileSetupSkip,
   PROFILE_SETUP_STEPS,
@@ -205,7 +206,7 @@ export const ProfileSetup: React.FC = () => {
   };
 
   const toggleInterest = (tag: string, group: (typeof tagGroups)[number]) => {
-    setInterests((prev) => toggleProfileInterest(prev, tag, group));
+    setInterests((prev) => toggleProfileInterest(prev, tag, group, PROFILE_INTERESTS_MAX));
   };
 
   const goNext = async () => {
@@ -551,7 +552,7 @@ export const ProfileSetup: React.FC = () => {
         {step === 'tags' ? (
           <div className="max-h-[min(52vh,420px)] space-y-4 overflow-y-auto pr-1">
             <p className="text-[12px] text-[var(--cream-muted)]">
-              Selected {interests.length}/10
+              Selected {interests.length}/{PROFILE_INTERESTS_MAX}
             </p>
             {tagGroups.map((group) => (
               <div key={group.label}>
@@ -561,7 +562,7 @@ export const ProfileSetup: React.FC = () => {
                 <div className="flex flex-wrap gap-2">
                   {group.tags.map((tag) => {
                     const active = interests.includes(tag);
-                    const maxed = interests.length >= 10 && !active;
+                    const maxed = interests.length >= PROFILE_INTERESTS_MAX && !active;
                     return (
                       <button
                         key={tag}

@@ -9,6 +9,7 @@ import {
   ResetPasswordInput,
   ChangePasswordInput,
   ChangeEmailInput,
+  DeleteAccountInput,
 } from '../types/validation';
 import { sendTransactionalEmail } from './mailer.service';
 import {
@@ -17,6 +18,7 @@ import {
 } from './transactional-email.template';
 import { v4 as uuidv4 } from 'uuid';
 import { inviteCodeService, isInviteRequired } from './invite-code.service';
+import { ageFromDateOfBirth } from '../lib/age';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable is required');
@@ -121,30 +123,44 @@ export const authService = {
     // retained only for local identity-flow fixtures.
     const autoVerify = process.env.DEV_AUTO_VERIFY === 'true';
 
+    let age = data.age;
+    let dateOfBirth: string | null = data.date_of_birth ?? null;
+    if (dateOfBirth) {
+      try {
+        age = ageFromDateOfBirth(dateOfBirth);
+      } catch {
+        throw new Error('Enter a valid date of birth.');
+      }
+    }
+    if (age < 18) {
+      throw new Error('You must be 18 or older to join MenRush.');
+    }
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
       // 18+ enforced by Zod (age min 18). Default shared avatar so new men
       // are not invisible on Discover until they upload a photo.
-      if (data.age < 18) {
+      if (age < 18) {
         throw new Error('You must be 18 or older to join MenRush.');
       }
-      const defaultAvatar = defaultGenericAvatarUrl(data.age);
+      const defaultAvatar = defaultGenericAvatarUrl(age);
 
       const result = await client.query(
         `INSERT INTO users (
-           id, email, password_hash, name, age, photo_url,
+           id, email, password_hash, name, age, date_of_birth, photo_url,
            is_verified, verification_status, age_assurance_status
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'self_attested')
-         RETURNING id, email, name, age, photo_url, is_verified, verification_status,
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'self_attested')
+         RETURNING id, email, name, age, date_of_birth, photo_url, is_verified, verification_status,
                    age_assurance_status, authenticity_status`,
         [
           id,
           data.email,
           hashedPassword,
           data.name,
-          data.age,
+          age,
+          dateOfBirth,
           defaultAvatar,
           autoVerify,
           autoVerify ? 'verified' : 'unverified',
@@ -539,5 +555,31 @@ export const authService = {
     );
 
     return { ok: true, email: data.new_email };
+  },
+
+  async deleteAccount(userId: string, data: DeleteAccountInput) {
+    const result = await query(`SELECT password_hash, email FROM users WHERE id = $1`, [userId]);
+    if (result.rows.length === 0) {
+      throw new Error('User not found');
+    }
+
+    const valid = await bcryptjs.compare(data.current_password, result.rows[0].password_hash);
+    if (!valid) {
+      throw new Error('Current password is incorrect');
+    }
+
+    if (data.confirmation !== 'DELETE') {
+      throw new Error('Type DELETE to confirm account deletion');
+    }
+
+    try {
+      const { trustedDeviceService } = await import('./trusted-device.service');
+      await trustedDeviceService.revokeAll(userId);
+    } catch {
+      /* best-effort */
+    }
+
+    await query(`DELETE FROM users WHERE id = $1`, [userId]);
+    return { ok: true };
   },
 };
