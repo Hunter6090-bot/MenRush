@@ -1,5 +1,6 @@
 import { query } from '../db';
 import { ccbillService, CCBillTier } from './ccbill.service';
+import { isInviteRequired } from './invite-code.service';
 
 export type PremiumTier = 'free' | 'premium' | 'premium_plus';
 export type PremiumFeature =
@@ -121,7 +122,9 @@ export const premiumService = {
   },
 
   isBetaPremiumFree(): boolean {
-    return process.env.BETA_PREMIUM_FREE === 'true';
+    // MenRush is currently in beta, so Premium is included unless an operator
+    // explicitly ends the beta entitlement with BETA_PREMIUM_FREE=false.
+    return process.env.BETA_PREMIUM_FREE !== 'false' || isInviteRequired();
   },
 
   async isPremium(userId: string): Promise<boolean> {
