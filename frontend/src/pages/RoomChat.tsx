@@ -13,6 +13,7 @@ import { profilePathForUser } from '../lib/profileLinks';
 import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 import { getPhotoUrl } from '../components/UserAvatar';
 import { parseRoomImageMessage } from '../lib/roomMediaMessage';
+import { RoomTempIdentityGate } from '../components/RoomTempIdentityGate';
 
 const ROOM_EMOJI_PICKER = [
   '😀', '😂', '🔥', '❤️', '👍', '👀', '😈', '🥵', '💪', '🎉', '😏', '🙌',
@@ -42,6 +43,9 @@ interface RoomMember {
   name: string;
   photo_url?: string;
   role?: string;
+  is_verified?: boolean;
+  authenticity_status?: string;
+  using_temp_identity?: boolean;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -121,6 +125,9 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({}); // userId → name
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [identityReady, setIdentityReady] = useState(false);
+  const [loadingRoom, setLoadingRoom] = useState(true);
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   const {
     participants,
@@ -137,23 +144,67 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     toggleCamera,
     toggleMic,
     photoUrl,
-  } = useRoomVideo({ roomId, userId: user?.id, enabled: !!roomId });
+  } = useRoomVideo({ roomId, userId: user?.id, enabled: identityReady && !!roomId });
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Load room info + messages ────────────────────────────────────────────
+  // Load room; ensure membership; always gate on temp identity before video.
   useEffect(() => {
     if (!roomId) return;
-    roomsAPI.getRoom(roomId).then((r) => setRoom(r.data)).catch(() => {});
+    let cancelled = false;
+    setLoadingRoom(true);
+    setJoinError(null);
+    setIdentityReady(false);
+
+    (async () => {
+      try {
+        const r = await roomsAPI.getRoom(roomId);
+        if (cancelled) return;
+        const data = r.data as RoomInfo;
+        setRoom(data);
+
+        if (!data.user_role) {
+          try {
+            await roomsAPI.joinRoom(roomId);
+            const refreshed = await roomsAPI.getRoom(roomId);
+            if (cancelled) return;
+            setRoom(refreshed.data as RoomInfo);
+          } catch (err: unknown) {
+            const msg =
+              (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+            setJoinError(msg || 'Could not join this room.');
+            setLoadingRoom(false);
+            return;
+          }
+        }
+        setLoadingRoom(false);
+      } catch {
+        if (!cancelled) {
+          setJoinError('Could not load this room.');
+          setLoadingRoom(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      // Session exit: wipe unsaved temp identity (never touches main profile).
+      void roomsAPI.clearTempIdentity(roomId).catch(() => {});
+    };
+  }, [roomId]);
+
+  // Load messages + members only after identity confirmed.
+  useEffect(() => {
+    if (!roomId || !identityReady) return;
     roomsAPI.getMessages(roomId).then((r) => setMessages(r.data)).catch(() => {});
     roomsAPI
       .getMembers(roomId)
       .then((r) => loadMembers(r.data.map((m) => ({ id: m.id, name: m.name, photo_url: m.photo_url }))))
       .catch(() => {});
-  }, [roomId, loadMembers]);
+  }, [roomId, identityReady, loadMembers]);
 
   useEffect(() => {
     if (!roomId || !settingsOpen) return;
@@ -425,6 +476,73 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  if (loadingRoom) {
+    return (
+      <div
+        className={embedded ? 'flex h-full min-h-0 flex-col items-center justify-center' : 'fixed inset-0 flex flex-col items-center justify-center'}
+        style={{ background: 'var(--bg-primary)' }}
+      >
+        <PulseRing size={32} label="Loading room" />
+      </div>
+    );
+  }
+
+  if (joinError) {
+    return (
+      <div
+        className={embedded ? 'flex h-full min-h-0 flex-col' : 'fixed inset-0 flex flex-col'}
+        style={{ background: 'var(--bg-primary)' }}
+      >
+        <header className="flex shrink-0 items-center gap-2 border-b border-[var(--border-default)] px-3 py-3">
+          <MobileBackButton fallback="/rooms" onClick={() => navigate('/rooms')} className="-ml-1" />
+          <p className="flex-1 truncate text-sm font-semibold text-[var(--cream)]">Group</p>
+        </header>
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+          <p className="text-sm text-[var(--cream)]">{joinError}</p>
+          <button
+            type="button"
+            onClick={() => navigate('/rooms')}
+            className="rounded-xl bg-[var(--copper)] px-4 py-2 text-sm font-bold text-[#1A0E03]"
+          >
+            Back to rooms
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!identityReady && room) {
+    return (
+      <div
+        className={embedded ? 'flex h-full min-h-0 flex-col' : 'fixed inset-0 flex flex-col'}
+        style={{ background: 'var(--bg-primary)' }}
+      >
+        <header
+          className="flex shrink-0 items-center gap-2 border-b border-[var(--border-default)] px-3 py-3"
+          style={{ zIndex: 20 }}
+        >
+          <MobileBackButton fallback="/rooms" onClick={() => navigate('/rooms')} className="-ml-1" />
+          <p className="flex-1 truncate text-sm font-semibold text-[var(--cream)]">{room.name}</p>
+        </header>
+        <RoomTempIdentityGate
+          roomId={roomId!}
+          roomName={room.name}
+          roomDescription={room.description}
+          onReady={async ({ displayName, photoUrl: gatePhotoUrl, saveName, savePhoto }) => {
+            await roomsAPI.setTempIdentity(roomId!, {
+              display_name: displayName,
+              photo_url: gatePhotoUrl ?? null,
+              save_name: saveName,
+              save_photo: savePhoto,
+            });
+            setIdentityReady(true);
+          }}
+          onCancel={() => navigate('/rooms')}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className={embedded ? 'flex h-full min-h-0 flex-col' : 'fixed inset-0 flex flex-col'}
@@ -564,6 +682,11 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                     >
                       <span className="flex-1 text-sm truncate" style={{ color: 'var(--cream)' }}>
                         {member.name}
+                        {member.is_verified ? (
+                          <span className="ml-1 text-[10px]" style={{ color: '#8FC773' }} title="Adult assurance">
+                            · verified
+                          </span>
+                        ) : null}
                         {member.role === 'owner' ? (
                           <span className="ml-1 text-[10px]" style={{ color: '#C4832A' }}>
                             · owner
