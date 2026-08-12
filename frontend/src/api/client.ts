@@ -470,6 +470,8 @@ export const roomsAPI = {
   },
   clearTempIdentity: (roomId: string) =>
     apiClient.post<{ cleared: true }>(`/rooms/${roomId}/temp-identity/clear`),
+  deleteTempIdentity: (roomId: string) =>
+    apiClient.delete(`/rooms/${roomId}/temp-identity`),
 };
 
 export type ContactSubmitPayload = {

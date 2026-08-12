@@ -202,6 +202,18 @@ router.post('/:roomId/temp-identity/clear', async (req: AuthRequest, res: Respon
   }
 });
 
+// DELETE /:roomId/temp-identity — manual clear of saved/unsaved identity (immediate)
+router.delete('/:roomId/temp-identity', async (req: AuthRequest, res: Response) => {
+  try {
+    const member = await roomService.isMember(req.userId!, req.params.roomId);
+    if (!member) return res.status(403).json({ error: 'not_a_member' });
+    await roomService.deleteTempIdentity(req.userId!, req.params.roomId);
+    res.status(204).send();
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /:roomId/members — roster for gallery view
 router.get('/:roomId/members', async (req: AuthRequest, res: Response) => {
   try {

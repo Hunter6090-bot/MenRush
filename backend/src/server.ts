@@ -29,6 +29,7 @@ import adminRoutes from './routes/admin.routes';
 import campaignRoutes from './routes/campaigns';
 import socialRoutes from './routes/social';
 import { startPulseExpiryCron } from './services/pulse.service';
+import { startRoomTempIdentityPurgeCron } from './services/room.service';
 import {
   hasWelcomeBeenSent,
   isWaitlistEmailPaused,
@@ -607,6 +608,7 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   startPulseExpiryCron();
+  startRoomTempIdentityPurgeCron();
   startVerificationRetentionWorker();
   // Optional: in-process drip worker. Prefer an external cron in production
   // (POST /api/waitlist/admin/run); only enable in-process when running a
