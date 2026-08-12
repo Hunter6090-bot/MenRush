@@ -3,6 +3,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { premiumService, PremiumRequiredError } from './premium.service';
 import { accessControl } from '../security/access';
 
+/** Soft TTL for saved room temp identities (strategy 3). Unsaved wipe on leave. */
+export const ROOM_TEMP_IDENTITY_TTL_DAYS = 30;
+const ROOM_TEMP_IDENTITY_PURGE_MS = 6 * 60 * 60 * 1000;
 interface CreateRoomData {
   name: string;
   description?: string;
@@ -309,13 +312,27 @@ export const roomService = {
 
     // Temp identity is room-scoped only — never mutates users.name / photo_url.
     const senderRes = await query(
-      `SELECT COALESCE(ti.display_name, u.name) AS sender_name,
-              COALESCE(ti.photo_url, u.photo_url) AS sender_photo_url
+      `SELECT COALESCE(
+                CASE
+                  WHEN ti.last_used_at > NOW() - ($3 || ' days')::interval
+                  THEN ti.display_name
+                  ELSE NULL
+                END,
+                u.name
+              ) AS sender_name,
+              COALESCE(
+                CASE
+                  WHEN ti.last_used_at > NOW() - ($3 || ' days')::interval
+                  THEN ti.photo_url
+                  ELSE NULL
+                END,
+                u.photo_url
+              ) AS sender_photo_url
          FROM users u
          LEFT JOIN room_temp_identities ti
            ON ti.user_id = u.id AND ti.room_id = $2
         WHERE u.id = $1`,
-      [userId, roomId],
+      [userId, roomId, String(ROOM_TEMP_IDENTITY_TTL_DAYS)],
     );
     if (senderRes.rows[0]) {
       msg.sender_name = senderRes.rows[0].sender_name;
@@ -358,10 +375,27 @@ export const roomService = {
       }
     }
 
+    values.push(String(ROOM_TEMP_IDENTITY_TTL_DAYS));
+    const ttlParam = `$${values.length}`;
+
     const result = await query(
       `SELECT rm.id, rm.room_id, rm.sender_id, rm.message, rm.reply_to, rm.created_at,
-              COALESCE(ti.display_name, u.name) AS sender_name,
-              COALESCE(ti.photo_url, u.photo_url) AS sender_photo_url
+              COALESCE(
+                CASE
+                  WHEN ti.last_used_at > NOW() - (${ttlParam} || ' days')::interval
+                  THEN ti.display_name
+                  ELSE NULL
+                END,
+                u.name
+              ) AS sender_name,
+              COALESCE(
+                CASE
+                  WHEN ti.last_used_at > NOW() - (${ttlParam} || ' days')::interval
+                  THEN ti.photo_url
+                  ELSE NULL
+                END,
+                u.photo_url
+              ) AS sender_photo_url
        FROM room_messages rm
        JOIN users u ON u.id = rm.sender_id
        LEFT JOIN room_temp_identities ti
@@ -370,7 +404,7 @@ export const roomService = {
          ${cursorClause}
        ORDER BY rm.created_at DESC
        LIMIT $2`,
-      values
+      values,
     );
 
     return result.rows.reverse();
@@ -409,29 +443,53 @@ export const roomService = {
     // still reflects the real account (host can see adult assurance, not real name).
     const result = await query(
       `SELECT u.id,
-              COALESCE(ti.display_name, u.name) AS name,
-              COALESCE(ti.photo_url, u.photo_url) AS photo_url,
+              COALESCE(
+                CASE
+                  WHEN ti.last_used_at > NOW() - ($2 || ' days')::interval
+                  THEN ti.display_name
+                  ELSE NULL
+                END,
+                u.name
+              ) AS name,
+              COALESCE(
+                CASE
+                  WHEN ti.last_used_at > NOW() - ($2 || ' days')::interval
+                  THEN ti.photo_url
+                  ELSE NULL
+                END,
+                u.photo_url
+              ) AS photo_url,
               rm.role,
               u.is_verified,
               u.authenticity_status,
-              (ti.display_name IS NOT NULL) AS using_temp_identity
+              (ti.display_name IS NOT NULL AND ti.last_used_at > NOW() - ($2 || ' days')::interval)
+                AS using_temp_identity
        FROM room_members rm
        JOIN users u ON u.id = rm.user_id
        LEFT JOIN room_temp_identities ti
          ON ti.user_id = u.id AND ti.room_id = $1
        WHERE rm.room_id = $1
-       ORDER BY COALESCE(ti.display_name, u.name) ASC`,
-      [roomId],
+       ORDER BY COALESCE(
+         CASE
+           WHEN ti.last_used_at > NOW() - ($2 || ' days')::interval
+           THEN ti.display_name
+           ELSE NULL
+         END,
+         u.name
+       ) ASC`,
+      [roomId, String(ROOM_TEMP_IDENTITY_TTL_DAYS)],
     );
     return result.rows;
   },
 
   async getTempIdentity(userId: string, roomId: string) {
+    // Soft TTL: treat expired saved rows as absent (purge cron also deletes them).
     const res = await query(
-      `SELECT display_name, photo_url, save_name, save_photo
+      `SELECT display_name, photo_url, save_name, save_photo, last_used_at, updated_at
        FROM room_temp_identities
-       WHERE user_id = $1 AND room_id = $2`,
-      [userId, roomId],
+       WHERE user_id = $1 AND room_id = $2
+         AND last_used_at > NOW() - ($3 || ' days')::interval`,
+      [userId, roomId, String(ROOM_TEMP_IDENTITY_TTL_DAYS)],
     );
     return res.rows[0] ?? null;
   },
@@ -448,13 +506,14 @@ export const roomService = {
   ) {
     await query(
       `INSERT INTO room_temp_identities
-         (user_id, room_id, display_name, photo_url, save_name, save_photo, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+         (user_id, room_id, display_name, photo_url, save_name, save_photo, last_used_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
        ON CONFLICT (user_id, room_id)
        DO UPDATE SET display_name = EXCLUDED.display_name,
                      photo_url = EXCLUDED.photo_url,
                      save_name = EXCLUDED.save_name,
                      save_photo = EXCLUDED.save_photo,
+                     last_used_at = NOW(),
                      updated_at = NOW()`,
       [
         userId,
@@ -468,9 +527,20 @@ export const roomService = {
     return this.getTempIdentity(userId, roomId);
   },
 
+  /** Refresh inactivity clock when a saved identity is actively used in-room. */
+  async touchTempIdentity(userId: string, roomId: string) {
+    await query(
+      `UPDATE room_temp_identities
+          SET last_used_at = NOW(), updated_at = NOW()
+        WHERE user_id = $1 AND room_id = $2
+          AND last_used_at > NOW() - ($3 || ' days')::interval`,
+      [userId, roomId, String(ROOM_TEMP_IDENTITY_TTL_DAYS)],
+    );
+  },
+
   /**
    * On leave / session exit: wipe unsaved temp identity.
-   * Saved name/photo for this room are kept for next entry prefill.
+   * Saved name/photo for this room are kept for next entry prefill (until soft TTL).
    * Never touches users/profiles.
    */
   async clearTempIdentityOnLeave(userId: string, roomId: string) {
@@ -494,19 +564,60 @@ export const roomService = {
     );
   },
 
+  /** Manual clear: hard-delete immediately (do not wait for TTL). */
+  async deleteTempIdentity(userId: string, roomId: string) {
+    await query(
+      `DELETE FROM room_temp_identities WHERE user_id = $1 AND room_id = $2`,
+      [userId, roomId],
+    );
+  },
+
+  /**
+   * Soft TTL purge — disposable temp data only. Idempotent / safe to re-run.
+   * Returns deleted row count for monitoring.
+   */
+  async purgeExpiredTempIdentities(): Promise<number> {
+    const res = await query(
+      `DELETE FROM room_temp_identities
+        WHERE last_used_at < NOW() - ($1 || ' days')::interval
+        RETURNING user_id`,
+      [String(ROOM_TEMP_IDENTITY_TTL_DAYS)],
+    );
+    return res.rowCount ?? res.rows.length;
+  },
+
   /** Resolve display name/photo for socket presence inside a room. */
   async resolveRoomPresence(userId: string, roomId: string) {
     const res = await query(
-      `SELECT COALESCE(ti.display_name, u.name) AS name,
-              COALESCE(ti.photo_url, u.photo_url) AS photo_url,
+      `SELECT COALESCE(
+                CASE
+                  WHEN ti.last_used_at > NOW() - ($3 || ' days')::interval
+                  THEN ti.display_name
+                  ELSE NULL
+                END,
+                u.name
+              ) AS name,
+              COALESCE(
+                CASE
+                  WHEN ti.last_used_at > NOW() - ($3 || ' days')::interval
+                  THEN ti.photo_url
+                  ELSE NULL
+                END,
+                u.photo_url
+              ) AS photo_url,
               u.is_verified,
-              u.authenticity_status
+              u.authenticity_status,
+              (ti.display_name IS NOT NULL AND ti.last_used_at > NOW() - ($3 || ' days')::interval)
+                AS using_temp_identity
          FROM users u
          LEFT JOIN room_temp_identities ti
            ON ti.user_id = u.id AND ti.room_id = $2
         WHERE u.id = $1`,
-      [userId, roomId],
+      [userId, roomId, String(ROOM_TEMP_IDENTITY_TTL_DAYS)],
     );
+    if (res.rows[0]?.using_temp_identity) {
+      await this.touchTempIdentity(userId, roomId);
+    }
     return {
       name: res.rows[0]?.name ?? 'Member',
       photo_url: res.rows[0]?.photo_url ?? null,
@@ -523,3 +634,19 @@ export const roomService = {
     await query(`DELETE FROM rooms WHERE id = $1`, [roomId]);
   },
 };
+
+export function startRoomTempIdentityPurgeCron(): NodeJS.Timeout {
+  const run = () =>
+    roomService.purgeExpiredTempIdentities()
+      .then((deleted) => {
+        if (deleted > 0) {
+          console.log(`[room-temp-identity] purged ${deleted} expired row(s)`);
+        }
+      })
+      .catch((err) => {
+        console.error('[room-temp-identity] purge failed:', err);
+      });
+
+  run();
+  return setInterval(run, ROOM_TEMP_IDENTITY_PURGE_MS);
+}
