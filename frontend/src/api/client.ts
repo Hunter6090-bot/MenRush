@@ -426,9 +426,17 @@ export const roomsAPI = {
   getRooms: () => apiClient.get('/rooms'),
   getRoom: (roomId: string) => apiClient.get(`/rooms/${roomId}`),
   getMembers: (roomId: string) =>
-    apiClient.get<Array<{ id: string; name: string; photo_url?: string; role?: string }>>(
-      `/rooms/${roomId}/members`,
-    ),
+    apiClient.get<
+      Array<{
+        id: string;
+        name: string;
+        photo_url?: string;
+        role?: string;
+        is_verified?: boolean;
+        authenticity_status?: string;
+        using_temp_identity?: boolean;
+      }>
+    >(`/rooms/${roomId}/members`),
   addMember: (roomId: string, userId: string) =>
     apiClient.post(`/rooms/${roomId}/members`, { user_id: userId }),
   joinRoom: (roomId: string) => apiClient.post(`/rooms/${roomId}/join`),
@@ -437,6 +445,31 @@ export const roomsAPI = {
     apiClient.get(`/rooms/${roomId}/messages`, { params: { before } }),
   sendMessage: (roomId: string, message: string, replyTo?: string) =>
     apiClient.post(`/rooms/${roomId}/messages`, { message, reply_to: replyTo }),
+  getTempIdentity: (roomId: string) =>
+    apiClient.get<{
+      display_name?: string | null;
+      photo_url?: string | null;
+      save_name?: boolean;
+      save_photo?: boolean;
+    }>(`/rooms/${roomId}/temp-identity`),
+  setTempIdentity: (
+    roomId: string,
+    data: {
+      display_name: string;
+      photo_url?: string | null;
+      save_name?: boolean;
+      save_photo?: boolean;
+    },
+  ) => apiClient.put(`/rooms/${roomId}/temp-identity`, data),
+  uploadTempPhoto: (roomId: string, file: File) => {
+    const fd = new FormData();
+    fd.append('photo', file);
+    return apiClient.post<{ photo_url: string }>(`/rooms/${roomId}/temp-identity/photo`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  clearTempIdentity: (roomId: string) =>
+    apiClient.post<{ cleared: true }>(`/rooms/${roomId}/temp-identity/clear`),
 };
 
 export type ContactSubmitPayload = {

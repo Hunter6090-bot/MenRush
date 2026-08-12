@@ -1,13 +1,40 @@
 import { Router, Response } from 'express';
+import fs from 'fs';
+import multer from 'multer';
+import path from 'path';
 import { roomService } from '../services/room.service';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { SecurityError } from '../security/access';
-import { AddRoomMemberSchema, CreateRoomSchema, RoomMessageSchema } from '../types/validation';
+import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
+import {
+  AddRoomMemberSchema,
+  CreateRoomSchema,
+  RoomMessageSchema,
+  RoomTempIdentitySchema,
+} from '../types/validation';
 import { PremiumRequiredError } from '../services/premium.service';
 
 const router = Router();
 
 router.use(authMiddleware, verifiedMiddleware);
+
+const tempPhotoDir = path.resolve(__dirname, '../../uploads/room-temp');
+fs.mkdirSync(tempPhotoDir, { recursive: true });
+
+const tempPhotoUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, tempPhotoDir),
+    filename: (req: any, file, cb) => {
+      try {
+        cb(null, safeUploadFilename('room-temp', req.userId, file.mimetype));
+      } catch (error) {
+        cb(error as Error, '');
+      }
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: uploadFileFilter('room-temp'),
+});
 
 function handleRoomError(res: Response, error: unknown) {
   if (error instanceof PremiumRequiredError) {
@@ -101,6 +128,77 @@ router.post('/:roomId/leave', async (req: AuthRequest, res: Response) => {
     res.status(200).json({ message: 'Left room' });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+// GET /:roomId/temp-identity — caller's temp identity (if any / saved)
+router.get('/:roomId/temp-identity', async (req: AuthRequest, res: Response) => {
+  try {
+    const member = await roomService.isMember(req.userId!, req.params.roomId);
+    if (!member) return res.status(403).json({ error: 'not_a_member' });
+    const identity = await roomService.getTempIdentity(req.userId!, req.params.roomId);
+    res.json(identity ?? {});
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /:roomId/temp-identity — set/update temp identity (never touches main profile)
+router.put('/:roomId/temp-identity', async (req: AuthRequest, res: Response) => {
+  try {
+    const member = await roomService.isMember(req.userId!, req.params.roomId);
+    if (!member) return res.status(403).json({ error: 'not_a_member' });
+    const data = RoomTempIdentitySchema.parse(req.body);
+    const identity = await roomService.setTempIdentity(req.userId!, req.params.roomId, data);
+    res.json(identity);
+  } catch (err: any) {
+    if (err.name === 'ZodError') {
+      return res.status(400).json({ error: 'Validation error', details: err.errors });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /:roomId/temp-identity/photo — upload temp photo (room-scoped file; not profile)
+router.post(
+  '/:roomId/temp-identity/photo',
+  tempPhotoUpload.single('photo'),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const member = await roomService.isMember(req.userId!, req.params.roomId);
+      if (!member) {
+        if (req.file?.path) fs.unlinkSync(req.file.path);
+        return res.status(403).json({ error: 'not_a_member' });
+      }
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+      if (!(await validateFileSignature(req.file.path, req.file.mimetype))) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ error: 'File content does not match its type' });
+      }
+      const photo_url = `/uploads/room-temp/${req.file.filename}`;
+      res.status(201).json({ photo_url });
+    } catch (err: any) {
+      if (req.file?.path) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch {
+          /* ignore */
+        }
+      }
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+// POST /:roomId/temp-identity/clear — wipe unsaved temp identity (session exit)
+router.post('/:roomId/temp-identity/clear', async (req: AuthRequest, res: Response) => {
+  try {
+    await roomService.clearTempIdentityOnLeave(req.userId!, req.params.roomId);
+    res.json({ cleared: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 
