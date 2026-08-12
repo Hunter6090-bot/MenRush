@@ -57,6 +57,19 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
       .catch(() => {});
   }, [roomId]);
 
+  const handleClearSaved = async () => {
+    setError(null);
+    try {
+      await roomsAPI.deleteTempIdentity(roomId);
+      setDisplayName('');
+      setPhotoUrl(undefined);
+      setSaveName(false);
+      setSavePhoto(false);
+    } catch {
+      setError('Could not clear saved identity.');
+    }
+  };
+
   const handlePhotoPick = async (file: File | null) => {
     if (!file) return;
     setUploading(true);
@@ -273,6 +286,17 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
             className="mt-2 w-full rounded-xl py-2 text-[12px] text-[var(--cream-muted)] transition-colors hover:text-[var(--cream)]"
           >
             Cancel
+          </button>
+        ) : null}
+
+        {(saveName || savePhoto || displayName || photoUrl) ? (
+          <button
+            type="button"
+            onClick={() => void handleClearSaved()}
+            className="mt-2 w-full rounded-xl py-2 text-[11px] text-[var(--cream-muted)] underline-offset-2 hover:text-[var(--cream)] hover:underline"
+            data-testid="room-temp-clear-saved"
+          >
+            Clear saved identity for this group
           </button>
         ) : null}
       </div>
