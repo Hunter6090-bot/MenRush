@@ -40,9 +40,13 @@ export function isAllowedOrigin(origin: string | undefined): boolean {
     /* ignore */
   }
 
-  if (process.env.NODE_ENV !== 'production') {
-    if (PRIVATE_LAN_ORIGIN.test(origin) || isDevTunnelOrigin(origin)) return true;
-  }
+  // Always allow private LAN / tunnels so iPhone HTTPS LAN and local multi-device
+  // call testing work against staging/production APIs (JWT still required).
+  if (PRIVATE_LAN_ORIGIN.test(origin) || isDevTunnelOrigin(origin)) return true;
+
+  // Comma-separated FRONTEND_URL entries (Railway often stores a list).
+  const frontendList = process.env.FRONTEND_URL?.split(',').map((s) => s.trim().replace(/\/$/, '')) ?? [];
+  if (frontendList.includes(origin.replace(/\/$/, ''))) return true;
 
   return false;
 }
