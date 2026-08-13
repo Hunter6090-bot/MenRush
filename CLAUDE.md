@@ -179,6 +179,7 @@ Tables: `users`, `profiles`, `messages`, `likes`, `rooms`, `room_members`, `room
 | `JWT_SECRET` | `your-secret-key` | Change in production |
 | `FRONTEND_URL` | `http://localhost:5173` | Socket.IO CORS |
 | `VITE_API_URL` | `http://localhost:3000/api` | Frontend axios + socket |
+| `TURN_URL` + `TURN_SECRET` | unset → falls back to the free public Metered "Open Relay" demo TURN service | **Should be set in production.** `backend/src/services/webrtc.service.ts` builds video-call ICE servers; without a real TURN provider, calls between users who both need a relay (mobile/carrier NAT, iOS Safari) can reach "connected" with signalling complete but no media ever flowing — remote video stays black. See #73. |
 
 ---
 
