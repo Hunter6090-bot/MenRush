@@ -8,6 +8,7 @@ import { CoverBanner, normalizeCoverFrame } from '../components/CoverBanner';
 import { StatusBadge } from '../components/StatusBadge';
 import { ProfileAlbumsSection } from '../components/ProfileAlbumsSection';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
+import { formatHeight, formatWeight } from '../lib/age';
 
 interface ViewableUser {
   id: string;
@@ -22,6 +23,13 @@ interface ViewableUser {
   cover_position_y?: number;
   cover_zoom?: number;
   interests?: string[];
+  height_cm?: number | null;
+  weight_kg?: number | null;
+  relationship_status?: string | null;
+  hosting_status?: string | null;
+  sexual_health_status?: string | null;
+  on_prep?: boolean | null;
+  last_tested_at?: string | null;
   online?: boolean;
   last_seen?: string;
   is_match?: boolean;
@@ -225,6 +233,17 @@ export const ProfileView = () => {
             {typeof user.age === 'number' && (
               <p className="text-[var(--cream-muted)] text-sm mt-0.5">Age {user.age}</p>
             )}
+            {(user.height_cm != null ||
+              user.weight_kg != null ||
+              user.relationship_status ||
+              user.hosting_status) && (
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-[var(--cream-muted)]">
+                {user.height_cm != null ? <span>{formatHeight(user.height_cm)}</span> : null}
+                {user.weight_kg != null ? <span>{formatWeight(user.weight_kg)}</span> : null}
+                {user.relationship_status ? <span>{user.relationship_status}</span> : null}
+                {user.hosting_status ? <span>{user.hosting_status}</span> : null}
+              </div>
+            )}
             {user.headline && (
               <p className="text-[var(--cream)]/80 text-sm mt-3 italic">{user.headline}</p>
             )}
@@ -235,6 +254,22 @@ export const ProfileView = () => {
               <p className="text-[var(--cream-muted)] text-xs mt-3">
                 <span className="uppercase tracking-wide font-semibold">Looking for:</span>{' '}
                 <span className="text-[var(--cream)]/80">{user.looking_for}</span>
+              </p>
+            )}
+            {(user.sexual_health_status || user.on_prep != null || user.last_tested_at) && (
+              <p className="text-[var(--cream-muted)] text-xs mt-2">
+                <span className="uppercase tracking-wide font-semibold">Health:</span>{' '}
+                <span className="text-[var(--cream)]/80">
+                  {[
+                    user.sexual_health_status,
+                    user.on_prep === true ? 'On PrEP' : user.on_prep === false ? 'Not on PrEP' : null,
+                    user.last_tested_at
+                      ? `Last tested ${String(user.last_tested_at).slice(0, 10)}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
               </p>
             )}
             {user.interests && user.interests.length > 0 && (

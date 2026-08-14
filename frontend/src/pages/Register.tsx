@@ -138,6 +138,7 @@ export const Register = () => {
         name: form.displayName,
         email: form.email,
         age: age ?? 0,
+        date_of_birth: form.dob,
         password: form.password,
         ...(BETA_INVITE_REQUIRED ? { invite_code: inviteCode } : {}),
       });

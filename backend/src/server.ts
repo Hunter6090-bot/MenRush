@@ -50,6 +50,9 @@ import { startVerificationRetentionWorker } from './services/verification/retent
 import { Sentry } from './observability/sentry';
 import { corsOrigin } from './security/cors';
 import { query } from './db';
+import { ensureUploadDirs, getUploadsRoot, probeUploadsWritable } from './lib/uploads-root';
+import { logCallMetric } from './services/call-metrics.service';
+import { mediaStorageMode } from './services/media-storage.service';
 
 // Transient DB disconnects must not take down login/API.
 process.on('unhandledRejection', (reason) => {
@@ -78,8 +81,15 @@ app.use('/api/premium/webhook', premiumWebhookRoutes);
 app.use(express.json());
 app.use('/api/verify', verifyRoutes);
 // Profile / message / album media. fallthrough:true so missing files hit a clean 404
-// (not 500). Production mounts a Railway volume at /app/uploads (see Dockerfile).
-const uploadsRoot = path.join(__dirname, '../uploads');
+// (not 500). Production mounts a Railway volume at /app/uploads (see Dockerfile + UPLOADS_ROOT).
+ensureUploadDirs();
+const uploadsRoot = getUploadsRoot();
+console.log(`[media] uploads root: ${uploadsRoot} mode=${mediaStorageMode()}`);
+void probeUploadsWritable().then((probe) => {
+  if (probe.ok) console.log('[media] volume writable');
+  else console.error('[media] volume NOT writable:', probe.error, probe.root);
+});
+
 app.use(
   '/uploads',
   express.static(uploadsRoot, {
@@ -161,8 +171,18 @@ app.post('/api/waitlist', async (req, res) => {
 
 // Health checks — `/health` for Railway/Docker; `/api/health` for edge proxies
 // that only route `/api/*` to this service (menrush.com → backend).
-const healthHandler: express.RequestHandler = (_req, res) => {
-  res.json({ status: 'ok', service: 'menrush-backend' });
+const healthHandler: express.RequestHandler = async (_req, res) => {
+  const media = await probeUploadsWritable();
+  res.json({
+    status: media.ok ? 'ok' : 'degraded',
+    service: 'menrush-backend',
+    media: {
+      ok: media.ok,
+      root: media.root,
+      storage: mediaStorageMode(),
+      error: media.error ?? null,
+    },
+  });
 };
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
@@ -290,8 +310,16 @@ io.on('connection', (socket: Socket) => {
     const authorized = await authorizeCallTarget(socket, data?.to);
     if (!authorized || !data.offer) return;
     try {
+      logCallMetric('call_initiate', {
+        callerId: authorized.actorId,
+        calleeId: authorized.targetId,
+      });
       // No live socket in user:{id} → they cannot answer WebRTC (push alone is not enough).
       if (!userSockets.has(authorized.targetId)) {
+        logCallMetric('call_offline', {
+          callerId: authorized.actorId,
+          calleeId: authorized.targetId,
+        });
         socket.emit('call:error', { error: 'target_offline' });
         return;
       }
@@ -306,6 +334,10 @@ io.on('connection', (socket: Socket) => {
         fromName,
         offer: data.offer,
       });
+      logCallMetric('call_incoming_emitted', {
+        callerId: authorized.actorId,
+        calleeId: authorized.targetId,
+      });
       // Best-effort heads-up when the recipient's app is backgrounded/locked.
       // The service worker suppresses this if a foreground tab is focused, so
       // an in-app session won't double-alert. Web push cannot wake a live
@@ -317,6 +349,7 @@ io.on('connection', (socket: Socket) => {
         tag: `call-${authorized.actorId}`,
       }).catch(() => undefined);
     } catch {
+      logCallMetric('call_error', { code: 'target_not_authorized' });
       socket.emit('call:error', { error: 'target_not_authorized' });
     }
   });
@@ -326,6 +359,10 @@ io.on('connection', (socket: Socket) => {
     if (!authorized || !data.answer) return;
     const pending = findPendingCall(authorized.actorId, authorized.targetId);
     if (pending) pending.answered = true;
+    logCallMetric('call_answer', {
+      calleeId: authorized.actorId,
+      callerId: authorized.targetId,
+    });
     io.to(`user:${authorized.targetId}`).emit('call:answered', {
       from: authorized.actorId,
       answer: data.answer,
@@ -337,6 +374,10 @@ io.on('connection', (socket: Socket) => {
     if (!authorized) return;
     const pending = findPendingCall(authorized.actorId, authorized.targetId);
     if (pending) clearPendingCall(pending.callerId, pending.calleeId);
+    logCallMetric('call_reject', {
+      calleeId: authorized.actorId,
+      callerId: authorized.targetId,
+    });
     io.to(`user:${authorized.targetId}`).emit('call:rejected', { from: authorized.actorId });
   });
 
@@ -353,12 +394,18 @@ io.on('connection', (socket: Socket) => {
     const authorized = await authorizeCallTarget(socket, data?.to);
     if (!authorized) return;
     const pending = findPendingCall(authorized.actorId, authorized.targetId);
+    const answered = Boolean(pending?.answered);
     if (pending && !pending.answered) {
       clearPendingCall(pending.callerId, pending.calleeId);
       void recordMissedCall(pending.callerId, pending.calleeId);
     } else if (pending) {
       clearPendingCall(pending.callerId, pending.calleeId);
     }
+    logCallMetric('call_end', {
+      fromUserId: authorized.actorId,
+      toUserId: authorized.targetId,
+      answered,
+    });
     io.to(`user:${authorized.targetId}`).emit('call:ended', { from: authorized.actorId });
   });
 

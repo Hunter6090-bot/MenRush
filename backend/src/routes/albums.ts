@@ -9,10 +9,11 @@ import { SecurityError } from '../security/access';
 import { resolveMediaPath, verifyMediaAccess } from '../security/media';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
 import { CreateAlbumSchema, GrantAlbumSchema } from '../types/validation';
+import { getUploadSubdir } from '../lib/uploads-root';
 
 const router = Router();
 
-const uploadsDir = path.resolve(__dirname, '../../uploads/albums');
+const uploadsDir = getUploadSubdir('albums');
 fs.mkdirSync(uploadsDir, { recursive: true });
 
 const upload = multer({

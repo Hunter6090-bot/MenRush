@@ -112,6 +112,8 @@ export const authAPI = {
   getAccount: () => apiClient.get<{ email: string }>('/auth/account'),
   changeEmail: (data: { current_password: string; new_email: string }) =>
     apiClient.post<{ ok: boolean; email: string; message: string }>('/auth/change-email', data),
+  deleteAccount: (data: { current_password: string; confirmation: 'DELETE' }) =>
+    apiClient.post<{ ok: boolean; message: string }>('/auth/delete-account', data),
 };
 
 export const betaAPI = {
@@ -155,6 +157,8 @@ export const usersAPI = {
   updateLocation: (lat: number, lng: number) =>
     apiClient.post('/users/location', { lat, lng }),
   updateProfile: (data: {
+    name?: string;
+    date_of_birth?: string | null;
     bio?: string;
     headline?: string;
     looking_for?: string;
@@ -164,6 +168,14 @@ export const usersAPI = {
     cover_position_y?: number;
     cover_zoom?: number;
     interests?: string[];
+    height_cm?: number | null;
+    weight_kg?: number | null;
+    relationship_status?: string | null;
+    hosting_status?: string | null;
+    sexual_health_status?: string | null;
+    on_prep?: boolean | null;
+    last_tested_at?: string | null;
+    show_age?: boolean;
   }) =>
     apiClient.post('/users/profile', data),
   uploadPhoto: (file: File) => {
