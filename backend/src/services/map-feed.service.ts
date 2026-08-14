@@ -4,8 +4,12 @@ import { v4 as uuidv4 } from 'uuid';
 export interface MapFeedMessage {
   id: string;
   sender_id: string;
-  sender_name: string;
-  sender_photo_url: string | null;
+  // Field names match the frontend's MapFeedMessage contract
+  // (frontend/src/api/client.ts) — not renamed from "sender_*" because the
+  // map feed is anonymous-by-design, same display fields used everywhere
+  // else a poster's identity is shown in this feature.
+  display_name: string;
+  photo_url: string | null;
   message: string;
   lat: number;
   lng: number;
@@ -35,7 +39,7 @@ export const mapFeedService = {
     const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
 
     const result = await query(
-      `SELECT mf.id, mf.sender_id, u.name AS sender_name, u.photo_url AS sender_photo_url,
+      `SELECT mf.id, mf.sender_id, u.name AS display_name, u.photo_url AS photo_url,
               mf.message, mf.lat, mf.lng, mf.created_at
        FROM map_feed_messages mf
        JOIN users u ON u.id = mf.sender_id
@@ -76,8 +80,8 @@ export const mapFeedService = {
     const userRes = await query(`SELECT name, photo_url FROM users WHERE id = $1`, [userId]);
     return {
       ...row,
-      sender_name: userRes.rows[0]?.name ?? '',
-      sender_photo_url: userRes.rows[0]?.photo_url ?? null,
+      display_name: userRes.rows[0]?.name ?? '',
+      photo_url: userRes.rows[0]?.photo_url ?? null,
     };
   },
 

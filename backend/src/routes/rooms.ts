@@ -54,7 +54,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 router.get('/official', async (req: AuthRequest, res: Response) => {
   try {
     const rooms = await roomService.ensureOfficialRooms(req.userId!);
-    res.json(rooms);
+    res.json({ rooms });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

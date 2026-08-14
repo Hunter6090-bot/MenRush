@@ -28,7 +28,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       req.query.radius !== undefined ? parseFloat(req.query.radius as string) : undefined;
 
     const messages = await mapFeedService.listNearby(req.userId!, { lat, lng, radiusKm });
-    res.json(messages);
+    res.json({ messages });
   } catch (err: any) {
     res.status(500).json({ error: err.message ?? 'Internal server error' });
   }

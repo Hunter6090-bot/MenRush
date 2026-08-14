@@ -400,7 +400,7 @@ export const roomsAPI = {
       `/rooms/${roomId}/temp-identity`,
     ),
   setTempIdentity: (roomId: string, data: { display_name: string; photo_url?: string }) =>
-    apiClient.post<{ display_name: string; photo_url: string | null }>(
+    apiClient.put<{ display_name: string; photo_url: string | null }>(
       `/rooms/${roomId}/temp-identity`,
       data,
     ),
