@@ -312,6 +312,10 @@ io.on('connection', (socket: Socket) => {
         calleeId: authorized.targetId,
       });
       // No live socket in user:{id} → they cannot answer WebRTC (push alone is not enough).
+      // Re-check after a short wait — mobile tabs often reconnect a beat after unlock.
+      if (!userSockets.has(authorized.targetId)) {
+        await new Promise((r) => setTimeout(r, 1200));
+      }
       if (!userSockets.has(authorized.targetId)) {
         logCallMetric('call_offline', {
           callerId: authorized.actorId,
