@@ -52,6 +52,7 @@ import { query } from './db';
 import { ensureUploadDirs, getUploadsRoot, probeUploadsWritable } from './lib/uploads-root';
 import { logCallMetric } from './services/call-metrics.service';
 import { mediaStorageMode } from './services/media-storage.service';
+import { warmIceServers } from './services/webrtc.service';
 
 // Transient DB disconnects must not take down login/API.
 process.on('unhandledRejection', (reason) => {
@@ -664,6 +665,7 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  warmIceServers();
   startPulseExpiryCron();
   startVerificationRetentionWorker();
   // Optional: in-process drip worker. Prefer an external cron in production
