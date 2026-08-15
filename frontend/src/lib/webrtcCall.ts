@@ -46,11 +46,24 @@ async function hmacSha1Base64(secret: string, message: string): Promise<string> 
 async function buildClientTurnFallback(): Promise<RTCIceServer[]> {
   try {
     const expiry = Math.floor(Date.now() / 1000) + 6 * 60 * 60;
-    const username = `${expiry}:menrush`;
-    const credential = await hmacSha1Base64(OPEN_RELAY_STATIC_SECRET, username);
+    const userA = `${expiry}:menrush`;
+    const userB = String(expiry);
+    const credA = await hmacSha1Base64(OPEN_RELAY_STATIC_SECRET, userA);
+    const credB = await hmacSha1Base64(OPEN_RELAY_STATIC_SECRET, userB);
     return [
       ...STATIC_ICE_SERVERS,
-      { urls: OPEN_RELAY_URLS, username, credential },
+      { urls: OPEN_RELAY_URLS[0]!, username: userA, credential: credA },
+      { urls: OPEN_RELAY_URLS, username: userA, credential: credA },
+      { urls: OPEN_RELAY_URLS, username: userB, credential: credB },
+      {
+        urls: [
+          'turns:openrelay.metered.ca:443?transport=tcp',
+          'turn:openrelay.metered.ca:443?transport=tcp',
+          'turn:openrelay.metered.ca:80',
+        ],
+        username: 'openrelayproject',
+        credential: 'openrelayproject',
+      },
     ];
   } catch {
     return STATIC_ICE_SERVERS;
@@ -400,14 +413,22 @@ export function waitForSocket(socket: Socket, timeoutMs = 10_000): Promise<void>
   });
 }
 
-export function createPeerConnection(iceServers: RTCIceServer[]): RTCPeerConnection {
-  // Prefer relay when available so cross-network / mobile carrier NAT works.
-  // Still allows host/srflx for same-LAN; browsers will pick the best candidate pair.
+export function createPeerConnection(
+  iceServers: RTCIceServer[],
+  options?: { forceRelay?: boolean },
+): RTCPeerConnection {
+  // Mobile: force TURN relay — host/srflx pairs often fail phone↔home Wi‑Fi
+  // (exactly the "your camera works, waiting for his video" stuck state).
+  const forceRelay =
+    options?.forceRelay === true ||
+    (options?.forceRelay !== false && (isIOSCallDevice() || isAndroidCallDevice()));
+
   return new RTCPeerConnection({
     iceServers,
     bundlePolicy: 'max-bundle',
     rtcpMuxPolicy: 'require',
-    iceCandidatePoolSize: 8,
+    iceCandidatePoolSize: 10,
+    iceTransportPolicy: forceRelay ? 'relay' : 'all',
   });
 }
 
