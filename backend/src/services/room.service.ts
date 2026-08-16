@@ -111,7 +111,7 @@ export const roomService = {
   async getRoom(roomId: string, requestingUserId: string) {
     const roomResult = await query(
       `SELECT r.id, r.name, r.description, r.avatar_url, r.created_by, r.is_location_based,
-              r.max_members, r.lat, r.lng, r.created_at, r.updated_at,
+              r.is_official, r.theme_slug, r.max_members, r.lat, r.lng, r.created_at, r.updated_at,
               COUNT(rm.id)::int AS member_count
        FROM rooms r
        LEFT JOIN room_members rm ON rm.room_id = r.id
@@ -188,11 +188,11 @@ export const roomService = {
 
   async joinRoom(userId: string, roomId: string) {
     const roomResult = await query(
-      `SELECT r.max_members, r.is_location_based, COUNT(rm.id)::int AS member_count
+      `SELECT r.max_members, r.is_location_based, r.is_official, COUNT(rm.id)::int AS member_count
        FROM rooms r
        LEFT JOIN room_members rm ON rm.room_id = r.id
        WHERE r.id = $1
-       GROUP BY r.max_members, r.is_location_based`,
+       GROUP BY r.max_members, r.is_location_based, r.is_official`,
       [roomId]
     );
 
@@ -201,7 +201,7 @@ export const roomService = {
     }
 
     const room = roomResult.rows[0];
-    if (!room.is_location_based) {
+    if (!room.is_location_based && !room.is_official) {
       throw new Error('This group is invite-only. Ask the owner to add you.');
     }
 
@@ -277,6 +277,8 @@ export const roomService = {
       throw new Error('Owner cannot leave the room. Transfer ownership or delete the room first');
     }
 
+    await this.clearTempIdentityOnLeave(userId, roomId);
+
     await query(
       `DELETE FROM room_members WHERE room_id = $1 AND user_id = $2`,
       [roomId, userId]
@@ -303,9 +305,18 @@ export const roomService = {
 
     const msg = result.rows[0] as any;
 
-    const senderRes = await query(`SELECT name FROM users WHERE id = $1`, [userId]);
+    // Use temp identity display_name/photo if present, otherwise fall back to real profile.
+    const senderRes = await query(
+      `SELECT COALESCE(ti.display_name, u.name) AS sender_name,
+              COALESCE(ti.photo_url, u.photo_url) AS sender_photo_url
+       FROM users u
+       LEFT JOIN room_temp_identities ti ON ti.user_id = u.id AND ti.room_id = $2
+       WHERE u.id = $1`,
+      [userId, roomId],
+    );
     if (senderRes.rows[0]) {
-      msg.sender_name = senderRes.rows[0].name;
+      msg.sender_name = senderRes.rows[0].sender_name;
+      msg.sender_photo_url = senderRes.rows[0].sender_photo_url;
     }
 
     // Update room updated_at
@@ -332,9 +343,11 @@ export const roomService = {
 
     const result = await query(
       `SELECT rm.id, rm.room_id, rm.sender_id, rm.message, rm.reply_to, rm.created_at,
-              u.name AS sender_name, u.photo_url AS sender_photo_url
+              COALESCE(ti.display_name, u.name) AS sender_name,
+              COALESCE(ti.photo_url, u.photo_url) AS sender_photo_url
        FROM room_messages rm
        JOIN users u ON u.id = rm.sender_id
+       LEFT JOIN room_temp_identities ti ON ti.user_id = rm.sender_id AND ti.room_id = rm.room_id
        WHERE rm.room_id = $1
          ${cursorClause}
        ORDER BY rm.created_at DESC
@@ -375,14 +388,116 @@ export const roomService = {
     }
 
     const result = await query(
-      `SELECT u.id, u.name, u.photo_url, rm.role
+      `SELECT u.id,
+              COALESCE(ti.display_name, u.name) AS name,
+              COALESCE(ti.photo_url, u.photo_url) AS photo_url,
+              rm.role
        FROM room_members rm
        JOIN users u ON u.id = rm.user_id
+       LEFT JOIN room_temp_identities ti ON ti.user_id = u.id AND ti.room_id = $1
        WHERE rm.room_id = $1
-       ORDER BY u.name ASC`,
+       ORDER BY COALESCE(ti.display_name, u.name) ASC`,
       [roomId],
     );
     return result.rows;
+  },
+
+  async getTempIdentity(userId: string, roomId: string) {
+    const res = await query(
+      `SELECT display_name, photo_url, save_name, save_photo
+       FROM room_temp_identities
+       WHERE user_id = $1 AND room_id = $2`,
+      [userId, roomId],
+    );
+    return res.rows[0] ?? null;
+  },
+
+  async setTempIdentity(
+    userId: string,
+    roomId: string,
+    data: { display_name: string; photo_url?: string | null; save_name?: boolean; save_photo?: boolean },
+  ) {
+    await query(
+      `INSERT INTO room_temp_identities (user_id, room_id, display_name, photo_url, save_name, save_photo, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+       ON CONFLICT (user_id, room_id)
+       DO UPDATE SET display_name = EXCLUDED.display_name,
+                     photo_url = EXCLUDED.photo_url,
+                     save_name = EXCLUDED.save_name,
+                     save_photo = EXCLUDED.save_photo,
+                     updated_at = NOW()`,
+      [
+        userId,
+        roomId,
+        data.display_name,
+        data.photo_url ?? null,
+        data.save_name ?? false,
+        data.save_photo ?? false,
+      ],
+    );
+    return this.getTempIdentity(userId, roomId);
+  },
+
+  async clearTempIdentityOnLeave(userId: string, roomId: string) {
+    await query(
+      `DELETE FROM room_temp_identities WHERE user_id = $1 AND room_id = $2`,
+      [userId, roomId],
+    );
+  },
+
+  async listOfficialRooms() {
+    const result = await query(
+      `SELECT r.id, r.name, r.description, r.avatar_url, r.theme_slug, r.max_members,
+              COUNT(rm.id)::int AS member_count
+       FROM rooms r
+       LEFT JOIN room_members rm ON rm.room_id = r.id
+       WHERE r.is_official = TRUE
+       GROUP BY r.id
+       ORDER BY r.name ASC`,
+      [],
+    );
+    return result.rows;
+  },
+
+  async ensureOfficialRooms(createdBy: string) {
+    const existing = await query(
+      `SELECT id FROM rooms WHERE is_official = TRUE LIMIT 1`,
+      [],
+    );
+    if (existing.rows.length > 0) {
+      return this.listOfficialRooms();
+    }
+
+    const themes: Array<{ name: string; slug: string; description: string }> = [
+      { name: 'Bears & Cubs', slug: 'bears-cubs', description: 'A warm space for bears and cubs.' },
+      { name: 'Daddies', slug: 'daddies', description: 'For daddies and their admirers.' },
+      { name: 'Leather & Gear', slug: 'leather-gear', description: 'All about leather, rubber, and gear.' },
+      { name: 'Muscle Jocks', slug: 'muscle-jocks', description: 'Gym culture, fitness, and jock life.' },
+      { name: 'Twinks & Twunks', slug: 'twinks-twunks', description: 'The twink and twunk scene.' },
+      { name: 'Smokers & Cigars', slug: 'smokers-cigars', description: 'For cigar and smoke enthusiasts.' },
+      { name: 'Discreet / DL', slug: 'discreet-dl', description: 'A discreet space for DL men.' },
+      { name: 'Group Play', slug: 'group-play', description: 'Organise and find group experiences.' },
+      { name: 'Kink & Pig', slug: 'kink-pig', description: 'Kink, fetish, and pig play.' },
+      { name: 'Hosting Tonight', slug: 'hosting-tonight', description: 'Who is hosting tonight? Find out here.' },
+    ];
+
+    for (const theme of themes) {
+      const id = uuidv4();
+      await query(
+        `INSERT INTO rooms (id, name, description, created_by, is_location_based, is_official, theme_slug, max_members, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, FALSE, TRUE, $5, 1000, NOW(), NOW())
+         ON CONFLICT DO NOTHING`,
+        [id, theme.name, theme.description, createdBy, theme.slug],
+      );
+      await query(
+        `INSERT INTO room_members (id, room_id, user_id, role, joined_at, last_read_at)
+         VALUES ($1, $2, $3, 'owner', NOW(), NOW())
+         ON CONFLICT DO NOTHING`,
+        [uuidv4(), id, createdBy],
+      );
+    }
+
+    return this.listOfficialRooms();
   },
 
   async deleteRoom(userId: string, roomId: string) {

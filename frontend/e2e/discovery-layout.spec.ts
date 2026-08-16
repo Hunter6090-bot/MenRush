@@ -44,14 +44,20 @@ test('nearby counts never cover the top category controls and controls stay clic
   const page = await ctx.newPage();
   await page.goto('/discover');
 
-  const counts = page.getByTestId('nearby-counts');
+  const counts = page.getByTestId('nearby-counts').first();
   await expect(counts).toBeVisible();
+
+  // Tribe filters live inline on mobile; under Mood & filters on desktop.
+  const filtersSummary = page.getByText(/Mood & filters/i);
+  if (await filtersSummary.isVisible().catch(() => false)) {
+    await filtersSummary.click();
+  }
 
   // Tribe category pills (Top, Twink, Daddy, …) stay unobstructed at the top.
   const twink = page.getByRole('button', { name: 'Twink', exact: true });
   await expect(twink).toBeVisible();
 
-  const slider = page.getByTestId('proximity-slider');
+  const slider = page.getByTestId('proximity-slider').first();
   await expect(slider).toBeVisible();
 
   const countsBox = await counts.boundingBox();
@@ -60,12 +66,18 @@ test('nearby counts never cover the top category controls and controls stay clic
   expect(countsBox).not.toBeNull();
   expect(twinkBox).not.toBeNull();
   expect(sliderBox).not.toBeNull();
-  expect(countsBox!.y).toBeGreaterThan(twinkBox!.y);
-  expect(sliderBox!.y).toBeGreaterThan(countsBox!.y);
+  // On desktop the map status chip can sit below filters; only assert non-overlap
+  // for the classic mobile strip layout where counts sit under tribe pills.
+  const viewport = page.viewportSize();
+  const isMobile = (viewport?.width ?? 1440) < 1024;
+  if (isMobile) {
+    expect(countsBox!.y).toBeGreaterThan(twinkBox!.y);
+    expect(sliderBox!.y).toBeGreaterThan(countsBox!.y);
+  }
 
   // Category and radius controls remain clickable (Playwright throws if an overlay intercepts).
   await twink.click();
-  await page.getByRole('button', { name: 'Increase search radius' }).click();
+  await page.getByRole('button', { name: 'Increase search radius' }).first().click();
 
   await ctx.close();
 });

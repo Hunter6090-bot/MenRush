@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
+import { useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Layout } from './Layout';
 import { ConversationList } from './ConversationList';
 import { RoomList } from './RoomList';
+import { CreateGroupModal } from './CreateGroupModal';
 import { Messages } from '../pages/Messaging';
 import { RoomChat } from '../pages/RoomChat';
 import { IconChat, IconRooms } from './icons';
@@ -19,6 +21,7 @@ export const MessagingHub = () => {
   const navigate = useNavigate();
   const { otherId, roomId } = useParams<{ otherId?: string; roomId?: string }>();
   const tab = hubTabFromPath(location.pathname);
+  const [createRoomOpen, setCreateRoomOpen] = useState(false);
 
   const setTab = (next: HubTab) => {
     if (next === tab) return;
@@ -96,11 +99,33 @@ export const MessagingHub = () => {
             <HubEmpty
               icon={<IconRooms size={36} className="text-[var(--copper)]/50" />}
               title="Open a room"
-              body="Select a group from the list to join the conversation, or create a new Premium group."
+              body="Select a group from the list, or create a new Premium group."
+              action={
+                <button
+                  type="button"
+                  onClick={() => setCreateRoomOpen(true)}
+                  className="mt-5 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all active:scale-95"
+                  style={{
+                    background: 'linear-gradient(135deg, #C4832A, #A45E18)',
+                    color: '#FFF5E6',
+                    boxShadow: '0 2px 12px rgba(196,131,42,0.35)',
+                  }}
+                >
+                  Create a group
+                </button>
+              }
             />
           )}
         </section>
       </div>
+      <CreateGroupModal
+        open={createRoomOpen}
+        onClose={() => setCreateRoomOpen(false)}
+        onCreated={(id) => {
+          setCreateRoomOpen(false);
+          navigate(`/rooms/${id}`);
+        }}
+      />
     </Layout>
   );
 };
@@ -109,10 +134,12 @@ function HubEmpty({
   icon,
   title,
   body,
+  action,
 }: {
   icon: ReactNode;
   title: string;
   body: string;
+  action?: ReactNode;
 }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
@@ -121,6 +148,7 @@ function HubEmpty({
       </div>
       <h2 className="text-lg font-bold text-[var(--cream)]">{title}</h2>
       <p className="mt-2 max-w-sm text-sm text-[var(--cream-muted)]">{body}</p>
+      {action}
     </div>
   );
 }
