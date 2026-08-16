@@ -1,5 +1,10 @@
 import { query } from '../db';
 import { ccbillService, CCBillTier } from './ccbill.service';
+import {
+  buildSafeWebhookMetadata,
+  classifyEventCategory,
+  webhookEventStore,
+} from './ccbill-webhook.service';
 
 export type PremiumTier = 'free' | 'premium' | 'premium_plus';
 export type PremiumFeature =
@@ -50,6 +55,16 @@ export class PremiumRequiredError extends Error {
   ) {
     super(message);
     this.name = 'PremiumRequiredError';
+  }
+}
+
+export class WebhookVerificationError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'WebhookVerificationError';
   }
 }
 
@@ -182,6 +197,11 @@ export const premiumService = {
     const tier = tierFromPassthrough(event.raw);
     const periodEnd =
       event.periodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const safeMeta = buildSafeWebhookMetadata({
+      eventId: event.eventId,
+      eventType: event.eventType,
+      subscriptionId: event.subscriptionId,
+    });
 
     await query(
       `UPDATE subscriptions
@@ -202,7 +222,7 @@ export const premiumService = {
         event.subscriptionId,
         event.customerId,
         periodEnd,
-        JSON.stringify(event.raw),
+        JSON.stringify(safeMeta),
       ],
     );
 
@@ -224,6 +244,11 @@ export const premiumService = {
     );
 
     const tier = (existing.rows[0]?.tier || tierFromPassthrough(event.raw)) as PremiumTier;
+    const safeMeta = buildSafeWebhookMetadata({
+      eventId: event.eventId,
+      eventType: event.eventType,
+      subscriptionId: event.subscriptionId,
+    });
 
     await query(
       `UPDATE subscriptions
@@ -232,52 +257,131 @@ export const premiumService = {
            updated_at = NOW(),
            metadata = metadata || $4::jsonb
        WHERE user_id = $1 AND status = 'active'`,
-      [event.userId, periodEnd, event.subscriptionId, JSON.stringify(event.raw)],
+      [event.userId, periodEnd, event.subscriptionId, JSON.stringify(safeMeta)],
     );
 
     await syncUserEntitlements(event.userId, tier, true, periodEnd);
     return { ok: true, userId: event.userId, tier, periodEnd };
   },
 
-  async deactivateFromWebhook(event: ReturnType<typeof ccbillService.parseWebhook>) {
+  async deactivateFromWebhook(
+    event: ReturnType<typeof ccbillService.parseWebhook>,
+    category?: ReturnType<typeof classifyEventCategory>,
+  ) {
     if (!event.userId) return { ok: false, reason: 'missing_user_id' };
+
+    const resolvedCategory = category || classifyEventCategory(event.eventType);
+    const safeMeta = buildSafeWebhookMetadata({
+      eventId: event.eventId,
+      eventType: event.eventType,
+      subscriptionId: event.subscriptionId,
+    });
 
     await query(
       `UPDATE subscriptions
-       SET status = 'expired', updated_at = NOW()
+       SET status = 'expired',
+           updated_at = NOW(),
+           metadata = metadata || $2::jsonb
        WHERE user_id = $1 AND status = 'active'`,
-      [event.userId],
+      [event.userId, JSON.stringify({ ...safeMeta, deactivation_category: resolvedCategory })],
     );
 
     await syncUserEntitlements(event.userId, 'free', false, null);
-    return { ok: true, userId: event.userId };
+    return { ok: true, userId: event.userId, category: resolvedCategory };
   },
 
+  /**
+   * Entry point for CCBill webhook delivery.
+   *
+   * Required order of operations:
+   *  1. Verify authenticity. Fails closed if CCBILL_WEBHOOK_SECRET is not
+   *     configured (see ccbillService.verifyWebhook).
+   *  2. Parse and classify the event: activation, renewal, cancellation,
+   *     expiry, refund, or chargeback. Refund and chargeback are kept as
+   *     distinct categories even though both currently deactivate Premium,
+   *     so future reward-reversal logic (issues #39, #40) can tell them
+   *     apart without another migration.
+   *  3. Require a stable provider event id. Without one, idempotency
+   *     cannot be guaranteed, so the event is rejected rather than risking
+   *     a silent duplicate.
+   *  4. Record the attempt under a database unique constraint. A duplicate
+   *     or replayed delivery for the same event id is a no-op.
+   *  5. Guard against out-of-order delivery for the same subscription.
+   *  6. Only then apply the entitlement change, and mark the event
+   *     processed or failed for audit.
+   */
   async handleWebhook(body: Record<string, unknown>) {
-    if (!ccbillService.verifyWebhook(body)) {
-      const err = new Error('Invalid webhook signature');
-      (err as any).code = 'invalid_signature';
-      throw err;
+    const verification = ccbillService.verifyWebhook(body);
+    if (!verification.ok) {
+      throw new WebhookVerificationError(
+        verification.reason || 'invalid_signature',
+        `CCBill webhook rejected: ${verification.reason || 'invalid_signature'}`,
+      );
     }
 
     const event = ccbillService.parseWebhook(body);
-    const type = event.eventType.toLowerCase();
+    const category = classifyEventCategory(event.eventType);
 
-    if (type.includes('newsale') || type.includes('new_sale')) {
-      return this.activateFromWebhook(event);
-    }
-    if (type.includes('renewal')) {
-      return this.renewFromWebhook(event);
-    }
-    if (
-      type.includes('cancel') ||
-      type.includes('expir') ||
-      type.includes('refund') ||
-      type.includes('chargeback')
-    ) {
-      return this.deactivateFromWebhook(event);
+    if (!event.eventId) {
+      throw new WebhookVerificationError(
+        'missing_event_id',
+        'CCBill webhook rejected: no stable provider event identifier could be derived',
+      );
     }
 
-    return { ok: true, ignored: true, eventType: event.eventType };
+    const attempt = await webhookEventStore.recordAttempt({
+      eventId: event.eventId,
+      eventType: event.eventType,
+      category,
+      userId: event.userId,
+      subscriptionId: event.subscriptionId,
+      occurredAt: event.occurredAt,
+    });
+
+    if (attempt.status === 'duplicate') {
+      return { ok: true, duplicate: true, eventId: event.eventId, category };
+    }
+
+    if (event.subscriptionId && event.occurredAt) {
+      const outOfOrder = await webhookEventStore.isOutOfOrder(
+        event.subscriptionId,
+        event.occurredAt,
+      );
+      if (outOfOrder) {
+        await webhookEventStore.markIgnoredOutOfOrder(attempt.id);
+        return {
+          ok: true,
+          ignored: true,
+          reason: 'out_of_order',
+          eventId: event.eventId,
+          category,
+        };
+      }
+    }
+
+    try {
+      let result: Record<string, unknown>;
+      switch (category) {
+        case 'activation':
+          result = await this.activateFromWebhook(event);
+          break;
+        case 'renewal':
+          result = await this.renewFromWebhook(event);
+          break;
+        case 'cancellation':
+        case 'expiry':
+        case 'refund':
+        case 'chargeback':
+          result = await this.deactivateFromWebhook(event, category);
+          break;
+        default:
+          result = { ok: true, ignored: true, eventType: event.eventType };
+      }
+      await webhookEventStore.markProcessed(attempt.id);
+      return { ...result, eventId: event.eventId, category };
+    } catch (err) {
+      await webhookEventStore.markFailed(attempt.id).catch(() => {});
+      throw err;
+    }
   },
 };
