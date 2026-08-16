@@ -164,7 +164,7 @@ function AppShell() {
 
   return (
     <>
-      <ToastNotifications />
+      {token ? <ToastNotifications /> : null}
       <Routes>
         <Route path="/" element={<ComingSoon />} />
         <Route path="/app" element={<AppEntry />} />
