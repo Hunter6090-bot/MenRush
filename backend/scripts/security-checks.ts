@@ -4,6 +4,14 @@ import os from 'os';
 import path from 'path';
 import { createAccessControl, SecurityError } from '../src/security/access';
 import {
+  canUserUseAdultAssuranceStub,
+  evaluateAdultAssuranceAccess,
+  isAdultAssuranceGateEnabled,
+  isAdultAssuranceProviderAvailable,
+  isUserSubjectToAdultAssuranceGate,
+  adultAssuranceProductionStubMisconfig,
+} from '../src/config/adult-assurance-gate';
+import {
   allowedUpload,
   safeUploadFilename,
   validateFileSignature,
@@ -26,6 +34,25 @@ async function rejectsWithCode(run: () => Promise<unknown>, code: string) {
   await assert.rejects(run, (error: unknown) => {
     return error instanceof SecurityError && error.code === code;
   });
+}
+
+function withEnv(overrides: Record<string, string | undefined>, run: () => void | Promise<void>) {
+  const previous: Record<string, string | undefined> = {};
+  for (const key of Object.keys(overrides)) {
+    previous[key] = process.env[key];
+    const value = overrides[key];
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+  return Promise.resolve()
+    .then(run)
+    .finally(() => {
+      for (const key of Object.keys(overrides)) {
+        const value = previous[key];
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    });
 }
 
 test('legacy ID gate cannot deny unverified accounts', async () => {
@@ -129,6 +156,233 @@ test('ID verification remains optional with no legacy environment setting', asyn
   }
 });
 
+test('adult assurance: confirmed allows access', () => {
+  const decision = evaluateAdultAssuranceAccess({
+    ageAssuranceStatus: 'confirmed',
+    providerAvailable: true,
+  });
+  assert.equal(decision.allowed, true);
+  assert.equal(decision.reason, 'confirmed');
+  assert.equal(decision.error_code, null);
+});
+
+test('adult assurance: pending blocks with adult_assurance_required', () => {
+  const decision = evaluateAdultAssuranceAccess({
+    ageAssuranceStatus: 'pending',
+    providerAvailable: true,
+  });
+  assert.equal(decision.allowed, false);
+  assert.equal(decision.reason, 'blocked_pending');
+  assert.equal(decision.error_code, 'adult_assurance_required');
+  assert.equal(decision.retry_allowed, true);
+});
+
+test('adult assurance: failed blocks and allows retry', () => {
+  const decision = evaluateAdultAssuranceAccess({
+    ageAssuranceStatus: 'failed',
+    providerAvailable: true,
+  });
+  assert.equal(decision.allowed, false);
+  assert.equal(decision.reason, 'blocked_failed');
+  assert.equal(decision.error_code, 'adult_assurance_required');
+  assert.equal(decision.retry_allowed, true);
+});
+
+test('adult assurance: legacy self_attested is not grandfathered', () => {
+  const decision = evaluateAdultAssuranceAccess({
+    ageAssuranceStatus: 'self_attested',
+    providerAvailable: true,
+  });
+  assert.equal(decision.allowed, false);
+  assert.equal(decision.reason, 'blocked_self_attested');
+  assert.equal(decision.error_code, 'adult_assurance_required');
+});
+
+test('adult assurance: provider unavailable hard-blocks unconfirmed with machine-readable state', () => {
+  const decision = evaluateAdultAssuranceAccess({
+    ageAssuranceStatus: 'pending',
+    providerAvailable: false,
+  });
+  assert.equal(decision.allowed, false);
+  assert.equal(decision.reason, 'provider_unavailable');
+  assert.equal(decision.error_code, 'adult_assurance_provider_unavailable');
+  assert.equal(decision.provider_available, false);
+  assert.equal(decision.retry_allowed, true);
+});
+
+test('adult assurance: confirmed still allowed when provider unavailable', () => {
+  const decision = evaluateAdultAssuranceAccess({
+    ageAssuranceStatus: 'confirmed',
+    providerAvailable: false,
+  });
+  assert.equal(decision.allowed, true);
+  assert.equal(decision.reason, 'confirmed');
+});
+
+test('adult assurance: canary subjects skip gate for non-listed members', () => {
+  const decision = evaluateAdultAssuranceAccess({
+    ageAssuranceStatus: 'pending',
+    providerAvailable: false,
+    subjectToEnforcement: false,
+  });
+  assert.equal(decision.allowed, true);
+  assert.equal(decision.reason, 'not_in_enforcement_subjects');
+});
+
+test('adult assurance middleware denies pending users with structured SecurityError', async () => {
+  await withEnv(
+    {
+      ADULT_ASSURANCE_ENFORCEMENT_DISABLED: undefined,
+      ADULT_ASSURANCE_PROVIDER: 'stub',
+      ADULT_ASSURANCE_PROVIDER_UNAVAILABLE: undefined,
+    },
+    async () => {
+      assert.equal(isAdultAssuranceGateEnabled(), true);
+      assert.equal(isAdultAssuranceProviderAvailable(), true);
+      const access = createAccessControl(async () => ({
+        rows: [{ age_assurance_status: 'pending' }],
+        rowCount: 1,
+      }));
+      await rejectsWithCode(() => access.requireAdultAssurance('user-1'), 'adult_assurance_required');
+      try {
+        await access.requireAdultAssurance('user-1');
+        assert.fail('expected throw');
+      } catch (error) {
+        assert.ok(error instanceof SecurityError);
+        assert.equal(error.details?.age_assurance_status, 'pending');
+        assert.equal(error.details?.retry_allowed, true);
+      }
+    },
+  );
+});
+
+test('adult assurance middleware denies failed users', async () => {
+  await withEnv({ ADULT_ASSURANCE_PROVIDER: 'stub' }, async () => {
+    const access = createAccessControl(async () => ({
+      rows: [{ age_assurance_status: 'failed' }],
+      rowCount: 1,
+    }));
+    await rejectsWithCode(() => access.requireAdultAssurance('user-1'), 'adult_assurance_required');
+  });
+});
+
+test('adult assurance middleware allows confirmed users', async () => {
+  await withEnv({ ADULT_ASSURANCE_PROVIDER: 'stub' }, async () => {
+    const access = createAccessControl(async () => ({
+      rows: [{ age_assurance_status: 'confirmed' }],
+      rowCount: 1,
+    }));
+    await access.requireAdultAssurance('user-1');
+  });
+});
+
+test('adult assurance middleware hard-blocks when provider unavailable', async () => {
+  await withEnv(
+    {
+      ADULT_ASSURANCE_PROVIDER: 'stub',
+      ADULT_ASSURANCE_PROVIDER_UNAVAILABLE: 'true',
+    },
+    async () => {
+      assert.equal(isAdultAssuranceProviderAvailable(), false);
+      const access = createAccessControl(async () => ({
+        rows: [{ age_assurance_status: 'self_attested' }],
+        rowCount: 1,
+      }));
+      await rejectsWithCode(
+        () => access.requireAdultAssurance('legacy-user'),
+        'adult_assurance_provider_unavailable',
+      );
+    },
+  );
+});
+
+test('adult assurance rollback flag disables enforcement', async () => {
+  await withEnv({ ADULT_ASSURANCE_ENFORCEMENT_DISABLED: 'true' }, async () => {
+    assert.equal(isAdultAssuranceGateEnabled(), false);
+    const access = createAccessControl(async () => ({
+      rows: [{ age_assurance_status: 'pending' }],
+      rowCount: 1,
+    }));
+    await access.requireAdultAssurance('user-1');
+  });
+});
+
+test('adult assurance never satisfied by identity-verified-only state', async () => {
+  // requireAdultAssurance reads only age_assurance_status — is_verified is irrelevant.
+  await withEnv({ ADULT_ASSURANCE_PROVIDER: 'stub', NODE_ENV: 'test' }, async () => {
+    const access = createAccessControl(async () => ({
+      rows: [{ age_assurance_status: 'self_attested', is_verified: true, email: 'id@test.local' }],
+      rowCount: 1,
+    }));
+    await rejectsWithCode(() => access.requireAdultAssurance('id-only'), 'adult_assurance_required');
+  });
+});
+
+test('adult assurance stub is unavailable in production even if misconfigured', async () => {
+  await withEnv(
+    {
+      NODE_ENV: 'production',
+      ADULT_ASSURANCE_PROVIDER: 'stub',
+      ADULT_ASSURANCE_PROVIDER_UNAVAILABLE: undefined,
+    },
+    async () => {
+      assert.equal(isAdultAssuranceProviderAvailable(), false);
+      assert.equal(canUserUseAdultAssuranceStub('any-user', 'owner@test.local'), false);
+      assert.equal(adultAssuranceProductionStubMisconfig(), true);
+    },
+  );
+});
+
+test('adult assurance canary subjects gate only listed accounts', async () => {
+  await withEnv(
+    {
+      NODE_ENV: 'test',
+      ADULT_ASSURANCE_PROVIDER: 'none',
+      ADULT_ASSURANCE_ENFORCEMENT_SUBJECTS: 'owner@test.local,aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      ADULT_ASSURANCE_ENFORCEMENT_DISABLED: undefined,
+    },
+    async () => {
+      assert.equal(isUserSubjectToAdultAssuranceGate('other-user', 'other@test.local'), false);
+      assert.equal(isUserSubjectToAdultAssuranceGate('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', null), true);
+      assert.equal(isUserSubjectToAdultAssuranceGate('x', 'owner@test.local'), true);
+
+      const access = createAccessControl(async (_sql, values) => {
+        const id = String(values?.[0] || '');
+        if (id === 'other-user') {
+          return {
+            rows: [{ age_assurance_status: 'pending', email: 'other@test.local' }],
+            rowCount: 1,
+          };
+        }
+        return {
+          rows: [{ age_assurance_status: 'pending', email: 'owner@test.local' }],
+          rowCount: 1,
+        };
+      });
+
+      await access.requireAdultAssurance('other-user');
+      await rejectsWithCode(
+        () => access.requireAdultAssurance('owner-user'),
+        'adult_assurance_provider_unavailable',
+      );
+    },
+  );
+});
+
+test('adult assurance staging stub allowlist restricts self-confirm', async () => {
+  await withEnv(
+    {
+      NODE_ENV: 'development',
+      ADULT_ASSURANCE_PROVIDER: 'stub',
+      ADULT_ASSURANCE_STUB_ALLOWLIST: 'owner@test.local',
+    },
+    async () => {
+      assert.equal(canUserUseAdultAssuranceStub('u1', 'owner@test.local'), true);
+      assert.equal(canUserUseAdultAssuranceStub('u2', 'other@test.local'), false);
+    },
+  );
+});
+
 test('uploads use allowlisted MIME types, generated extensions, and magic bytes', async () => {
   assert.equal(allowedUpload('image/svg+xml', 'profile'), false);
   assert.equal(allowedUpload('image/jpeg', 'profile'), true);
@@ -173,9 +427,14 @@ test('source guards preserve location, push, socket, and media privacy boundarie
   const albums = fs.readFileSync(path.join(root, 'src/routes/albums.ts'), 'utf8');
   for (const route of ['rooms', 'events', 'pulse', 'profile-meta']) {
     const source = fs.readFileSync(path.join(root, `src/routes/${route}.ts`), 'utf8');
-    assert.match(source, /router\.use\(authMiddleware,\s*verifiedMiddleware\)/);
+    assert.match(
+      source,
+      /router\.use\(authMiddleware,\s*verifiedMiddleware,\s*adultAssuranceMiddleware\)/,
+    );
   }
 
+  assert.match(messages, /adultAssuranceMiddleware/);
+  assert.match(server, /requireAdultAssurance/);
   assert.equal(server.includes("app.use('/uploads', express.static"), false);
   assert.equal(server.includes('ST_DWithin(p.location::geography'), false);
   assert.equal(server.includes("socket.on('message'"), false);
@@ -185,6 +444,17 @@ test('source guards preserve location, push, socket, and media privacy boundarie
   assert.match(messages, /router\.get\('\/:messageId\/media'/);
   assert.match(messages, /messageService\.forViewer\(message,\s*receiver_id\)/);
   assert.match(albums, /router\.get\('\/media\/:photoId'/);
+});
+
+test('adult assurance routes stay reachable without the social gate middleware', () => {
+  const root = path.resolve(__dirname, '..');
+  const verify = fs.readFileSync(path.join(root, 'src/routes/verify.ts'), 'utf8');
+  assert.match(verify, /\/adult\/start/);
+  assert.match(verify, /\/adult\/retry/);
+  assert.match(verify, /\/adult\/complete/);
+  assert.equal(verify.includes('adultAssuranceMiddleware'), false);
+  const premium = fs.readFileSync(path.join(root, 'src/routes/premium.ts'), 'utf8');
+  assert.equal(premium.includes('adultAssuranceMiddleware'), false);
 });
 
 async function main() {

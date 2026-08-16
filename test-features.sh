@@ -1,6 +1,11 @@
 #!/bin/bash
 # MenRush - Pre-deployment Feature Verification
-# Covers: beta invite gate, auth, location, discovery, photo, likes/matches, messaging
+# Covers: beta invite gate, auth, location, adult-assurance enforcement,
+# discovery, photo, likes/matches, messaging
+#
+# Adult Assurance is enforced by default. Run the API under test with:
+#   ADULT_ASSURANCE_PROVIDER=stub
+# so this script can complete assurance after asserting the unassured block.
 
 set -euo pipefail
 
@@ -114,6 +119,90 @@ if [ -n "$PHOTO_URL" ]; then
   ok "Photo upload ($PHOTO_URL)"
 else
   bad "Photo upload failed: $PHOTO_RES"
+fi
+
+# 6b. Adult Assurance enforcement (issue #50) — unassured members must be blocked.
+# Fresh signups are self_attested only; DOB is not confirmed Adult Assurance.
+echo "🛡️  Adult-assurance enforcement..."
+NEARBY_BLOCK_CODE=$(curl -s -o /tmp/mr_aa_nearby.body -w "%{http_code}" \
+  -X GET "$API_URL/users/nearby?lat=40.7128&lng=-74.0060" \
+  -H "Authorization: Bearer $TOKEN1")
+NEARBY_BLOCK_BODY=$(cat /tmp/mr_aa_nearby.body 2>/dev/null || true)
+if [ "$NEARBY_BLOCK_CODE" = "403" ]; then
+  ok "Unassured user blocked from discovery (HTTP 403)"
+  if echo "$NEARBY_BLOCK_BODY" | grep -Eq 'adult_assurance_required|adult_assurance_provider_unavailable'; then
+    ok "Discovery block returns machine-readable adult_assurance code"
+  else
+    bad "Discovery 403 missing adult_assurance code: $NEARBY_BLOCK_BODY"
+  fi
+else
+  bad "Unassured discovery expected 403, got HTTP $NEARBY_BLOCK_CODE — $NEARBY_BLOCK_BODY"
+fi
+
+MATCHES_BLOCK_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+  -X GET "$API_URL/users/matches" -H "Authorization: Bearer $TOKEN1")
+if [ "$MATCHES_BLOCK_CODE" = "403" ]; then
+  ok "Unassured user blocked from matches (HTTP 403)"
+else
+  bad "Unassured matches expected 403, got HTTP $MATCHES_BLOCK_CODE"
+fi
+
+MSG_BLOCK_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+  -X POST "$API_URL/messages" \
+  -H "Authorization: Bearer $TOKEN1" \
+  -H "Content-Type: application/json" \
+  -d "{\"receiver_id\":\"$USER2_ID\",\"message\":\"should be blocked\"}")
+if [ "$MSG_BLOCK_CODE" = "403" ]; then
+  ok "Unassured user blocked from messaging (HTTP 403)"
+else
+  bad "Unassured messaging expected 403, got HTTP $MSG_BLOCK_CODE"
+fi
+
+# Status + retry endpoints must stay open while gated routes are blocked.
+VERIFY_STATUS=$(curl -s -w "\n%{http_code}" "$API_URL/verify/status" -H "Authorization: Bearer $TOKEN1")
+VERIFY_CODE=$(echo "$VERIFY_STATUS" | tail -n1)
+VERIFY_BODY=$(echo "$VERIFY_STATUS" | sed '$d')
+if [ "$VERIFY_CODE" = "200" ]; then
+  ok "verify/status reachable while unassured (HTTP 200)"
+else
+  bad "verify/status expected 200 while unassured, got HTTP $VERIFY_CODE"
+fi
+
+complete_adult_assurance() {
+  local token="$1"
+  local label="$2"
+  local start_res start_code session_id complete_res complete_code
+  start_res=$(curl -s -w "\n%{http_code}" -X POST "$API_URL/verify/adult/start" \
+    -H "Authorization: Bearer $token" -H "Content-Type: application/json" -d '{}')
+  start_code=$(echo "$start_res" | tail -n1)
+  start_body=$(echo "$start_res" | sed '$d')
+  if [ "$start_code" = "503" ]; then
+    die "Adult assurance provider unavailable (HTTP 503). Run the API with ADULT_ASSURANCE_PROVIDER=stub for predeploy. Body: $start_body"
+  fi
+  [ "$start_code" = "201" ] || die "$label adult/start failed HTTP $start_code: $start_body"
+  session_id=$(json_field "$start_body" "session_id")
+  [ -n "$session_id" ] || die "$label adult/start missing session_id: $start_body"
+  complete_res=$(curl -s -w "\n%{http_code}" -X POST "$API_URL/verify/adult/complete" \
+    -H "Authorization: Bearer $token" -H "Content-Type: application/json" \
+    -d "{\"session_id\":\"$session_id\",\"outcome\":\"confirmed\"}")
+  complete_code=$(echo "$complete_res" | tail -n1)
+  complete_body=$(echo "$complete_res" | sed '$d')
+  [ "$complete_code" = "200" ] || die "$label adult/complete failed HTTP $complete_code: $complete_body"
+  ok "$label completed Adult Assurance (stub)"
+}
+
+complete_adult_assurance "$TOKEN1" "Alice"
+complete_adult_assurance "$TOKEN2" "Bob"
+
+# Retry path: force a failed attempt then retry+confirm on a throwaway third user is heavy;
+# assert retry endpoint accepts an already-confirmed member's re-start (idempotent session).
+RETRY_CODE=$(curl -s -o /tmp/mr_aa_retry.body -w "%{http_code}" \
+  -X POST "$API_URL/verify/adult/retry" -H "Authorization: Bearer $TOKEN1" \
+  -H "Content-Type: application/json" -d '{}')
+if [ "$RETRY_CODE" = "201" ] || [ "$RETRY_CODE" = "503" ]; then
+  ok "adult/retry endpoint reachable (HTTP $RETRY_CODE)"
+else
+  bad "adult/retry unexpected HTTP $RETRY_CODE — $(head -c 200 /tmp/mr_aa_retry.body)"
 fi
 
 # 7. Discovery / nearby

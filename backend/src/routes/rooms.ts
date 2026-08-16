@@ -1,13 +1,13 @@
 import { Router, Response } from 'express';
 import { roomService } from '../services/room.service';
-import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
+import { AuthRequest, authMiddleware, verifiedMiddleware, adultAssuranceMiddleware } from '../middleware/auth';
 import { SecurityError } from '../security/access';
 import { AddRoomMemberSchema, CreateRoomSchema, RoomMessageSchema } from '../types/validation';
 import { PremiumRequiredError } from '../services/premium.service';
 
 const router = Router();
 
-router.use(authMiddleware, verifiedMiddleware);
+router.use(authMiddleware, verifiedMiddleware, adultAssuranceMiddleware);
 
 function handleRoomError(res: Response, error: unknown) {
   if (error instanceof PremiumRequiredError) {

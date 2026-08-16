@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { userService } from '../services/user.service';
 import { profileViewsService } from '../services/profile-views.service';
 import { notificationService } from '../services/notification.service';
-import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
+import { AuthRequest, authMiddleware, verifiedMiddleware, adultAssuranceMiddleware } from '../middleware/auth';
 import { SecurityError } from '../security/access';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
 import { LocationSchema, ProfileSchema } from '../types/validation';
@@ -110,7 +110,7 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.get('/search', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/search', verifiedMiddleware, adultAssuranceMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const q = typeof req.query.q === 'string' ? req.query.q : '';
     const users = await userService.searchProfiles(req.userId!, q);
@@ -120,7 +120,7 @@ router.get('/search', verifiedMiddleware, async (req: AuthRequest, res: Response
   }
 });
 
-router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/nearby', verifiedMiddleware, adultAssuranceMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { radius, minAge, maxAge, interests, onlyPulse, lookingFor, mood } = req.query;
     const requestedRadius = radius ? Number.parseFloat(radius as string) : 5;
@@ -157,7 +157,7 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
   }
 });
 
-router.get('/profile-views', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/profile-views', verifiedMiddleware, adultAssuranceMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const summary = await profileViewsService.getViewersForUser(req.userId!);
     res.json(summary);
@@ -166,7 +166,7 @@ router.get('/profile-views', verifiedMiddleware, async (req: AuthRequest, res: R
   }
 });
 
-router.get('/profile/:id', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/profile/:id', verifiedMiddleware, adultAssuranceMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const viewerId = req.userId!;
     const targetId = req.params.id;
@@ -205,7 +205,7 @@ router.get('/profile/:id', verifiedMiddleware, async (req: AuthRequest, res: Res
   }
 });
 
-router.post('/like/:id', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/like/:id', verifiedMiddleware, adultAssuranceMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const isMatch = await userService.likeUser(req.userId!, req.params.id);
     const io = req.app.get('io');
@@ -250,7 +250,7 @@ router.post('/like/:id', verifiedMiddleware, async (req: AuthRequest, res: Respo
   }
 });
 
-router.get('/matches', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/matches', verifiedMiddleware, adultAssuranceMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const matches = await userService.getMatches(req.userId!);
     res.json(matches);
@@ -259,7 +259,7 @@ router.get('/matches', verifiedMiddleware, async (req: AuthRequest, res: Respons
   }
 });
 
-router.get('/likes/received/summary', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/likes/received/summary', verifiedMiddleware, adultAssuranceMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const summary = await userService.getReceivedLikesSummary(req.userId!);
     res.json(summary);
@@ -269,7 +269,7 @@ router.get('/likes/received/summary', verifiedMiddleware, async (req: AuthReques
 });
 
 /** Outbound likes — ids only, so Discover/Stream Match CTAs survive reload. */
-router.get('/likes/sent', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/likes/sent', verifiedMiddleware, adultAssuranceMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const ids = await userService.getSentLikeIds(req.userId!);
     res.json({ ids });
@@ -320,7 +320,7 @@ const PulseStartSchema = z.object({
   minutes: z.number().int().min(5).max(480).optional(),
 });
 
-router.post('/pulse/start', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/pulse/start', verifiedMiddleware, adultAssuranceMiddleware, async (req: AuthRequest, res: Response) => {
   const parsed = PulseStartSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.errors[0].message });
@@ -336,7 +336,7 @@ router.post('/pulse/start', verifiedMiddleware, async (req: AuthRequest, res: Re
   }
 });
 
-router.post('/pulse/stop', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/pulse/stop', verifiedMiddleware, adultAssuranceMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     await userService.stopPulse(req.userId!);
     res.json({ available_until: null });

@@ -43,7 +43,7 @@ import { roomService } from './services/room.service';
 import { sendPushToUser } from './services/push.service';
 import { notificationService } from './services/notification.service';
 import { messageService } from './services/message.service';
-import { accessControl } from './security/access';
+import { accessControl, SecurityError } from './security/access';
 import { logResendMailerStatus } from './services/mailer.service';
 import { startVerificationRetentionWorker } from './services/verification/retention.worker';
 import { Sentry } from './observability/sentry';
@@ -52,6 +52,15 @@ import { query } from './db';
 import { ensureUploadDirs, getUploadsRoot, probeUploadsWritable } from './lib/uploads-root';
 import { logCallMetric } from './services/call-metrics.service';
 import { mediaStorageMode } from './services/media-storage.service';
+import { adultAssuranceProductionStubMisconfig } from './config/adult-assurance-gate';
+
+if (adultAssuranceProductionStubMisconfig()) {
+  console.error(
+    '[boot] ADULT_ASSURANCE_PROVIDER=stub is configured under NODE_ENV=production. ' +
+      'Stub is ignored in production (treated as unavailable). Remove the setting. ' +
+      'Never use stub in production — it would allow self-confirm if it were honoured.',
+  );
+}
 
 // Transient DB disconnects must not take down login/API.
 process.on('unhandledRejection', (reason) => {
@@ -307,6 +316,7 @@ io.on('connection', (socket: Socket) => {
     try {
       const decoded = authService.verifyToken(token);
       await accessControl.requireVerified(decoded.userId);
+      await accessControl.requireAdultAssurance(decoded.userId);
       const previousUserId = socketToUser.get(socket.id);
       if (previousUserId && previousUserId !== decoded.userId) {
         removeUserSocket(previousUserId, socket.id);
@@ -317,6 +327,14 @@ io.on('connection', (socket: Socket) => {
       socket.join(`user:${decoded.userId}`);
       socket.emit('authenticated', { userId: decoded.userId });
     } catch (error) {
+      if (error instanceof SecurityError && error.code.startsWith('adult_assurance')) {
+        socket.emit('authentication:error', {
+          error: error.code,
+          code: error.code,
+          ...(error.details || {}),
+        });
+        return;
+      }
       socket.emit('authentication:error', { error: 'authentication_failed' });
     }
   });

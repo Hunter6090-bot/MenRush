@@ -1,12 +1,12 @@
 import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
-import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
+import { AuthRequest, authMiddleware, verifiedMiddleware, adultAssuranceMiddleware } from '../middleware/auth';
 import { hotSpotsService } from '../services/hot-spots.service';
 import { LocationSchema } from '../types/validation';
 
 const router = Router();
-router.use(authMiddleware, verifiedMiddleware);
+router.use(authMiddleware, verifiedMiddleware, adultAssuranceMiddleware);
 
 const checkInLimiter = rateLimit({
   windowMs: 60 * 1000,
