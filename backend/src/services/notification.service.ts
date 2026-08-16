@@ -127,6 +127,23 @@ export const notificationService = {
     return result.rowCount ?? 0;
   },
 
+  /** #74 — user-initiated delete (distinct from expiry/retention, if any exists elsewhere). */
+  async remove(userId: string, notificationId: string): Promise<boolean> {
+    const result = await query(
+      `DELETE FROM notifications WHERE id = $1 AND user_id = $2 RETURNING id`,
+      [notificationId, userId],
+    );
+    return (result.rowCount ?? 0) > 0;
+  },
+
+  async removeAllRead(userId: string): Promise<number> {
+    const result = await query(
+      `DELETE FROM notifications WHERE user_id = $1 AND read = TRUE RETURNING id`,
+      [userId],
+    );
+    return result.rowCount ?? 0;
+  },
+
   /** Emit payload shape consumed by the frontend socket + store. */
   toSocketPayload(row: NotificationRow) {
     return {

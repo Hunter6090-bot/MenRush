@@ -14,7 +14,7 @@ export function toggleProfileInterest(
   interests: string[],
   tag: string,
   group: { tags: readonly string[]; singleSelect?: boolean },
-  maxTags = 10,
+  maxTags = 20,
 ): string[] {
   if (interests.includes(tag)) {
     return interests.filter((t) => t !== tag);

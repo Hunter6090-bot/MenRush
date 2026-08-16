@@ -49,6 +49,9 @@ import { startVerificationRetentionWorker } from './services/verification/retent
 import { Sentry } from './observability/sentry';
 import { corsOrigin } from './security/cors';
 import { query } from './db';
+import { ensureUploadDirs, getUploadsRoot, probeUploadsWritable } from './lib/uploads-root';
+import { logCallMetric } from './services/call-metrics.service';
+import { mediaStorageMode } from './services/media-storage.service';
 
 // Transient DB disconnects must not take down login/API.
 process.on('unhandledRejection', (reason) => {
@@ -77,8 +80,15 @@ app.use('/api/premium/webhook', premiumWebhookRoutes);
 app.use(express.json());
 app.use('/api/verify', verifyRoutes);
 // Profile / message / album media. fallthrough:true so missing files hit a clean 404
-// (not 500). Production mounts a Railway volume at /app/uploads (see Dockerfile).
-const uploadsRoot = path.join(__dirname, '../uploads');
+// (not 500). Production mounts a Railway volume at /app/uploads (see Dockerfile + UPLOADS_ROOT).
+ensureUploadDirs();
+const uploadsRoot = getUploadsRoot();
+console.log(`[media] uploads root: ${uploadsRoot} mode=${mediaStorageMode()}`);
+void probeUploadsWritable().then((probe) => {
+  if (probe.ok) console.log('[media] volume writable');
+  else console.error('[media] volume NOT writable:', probe.error, probe.root);
+});
+
 app.use(
   '/uploads',
   express.static(uploadsRoot, {
@@ -159,16 +169,53 @@ app.post('/api/waitlist', async (req, res) => {
 
 // Health checks — `/health` for Railway/Docker; `/api/health` for edge proxies
 // that only route `/api/*` to this service (menrush.com → backend).
-const healthHandler: express.RequestHandler = (_req, res) => {
-  res.json({ status: 'ok', service: 'menrush-backend' });
+const healthHandler: express.RequestHandler = async (_req, res) => {
+  const media = await probeUploadsWritable();
+  res.json({
+    status: media.ok ? 'ok' : 'degraded',
+    service: 'menrush-backend',
+    media: {
+      ok: media.ok,
+      root: media.root,
+      storage: mediaStorageMode(),
+      error: media.error ?? null,
+    },
+  });
 };
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 app.get('/api/healthz', healthHandler);
 
-// Socket.IO
-const userSockets: Map<string, string> = new Map(); // userId → socketId
+// Socket.IO — track ALL live sockets per user (phone + tab + reconnect).
+// A single socketId map wrongly marked people offline when one tab closed
+// while another stayed open — common BOA↔Bigbear "we were both on" failures.
+const userSockets: Map<string, Set<string>> = new Map(); // userId → socket ids
 const socketToUser: Map<string, string> = new Map(); // socketId → userId
+
+function addUserSocket(userId: string, socketId: string) {
+  let set = userSockets.get(userId);
+  if (!set) {
+    set = new Set();
+    userSockets.set(userId, set);
+  }
+  set.add(socketId);
+}
+
+function removeUserSocket(userId: string, socketId: string): boolean {
+  const set = userSockets.get(userId);
+  if (!set) return false;
+  set.delete(socketId);
+  if (set.size === 0) {
+    userSockets.delete(userId);
+    return true; // fully offline
+  }
+  return false;
+}
+
+function isUserSocketOnline(userId: string): boolean {
+  const set = userSockets.get(userId);
+  return Boolean(set && set.size > 0);
+}
 
 interface PendingCall {
   callerId: string;
@@ -261,8 +308,10 @@ io.on('connection', (socket: Socket) => {
       const decoded = authService.verifyToken(token);
       await accessControl.requireVerified(decoded.userId);
       const previousUserId = socketToUser.get(socket.id);
-      if (previousUserId) userSockets.delete(previousUserId);
-      userSockets.set(decoded.userId, socket.id);
+      if (previousUserId && previousUserId !== decoded.userId) {
+        removeUserSocket(previousUserId, socket.id);
+      }
+      addUserSocket(decoded.userId, socket.id);
       socketToUser.set(socket.id, decoded.userId);
       await userService.setOnlineStatus(decoded.userId, true);
       socket.join(`user:${decoded.userId}`);
@@ -287,8 +336,20 @@ io.on('connection', (socket: Socket) => {
     const authorized = await authorizeCallTarget(socket, data?.to);
     if (!authorized || !data.offer) return;
     try {
-      // No live socket in user:{id} → they cannot answer WebRTC (push alone is not enough).
-      if (!userSockets.has(authorized.targetId)) {
+      logCallMetric('call_initiate', {
+        callerId: authorized.actorId,
+        calleeId: authorized.targetId,
+      });
+      // No live socket for this user → they cannot answer WebRTC (push alone is not enough).
+      // Re-check after a short wait — mobile tabs often reconnect a beat after unlock.
+      if (!isUserSocketOnline(authorized.targetId)) {
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      if (!isUserSocketOnline(authorized.targetId)) {
+        logCallMetric('call_offline', {
+          callerId: authorized.actorId,
+          calleeId: authorized.targetId,
+        });
         socket.emit('call:error', { error: 'target_offline' });
         return;
       }
@@ -303,6 +364,10 @@ io.on('connection', (socket: Socket) => {
         fromName,
         offer: data.offer,
       });
+      logCallMetric('call_incoming_emitted', {
+        callerId: authorized.actorId,
+        calleeId: authorized.targetId,
+      });
       // Best-effort heads-up when the recipient's app is backgrounded/locked.
       // The service worker suppresses this if a foreground tab is focused, so
       // an in-app session won't double-alert. Web push cannot wake a live
@@ -314,6 +379,7 @@ io.on('connection', (socket: Socket) => {
         tag: `call-${authorized.actorId}`,
       }).catch(() => undefined);
     } catch {
+      logCallMetric('call_error', { code: 'target_not_authorized' });
       socket.emit('call:error', { error: 'target_not_authorized' });
     }
   });
@@ -323,6 +389,10 @@ io.on('connection', (socket: Socket) => {
     if (!authorized || !data.answer) return;
     const pending = findPendingCall(authorized.actorId, authorized.targetId);
     if (pending) pending.answered = true;
+    logCallMetric('call_answer', {
+      calleeId: authorized.actorId,
+      callerId: authorized.targetId,
+    });
     io.to(`user:${authorized.targetId}`).emit('call:answered', {
       from: authorized.actorId,
       answer: data.answer,
@@ -334,6 +404,10 @@ io.on('connection', (socket: Socket) => {
     if (!authorized) return;
     const pending = findPendingCall(authorized.actorId, authorized.targetId);
     if (pending) clearPendingCall(pending.callerId, pending.calleeId);
+    logCallMetric('call_reject', {
+      calleeId: authorized.actorId,
+      callerId: authorized.targetId,
+    });
     io.to(`user:${authorized.targetId}`).emit('call:rejected', { from: authorized.actorId });
   });
 
@@ -350,12 +424,18 @@ io.on('connection', (socket: Socket) => {
     const authorized = await authorizeCallTarget(socket, data?.to);
     if (!authorized) return;
     const pending = findPendingCall(authorized.actorId, authorized.targetId);
+    const answered = Boolean(pending?.answered);
     if (pending && !pending.answered) {
       clearPendingCall(pending.callerId, pending.calleeId);
       void recordMissedCall(pending.callerId, pending.calleeId);
     } else if (pending) {
       clearPendingCall(pending.callerId, pending.calleeId);
     }
+    logCallMetric('call_end', {
+      fromUserId: authorized.actorId,
+      toUserId: authorized.targetId,
+      answered,
+    });
     io.to(`user:${authorized.targetId}`).emit('call:ended', { from: authorized.actorId });
   });
 
@@ -555,9 +635,12 @@ io.on('connection', (socket: Socket) => {
   socket.on('disconnect', () => {
     const userId = socketToUser.get(socket.id);
     if (userId) {
-      userSockets.delete(userId);
+      const fullyOffline = removeUserSocket(userId, socket.id);
       socketToUser.delete(socket.id);
-      userService.setOnlineStatus(userId, false);
+      // Only mark offline when no other tab/device remains authenticated.
+      if (fullyOffline) {
+        userService.setOnlineStatus(userId, false);
+      }
       // Notify any group rooms this socket was in.
       for (const roomName of socket.rooms) {
         if (roomName.startsWith('room:')) {

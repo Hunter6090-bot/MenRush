@@ -120,7 +120,7 @@ export const HotSpots = () => {
           existing.spot.name !== spot.name ||
           existing.spot.category_icon !== spot.category_icon
         ) {
-          existing.root.render(<HotSpotPin spot={pinData} size={36} />);
+          existing.root.render(<HotSpotPin spot={pinData} size={52} />);
         }
         existing.spot = spot;
         return;
@@ -133,7 +133,7 @@ export const HotSpots = () => {
           const el = document.getElementById(`hotspot-card-${spot.id}`);
           el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         },
-        36,
+        52,
       );
       const marker = new mapboxgl.Marker({ element, anchor: 'center' })
         .setLngLat(lngLat)

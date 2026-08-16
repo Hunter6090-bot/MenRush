@@ -5,11 +5,39 @@ const normalizedEmail = z
   .email()
   .transform((email) => email.trim().toLowerCase());
 
+const isoDateOnly = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD');
+
+export const RELATIONSHIP_STATUSES = [
+  'Single',
+  'Taken',
+  'Open',
+  'Complicated',
+  'Prefer not to say',
+] as const;
+
+export const HOSTING_STATUSES = [
+  'Hosting',
+  'Travelling',
+  'Public only',
+  'Depends',
+] as const;
+
+export const SEXUAL_HEALTH_STATUSES = [
+  'Negative',
+  'Positive',
+  'Undetectable',
+  'Prefer not to say',
+] as const;
+
 export const RegisterSchema = z.object({
   email: normalizedEmail,
   password: z.string().min(8),
   name: z.string().min(2).max(50),
   age: z.number().min(18).max(120),
+  /** Preferred source of truth for age — persisted and used to recompute age. */
+  date_of_birth: isoDateOnly.optional(),
   invite_code: z.string().min(1).max(64).optional(),
 });
 
@@ -55,6 +83,8 @@ export const TwoFactorVerifyLoginSchema = z.object({
 });
 
 export const ProfileSchema = z.object({
+  name: z.string().min(2).max(50).optional(),
+  date_of_birth: isoDateOnly.nullable().optional(),
   bio: z.string().max(500).optional(),
   headline: z.string().max(100).optional(),
   looking_for: z.string().max(100).optional(),
@@ -63,7 +93,20 @@ export const ProfileSchema = z.object({
   cover_position_x: z.number().min(0).max(100).optional(),
   cover_position_y: z.number().min(0).max(100).optional(),
   cover_zoom: z.number().min(1).max(3).optional(),
-  interests: z.array(z.string().max(30)).max(10).optional(),
+  interests: z.array(z.string().max(30)).max(20).optional(),
+  height_cm: z.number().int().min(120).max(250).nullable().optional(),
+  weight_kg: z.number().int().min(35).max(300).nullable().optional(),
+  relationship_status: z.enum(RELATIONSHIP_STATUSES).nullable().optional(),
+  hosting_status: z.enum(HOSTING_STATUSES).nullable().optional(),
+  sexual_health_status: z.enum(SEXUAL_HEALTH_STATUSES).nullable().optional(),
+  on_prep: z.boolean().nullable().optional(),
+  last_tested_at: isoDateOnly.nullable().optional(),
+  show_age: z.boolean().optional(),
+});
+
+export const DeleteAccountSchema = z.object({
+  current_password: z.string().min(1, 'Current password is required'),
+  confirmation: z.literal('DELETE'),
 });
 
 export const LocationSchema = z.object({
@@ -181,6 +224,7 @@ export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
 export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
 export type ChangeEmailInput = z.infer<typeof ChangeEmailSchema>;
 export type ProfileInput = z.infer<typeof ProfileSchema>;
+export type DeleteAccountInput = z.infer<typeof DeleteAccountSchema>;
 export type LocationInput = z.infer<typeof LocationSchema>;
 export type MessageInput = z.infer<typeof MessageSchema>;
 export type CreateRoomInput = z.infer<typeof CreateRoomSchema>;

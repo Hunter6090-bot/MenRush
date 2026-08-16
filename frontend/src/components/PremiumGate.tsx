@@ -1,4 +1,5 @@
 import { formatRadiusFromKm } from '../lib/localeUnits';
+import { isBetaPremiumFree } from '../lib/betaInvite';
 
 interface PremiumGateProps {
   headline?: string;
@@ -24,6 +25,9 @@ export function PremiumGate({
   onClose,
   onUnlock,
 }: PremiumGateProps) {
+  const betaIncluded = isBetaPremiumFree();
+  const resolvedCta = betaIncluded ? 'Continue — included in beta' : ctaLabel;
+
   return (
     <div
       className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60"
@@ -70,7 +74,7 @@ export function PremiumGate({
             }}
             className="w-full py-3.5 rounded-full bg-nn-copper text-[#1A0E03] font-semibold text-sm tracking-wide uppercase shadow-glow-copper hover:bg-nn-copper-bright active:scale-95 transition-all"
           >
-            {ctaLabel}
+            {resolvedCta}
           </button>
           <p className="text-center text-[11px] text-nn-faint mt-3">Cancel anytime. No fake timers.</p>
         </div>
