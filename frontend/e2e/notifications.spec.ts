@@ -135,6 +135,58 @@ test('a new message raises the unread badge and opening the chat clears it', asy
   await bobCtx.close();
 });
 
+// ── Privacy: toasts must never leak onto public/logged-out pages ────────────
+
+test('a pending real-time notification never renders as a toast after logging out', async ({ browser }) => {
+  const bobCtx = await browser.newContext();
+  const bobPage = await bobCtx.newPage();
+
+  // Deliberately NOT using the shared `authenticate()` helper here: it uses
+  // `context.addInitScript`, which Playwright re-runs on every subsequent
+  // navigation in the context — that would silently re-inject Bob's token
+  // right as we navigate to the post-logout page, masking the very bug this
+  // test exists to catch. Seed localStorage once via `page.evaluate` instead.
+  await bobPage.goto('/');
+  await bobPage.evaluate(({ token, user }) => {
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(user));
+  }, bob);
+  await bobPage.goto('/discover');
+  await bobPage.waitForTimeout(1500); // allow the socket to authenticate
+
+  const aliceApi = await apiRequest.newContext({
+    baseURL: BASE_URL,
+    extraHTTPHeaders: { Authorization: `Bearer ${alice.token}` },
+  });
+  try {
+    const res = await aliceApi.post('/api/messages', {
+      data: { receiver_id: bob.user.id, message: `Toast leak check ${Date.now()}` },
+    });
+    expect(res.ok()).toBeTruthy();
+  } finally {
+    await aliceApi.dispose();
+  }
+
+  // Sanity: while genuinely authenticated, the toast does render.
+  await expect(bobPage.getByTestId('toast-notifications')).toBeVisible({ timeout: 10_000 });
+
+  // Log out via the real control (not just clearing storage) so the auth
+  // store's in-memory token actually flips — that's what unmounts
+  // ToastNotifications, regardless of any pending unread items. The Settings
+  // page's "Sign out" is used (rather than the desktop-only sidebar control)
+  // since it's reachable on both desktop and mobile layouts.
+  await bobPage.goto('/settings');
+  await bobPage.getByTestId('settings-sign-out').click();
+  await expect(bobPage).toHaveURL(/\/login/);
+  await bobPage.goto('/');
+
+  await expect(bobPage.getByRole('link', { name: 'Sign in' })).toBeVisible();
+  await expect(bobPage.getByTestId('toast-notifications')).toHaveCount(0);
+  await expect(bobPage.getByText('Toast leak check', { exact: false })).toHaveCount(0);
+
+  await bobCtx.close();
+});
+
 test('opening a conversation thread clears that sender from the unread badge', async ({ browser }) => {
   const bobCtx = await browser.newContext();
   await authenticate(bobCtx, bob);

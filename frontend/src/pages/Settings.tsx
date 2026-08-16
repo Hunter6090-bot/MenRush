@@ -977,6 +977,7 @@ export const Settings = () => {
 
           <button
             type="button"
+            data-testid="settings-sign-out"
             onClick={handleLogout}
             className="mt-2 w-full rounded-[14px] border border-[var(--border-default)] py-3.5 text-[15px] font-bold text-[#B0432E] transition-colors hover:border-[#B0432E]"
           >
