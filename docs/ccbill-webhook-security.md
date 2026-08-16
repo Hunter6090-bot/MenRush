@@ -46,7 +46,7 @@ it for audit.
 
 ## Database migration
 
-`031_ccbill_webhook_events.sql` (mirrored in `database/migrations` and
+`032_ccbill_webhook_events.sql` (mirrored in `database/migrations` and
 `backend/database/migrations`) creates `processed_webhook_events` with a
 unique index on `(provider, provider_event_id)`, plus supporting indexes
 for subscription lookups and category reporting. This is additive only: no
