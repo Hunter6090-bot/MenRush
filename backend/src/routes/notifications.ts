@@ -1,10 +1,10 @@
 import { Router, Response } from 'express';
 import { notificationService } from '../services/notification.service';
-import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
+import { AuthRequest, authMiddleware, verifiedMiddleware, adultAssuranceMiddleware } from '../middleware/auth';
 
 const router = Router();
 
-router.use(authMiddleware, verifiedMiddleware);
+router.use(authMiddleware, verifiedMiddleware, adultAssuranceMiddleware);
 
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {

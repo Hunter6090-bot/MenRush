@@ -35,6 +35,29 @@ jobs:
       - name: Build
         run: npm run build
 
+  backend-security:
+    name: Backend security tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Adult assurance + security checks
+        run: npm run test:security
+        env:
+          NODE_ENV: test
+          ADULT_ASSURANCE_PROVIDER: stub
+
   frontend-build:
     name: Frontend build
     runs-on: ubuntu-latest

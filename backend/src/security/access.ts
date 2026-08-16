@@ -1,5 +1,11 @@
 import { query } from '../db';
 import { isIdVerificationRequired } from '../config/verification-gate';
+import {
+  evaluateAdultAssuranceAccess,
+  isAdultAssuranceGateEnabled,
+  isAdultAssuranceProviderAvailable,
+  type AdultAssuranceDecision,
+} from '../config/adult-assurance-gate';
 
 type QueryResult = { rows: any[]; rowCount?: number | null };
 type QueryFn = (text: string, values?: unknown[]) => Promise<QueryResult>;
@@ -22,10 +28,21 @@ export class SecurityError extends Error {
     public readonly code: string,
     public readonly status: number,
     message: string,
+    public readonly details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = 'SecurityError';
   }
+}
+
+function adultAssuranceDeniedError(decision: AdultAssuranceDecision): SecurityError {
+  const code = decision.error_code || 'adult_assurance_required';
+  return new SecurityError(code, 403, 'Adult assurance is required', {
+    age_assurance_status: decision.age_assurance_status,
+    provider_available: decision.provider_available,
+    retry_allowed: decision.retry_allowed,
+    reason: decision.reason,
+  });
 }
 
 export function createAccessControl(runQuery: QueryFn) {
@@ -76,6 +93,31 @@ export function createAccessControl(runQuery: QueryFn) {
           403,
           'Identity verification is required',
         );
+      }
+    },
+
+    /**
+     * Mandatory Adult Assurance gate (issue #50).
+     * Independent of Premium and government-ID verification.
+     * Legacy / self_attested accounts are not grandfathered.
+     */
+    async requireAdultAssurance(userId: string): Promise<void> {
+      if (!isAdultAssuranceGateEnabled()) return;
+
+      const result = await runQuery(
+        `SELECT age_assurance_status FROM users WHERE id = $1`,
+        [userId],
+      );
+      if (!result.rows[0]) {
+        throw new SecurityError('account_unavailable', 401, 'Account unavailable');
+      }
+
+      const decision = evaluateAdultAssuranceAccess({
+        ageAssuranceStatus: result.rows[0].age_assurance_status,
+        providerAvailable: isAdultAssuranceProviderAvailable(),
+      });
+      if (!decision.allowed) {
+        throw adultAssuranceDeniedError(decision);
       }
     },
 

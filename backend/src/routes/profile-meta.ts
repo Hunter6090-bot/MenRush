@@ -1,11 +1,11 @@
 import { Router, Response } from 'express';
-import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
+import { AuthRequest, authMiddleware, verifiedMiddleware, adultAssuranceMiddleware } from '../middleware/auth';
 import { profileMetaService } from '../services/profile-meta.service';
 import { premiumService } from '../services/premium.service';
 import { MoodSchema, GhostSchema, LiveLocationSharingSchema } from '../types/validation';
 
 const router = Router();
-router.use(authMiddleware, verifiedMiddleware);
+router.use(authMiddleware, verifiedMiddleware, adultAssuranceMiddleware);
 
 router.get('/mood', async (req: AuthRequest, res: Response) => {
   try {

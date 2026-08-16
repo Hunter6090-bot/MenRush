@@ -16,6 +16,23 @@ export interface VerifyStatus {
   authenticity_status: VerificationStatus;
   authenticity_verified_at: string | null;
   trust_level: TrustLevel;
+  adult_assurance?: {
+    provider_available: boolean;
+    provider: string;
+    gate_enforced: boolean;
+    access_allowed: boolean;
+    reason: string;
+    retry_allowed: boolean;
+  };
+}
+
+export interface AdultAssuranceSession {
+  session_id: string;
+  status: string;
+  provider: string;
+  created_at: string;
+  expires_at: string;
+  completed_at: string | null;
 }
 
 export interface AuthenticityChallenge {
@@ -144,5 +161,14 @@ export const verifyAPI = {
     if (handoffSessionId) form.append('handoff_session_id', handoffSessionId);
     return apiClient.post<VerifySubmitResult>('/verify/submit', form);
   },
+  startAdultAssurance: () =>
+    apiClient.post<AdultAssuranceSession>('/verify/adult/start', {}),
+  retryAdultAssurance: () =>
+    apiClient.post<AdultAssuranceSession>('/verify/adult/retry', {}),
+  completeAdultAssurance: (sessionId: string, outcome: 'confirmed' | 'failed') =>
+    apiClient.post<{ session: AdultAssuranceSession; age_assurance_status: AgeAssuranceStatus }>(
+      '/verify/adult/complete',
+      { session_id: sessionId, outcome },
+    ),
   status: () => apiClient.get<VerifyStatus>('/verify/status'),
 };

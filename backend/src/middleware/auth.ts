@@ -33,7 +33,32 @@ export const verifiedMiddleware = async (
     next();
   } catch (error) {
     if (error instanceof SecurityError) {
-      return res.status(error.status).json({ error: error.code });
+      return res.status(error.status).json({ error: error.code, ...(error.details || {}) });
+    }
+    next(error);
+  }
+};
+
+/**
+ * Mandatory Adult Assurance gate for Discover / Matches / Messaging and other
+ * member social surfaces. Must run after authMiddleware. Does not apply to
+ * /api/verify adult start|retry|status paths (those stay reachable).
+ */
+export const adultAssuranceMiddleware = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    await accessControl.requireAdultAssurance(req.userId!);
+    next();
+  } catch (error) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({
+        error: error.code,
+        code: error.code,
+        ...(error.details || {}),
+      });
     }
     next(error);
   }
@@ -55,7 +80,7 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
   }
 
   if (err instanceof SecurityError) {
-    return res.status(err.status).json({ error: err.code });
+    return res.status(err.status).json({ error: err.code, ...(err.details || {}) });
   }
 
   if (err instanceof PremiumRequiredError) {

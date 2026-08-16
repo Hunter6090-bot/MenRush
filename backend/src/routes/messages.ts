@@ -4,7 +4,7 @@ import multer from 'multer';
 import { messageService } from '../services/message.service';
 import { sendPushToUser } from '../services/push.service';
 import { notificationService } from '../services/notification.service';
-import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
+import { AuthRequest, authMiddleware, verifiedMiddleware, adultAssuranceMiddleware } from '../middleware/auth';
 import { SecurityError } from '../security/access';
 import { resolveMediaPath, verifyMediaAccess } from '../security/media';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
@@ -63,7 +63,7 @@ router.get('/:messageId/media', async (req, res) => {
   }
 });
 
-router.use(authMiddleware, verifiedMiddleware);
+router.use(authMiddleware, verifiedMiddleware, adultAssuranceMiddleware);
 
 router.post('/', async (req: AuthRequest, res: Response) => {
   try {

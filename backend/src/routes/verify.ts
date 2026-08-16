@@ -16,6 +16,10 @@ import {
   type IdPrecheckTemplate,
 } from '../services/verification/id-precheck.service';
 import { authenticityService } from '../services/verification/authenticity.service';
+import {
+  adultAssuranceService,
+  AdultAssuranceProviderError,
+} from '../services/verification/adult-assurance.service';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
 import { getUploadSubdir } from '../lib/uploads-root';
 
@@ -201,6 +205,71 @@ router.post(
 );
 
 router.use(authMiddleware);
+
+router.post('/adult/start', async (req: AuthRequest, res: Response) => {
+  try {
+    const session = await adultAssuranceService.startSession(req.userId!);
+    return res.status(201).json(session);
+  } catch (err) {
+    if (err instanceof AdultAssuranceProviderError) {
+      return res.status(503).json({
+        error: err.code,
+        code: err.code,
+        provider_available: false,
+        retry_allowed: true,
+      });
+    }
+    console.error('[verify] adult start error:', err);
+    return res.status(500).json({ error: 'adult_assurance_start_failed' });
+  }
+});
+
+router.post('/adult/retry', async (req: AuthRequest, res: Response) => {
+  try {
+    const session = await adultAssuranceService.retrySession(req.userId!);
+    return res.status(201).json(session);
+  } catch (err) {
+    if (err instanceof AdultAssuranceProviderError) {
+      return res.status(503).json({
+        error: err.code,
+        code: err.code,
+        provider_available: false,
+        retry_allowed: true,
+      });
+    }
+    console.error('[verify] adult retry error:', err);
+    return res.status(500).json({ error: 'adult_assurance_retry_failed' });
+  }
+});
+
+router.post('/adult/complete', async (req: AuthRequest, res: Response) => {
+  const sessionId = String(req.body?.session_id || '').trim();
+  const outcome = String(req.body?.outcome || '').trim();
+  if (!sessionId || (outcome !== 'confirmed' && outcome !== 'failed')) {
+    return res.status(400).json({ error: 'invalid_adult_assurance_complete' });
+  }
+
+  try {
+    const result = await adultAssuranceService.completeSession(
+      req.userId!,
+      sessionId,
+      outcome as 'confirmed' | 'failed',
+    );
+    return res.json(result);
+  } catch (err) {
+    if (err instanceof AdultAssuranceProviderError) {
+      const status = err.code === 'adult_assurance_session_invalid' ? 409 : 503;
+      return res.status(status).json({
+        error: err.code,
+        code: err.code,
+        provider_available: err.code !== 'adult_assurance_session_invalid',
+        retry_allowed: true,
+      });
+    }
+    console.error('[verify] adult complete error:', err);
+    return res.status(500).json({ error: 'adult_assurance_complete_failed' });
+  }
+});
 
 router.post('/authenticity/challenge', async (req: AuthRequest, res: Response) => {
   try {
@@ -456,17 +525,27 @@ router.post(
 router.get('/status', async (req: AuthRequest, res: Response) => {
   try {
     const state = await verificationService.getState(req.userId!);
+    const adult = await adultAssuranceService.getAccessSnapshot(req.userId!);
     res.json({
       is_verified: state.is_verified,
       status: state.verification_status,
       provider: state.verification_provider,
       verified_at: state.verified_at,
       rejection_reason: state.rejection_reason,
-      age_assurance_status: state.age_assurance_status,
-      age_assured_at: state.age_assured_at,
+      age_assurance_status: adult.age_assurance_status,
+      age_assured_at: adult.age_assured_at,
       authenticity_status: state.authenticity_status,
       authenticity_verified_at: state.authenticity_verified_at,
       trust_level: state.trust_level,
+      // Adult Assurance gate surface (machine-readable for client retry UX).
+      adult_assurance: {
+        provider_available: adult.provider_available,
+        provider: adult.provider,
+        gate_enforced: adult.gate_enforced,
+        access_allowed: adult.access_allowed,
+        reason: adult.reason,
+        retry_allowed: adult.retry_allowed,
+      },
     });
   } catch (err) {
     console.error('[verify] status error:', err);
