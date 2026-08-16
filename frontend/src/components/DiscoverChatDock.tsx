@@ -11,6 +11,7 @@ const POLL_INTERVAL_MS = 30_000;
 
 export function readDockOpen(): boolean {
   try {
+    // Default closed — collapsed toggle never steals map pan/zoom.
     return localStorage.getItem(DOCK_STORAGE_KEY) === '1';
   } catch {
     return false;
