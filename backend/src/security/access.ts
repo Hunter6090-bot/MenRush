@@ -4,6 +4,7 @@ import {
   evaluateAdultAssuranceAccess,
   isAdultAssuranceGateEnabled,
   isAdultAssuranceProviderAvailable,
+  isUserSubjectToAdultAssuranceGate,
   type AdultAssuranceDecision,
 } from '../config/adult-assurance-gate';
 
@@ -100,12 +101,13 @@ export function createAccessControl(runQuery: QueryFn) {
      * Mandatory Adult Assurance gate (issue #50).
      * Independent of Premium and government-ID verification.
      * Legacy / self_attested accounts are not grandfathered.
+     * Optional canary: ADULT_ASSURANCE_ENFORCEMENT_SUBJECTS limits who is gated.
      */
     async requireAdultAssurance(userId: string): Promise<void> {
       if (!isAdultAssuranceGateEnabled()) return;
 
       const result = await runQuery(
-        `SELECT age_assurance_status FROM users WHERE id = $1`,
+        `SELECT age_assurance_status, email FROM users WHERE id = $1`,
         [userId],
       );
       if (!result.rows[0]) {
@@ -115,6 +117,10 @@ export function createAccessControl(runQuery: QueryFn) {
       const decision = evaluateAdultAssuranceAccess({
         ageAssuranceStatus: result.rows[0].age_assurance_status,
         providerAvailable: isAdultAssuranceProviderAvailable(),
+        subjectToEnforcement: isUserSubjectToAdultAssuranceGate(
+          userId,
+          result.rows[0].email as string | null,
+        ),
       });
       if (!decision.allowed) {
         throw adultAssuranceDeniedError(decision);

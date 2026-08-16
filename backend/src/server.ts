@@ -52,6 +52,15 @@ import { query } from './db';
 import { ensureUploadDirs, getUploadsRoot, probeUploadsWritable } from './lib/uploads-root';
 import { logCallMetric } from './services/call-metrics.service';
 import { mediaStorageMode } from './services/media-storage.service';
+import { adultAssuranceProductionStubMisconfig } from './config/adult-assurance-gate';
+
+if (adultAssuranceProductionStubMisconfig()) {
+  console.error(
+    '[boot] ADULT_ASSURANCE_PROVIDER=stub is configured under NODE_ENV=production. ' +
+      'Stub is ignored in production (treated as unavailable). Remove the setting. ' +
+      'Never use stub in production — it would allow self-confirm if it were honoured.',
+  );
+}
 
 // Transient DB disconnects must not take down login/API.
 process.on('unhandledRejection', (reason) => {

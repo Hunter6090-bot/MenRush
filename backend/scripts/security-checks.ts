@@ -4,9 +4,12 @@ import os from 'os';
 import path from 'path';
 import { createAccessControl, SecurityError } from '../src/security/access';
 import {
+  canUserUseAdultAssuranceStub,
   evaluateAdultAssuranceAccess,
   isAdultAssuranceGateEnabled,
   isAdultAssuranceProviderAvailable,
+  isUserSubjectToAdultAssuranceGate,
+  adultAssuranceProductionStubMisconfig,
 } from '../src/config/adult-assurance-gate';
 import {
   allowedUpload,
@@ -216,6 +219,16 @@ test('adult assurance: confirmed still allowed when provider unavailable', () =>
   assert.equal(decision.reason, 'confirmed');
 });
 
+test('adult assurance: canary subjects skip gate for non-listed members', () => {
+  const decision = evaluateAdultAssuranceAccess({
+    ageAssuranceStatus: 'pending',
+    providerAvailable: false,
+    subjectToEnforcement: false,
+  });
+  assert.equal(decision.allowed, true);
+  assert.equal(decision.reason, 'not_in_enforcement_subjects');
+});
+
 test('adult assurance middleware denies pending users with structured SecurityError', async () => {
   await withEnv(
     {
@@ -296,13 +309,78 @@ test('adult assurance rollback flag disables enforcement', async () => {
 
 test('adult assurance never satisfied by identity-verified-only state', async () => {
   // requireAdultAssurance reads only age_assurance_status — is_verified is irrelevant.
-  await withEnv({ ADULT_ASSURANCE_PROVIDER: 'stub' }, async () => {
+  await withEnv({ ADULT_ASSURANCE_PROVIDER: 'stub', NODE_ENV: 'test' }, async () => {
     const access = createAccessControl(async () => ({
-      rows: [{ age_assurance_status: 'self_attested', is_verified: true }],
+      rows: [{ age_assurance_status: 'self_attested', is_verified: true, email: 'id@test.local' }],
       rowCount: 1,
     }));
     await rejectsWithCode(() => access.requireAdultAssurance('id-only'), 'adult_assurance_required');
   });
+});
+
+test('adult assurance stub is unavailable in production even if misconfigured', async () => {
+  await withEnv(
+    {
+      NODE_ENV: 'production',
+      ADULT_ASSURANCE_PROVIDER: 'stub',
+      ADULT_ASSURANCE_PROVIDER_UNAVAILABLE: undefined,
+    },
+    async () => {
+      assert.equal(isAdultAssuranceProviderAvailable(), false);
+      assert.equal(canUserUseAdultAssuranceStub('any-user', 'owner@test.local'), false);
+      assert.equal(adultAssuranceProductionStubMisconfig(), true);
+    },
+  );
+});
+
+test('adult assurance canary subjects gate only listed accounts', async () => {
+  await withEnv(
+    {
+      NODE_ENV: 'test',
+      ADULT_ASSURANCE_PROVIDER: 'none',
+      ADULT_ASSURANCE_ENFORCEMENT_SUBJECTS: 'owner@test.local,aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      ADULT_ASSURANCE_ENFORCEMENT_DISABLED: undefined,
+    },
+    async () => {
+      assert.equal(isUserSubjectToAdultAssuranceGate('other-user', 'other@test.local'), false);
+      assert.equal(isUserSubjectToAdultAssuranceGate('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', null), true);
+      assert.equal(isUserSubjectToAdultAssuranceGate('x', 'owner@test.local'), true);
+
+      const access = createAccessControl(async (_sql, values) => {
+        const id = String(values?.[0] || '');
+        if (id === 'other-user') {
+          return {
+            rows: [{ age_assurance_status: 'pending', email: 'other@test.local' }],
+            rowCount: 1,
+          };
+        }
+        return {
+          rows: [{ age_assurance_status: 'pending', email: 'owner@test.local' }],
+          rowCount: 1,
+        };
+      });
+
+      await access.requireAdultAssurance('other-user');
+      await rejectsWithCode(
+        () => access.requireAdultAssurance('owner-user'),
+        'adult_assurance_provider_unavailable',
+      );
+    },
+  );
+});
+
+test('adult assurance staging stub allowlist restricts self-confirm', async () => {
+  await withEnv(
+    {
+      NODE_ENV: 'development',
+      ADULT_ASSURANCE_PROVIDER: 'stub',
+      ADULT_ASSURANCE_STUB_ALLOWLIST: 'owner@test.local',
+    },
+    async () => {
+      assert.equal(canUserUseAdultAssuranceStub('u1', 'owner@test.local'), true);
+      assert.equal(canUserUseAdultAssuranceStub('u2', 'other@test.local'), false);
+    },
+  );
 });
 
 test('uploads use allowlisted MIME types, generated extensions, and magic bytes', async () => {

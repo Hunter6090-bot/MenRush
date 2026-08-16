@@ -206,18 +206,48 @@ router.post(
 
 router.use(authMiddleware);
 
+function adultAssuranceProviderHttp(err: AdultAssuranceProviderError) {
+  if (err.code === 'adult_assurance_session_invalid') {
+    return {
+      status: 409,
+      body: {
+        error: err.code,
+        code: err.code,
+        provider_available: true,
+        retry_allowed: true,
+      },
+    };
+  }
+  if (err.code === 'adult_assurance_stub_forbidden') {
+    return {
+      status: 403,
+      body: {
+        error: err.code,
+        code: err.code,
+        provider_available: true,
+        retry_allowed: false,
+      },
+    };
+  }
+  return {
+    status: 503,
+    body: {
+      error: err.code,
+      code: err.code,
+      provider_available: false,
+      retry_allowed: true,
+    },
+  };
+}
+
 router.post('/adult/start', async (req: AuthRequest, res: Response) => {
   try {
     const session = await adultAssuranceService.startSession(req.userId!);
     return res.status(201).json(session);
   } catch (err) {
     if (err instanceof AdultAssuranceProviderError) {
-      return res.status(503).json({
-        error: err.code,
-        code: err.code,
-        provider_available: false,
-        retry_allowed: true,
-      });
+      const mapped = adultAssuranceProviderHttp(err);
+      return res.status(mapped.status).json(mapped.body);
     }
     console.error('[verify] adult start error:', err);
     return res.status(500).json({ error: 'adult_assurance_start_failed' });
@@ -230,12 +260,8 @@ router.post('/adult/retry', async (req: AuthRequest, res: Response) => {
     return res.status(201).json(session);
   } catch (err) {
     if (err instanceof AdultAssuranceProviderError) {
-      return res.status(503).json({
-        error: err.code,
-        code: err.code,
-        provider_available: false,
-        retry_allowed: true,
-      });
+      const mapped = adultAssuranceProviderHttp(err);
+      return res.status(mapped.status).json(mapped.body);
     }
     console.error('[verify] adult retry error:', err);
     return res.status(500).json({ error: 'adult_assurance_retry_failed' });
@@ -258,13 +284,8 @@ router.post('/adult/complete', async (req: AuthRequest, res: Response) => {
     return res.json(result);
   } catch (err) {
     if (err instanceof AdultAssuranceProviderError) {
-      const status = err.code === 'adult_assurance_session_invalid' ? 409 : 503;
-      return res.status(status).json({
-        error: err.code,
-        code: err.code,
-        provider_available: err.code !== 'adult_assurance_session_invalid',
-        retry_allowed: true,
-      });
+      const mapped = adultAssuranceProviderHttp(err);
+      return res.status(mapped.status).json(mapped.body);
     }
     console.error('[verify] adult complete error:', err);
     return res.status(500).json({ error: 'adult_assurance_complete_failed' });
@@ -542,6 +563,8 @@ router.get('/status', async (req: AuthRequest, res: Response) => {
         provider_available: adult.provider_available,
         provider: adult.provider,
         gate_enforced: adult.gate_enforced,
+        subject_to_enforcement: adult.subject_to_enforcement,
+        stub_allowed_for_user: adult.stub_allowed_for_user,
         access_allowed: adult.access_allowed,
         reason: adult.reason,
         retry_allowed: adult.retry_allowed,

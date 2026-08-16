@@ -20,6 +20,8 @@ export interface VerifyStatus {
     provider_available: boolean;
     provider: string;
     gate_enforced: boolean;
+    subject_to_enforcement?: boolean;
+    stub_allowed_for_user?: boolean;
     access_allowed: boolean;
     reason: string;
     retry_allowed: boolean;

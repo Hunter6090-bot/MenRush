@@ -2,17 +2,22 @@ import { v4 as uuidv4 } from 'uuid';
 import { query } from '../../db';
 import {
   AgeAssuranceStatus,
+  canUserUseAdultAssuranceStub,
   evaluateAdultAssuranceAccess,
   getAdultAssuranceProviderName,
   isAdultAssuranceGateEnabled,
   isAdultAssuranceProviderAvailable,
+  isUserSubjectToAdultAssuranceGate,
 } from '../../config/adult-assurance-gate';
 
 export type AdultAssuranceProviderName = 'stub' | 'none';
 
 export class AdultAssuranceProviderError extends Error {
   constructor(
-    public readonly code: 'adult_assurance_provider_unavailable' | 'adult_assurance_session_invalid',
+    public readonly code:
+      | 'adult_assurance_provider_unavailable'
+      | 'adult_assurance_session_invalid'
+      | 'adult_assurance_stub_forbidden',
     message: string,
   ) {
     super(message);
@@ -44,27 +49,38 @@ function publicSession(row: {
   };
 }
 
+async function loadUserIdentity(userId: string): Promise<{
+  age_assurance_status: AgeAssuranceStatus;
+  age_assured_at: Date | string | null;
+  email: string | null;
+}> {
+  const res = await query(
+    `SELECT age_assurance_status, age_assured_at, email
+       FROM users WHERE id = $1`,
+    [userId],
+  );
+  const row = res.rows[0];
+  if (!row) {
+    const err = new Error('user_not_found');
+    (err as any).code = 'user_not_found';
+    throw err;
+  }
+  return row;
+}
+
 export const adultAssuranceService = {
   isProviderAvailable: isAdultAssuranceProviderAvailable,
   getProviderName: getAdultAssuranceProviderName,
 
   async getAccessSnapshot(userId: string) {
-    const res = await query(
-      `SELECT age_assurance_status, age_assured_at
-         FROM users WHERE id = $1`,
-      [userId],
-    );
-    const row = res.rows[0];
-    if (!row) {
-      const err = new Error('user_not_found');
-      (err as any).code = 'user_not_found';
-      throw err;
-    }
+    const row = await loadUserIdentity(userId);
     const status = row.age_assurance_status as AgeAssuranceStatus;
     const provider_available = isAdultAssuranceProviderAvailable();
+    const subject = isUserSubjectToAdultAssuranceGate(userId, row.email);
     const decision = evaluateAdultAssuranceAccess({
       ageAssuranceStatus: status,
       providerAvailable: provider_available,
+      subjectToEnforcement: subject,
     });
     return {
       age_assurance_status: status,
@@ -73,6 +89,8 @@ export const adultAssuranceService = {
       provider_available,
       provider: getAdultAssuranceProviderName(),
       gate_enforced: isAdultAssuranceGateEnabled(),
+      subject_to_enforcement: subject,
+      stub_allowed_for_user: canUserUseAdultAssuranceStub(userId, row.email),
       access_allowed: !isAdultAssuranceGateEnabled() || decision.allowed,
       reason: decision.reason,
       retry_allowed: decision.retry_allowed,
@@ -83,12 +101,23 @@ export const adultAssuranceService = {
    * Start (or restart) an Adult Assurance session. Always callable so members
    * can reach retry/status surfaces during a provider outage — callers get a
    * machine-readable unavailable error instead of silent success.
+   *
+   * Stub start/complete never runs in production. On staging/local, optional
+   * ADULT_ASSURANCE_STUB_ALLOWLIST further restricts who may self-confirm.
    */
   async startSession(userId: string) {
-    if (!isAdultAssuranceProviderAvailable()) {
+    const identity = await loadUserIdentity(userId);
+    if (!canUserUseAdultAssuranceStub(userId, identity.email)) {
+      // Distinguish production/misconfig (unavailable) from staging allowlist miss.
+      if (!isAdultAssuranceProviderAvailable()) {
+        throw new AdultAssuranceProviderError(
+          'adult_assurance_provider_unavailable',
+          'Adult assurance provider is unavailable',
+        );
+      }
       throw new AdultAssuranceProviderError(
-        'adult_assurance_provider_unavailable',
-        'Adult assurance provider is unavailable',
+        'adult_assurance_stub_forbidden',
+        'Adult assurance stub is not allowed for this account',
       );
     }
 
@@ -128,8 +157,8 @@ export const adultAssuranceService = {
   },
 
   /**
-   * Complete a stub-provider session. Real third-party webhooks will replace
-   * this path; until then only the stub provider may confirm/fail here.
+   * Complete a stub-provider session (non-production only).
+   * Real third-party webhooks will replace this path later — none invented here.
    * Stores status + timestamp only (data minimisation).
    */
   async completeSession(
@@ -137,10 +166,17 @@ export const adultAssuranceService = {
     sessionId: string,
     outcome: 'confirmed' | 'failed',
   ) {
-    if (!isAdultAssuranceProviderAvailable()) {
+    const identity = await loadUserIdentity(userId);
+    if (!canUserUseAdultAssuranceStub(userId, identity.email)) {
+      if (!isAdultAssuranceProviderAvailable()) {
+        throw new AdultAssuranceProviderError(
+          'adult_assurance_provider_unavailable',
+          'Adult assurance provider is unavailable',
+        );
+      }
       throw new AdultAssuranceProviderError(
-        'adult_assurance_provider_unavailable',
-        'Adult assurance provider is unavailable',
+        'adult_assurance_stub_forbidden',
+        'Adult assurance stub is not allowed for this account',
       );
     }
     if (getAdultAssuranceProviderName() !== 'stub') {

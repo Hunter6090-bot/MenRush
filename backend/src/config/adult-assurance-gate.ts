@@ -10,6 +10,13 @@
  * verification are separate gates and never satisfy this check.
  *
  * Pure, dependency-free decision logic so unit tests need no database.
+ *
+ * Provider safety:
+ * - There is no invented third-party provider. Until a real one is wired,
+ *   the only completion path is the non-production `stub`.
+ * - Production MUST NOT set ADULT_ASSURANCE_PROVIDER=stub (ignored / unavailable).
+ * - Rollback: ADULT_ASSURANCE_ENFORCEMENT_DISABLED=true.
+ * - Canary: ADULT_ASSURANCE_ENFORCEMENT_SUBJECTS limits who the gate applies to.
  */
 
 export type AgeAssuranceStatus = 'pending' | 'self_attested' | 'confirmed' | 'failed';
@@ -20,11 +27,14 @@ export type AdultAssuranceDecisionReason =
   | 'blocked_self_attested'
   | 'blocked_failed'
   | 'blocked_unconfirmed'
-  | 'provider_unavailable';
+  | 'provider_unavailable'
+  | 'not_in_enforcement_subjects';
 
 export interface AdultAssuranceEvaluationInput {
   ageAssuranceStatus: AgeAssuranceStatus | string | null | undefined;
   providerAvailable: boolean;
+  /** When false, the member is outside a canary allowlist and is not gated. */
+  subjectToEnforcement?: boolean;
 }
 
 export interface AdultAssuranceDecision {
@@ -56,6 +66,18 @@ export function evaluateAdultAssuranceAccess(
 ): AdultAssuranceDecision {
   const age_assurance_status = normalizeStatus(input.ageAssuranceStatus);
   const provider_available = Boolean(input.providerAvailable);
+  const subjectToEnforcement = input.subjectToEnforcement !== false;
+
+  if (!subjectToEnforcement) {
+    return {
+      allowed: true,
+      reason: 'not_in_enforcement_subjects',
+      age_assurance_status,
+      provider_available,
+      retry_allowed: false,
+      error_code: null,
+    };
+  }
 
   if (age_assurance_status === 'confirmed') {
     return {
@@ -106,19 +128,95 @@ export function isAdultAssuranceGateEnabled(): boolean {
   return process.env.ADULT_ASSURANCE_ENFORCEMENT_DISABLED !== 'true';
 }
 
+/** True when NODE_ENV is production (case-insensitive). */
+export function isProductionNodeEnv(): boolean {
+  return (process.env.NODE_ENV || '').toLowerCase() === 'production';
+}
+
 /**
- * Whether the configured Adult Assurance provider can accept new checks.
- * Kept here (env-only) so access control unit tests never import the DB pool.
+ * Parse canary subject list. null = enforce for everyone (full rollout).
+ * Entries are lowercased user UUIDs and/or emails.
+ */
+export function parseEnforcementSubjects(): string[] | null {
+  const raw = process.env.ADULT_ASSURANCE_ENFORCEMENT_SUBJECTS?.trim();
+  if (!raw) return null;
+  const subjects = raw
+    .split(',')
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean);
+  return subjects.length > 0 ? subjects : null;
+}
+
+/**
+ * When ADULT_ASSURANCE_ENFORCEMENT_SUBJECTS is set, only listed members are gated.
+ * Unset = full enforcement for all authenticated members.
+ */
+export function isUserSubjectToAdultAssuranceGate(
+  userId: string,
+  email?: string | null,
+): boolean {
+  const subjects = parseEnforcementSubjects();
+  if (subjects === null) return true;
+  const id = userId.trim().toLowerCase();
+  const em = (email || '').trim().toLowerCase();
+  return subjects.includes(id) || (Boolean(em) && subjects.includes(em));
+}
+
+/**
+ * Stub completion is never available in production — even if misconfigured.
+ * Non-production may use ADULT_ASSURANCE_PROVIDER=stub for local/CI/staging.
+ */
+export function isAdultAssuranceStubConfigured(): boolean {
+  return (process.env.ADULT_ASSURANCE_PROVIDER || 'none').toLowerCase() === 'stub';
+}
+
+export function isAdultAssuranceStubAllowedInThisEnvironment(): boolean {
+  if (isProductionNodeEnv()) return false;
+  if (process.env.ADULT_ASSURANCE_PROVIDER_UNAVAILABLE === 'true') return false;
+  return isAdultAssuranceStubConfigured();
+}
+
+/**
+ * Whether any completion provider can accept new checks for gate UX.
+ * No invented third-party provider: only non-production stub counts today.
  */
 export function isAdultAssuranceProviderAvailable(): boolean {
-  if (process.env.ADULT_ASSURANCE_PROVIDER_UNAVAILABLE === 'true') {
-    return false;
-  }
-  const provider = (process.env.ADULT_ASSURANCE_PROVIDER || 'none').toLowerCase();
-  return provider === 'stub';
+  return isAdultAssuranceStubAllowedInThisEnvironment();
 }
 
 export function getAdultAssuranceProviderName(): 'stub' | 'none' {
-  const provider = (process.env.ADULT_ASSURANCE_PROVIDER || 'none').toLowerCase();
-  return provider === 'stub' ? 'stub' : 'none';
+  if (isAdultAssuranceStubAllowedInThisEnvironment()) return 'stub';
+  return 'none';
+}
+
+/**
+ * Optional staging allowlist for who may call stub start/complete.
+ * Unset on non-prod = any authenticated user may use stub (local/CI).
+ * When set, only listed user ids/emails may self-confirm via stub.
+ */
+export function parseStubAllowlist(): string[] | null {
+  const raw = process.env.ADULT_ASSURANCE_STUB_ALLOWLIST?.trim();
+  if (!raw) return null;
+  const list = raw
+    .split(',')
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean);
+  return list.length > 0 ? list : null;
+}
+
+export function canUserUseAdultAssuranceStub(
+  userId: string,
+  email?: string | null,
+): boolean {
+  if (!isAdultAssuranceStubAllowedInThisEnvironment()) return false;
+  const allowlist = parseStubAllowlist();
+  if (allowlist === null) return true;
+  const id = userId.trim().toLowerCase();
+  const em = (email || '').trim().toLowerCase();
+  return allowlist.includes(id) || (Boolean(em) && allowlist.includes(em));
+}
+
+/** Boot / ops helper: warn when production mis-sets stub. */
+export function adultAssuranceProductionStubMisconfig(): boolean {
+  return isProductionNodeEnv() && isAdultAssuranceStubConfigured();
 }
