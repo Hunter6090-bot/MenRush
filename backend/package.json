@@ -16,6 +16,7 @@
     "notify:id-verification-paused": "ts-node src/scripts/send-id-verification-paused.ts",
     "verification:purge-sensitive": "ts-node src/scripts/purge-verification-files.ts",
     "test:security": "ts-node scripts/security-checks.ts",
+    "test:webhook-security": "ts-node scripts/webhook-security-checks.ts",
     "test:push": "ts-node scripts/test-push.ts",
     "test:features": "bash ../test-features.sh",
     "test:smoke": "node ../scripts/smoke-critical-path.mjs",

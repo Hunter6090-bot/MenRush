@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| CCBill webhook fail-closed + idempotency (#48) | pending PR `cursor/harden-ccbill-webhook-34b0` | — | Cursor cloud — supersedes draft #49 migration 029 conflict |
 | Full profile settings (DOB, name, stats, delete) | PR branch `cursor/complete-profile-settings-6691` | — | Cursor cloud — editable post-signup parity |
 | Settings tidy + change password | pending push | Account section, POST /auth/change-password, grouped Settings UI | Grok |
 | Mutual chat gate + Match coach (likes dead-end fix) | `246aec0` — pushed + Vercel prod | Chat only on mutual; Matched vs Open chat; first-Match coach | Grok CEO cycle 18 |
