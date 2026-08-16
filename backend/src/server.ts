@@ -188,10 +188,37 @@ app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 app.get('/api/healthz', healthHandler);
 
-// Socket.IO
-const userSockets: Map<string, string> = new Map(); // userId → socketId
+// Socket.IO — track ALL live sockets per user (phone + tab + reconnect).
+// A single socketId map wrongly marked people offline when one tab closed
+// while another stayed open — common BOA↔Bigbear "we were both on" failures.
+const userSockets: Map<string, Set<string>> = new Map(); // userId → socket ids
 const socketToUser: Map<string, string> = new Map(); // socketId → userId
 app.set('userSockets', userSockets);
+
+function addUserSocket(userId: string, socketId: string) {
+  let set = userSockets.get(userId);
+  if (!set) {
+    set = new Set();
+    userSockets.set(userId, set);
+  }
+  set.add(socketId);
+}
+
+function removeUserSocket(userId: string, socketId: string): boolean {
+  const set = userSockets.get(userId);
+  if (!set) return false;
+  set.delete(socketId);
+  if (set.size === 0) {
+    userSockets.delete(userId);
+    return true; // fully offline
+  }
+  return false;
+}
+
+function isUserSocketOnline(userId: string): boolean {
+  const set = userSockets.get(userId);
+  return Boolean(set && set.size > 0);
+}
 
 interface PendingCall {
   callerId: string;
@@ -284,8 +311,10 @@ io.on('connection', (socket: Socket) => {
       const decoded = authService.verifyToken(token);
       await accessControl.requireVerified(decoded.userId);
       const previousUserId = socketToUser.get(socket.id);
-      if (previousUserId) userSockets.delete(previousUserId);
-      userSockets.set(decoded.userId, socket.id);
+      if (previousUserId && previousUserId !== decoded.userId) {
+        removeUserSocket(previousUserId, socket.id);
+      }
+      addUserSocket(decoded.userId, socket.id);
       socketToUser.set(socket.id, decoded.userId);
       await userService.setOnlineStatus(decoded.userId, true);
       socket.join(`user:${decoded.userId}`);
@@ -314,8 +343,12 @@ io.on('connection', (socket: Socket) => {
         callerId: authorized.actorId,
         calleeId: authorized.targetId,
       });
-      // No live socket in user:{id} → they cannot answer WebRTC (push alone is not enough).
-      if (!userSockets.has(authorized.targetId)) {
+      // No live socket for this user → they cannot answer WebRTC (push alone is not enough).
+      // Re-check after a short wait — mobile tabs often reconnect a beat after unlock.
+      if (!isUserSocketOnline(authorized.targetId)) {
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      if (!isUserSocketOnline(authorized.targetId)) {
         logCallMetric('call_offline', {
           callerId: authorized.actorId,
           calleeId: authorized.targetId,
@@ -605,9 +638,12 @@ io.on('connection', (socket: Socket) => {
   socket.on('disconnect', () => {
     const userId = socketToUser.get(socket.id);
     if (userId) {
-      userSockets.delete(userId);
+      const fullyOffline = removeUserSocket(userId, socket.id);
       socketToUser.delete(socket.id);
-      userService.setOnlineStatus(userId, false);
+      // Only mark offline when no other tab/device remains authenticated.
+      if (fullyOffline) {
+        userService.setOnlineStatus(userId, false);
+      }
       // Notify any group rooms this socket was in.
       for (const roomName of socket.rooms) {
         if (roomName.startsWith('room:')) {
