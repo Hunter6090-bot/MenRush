@@ -208,7 +208,8 @@ function AppShell() {
         <Route path="/messages/:otherId" element={<RequireVerified><MessagingRoute /></RequireVerified>} />
         <Route path="/rooms" element={<RequireVerified><RoomsRoute /></RequireVerified>} />
         <Route path="/rooms/:roomId" element={<RequireVerified><RoomsRoute /></RequireVerified>} />
-        {import.meta.env.DEV ? (
+        {import.meta.env.DEV ||
+        (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) ? (
           <Route path="/dev/room-temp-gate" element={<RoomTempIdentityGatePreview />} />
         ) : null}
         <Route path="*" element={<NotFound />} />
