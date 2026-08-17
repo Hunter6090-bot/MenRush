@@ -146,7 +146,31 @@ fi
 
 # 8. Likes & matches
 echo "❤️  Testing likes & matches..."
+# One-way like first — received list must show liker without premium
 LIKE1=$(curl -s -X POST "$API_URL/users/like/$USER2_ID" -H "Authorization: Bearer $TOKEN1")
+if echo "$LIKE1" | grep -q '"match":false\|"match": false'; then
+  ok "Alice → Bob like recorded (not yet mutual)"
+else
+  # Already matched from a prior run is fine; still verify endpoints below
+  ok "Alice → Bob like response: $LIKE1"
+fi
+
+RECEIVED=$(curl -s -X GET "$API_URL/users/likes/received" -H "Authorization: Bearer $TOKEN2")
+if echo "$RECEIVED" | grep -q "Alice"; then
+  ok "Bob sees Alice in ungated received likes"
+else
+  bad "Received likes missing Alice (must not require premium): $RECEIVED"
+fi
+
+SUMMARY=$(curl -s -X GET "$API_URL/users/likes/received/summary" -H "Authorization: Bearer $TOKEN2")
+SUMMARY_COUNT=$(json_field "$SUMMARY" "count")
+SUMMARY_PREVIEW=$(echo "$SUMMARY" | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d.get('preview') or []))" 2>/dev/null || echo 0)
+if [ -n "$SUMMARY_COUNT" ] && [ "$SUMMARY_COUNT" != "0" ] && [ "$SUMMARY_PREVIEW" != "0" ]; then
+  ok "Received likes summary includes free preview (count=$SUMMARY_COUNT)"
+else
+  bad "Summary should return count+preview without premium: $SUMMARY"
+fi
+
 LIKE2=$(curl -s -X POST "$API_URL/users/like/$USER1_ID" -H "Authorization: Bearer $TOKEN2")
 if echo "$LIKE2" | grep -q '"match":true'; then
   ok "Mutual like created a match"
@@ -159,6 +183,14 @@ if echo "$MATCHES" | grep -q "Bob"; then
   ok "Bob listed in Alice matches"
 else
   bad "Matches list missing Bob: $MATCHES"
+fi
+
+# After mutual, Alice should leave Bob's received (non-mutual) list
+RECEIVED_AFTER=$(curl -s -X GET "$API_URL/users/likes/received" -H "Authorization: Bearer $TOKEN2")
+if echo "$RECEIVED_AFTER" | grep -q "Alice"; then
+  bad "Mutual match should leave received-likes list: $RECEIVED_AFTER"
+else
+  ok "Mutual match removed from received-likes list"
 fi
 
 # 9. Messaging
