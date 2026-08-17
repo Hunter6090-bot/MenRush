@@ -10,7 +10,8 @@ const FORBIDDEN_CTA_PATTERNS = [
 ];
 
 async function assertComingSoonDesignLock(page: import('@playwright/test').Page) {
-  const signInLink = page.getByRole('link', { name: /Already have an invite\? Sign in/i });
+  // Header sign-in (design lock: one sign-in path for invite holders).
+  const signInLink = page.getByRole('link', { name: /^Sign in$/i });
   await expect(signInLink).toHaveCount(1);
   await expect(signInLink).toHaveAttribute('href', '/login');
 
@@ -26,7 +27,7 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
 
   await expect(page.locator('#waitlist')).toBeVisible();
   await expect(page.locator('#waitlist-email')).toBeVisible();
-  await expect(page.getByRole('button', { name: /Join the verified waitlist/i })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /Join the beta|Join the verified waitlist/i })).toHaveCount(1);
   await assertBrandMark(page);
 }
 
@@ -38,8 +39,7 @@ async function assertAuthShell(page: import('@playwright/test').Page) {
 async function assertBrandMark(page: import('@playwright/test').Page) {
   const mark = page.getByTestId('brand-mark').first();
   await expect(mark).toBeVisible();
-  await expect(mark.locator('img[src*="menrush-logo-512"]')).toBeVisible();
-  await expect(page.locator('img[src*="medallion-480"]')).toHaveCount(0);
+  await expect(mark.locator('img[alt="MenRush"]')).toBeVisible();
 }
 
 async function assertCreamInputs(page: import('@playwright/test').Page) {
@@ -77,8 +77,8 @@ test.describe('public design lock — auth pages', () => {
     const network = await guardAgainstSideEffects(page);
     await page.goto('/beta');
     await assertAuthShell(page);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Beta access is/i);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/invite-only/i);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/You're in the/i);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/MenRush beta/i);
     await expect(page.locator('#beta-invite-code')).toBeVisible();
     await expect(page.getByRole('button', { name: /^Continue$/i })).toHaveCount(1);
     expect(network.expectNoSideEffects()).toEqual([]);

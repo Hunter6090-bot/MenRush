@@ -403,8 +403,12 @@ export const meetAPI = {
 };
 
 export const roomsAPI = {
-  createRoom: (data: any) => apiClient.post('/rooms', data),
+  createRoom: (data: unknown) => apiClient.post('/rooms', data),
   getRooms: () => apiClient.get('/rooms'),
+  getOfficialRooms: () =>
+    apiClient.get<{ rooms: Array<{ id: string; name: string; description?: string; member_count: number; is_official: boolean }> }>(
+      '/rooms/official',
+    ),
   getRoom: (roomId: string) => apiClient.get(`/rooms/${roomId}`),
   getMembers: (roomId: string) =>
     apiClient.get<Array<{ id: string; name: string; photo_url?: string; role?: string }>>(
@@ -414,10 +418,40 @@ export const roomsAPI = {
     apiClient.post(`/rooms/${roomId}/members`, { user_id: userId }),
   joinRoom: (roomId: string) => apiClient.post(`/rooms/${roomId}/join`),
   leaveRoom: (roomId: string) => apiClient.post(`/rooms/${roomId}/leave`),
+  deleteRoom: (roomId: string) => apiClient.delete(`/rooms/${roomId}`),
   getMessages: (roomId: string, before?: string) =>
     apiClient.get(`/rooms/${roomId}/messages`, { params: { before } }),
   sendMessage: (roomId: string, message: string, replyTo?: string) =>
     apiClient.post(`/rooms/${roomId}/messages`, { message, reply_to: replyTo }),
+  getTempIdentity: (roomId: string) =>
+    apiClient.get<{ display_name: string | null; photo_url: string | null }>(
+      `/rooms/${roomId}/temp-identity`,
+    ),
+  setTempIdentity: (roomId: string, data: { display_name: string; photo_url?: string }) =>
+    apiClient.put<{ display_name: string; photo_url: string | null }>(
+      `/rooms/${roomId}/temp-identity`,
+      data,
+    ),
+};
+
+// ── Map feed (Sniffies-style anonymous location chat) ─────────────────────
+export interface MapFeedMessage {
+  id: string;
+  display_name: string;
+  photo_url?: string | null;
+  message: string;
+  created_at: string;
+  /** Distance bucket label e.g. "< 500m" */
+  distance_label?: string;
+}
+
+export const mapFeedAPI = {
+  list: (lat?: number, lng?: number, limit = 20) =>
+    apiClient.get<{ messages: MapFeedMessage[] }>('/map-feed', {
+      params: { lat, lng, limit },
+    }),
+  post: (data: { message: string; lat?: number; lng?: number; display_name?: string }) =>
+    apiClient.post<MapFeedMessage>('/map-feed', data),
 };
 
 export type ContactSubmitPayload = {

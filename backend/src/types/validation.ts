@@ -174,6 +174,13 @@ export const AddRoomMemberSchema = z.object({
   user_id: z.string().uuid(),
 });
 
+export const RoomTempIdentitySchema = z.object({
+  display_name: z.string().trim().min(1).max(40),
+  photo_url: z.string().trim().max(500).nullable().optional(),
+  save_name: z.boolean().optional(),
+  save_photo: z.boolean().optional(),
+});
+
 export const ContactFormSchema = z.object({
   name: z.string().trim().min(2, 'Name must be at least 2 characters').max(120),
   email: z.string().trim().email('Enter a valid email address'),
@@ -240,3 +247,4 @@ export type MediaKind = (typeof MEDIA_KINDS)[number];
 export type MessageMediaKind = (typeof MESSAGE_MEDIA_KINDS)[number];
 export type LocationMessageInput = z.infer<typeof LocationMessageSchema>;
 export type MediaMessageFormInput = z.infer<typeof MediaMessageFormSchema>;
+export type RoomTempIdentityInput = z.infer<typeof RoomTempIdentitySchema>;

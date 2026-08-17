@@ -205,14 +205,14 @@ export const ProfileView = () => {
             <div className="h-40 sm:h-32 bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#A45E18]/10" />
           )}
           <div className="px-5 pb-5">
-            <div className="-mt-10 mb-3 flex items-end justify-between gap-2">
+            <div className="-mt-12 mb-3 flex items-end justify-between gap-2">
               <UserAvatar
                 name={user.name}
                 photoUrl={user.photo_url}
                 age={user.age}
                 online={user.online}
                 size="xl"
-                className="ring-4 ring-[var(--bg-card)]"
+                framed={false}
               />
               <div className="flex items-center gap-1.5 pb-1">
                 <StatusBadge online={!!user.online} lastSeen={user.last_seen} />

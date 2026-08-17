@@ -17,6 +17,7 @@ interface ConversationItemProps {
   onBlocked?: () => void;
   isActive?: boolean;
   variant?: 'default' | 'sidebar';
+  onSelect?: (userId: string) => void;
 }
 
 export const ConversationItem: React.FC<ConversationItemProps> = ({
@@ -30,6 +31,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   onBlocked,
   isActive = false,
   variant = 'default',
+  onSelect,
 }) => {
   const navigate = useNavigate();
   const isMissedCall = lastMessage === MISSED_CALL_PREVIEW;
@@ -38,7 +40,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   return (
     <div className="flex items-center gap-1">
       <button
-        onClick={() => navigate(`/messages/${userId}`)}
+        onClick={() => (onSelect ? onSelect(userId) : navigate(`/messages/${userId}`))}
         className={`group flex min-w-0 flex-1 items-center gap-3 text-left transition-all duration-200 ${
           isSidebar
             ? `rounded-[14px] px-3 py-3 ${

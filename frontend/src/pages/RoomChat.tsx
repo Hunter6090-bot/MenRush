@@ -5,6 +5,7 @@ import { useSocket } from '../hooks/useSocket';
 import { useAuthStore } from '../hooks/store';
 import { useRoomVideo } from '../hooks/useRoomVideo';
 import { RoomGalleryGrid } from '../components/RoomGalleryGrid';
+import { RoomTempIdentityGate } from '../components/RoomTempIdentityGate';
 import { PulseRing } from '../components/PulseRing';
 import { MobileBackButton } from '../components/MobileBackButton';
 import { ThemeToggle } from '../components/ThemeToggle';
@@ -27,6 +28,8 @@ interface RoomInfo {
   member_count: number;
   user_role?: string | null;
   is_location_based?: boolean;
+  is_official?: boolean;
+  is_invite_only?: boolean;
 }
 
 interface RoomMember {
@@ -111,6 +114,11 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
 
+  // ── Identity gate: required for official/location-based rooms without membership ──
+  const [identityReady, setIdentityReady] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const [loadingRoom, setLoadingRoom] = useState(true);
+
   const {
     participants,
     pinnedId,
@@ -126,22 +134,70 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     toggleCamera,
     toggleMic,
     photoUrl,
-  } = useRoomVideo({ roomId, userId: user?.id, enabled: !!roomId });
+  } = useRoomVideo({ roomId, userId: user?.id, enabled: identityReady && !!roomId });
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Load room info + messages ────────────────────────────────────────────
+  // ── Load room info; auto-join if needed; gate for official/location-based ──
   useEffect(() => {
     if (!roomId) return;
-    roomsAPI.getRoom(roomId).then((r) => setRoom(r.data)).catch(() => {});
+    setLoadingRoom(true);
+    setJoinError(null);
+
+    roomsAPI
+      .getRoom(roomId)
+      .then(async (r) => {
+        const data = r.data as RoomInfo;
+        setRoom(data);
+
+        const needsGate =
+          !data.user_role && (data.is_official || data.is_location_based);
+
+        if (needsGate) {
+          if (data.is_invite_only) {
+            setJoinError('This room is invite-only. Ask an owner to add you.');
+            setLoadingRoom(false);
+            return;
+          }
+          // Auto-join silently
+          try {
+            await roomsAPI.joinRoom(roomId);
+            // Refresh room info to get user_role
+            const refreshed = await roomsAPI.getRoom(roomId);
+            setRoom(refreshed.data as RoomInfo);
+          } catch (err: unknown) {
+            const msg =
+              (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+            setJoinError(msg || 'Could not join this room.');
+            setLoadingRoom(false);
+            return;
+          }
+          // Show the identity gate — don't load messages yet
+          setLoadingRoom(false);
+          return;
+        }
+
+        // Already a member or no gate required
+        setIdentityReady(true);
+        setLoadingRoom(false);
+      })
+      .catch(() => {
+        setJoinError('Could not load this room.');
+        setLoadingRoom(false);
+      });
+  }, [roomId]);
+
+  // ── Load messages + members once identity is ready ───────────────────────
+  useEffect(() => {
+    if (!roomId || !identityReady) return;
     roomsAPI.getMessages(roomId).then((r) => setMessages(r.data)).catch(() => {});
     roomsAPI
       .getMembers(roomId)
       .then((r) => loadMembers(r.data.map((m) => ({ id: m.id, name: m.name, photo_url: m.photo_url }))))
       .catch(() => {});
-  }, [roomId, loadMembers]);
+  }, [roomId, identityReady, loadMembers]);
 
   useEffect(() => {
     if (!roomId || !settingsOpen) return;
@@ -365,6 +421,75 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  // Loading state
+  if (loadingRoom) {
+    return (
+      <div
+        className={embedded ? 'flex h-full min-h-0 flex-col items-center justify-center' : 'fixed inset-0 flex flex-col items-center justify-center'}
+        style={{ background: 'var(--bg-primary)' }}
+      >
+        <PulseRing size={32} label="Loading room…" />
+      </div>
+    );
+  }
+
+  // Join error or invite-only
+  if (joinError) {
+    return (
+      <div
+        className={embedded ? 'flex h-full min-h-0 flex-col items-center justify-center px-6 text-center' : 'fixed inset-0 flex flex-col items-center justify-center px-6 text-center'}
+        style={{ background: 'var(--bg-primary)' }}
+      >
+        <p className="text-sm text-[var(--cream)]/80">{joinError}</p>
+        <button
+          type="button"
+          onClick={() => navigate('/rooms')}
+          className="mt-4 rounded-xl border border-[rgba(196,131,42,0.35)] bg-[rgba(196,131,42,0.1)] px-5 py-2.5 text-sm font-semibold text-[#C4832A] hover:bg-[rgba(196,131,42,0.2)]"
+        >
+          Back to rooms
+        </button>
+      </div>
+    );
+  }
+
+  // Identity gate — show for official/location-based when not yet ready
+  if (!identityReady && room && (room.is_official || room.is_location_based)) {
+    return (
+      <div
+        className={embedded ? 'flex h-full min-h-0 flex-col' : 'fixed inset-0 flex flex-col'}
+        style={{ background: 'var(--bg-primary)' }}
+      >
+        <header
+          className="flex shrink-0 items-center gap-2 border-b border-[var(--border-default)] px-3 py-3"
+          style={{ zIndex: 20 }}
+        >
+          <MobileBackButton fallback="/rooms" onClick={() => navigate('/rooms')} className="-ml-1" />
+          <p className="flex-1 truncate text-sm font-semibold text-[var(--cream)]">
+            {room.name}
+          </p>
+        </header>
+        <RoomTempIdentityGate
+          roomName={room.name}
+          roomDescription={room.description}
+          isOfficial={room.is_official}
+          isLocationBased={room.is_location_based}
+          onReady={async ({ displayName, photoUrl: gatePhotoUrl }) => {
+            try {
+              await roomsAPI.setTempIdentity(roomId!, {
+                display_name: displayName,
+                photo_url: gatePhotoUrl,
+              });
+            } catch {
+              // Non-fatal — proceed anyway
+            }
+            setIdentityReady(true);
+          }}
+          onCancel={() => navigate('/rooms')}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className={embedded ? 'flex h-full min-h-0 flex-col' : 'fixed inset-0 flex flex-col'}
@@ -551,21 +676,53 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
               </div>
             )}
 
-            <button
-              onClick={async () => {
-                if (!roomId) return;
-                try {
-                  await roomsAPI.leaveRoom(roomId);
-                  navigate('/rooms');
-                } catch {
-                  // ignore
-                }
-              }}
-              className="w-full px-4 py-3 text-sm text-left transition-all duration-150 hover:bg-[var(--border-default)]/50"
-              style={{ color: '#EF4444' }}
-            >
-              Leave Room
-            </button>
+            {isOwner ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!roomId) return;
+                  const ok = window.confirm(
+                    'Delete this group for everyone? This cannot be undone.',
+                  );
+                  if (!ok) return;
+                  try {
+                    await roomsAPI.deleteRoom(roomId);
+                    navigate('/rooms');
+                  } catch (err: unknown) {
+                    setSettingsNotice(
+                      (err as { response?: { data?: { error?: string } } })?.response?.data
+                        ?.error || 'Could not delete group.',
+                    );
+                  }
+                }}
+                className="w-full px-4 py-3 text-sm text-left transition-all duration-150 hover:bg-[var(--border-default)]/50"
+                style={{ color: '#EF4444' }}
+                data-testid="delete-group-button"
+              >
+                Delete group
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!roomId) return;
+                  try {
+                    await roomsAPI.leaveRoom(roomId);
+                    navigate('/rooms');
+                  } catch (err: unknown) {
+                    setSettingsNotice(
+                      (err as { response?: { data?: { error?: string } } })?.response?.data
+                        ?.error || 'Could not leave room.',
+                    );
+                  }
+                }}
+                className="w-full px-4 py-3 text-sm text-left transition-all duration-150 hover:bg-[var(--border-default)]/50"
+                style={{ color: '#EF4444' }}
+                data-testid="leave-group-button"
+              >
+                Leave Room
+              </button>
+            )}
           </div>
         </div>
       )}

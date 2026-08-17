@@ -41,6 +41,14 @@ interface RoomListProps {
   className?: string;
 }
 
+interface OfficialRoom {
+  id: string;
+  name: string;
+  description?: string;
+  member_count: number;
+  is_official: boolean;
+}
+
 export const RoomList: React.FC<RoomListProps> = ({
   activeRoomId,
   variant = 'mobile',
@@ -50,6 +58,7 @@ export const RoomList: React.FC<RoomListProps> = ({
   const navigate = useNavigate();
   const socket = useSocket();
   const [rooms, setRooms] = useState<RoomRow[]>([]);
+  const [officialRooms, setOfficialRooms] = useState<OfficialRoom[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
@@ -75,6 +84,11 @@ export const RoomList: React.FC<RoomListProps> = ({
 
   useEffect(() => {
     refreshRooms();
+    // Fetch official rooms (best-effort — new endpoint may not exist yet)
+    roomsAPI
+      .getOfficialRooms()
+      .then((r) => setOfficialRooms(r.data.rooms ?? []))
+      .catch(() => setOfficialRooms([]));
   }, []);
 
   useEffect(() => {
@@ -152,24 +166,43 @@ export const RoomList: React.FC<RoomListProps> = ({
       )}
 
       <div className={`shrink-0 ${isSidebar ? 'px-3 pt-3' : 'mb-4'}`}>
-        <div className="relative">
-          <SearchIcon
-            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2"
-            style={{ color: '#6B5035' }}
-          />
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search rooms..."
-            className="w-full rounded-2xl py-3 pl-10 pr-4 text-sm transition-all duration-200 focus:outline-none"
-            style={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border-default)',
-              color: 'var(--cream)',
-              caretColor: '#C4832A',
-            }}
-          />
+        <div className="flex gap-2">
+          <div className="relative min-w-0 flex-1">
+            <SearchIcon
+              className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2"
+              style={{ color: '#6B5035' }}
+            />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search rooms..."
+              className="w-full rounded-2xl py-3 pl-10 pr-4 text-sm transition-all duration-200 focus:outline-none"
+              style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-default)',
+                color: 'var(--cream)',
+                caretColor: '#C4832A',
+              }}
+            />
+          </div>
+          {!showHeader ? (
+            <button
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              aria-label="Create group"
+              title="Create group"
+              data-testid="create-group-button"
+              className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-2xl transition-all duration-150 active:scale-95"
+              style={{
+                background: 'linear-gradient(135deg, #C4832A, #A45E18)',
+                boxShadow: '0 2px 12px rgba(196,131,42,0.35)',
+                color: '#fff',
+              }}
+            >
+              <PlusIcon className="h-5 w-5" />
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -180,97 +213,189 @@ export const RoomList: React.FC<RoomListProps> = ({
               <div key={i} className="h-16 animate-pulse rounded-2xl" style={{ background: 'var(--bg-card)' }} />
             ))}
           </div>
-        ) : filtered.length === 0 ? (
-          <div className="flex select-none flex-col items-center justify-center py-20">
-            <div
-              className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl"
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
-            >
-              <RoomsIcon className="h-8 w-8" style={{ color: '#C4832A', opacity: 0.5 } as React.CSSProperties} />
-            </div>
-            <p className="text-sm font-medium" style={{ color: 'var(--cream-muted)' }}>
-              {search ? 'No rooms match your search' : 'No rooms yet'}
-            </p>
-            {!search && (
-              <button
-                onClick={() => setCreateOpen(true)}
-                className="mt-4 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all duration-150 active:scale-95"
-                style={{
-                  background: 'linear-gradient(135deg, #C4832A, #A45E18)',
-                  color: '#FFF5E6',
-                  boxShadow: '0 2px 12px rgba(196,131,42,0.35)',
-                }}
-              >
-                Create a Group
-              </button>
-            )}
-          </div>
         ) : (
-          <div className="flex flex-col gap-2">
-            {filtered.map((room) => {
-              const active = activeRoomId === room.id;
-              return (
-                <button
-                  key={room.id}
-                  onClick={() => navigate(`/rooms/${room.id}`)}
-                  className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-all duration-150 active:scale-[0.98] ${
-                    isSidebar && active
-                      ? 'border border-[var(--copper)]/40 bg-[var(--copper)]/12 shadow-[inset_3px_0_0_var(--copper)]'
-                      : ''
-                  }`}
-                  style={
-                    isSidebar && active
-                      ? undefined
-                      : { background: 'var(--bg-card)', border: '1px solid var(--border-default)' }
-                  }
+          <>
+            {/* ── Official rooms ─────────────────────────────────────── */}
+            {officialRooms.length > 0 && !search && (
+              <div className="mb-4">
+                <div className="mb-2 flex items-center gap-2 px-1">
+                  <span
+                    className="text-[10px] font-bold uppercase tracking-[0.18em]"
+                    style={{ color: '#C4832A' }}
+                  >
+                    Official rooms
+                  </span>
+                  <div className="h-px flex-1" style={{ background: 'rgba(196,131,42,0.2)' }} />
+                  <span
+                    className="flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold"
+                    style={{ background: 'rgba(196,131,42,0.18)', color: '#C4832A' }}
+                  >
+                    ✓
+                  </span>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {officialRooms.map((room) => {
+                    const active = activeRoomId === room.id;
+                    return (
+                      <button
+                        key={room.id}
+                        onClick={() => navigate(`/rooms/${room.id}`)}
+                        className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-all duration-150 active:scale-[0.98] ${
+                          isSidebar && active
+                            ? 'border border-[var(--copper)]/40 bg-[var(--copper)]/12 shadow-[inset_3px_0_0_var(--copper)]'
+                            : ''
+                        }`}
+                        style={
+                          isSidebar && active
+                            ? undefined
+                            : {
+                                background:
+                                  'linear-gradient(135deg, rgba(196,131,42,0.08), rgba(13,10,6,0.95))',
+                                border: '1px solid rgba(196,131,42,0.35)',
+                              }
+                        }
+                      >
+                        <div
+                          className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl text-base font-bold"
+                          style={{
+                            background: 'linear-gradient(135deg, rgba(196,131,42,0.35), rgba(139,69,19,0.25))',
+                            border: '1px solid rgba(196,131,42,0.45)',
+                            color: '#C4832A',
+                          }}
+                        >
+                          {roomInitials(room.name)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="truncate text-sm font-semibold" style={{ color: 'var(--cream)' }}>
+                              {room.name}
+                            </span>
+                            <span
+                              className="shrink-0 rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide"
+                              style={{ background: 'rgba(196,131,42,0.18)', color: '#C4832A' }}
+                            >
+                              Official
+                            </span>
+                          </div>
+                          <span className="text-xs" style={{ color: '#6B5035' }}>
+                            <GroupIcon className="mr-0.5 inline h-3 w-3" />
+                            {room.member_count} members
+                            {room.description ? ` · ${room.description.slice(0, 40)}` : ''}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ── Your groups ────────────────────────────────────────── */}
+            {filtered.length > 0 && !search && officialRooms.length > 0 && (
+              <div className="mb-2 flex items-center gap-2 px-1">
+                <span
+                  className="text-[10px] font-bold uppercase tracking-[0.18em]"
+                  style={{ color: '#6B5035' }}
                 >
-                  <div
-                    className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl text-base font-bold"
+                  Your groups
+                </span>
+                <div className="h-px flex-1" style={{ background: 'var(--border-default)' }} />
+              </div>
+            )}
+
+            {filtered.length === 0 && officialRooms.length === 0 ? (
+              <div className="flex select-none flex-col items-center justify-center py-20">
+                <div
+                  className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl"
+                  style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
+                >
+                  <RoomsIcon className="h-8 w-8" style={{ color: '#C4832A', opacity: 0.5 } as React.CSSProperties} />
+                </div>
+                <p className="text-sm font-medium" style={{ color: 'var(--cream-muted)' }}>
+                  {search ? 'No rooms match your search' : 'No rooms yet'}
+                </p>
+                {!search && (
+                  <button
+                    onClick={() => setCreateOpen(true)}
+                    className="mt-4 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all duration-150 active:scale-95"
                     style={{
-                      background: 'linear-gradient(135deg, rgba(196,131,42,0.25), rgba(139,69,19,0.15))',
-                      border: '1px solid rgba(196,131,42,0.25)',
-                      color: '#C4832A',
+                      background: 'linear-gradient(135deg, #C4832A, #A45E18)',
+                      color: '#FFF5E6',
+                      boxShadow: '0 2px 12px rgba(196,131,42,0.35)',
                     }}
                   >
-                    {roomInitials(room.name)}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-semibold" style={{ color: 'var(--cream)' }}>
-                        {room.name}
-                      </span>
-                      <span className="flex-shrink-0 text-[10px]" style={{ color: '#6B5035' }}>
-                        {formatRelative(room.last_message_at)}
-                      </span>
-                    </div>
-                    <div className="mt-0.5 flex items-center justify-between gap-2">
-                      <span className="truncate text-xs" style={{ color: '#6B5035' }}>
-                        {room.last_message ?? `${room.member_count} members`}
-                      </span>
-                      <div className="flex flex-shrink-0 items-center gap-1.5">
-                        <span className="text-[10px]" style={{ color: '#6B5035' }}>
-                          <GroupIcon className="mr-0.5 inline h-3 w-3" />
-                          {room.member_count}
-                        </span>
-                        {(room.unread_count ?? 0) > 0 && (
-                          <span
-                            className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[9px] font-bold"
-                            style={{
-                              background: 'linear-gradient(135deg, #C4832A, #A45E18)',
-                              color: '#fff',
-                            }}
-                          >
-                            {(room.unread_count ?? 0) > 9 ? '9+' : room.unread_count}
-                          </span>
-                        )}
+                    Create a Group
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {filtered.map((room) => {
+                  const active = activeRoomId === room.id;
+                  return (
+                    <button
+                      key={room.id}
+                      onClick={() => navigate(`/rooms/${room.id}`)}
+                      className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-all duration-150 active:scale-[0.98] ${
+                        isSidebar && active
+                          ? 'border border-[var(--copper)]/40 bg-[var(--copper)]/12 shadow-[inset_3px_0_0_var(--copper)]'
+                          : ''
+                      }`}
+                      style={
+                        isSidebar && active
+                          ? undefined
+                          : { background: 'var(--bg-card)', border: '1px solid var(--border-default)' }
+                      }
+                    >
+                      <div
+                        className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl text-base font-bold"
+                        style={{
+                          background: 'linear-gradient(135deg, rgba(196,131,42,0.25), rgba(139,69,19,0.15))',
+                          border: '1px solid rgba(196,131,42,0.25)',
+                          color: '#C4832A',
+                        }}
+                      >
+                        {roomInitials(room.name)}
                       </div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate text-sm font-semibold" style={{ color: 'var(--cream)' }}>
+                            {room.name}
+                          </span>
+                          <span className="flex-shrink-0 text-[10px]" style={{ color: '#6B5035' }}>
+                            {formatRelative(room.last_message_at)}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 flex items-center justify-between gap-2">
+                          <span className="truncate text-xs" style={{ color: '#6B5035' }}>
+                            {room.last_message ?? `${room.member_count} members`}
+                          </span>
+                          <div className="flex flex-shrink-0 items-center gap-1.5">
+                            <span className="text-[10px]" style={{ color: '#6B5035' }}>
+                              <GroupIcon className="mr-0.5 inline h-3 w-3" />
+                              {room.member_count}
+                            </span>
+                            {(room.unread_count ?? 0) > 0 && (
+                              <span
+                                className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[9px] font-bold"
+                                style={{
+                                  background: 'linear-gradient(135deg, #C4832A, #A45E18)',
+                                  color: '#fff',
+                                }}
+                              >
+                                {(room.unread_count ?? 0) > 9 ? '9+' : room.unread_count}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </div>
 

@@ -128,8 +128,18 @@ function canWithdrawMedia(msg: Message, userId?: string): boolean {
 
 // ── Main component ───────────────────────────────────────────────────────────
 
-export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
-  const { otherId } = useParams<{ otherId: string }>();
+export const Messages = ({
+  embedded = false,
+  otherUserId,
+  onBack,
+}: {
+  embedded?: boolean;
+  /** When set (e.g. map chat dock), overrides the route param. */
+  otherUserId?: string;
+  onBack?: () => void;
+}) => {
+  const { otherId: paramOtherId } = useParams<{ otherId: string }>();
+  const otherId = otherUserId ?? paramOtherId;
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -655,7 +665,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       >
         <MobileBackButton
           fallback="/conversations"
-          onClick={() => navigate('/conversations')}
+          onClick={() => (onBack ? onBack() : navigate('/conversations'))}
           className="-ml-1"
         />
 
