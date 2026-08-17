@@ -47,6 +47,7 @@ import { FEATURES } from './lib/featureFlags';
 import { VideoCallModal } from './components/VideoCallModal';
 import { ToastNotifications } from './components/ToastNotifications';
 import { savePostAuthRedirect } from './lib/profileLinks';
+import { RoomTempIdentityGatePreview } from './pages/RoomTempIdentityGatePreview';
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
   const token = useAuthStore((s) => s.token);
@@ -205,6 +206,10 @@ function AppShell() {
         <Route path="/messages/:otherId" element={<RequireVerified><MessagingRoute /></RequireVerified>} />
         <Route path="/rooms" element={<RequireVerified><RoomsRoute /></RequireVerified>} />
         <Route path="/rooms/:roomId" element={<RequireVerified><RoomsRoute /></RequireVerified>} />
+        {import.meta.env.DEV ||
+        (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) ? (
+          <Route path="/dev/room-temp-gate" element={<RoomTempIdentityGatePreview />} />
+        ) : null}
         <Route path="*" element={<NotFound />} />
       </Routes>
       {token && FEATURES.videoCalls && <VideoCallModal />}
