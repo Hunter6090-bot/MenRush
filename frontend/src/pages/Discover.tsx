@@ -16,6 +16,7 @@ import { ProfileDrawer } from '../components/ProfileDrawer';
 import { HotSpotSheet } from '../components/HotSpotSheet';
 import { createMapMarkerElement, MapMarker } from '../components/MapMarker';
 import { createHotSpotPinElement, HotSpotPin } from '../components/HotSpotPin';
+import { profilePathForUser } from '../lib/profileLinks';
 
 import { ActivationBanner } from '../components/ActivationBanner';
 import { DiscoveryFilterPills } from '../components/DiscoveryFilterPills';
@@ -1138,6 +1139,12 @@ export const Discover = () => {
         size={48}
       />,
     );
+    selfEl.style.cursor = 'pointer';
+    selfEl.setAttribute('aria-label', 'Open your profile');
+    selfEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      navigate('/profile');
+    });
     selfMarkerRef.current = new mapboxgl.Marker({ element: selfEl })
       .setLngLat([startCenter[1], startCenter[0]])
       .addTo(map);
@@ -1240,7 +1247,10 @@ export const Discover = () => {
 
       const { element, root } = createMapMarkerElement(
         markerUser,
-        () => setSelectedUser(user),
+        () =>
+          navigate(
+            profilePathForUser(user.id, useAuthStore.getState().user?.id),
+          ),
         isPulsing ? 52 : 44,
       );
 
@@ -1685,7 +1695,6 @@ export const Discover = () => {
             <NearbyProfileGrid
               users={displayUsers}
               loading={loading}
-              onSelect={setSelectedUser}
               onMatch={handleLike}
               likedUserIds={likedUsers}
               mutualUserIds={matchedUsers}
@@ -1940,7 +1949,6 @@ export const Discover = () => {
                 <NearbyProfileGrid
                   users={displayUsers}
                   loading={loading}
-                  onSelect={setSelectedUser}
                   onMatch={handleLike}
                   likedUserIds={likedUsers}
                   mutualUserIds={matchedUsers}

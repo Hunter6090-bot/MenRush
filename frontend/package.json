@@ -12,7 +12,8 @@
     "test:unit": "node --experimental-strip-types --test src/lib/notificationToasts.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:install": "playwright install chromium"
+    "test:e2e:install": "playwright install chromium",
+    "test:unit": "node --experimental-strip-types --test src/lib/profileLinks.test.ts"
   },
   "dependencies": {
     "@sentry/react": "^10.57.0",

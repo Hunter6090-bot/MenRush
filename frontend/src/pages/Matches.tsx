@@ -6,6 +6,7 @@ import { IconMatches } from '../components/icons';
 import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { useResolvingPhotoSrc } from '../components/UserAvatar';
+import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 
 interface Match {
   id: string;
@@ -62,8 +63,8 @@ function formatLikedAgo(iso?: string): string | null {
 function PersonGridCard({
   person,
   subtitle,
-  onClick,
   testId,
+  onMessage,
 }: {
   person: {
     id: string;
@@ -75,49 +76,66 @@ function PersonGridCard({
     authenticity_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
   };
   subtitle: string;
-  onClick: () => void;
   testId?: string;
+  /** Dedicated Message control — photo always opens profile. */
+  onMessage?: () => void;
 }) {
   const { src: photo, onError } = useResolvingPhotoSrc(person.photo_url ?? undefined, person.age);
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <div
       data-testid={testId}
       className="group relative overflow-hidden rounded-2xl border border-[rgba(196,131,42,0.35)] bg-nn-card text-left shadow-card transition-all hover:-translate-y-[3px] hover:border-[rgba(196,131,42,0.4)]"
     >
-      <div className="relative aspect-[3/3.6] w-full bg-[var(--bg-elevated)]">
-        {photo ? (
-          <img
-            src={photo}
-            alt={person.name}
-            data-testid={testId ? `${testId}-photo` : undefined}
-            className="h-full w-full object-cover"
-            onError={onError}
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center">
-            <SilhouetteAvatar size={80} variant="card" />
-          </div>
-        )}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent px-3 pb-2.5 pt-10">
-          <div className="flex items-center gap-1.5">
-            <span
-              className={`h-2 w-2 shrink-0 rounded-full ${person.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
+      <ProfilePhotoLink
+        userId={person.id}
+        name={person.name}
+        className="block"
+        data-testid={testId ? `${testId}-photo` : `match-photo-${person.id}`}
+      >
+        <div className="relative aspect-[3/3.6] w-full bg-[var(--bg-elevated)]">
+          {photo ? (
+            <img
+              src={photo}
+              alt={person.name}
+              className="h-full w-full object-cover"
+              onError={onError}
             />
-            <span className="truncate text-[15px] font-bold text-[#FFF6E6]">
-              {person.name} {person.age}
-            </span>
-            {person.is_verified ? (
-              <VerifiedBadge size="sm" />
-            ) : person.authenticity_status === 'verified' ? (
-              <VerifiedBadge size="sm" level="authentic_person" />
-            ) : null}
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <SilhouetteAvatar size={80} variant="card" />
+            </div>
+          )}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent px-3 pb-2.5 pt-10">
+            <div className="flex items-center gap-1.5">
+              <span
+                className={`h-2 w-2 shrink-0 rounded-full ${person.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
+              />
+              <span className="truncate text-[15px] font-bold text-[#FFF6E6]">
+                {person.name} {person.age}
+              </span>
+              {person.is_verified ? (
+                <VerifiedBadge size="sm" />
+              ) : person.authenticity_status === 'verified' ? (
+                <VerifiedBadge size="sm" level="authentic_person" />
+              ) : null}
+            </div>
+            <p className="mt-0.5 truncate text-xs font-semibold text-[var(--cream)]">{subtitle}</p>
           </div>
-          <p className="mt-0.5 truncate text-xs font-semibold text-[var(--cream)]">{subtitle}</p>
         </div>
-      </div>
-    </button>
+      </ProfilePhotoLink>
+      {onMessage ? (
+        <div className="border-t border-[var(--border-default)] p-1.5">
+          <button
+            type="button"
+            onClick={onMessage}
+            data-testid={`match-message-${person.id}`}
+            className="w-full rounded-xl border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] py-2 text-[11px] font-extrabold uppercase tracking-wide text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.28)]"
+          >
+            Message
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -235,7 +253,6 @@ export const Matches = () => {
                         (like.online ? 'Active now' : 'Liked you')
                       }
                       testId={`liker-card-${like.id}`}
-                      onClick={() => navigate(`/profile/${like.id}`)}
                     />
                   ))}
                 </div>
@@ -262,7 +279,7 @@ export const Matches = () => {
                         (match.online ? 'Active now' : 'Last seen recently')
                       }
                       testId={`match-card-${match.id}`}
-                      onClick={() => navigate(`/messages/${match.id}`)}
+                      onMessage={() => navigate(`/messages/${match.id}`)}
                     />
                   ))}
                 </div>
