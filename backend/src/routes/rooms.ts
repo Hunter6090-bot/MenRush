@@ -1,13 +1,36 @@
 import { Router, Response } from 'express';
+import fs from 'fs';
+import multer from 'multer';
 import { roomService } from '../services/room.service';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { SecurityError } from '../security/access';
 import { AddRoomMemberSchema, CreateRoomSchema, RoomMessageSchema } from '../types/validation';
 import { PremiumRequiredError } from '../services/premium.service';
+import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
+import { getUploadSubdir } from '../lib/uploads-root';
 
 const router = Router();
 
 router.use(authMiddleware, verifiedMiddleware);
+
+const roomMediaDir = getUploadSubdir('rooms');
+fs.mkdirSync(roomMediaDir, { recursive: true });
+
+const roomMediaUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, roomMediaDir),
+    filename: (req: any, file, cb) => {
+      try {
+        // Reuse message mime allow-list; files still land under uploads/rooms/.
+        cb(null, safeUploadFilename('message', req.userId, file.mimetype).replace(/^message-/, 'room-'));
+      } catch (error) {
+        cb(error as Error, '');
+      }
+    },
+  }),
+  limits: { fileSize: 12 * 1024 * 1024 },
+  fileFilter: uploadFileFilter('message'),
+});
 
 function handleRoomError(res: Response, error: unknown) {
   if (error instanceof PremiumRequiredError) {
@@ -157,5 +180,43 @@ router.post('/:roomId/messages', async (req: AuthRequest, res: Response) => {
     res.status(400).json({ error: error.message });
   }
 });
+
+// POST /:roomId/messages/media — attach an image (1:1-style gallery pick → send)
+router.post(
+  '/:roomId/messages/media',
+  roomMediaUpload.single('media'),
+  async (req: AuthRequest, res: Response) => {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    if (!req.file.mimetype.startsWith('image/')) {
+      try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+      return res.status(400).json({ error: 'Expected an image upload' });
+    }
+
+    if (!(await validateFileSignature(req.file.path, req.file.mimetype))) {
+      try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+      return res.status(400).json({ error: 'File content does not match its type' });
+    }
+
+    try {
+      const publicUrl = `/uploads/rooms/${req.file.filename}`;
+      const caption = typeof req.body?.caption === 'string' ? req.body.caption : undefined;
+      const message = await roomService.sendImageMessage(
+        req.userId!,
+        req.params.roomId,
+        publicUrl,
+        caption,
+      );
+
+      const io = req.app.get('io');
+      io.to(`room:${req.params.roomId}`).emit('room:message', message);
+
+      res.status(201).json(message);
+    } catch (error: any) {
+      try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+      res.status(400).json({ error: error.message });
+    }
+  },
+);
 
 export default router;

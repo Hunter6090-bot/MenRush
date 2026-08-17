@@ -291,6 +291,9 @@ export const roomService = {
 
     const id = uuidv4();
     const sanitized = message.replace(/<script[^>]*>.*?<\/script>/gi, '').trim();
+    if (!sanitized) {
+      throw new Error('Message cannot be empty');
+    }
 
     const replyToVal = replyTo ?? null;
 
@@ -312,6 +315,20 @@ export const roomService = {
     await query(`UPDATE rooms SET updated_at = NOW() WHERE id = $1`, [roomId]);
 
     return msg;
+  },
+
+  /**
+   * Attach an image into a room chat. room_messages is text-only, so we store a
+   * stable marker + public /uploads/rooms/… URL (same pattern the frontend parses).
+   */
+  async sendImageMessage(userId: string, roomId: string, publicUrl: string, caption?: string) {
+    if (!publicUrl.startsWith('/uploads/rooms/')) {
+      throw new Error('Invalid room media URL');
+    }
+    const body = caption?.trim()
+      ? `[[mr-img:${publicUrl}]]\n${caption.trim()}`
+      : `[[mr-img:${publicUrl}]]`;
+    return this.sendMessage(userId, roomId, body);
   },
 
   async getMessages(roomId: string, options: GetMessagesOptions) {
