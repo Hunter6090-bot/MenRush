@@ -38,7 +38,14 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     css: false,
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
-    exclude: ['node_modules', 'e2e', 'dist'],
+    include: ['src/**/*.test.{ts,tsx}'],
+    exclude: [
+      'node_modules',
+      'e2e',
+      'dist',
+      // Node built-in test runner files (npm run test:unit)
+      'src/lib/notificationToasts.test.ts',
+      'src/lib/profileLinks.test.ts',
+    ],
   },
 });
