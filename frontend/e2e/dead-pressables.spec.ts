@@ -5,6 +5,8 @@ const PNG_BUFFER = Buffer.from(
   'base64',
 );
 
+const FAKE_TOKEN = 'e2e-test-token-payload.e2e-test-token-signature';
+
 const FAKE_USER = {
   id: 'a1000001-0001-4001-8001-000000000001',
   email: 'alice@example.com',
@@ -21,7 +23,10 @@ const FAKE_USER = {
 
 type EventFixture = Record<string, unknown>;
 
-async function stubAuthedShell(page: Page, opts?: { events?: EventFixture[] }) {
+async function stubAuthedShell(
+  page: Page,
+  opts?: { events?: EventFixture[]; onMediaPost?: () => void },
+) {
   const eventsRef = {
     current: opts?.events ?? [
       {
@@ -43,48 +48,62 @@ async function stubAuthedShell(page: Page, opts?: { events?: EventFixture[] }) {
   };
 
   await page.addInitScript(
-    ({ user, lat, lng }) => {
-      localStorage.setItem('token', 'test-token');
+    ({ token, user, lat, lng }) => {
+      localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
       localStorage.setItem(
         'menrush_last_location',
         JSON.stringify({ lat, lng, at: Date.now() }),
       );
     },
-    { user: FAKE_USER, lat: 51.5074, lng: -0.1278 },
+    { token: FAKE_TOKEN, user: FAKE_USER, lat: 51.5074, lng: -0.1278 },
   );
 
-  await page.route('**/api/**', async (route) => {
+  await page.route('**/*', async (route) => {
+    let pathname = '';
+    try {
+      pathname = new URL(route.request().url()).pathname;
+    } catch {
+      return route.continue();
+    }
+    if (!pathname.startsWith('/api/')) {
+      return route.continue();
+    }
+
     const url = route.request().url();
     const method = route.request().method();
 
-    if (url.includes('/api/auth/') || url.includes('/api/users/me')) {
+    if (pathname === '/api/users/me' || pathname.startsWith('/api/auth/')) {
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify(FAKE_USER),
       });
     }
-    if (url.includes('/api/notifications')) {
+    if (pathname.startsWith('/api/notifications')) {
       return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
     }
-    if (url.includes('/api/users/nearby') || url.includes('/api/users/search')) {
+    if (pathname.startsWith('/api/users/nearby') || pathname.startsWith('/api/users/search')) {
       return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
     }
-    if (url.includes('/api/likes')) {
+    if (pathname.startsWith('/api/likes')) {
       return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
     }
-    if (url.includes('/api/messages/conversations') || url.includes('/api/users/matches')) {
+    if (
+      pathname.startsWith('/api/messages/conversations') ||
+      pathname.startsWith('/api/users/matches')
+    ) {
       return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
     }
-    if (url.includes('/api/events/nearby')) {
+    if (pathname.startsWith('/api/events/nearby')) {
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify(eventsRef.current),
       });
     }
-    if (url.includes('/messages/media') && method === 'POST') {
+    if (pathname.includes('/messages/media') && method === 'POST') {
+      opts?.onMediaPost?.();
       return route.fulfill({
         status: 201,
         contentType: 'application/json',
@@ -98,17 +117,17 @@ async function stubAuthedShell(page: Page, opts?: { events?: EventFixture[] }) {
         }),
       });
     }
-    if (url.includes('/api/rooms/') && url.includes('/messages') && method === 'GET') {
+    if (pathname.match(/^\/api\/rooms\/[^/]+\/messages$/) && method === 'GET') {
       return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
     }
-    if (url.includes('/api/rooms/') && url.includes('/members')) {
+    if (pathname.match(/^\/api\/rooms\/[^/]+\/members$/)) {
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify([{ id: FAKE_USER.id, name: FAKE_USER.name, role: 'owner' }]),
       });
     }
-    if (/\/api\/rooms\/[^/?]+$/.test(new URL(url).pathname) && method === 'GET') {
+    if (pathname.match(/^\/api\/rooms\/[^/]+$/) && method === 'GET') {
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -122,7 +141,7 @@ async function stubAuthedShell(page: Page, opts?: { events?: EventFixture[] }) {
         }),
       });
     }
-    if (url.includes('/api/rooms') && method === 'GET') {
+    if (pathname === '/api/rooms' && method === 'GET') {
       return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
     }
 
@@ -183,25 +202,11 @@ test.describe('dead pressables', () => {
   });
 
   test('RoomChat attach sends media; emoji inserts into composer', async ({ page }) => {
-    await stubAuthedShell(page);
-
     let mediaPosted = false;
-    await page.route('**/api/rooms/*/messages/media', async (route) => {
-      mediaPosted = true;
-      return route.fulfill({
-        status: 201,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          id: 'msg-media-1',
-          room_id: 'room-1',
-          sender_id: FAKE_USER.id,
-          sender_name: FAKE_USER.name,
-          message: '[[mr-img:/uploads/rooms/room-test.png]]',
-          created_at: new Date().toISOString(),
-        }),
-      });
-    });
+    await stubAuthedShell(page, { onMediaPost: () => { mediaPosted = true; } });
 
+    // Force mobile layout so RoomsRoute mounts RoomChat directly (not MessagingHub).
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/rooms/room-1');
     await expect(page.getByText('Test Room')).toBeVisible({ timeout: 15_000 });
 
