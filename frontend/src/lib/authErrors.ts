@@ -13,6 +13,14 @@ export function loginErrorMessage(err: unknown): string {
   if (apiError === 'Too many attempts, please try again in 15 minutes') {
     return apiError;
   }
+  // Legacy crypto leak from AES-GCM auth-tag failure (rotated wrap key).
+  if (
+    apiError === 'Unsupported state or unable to authenticate data' ||
+    (typeof apiError === 'string' &&
+      /unable to authenticate data|unsupported state/i.test(apiError))
+  ) {
+    return 'Could not verify authenticator. Try again or use a trusted device.';
+  }
   if (apiError) {
     return apiError;
   }

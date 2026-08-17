@@ -14,6 +14,11 @@ import {
   signMediaAccess,
   verifyMediaAccess,
 } from '../src/security/media';
+import {
+  encryptTotpSecret,
+  decryptTotpSecret,
+  TOTP_DECRYPT_FAILED_MESSAGE,
+} from '../src/security/totp-crypto';
 
 type Test = { name: string; run: () => void | Promise<void> };
 const tests: Test[] = [];
@@ -27,6 +32,96 @@ async function rejectsWithCode(run: () => Promise<unknown>, code: string) {
     return error instanceof SecurityError && error.code === code;
   });
 }
+
+test('decryptTotpSecret with wrong key throws friendly error, not OpenSSL GCM message', () => {
+  const prevTotp = process.env.TOTP_ENCRYPTION_KEY;
+  const prevPrev = process.env.TOTP_ENCRYPTION_KEY_PREVIOUS;
+  const prevJwt = process.env.JWT_SECRET;
+  try {
+    delete process.env.TOTP_ENCRYPTION_KEY_PREVIOUS;
+    process.env.TOTP_ENCRYPTION_KEY = 'unit-test-totp-key-alpha';
+    process.env.JWT_SECRET = 'unit-test-jwt-should-not-be-used';
+    const ciphertext = encryptTotpSecret('JBSWY3DPEHPK3PXP');
+
+    process.env.TOTP_ENCRYPTION_KEY = 'unit-test-totp-key-beta-wrong';
+    assert.throws(
+      () => decryptTotpSecret(ciphertext),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.equal(error.message, TOTP_DECRYPT_FAILED_MESSAGE);
+        assert.equal(
+          error.message.includes('Unsupported state'),
+          false,
+          'must not leak OpenSSL GCM auth-tag message',
+        );
+        assert.equal(
+          error.message.includes('unable to authenticate data'),
+          false,
+          'must not leak OpenSSL GCM auth-tag message',
+        );
+        return true;
+      },
+    );
+  } finally {
+    if (prevTotp === undefined) delete process.env.TOTP_ENCRYPTION_KEY;
+    else process.env.TOTP_ENCRYPTION_KEY = prevTotp;
+    if (prevPrev === undefined) delete process.env.TOTP_ENCRYPTION_KEY_PREVIOUS;
+    else process.env.TOTP_ENCRYPTION_KEY_PREVIOUS = prevPrev;
+    if (prevJwt === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = prevJwt;
+  }
+});
+
+test('decryptTotpSecret retries TOTP_ENCRYPTION_KEY_PREVIOUS after rotation', () => {
+  const prevTotp = process.env.TOTP_ENCRYPTION_KEY;
+  const prevPrev = process.env.TOTP_ENCRYPTION_KEY_PREVIOUS;
+  const prevJwt = process.env.JWT_SECRET;
+  try {
+    process.env.JWT_SECRET = 'unit-test-jwt-unused-for-wrap';
+    process.env.TOTP_ENCRYPTION_KEY = 'unit-test-totp-old-key';
+    delete process.env.TOTP_ENCRYPTION_KEY_PREVIOUS;
+    const ciphertext = encryptTotpSecret('JBSWY3DPEHPK3PXP');
+
+    process.env.TOTP_ENCRYPTION_KEY = 'unit-test-totp-new-key';
+    process.env.TOTP_ENCRYPTION_KEY_PREVIOUS = 'unit-test-totp-old-key';
+    assert.equal(decryptTotpSecret(ciphertext), 'JBSWY3DPEHPK3PXP');
+  } finally {
+    if (prevTotp === undefined) delete process.env.TOTP_ENCRYPTION_KEY;
+    else process.env.TOTP_ENCRYPTION_KEY = prevTotp;
+    if (prevPrev === undefined) delete process.env.TOTP_ENCRYPTION_KEY_PREVIOUS;
+    else process.env.TOTP_ENCRYPTION_KEY_PREVIOUS = prevPrev;
+    if (prevJwt === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = prevJwt;
+  }
+});
+
+test('decryptTotpSecret does not fall back to JWT_SECRET when TOTP_ENCRYPTION_KEY is set', () => {
+  const prevTotp = process.env.TOTP_ENCRYPTION_KEY;
+  const prevPrev = process.env.TOTP_ENCRYPTION_KEY_PREVIOUS;
+  const prevJwt = process.env.JWT_SECRET;
+  try {
+    delete process.env.TOTP_ENCRYPTION_KEY;
+    delete process.env.TOTP_ENCRYPTION_KEY_PREVIOUS;
+    process.env.JWT_SECRET = 'unit-test-legacy-jwt-wrap';
+    const ciphertext = encryptTotpSecret('JBSWY3DPEHPK3PXP');
+
+    // Dedicated TOTP key set (wrong) — must not silently decrypt via JWT_SECRET.
+    process.env.TOTP_ENCRYPTION_KEY = 'unit-test-dedicated-wrong';
+    process.env.JWT_SECRET = 'unit-test-legacy-jwt-wrap';
+    assert.throws(
+      () => decryptTotpSecret(ciphertext),
+      (error: unknown) =>
+        error instanceof Error && error.message === TOTP_DECRYPT_FAILED_MESSAGE,
+    );
+  } finally {
+    if (prevTotp === undefined) delete process.env.TOTP_ENCRYPTION_KEY;
+    else process.env.TOTP_ENCRYPTION_KEY = prevTotp;
+    if (prevPrev === undefined) delete process.env.TOTP_ENCRYPTION_KEY_PREVIOUS;
+    else process.env.TOTP_ENCRYPTION_KEY_PREVIOUS = prevPrev;
+    if (prevJwt === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = prevJwt;
+  }
+});
 
 test('legacy ID gate cannot deny unverified accounts', async () => {
   const prev = process.env.REQUIRE_ID_VERIFICATION;
