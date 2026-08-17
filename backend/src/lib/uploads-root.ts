@@ -34,7 +34,7 @@ export function getUploadSubdir(...parts: string[]): string {
 
 export function ensureUploadDirs(): void {
   const root = getUploadsRoot();
-  for (const sub of ['profiles', 'messages', 'albums', 'verification', 'rooms']) {
+  for (const sub of ['profiles', 'messages', 'albums', 'verification', 'rooms', 'room-temp']) {
     fs.mkdirSync(path.join(root, sub), { recursive: true });
   }
 }
