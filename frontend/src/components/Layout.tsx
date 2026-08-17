@@ -201,9 +201,12 @@ function LayoutInner({ children }: LayoutProps) {
               data-testid="desktop-sign-out"
               title="Sign out"
               aria-label="Sign out"
-              className="mt-3 mx-auto flex h-9 w-9 items-center justify-center rounded-full text-nn-faint transition-colors hover:bg-nn-card hover:text-nn-danger"
+              className="mt-3 mx-auto flex w-11 flex-col items-center justify-center gap-0.5 rounded-xl py-1.5 text-nn-faint transition-colors hover:bg-nn-card hover:text-nn-danger"
             >
               <IconSignOut size={18} />
+              <span className="text-[9px] font-bold uppercase tracking-wide" aria-hidden>
+                Out
+              </span>
             </button>
           )}
         </div>

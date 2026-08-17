@@ -118,7 +118,7 @@ export function NearbyProfileGrid({
               className={`min-h-[44px] rounded-full border px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide transition-colors ${
                 pulseBlockedReason
                   ? 'border-[rgba(196,131,42,0.35)] bg-[rgba(196,131,42,0.08)] text-[rgba(196,131,42,0.75)] hover:bg-[rgba(196,131,42,0.16)]'
-                  : 'border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.15)] text-[#C4832A] hover:bg-[rgba(196,131,42,0.28)]'
+                  : 'border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.22)] text-[#E0A14A] hover:bg-[rgba(196,131,42,0.35)]'
               }`}
             >
               Start Pulse
