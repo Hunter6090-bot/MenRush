@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Dead pressables (Events Tickets, RoomChat attach/emoji, search label) | PR `#104` `cursor/fix-dead-pressables-8f37` | — | Cursor cloud — draft; do not merge yet |
 | Chat camera Picture|Video chooser | PR branch `cursor/chat-camera-picture-video-chooser-c19f` | — | Cursor cloud — camera tap → chooser → live capture; no hold-for-video |
 | Incoming likes ungated on Matches (no MenRush+ lock) | PR `cursor/incoming-likes-no-paywall-b610` (#103) | GET /likes/received; Matches Liked you section; e2e | Cursor cloud — do not reintroduce PremiumGate on likes |
 | Login toast dump / badge-only (#74 leftover) | PR `cursor/fix-notification-toast-backfill-7723` | — | Cursor cloud — `setFromServer` never toasts; live upsert after sync may |
