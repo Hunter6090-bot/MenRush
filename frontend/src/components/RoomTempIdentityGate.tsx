@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { roomsAPI } from '../api/client';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { getPhotoUrl } from './UserAvatar';
+import { SelfieCaptureModal } from './SelfieCaptureModal';
 
 export interface RoomTempIdentityPayload {
   displayName: string;
@@ -101,6 +103,24 @@ function defaultHouseRules(): string[] {
   ];
 }
 
+/** Resolve avatar src — blob/data/brand stay same-origin; /uploads go via API host. */
+export function resolveTempPhotoSrc(url?: string | null): string | undefined {
+  if (!url) return undefined;
+  const trimmed = String(url).trim();
+  if (!trimmed) return undefined;
+  if (
+    trimmed.startsWith('blob:') ||
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('/brand/') ||
+    trimmed.startsWith('/avatars/')
+  ) {
+    return trimmed;
+  }
+  return getPhotoUrl(trimmed) ?? trimmed;
+}
+
 /**
  * Gate before entering a group video room.
  * Temporary name (required) + optional photo; never writes the main profile.
@@ -119,6 +139,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   const isWide = useMediaQuery('(min-width: 1280px)');
   const [displayName, setDisplayName] = useState('');
   const [photoUrl, setPhotoUrl] = useState<string | undefined>();
+  const [photoPreview, setPhotoPreview] = useState<string | undefined>();
   const [saveForNext, setSaveForNext] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -126,6 +147,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   const [nameTouched, setNameTouched] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [hadSavedIdentity, setHadSavedIdentity] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>(() =>
@@ -133,9 +155,18 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   );
 
   const nameRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const localPreviewRef = useRef<string | null>(null);
+
+  const revokeLocalPreview = () => {
+    if (localPreviewRef.current) {
+      URL.revokeObjectURL(localPreviewRef.current);
+      localPreviewRef.current = null;
+    }
+  };
+
+  useEffect(() => () => revokeLocalPreview(), []);
 
   useEffect(() => {
     setSuggestions(buildNameSuggestions(roomTheme || roomName));
@@ -155,7 +186,10 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
         };
         const hasSaved = Boolean(data.display_name || data.photo_url);
         if (data.display_name) setDisplayName(data.display_name);
-        if (data.photo_url) setPhotoUrl(data.photo_url);
+        if (data.photo_url) {
+          setPhotoUrl(data.photo_url);
+          setPhotoPreview(resolveTempPhotoSrc(data.photo_url));
+        }
         if (data.save_name || data.save_photo) setSaveForNext(true);
         if (hasSaved) {
           setHadSavedIdentity(true);
@@ -221,8 +255,10 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
     setFormError(null);
     try {
       await roomsAPI.deleteTempIdentity(roomId);
+      revokeLocalPreview();
       setDisplayName('');
       setPhotoUrl(undefined);
+      setPhotoPreview(undefined);
       setSaveForNext(false);
       setHadSavedIdentity(false);
       setNameTouched(false);
@@ -234,18 +270,44 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
 
   const handlePhotoPick = async (file: File | null) => {
     if (!file) return;
-    setUploading(true);
+    if (!file.type.startsWith('image/')) {
+      setFormError('Choose an image file (JPEG, PNG, or WebP).');
+      return;
+    }
     setFormError(null);
+    setUploading(true);
+
+    revokeLocalPreview();
+    const localUrl = URL.createObjectURL(file);
+    localPreviewRef.current = localUrl;
+    setPhotoPreview(localUrl);
+
     try {
       const res = await roomsAPI.uploadTempPhoto(roomId, file);
-      setPhotoUrl(res.data.photo_url);
+      const serverUrl = res?.data?.photo_url;
+      if (!serverUrl) {
+        throw new Error('missing_photo_url');
+      }
+      // Payload keeps the server path; avatar keeps the local object URL so the
+      // preview always updates (API /uploads may be on another origin).
+      setPhotoUrl(serverUrl);
+      setPhotoPreview(localUrl);
     } catch {
+      revokeLocalPreview();
+      setPhotoUrl(undefined);
+      setPhotoPreview(undefined);
       setFormError('Could not upload photo. Try another image.');
     } finally {
       setUploading(false);
-      if (cameraInputRef.current) cameraInputRef.current.value = '';
       if (galleryInputRef.current) galleryInputRef.current.value = '';
     }
+  };
+
+  const handleRemovePhoto = () => {
+    revokeLocalPreview();
+    setPhotoUrl(undefined);
+    setPhotoPreview(undefined);
+    setFormError(null);
   };
 
   const handleEnter = async () => {
@@ -282,8 +344,15 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
         </span>
       );
     }
-    if (photoUrl) {
-      return <img src={photoUrl} alt="" className="h-full w-full object-cover" />;
+    if (photoPreview || photoUrl) {
+      return (
+        <img
+          src={photoPreview || resolveTempPhotoSrc(photoUrl)}
+          alt=""
+          className="h-full w-full object-cover"
+          data-testid="room-temp-photo-preview"
+        />
+      );
     }
     if (trimmed) {
       return <span className="text-lg font-bold text-[#C4832A]">{nameInitials(trimmed)}</span>;
@@ -482,15 +551,6 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   const photoControls = (
     <div>
       <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="user"
-        className="hidden"
-        data-testid="room-temp-camera-input"
-        onChange={(e) => void handlePhotoPick(e.target.files?.[0] ?? null)}
-      />
-      <input
         ref={galleryInputRef}
         type="file"
         accept="image/*"
@@ -502,7 +562,11 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
         <button
           type="button"
           disabled={uploading}
-          onClick={() => cameraInputRef.current?.click()}
+          data-testid="room-temp-take-photo"
+          onClick={() => {
+            setFormError(null);
+            setCameraOpen(true);
+          }}
           className="inline-flex h-[46px] items-center justify-center gap-2 rounded-xl border border-[var(--border-default)] text-[14px] font-semibold text-[var(--cream)] transition-colors hover:border-[#C4832A] disabled:opacity-50"
         >
           <CameraIcon className="h-4 w-4 text-[#C4832A]" />
@@ -511,6 +575,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
         <button
           type="button"
           disabled={uploading}
+          data-testid="room-temp-upload"
           onClick={() => galleryInputRef.current?.click()}
           className="inline-flex h-[46px] items-center justify-center gap-2 rounded-xl border border-[var(--border-default)] text-[14px] font-semibold text-[var(--cream)] transition-colors hover:border-[#C4832A] disabled:opacity-50"
         >
@@ -531,10 +596,11 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
         <p className="text-[11px] text-[#A89070]">
           Photo optional. Skip it and you enter with initials.
         </p>
-        {photoUrl ? (
+        {photoUrl || photoPreview ? (
           <button
             type="button"
-            onClick={() => setPhotoUrl(undefined)}
+            data-testid="room-temp-remove-photo"
+            onClick={handleRemovePhoto}
             className="shrink-0 text-[11px] font-semibold text-[#A89070] underline-offset-2 hover:text-[var(--cream)] hover:underline"
           >
             Remove photo
@@ -792,6 +858,24 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
           </div>
         </div>
       )}
+
+      <SelfieCaptureModal
+        variant="compact"
+        open={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+        onCapture={(file) => {
+          setCameraOpen(false);
+          void handlePhotoPick(file);
+        }}
+        onError={(message) => {
+          setCameraOpen(false);
+          setFormError(message || 'Could not open the camera.');
+        }}
+        ariaLabel="Take a temporary group photo"
+        filePrefix="room-temp"
+        captureLabel="Use photo"
+        instruction="This photo stays in this group only."
+      />
     </div>
   );
 };

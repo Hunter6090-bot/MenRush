@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import {
   RoomTempIdentityGate,
   buildNameSuggestions,
+  resolveTempPhotoSrc,
   type RoomTempIdentityPayload,
 } from './RoomTempIdentityGate';
 
@@ -15,10 +16,40 @@ vi.mock('../api/client', () => ({
   },
 }));
 
+vi.mock('./SelfieCaptureModal', () => ({
+  SelfieCaptureModal: ({
+    open,
+    onCapture,
+    onClose,
+  }: {
+    open: boolean;
+    onCapture: (file: File) => void;
+    onClose: () => void;
+    onError: (message: string) => void;
+  }) =>
+    open ? (
+      <div data-testid="room-temp-selfie-modal" role="dialog" aria-label="Take a temporary group photo">
+        <button
+          type="button"
+          data-testid="room-temp-selfie-capture"
+          onClick={() =>
+            onCapture(new File([new Uint8Array([1, 2, 3])], 'selfie.jpg', { type: 'image/jpeg' }))
+          }
+        >
+          Use photo
+        </button>
+        <button type="button" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    ) : null,
+}));
+
 import { roomsAPI } from '../api/client';
 
 const mockedGet = vi.mocked(roomsAPI.getTempIdentity);
 const mockedDelete = vi.mocked(roomsAPI.deleteTempIdentity);
+const mockedUpload = vi.mocked(roomsAPI.uploadTempPhoto);
 
 type GateProps = {
   roomId: string;
@@ -65,11 +96,19 @@ describe('buildNameSuggestions', () => {
   });
 });
 
+describe('resolveTempPhotoSrc', () => {
+  it('passes through blob and brand paths', () => {
+    expect(resolveTempPhotoSrc('blob:http://localhost/abc')).toBe('blob:http://localhost/abc');
+    expect(resolveTempPhotoSrc('/brand/medallion-380.png')).toBe('/brand/medallion-380.png');
+  });
+});
+
 describe('RoomTempIdentityGate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedGet.mockResolvedValue({ data: {} } as never);
     mockedDelete.mockResolvedValue({} as never);
+    mockedUpload.mockResolvedValue({ data: { photo_url: '/uploads/room-temp/test.jpg' } } as never);
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
       value: vi.fn().mockImplementation((query: string) => ({
@@ -177,5 +216,71 @@ describe('RoomTempIdentityGate', () => {
     expect(screen.queryByTestId('room-temp-clear-saved')).not.toBeInTheDocument();
     await user.click(screen.getByLabelText('More options'));
     expect(screen.getByTestId('room-temp-clear-saved')).toBeInTheDocument();
+  });
+
+  it('Take photo opens the camera modal, not a file input', async () => {
+    const user = userEvent.setup();
+    renderGate();
+    await waitFor(() => expect(mockedGet).toHaveBeenCalled());
+
+    expect(screen.queryByTestId('room-temp-camera-input')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('room-temp-selfie-modal')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('room-temp-take-photo'));
+    expect(screen.getByTestId('room-temp-selfie-modal')).toBeInTheDocument();
+  });
+
+  it('Upload uses the gallery file input and sets photo preview on success', async () => {
+    const user = userEvent.setup();
+    const { onReady } = renderGate();
+    await waitFor(() => expect(mockedGet).toHaveBeenCalled());
+
+    const gallery = screen.getByTestId('room-temp-gallery-input') as HTMLInputElement;
+    expect(gallery).not.toHaveAttribute('capture');
+    expect(gallery.getAttribute('accept')).toBe('image/*');
+
+    const file = new File([new Uint8Array([9, 8, 7])], 'avatar.png', { type: 'image/png' });
+    await user.upload(gallery, file);
+
+    await waitFor(() => expect(mockedUpload).toHaveBeenCalledWith('room-1', file));
+    await waitFor(() => expect(screen.getByTestId('room-temp-photo-preview')).toBeInTheDocument());
+
+    await user.type(screen.getByTestId('room-temp-name'), 'Anon Bear');
+    await user.click(screen.getByTestId('room-temp-enter'));
+    await waitFor(() => expect(onReady).toHaveBeenCalled());
+    expect(onReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        displayName: 'Anon Bear',
+        photoUrl: '/uploads/room-temp/test.jpg',
+      }),
+    );
+  });
+
+  it('Take photo capture uploads and shows preview', async () => {
+    const user = userEvent.setup();
+    renderGate();
+    await waitFor(() => expect(mockedGet).toHaveBeenCalled());
+
+    await user.click(screen.getByTestId('room-temp-take-photo'));
+    await user.click(screen.getByTestId('room-temp-selfie-capture'));
+
+    await waitFor(() => expect(mockedUpload).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId('room-temp-photo-preview')).toBeInTheDocument());
+  });
+
+  it('shows a danger error when upload fails', async () => {
+    const user = userEvent.setup();
+    mockedUpload.mockRejectedValueOnce(new Error('network'));
+    renderGate();
+    await waitFor(() => expect(mockedGet).toHaveBeenCalled());
+
+    const gallery = screen.getByTestId('room-temp-gallery-input');
+    const file = new File([new Uint8Array([1])], 'bad.png', { type: 'image/png' });
+    await user.upload(gallery, file);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/Could not upload photo/i);
+    expect(alert).toHaveStyle({ color: '#B0432E' });
+    expect(screen.queryByTestId('room-temp-photo-preview')).not.toBeInTheDocument();
   });
 });
