@@ -293,13 +293,16 @@ function LayoutInner({ children }: LayoutProps) {
             ) : null}
             <IconPulse size={20} className="relative z-[1]" />
           </button>
-          <Link to="/profile" className="shrink-0">
+          <Link to="/profile" className="shrink-0" aria-label="Open your profile">
             <UserAvatar
               name={user?.name ?? '?'}
               photoUrl={user?.photo_url}
+              userId={user?.id}
+              linkToProfile={false}
               size="md"
               showStatus={false}
               className="!w-[42px] !h-[42px] ring-2 ring-nn-copper"
+              data-testid="header-own-avatar"
             />
           </Link>
         </div>

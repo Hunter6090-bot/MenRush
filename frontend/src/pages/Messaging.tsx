@@ -22,6 +22,8 @@ import { MissedCallIcon } from '../components/MissedCallIcon';
 import { isMissedCallMessage, MISSED_CALL_PREVIEW } from '../lib/missedCall';
 import { openMapsDirections } from '../lib/maps';
 import { parseLocationPayload } from '../lib/locationMessage';
+import { profilePathForUser } from '../lib/profileLinks';
+import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
 interface Message extends Partial<MessageDTO> {
@@ -662,15 +664,18 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         {/* Avatar + name block — centered, tappable to open profile */}
         <button
           type="button"
-          onClick={() => otherId && navigate(`/profile/${otherId}`)}
+          onClick={() => otherId && navigate(profilePathForUser(otherId, user?.id))}
           aria-label={otherUser ? `Open ${otherUser.name}'s profile` : 'Open profile'}
           className="flex-1 flex items-center gap-3 min-w-0 text-left rounded-xl px-1 py-1 -mx-1 hover:bg-[var(--bg-card)] active:scale-[0.99] transition-all"
+          data-testid="chat-header-profile"
         >
           {otherUser ? (
             <>
               <UserAvatar
                 name={otherUser.name}
                 photoUrl={otherUser.photo_url}
+                userId={otherId}
+                linkToProfile={false}
                 online={otherUser.online}
                 size="sm"
               />
@@ -874,22 +879,29 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 {/* Received: avatar placeholder for spacing */}
                 {!isMine && (
                   <div className="w-7 flex-shrink-0 mr-2 flex items-end mb-1">
-                    {showTail && (
-                      otherUser?.photo_url ? (
-                        <div
-                          className="w-7 h-7 rounded-full overflow-hidden"
-                          style={{ border: '1px solid var(--border-default)', flexShrink: 0 }}
-                        >
-                          <img
-                            src={otherUser.photo_url}
-                            alt={otherUser.name}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      ) : (
-                        <SilhouetteAvatar size={28} variant="chat" />
-                      )
-                    )}
+                    {showTail && otherId ? (
+                      <ProfilePhotoLink
+                        userId={otherId}
+                        name={otherUser?.name}
+                        className="block"
+                        data-testid={`chat-bubble-avatar-${otherId}`}
+                      >
+                        {otherUser?.photo_url ? (
+                          <div
+                            className="w-7 h-7 rounded-full overflow-hidden"
+                            style={{ border: '1px solid var(--border-default)', flexShrink: 0 }}
+                          >
+                            <img
+                              src={otherUser.photo_url}
+                              alt={otherUser.name}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <SilhouetteAvatar size={28} variant="chat" />
+                        )}
+                      </ProfilePhotoLink>
+                    ) : null}
                   </div>
                 )}
 

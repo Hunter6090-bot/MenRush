@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usersAPI } from '../api/client';
 import { UserAvatar } from './UserAvatar';
+import { profilePathForUser } from '../lib/profileLinks';
+import { useAuthStore } from '../hooks/store';
 
 interface ProfileSearchModalProps {
   open: boolean;
@@ -105,7 +107,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
 
   const openProfile = (id: string) => {
     onClose();
-    navigate(`/profile/${id}`);
+    navigate(profilePathForUser(id, useAuthStore.getState().user?.id));
   };
 
   const handleMatch = async (hit: SearchHit) => {
@@ -236,6 +238,8 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
                   <UserAvatar
                     name={hit.name}
                     photoUrl={hit.photo_url}
+                    userId={hit.id}
+                    linkToProfile={false}
                     age={hit.age}
                     size="sm"
                     showStatus={false}
