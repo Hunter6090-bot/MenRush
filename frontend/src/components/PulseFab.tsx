@@ -2,13 +2,15 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import { IconPulse, IconClose } from "./icons";
 import { dismissPulseIntro, isPulseIntroDismissed } from "../lib/pulseIntro";
-import { formatRadiusFromKm } from "../lib/localeUnits";
+import { DEFAULT_RADIUS_KM, formatRadiusControlLabel } from "../lib/discoveryFormat";
 
 interface PulseFabProps {
   isPulsing: boolean;
   pulseExpiresAt?: string;
   nextPulseAllowedAt?: string;
   isPremium?: boolean;
+  /** Current discovery radius — shown in the sheet copy when starting. */
+  radiusKm?: number;
   onStartPulse: (durationMin: 60 | 90 | 120) => Promise<void>;
   onStopPulse?: () => Promise<void>;
   /** Increment to open the Pulse sheet from banners / empty states / header. */
@@ -26,6 +28,7 @@ export function PulseFab({
   pulseExpiresAt,
   nextPulseAllowedAt,
   isPremium = false,
+  radiusKm = DEFAULT_RADIUS_KM,
   onStartPulse,
   onStopPulse,
   openRequestId = 0,
@@ -270,7 +273,11 @@ export function PulseFab({
                 ) : (
                   <>
                     <p className="text-nn-muted mb-6 leading-relaxed">
-                      Go visible. <span className="text-nn-copper font-semibold">{formatRadiusFromKm(5)} radius.</span>
+                      Go visible within{' '}
+                      <span className="text-nn-copper font-semibold">
+                        {formatRadiusControlLabel(radiusKm)}
+                      </span>
+                      .
                     </p>
 
                     <div className="grid grid-cols-3 gap-3 mb-6">

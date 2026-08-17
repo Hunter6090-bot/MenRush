@@ -1999,6 +1999,7 @@ export const Discover = () => {
         pulseExpiresAt={pulseUntil ? pulseUntil.toISOString() : undefined}
         nextPulseAllowedAt={nextPulseAllowedAt ?? undefined}
         isPremium={pulseIsPremium}
+        radiusKm={radius}
         onStartPulse={handleStartPulse}
         onStopPulse={handleStopPulse}
         openRequestId={pulseOpenRequestId}
