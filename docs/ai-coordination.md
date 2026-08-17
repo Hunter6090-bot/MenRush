@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Login toast dump / badge-only (#74 leftover) | PR `cursor/fix-notification-toast-backfill-7723` | — | Cursor cloud — `setFromServer` never toasts; live upsert after sync may |
 | Full profile settings (DOB, name, stats, delete) | PR branch `cursor/complete-profile-settings-6691` | — | Cursor cloud — editable post-signup parity |
 | Settings tidy + change password | pending push | Account section, POST /auth/change-password, grouped Settings UI | Grok |
 | Mutual chat gate + Match coach (likes dead-end fix) | `246aec0` — pushed + Vercel prod | Chat only on mutual; Matched vs Open chat; first-Match coach | Grok CEO cycle 18 |
