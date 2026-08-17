@@ -40,8 +40,15 @@ export function RoomTempIdentityGatePreview() {
       return { data: {} } as never;
     };
     roomsAPI.deleteTempIdentity = async () => ({ data: { deleted: true } }) as never;
-    roomsAPI.uploadTempPhoto = async () =>
-      ({ data: { photo_url: '/brand/medallion-380.png' } }) as never;
+    // Prefer an object URL of the picked file so the avatar visibly updates in the harness.
+    // Fall back to the brand medallion if createObjectURL is unavailable.
+    roomsAPI.uploadTempPhoto = async (_roomId: string, file?: File) => {
+      const photo_url =
+        file instanceof File && typeof URL !== 'undefined' && URL.createObjectURL
+          ? URL.createObjectURL(file)
+          : '/brand/medallion-380.png';
+      return { data: { photo_url } } as never;
+    };
 
     setReady(true);
     return () => {
