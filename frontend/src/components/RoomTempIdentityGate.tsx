@@ -48,8 +48,9 @@ const THEME_CHIP_MAP: Array<{ match: RegExp; chips: string[] }> = [
 function roomInitials(name: string): string {
   return name
     .split(/\s+/)
+    .filter((w) => /[A-Za-z0-9]/.test(w))
+    .map((w) => w.replace(/[^A-Za-z0-9]/g, '')[0])
     .filter(Boolean)
-    .map((w) => w[0])
     .join('')
     .toUpperCase()
     .slice(0, 2);
@@ -261,6 +262,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
       });
     } catch {
       setFormError('Could not enter the group. Try again.');
+    } finally {
       setSubmitting(false);
     }
   };
@@ -740,9 +742,10 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
       style={{ background: 'var(--bg-primary)' }}
     >
       {isWide ? (
-        <div className="flex min-h-0 flex-1 items-center justify-center p-8">
+        <div className="relative flex min-h-0 flex-1 items-center justify-center p-8">
+          <div className="pointer-events-none absolute inset-0 bg-black/50" aria-hidden />
           <div
-            className="grid w-full max-w-[920px] overflow-hidden rounded-2xl border border-[rgba(196,131,42,0.3)] shadow-[0_24px_64px_rgba(0,0,0,0.55)]"
+            className="relative grid w-full max-w-[920px] overflow-hidden rounded-2xl border border-[rgba(196,131,42,0.3)] shadow-[0_24px_64px_rgba(0,0,0,0.55)]"
             style={{
               background: 'var(--bg-card)',
               gridTemplateColumns: 'minmax(280px, 0.92fr) minmax(340px, 1.08fr)',
@@ -758,9 +761,13 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
           </div>
         </div>
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col justify-end">
+        <div className="relative flex min-h-0 flex-1 flex-col justify-end">
           <div
-            className="flex max-h-[min(92dvh,920px)] min-h-0 w-full flex-col rounded-t-[28px] border border-b-0 border-[rgba(196,131,42,0.28)] shadow-[0_-12px_48px_rgba(0,0,0,0.55)]"
+            className="pointer-events-none absolute inset-0 bg-black/45"
+            aria-hidden
+          />
+          <div
+            className="relative flex max-h-[min(92dvh,920px)] min-h-[min(72dvh,680px)] w-full flex-col rounded-t-[28px] border border-b-0 border-[rgba(196,131,42,0.28)] shadow-[0_-12px_48px_rgba(0,0,0,0.55)]"
             style={{
               background: 'var(--bg-card)',
               paddingBottom: 'env(safe-area-inset-bottom, 0px)',
