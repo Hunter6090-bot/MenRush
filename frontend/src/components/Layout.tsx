@@ -5,7 +5,7 @@ import { useAuthStore, useNotificationStore, useUnreadStore } from '../hooks/sto
 import { UserAvatar } from './UserAvatar';
 import { mobileBackFallback, shouldShowMobileBack } from '../lib/mobileBack';
 import { MobileBackButton } from './MobileBackButton';
-import { IconMapExpand, IconMore, IconNotifications, IconPulse } from './icons';
+import { IconMapExpand, IconMore, IconNotifications, IconPulse, IconSignOut } from './icons';
 import { BrandMark } from './BrandMark';
 import { ProfileSearchModal } from './ProfileSearchModal';
 import { NotificationDot } from './NotificationDot';
@@ -54,6 +54,7 @@ function LayoutInner({ children }: LayoutProps) {
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   const [matchCount, setMatchCount] = useState(0);
   const [sidebarExpanded, setSidebarExpanded] = useState(readSidebarExpanded);
   const { state: discoveryShell } = useDiscoveryShell();
@@ -87,7 +88,12 @@ function LayoutInner({ children }: LayoutProps) {
     setMoreMenuOpen(false);
   }, [location.pathname]);
 
-  const handleLogout = () => {
+  const requestSignOut = () => {
+    setSignOutConfirmOpen(true);
+  };
+
+  const confirmSignOut = () => {
+    setSignOutConfirmOpen(false);
     logout();
     navigate('/login');
   };
@@ -179,22 +185,25 @@ function LayoutInner({ children }: LayoutProps) {
           {sidebarExpanded ? (
             <button
               type="button"
-              onClick={handleLogout}
-              className="mt-3 w-full px-1 py-2 text-left text-sm text-nn-faint transition-colors hover:text-nn-danger"
+              onClick={requestSignOut}
+              data-testid="desktop-sign-out"
+              title="Sign out"
+              aria-label="Sign out"
+              className="mt-3 flex w-full items-center gap-2.5 px-1 py-2 text-left text-sm text-nn-faint transition-colors hover:text-nn-danger"
             >
-              Sign out.
+              <IconSignOut size={18} className="shrink-0" />
+              Sign out
             </button>
           ) : (
             <button
               type="button"
-              onClick={handleLogout}
+              onClick={requestSignOut}
+              data-testid="desktop-sign-out"
               title="Sign out"
               aria-label="Sign out"
               className="mt-3 mx-auto flex h-9 w-9 items-center justify-center rounded-full text-nn-faint transition-colors hover:bg-nn-card hover:text-nn-danger"
             >
-              <span className="text-lg leading-none" aria-hidden>
-                ⎋
-              </span>
+              <IconSignOut size={18} />
             </button>
           )}
         </div>
@@ -369,6 +378,49 @@ function LayoutInner({ children }: LayoutProps) {
       </div>
 
       <ProfileSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
+
+      {signOutConfirmOpen ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4"
+          role="presentation"
+          onClick={() => setSignOutConfirmOpen(false)}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="sign-out-confirm-title"
+            aria-describedby="sign-out-confirm-desc"
+            data-testid="sign-out-confirm"
+            className="w-full max-w-sm rounded-2xl border border-nn-border bg-nn-bg p-5 shadow-[var(--shadow-lg)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="sign-out-confirm-title" className="text-lg font-extrabold text-nn-text">
+              Sign out?
+            </h2>
+            <p id="sign-out-confirm-desc" className="mt-2 text-sm leading-relaxed text-nn-muted">
+              You will need to sign in again to use MenRush on this device.
+            </p>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                data-testid="sign-out-cancel"
+                onClick={() => setSignOutConfirmOpen(false)}
+                className="rounded-full border border-nn-border px-4 py-2 text-sm font-bold text-nn-muted transition-colors hover:text-nn-text"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                data-testid="sign-out-confirm-btn"
+                onClick={confirmSignOut}
+                className="rounded-full bg-[#B0432E] px-4 py-2 text-sm font-extrabold text-white transition-opacity hover:opacity-90"
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

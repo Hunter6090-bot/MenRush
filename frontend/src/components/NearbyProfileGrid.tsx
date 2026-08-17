@@ -4,6 +4,7 @@ import { VerifiedBadge } from './VerifiedBadge';
 import { useResolvingPhotoSrc } from './UserAvatar';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { formatActiveStatus, formatDistanceMiles, getTribeTag } from '../lib/discoveryFormat';
+import { Link } from 'react-router-dom';
 
 interface NearbyProfileGridProps {
   users: NearbyUser[];
@@ -26,6 +27,8 @@ interface NearbyProfileGridProps {
   /** Turn on Pulse to become more visible when density is empty. */
   onStartPulse?: () => void;
   pulseOn?: boolean;
+  /** When set, empty-state Pulse CTA stays clickable but explains the block. */
+  pulseBlockedReason?: string | null;
   /** Venue check-ins when the map is quiet. */
   onOpenHotSpots?: () => void;
   radiusLabel?: string;
@@ -45,6 +48,7 @@ export function NearbyProfileGrid({
   onFinishProfile,
   onStartPulse,
   pulseOn,
+  pulseBlockedReason,
   onOpenHotSpots,
   radiusLabel,
   beyondRadiusCount = 0,
@@ -105,10 +109,35 @@ export function NearbyProfileGrid({
               type="button"
               onClick={onStartPulse}
               data-testid="empty-start-pulse"
-              className="min-h-[44px] rounded-full border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.15)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.28)]"
+              aria-label={
+                pulseBlockedReason
+                  ? `Start Pulse unavailable: ${pulseBlockedReason}`
+                  : 'Start Pulse'
+              }
+              title={pulseBlockedReason ?? 'Start Pulse'}
+              className={`min-h-[44px] rounded-full border px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide transition-colors ${
+                pulseBlockedReason
+                  ? 'border-[rgba(196,131,42,0.35)] bg-[rgba(196,131,42,0.08)] text-[rgba(196,131,42,0.75)] hover:bg-[rgba(196,131,42,0.16)]'
+                  : 'border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.15)] text-[#C4832A] hover:bg-[rgba(196,131,42,0.28)]'
+              }`}
             >
               Start Pulse
             </button>
+          ) : null}
+          {onStartPulse && !pulseOn && pulseBlockedReason ? (
+            <p
+              className="basis-full text-[12px] leading-relaxed text-[var(--cream-muted)]"
+              data-testid="empty-pulse-blocked"
+            >
+              {pulseBlockedReason}{' '}
+              <Link
+                to="/premium"
+                className="font-bold text-[#C4832A] underline-offset-2 hover:underline"
+              >
+                MenRush+
+              </Link>{' '}
+              for unlimited pulses.
+            </p>
           ) : null}
           {onOpenHotSpots ? (
             <button
