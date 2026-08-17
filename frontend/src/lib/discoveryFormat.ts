@@ -1,7 +1,10 @@
 import type { NearbyUser } from '../components/ProfileCard';
 import {
+  RADIUS_KM_OPTIONS,
+  displayRadiusValueToKm,
   formatDistanceFromKm,
   formatRadiusFromKm,
+  kmToDisplayRadiusValue,
   resolveDistanceUnitSystem,
   type DistanceUnitSystem,
 } from './localeUnits';
@@ -27,14 +30,15 @@ export const RADIUS_MILE_OPTIONS = [
 
 export type RadiusMilesSelection = 'all' | number;
 
-export const DEFAULT_RADIUS_KM = 5;
-
 export const INTENT_FILTERS = ['All', 'Chat', 'Drinks', 'Date', 'NSA'] as const;
 export type IntentFilter = (typeof INTENT_FILTERS)[number];
 
 export function milesToKm(miles: number): number {
   return Math.round(miles * KM_PER_MILE * 10) / 10;
 }
+
+/** Default search radius: 5 miles (not 5 km — avoids header/pill label drift). */
+export const DEFAULT_RADIUS_KM = milesToKm(5);
 
 /** ~0.5 miles — matches the smallest dropdown option. */
 export const MIN_RADIUS_KM = milesToKm(0.5);
@@ -63,6 +67,43 @@ export function radiusSelectionToKm(selection: RadiusMilesSelection): number {
 
 export function formatRadiusMiles(km: number, system?: DistanceUnitSystem): string {
   return formatRadiusFromKm(km, system ?? resolveDistanceUnitSystem());
+}
+
+/**
+ * Label for radius controls (header select + map pill).
+ * Snaps to the same discrete option the dropdown uses so both never disagree
+ * (e.g. 5 km must not show as "5 miles" in one place and "3 miles" in another).
+ */
+export function formatRadiusControlLabel(km: number, system?: DistanceUnitSystem): string {
+  const resolved = system ?? resolveDistanceUnitSystem();
+  if (resolved === 'imperial') {
+    return formatRadiusMilesLabel(kmToRadiusSelection(km));
+  }
+  const clamped = clampRadiusKm(km);
+  if (clamped >= RADIUS_ALL_KM - 0.5) return 'All';
+  const selection = kmToDisplayRadiusValue(clamped, 'metric');
+  if (selection === 'all') return 'All';
+  return formatRadiusFromKm(selection, 'metric');
+}
+
+/** Snap stored km onto the discrete picker option for the active unit system. */
+export function normalizeRadiusKm(km: number, system?: DistanceUnitSystem): number {
+  const resolved = system ?? resolveDistanceUnitSystem();
+  if (resolved === 'imperial') {
+    return radiusSelectionToKm(kmToRadiusSelection(km));
+  }
+  return displayRadiusValueToKm(kmToDisplayRadiusValue(km, 'metric'), 'metric');
+}
+
+/** Map +/− step values in km, aligned with the header radius dropdown. */
+export function radiusStepOptionsKm(system?: DistanceUnitSystem): number[] {
+  const resolved = system ?? resolveDistanceUnitSystem();
+  if (resolved === 'imperial') {
+    // Keep map chrome compact: subset of mile options + All.
+    const miles = [0.5, 1, 5, 10, 25, 50, 100] as const;
+    return [...miles.map((m) => milesToKm(m)), RADIUS_ALL_KM];
+  }
+  return [...RADIUS_KM_OPTIONS];
 }
 
 export function formatRadiusMilesLabel(selection: RadiusMilesSelection): string {

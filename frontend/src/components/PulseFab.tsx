@@ -1,15 +1,22 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Link } from "react-router-dom";
 import { IconPulse, IconClose } from "./icons";
 import { dismissPulseIntro, isPulseIntroDismissed } from "../lib/pulseIntro";
-import { formatRadiusFromKm } from "../lib/localeUnits";
+import { DEFAULT_RADIUS_KM, formatRadiusControlLabel } from "../lib/discoveryFormat";
 
 interface PulseFabProps {
   isPulsing: boolean;
   pulseExpiresAt?: string;
   nextPulseAllowedAt?: string;
   isPremium?: boolean;
+  /** Current discovery radius — shown in the sheet copy when starting. */
+  radiusKm?: number;
   onStartPulse: (durationMin: 60 | 90 | 120) => Promise<void>;
   onStopPulse?: () => Promise<void>;
+  /** Increment to open the Pulse sheet from banners / empty states / header. */
+  openRequestId?: number;
+  /** When true, only the sheet is available (no floating FAB) — e.g. desktop chrome. */
+  hideFab?: boolean;
 }
 
 const DURATION_OPTIONS = [60, 90, 120] as const;
@@ -21,8 +28,11 @@ export function PulseFab({
   pulseExpiresAt,
   nextPulseAllowedAt,
   isPremium = false,
+  radiusKm = DEFAULT_RADIUS_KM,
   onStartPulse,
   onStopPulse,
+  openRequestId = 0,
+  hideFab = false,
 }: PulseFabProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalView, setModalView] = useState<ModalView>("sheet");
@@ -30,6 +40,7 @@ export function PulseFab({
   const [selected, setSelected] = useState<Duration>(90);
   const [submitting, setSubmitting] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const lastOpenRequestId = useRef(openRequestId);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -53,6 +64,13 @@ export function PulseFab({
     setModalView(showIntro ? "intro" : "sheet");
     setModalOpen(true);
   }, [isPulsing, onCooldown]);
+
+  useEffect(() => {
+    if (openRequestId <= 0) return;
+    if (openRequestId === lastOpenRequestId.current) return;
+    lastOpenRequestId.current = openRequestId;
+    openModal();
+  }, [openRequestId, openModal]);
 
   const closeModal = useCallback(() => {
     if (submitting) return;
@@ -92,41 +110,56 @@ export function PulseFab({
 
   return (
     <>
-      <button
-        onClick={openModal}
-        disabled={onCooldown}
-        aria-label={isPulsing ? `Pulsing — ${minutesLeft} min left` : "Pulse — go visible"}
-        data-testid="pulse-fab"
-        className={`
-          fixed bottom-[calc(var(--fab-offset)+88px)] right-[var(--fab-offset)] z-40
-          flex flex-col items-center justify-center gap-0.5
-          w-[var(--fab-size)] h-[var(--fab-size)]
-          rounded-full
-          bg-[var(--copper)] text-[var(--bg-primary)]
-          shadow-[var(--shadow-glow)]
-          transition-all duration-[var(--duration-base)] ease-[var(--ease-out)]
-          ${isPulsing ? "animate-pulse-glow" : ""}
-          ${onCooldown ? "opacity-50 cursor-not-allowed" : "hover:scale-105 active:scale-95"}
-        `}
-      >
-        <IconPulse
-          size={22}
-          className={`absolute opacity-30 ${isPulsing ? "animate-pulse-breathe" : ""}`}
-          aria-hidden
-        />
-        <span
-          className={`relative z-10 font-display text-[13px] font-black uppercase leading-none tracking-[0.08em] ${
-            isPulsing ? "animate-pulse-breathe" : ""
-          }`}
+      {!hideFab ? (
+        <button
+          type="button"
+          onClick={openModal}
+          aria-label={
+            isPulsing
+              ? `Pulsing — ${minutesLeft} min left`
+              : onCooldown
+                ? `Pulse on cooldown — ${cooldownMinutesLeft} min left. Open for details.`
+                : "Pulse — go visible"
+          }
+          title={
+            onCooldown
+              ? `Cooldown · ~${cooldownHoursLeft}h left`
+              : isPulsing
+                ? `${minutesLeft} min left`
+                : "Start Pulse"
+          }
+          data-testid="pulse-fab"
+          className={`
+            fixed bottom-[calc(var(--fab-offset)+88px)] right-[var(--fab-offset)] z-40
+            flex flex-col items-center justify-center gap-0.5
+            w-[var(--fab-size)] h-[var(--fab-size)]
+            rounded-full
+            bg-[var(--copper)] text-[var(--bg-primary)]
+            shadow-[var(--shadow-glow)]
+            transition-all duration-[var(--duration-base)] ease-[var(--ease-out)]
+            ${isPulsing ? "animate-pulse-glow" : ""}
+            ${onCooldown ? "opacity-70" : "hover:scale-105 active:scale-95"}
+          `}
         >
-          Pulse
-        </span>
-        {isPulsing && (
-          <span className="absolute -bottom-1 -right-1 z-20 bg-[var(--bg-primary)] text-[var(--copper)] text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-[var(--copper)]">
-            {minutesLeft}
+          <IconPulse
+            size={22}
+            className={`absolute opacity-30 ${isPulsing ? "animate-pulse-breathe" : ""}`}
+            aria-hidden
+          />
+          <span
+            className={`relative z-10 font-display text-[13px] font-black uppercase leading-none tracking-[0.08em] ${
+              isPulsing ? "animate-pulse-breathe" : ""
+            }`}
+          >
+            Pulse
           </span>
-        )}
-      </button>
+          {isPulsing && (
+            <span className="absolute -bottom-1 -right-1 z-20 bg-[var(--bg-primary)] text-[var(--copper)] text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-[var(--copper)]">
+              {minutesLeft}
+            </span>
+          )}
+        </button>
+      ) : null}
 
       {modalOpen && (
         <div
@@ -136,6 +169,9 @@ export function PulseFab({
         >
           <div
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Pulse"
             className="
               relative w-full sm:max-w-md max-h-[min(88vh,640px)] overflow-y-auto
               bg-[var(--bg-elevated)] border border-[var(--border-default)]
@@ -204,6 +240,7 @@ export function PulseFab({
                     </p>
                     {onStopPulse && (
                       <button
+                        type="button"
                         onClick={handleStop}
                         disabled={submitting}
                         className="sticky bottom-0 w-full py-4 rounded-[var(--radius-md)] bg-[var(--copper)] text-[var(--bg-primary)] font-bold shadow-[var(--shadow-glow)] hover:bg-[var(--copper-light)] transition-colors disabled:opacity-50"
@@ -214,27 +251,40 @@ export function PulseFab({
                   </>
                 ) : onCooldown ? (
                   <>
-                    <p className="text-[var(--cream-soft)] mb-6">
+                    <p className="text-[var(--cream-soft)] mb-4" data-testid="pulse-cooldown-copy">
                       Pulse cooldown — free members get one pulse every 24 hours.
                     </p>
-                    <p className="text-nn-muted text-sm leading-relaxed">
+                    <p className="text-nn-muted text-sm leading-relaxed mb-6">
                       Pulse again in about {cooldownHoursLeft}{" "}
                       {cooldownHoursLeft === 1 ? "hour" : "hours"} ({cooldownMinutesLeft} min).
-                      <br />
-                      <br />
-                      <span className="text-nn-copper">MenRush Premium</span> unlocks unlimited pulses.
+                    </p>
+                    <Link
+                      to="/premium"
+                      data-testid="pulse-cooldown-premium"
+                      className="block w-full rounded-[var(--radius-md)] bg-[var(--copper)] py-4 text-center font-bold text-[var(--bg-primary)] shadow-[var(--shadow-glow)] transition-colors hover:bg-[var(--copper-light)]"
+                      onClick={closeModal}
+                    >
+                      Unlock unlimited with MenRush+
+                    </Link>
+                    <p className="mt-3 text-center text-xs text-nn-muted">
+                      MenRush+ unlocks unlimited pulses — no charge from this screen.
                     </p>
                   </>
                 ) : (
                   <>
                     <p className="text-nn-muted mb-6 leading-relaxed">
-                      Go visible. <span className="text-nn-copper font-semibold">{formatRadiusFromKm(5)} radius.</span>
+                      Go visible within{' '}
+                      <span className="text-nn-copper font-semibold">
+                        {formatRadiusControlLabel(radiusKm)}
+                      </span>
+                      .
                     </p>
 
                     <div className="grid grid-cols-3 gap-3 mb-6">
                       {DURATION_OPTIONS.map((min) => (
                         <button
                           key={min}
+                          type="button"
                           onClick={() => setSelected(min)}
                           className={`
                             py-4 rounded-[var(--radius-md)] font-semibold text-sm
@@ -261,6 +311,7 @@ export function PulseFab({
                     </p>
 
                     <button
+                      type="button"
                       onClick={handleStart}
                       disabled={submitting}
                       data-testid="pulse-start"
@@ -283,6 +334,7 @@ export function PulseFab({
             )}
 
             <button
+              type="button"
               onClick={closeModal}
               className="absolute top-4 right-4 text-nn-muted hover:text-nn-text transition-colors"
               aria-label="Close"

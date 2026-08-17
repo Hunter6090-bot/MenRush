@@ -11,6 +11,9 @@ import {
   DEFAULT_RADIUS_KM,
   MAX_RADIUS_KM,
   clampRadiusKm,
+  formatRadiusControlLabel,
+  normalizeRadiusKm,
+  radiusStepOptionsKm,
 } from '../lib/discoveryFormat';
 import { ProfileDrawer } from '../components/ProfileDrawer';
 import { HotSpotSheet } from '../components/HotSpotSheet';
@@ -23,8 +26,8 @@ import { DiscoveryFilterPills } from '../components/DiscoveryFilterPills';
 import { DiscoveryFilterPanel } from '../components/DiscoveryFilterPanel';
 import { NearbyProfileGrid } from '../components/NearbyProfileGrid';
 import { DiscoveryShellPublisher } from '../context/DiscoveryShellContext';
-import { formatRadiusMiles } from '../lib/discoveryFormat';
 import type { ProfileSetupSnapshot } from '../lib/profileSetup';
+import { resolveDistanceUnitSystem } from '../lib/localeUnits';
 import {
   DEFAULT_DISCOVERY_FILTERS,
   applyDiscoveryClientFilters,
@@ -310,7 +313,9 @@ export const Discover = () => {
   const [radius, setRadius] = useState<number>(() => {
     try {
       const saved = Number(localStorage.getItem(DISCOVER_RADIUS_KEY));
-      if (Number.isFinite(saved) && saved > 0) return clampRadiusKm(saved);
+      if (Number.isFinite(saved) && saved > 0) {
+        return normalizeRadiusKm(clampRadiusKm(saved), resolveDistanceUnitSystem());
+      }
     } catch {
       /* ignore */
     }
@@ -324,6 +329,7 @@ export const Discover = () => {
   const [nextPulseAllowedAt, setNextPulseAllowedAt] = useState<string | null>(null);
   const [pulseIsPremium, setPulseIsPremium] = useState(false);
   const [pulseError, setPulseError] = useState('');
+  const [pulseOpenRequestId, setPulseOpenRequestId] = useState(0);
   const [selectedUser, setSelectedUser] = useState<NearbyUser | null>(null);
   const { lat, lng, setLocation } = useLocationStore();
   /** Seed from last known pin so returning to Nearby never jumps to a fake city. */
@@ -795,7 +801,7 @@ export const Discover = () => {
 
   const handleRadiusChange = useCallback(
     (next: number) => {
-      const clamped = clampRadiusKm(next);
+      const clamped = normalizeRadiusKm(clampRadiusKm(next), resolveDistanceUnitSystem());
       setRadius(clamped);
       try {
         localStorage.setItem(DISCOVER_RADIUS_KEY, String(clamped));
@@ -821,8 +827,7 @@ export const Discover = () => {
       return;
     }
 
-    // Big, noticeable jumps: ~5 → 25 → 50 → 100 mi (API max)
-    const stepsKm = [5, 10, 25, 50, 80, MAX_RADIUS_KM];
+    const stepsKm = radiusStepOptionsKm(resolveDistanceUnitSystem());
     const next = stepsKm.find((km) => km > radius + 0.4) ?? MAX_RADIUS_KM;
     handleRadiusChange(next);
   }, [radius, beyondRadiusCount, handleRadiusChange]);
@@ -1422,16 +1427,29 @@ export const Discover = () => {
   const mobileMapExpanded =
     !isDesktopLayout && mapPanelMode === 'expanded' && !needsLocationGate && mapCenter != null;
 
+  const requestOpenPulse = useCallback(() => {
+    setPulseOpenRequestId((n) => n + 1);
+  }, []);
+
+  const pulseBlockedReason = (() => {
+    if (pulseUntil || pulseIsPremium || !nextPulseAllowedAt) return null;
+    const ms = new Date(nextPulseAllowedAt).getTime() - Date.now();
+    if (ms <= 0) return null;
+    const mins = Math.max(1, Math.ceil(ms / 60000));
+    const hours = Math.ceil(mins / 60);
+    return `Pulse is on cooldown (~${hours}h left). Free members get one every 24 hours.`;
+  })();
+
   const togglePulseHeader = useCallback(async () => {
     if (pulseUntil) await handleStopPulse();
-    else await handleStartPulse(90);
-  }, [pulseUntil, handleStartPulse, handleStopPulse]);
+    else requestOpenPulse();
+  }, [pulseUntil, handleStopPulse, requestOpenPulse]);
 
   return (
     <Layout>
       <DiscoveryShellPublisher
         nearbyCount={nearbyCount}
-        radiusLabel={formatRadiusMiles(radius)}
+        radiusLabel={formatRadiusControlLabel(radius)}
         pulseOn={!!pulseUntil}
         togglePulse={() => void togglePulseHeader()}
       />
@@ -1537,7 +1555,7 @@ export const Discover = () => {
                 data-testid="match-toast-pulse"
                 onClick={() => {
                   setMatchToast(null);
-                  void handleStartPulse(90).catch(() => {});
+                  requestOpenPulse();
                 }}
                 className="rounded-full border border-[rgba(196,131,42,0.55)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
               >
@@ -1570,7 +1588,8 @@ export const Discover = () => {
             <div className="flex shrink-0 flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => void handleStartPulse(90).catch(() => {})}
+                data-testid="pulse-nudge-start"
+                onClick={requestOpenPulse}
                 className="rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
               >
                 Start Pulse
@@ -1666,7 +1685,7 @@ export const Discover = () => {
           <MapFloatingChrome
             expanded={desktopMapExpanded}
             nearbyCount={nearbyCount}
-            radiusLabel={formatRadiusMiles(radius)}
+            radiusLabel={formatRadiusControlLabel(radius)}
             radiusKm={radius}
             onToggleExpand={toggleDesktopMapExpanded}
             onRadiusChange={handleRadiusChange}
@@ -1701,10 +1720,11 @@ export const Discover = () => {
               matchingUserId={matchingUserId}
               onExpandRadius={handleRadiusCycle}
               onFinishProfile={() => navigate('/profile/setup')}
-              onStartPulse={() => void handleStartPulse(90)}
+              onStartPulse={requestOpenPulse}
               pulseOn={!!pulseUntil}
+              pulseBlockedReason={pulseBlockedReason}
               onOpenHotSpots={() => navigate('/hot-spots')}
-              radiusLabel={formatRadiusMiles(radius)}
+              radiusLabel={formatRadiusControlLabel(radius)}
               beyondRadiusCount={beyondRadiusCount}
             />
           ) : null}
@@ -1767,7 +1787,7 @@ export const Discover = () => {
             <MapFloatingChrome
               expanded={mapPanelMode === 'expanded'}
               nearbyCount={nearbyCount}
-              radiusLabel={formatRadiusMiles(radius)}
+              radiusLabel={formatRadiusControlLabel(radius)}
               radiusKm={radius}
               onToggleExpand={() =>
                 setMapPanel(mapPanelMode === 'expanded' ? 'default' : 'expanded')
@@ -1955,10 +1975,11 @@ export const Discover = () => {
                   matchingUserId={matchingUserId}
                   onExpandRadius={handleRadiusCycle}
                   onFinishProfile={() => navigate('/profile/setup')}
-                  onStartPulse={() => void handleStartPulse(90)}
+                  onStartPulse={requestOpenPulse}
                   pulseOn={!!pulseUntil}
+                  pulseBlockedReason={pulseBlockedReason}
                   onOpenHotSpots={() => navigate('/hot-spots')}
-                  radiusLabel={formatRadiusMiles(radius)}
+                  radiusLabel={formatRadiusControlLabel(radius)}
                   beyondRadiusCount={beyondRadiusCount}
                 />
                 <EventsRail
@@ -1970,17 +1991,20 @@ export const Discover = () => {
             ) : null}
           </div>
         </div>
-
-        <PulseFab
-          isPulsing={!!pulseUntil}
-          pulseExpiresAt={pulseUntil ? pulseUntil.toISOString() : undefined}
-          nextPulseAllowedAt={nextPulseAllowedAt ?? undefined}
-          isPremium={pulseIsPremium}
-          onStartPulse={handleStartPulse}
-          onStopPulse={handleStopPulse}
-        />
       </div>
       )}
+
+      <PulseFab
+        isPulsing={!!pulseUntil}
+        pulseExpiresAt={pulseUntil ? pulseUntil.toISOString() : undefined}
+        nextPulseAllowedAt={nextPulseAllowedAt ?? undefined}
+        isPremium={pulseIsPremium}
+        radiusKm={radius}
+        onStartPulse={handleStartPulse}
+        onStopPulse={handleStopPulse}
+        openRequestId={pulseOpenRequestId}
+        hideFab={isDesktopLayout}
+      />
 
       <ProfileDrawer
         user={selectedUser}
