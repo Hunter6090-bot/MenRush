@@ -418,6 +418,18 @@ export const roomsAPI = {
     apiClient.get(`/rooms/${roomId}/messages`, { params: { before } }),
   sendMessage: (roomId: string, message: string, replyTo?: string) =>
     apiClient.post(`/rooms/${roomId}/messages`, { message, reply_to: replyTo }),
+  sendMedia: (roomId: string, file: File | Blob, caption?: string) => {
+    const fd = new FormData();
+    const filename =
+      file instanceof File && file.name
+        ? file.name
+        : `room-media-${Date.now()}.jpg`;
+    fd.append('media', file, filename);
+    if (caption) fd.append('caption', caption);
+    return apiClient.post(`/rooms/${roomId}/messages/media`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 export type ContactSubmitPayload = {
