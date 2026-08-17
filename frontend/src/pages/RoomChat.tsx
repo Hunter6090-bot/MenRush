@@ -455,19 +455,17 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     return (
       <div
         className={embedded ? 'flex h-full min-h-0 flex-col' : 'fixed inset-0 flex flex-col'}
-        style={{ background: 'var(--bg-primary)' }}
+        style={{
+          background: 'var(--bg-primary)',
+          paddingTop: embedded ? undefined : 'env(safe-area-inset-top, 0px)',
+        }}
       >
-        <header
-          className="flex shrink-0 items-center gap-2 border-b border-[var(--border-default)] px-3 py-3"
-          style={{ zIndex: 20 }}
-        >
-          <MobileBackButton fallback="/rooms" onClick={() => navigate('/rooms')} className="-ml-1" />
-          <p className="flex-1 truncate text-sm font-semibold text-[var(--cream)]">{room.name}</p>
-        </header>
         <RoomTempIdentityGate
           roomId={roomId!}
           roomName={room.name}
           roomDescription={room.description}
+          activeCount={room.member_count}
+          roomTheme={room.name}
           onReady={async ({ displayName, photoUrl: gatePhotoUrl, saveName, savePhoto }) => {
             await roomsAPI.setTempIdentity(roomId!, {
               display_name: displayName,
