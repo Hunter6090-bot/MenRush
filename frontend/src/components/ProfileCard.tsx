@@ -53,7 +53,6 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   const [showMatch, setShowMatch] = useState(false);
   const [likeHint, setLikeHint] = useState<string | null>(null);
   const [liking, setLiking] = useState(false);
-  const distance = parseFloat(String(user.distance_km));
   const distanceLabel = getDistanceLabel(user);
   const { src: fullPhotoUrl, onError: onPhotoError } = useResolvingPhotoSrc(
     user.photo_url,
@@ -121,31 +120,39 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         </div>
       )}
 
-      {/* Photo area */}
+      {/* Photo area — tap opens profile; Match control stays separate */}
       <div className="relative h-52 bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--bg-card)] flex-shrink-0">
-        {fullPhotoUrl ? (
-          <img
-            src={fullPhotoUrl}
-            alt={user.name}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-            onError={onPhotoError}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <SilhouetteAvatar size={120} variant="card" />
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={() => navigate(`/profile/${user.id}`)}
+          className="absolute inset-0 z-0 block h-full w-full cursor-pointer border-0 p-0 text-left"
+          aria-label={`Open ${user.name}'s profile`}
+          data-testid={`profile-card-photo-${user.id}`}
+        >
+          {fullPhotoUrl ? (
+            <img
+              src={fullPhotoUrl}
+              alt={user.name}
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              onError={onPhotoError}
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <SilhouetteAvatar size={120} variant="card" />
+            </div>
+          )}
+        </button>
 
         {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-card)] via-transparent to-transparent" />
+        <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-t from-[var(--bg-card)] via-transparent to-transparent" />
 
         {/* Status badge */}
-        <div className="absolute top-3 left-3">
+        <div className="absolute top-3 left-3 z-[2]">
           <StatusBadge online={user.online} lastSeen={user.last_seen} pulsing={isPulsing} />
         </div>
 
         {/* Distance badge */}
-        <div className="absolute top-3 right-3">
+        <div className="absolute top-3 right-3 z-[2]">
           <span className="flex items-center gap-1 bg-black/50 backdrop-blur-sm text-[var(--cream)]/80 text-xs font-medium px-2.5 py-1 rounded-full border border-[var(--border-default)]">
             <PinIcon className="w-3 h-3 text-[#C4832A]" />
             {distanceLabel}
@@ -154,12 +161,16 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
 
         {/* Match button overlay */}
         <button
+          type="button"
           onClick={handleLike}
-          className={`absolute bottom-3 right-3 w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+          disabled={liking || (liked && !isMutual)}
+          aria-label={isMutual ? 'Open chat' : liked ? 'Match already sent' : `Match with ${user.name}`}
+          data-testid={`profile-card-match-${user.id}`}
+          className={`absolute bottom-3 right-3 z-10 flex h-11 w-11 items-center justify-center rounded-full transition-all disabled:opacity-70 ${
             liked
               ? 'bg-nn-copper text-nn-on-copper shadow-glow-copper'
               : 'bg-black/50 backdrop-blur-sm text-nn-copper-bright hover:bg-nn-copper/20 hover:scale-110'
-          } border border-nn-border z-10`}
+          } border border-nn-border`}
         >
           <IconMatches size={20} />
         </button>

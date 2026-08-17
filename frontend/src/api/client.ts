@@ -204,6 +204,22 @@ export const usersAPI = {
       is_premium: boolean;
       preview?: Array<{ id: string; name: string; age: number; photo_url?: string | null }>;
     }>('/users/likes/received/summary'),
+  /** Incoming likes (not yet mutual) — not gated behind MenRush+. */
+  getReceivedLikes: () =>
+    apiClient.get<
+      Array<{
+        id: string;
+        name: string;
+        age: number;
+        bio?: string;
+        photo_url?: string | null;
+        online?: boolean;
+        last_seen?: string;
+        liked_at?: string;
+        is_verified?: boolean;
+        authenticity_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
+      }>
+    >('/users/likes/received'),
   getProfileViews: () =>
     apiClient.get<{
       viewers: Array<{
