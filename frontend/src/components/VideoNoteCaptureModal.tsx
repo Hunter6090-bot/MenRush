@@ -119,11 +119,13 @@ export function VideoNoteCaptureModal({
         if (video) {
           video.srcObject = stream;
           const markReady = () => {
+            if (cancelled) return;
             if (video.videoWidth > 0 && video.videoHeight > 0) setReady(true);
             else setReady(true);
           };
           video.onloadedmetadata = markReady;
           void video.play().then(markReady).catch(() => {
+            if (cancelled) return;
             onErrorRef.current('Could not start the camera preview.');
             onCloseRef.current();
           });
@@ -132,6 +134,7 @@ export function VideoNoteCaptureModal({
         }
       })
       .catch((error: DOMException) => {
+        if (cancelled) return;
         onErrorRef.current(
           error?.name === 'NotAllowedError'
             ? 'Camera access was blocked.'
