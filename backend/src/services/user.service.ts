@@ -822,6 +822,36 @@ export const userService = {
     return result.rows.map((row: { id: string }) => row.id);
   },
 
+  /**
+   * Incoming likes that are not yet mutual. Always returned — not a MenRush+ gate.
+   * Mutual pairs show up under getMatches instead.
+   */
+  async getReceivedLikes(userId: string) {
+    const result = await query(
+      `SELECT
+         u.id, u.name, u.age, u.bio, u.photo_url, u.is_verified, u.authenticity_status,
+         p.online, p.last_seen,
+         l.created_at AS liked_at
+       FROM likes l
+       JOIN users u ON u.id = l.liker_id
+       JOIN profiles p ON p.user_id = u.id
+       WHERE l.liked_id = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM likes l2
+           WHERE l2.liker_id = $1 AND l2.liked_id = l.liker_id
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM blocks b
+           WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+              OR (b.blocker_id = u.id AND b.blocked_id = $1)
+         )
+       ORDER BY l.created_at DESC
+       LIMIT 100`,
+      [userId],
+    );
+    return result.rows;
+  },
+
   async getReceivedLikesSummary(userId: string) {
     const { premiumService } = await import('./premium.service');
     const isPremium = await premiumService.isPremium(userId);
@@ -833,13 +863,19 @@ export const userService = {
          AND NOT EXISTS (
            SELECT 1 FROM likes l2
            WHERE l2.liker_id = $1 AND l2.liked_id = l.liker_id
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM blocks b
+           WHERE (b.blocker_id = $1 AND b.blocked_id = l.liker_id)
+              OR (b.blocker_id = l.liker_id AND b.blocked_id = $1)
          )`,
       [userId],
     );
     const count = countResult.rows[0]?.count ?? 0;
 
+    // Preview is free for everyone — incoming likes are not a MenRush+ lock.
     let preview: Array<{ id: string; name: string; age: number; photo_url: string | null }> = [];
-    if (isPremium && count > 0) {
+    if (count > 0) {
       const previewResult = await query(
         `SELECT u.id, u.name, u.age, u.photo_url
          FROM likes l
@@ -848,6 +884,11 @@ export const userService = {
            AND NOT EXISTS (
              SELECT 1 FROM likes l2
              WHERE l2.liker_id = $1 AND l2.liked_id = l.liker_id
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM blocks b
+             WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+                OR (b.blocker_id = u.id AND b.blocked_id = $1)
            )
          ORDER BY l.created_at DESC
          LIMIT 3`,
