@@ -29,6 +29,7 @@ import adminRoutes from './routes/admin.routes';
 import campaignRoutes from './routes/campaigns';
 import socialRoutes from './routes/social';
 import { startPulseExpiryCron } from './services/pulse.service';
+import { startRoomTempIdentityPurgeCron } from './services/room.service';
 import {
   hasWelcomeBeenSent,
   isWaitlistEmailPaused,
@@ -454,19 +455,15 @@ io.on('connection', (socket: Socket) => {
 
       socket.join(`room:${roomId}`);
 
-      const profile = await query(
-        `SELECT name, photo_url FROM users WHERE id = $1`,
-        [userId],
-      );
-      const name = profile.rows[0]?.name ?? 'Member';
-      const photo_url = profile.rows[0]?.photo_url ?? null;
+      const presence = await roomService.resolveRoomPresence(userId, roomId);
 
       socket.to(`room:${roomId}`).emit('room:presence', {
         room_id: roomId,
         type: 'join',
         user_id: userId,
-        name,
-        photo_url,
+        name: presence.name,
+        photo_url: presence.photo_url,
+        is_verified: presence.is_verified,
       });
 
       const peers = await io.in(`room:${roomId}`).fetchSockets();
@@ -480,11 +477,12 @@ io.on('connection', (socket: Socket) => {
 
       const rosterDetails = await Promise.all(
         roster.map(async (entry: any) => {
-          const r = await query(`SELECT name, photo_url FROM users WHERE id = $1`, [entry.user_id]);
+          const p = await roomService.resolveRoomPresence(entry.user_id, roomId);
           return {
             user_id: entry.user_id,
-            name: r.rows[0]?.name ?? 'Member',
-            photo_url: r.rows[0]?.photo_url ?? null,
+            name: p.name,
+            photo_url: p.photo_url,
+            is_verified: p.is_verified,
           };
         }),
       );
@@ -665,6 +663,7 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   startPulseExpiryCron();
+  startRoomTempIdentityPurgeCron();
   startVerificationRetentionWorker();
   // Optional: in-process drip worker. Prefer an external cron in production
   // (POST /api/waitlist/admin/run); only enable in-process when running a

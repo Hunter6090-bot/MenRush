@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig, type ProxyOptions } from 'vite';
 import react from '@vitejs/plugin-react';
 import type { IncomingMessage } from 'http';
@@ -32,5 +33,19 @@ export default defineConfig({
       '/uploads': devProxy('/uploads'),
       '/socket.io': devProxy('/socket.io', { ws: true }),
     },
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    css: false,
+    include: ['src/**/*.test.{ts,tsx}'],
+    exclude: [
+      'node_modules',
+      'e2e',
+      'dist',
+      // Node built-in test runner files (npm run test:unit)
+      'src/lib/notificationToasts.test.ts',
+      'src/lib/profileLinks.test.ts',
+    ],
   },
 });
