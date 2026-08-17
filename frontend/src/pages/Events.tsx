@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { EventDTO, eventsAPI } from '../api/client';
 import { Layout } from '../components/Layout';
 import { useLocationStore } from '../hooks/store';
+import { mondayFirstLeadingBlanks, MONDAY_FIRST_WEEKDAY_LABELS } from '../lib/calendarGrid';
+import { eventTicketUrl } from '../lib/eventTickets';
 import { resolveLocaleTag } from '../lib/localeUnits';
 
 const CATEGORIES = ['All', 'Nightclub', 'Drag', 'Live', 'Bar', 'Pride', 'Fetish'] as const;
@@ -59,7 +61,10 @@ export const Events = () => {
     year: 'numeric',
   });
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const firstWeekday = new Date(now.getFullYear(), now.getMonth(), 1).getDay();
+  // Date#getDay() is Sunday-indexed; calendar headers are Monday-first.
+  const firstWeekdayPad = mondayFirstLeadingBlanks(
+    new Date(now.getFullYear(), now.getMonth(), 1).getDay(),
+  );
   const eventDays = new Set(enriched.map((e) => e.day).filter(Boolean));
 
   return (
@@ -161,7 +166,9 @@ export const Events = () => {
               </div>
             ) : (
               <div className="grid gap-3.5 sm:grid-cols-2">
-                {visible.map((ev) => (
+                {visible.map((ev) => {
+                  const ticketUrl = eventTicketUrl(ev);
+                  return (
                   <article
                     key={ev.id}
                     className="mr-card flex flex-col overflow-hidden transition-transform hover:-translate-y-0.5 hover:border-[var(--copper)]/40"
@@ -177,20 +184,34 @@ export const Events = () => {
                         <p className="text-[13px] leading-relaxed text-[var(--cream-muted)]">{ev.description}</p>
                       ) : null}
                       <div className="mt-auto flex gap-2 pt-2">
-                        <button type="button" className="mr-cta-gradient flex-1 rounded-full py-2 text-[13px] font-bold">
-                          Tickets
-                        </button>
+                        {ticketUrl ? (
+                          <a
+                            href={ticketUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            data-testid="event-tickets"
+                            className="mr-cta-gradient flex-1 rounded-full py-2 text-center text-[13px] font-bold"
+                          >
+                            Tickets
+                          </a>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => navigate(`/rooms/${ev.id}`)}
-                          className="flex-1 rounded-full border border-[var(--border-default)] py-2 text-[13px] font-bold text-[var(--cream-muted)] hover:border-[var(--copper)]/40 hover:text-[#E0A14A]"
+                          data-testid="event-whos-going"
+                          className={
+                            ticketUrl
+                              ? 'flex-1 rounded-full border border-[var(--border-default)] py-2 text-[13px] font-bold text-[var(--cream-muted)] hover:border-[var(--copper)]/40 hover:text-[#E0A14A]'
+                              : 'mr-cta-gradient flex-1 rounded-full py-2 text-[13px] font-bold'
+                          }
                         >
                           Who&apos;s going
                         </button>
                       </div>
                     </div>
                   </article>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -201,13 +222,13 @@ export const Events = () => {
               <p className="text-xs text-[var(--cream-muted)]">{enriched.length} events</p>
             </div>
             <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-[var(--cream-muted)]">
-              {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d) => (
-                <span key={d}>{d}</span>
+              {MONDAY_FIRST_WEEKDAY_LABELS.map((d, i) => (
+                <span key={`${d}-${i}`}>{d}</span>
               ))}
             </div>
-            <div className="grid grid-cols-7 gap-1">
-              {[...Array((firstWeekday + 6) % 7)].map((_, i) => (
-                <span key={`pad-${i}`} />
+            <div className="grid grid-cols-7 gap-1" data-testid="events-calendar-grid">
+              {[...Array(firstWeekdayPad)].map((_, i) => (
+                <span key={`pad-${i}`} data-testid="calendar-pad" />
               ))}
               {[...Array(daysInMonth)].map((_, i) => {
                 const day = i + 1;
