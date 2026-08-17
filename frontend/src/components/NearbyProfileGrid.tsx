@@ -2,12 +2,17 @@ import type { NearbyUser } from './ProfileCard';
 import { SilhouetteAvatar } from './SilhouetteAvatar';
 import { VerifiedBadge } from './VerifiedBadge';
 import { useResolvingPhotoSrc } from './UserAvatar';
+import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { formatActiveStatus, formatDistanceMiles, getTribeTag } from '../lib/discoveryFormat';
 
 interface NearbyProfileGridProps {
   users: NearbyUser[];
   loading: boolean;
-  onSelect: (user: NearbyUser) => void;
+  /**
+   * Optional legacy callback. When omitted, photo taps navigate via ProfilePhotoLink
+   * (self → /profile, else → /profile/:id).
+   */
+  onSelect?: (user: NearbyUser) => void;
   /** One-tap match without opening the drawer — primary engagement path. */
   onMatch?: (user: NearbyUser) => void | Promise<void>;
   likedUserIds?: Set<string>;
@@ -152,40 +157,26 @@ export function NearbyProfileGrid({
             className="group relative overflow-hidden rounded-2xl border border-nn-border bg-nn-card text-left shadow-card transition-all hover:-translate-y-[3px] hover:border-[rgba(196,131,42,0.4)]"
             data-testid="nearby-grid-card"
           >
-            <button
-              type="button"
-              onClick={() => onSelect(user)}
-              className="block w-full text-left"
-              aria-label={`Open profile for ${user.name}`}
-            >
-              <div className="relative aspect-square w-full bg-[var(--bg-elevated)]">
-                <GridPhoto
-                  name={user.name}
-                  photoUrl={user.photo_url}
-                  age={user.age}
-                />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent px-2.5 pb-2 pt-10">
-                  <div className="flex items-center gap-1">
-                    <span
-                      className={`h-2 w-2 shrink-0 rounded-full ${user.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
-                    />
-                    {/* Fixed light cream on photo gradient — theme tokens invert in light mode */}
-                    <span className="truncate text-[14px] font-bold text-[#FFF6E6]">
-                      {user.name} {user.age}
-                    </span>
-                    {user.is_verified ? <VerifiedBadge size="sm" /> : null}
-                  </div>
-                  <p className="mt-0.5 truncate text-[11px] font-semibold text-[var(--cream)]">
-                    {meta}
-                  </p>
-                  {user.looking_for ? (
-                    <p className="mt-0.5 truncate text-[10px] font-bold text-[#E0A14A]">
-                      {user.looking_for}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-            </button>
+            {onSelect ? (
+              <button
+                type="button"
+                onClick={() => onSelect(user)}
+                className="block w-full text-left"
+                aria-label={`Open profile for ${user.name}`}
+                data-testid={`nearby-grid-photo-${user.id}`}
+              >
+                <GridCardFace user={user} meta={meta} />
+              </button>
+            ) : (
+              <ProfilePhotoLink
+                userId={user.id}
+                name={user.name}
+                className="block w-full text-left"
+                data-testid={`nearby-grid-photo-${user.id}`}
+              >
+                <GridCardFace user={user} meta={meta} />
+              </ProfilePhotoLink>
+            )}
             {onMatch ? (
               <div className="border-t border-[var(--border-default)] p-1.5">
                 <button
@@ -215,6 +206,29 @@ export function NearbyProfileGrid({
   );
 }
 
+function GridCardFace({ user, meta }: { user: NearbyUser; meta: string }) {
+  return (
+    <div className="relative aspect-square w-full bg-[var(--bg-elevated)]">
+      <GridPhoto name={user.name} photoUrl={user.photo_url} age={user.age} />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent px-2.5 pb-2 pt-10">
+        <div className="flex items-center gap-1">
+          <span
+            className={`h-2 w-2 shrink-0 rounded-full ${user.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
+          />
+          <span className="truncate text-[14px] font-bold text-[#FFF6E6]">
+            {user.name} {user.age}
+          </span>
+          {user.is_verified ? <VerifiedBadge size="sm" /> : null}
+        </div>
+        <p className="mt-0.5 truncate text-[11px] font-semibold text-[var(--cream)]">{meta}</p>
+        {user.looking_for ? (
+          <p className="mt-0.5 truncate text-[10px] font-bold text-[#E0A14A]">{user.looking_for}</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function GridPhoto({
   name,
   age,
@@ -223,7 +237,6 @@ function GridPhoto({
   name: string;
   photoUrl?: string;
   age?: number;
-  resolved?: string;
 }) {
   const { src, onError } = useResolvingPhotoSrc(photoUrl, age);
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useResolvingPhotoSrc } from './UserAvatar';
+import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { StatusBadge } from './StatusBadge';
 import { SilhouetteAvatar } from './SilhouetteAvatar';
 import { IconMatches } from './icons';
@@ -120,13 +121,12 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         </div>
       )}
 
-      {/* Photo area — tap opens profile; Match control stays separate */}
+      {/* Photo area — photo taps open profile; Match stays a separate control */}
       <div className="relative h-52 bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--bg-card)] flex-shrink-0">
-        <button
-          type="button"
-          onClick={() => navigate(`/profile/${user.id}`)}
-          className="absolute inset-0 z-0 block h-full w-full cursor-pointer border-0 p-0 text-left"
-          aria-label={`Open ${user.name}'s profile`}
+        <ProfilePhotoLink
+          userId={user.id}
+          name={user.name}
+          className="absolute inset-0 z-0 block"
           data-testid={`profile-card-photo-${user.id}`}
         >
           {fullPhotoUrl ? (
@@ -141,18 +141,18 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               <SilhouetteAvatar size={120} variant="card" />
             </div>
           )}
-        </button>
+        </ProfilePhotoLink>
 
         {/* Gradient overlay */}
         <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-t from-[var(--bg-card)] via-transparent to-transparent" />
 
         {/* Status badge */}
-        <div className="absolute top-3 left-3 z-[2]">
+        <div className="pointer-events-none absolute top-3 left-3 z-[2]">
           <StatusBadge online={user.online} lastSeen={user.last_seen} pulsing={isPulsing} />
         </div>
 
         {/* Distance badge */}
-        <div className="absolute top-3 right-3 z-[2]">
+        <div className="pointer-events-none absolute top-3 right-3 z-[2]">
           <span className="flex items-center gap-1 bg-black/50 backdrop-blur-sm text-[var(--cream)]/80 text-xs font-medium px-2.5 py-1 rounded-full border border-[var(--border-default)]">
             <PinIcon className="w-3 h-3 text-[#C4832A]" />
             {distanceLabel}
@@ -228,6 +228,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         <button
           type="button"
           disabled={liking || (liked && !isMutual)}
+          data-testid={`profile-card-match-cta-${user.id}`}
           onClick={
             isMutual
               ? (e) => {

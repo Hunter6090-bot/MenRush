@@ -9,6 +9,8 @@ import { PulseRing } from '../components/PulseRing';
 import { MobileBackButton } from '../components/MobileBackButton';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
+import { profilePathForUser } from '../lib/profileLinks';
+import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 
 interface RoomMessage {
   id?: string;
@@ -496,14 +498,21 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
               <div className="space-y-1">
                 {members.map((member) => (
                   <div key={member.id} className="flex items-center gap-2">
-                    <span className="flex-1 text-sm truncate" style={{ color: 'var(--cream)' }}>
-                      {member.name}
-                      {member.role === 'owner' ? (
-                        <span className="ml-1 text-[10px]" style={{ color: '#C4832A' }}>
-                          · owner
-                        </span>
-                      ) : null}
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => navigate(profilePathForUser(member.id, user?.id))}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      data-testid={`room-member-${member.id}`}
+                    >
+                      <span className="flex-1 text-sm truncate" style={{ color: 'var(--cream)' }}>
+                        {member.name}
+                        {member.role === 'owner' ? (
+                          <span className="ml-1 text-[10px]" style={{ color: '#C4832A' }}>
+                            · owner
+                          </span>
+                        ) : null}
+                      </span>
+                    </button>
                     {member.id !== user?.id && (
                       <ChatSafetyMenu
                         peerId={member.id}
@@ -657,17 +666,23 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                 {!isMine && (
                   <div className="w-8 flex-shrink-0 mr-2 flex items-end mb-1">
                     {showTail && (
-                      <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                        style={{
-                          background: `${color}22`,
-                          border: `1px solid ${color}44`,
-                          color,
-                          flexShrink: 0,
-                        }}
+                      <ProfilePhotoLink
+                        userId={msg.sender_id}
+                        name={msg.sender_name}
+                        data-testid={`room-msg-avatar-${msg.sender_id}`}
                       >
-                        {initials(msg.sender_name)}
-                      </div>
+                        <div
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                          style={{
+                            background: `${color}22`,
+                            border: `1px solid ${color}44`,
+                            color,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {initials(msg.sender_name)}
+                        </div>
+                      </ProfilePhotoLink>
                     )}
                   </div>
                 )}
