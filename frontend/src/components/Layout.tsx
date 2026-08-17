@@ -260,13 +260,7 @@ function LayoutInner({ children }: LayoutProps) {
             className="flex max-w-[520px] flex-1 items-center gap-2.5 rounded-full border border-nn-border bg-nn-card px-4 py-2.5 text-left transition-colors hover:border-nn-copper/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--copper)]"
           >
             <SearchIcon className="h-4 w-4 shrink-0 text-nn-muted" />
-            <span className="text-sm text-nn-muted">
-              {location.pathname.startsWith('/events')
-                ? 'Search events'
-                : location.pathname.startsWith('/matches')
-                  ? 'Search matches'
-                  : 'Search by name'}
-            </span>
+            <span className="text-sm text-nn-muted">Search profiles</span>
           </button>
           <div className="flex-1" />
           <ThemeToggle variant="header" className="text-nn-muted hover:text-nn-copper" />
