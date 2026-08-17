@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { roomsAPI } from '../api/client';
 import { RoomTempIdentityGate } from '../components/RoomTempIdentityGate';
+import { applyTheme } from '../lib/theme';
 
 type PreviewState = 'first' | 'saved' | 'error';
 
@@ -14,6 +15,10 @@ export function RoomTempIdentityGatePreview() {
   const [lastPayload, setLastPayload] = useState('');
   const [cancelled, setCancelled] = useState(false);
   const key = useMemo(() => `preview-${state}`, [state]);
+
+  useEffect(() => {
+    applyTheme('dark');
+  }, []);
 
   useEffect(() => {
     setReady(false);
