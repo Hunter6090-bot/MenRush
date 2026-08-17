@@ -9,6 +9,7 @@
     "build": "node scripts/guard-brand-assets.mjs && tsc && vite build",
     "brand:sync-logo": "node scripts/sync-brand-logo.mjs",
     "preview": "vite preview",
+    "test:unit": "node --experimental-strip-types --test src/lib/notificationToasts.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:install": "playwright install chromium"
