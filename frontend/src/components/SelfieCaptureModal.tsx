@@ -119,13 +119,13 @@ function CompactSelfieCapture({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center px-4 bg-black/88 backdrop-blur-md" onClick={() => onCloseRef.current()} role="presentation">
-      <div role="dialog" aria-modal aria-label={ariaLabel ?? 'Take a selfie'} className="w-full max-w-sm overflow-hidden rounded-3xl border border-[#3D2B0E] bg-[#0D0A06]" onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal aria-label={ariaLabel ?? 'Take a selfie'} data-testid="picture-capture" className="w-full max-w-sm overflow-hidden rounded-3xl border border-[#3D2B0E] bg-[#0D0A06]" onClick={(e) => e.stopPropagation()}>
         <div className={`relative ${aspectClassName ?? 'aspect-[3/4]'} bg-black`}>
           <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 h-full w-full object-cover" style={mirror ? { transform: 'scaleX(-1)' } : undefined} />
         </div>
         <div className="flex justify-center gap-4 px-4 py-4">
           <button type="button" onClick={() => onCloseRef.current()} className="rounded-xl border border-[#3D2B0E] px-4 py-2 text-sm text-[var(--cream-muted)]">Cancel</button>
-          <button type="button" onClick={handleCapture} disabled={!ready} className="rounded-xl bg-[#C4832A] px-5 py-2 text-sm font-bold text-[#0D0A06] disabled:opacity-40">{captureLabel ?? 'Capture'}</button>
+          <button type="button" onClick={handleCapture} disabled={!ready} data-testid="picture-capture-shutter" className="rounded-xl bg-[#C4832A] px-5 py-2 text-sm font-bold text-[#0D0A06] disabled:opacity-40">{captureLabel ?? 'Capture'}</button>
         </div>
       </div>
     </div>
