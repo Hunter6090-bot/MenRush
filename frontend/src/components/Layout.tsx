@@ -245,6 +245,7 @@ function LayoutInner({ children }: LayoutProps) {
                 <NotificationDot
                   count={notificationUnread}
                   visible={notificationUnread > 0}
+                  data-testid="badge-notifications"
                   className="-top-0.5 -right-0.5 min-w-[16px] h-4 text-[9px] bg-[var(--copper)] border-[var(--bg-primary)]"
                 />
               </Link>
