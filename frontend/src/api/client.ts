@@ -404,7 +404,12 @@ export const meetAPI = {
 
 export const roomsAPI = {
   createRoom: (data: any) => apiClient.post('/rooms', data),
-  getRooms: () => apiClient.get('/rooms'),
+  getRooms: () =>
+    apiClient.get<{
+      member_rooms: Array<Record<string, unknown>>;
+      nearby_rooms: Array<Record<string, unknown>>;
+      official_rooms: Array<Record<string, unknown>>;
+    }>('/rooms'),
   getRoom: (roomId: string) => apiClient.get(`/rooms/${roomId}`),
   getMembers: (roomId: string) =>
     apiClient.get<
