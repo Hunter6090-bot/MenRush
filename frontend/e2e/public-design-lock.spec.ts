@@ -90,10 +90,14 @@ test.describe('public design lock — auth pages', () => {
     const network = await guardAgainstSideEffects(page);
     await page.goto('/beta');
     await assertAuthShell(page);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Beta access is/i);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/invite-only/i);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/You're in the/i);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/MenRush beta/i);
     await expect(page.locator('#beta-invite-code')).toBeVisible();
     await expect(page.getByRole('button', { name: /^Continue$/i })).toHaveCount(1);
+    await expect(page.getByRole('link', { name: /Join the waitlist/i })).toHaveAttribute(
+      'href',
+      '/coming-soon#waitlist',
+    );
     expect(network.expectNoSideEffects()).toEqual([]);
   });
 
