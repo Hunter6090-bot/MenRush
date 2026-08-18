@@ -56,13 +56,15 @@ export const RoomList: React.FC<RoomListProps> = ({
   const [memberRooms, setMemberRooms] = useState<RoomRow[]>([]);
   const [officialRooms, setOfficialRooms] = useState<RoomRow[]>([]);
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
+  /** Initial fetch only — never flip back to true on refresh (avoids pulse-skeleton blink). */
+  const [initialLoading, setInitialLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
   const isSidebar = variant === 'sidebar';
 
   const refreshRooms = () => {
+    // Refresh in place: keep existing rows visible; do not re-enter skeleton state.
     roomsAPI
       .getRooms()
       .then((r) => {
@@ -87,7 +89,7 @@ export const RoomList: React.FC<RoomListProps> = ({
         setMemberRooms([]);
         setOfficialRooms([]);
       })
-      .finally(() => setLoading(false));
+      .finally(() => setInitialLoading(false));
   };
 
   useEffect(() => {
@@ -229,7 +231,7 @@ export const RoomList: React.FC<RoomListProps> = ({
       </div>
 
       <div className={`min-h-0 flex-1 overflow-y-auto ${isSidebar ? 'px-2 pb-3' : ''}`}>
-        {loading ? (
+        {initialLoading ? (
           <div className="flex flex-col gap-2">
             {[...Array(5)].map((_, i) => (
               <div key={i} className="h-16 animate-pulse rounded-2xl" style={{ background: 'var(--bg-card)' }} />
