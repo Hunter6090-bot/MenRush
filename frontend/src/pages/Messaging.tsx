@@ -553,9 +553,15 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     await sendTextMessage(inputValueRef.current || input);
   };
 
-  /** Fire send on pointer down so iOS keyboard dismiss cannot steal the tap. */
+  /**
+   * Fire send on pointerdown (touch/pen) so mobile Chrome keyboard dismiss
+   * cannot steal the tap — same failure mode on Android Chrome and iOS.
+   * Mouse left-clicks still use the normal click → submit path.
+   */
   const handleSendPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
+    // Only intercept touch/pen — let mouse use form submit to avoid double-send quirks.
+    if (e.pointerType === 'mouse') return;
     e.preventDefault();
     void handleSend(e as unknown as React.FormEvent);
   };
@@ -567,11 +573,24 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     'What are you looking for tonight?',
   ] as const;
 
+  /**
+   * Desktop Enter + Android Gboard quirks: Chrome often reports IME keys as
+   * `Unidentified` / keyCode 229, or routes Return through beforeinput
+   * `insertLineBreak` without a matching Enter keydown.
+   */
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend(e);
+      void handleSend(e);
     }
+  };
+
+  const handleBeforeInput = (e: React.FormEvent<HTMLInputElement>) => {
+    const ne = e.nativeEvent as InputEvent;
+    if (ne.inputType !== 'insertLineBreak' && ne.inputType !== 'insertParagraph') return;
+    e.preventDefault();
+    void handleSend();
   };
 
   const handleWithdrawMedia = async (messageId: string) => {
@@ -1171,8 +1190,12 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
+                onBeforeInput={handleBeforeInput}
                 placeholder="Say something direct."
                 autoComplete="off"
+                enterKeyHint="send"
+                inputMode="text"
+                data-testid="chat-text-input"
                 className="w-full text-sm px-5 py-3 rounded-full focus:outline-none transition-all duration-200"
                 style={{
                   background: 'var(--bg-card)',
@@ -1191,8 +1214,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               />
             </div>
 
-            {/* Voice note OR Send — keep Send visible while in-flight so iOS
-                keyboard-dismiss clicks cannot land on Mic after input clears. */}
+            {/* Voice note OR Send — keep Send visible while in-flight so a
+                keyboard-dismiss ghost tap cannot land on Mic after input clears
+                (Android Chrome + iOS). */}
             {input.trim() || sending ? (
               <button
                 type="submit"
