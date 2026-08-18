@@ -1,0 +1,19 @@
+{
+  "name": "menrush-social-studio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local-only MenRush Social Studio — keys stay on this device; Approve is what posts.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "studio": "node src/server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "oauth-1.0a": "^2.2.6",
+    "open": "^10.1.0"
+  }
+}
