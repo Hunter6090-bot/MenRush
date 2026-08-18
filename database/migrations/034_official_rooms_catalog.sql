@@ -37,8 +37,9 @@ INSERT INTO users (
 VALUES (
   'a0000000-0000-4000-8000-0000000000ff',
   'official-rooms@menrush.internal',
-  -- Unusable placeholder hash; account is seed-only (no login).
-  '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
+  -- Non-loginable sentinel (not a bcrypt of any password). bcrypt.compare → false.
+  -- Catalog owner is seed-only; never a real login account.
+  '!menrush-official-catalog-seed-only-no-login',
   'MenRush Official',
   99,
   TRUE,
@@ -46,7 +47,12 @@ VALUES (
   'confirmed',
   'unverified'
 )
-ON CONFLICT (email) DO NOTHING;
+ON CONFLICT (email) DO UPDATE SET
+  password_hash = EXCLUDED.password_hash,
+  name = EXCLUDED.name,
+  is_verified = EXCLUDED.is_verified,
+  verification_status = EXCLUDED.verification_status,
+  age_assurance_status = EXCLUDED.age_assurance_status;
 
 -- Fixed UUIDs + official_slug → re-running seed updates in place, never duplicates.
 INSERT INTO rooms (
