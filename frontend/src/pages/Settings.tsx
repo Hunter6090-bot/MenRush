@@ -18,6 +18,7 @@ import {
 import { clearDeviceTrustToken } from '../lib/deviceTrust';
 import { isGenericAvatarUrl } from '../lib/genericAvatar';
 import { profileCompletionScore } from '../lib/profileDetails';
+import { toDateInputValue } from '../lib/age';
 
 const RADIUS_KEY = 'menrush_default_radius_km';
 
@@ -130,9 +131,7 @@ export const Settings = () => {
         setCompletion(
           profileCompletionScore({
             name: res.data?.name,
-            date_of_birth: res.data?.date_of_birth
-              ? String(res.data.date_of_birth).slice(0, 10)
-              : null,
+            date_of_birth: toDateInputValue(res.data?.date_of_birth) || null,
             age: res.data?.age,
             bio: res.data?.bio,
             headline: res.data?.headline,

@@ -72,25 +72,27 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 
     const io = req.app.get('io');
     io.to(`user:${data.receiver_id}`).emit('message', message);
+    // Respond before fan-out so mobile clients aren't blocked on notify/push latency.
+    res.status(201).json(message);
+
     pushNewMessage(data.receiver_id, message.sender_name ?? '', req.userId!, message.message);
 
     const preview =
       message.message.length > 80 ? `${message.message.slice(0, 77)}…` : message.message;
-    try {
-      await notificationService.notify(io, {
+    void notificationService
+      .notify(io, {
         userId: data.receiver_id,
         actorId: req.userId!,
         type: 'message',
         title: `New message from ${message.sender_name ?? 'someone'}`,
         body: preview,
         linkPath: `/messages/${req.userId}`,
-      });
-    } catch (notifyErr) {
-      console.error('[notification:message]', notifyErr);
-    }
-
-    res.status(201).json(message);
+      })
+      .catch((notifyErr) => console.error('[notification:message]', notifyErr));
   } catch (error: any) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
     res.status(400).json({ error: error.message });
   }
 });

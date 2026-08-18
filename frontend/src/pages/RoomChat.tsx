@@ -366,13 +366,17 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     setInput('');
     setEmojiOpen(false);
     setSending(true);
-    inputRef.current?.focus();
+    if (!window.matchMedia('(pointer: coarse)').matches) {
+      inputRef.current?.focus();
+    }
 
     try {
       const res = await roomsAPI.sendMessage(roomId, text);
       setMessages((prev) => [...prev, res.data]);
-    } catch {
+    } catch (err: unknown) {
       setInput(text);
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setMediaError(msg || 'Could not send message. Try again.');
     } finally {
       setSending(false);
     }

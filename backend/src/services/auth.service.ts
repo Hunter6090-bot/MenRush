@@ -152,7 +152,7 @@ export const authService = {
            id, email, password_hash, name, age, date_of_birth, photo_url,
            is_verified, verification_status, age_assurance_status
          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'self_attested')
-         RETURNING id, email, name, age, date_of_birth, photo_url, is_verified, verification_status,
+         RETURNING id, email, name, age, date_of_birth::text AS date_of_birth, photo_url, is_verified, verification_status,
                    age_assurance_status, authenticity_status`,
         [
           id,

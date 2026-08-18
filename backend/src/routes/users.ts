@@ -302,8 +302,11 @@ router.post('/location', verifiedMiddleware, async (req: AuthRequest, res: Respo
 
 router.post('/profile', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const data = ProfileSchema.parse(req.body);
-    const user = await userService.updateProfile(req.userId!, data);
+    const parsed = ProfileSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0]?.message || 'Invalid profile data' });
+    }
+    const user = await userService.updateProfile(req.userId!, parsed.data);
     res.json(user);
   } catch (error: any) {
     res.status(400).json({ error: error.message });

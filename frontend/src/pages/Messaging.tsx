@@ -135,6 +135,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const [otherUser, setOtherUser] = useState<OtherUser | null>(null);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -497,38 +498,66 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const sendTextMessage = useCallback(
     async (raw: string) => {
       const current = raw.trim();
-      if (!current || !otherId || !user || sending) return;
+      if (!current || !otherId || !user || sendingRef.current) return;
 
       emitTyping(false);
       if (typingTimer.current) clearTimeout(typingTimer.current);
 
       inputValueRef.current = '';
       setInput('');
+      sendingRef.current = true;
       setSending(true);
-      inputRef.current?.focus();
+      // Keep focus for desktop; on mobile avoid forced refocus which fights the keyboard.
+      if (!window.matchMedia('(pointer: coarse)').matches) {
+        inputRef.current?.focus();
+      }
 
       try {
         const res = await messagesAPI.sendMessage(otherId, current);
         const saved: Message = res.data;
-        setMessages((prev) => [...prev, saved]);
+        setMessages((prev) => (prev.some((m) => m.id === saved.id) ? prev : [...prev, saved]));
         trackEventOnce(
           'first_message_success',
           { kind: 'text', surface: 'direct_message' },
           'first_message_success',
         );
-      } catch {
+      } catch (err: unknown) {
         inputValueRef.current = current;
         setInput(current);
+        const data = (err as { response?: { data?: { error?: string; code?: string } } })?.response
+          ?.data;
+        const code = data?.code;
+        const msg = data?.error;
+        if (code === 'match_required' || /mutual match/i.test(msg || '')) {
+          setMediaError('You need a mutual match before messaging.');
+        } else if (code === 'interaction_blocked' || /blocked/i.test(msg || '')) {
+          setMediaError('You cannot message this person.');
+        } else if (
+          (err as { code?: string })?.code === 'ECONNABORTED' ||
+          /timeout/i.test(String((err as { message?: string })?.message || ''))
+        ) {
+          setMediaError('Send timed out — check your connection and try again.');
+        } else {
+          setMediaError(msg || 'Could not send message. Try again.');
+        }
       } finally {
+        sendingRef.current = false;
         setSending(false);
       }
     },
-    [otherId, user, sending, emitTyping],
+    [otherId, user, emitTyping],
   );
 
   const handleSend = async (e?: React.FormEvent | React.KeyboardEvent) => {
     e?.preventDefault?.();
-    await sendTextMessage(inputValueRef.current ?? input);
+    await sendTextMessage(inputValueRef.current || input);
+  };
+
+  /** Fire send on pointer down so iOS keyboard dismiss cannot steal the tap. */
+  const handleSendPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    void handleSend(e as unknown as React.FormEvent);
   };
 
   /** Direct, premium openers — never creepy. 18+ consent-first tone. */
@@ -1016,7 +1045,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
       {/* ── Input bar ─────────────────────────────────────────────────────── */}
       <div
-        className="flex-shrink-0 border-t border-[var(--border-default)] px-4 py-3 bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl"
+        className="flex-shrink-0 border-t border-[var(--border-default)] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl"
+        data-testid="chat-composer"
       >
         {mediaError && (
           <div
@@ -1167,6 +1197,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 type="submit"
                 disabled={!input.trim() || sending}
                 aria-label="Send message"
+                data-testid="chat-send-button"
+                onPointerDown={handleSendPointerDown}
                 className="flex-shrink-0 rounded-full px-5 py-2.5 text-sm font-bold mr-cta-gradient transition-all duration-200 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed min-h-[46px]"
               >
                 {sending ? <PulseRing size={16} label="Sending" /> : 'Send'}

@@ -327,6 +327,22 @@ export const userService = {
     const row = result.rows[0];
     if (!row) return row;
 
+    // Heal stale age when DOB is the source of truth (legacy rows / failed syncs).
+    if (row.date_of_birth) {
+      try {
+        const fromDob = ageFromDateOfBirth(String(row.date_of_birth).slice(0, 10));
+        if (typeof fromDob === 'number' && fromDob >= 18 && fromDob !== row.age) {
+          await query(`UPDATE users SET age = $2, updated_at = NOW() WHERE id = $1`, [
+            userId,
+            fromDob,
+          ]);
+          row.age = fromDob;
+        }
+      } catch {
+        /* keep stored age if DOB is corrupt */
+      }
+    }
+
     // Overlay beta / subscription entitlement so the client does not treat
     // raw users.is_premium=false as "locked" while Premium is free in beta.
     const status = await premiumService.getStatus(userId);

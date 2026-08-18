@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
+import { ageFromDateOfBirth } from '../lib/age';
 import {
   AUTH_BACKGROUNDS,
   PublicAuthHero,
@@ -35,14 +36,7 @@ interface FormState {
 }
 
 function calcAge(dob: string): number | null {
-  if (!dob) return null;
-  const d = new Date(dob);
-  if (isNaN(d.getTime())) return null;
-  const today = new Date();
-  let age = today.getFullYear() - d.getFullYear();
-  const m = today.getMonth() - d.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
-  return age;
+  return ageFromDateOfBirth(dob);
 }
 
 function passwordScore(pw: string): 0 | 1 | 2 | 3 {

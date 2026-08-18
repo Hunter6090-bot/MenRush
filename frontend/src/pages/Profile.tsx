@@ -22,7 +22,14 @@ import { clearProfileSetupSkip, isProfileSetupComplete } from '../lib/profileSet
 import { isGenericAvatarUrl } from '../lib/genericAvatar';
 import { isBetaPremiumFree } from '../lib/betaInvite';
 import { IconSettings } from '../components/icons';
-import { ageFromDateOfBirth, formatHeight, formatWeight } from '../lib/age';
+import {
+  ageFromDateOfBirth,
+  formatHeight,
+  formatLocalIsoDate,
+  formatWeight,
+  maxAdultDateOfBirth,
+  toDateInputValue,
+} from '../lib/age';
 import {
   HOSTING_STATUS_OPTIONS,
   PROFILE_INTERESTS_MAX,
@@ -117,11 +124,7 @@ export const Profile = () => {
         const d: ProfileData & { mood?: Mood | null; is_ghost?: boolean } = r.data;
         setProfile(d);
         setDisplayName(d.name ?? '');
-        setDateOfBirth(
-          d.date_of_birth
-            ? String(d.date_of_birth).slice(0, 10)
-            : '',
-        );
+        setDateOfBirth(toDateInputValue(d.date_of_birth));
         setShowAge(d.show_age !== false);
         setBio(d.bio ?? '');
         setHeadline(d.headline ?? '');
@@ -138,7 +141,7 @@ export const Profile = () => {
         setHostingStatus(d.hosting_status ?? '');
         setSexualHealthStatus(d.sexual_health_status ?? '');
         setOnPrep(typeof d.on_prep === 'boolean' ? d.on_prep : null);
-        setLastTestedAt(d.last_tested_at ? String(d.last_tested_at).slice(0, 10) : '');
+        setLastTestedAt(toDateInputValue(d.last_tested_at));
         if (typeof d.is_visible === 'boolean') setIsVisible(d.is_visible);
         if (d.mood !== undefined) setMood(d.mood ?? null);
         if (typeof d.is_ghost === 'boolean') setIsGhost(d.is_ghost);
@@ -331,9 +334,10 @@ export const Profile = () => {
 
     setSaving(true);
     try {
+      const dobPayload = toDateInputValue(dateOfBirth) || undefined;
       const res = await usersAPI.updateProfile({
         name: trimmedName,
-        date_of_birth: dateOfBirth || undefined,
+        date_of_birth: dobPayload,
         bio,
         headline,
         looking_for: lookingFor,
@@ -345,10 +349,21 @@ export const Profile = () => {
         hosting_status: hostingStatus || null,
         sexual_health_status: sexualHealthStatus || null,
         on_prep: onPrep,
-        last_tested_at: lastTestedAt || null,
+        last_tested_at: toDateInputValue(lastTestedAt) || null,
         show_age: showAge,
       });
-      setProfile((p) => (p ? { ...p, ...res.data } : p));
+      const savedDob = toDateInputValue(res.data?.date_of_birth) || dobPayload || '';
+      if (savedDob) setDateOfBirth(savedDob);
+      setProfile((p) =>
+        p
+          ? {
+              ...p,
+              ...res.data,
+              date_of_birth: savedDob || res.data?.date_of_birth || p.date_of_birth,
+              age: res.data?.age ?? p.age,
+            }
+          : p,
+      );
       if (user && token) {
         setAuth(
           {
@@ -372,7 +387,11 @@ export const Profile = () => {
       ) {
         clearProfileSetupSkip();
       }
-      showToast('success', 'Profile saved');
+      const savedAge = res.data?.age ?? (savedDob ? ageFromDateOfBirth(savedDob) : null);
+      showToast(
+        'success',
+        savedAge != null ? `Profile saved · age ${savedAge}` : 'Profile saved',
+      );
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
@@ -892,10 +911,8 @@ export const Profile = () => {
                 <input
                   type="date"
                   value={dateOfBirth}
-                  onChange={(e) => setDateOfBirth(e.target.value)}
-                  max={new Date(new Date().setFullYear(new Date().getFullYear() - 18))
-                    .toISOString()
-                    .slice(0, 10)}
+                  onChange={(e) => setDateOfBirth(toDateInputValue(e.target.value))}
+                  max={maxAdultDateOfBirth()}
                   className={inputClass}
                   aria-label="Date of birth"
                 />
@@ -1115,8 +1132,8 @@ export const Profile = () => {
                 <input
                   type="date"
                   value={lastTestedAt}
-                  onChange={(e) => setLastTestedAt(e.target.value)}
-                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => setLastTestedAt(toDateInputValue(e.target.value))}
+                  max={formatLocalIsoDate(new Date())}
                   className={inputClass}
                 />
               </div>
