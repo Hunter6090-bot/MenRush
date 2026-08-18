@@ -128,13 +128,13 @@ export const ComingSoon = () => {
       <main className="relative z-10 flex flex-1 flex-col">
         {/* Hero — one composition: brand, date, headline, copy, waitlist */}
         <section className="mx-auto flex w-full max-w-[720px] flex-col items-center px-6 pb-14 pt-4 text-center sm:pt-8">
-          <BrandMark size="hero" className="mb-8 mr-launch-fade" />
+          <BrandMark size="hero" className="mb-8" />
 
-          <p className="mr-coming-soon-overline mb-5 mr-launch-fade mr-launch-fade--1">
+          <p className="mr-coming-soon-overline mb-5">
             OPENS 1 OCTOBER 2026 · UK
           </p>
 
-          <h1 className="mr-coming-soon-heading max-w-[900px] text-balance mr-launch-fade mr-launch-fade--2">
+          <h1 className="mr-coming-soon-heading max-w-[900px] text-balance">
             Real men.
             <br />
             <span className="mr-coming-soon-accent">Verified bodies.</span>
@@ -142,12 +142,12 @@ export const ComingSoon = () => {
             Total discretion.
           </h1>
 
-          <p className="mt-6 max-w-[540px] text-pretty text-[clamp(15px,2vw,18px)] leading-[1.65] text-[#F0E0C0]/90 mr-launch-fade mr-launch-fade--3">
+          <p className="mt-6 max-w-[540px] text-pretty text-[clamp(15px,2vw,18px)] leading-[1.65] text-[#F0E0C0]/90">
             See who&apos;s near you right now. No swiping. Less noise. MenRush opens across the UK
             on 1 October 2026 — leave your email for early access.
           </p>
 
-          <div id="waitlist" className="relative mt-9 w-full max-w-[460px] mr-launch-fade mr-launch-fade--4">
+          <div id="waitlist" className="relative mt-9 w-full max-w-[460px]">
             {submitted && successMsg ? (
               <div className="rounded-[14px] border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.12)] px-5 py-[18px] text-[15px] font-bold tracking-[0.06em] text-[#E0A14A]">
                 {successMsg}
