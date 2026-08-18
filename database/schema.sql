@@ -91,6 +91,8 @@ CREATE TABLE IF NOT EXISTS rooms (
   avatar_url TEXT,
   created_by UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
   is_location_based BOOLEAN DEFAULT false,
+  is_official BOOLEAN NOT NULL DEFAULT false,
+  official_slug TEXT,
   location GEOGRAPHY(POINT, 4326),
   lat DECIMAL(10, 8),
   lng DECIMAL(11, 8),

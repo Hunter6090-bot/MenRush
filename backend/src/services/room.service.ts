@@ -81,9 +81,9 @@ export const roomService = {
     }
 
     const result = await query(
-      `INSERT INTO rooms (id, name, description, avatar_url, created_by, is_location_based, max_members, location, lat, lng, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, ${locationExpr}, ${latPlaceholder}, ${lngPlaceholder}, NOW(), NOW())
-       RETURNING id, name, description, avatar_url, created_by, is_location_based, max_members, lat, lng, created_at`,
+      `INSERT INTO rooms (id, name, description, avatar_url, created_by, is_location_based, max_members, location, lat, lng, is_official, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, ${locationExpr}, ${latPlaceholder}, ${lngPlaceholder}, FALSE, NOW(), NOW())
+       RETURNING id, name, description, avatar_url, created_by, is_location_based, is_official, max_members, lat, lng, created_at`,
       values
     );
 
@@ -114,7 +114,7 @@ export const roomService = {
   async getRoom(roomId: string, requestingUserId: string) {
     const roomResult = await query(
       `SELECT r.id, r.name, r.description, r.avatar_url, r.created_by, r.is_location_based,
-              r.max_members, r.lat, r.lng, r.created_at, r.updated_at,
+              r.is_official, r.official_slug, r.max_members, r.lat, r.lng, r.created_at, r.updated_at,
               COUNT(rm.id)::int AS member_count
        FROM rooms r
        LEFT JOIN room_members rm ON rm.room_id = r.id
@@ -145,7 +145,7 @@ export const roomService = {
     // Rooms the user is a member of
     const memberRooms = await query(
       `SELECT r.id, r.name, r.description, r.avatar_url, r.created_by, r.is_location_based,
-              r.max_members, r.lat, r.lng, r.created_at,
+              r.is_official, r.official_slug, r.max_members, r.lat, r.lng, r.created_at,
               rm.role AS user_role,
               COUNT(rm2.id)::int AS member_count
        FROM rooms r
@@ -159,6 +159,23 @@ export const roomService = {
 
     const memberRoomIds: string[] = memberRooms.rows.map((r: any) => r.id);
 
+    // Official curated catalog — visible to any authenticated verified adult
+    // (route already uses verifiedMiddleware). Includes join status.
+    const officialRooms = await query(
+      `SELECT r.id, r.name, r.description, r.avatar_url, r.created_by, r.is_location_based,
+              r.is_official, r.official_slug, r.max_members, r.lat, r.lng, r.created_at,
+              rm.role AS user_role,
+              COUNT(rm2.id)::int AS member_count
+       FROM rooms r
+       LEFT JOIN room_members rm ON rm.room_id = r.id AND rm.user_id = $1
+       LEFT JOIN room_members rm2 ON rm2.room_id = r.id
+       WHERE r.is_official = TRUE
+         AND COALESCE(r.kind, 'room') = 'room'
+       GROUP BY r.id, rm.role
+       ORDER BY r.name ASC`,
+      [userId]
+    );
+
     let nearbyRooms: any[] = [];
     if (options?.lat !== undefined && options?.lng !== undefined) {
       const radiusMeters = (options.radius ?? 5) * 1000;
@@ -166,13 +183,14 @@ export const roomService = {
 
       const nearbyResult = await query(
         `SELECT r.id, r.name, r.description, r.avatar_url, r.created_by, r.is_location_based,
-                r.max_members, r.lat, r.lng, r.created_at,
+                r.is_official, r.official_slug, r.max_members, r.lat, r.lng, r.created_at,
                 NULL AS user_role,
                 COUNT(rm.id)::int AS member_count,
                 ST_Distance(r.location, ST_MakePoint($2, $1)::geography) AS distance_m
          FROM rooms r
          LEFT JOIN room_members rm ON rm.room_id = r.id
          WHERE r.is_location_based = true
+           AND COALESCE(r.is_official, false) = false
            AND r.id != ALL($5::uuid[])
            AND ST_DWithin(r.location, ST_MakePoint($2, $1)::geography, $3)
          GROUP BY r.id
@@ -186,16 +204,18 @@ export const roomService = {
     return {
       member_rooms: memberRooms.rows,
       nearby_rooms: nearbyRooms,
+      official_rooms: officialRooms.rows,
     };
   },
 
   async joinRoom(userId: string, roomId: string) {
     const roomResult = await query(
-      `SELECT r.max_members, r.is_location_based, COUNT(rm.id)::int AS member_count
+      `SELECT r.max_members, r.is_location_based, COALESCE(r.is_official, false) AS is_official,
+              COUNT(rm.id)::int AS member_count
        FROM rooms r
        LEFT JOIN room_members rm ON rm.room_id = r.id
        WHERE r.id = $1
-       GROUP BY r.max_members, r.is_location_based`,
+       GROUP BY r.max_members, r.is_location_based, r.is_official`,
       [roomId]
     );
 
@@ -204,7 +224,9 @@ export const roomService = {
     }
 
     const room = roomResult.rows[0];
-    if (!room.is_location_based) {
+    // Official catalog + location-based nearby rooms are open join.
+    // Private/custom groups stay invite-only (owner adds via addMember).
+    if (!room.is_location_based && !room.is_official) {
       throw new Error('This group is invite-only. Ask the owner to add you.');
     }
 
@@ -221,11 +243,12 @@ export const roomService = {
     }
 
     const roomResult = await query(
-      `SELECT r.max_members, r.is_location_based, COUNT(rm.id)::int AS member_count
+      `SELECT r.max_members, r.is_location_based, COALESCE(r.is_official, false) AS is_official,
+              COUNT(rm.id)::int AS member_count
        FROM rooms r
        LEFT JOIN room_members rm ON rm.room_id = r.id
        WHERE r.id = $1
-       GROUP BY r.max_members, r.is_location_based`,
+       GROUP BY r.max_members, r.is_location_based, r.is_official`,
       [roomId]
     );
 
@@ -236,6 +259,10 @@ export const roomService = {
     const room = roomResult.rows[0];
     if (room.is_location_based) {
       throw new Error('Use join to enter location-based rooms');
+    }
+    // Official rooms are self-join via joinRoom — not the premium invite add path.
+    if (room.is_official) {
+      throw new Error('Use join to enter official rooms');
     }
 
     const roleResult = await query(
