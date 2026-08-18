@@ -28,7 +28,9 @@ SOCIAL_STUDIO_PORT=4000 npm start   # custom port
 | Connection secrets | `social-studio/.data/connections.json` (mode `0600`, gitignored) |
 | Publish results | `social-studio/.data/publish-log.json` (gitignored) |
 
-Never commit `.data/`, `.env`, or platform secrets. The studio never sends connection keys to MenRush production APIs.
+Enter keys only in the Connections UI. The studio does **not** load repo-root env files and does not import secrets from git history.
+
+Never commit `social-studio/.data/`, `.env`, `.env.menrush-social`, or platform secrets. The studio never sends connection keys to MenRush production APIs.
 
 Optional (drafts only — not keys):
 

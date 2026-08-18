@@ -9,13 +9,10 @@ pictures/task_*.webp
 .env
 .env.local
 **/.env
-<<<<<<< HEAD
 .env.menrush-social
 .env*.menrush-social
 **/.env.menrush-social
 **/.env*.menrush-social
-=======
->>>>>>> 8965e46 (feat(social-studio): local Connections + week Approve (cursor))
 social-studio/.data/
 .vercel
 frontend/playwright-report/

@@ -265,6 +265,7 @@ $('#btn-approve').addEventListener('click', async () => {
 async function boot() {
   meta = await api('/api/meta');
   $('#intro').textContent = meta.intro;
+  $('#key-source').textContent = meta.keySource || '';
   $('#bearer-warn').textContent = meta.bearerWarning;
   const health = await api('/api/health');
   $('#store-hint').textContent = `Store: ${health.store}`;

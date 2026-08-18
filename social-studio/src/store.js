@@ -1,6 +1,9 @@
 /**
  * Local credential store. Secrets never leave this machine via MenRush APIs.
  * File: social-studio/.data/connections.json
+ *
+ * Keys are entered only via the Connections UI. Never read repo-root env files
+ * (including `.env.menrush-social`), never dotenv them, never copy into code.
  */
 
 import fs from 'node:fs';
@@ -10,6 +13,15 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, '..', '.data');
 const STORE_PATH = path.join(DATA_DIR, 'connections.json');
+
+/** Refuse any path outside social-studio/.data/ — blocks accidental env imports. */
+function assertDataPath(target) {
+  const resolved = path.resolve(target);
+  const root = path.resolve(DATA_DIR);
+  if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+    throw new Error('Refusing to read/write credentials outside social-studio/.data/');
+  }
+}
 
 export const PLATFORMS = ['x', 'instagram', 'reddit', 'bluesky', 'threads'];
 
@@ -87,6 +99,7 @@ function defaultStore() {
 }
 
 function ensureDataDir() {
+  assertDataPath(DATA_DIR);
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
   }
@@ -94,6 +107,7 @@ function ensureDataDir() {
 
 export function loadStore() {
   ensureDataDir();
+  assertDataPath(STORE_PATH);
   if (!fs.existsSync(STORE_PATH)) {
     const fresh = defaultStore();
     fs.writeFileSync(STORE_PATH, JSON.stringify(fresh, null, 2), { mode: 0o600 });
@@ -115,6 +129,7 @@ export function loadStore() {
 
 export function saveStore(store) {
   ensureDataDir();
+  assertDataPath(STORE_PATH);
   fs.writeFileSync(STORE_PATH, JSON.stringify(store, null, 2), { mode: 0o600 });
 }
 

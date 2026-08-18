@@ -2,5 +2,6 @@ node_modules/
 .data/
 .env
 .env.*
+.env.menrush-social
 *.log
 publish-log.json

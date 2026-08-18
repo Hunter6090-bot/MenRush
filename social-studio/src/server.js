@@ -2,6 +2,9 @@
  * MenRush Social Studio — local-only.
  * Keys stay on this device. Never talks to Railway with secrets.
  * Approve is the only action that publishes.
+ *
+ * Do not dotenv / read `.env.menrush-social` or any repo-root env into this process.
+ * Credentials come only from Connections → social-studio/.data/connections.json.
  */
 
 import express from 'express';
@@ -48,6 +51,8 @@ app.get('/api/meta', (_req, res) => {
   res.json({
     intro:
       'Connections is where the studio gets permission to post. Keys stay on this device. On means that platform is in the week. Verify checks the key before you approve.',
+    keySource:
+      'Type keys into each card. They save only under social-studio/.data/ on this machine — not into git, not into MenRush production.',
     platforms: PLATFORMS.map((p) => ({
       id: p,
       label: PLATFORM_FIELDS[p].label,
