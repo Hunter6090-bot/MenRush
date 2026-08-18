@@ -117,6 +117,48 @@ input:-webkit-autofill:focus {
   color: #C4832A;
 }
 
+/* Launch homepage — subtle entrance, no heavy motion libs */
+@keyframes mr-launch-fade {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mr-launch-fade {
+  animation: mr-launch-fade 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mr-launch-fade--1 {
+  animation-delay: 0.08s;
+}
+
+.mr-launch-fade--2 {
+  animation-delay: 0.16s;
+}
+
+.mr-launch-fade--3 {
+  animation-delay: 0.24s;
+}
+
+.mr-launch-fade--4 {
+  animation-delay: 0.32s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mr-launch-fade,
+  .mr-launch-fade--1,
+  .mr-launch-fade--2,
+  .mr-launch-fade--3,
+  .mr-launch-fade--4 {
+    animation: none;
+  }
+}
+
 @keyframes mr-radar {
   0% { transform: scale(1); opacity: 0.55; }
   100% { transform: scale(3); opacity: 0; }
