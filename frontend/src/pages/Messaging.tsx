@@ -1191,11 +1191,12 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               />
             </div>
 
-            {/* Voice note OR Send — switch based on whether there's text */}
-            {input.trim() ? (
+            {/* Voice note OR Send — keep Send visible while in-flight so iOS
+                keyboard-dismiss clicks cannot land on Mic after input clears. */}
+            {input.trim() || sending ? (
               <button
                 type="submit"
-                disabled={!input.trim() || sending}
+                disabled={(!input.trim() && !sending) || sending}
                 aria-label="Send message"
                 data-testid="chat-send-button"
                 onPointerDown={handleSendPointerDown}
