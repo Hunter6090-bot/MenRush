@@ -47,21 +47,21 @@ async function ensureFreeVerifiedUser(email: string): Promise<string> {
        is_premium, premium_tier
      ) VALUES (
        $1, $2, $3, $4, 28,
-       TRUE, 'verified', 'verified',
+       TRUE, 'verified', 'confirmed',
        FALSE, 'free'
      )
      ON CONFLICT (email) DO UPDATE SET
        is_verified = TRUE,
        verification_status = 'verified',
-       age_assurance_status = 'verified',
+       age_assurance_status = 'confirmed',
        is_premium = FALSE,
        premium_tier = 'free',
        updated_at = NOW()
      RETURNING id`,
     [id, email, '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Official Rooms Tester'],
   );
-  const res = await query<{ id: string }>(`SELECT id FROM users WHERE email = $1`, [email]);
-  return res.rows[0].id;
+  const res = await query(`SELECT id FROM users WHERE email = $1`, [email]);
+  return res.rows[0].id as string;
 }
 
 async function ensurePremiumUser(email: string): Promise<string> {
@@ -85,23 +85,23 @@ test('seed is idempotent — exactly 10 official rooms after double apply', asyn
   await reseedOfficialCatalog();
   await reseedOfficialCatalog();
 
-  const count = await query<{ n: string }>(
+  const count = await query(
     `SELECT COUNT(*)::text AS n FROM rooms WHERE is_official = TRUE`,
   );
   assert.equal(count.rows[0].n, '10', 'expected exactly 10 official rooms');
 
-  const slugs = await query<{ official_slug: string }>(
+  const slugs = await query(
     `SELECT official_slug FROM rooms WHERE is_official = TRUE ORDER BY official_slug`,
   );
   assert.equal(slugs.rows.length, 10);
-  const unique = new Set(slugs.rows.map((r) => r.official_slug));
+  const unique = new Set(slugs.rows.map((r: { official_slug: string }) => r.official_slug));
   assert.equal(unique.size, 10, 'official_slug values must be unique');
 
-  const names = await query<{ name: string }>(
+  const names = await query(
     `SELECT name FROM rooms WHERE is_official = TRUE ORDER BY name`,
   );
   assert.deepEqual(
-    names.rows.map((r) => r.name).sort(),
+    names.rows.map((r: { name: string }) => r.name).sort(),
     [...OFFICIAL_NAMES].sort(),
   );
 });
@@ -131,11 +131,11 @@ test('getRooms lists official catalog for a free non-member', async () => {
 
 test('joinRoom succeeds for official room as verified free user', async () => {
   const userId = await ensureFreeVerifiedUser('official-rooms-joiner@test.menrush.local');
-  const room = await query<{ id: string }>(
+  const room = await query(
     `SELECT id FROM rooms WHERE official_slug = 'bears-cubs' LIMIT 1`,
   );
   assert.ok(room.rows[0]?.id);
-  const roomId = room.rows[0].id;
+  const roomId = room.rows[0].id as string;
 
   await query(`DELETE FROM room_members WHERE user_id = $1 AND room_id = $2`, [userId, roomId]);
 
@@ -145,7 +145,7 @@ test('joinRoom succeeds for official room as verified free user', async () => {
 
   // Idempotent membership insert
   await roomService.joinRoom(userId, roomId);
-  const again = await query<{ n: string }>(
+  const again = await query(
     `SELECT COUNT(*)::text AS n FROM room_members WHERE user_id = $1 AND room_id = $2`,
     [userId, roomId],
   );
@@ -206,10 +206,10 @@ test('createRoom custom group stays Premium-gated for free users', async () => {
 test('addMember cannot use premium invite path on official rooms', async () => {
   const ownerish = await ensurePremiumUser('official-rooms-add-owner@test.menrush.local');
   const target = await ensurePremiumUser('official-rooms-add-target@test.menrush.local');
-  const room = await query<{ id: string }>(
+  const room = await query(
     `SELECT id FROM rooms WHERE official_slug = 'daddies' LIMIT 1`,
   );
-  const roomId = room.rows[0].id;
+  const roomId = room.rows[0].id as string;
 
   await assert.rejects(
     () => roomService.addMember(ownerish, roomId, target),

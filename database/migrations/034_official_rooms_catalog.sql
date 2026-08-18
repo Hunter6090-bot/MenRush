@@ -43,7 +43,7 @@ VALUES (
   99,
   TRUE,
   'verified',
-  'verified',
+  'confirmed',
   'unverified'
 )
 ON CONFLICT (email) DO NOTHING;
