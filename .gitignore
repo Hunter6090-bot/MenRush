@@ -9,6 +9,11 @@ pictures/task_*.webp
 .env
 .env.local
 **/.env
+.env.menrush-social
+.env*.menrush-social
+**/.env.menrush-social
+**/.env*.menrush-social
+social-studio/.data/
 .vercel
 frontend/playwright-report/
 frontend/test-results/
