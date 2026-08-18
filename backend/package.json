@@ -9,6 +9,8 @@
     "start": "node dist/boot.js",
     "db:migrate": "ts-node src/scripts/migrate.ts",
     "db:seed-test-users": "ts-node scripts/seed-test-users.ts",
+    "db:seed-social-oct1": "ts-node scripts/seed-social-oct1-2026.ts",
+    "test:social-oct1": "ts-node scripts/test-social-oct1-seed.ts",
     "waitlist:import": "ts-node src/scripts/import-waitlist.ts",
     "hotspots:import": "ts-node scripts/import-hot-spots.ts",
     "invite:generate": "ts-node src/scripts/generate-invite-codes.ts",
