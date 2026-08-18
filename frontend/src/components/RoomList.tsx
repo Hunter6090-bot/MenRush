@@ -68,7 +68,7 @@ export const RoomList: React.FC<RoomListProps> = ({
     roomsAPI
       .getRooms()
       .then((r) => {
-        const data = r.data as
+        const data = r.data as unknown as
           | RoomRow[]
           | {
               member_rooms?: RoomRow[];
