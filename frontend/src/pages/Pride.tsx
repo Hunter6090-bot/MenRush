@@ -33,7 +33,8 @@ const WHAT_YOU_GET = [
 
 /**
  * Printed QR → menrush.com/pride.
- * Redeem path accepts PRIDE 3MONTH FREE (spaces ignored). Print that string only.
+ * Sole public Pride offer. Redeem PRIDE 3MONTH FREE at account register (spaces ignored).
+ * Waitlist alone does not redeem.
  */
 export const Pride = () => {
   const [copied, setCopied] = useState(false);
@@ -52,6 +53,8 @@ export const Pride = () => {
       setCopied(false);
     }
   };
+
+  const registerHref = `/register?promo=${encodeURIComponent(PRIDE_PROMO_CODE)}`;
 
   return (
     <div className="relative flex min-h-dvh flex-col overflow-hidden bg-[#0D0A06] text-[#F0E0C0]">
@@ -87,35 +90,14 @@ export const Pride = () => {
             className="mt-6 max-w-[560px] text-pretty text-[clamp(15px,2vw,17px)] font-semibold leading-[1.6] text-[#F0E0C0]/92"
             data-testid="pride-headline-lock"
           >
-            Enter code{' '}
+            Create an account and enter code{' '}
             <span className="font-mono font-black tracking-[0.08em] text-[#E0A14A]">
               {PRIDE_PROMO_CODE}
             </span>{' '}
-            when you join the waitlist by {PRIDE_ENTER_BY}. You get 3 months of Premium from{' '}
-            {PRIDE_PREMIUM_START}, when MenRush opens. You cannot use Premium before launch.
+            by {PRIDE_ENTER_BY}. You get 3 months of Premium from {PRIDE_PREMIUM_START}, when
+            MenRush opens (through {PRIDE_PREMIUM_END} if launch is on time). You cannot use
+            Premium before launch.
           </p>
-
-          <div
-            className="mt-6 max-w-[560px] rounded-[14px] border border-[rgba(196,131,42,0.35)] bg-[rgba(13,10,6,0.55)] px-5 py-4 text-left text-[14px] leading-[1.55] text-[var(--cream-muted)]"
-            data-testid="pride-path-split"
-          >
-            <p>
-              This is not the Brighton Pride claim path at{' '}
-              <Link to="/brightonpride" className={publicLinkClass}>
-                menrush.com/brightonpride
-              </Link>{' '}
-              (personal emailed code, redeem by 31 October 2026). One person cannot take both.
-              Either Pride grant replaces the 30-day waitlist gift — it does not add to it.
-            </p>
-            <p className="mt-3">
-              This printed-QR path uses public code{' '}
-              <span className="font-mono font-bold tracking-wide text-[#F0E0C0]">
-                {PRIDE_PROMO_CODE}
-              </span>
-              . Last day to enter: {PRIDE_ENTER_BY}. Three months of Premium from{' '}
-              {PRIDE_PREMIUM_START} launch.
-            </p>
-          </div>
 
           <div
             className="mt-9 w-full max-w-[460px] rounded-[18px] border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.12)] px-5 py-6"
@@ -137,16 +119,22 @@ export const Pride = () => {
           </div>
 
           <div className="mt-8 w-full max-w-[460px]">
-            <Link to="/#waitlist" className={publicPrimaryButtonClass} data-testid="pride-cta">
-              Continue to MenRush
+            <Link to={registerHref} className={publicPrimaryButtonClass} data-testid="pride-cta">
+              Create account &amp; enter code
             </Link>
-            <p className="mt-4 text-sm leading-[1.55] text-[var(--cream-muted)]">
-              Join the waitlist now (or{' '}
-              <Link to="/beta" className={publicLinkClass}>
-                enter an invite
+            <p
+              className="mt-4 text-sm leading-[1.55] text-[var(--cream-muted)]"
+              data-testid="pride-cta-note"
+            >
+              Create an account and enter {PRIDE_PROMO_CODE} by {PRIDE_ENTER_BY}. Joining the{' '}
+              <Link to="/#waitlist" className={publicLinkClass} data-testid="pride-waitlist-link">
+                waitlist
               </Link>{' '}
-              if you have one). Create your account and enter the code by {PRIDE_ENTER_BY}. The
-              product opens {PRIDE_PREMIUM_START} — this is not in-app use today.
+              alone does not redeem this code. Have a beta invite?{' '}
+              <Link to="/beta" className={publicLinkClass}>
+                Enter it here
+              </Link>
+              .
             </p>
           </div>
         </section>
@@ -165,16 +153,17 @@ export const Pride = () => {
           <ul className="mt-8 space-y-4 text-[15px] leading-[1.6] text-[var(--cream-muted)]">
             <li>
               <span className="font-bold text-[#F0E0C0]">{PRIDE_ENTER_BY}</span> is the last day to{' '}
-              <span className="font-bold text-[#F0E0C0]">enter</span> the code — not the end of the
-              free Premium period.
+              <span className="font-bold text-[#F0E0C0]">enter</span> the code at account register —
+              not the end of the free Premium period. The waitlist form does not redeem the code.
             </li>
             <li>
               The 3 months of Premium run from launch on{' '}
-              <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_START}</span> (about{' '}
-              {PRIDE_PREMIUM_START} to {PRIDE_PREMIUM_END}), not from scan or code entry.
+              <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_START}</span> through{' '}
+              <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_END}</span> if launch is on
+              time — not from scan or code entry.
             </li>
             <li>
-              Nothing is usable before launch. If launch slips, the 3 months honour from the actual
+              Nothing is usable before launch. If launch slips, the 3 months run from the actual
               open date.
             </li>
             <li>
@@ -182,14 +171,10 @@ export const Pride = () => {
               <span className="font-mono text-[#F0E0C0]">{PRIDE_PROMO_CODE}</span>.
             </li>
             <li>
-              Pride replaces the existing 30-day waitlist Premium gift (Terms 7.2). No stacking with
-              that gift or with the separate{' '}
-              <Link to="/brightonpride" className={publicLinkClass}>
-                /brightonpride
-              </Link>{' '}
-              offer. Maximum 90 days for a Pride redeemer.
+              Pride replaces the existing 30-day waitlist Premium gift (Terms 7.2). It does not add
+              to that gift.
             </li>
-            <li>18+ only. UK-first (London · Manchester · Birmingham · Brighton).</li>
+            <li>18+ only. UK-first (London · Manchester · Birmingham).</li>
             <li>Three months of Premium at no charge. You will not be billed for this offer.</li>
           </ul>
           <p
@@ -226,10 +211,18 @@ export const Pride = () => {
           >
             What you get at launch
           </h2>
+          <p className="mx-auto mt-4 max-w-[560px] text-center text-[15px] leading-[1.6] text-[var(--cream-muted)]">
+            The free MenRush app includes Nearby, Rooms, and Matches. This Pride offer adds{' '}
+            <span className="font-bold text-[#F0E0C0]">3 months of Premium</span> on top (see
+            Premium features in-app and in Terms).
+          </p>
           <ul className="mt-10 grid gap-8 sm:grid-cols-3 sm:gap-6">
             {WHAT_YOU_GET.map((item) => (
               <li key={item.title} className="text-center sm:text-left">
-                <h3 className="text-[17px] font-extrabold uppercase tracking-[0.1em] text-[#F0E0C0]">
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#C4832A]">
+                  Free app
+                </p>
+                <h3 className="mt-2 text-[17px] font-extrabold uppercase tracking-[0.1em] text-[#F0E0C0]">
                   {item.title}
                 </h3>
                 <p className="mt-3 text-[15px] leading-[1.6] text-[var(--cream-muted)]">{item.body}</p>

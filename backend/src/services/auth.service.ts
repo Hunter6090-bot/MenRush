@@ -122,6 +122,11 @@ export const authService = {
         if (prideCheck.reason === 'already_redeemed') {
           throw new Error('This Pride promo has already been used for this email.');
         }
+        if (prideCheck.reason === 'other_pride_path') {
+          throw new Error(
+            'This email already has a Pride Premium grant. The code cannot be stacked.',
+          );
+        }
         throw new Error('This promo code is not valid.');
       }
     }
@@ -191,27 +196,25 @@ export const authService = {
         await inviteCodeService.redeemForRegistration(inviteCode, user.id, client);
       }
 
-      await client.query('COMMIT');
-
+      // Redeem inside the same transaction so a failed Pride grant rolls back
+      // registration and the error is returned to the client (not silent).
       if (promoCode && isSharedPrideCode(promoCode)) {
-        try {
-          await promoService.redeemSharedPride(promoCode, data.email, user.id);
-          const refreshed = await query(
-            `SELECT id, email, name, age, date_of_birth, photo_url, is_verified, verification_status,
-                    age_assurance_status, authenticity_status,
-                    COALESCE(is_premium, FALSE) AS is_premium,
-                    COALESCE(premium_tier, 'free') AS premium_tier,
-                    premium_until
-             FROM users WHERE id = $1`,
-            [user.id],
-          );
-          if (refreshed.rows[0]) {
-            Object.assign(user, refreshed.rows[0]);
-          }
-        } catch (promoErr) {
-          console.error('[auth] Pride promo redeem failed after register:', promoErr);
+        await promoService.redeemSharedPride(promoCode, data.email, user.id, client);
+        const refreshed = await client.query(
+          `SELECT id, email, name, age, date_of_birth, photo_url, is_verified, verification_status,
+                  age_assurance_status, authenticity_status,
+                  COALESCE(is_premium, FALSE) AS is_premium,
+                  COALESCE(premium_tier, 'free') AS premium_tier,
+                  premium_until
+           FROM users WHERE id = $1`,
+          [user.id],
+        );
+        if (refreshed.rows[0]) {
+          Object.assign(user, refreshed.rows[0]);
         }
       }
+
+      await client.query('COMMIT');
 
       const token = signToken(user.id);
       return { user, token };

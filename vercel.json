@@ -4,8 +4,13 @@
   "framework": null,
   "redirects": [
     {
-      "source": "/pride",
-      "destination": "/brightonpride",
+      "source": "/brightonpride",
+      "destination": "/pride",
+      "permanent": false
+    },
+    {
+      "source": "/brightonpride26",
+      "destination": "/pride",
       "permanent": false
     }
   ],

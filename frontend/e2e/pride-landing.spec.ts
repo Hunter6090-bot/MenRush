@@ -13,25 +13,17 @@ test.describe('Pride promotion landing', () => {
 
     const headline = page.getByTestId('pride-headline-lock');
     await expect(headline).toContainText('PRIDE 3MONTH FREE');
-    await expect(headline).toContainText(/when you join the waitlist by 5 September 2026/i);
+    await expect(headline).toContainText(/Create an account and enter code/i);
+    await expect(headline).toContainText(/by 5 September 2026/i);
     await expect(headline).toContainText(/3 months of Premium from 1 October 2026/i);
-    await expect(headline).toContainText(/when MenRush opens/i);
+    await expect(headline).toContainText(/through 1 January 2027 if launch is on time/i);
     await expect(headline).toContainText(/cannot use Premium before launch/i);
 
-    const pathSplit = page.getByTestId('pride-path-split');
-    await expect(pathSplit).toContainText(/This is not the Brighton Pride claim path/i);
-    await expect(pathSplit).toContainText(/menrush.com\/brightonpride/i);
-    await expect(pathSplit).toContainText(/31 October 2026/i);
-    await expect(pathSplit).toContainText(/One person cannot take both/i);
-    await expect(pathSplit).toContainText(/replaces the 30-day waitlist gift/i);
-    await expect(pathSplit).toContainText(/does not add to it/i);
-    await expect(pathSplit).toContainText('PRIDE 3MONTH FREE');
-    await expect(pathSplit).toContainText(/5 September 2026/i);
-    await expect(pathSplit).toContainText(/1 October 2026/i);
-    await expect(pathSplit.getByRole('link', { name: /brightonpride/i })).toHaveAttribute(
-      'href',
-      '/brightonpride',
-    );
+    // Sole public Pride offer — no dual-path / Brighton face copy
+    await expect(page.getByText(/brightonpride/i)).toHaveCount(0);
+    await expect(page.getByText(/Brighton Pride/i)).toHaveCount(0);
+    await expect(page.getByText(/One person cannot take both/i)).toHaveCount(0);
+    await expect(page.getByText(/this is not the/i)).toHaveCount(0);
 
     const codeBox = page.getByTestId('pride-promo-code');
     await expect(codeBox).toContainText('PRIDE 3MONTH FREE');
@@ -39,10 +31,12 @@ test.describe('Pride promotion landing', () => {
 
     const conditions = page.getByTestId('pride-conditions');
     await expect(conditions).toContainText(/last day to/);
-    await expect(conditions).toContainText(/31 December 2026/i);
+    await expect(conditions).toContainText(/account register/i);
+    await expect(conditions).toContainText(/waitlist form does not redeem/i);
+    await expect(conditions).toContainText(/1 January 2027/i);
     await expect(conditions).toContainText(/If launch slips/i);
     await expect(conditions).toContainText(/Terms 7\.2/i);
-    await expect(conditions).toContainText(/No stacking/i);
+    await expect(conditions).toContainText(/does not add to that gift/i);
     await expect(conditions).toContainText(/18\+/);
     await expect(conditions).toContainText(/UK-first/i);
     await expect(conditions).toContainText(/Three months of Premium at no charge/i);
@@ -50,6 +44,8 @@ test.describe('Pride promotion landing', () => {
     await expect(page.getByText(/auto-renew/i)).toHaveCount(0);
     await expect(page.getByText(/CCBill/i)).toHaveCount(0);
     await expect(page.getByText(/card/i)).toHaveCount(0);
+    await expect(page.getByText(/90 days/i)).toHaveCount(0);
+    await expect(page.getByText(/31 December 2026/i)).toHaveCount(0);
 
     // No invented address block; Terms link is the address path
     await expect(page.getByText(/RM6 6AX/i)).toHaveCount(0);
@@ -63,7 +59,15 @@ test.describe('Pride promotion landing', () => {
       '/privacy',
     );
 
-    await expect(page.getByTestId('pride-cta')).toHaveAttribute('href', '/#waitlist');
+    const cta = page.getByTestId('pride-cta');
+    await expect(cta).toHaveAttribute('href', /\/register\?promo=/);
+    await expect(cta).toContainText(/Create account/i);
+
+    const ctaNote = page.getByTestId('pride-cta-note');
+    await expect(ctaNote).toContainText(/Create an account and enter PRIDE 3MONTH FREE by 5 September 2026/i);
+    await expect(ctaNote).toContainText(/waitlist/i);
+    await expect(ctaNote).toContainText(/alone does not redeem this code/i);
+    await expect(page.getByTestId('pride-waitlist-link')).toHaveAttribute('href', '/#waitlist');
 
     expect(network.expectNoSideEffects()).toEqual([]);
   });

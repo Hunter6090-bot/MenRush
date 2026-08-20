@@ -204,6 +204,12 @@ export const Register = () => {
             <span className="font-mono text-sm tracking-[0.12em] text-[#F0E0C0]">{promoCode}</span>
           </div>
         ) : null}
+        {promoCode ? (
+          <p className="text-[13px] leading-[1.55] text-[var(--cream-muted)]" data-testid="register-pride-note">
+            Create an account and enter {promoCode} by 5 September 2026. Joining the waitlist alone
+            does not redeem this code. If redemption fails, you will see an error on this form.
+          </p>
+        ) : null}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           <div className="flex flex-col gap-2.5">

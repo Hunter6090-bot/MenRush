@@ -1,6 +1,9 @@
 import crypto from 'crypto';
-import { query } from '../db';
+import type { PoolClient } from 'pg';
+import pool, { query } from '../db';
 import { sendTransactionalEmail } from './mailer.service';
+
+type Queryable = PoolClient | typeof pool;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -53,7 +56,7 @@ const CAMPAIGNS: Record<string, CampaignConfig> = {
     id: 'brightonpride26',
     codePrefix: 'PRIDE',
     monthsFree: 3,
-    // Redeem by 31 October 2026 — one month after launch, gives people time to sign up
+    // Live Brighton Pride: redeem by 31 October 2026. Premium clocks from 1 Oct 2026.
     expiresAt: new Date('2026-10-31T23:59:59Z'),
   },
 };
@@ -66,11 +69,11 @@ export function getCampaign(id: string): CampaignConfig | null {
 export const SHARED_PRIDE_DISPLAY_CODE = 'PRIDE 3MONTH FREE';
 export const SHARED_PRIDE_NORMALIZED = 'PRIDE3MONTHFREE';
 export const SHARED_PRIDE_CAMPAIGN = 'pride26_public';
-/** Last moment to ENTER the code (Finance/Legal). */
+export const BRIGHTON_PRIDE_CAMPAIGN = 'brightonpride26';
+/** Last moment to ENTER the public code (Finance/Legal). */
 export const SHARED_PRIDE_ENTER_BY = new Date('2026-09-05T23:59:59Z');
-/** Premium window clocks from launch, not redeem day. */
-export const SHARED_PRIDE_PREMIUM_START = new Date('2026-10-01T00:00:00Z');
-export const SHARED_PRIDE_PREMIUM_END = new Date('2026-12-31T23:59:59Z');
+/** Scheduled UK launch — override with MENRUSH_LAUNCH_AT (ISO) if launch slips. */
+export const SHARED_PRIDE_SCHEDULED_LAUNCH = new Date('2026-10-01T00:00:00Z');
 export const SHARED_PRIDE_MONTHS_FREE = 3;
 
 export function normalizeSharedPromoCode(raw: string): string {
@@ -79,6 +82,24 @@ export function normalizeSharedPromoCode(raw: string): string {
 
 export function isSharedPrideCode(raw: string): boolean {
   return normalizeSharedPromoCode(raw) === SHARED_PRIDE_NORMALIZED;
+}
+
+/** Actual open date: MENRUSH_LAUNCH_AT env, else 1 October 2026. */
+export function getMenRushLaunchDate(): Date {
+  const raw = process.env.MENRUSH_LAUNCH_AT?.trim();
+  if (raw) {
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  return new Date(SHARED_PRIDE_SCHEDULED_LAUNCH);
+}
+
+/** End of 3 calendar months from launch (e.g. 1 Oct → 1 Jan). */
+export function premiumEndFromLaunch(launch: Date, months = SHARED_PRIDE_MONTHS_FREE): Date {
+  const end = new Date(launch);
+  end.setUTCMonth(end.getUTCMonth() + months);
+  end.setUTCHours(23, 59, 59, 999);
+  return end;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -97,12 +118,39 @@ export type PromoValidateResult =
 
 export type SharedPrideValidateResult =
   | { valid: true; monthsFree: number; campaign: string; premiumStart: Date; premiumEnd: Date }
-  | { valid: false; reason: 'not_found' | 'already_redeemed' | 'expired' };
+  | {
+      valid: false;
+      reason: 'not_found' | 'already_redeemed' | 'expired' | 'other_pride_path';
+    };
 
 export const promoService = {
+  /** True if this email was issued a legacy personal Pride code (closed claim form). */
+  async emailHasBrightonPrideClaim(email: string): Promise<boolean> {
+    const emailHash = hashEmail(email);
+    const result = await query(
+      `SELECT 1 FROM promo_codes
+       WHERE campaign = $1 AND email_hash = $2
+       LIMIT 1`,
+      [BRIGHTON_PRIDE_CAMPAIGN, emailHash],
+    );
+    return result.rows.length > 0;
+  },
+
+  async emailHasPublicPrideRedeem(email: string): Promise<boolean> {
+    const emailHash = hashEmail(email);
+    const result = await query(
+      `SELECT 1 FROM shared_promo_redemptions
+       WHERE campaign = $1 AND email_hash = $2
+       LIMIT 1`,
+      [SHARED_PRIDE_CAMPAIGN, emailHash],
+    );
+    return result.rows.length > 0;
+  },
+
   /**
    * Validate the public Pride QR code (PRIDE 3MONTH FREE).
-   * Spaces are ignored. One redemption per account/email. Enter-by 5 Sep 2026.
+   * Spaces ignored. One per email. Enter-by 5 Sep 2026.
+   * Blocks if this email already has a legacy personal Pride code (no stacking).
    */
   async validateSharedPride(
     code: string,
@@ -116,6 +164,10 @@ export const promoService = {
     }
 
     const emailHash = hashEmail(email);
+    if (await this.emailHasBrightonPrideClaim(email)) {
+      return { valid: false, reason: 'other_pride_path' };
+    }
+
     const existing = await query(
       `SELECT 1 FROM shared_promo_redemptions
        WHERE campaign = $1 AND email_hash = $2
@@ -126,33 +178,48 @@ export const promoService = {
       return { valid: false, reason: 'already_redeemed' };
     }
 
+    const premiumStart = getMenRushLaunchDate();
+    const premiumEnd = premiumEndFromLaunch(premiumStart);
     return {
       valid: true,
       monthsFree: SHARED_PRIDE_MONTHS_FREE,
       campaign: SHARED_PRIDE_CAMPAIGN,
-      premiumStart: SHARED_PRIDE_PREMIUM_START,
-      premiumEnd: SHARED_PRIDE_PREMIUM_END,
+      premiumStart,
+      premiumEnd,
     };
   },
 
   /**
-   * Redeem public Pride code for a new user. Grants Premium for the launch window
-   * (1 Oct 2026 → 31 Dec 2026), replacing the 30-day waitlist gift — no stack.
-   * Does not flip Premium for any other users.
+   * Redeem public Pride code for a new user.
+   * Premium: 3 calendar months from actual launch (MENRUSH_LAUNCH_AT or 1 Oct 2026).
+   * Replaces 30-day waitlist gift. Does not stack with a prior personal Pride code.
    */
   async redeemSharedPride(
     code: string,
     email: string,
     userId: string,
+    client?: PoolClient,
   ): Promise<{ monthsFree: number; premiumUntil: Date }> {
+    const db: Queryable = client ?? pool;
     const validation = await this.validateSharedPride(code, email);
     if (!validation.valid) {
-      throw new Error(`Pride promo cannot be redeemed: ${validation.reason}`);
+      if (validation.reason === 'other_pride_path') {
+        throw new Error(
+          'This email already has a Pride Premium grant. The code cannot be stacked.',
+        );
+      }
+      if (validation.reason === 'expired') {
+        throw new Error('This Pride promo expired on 5 September 2026.');
+      }
+      if (validation.reason === 'already_redeemed') {
+        throw new Error('This Pride promo has already been used for this email.');
+      }
+      throw new Error('This promo code is not valid.');
     }
 
     const emailHash = hashEmail(email);
     try {
-      await query(
+      await db.query(
         `INSERT INTO shared_promo_redemptions
            (campaign, code_normalized, user_id, email_hash)
          VALUES ($1, $2, $3, $4)`,
@@ -161,33 +228,31 @@ export const promoService = {
     } catch (err: unknown) {
       const pg = err as { code?: string };
       if (pg.code === '23505') {
-        throw new Error('Pride promo cannot be redeemed: already_redeemed');
+        throw new Error('This Pride promo has already been used for this email.');
       }
       throw err;
     }
 
-    await query(
+    await db.query(
       `UPDATE users
        SET is_premium = TRUE,
            premium_tier = 'premium',
            premium_until = $2,
            updated_at = NOW()
        WHERE id = $1`,
-      [userId, SHARED_PRIDE_PREMIUM_END],
+      [userId, validation.premiumEnd],
     );
 
     return {
       monthsFree: validation.monthsFree,
-      premiumUntil: SHARED_PRIDE_PREMIUM_END,
+      premiumUntil: validation.premiumEnd,
     };
   },
   /**
    * Issue a promo code for the given email + campaign.
    *
-   * - Idempotent: if the email already has a code for this campaign, we resend
-   *   the existing one rather than create a duplicate.
-   * - Generates a unique code with up to 5 collision retries.
-   * - Sends a branded email with the code.
+   * New brightonpride26 claims are closed (public offer is /pride only).
+   * Already-issued personal codes stay redeemable via validate/redeem.
    */
   async issueCode(
     email: string,
@@ -195,6 +260,10 @@ export const promoService = {
   ): Promise<PromoSignupResult> {
     const campaign = getCampaign(campaignId);
     if (!campaign) throw new Error(`Unknown campaign: ${campaignId}`);
+
+    if (campaignId === BRIGHTON_PRIDE_CAMPAIGN) {
+      throw new Error('campaign_closed');
+    }
 
     const normalised = email.trim().toLowerCase();
     const emailHash = hashEmail(normalised);
@@ -289,9 +358,15 @@ export const promoService = {
   },
 
   /**
-   * Mark a promo code as redeemed.
-   * Call this AFTER the user account has been created and userId is known.
-   * Returns the number of free months applied.
+   * Mark a legacy personal promo code as redeemed (already-issued codes only).
+   * Call AFTER the user account has been created and userId is known.
+   *
+   * Finance lock when Premium grant is applied:
+   * - Benefit clocks from launch (MENRUSH_LAUNCH_AT or 1 Oct 2026) for monthsFree
+   *   calendar months — not from redeem/claim/scan day.
+   * - Replaces the 30-day waitlist gift; do not stack with public PRIDE 3MONTH FREE.
+   * - Already-issued brightonpride26 codes keep redeem-by 31 Oct 2026 (migration 037).
+   * This method currently only marks the row; it does NOT set is_premium yet.
    */
   async redeem(
     code: string,
@@ -377,8 +452,12 @@ async function sendPromoEmail(params: {
               Your Brighton Pride<br>offer is here.
             </h1>
             <p style="margin:0 0 32px;font-size:15px;color:#7a6a5a;line-height:1.6;">
-              You're on the list. When MenRush launches on 1&nbsp;October&nbsp;2026,
-              use the code below to activate ${campaign.monthsFree}&nbsp;months of Premium — on us.
+              You're on the list. Your personal code is below (format PRIDE-XXXX-XXXX).
+              It is <strong style="color:#8a7a6a;">not</strong> a beta invite (MENRUSH-XXXX).
+              Keep this email — there is not yet an in-app field to type the code; we will tell
+              you where to enter it when redemption opens at account signup.
+              Your ${campaign.monthsFree}&nbsp;months of Premium start on launch
+              (1&nbsp;October&nbsp;2026), not the day you claim this email.
             </p>
 
             <!-- Code box -->
@@ -408,16 +487,19 @@ async function sendPromoEmail(params: {
             <!-- How to redeem -->
             <h2 style="margin:0 0 12px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#C4832A;font-weight:700;">How to redeem</h2>
             <ol style="margin:0 0 32px;padding-left:20px;color:#7a6a5a;font-size:14px;line-height:1.8;">
-              <li>Download MenRush on 1&nbsp;October&nbsp;2026</li>
-              <li>Create your account using <strong style="color:#8a7a6a;">${to}</strong></li>
-              <li>Enter your code <strong style="color:#F0E0C0;">${formattedCode}</strong> in the Premium section</li>
-              <li>Enjoy ${campaign.monthsFree}&nbsp;months free — no card required until it expires</li>
+              <li>Keep this email — your code is locked to <strong style="color:#8a7a6a;">${to}</strong></li>
+              <li>This is a Premium promo code (PRIDE-XXXX-XXXX), not a /beta MENRUSH invite</li>
+              <li>Redemption at account signup is not open yet — we will tell you where to type it</li>
+              <li>When redeemed, Premium starts on launch (1&nbsp;October&nbsp;2026, or the actual open date if launch slips) for three calendar months (through 1&nbsp;January&nbsp;2027 if on time)</li>
+              <li>Redeem by 31&nbsp;October&nbsp;2026 once that path is live. Replaces the 30-day waitlist gift — not stacked with /pride</li>
             </ol>
 
             <!-- Fine print -->
             <p style="margin:0 0 32px;font-size:11px;color:#2a2010;line-height:1.6;border-top:1px solid #1a1210;padding-top:20px;">
-              New members only. One offer per person. Must be redeemed by 31&nbsp;October&nbsp;2026.
-              Cannot be combined with other offers. MenRush is an 18+ platform.
+              New members only. One code per user. Redeem by 31&nbsp;October&nbsp;2026 once signup
+              redemption is live. Benefit clocks from launch (not claim day) for three calendar
+              months. Replaces the 30-day waitlist Premium gift. Cannot be combined
+              with other offers or the printed-QR /pride path. MenRush is an 18+ platform.
               Bronze Apps UK Limited — Company No.&nbsp;17249857.
             </p>
 
@@ -439,18 +521,20 @@ async function sendPromoEmail(params: {
 
   const text = `Your MenRush Pride code
 
-${campaign.monthsFree} months free Premium — use it when we launch on 1 October 2026.
+${campaign.monthsFree} months free Premium starting 1 October 2026 (not the day you claim).
 
 YOUR CODE: ${formattedCode}
 
-This code is locked to ${to}. It only works with this email address.
+This code is locked to ${to}. Format PRIDE-XXXX-XXXX — not a beta MENRUSH invite.
 
 How to redeem:
-1. Download MenRush on 1 October 2026
-2. Create your account using ${to}
-3. Enter your code in the Premium section
+1. Keep this email
+2. Redemption at account signup is not open yet — we will tell you where to type the code
+3. When redeemed, Premium starts on launch (1 October 2026, or actual open if launch slips) for three calendar months (through 1 January 2027 if on time)
+4. Redeem by 31 October 2026 once that path is live
 
-Expires: 31 October 2026. New members only. 18+.
+Replaces the 30-day waitlist gift (not stacked with /pride).
+New members only. One code per user. 18+.
 Bronze Apps UK Limited — Company No. 17249857.`;
 
   await sendTransactionalEmail({
