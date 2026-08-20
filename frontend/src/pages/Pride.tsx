@@ -94,9 +94,10 @@ export const Pride = () => {
             <span className="font-mono font-black tracking-[0.08em] text-[#E0A14A]">
               {PRIDE_PROMO_CODE}
             </span>{' '}
-            by {PRIDE_ENTER_BY}. You get 3 months of Premium from {PRIDE_PREMIUM_START}, when
-            MenRush opens (through {PRIDE_PREMIUM_END} if launch is on time). You cannot use
-            Premium before launch.
+            by {PRIDE_ENTER_BY}. You get 3 months of Premium from launch. If MenRush opens on{' '}
+            {PRIDE_PREMIUM_START}, Premium ends {PRIDE_PREMIUM_END}. If launch slips, the 3 months
+            run from the actual open date — not still {PRIDE_PREMIUM_END}. You cannot use Premium
+            before launch.
           </p>
 
           <div
@@ -156,15 +157,12 @@ export const Pride = () => {
               <span className="font-bold text-[#F0E0C0]">enter</span> the code at account register —
               not the end of the free Premium period. The waitlist form does not redeem the code.
             </li>
-            <li>
-              The 3 months of Premium run from launch on{' '}
-              <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_START}</span> through{' '}
-              <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_END}</span> if launch is on
-              time — not from scan or code entry.
-            </li>
-            <li>
-              Nothing is usable before launch. If launch slips, the 3 months run from the actual
-              open date.
+            <li data-testid="pride-duration-rule">
+              Duration rule: if MenRush opens on{' '}
+              <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_START}</span>, Premium ends{' '}
+              <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_END}</span>. If launch
+              slips, the 3 months run from the actual open date — not still {PRIDE_PREMIUM_END}.
+              The clock does not start from scan or code entry. Nothing is usable before launch.
             </li>
             <li>
               One per user = one MenRush account / email. Code:{' '}

@@ -15,8 +15,10 @@ test.describe('Pride promotion landing', () => {
     await expect(headline).toContainText('PRIDE 3MONTH FREE');
     await expect(headline).toContainText(/Create an account and enter code/i);
     await expect(headline).toContainText(/by 5 September 2026/i);
-    await expect(headline).toContainText(/3 months of Premium from 1 October 2026/i);
-    await expect(headline).toContainText(/through 1 January 2027 if launch is on time/i);
+    await expect(headline).toContainText(/3 months of Premium from launch/i);
+    await expect(headline).toContainText(/If MenRush opens on 1 October 2026, Premium ends 1 January 2027/i);
+    await expect(headline).toContainText(/If launch slips, the 3 months run from the actual open date/i);
+    await expect(headline).toContainText(/not still 1 January 2027/i);
     await expect(headline).toContainText(/cannot use Premium before launch/i);
 
     // Sole public Pride offer — no dual-path / Brighton face copy
@@ -33,8 +35,10 @@ test.describe('Pride promotion landing', () => {
     await expect(conditions).toContainText(/last day to/);
     await expect(conditions).toContainText(/account register/i);
     await expect(conditions).toContainText(/waitlist form does not redeem/i);
-    await expect(conditions).toContainText(/1 January 2027/i);
-    await expect(conditions).toContainText(/If launch slips/i);
+    const duration = page.getByTestId('pride-duration-rule');
+    await expect(duration).toContainText(/if MenRush opens on 1 October 2026, Premium ends 1 January 2027/i);
+    await expect(duration).toContainText(/If launch slips, the 3 months run from the actual open date/i);
+    await expect(duration).toContainText(/not still 1 January 2027/i);
     await expect(conditions).toContainText(/Terms 7\.2/i);
     await expect(conditions).toContainText(/does not add to that gift/i);
     await expect(conditions).toContainText(/18\+/);

@@ -94,7 +94,7 @@ export function getMenRushLaunchDate(): Date {
   return new Date(SHARED_PRIDE_SCHEDULED_LAUNCH);
 }
 
-/** End of 3 calendar months from launch (e.g. 1 Oct → 1 Jan). */
+/** End of N calendar months from launch. On-time: 1 Oct → 1 Jan. Late launch: end moves with open date — never hard-code 1 January. */
 export function premiumEndFromLaunch(launch: Date, months = SHARED_PRIDE_MONTHS_FREE): Date {
   const end = new Date(launch);
   end.setUTCMonth(end.getUTCMonth() + months);
@@ -490,8 +490,8 @@ async function sendPromoEmail(params: {
               <li>Keep this email — your code is locked to <strong style="color:#8a7a6a;">${to}</strong></li>
               <li>This is a Premium promo code (PRIDE-XXXX-XXXX), not a /beta MENRUSH invite</li>
               <li>Redemption at account signup is not open yet — we will tell you where to type it</li>
-              <li>When redeemed, Premium starts on launch (1&nbsp;October&nbsp;2026, or the actual open date if launch slips) for three calendar months (through 1&nbsp;January&nbsp;2027 if on time)</li>
-              <li>Redeem by 31&nbsp;October&nbsp;2026 once that path is live. Replaces the 30-day waitlist gift — not stacked with /pride</li>
+              <li>When redeemed, Premium starts on launch. If open is 1&nbsp;October&nbsp;2026, Premium ends 1&nbsp;January&nbsp;2027. If launch slips, the 3 months run from the actual open date — not still 1&nbsp;January</li>
+              <li>Redeem by 31&nbsp;October&nbsp;2026 once that path is live. Replaces the 30-day waitlist gift. Do not stack with the public /pride code</li>
             </ol>
 
             <!-- Fine print -->
@@ -530,10 +530,10 @@ This code is locked to ${to}. Format PRIDE-XXXX-XXXX — not a beta MENRUSH invi
 How to redeem:
 1. Keep this email
 2. Redemption at account signup is not open yet — we will tell you where to type the code
-3. When redeemed, Premium starts on launch (1 October 2026, or actual open if launch slips) for three calendar months (through 1 January 2027 if on time)
+3. When redeemed, Premium starts on launch. If open is 1 October 2026, Premium ends 1 January 2027. If launch slips, the 3 months run from the actual open date — not still 1 January
 4. Redeem by 31 October 2026 once that path is live
 
-Replaces the 30-day waitlist gift (not stacked with /pride).
+Replaces the 30-day waitlist gift. Do not stack with the public /pride code.
 New members only. One code per user. 18+.
 Bronze Apps UK Limited — Company No. 17249857.`;
 

@@ -5,7 +5,7 @@ export const PRIDE_PROMO_CODE = 'PRIDE 3MONTH FREE';
 export const PRIDE_PROMO_NORMALIZED = 'PRIDE3MONTHFREE';
 export const PRIDE_ENTER_BY = '5 September 2026';
 export const PRIDE_PREMIUM_START = '1 October 2026';
-/** Locked: 3 calendar months from 1 Oct 2026 → through 1 January 2027 (if launch on time). */
+/** On-time end only (1 Oct open → 1 Jan). If launch slips, grant end moves with actual open — never hard-code this date as premium_until. */
 export const PRIDE_PREMIUM_END = '1 January 2027';
 export const PRIDE_STORAGE_KEY = 'menrush_pride_promo';
 
