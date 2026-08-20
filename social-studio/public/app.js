@@ -3,7 +3,9 @@ const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
 
 let meta = null;
 let connections = [];
+let studioSettings = null;
 let weekData = null;
+let imageGenConfigured = false;
 
 async function api(path, opts = {}) {
   const res = await fetch(path, {
@@ -38,6 +40,20 @@ function collectFields(card, platform) {
   return fields;
 }
 
+function renderImageGenCard() {
+  const masked = $('#image-gen-masked');
+  const keyInput = $('#image-gen-key');
+  const providerInput = $('#image-gen-provider');
+  const ig = studioSettings?.imageGen;
+  if (providerInput && !providerInput.value) providerInput.value = ig?.provider || '';
+  if (masked) {
+    masked.textContent = ig?.configured ? `On device: ${ig.masked}` : 'No key saved — remote Generate stays off.';
+  }
+  if (keyInput) {
+    keyInput.placeholder = ig?.configured ? 'Saved — enter new value to replace' : '';
+  }
+}
+
 function renderCards() {
   const root = $('#cards');
   root.innerHTML = '';
@@ -48,7 +64,6 @@ function renderCards() {
 
     const fieldHtml = Object.entries(conn.fields)
       .map(([key, f]) => {
-        const placeholder = f.set ? f.masked : '';
         return `<div class="field">
           <label for="${conn.platform}-${key}">${f.label}${f.optional ? ' (optional)' : ''}</label>
           <input id="${conn.platform}-${key}" data-field="${key}" type="password" autocomplete="off"
@@ -148,12 +163,193 @@ function renderCards() {
 
     root.appendChild(card);
   }
+  renderImageGenCard();
 }
 
 function upsertConn(c) {
   const i = connections.findIndex((x) => x.platform === c.platform);
   if (i >= 0) connections[i] = c;
   else connections.push(c);
+}
+
+function readyLabel(p) {
+  if (p.format === 'story' || p.format === 'reel') return 'Preview only';
+  if (p.ready) return 'Ready';
+  if (p.included) return 'On, not verified';
+  return 'Off — excluded';
+}
+
+function aspectClass(format) {
+  if (format === 'story' || format === 'reel') return 'tall';
+  if (format === 'post') return 'wide';
+  return 'square';
+}
+
+function visualWorkspaceHtml(p) {
+  const media = p.media || {};
+  const prompt = media.prompt || '';
+  const preview = media.hasImage
+    ? `<img data-preview src="${escapeAttr(media.imageUrl)}" alt="Draft preview" />`
+    : `<div class="visual-empty">No image yet — upload or Generate poster from your prompt.</div>`;
+  const remoteDisabled = imageGenConfigured ? '' : 'disabled';
+  const remoteTitle = imageGenConfigured
+    ? 'Remote AI Generate (provider not fully wired — use local poster or upload)'
+    : 'Set an image API key under Connections → Image generate (optional)';
+
+  return `
+    <div class="visual" data-visual>
+      <div class="visual-frame ${aspectClass(p.format)}">
+        ${preview}
+      </div>
+      <div class="visual-controls">
+        <label class="prompt-label" for="prompt-${cssId(p.id)}">Poster prompt</label>
+        <textarea id="prompt-${cssId(p.id)}" data-prompt rows="3" placeholder="Type what you want on the poster…">${escapeHtml(prompt)}</textarea>
+        ${
+          p.platform === 'instagram' && p.format === 'feed'
+            ? `<label class="prompt-label" for="puburl-${cssId(p.id)}">Public image URL (IG publish only)</label>
+               <input id="puburl-${cssId(p.id)}" data-public-url type="url" placeholder="https://… (Graph cannot fetch localhost uploads)" value="${escapeAttr(media.publicImageUrl || '')}" />`
+            : ''
+        }
+        <div class="visual-actions">
+          <label class="btn ghost file-btn">Upload<input type="file" data-upload accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" hidden /></label>
+          <button type="button" class="btn copper" data-gen-local>Generate poster</button>
+          <button type="button" class="btn ghost" data-gen-remote ${remoteDisabled} title="${escapeAttr(remoteTitle)}">Generate (AI)</button>
+          <button type="button" class="btn ghost" data-save-prompt>Save prompt</button>
+          <button type="button" class="btn ghost" data-clear-image ${media.hasImage ? '' : 'disabled'}>Clear image</button>
+        </div>
+        <div class="msg" data-visual-msg></div>
+      </div>
+    </div>
+  `;
+}
+
+function cssId(id) {
+  return String(id).replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function escapeAttr(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;');
+}
+
+function wireVisual(el, post) {
+  const msg = $('[data-visual-msg]', el);
+  const promptEl = $('[data-prompt]', el);
+  const pubUrlEl = $('[data-public-url]', el);
+
+  const setMsg = (text, ok) => {
+    msg.textContent = text;
+    msg.className = ok === true ? 'toast-ok' : ok === false ? 'toast-err' : 'muted';
+  };
+
+  const applyMedia = (media) => {
+    post.media = media;
+    const frame = $('.visual-frame', el);
+    if (media?.hasImage) {
+      frame.innerHTML = `<img data-preview src="${escapeAttr(media.imageUrl)}" alt="Draft preview" />`;
+    } else {
+      frame.innerHTML = `<div class="visual-empty">No image yet — upload or Generate poster from your prompt.</div>`;
+    }
+    $('[data-clear-image]', el).disabled = !media?.hasImage;
+  };
+
+  $('[data-save-prompt]', el).addEventListener('click', async () => {
+    setMsg('Saving…');
+    try {
+      const body = { prompt: promptEl.value };
+      if (pubUrlEl) body.publicImageUrl = pubUrlEl.value;
+      const data = await api(`/api/drafts/${encodeURIComponent(post.id)}/media`, {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      });
+      applyMedia(data.media);
+      setMsg('Prompt saved on this device.', true);
+    } catch (err) {
+      setMsg(err.message, false);
+    }
+  });
+
+  $('[data-upload]', el).addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setMsg('Uploading…');
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      const data = await api(`/api/drafts/${encodeURIComponent(post.id)}/image`, {
+        method: 'POST',
+        body: JSON.stringify({
+          imageBase64: dataUrl,
+          mimeType: file.type || 'image/png',
+          filename: file.name,
+        }),
+      });
+      applyMedia(data.media);
+      setMsg('Image attached to this draft.', true);
+    } catch (err) {
+      setMsg(err.message, false);
+    }
+  });
+
+  $('[data-clear-image]', el).addEventListener('click', async () => {
+    setMsg('Clearing…');
+    try {
+      const data = await api(`/api/drafts/${encodeURIComponent(post.id)}/image`, { method: 'DELETE' });
+      applyMedia(data.media);
+      setMsg('Image cleared.', true);
+    } catch (err) {
+      setMsg(err.message, false);
+    }
+  });
+
+  $('[data-gen-local]', el).addEventListener('click', async () => {
+    setMsg('Generating local poster…');
+    try {
+      const data = await api(`/api/drafts/${encodeURIComponent(post.id)}/generate`, {
+        method: 'POST',
+        body: JSON.stringify({
+          mode: 'local',
+          prompt: promptEl.value,
+          format: post.format,
+          platform: post.platform,
+        }),
+      });
+      if (promptEl && data.media?.prompt) promptEl.value = data.media.prompt;
+      applyMedia(data.media);
+      setMsg('Local poster ready — preview only until you Approve a publishable draft.', true);
+    } catch (err) {
+      setMsg(err.message, false);
+    }
+  });
+
+  $('[data-gen-remote]', el).addEventListener('click', async () => {
+    if (!imageGenConfigured) return;
+    setMsg('Remote Generate…');
+    try {
+      await api(`/api/drafts/${encodeURIComponent(post.id)}/generate`, {
+        method: 'POST',
+        body: JSON.stringify({
+          mode: 'remote',
+          prompt: promptEl.value,
+          format: post.format,
+          platform: post.platform,
+        }),
+      });
+    } catch (err) {
+      setMsg(err.message || 'Remote Generate unavailable — use local poster or upload.', false);
+    }
+  });
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Could not read file'));
+    reader.readAsDataURL(file);
+  });
 }
 
 function renderWeek() {
@@ -163,6 +359,7 @@ function renderWeek() {
     w.note ? ` · ${w.note}` : ''
   } · source: ${weekData.source}`;
   $('#approve-hint').textContent = weekData.approveHint || '';
+  imageGenConfigured = Boolean(weekData.imageGenConfigured);
 
   const root = $('#week-posts');
   root.innerHTML = '';
@@ -176,23 +373,26 @@ function renderWeek() {
     if (p.date !== lastDate) {
       lastDate = p.date;
       const h = document.createElement('h3');
-      h.style.cssText = 'font-family:var(--font);margin:1rem 0 0.35rem;font-size:1rem;color:var(--copper-hot)';
+      h.className = 'day-heading';
       h.textContent = p.date;
       root.appendChild(h);
     }
     const el = document.createElement('article');
-    el.className = `post${p.included ? '' : ' excluded'}`;
-    const ready = p.ready ? 'Ready' : p.included ? 'On, not verified' : 'Off — excluded';
+    el.className = `post${p.included ? '' : ' excluded'}${p.visual ? ' has-visual' : ''}`;
+    el.dataset.id = p.id;
+    const slot = p.slotLabel || p.platform.toUpperCase();
     el.innerHTML = `
       <div class="post-meta">
-        <span>${p.platform.toUpperCase()}</span>
-        <span>${p.timeUk || ''}</span>
-        <span>${p.kind || 'draft'}</span>
-        <span>${ready}</span>
+        <span class="slot">${escapeHtml(slot)}</span>
+        <span>${escapeHtml(p.timeUk || '')}</span>
+        <span>${escapeHtml(p.format || p.kind || 'draft')}</span>
+        <span>${escapeHtml(readyLabel(p))}</span>
       </div>
       <pre class="post-body">${escapeHtml(p.body)}</pre>
+      ${p.visual ? visualWorkspaceHtml(p) : ''}
     `;
     root.appendChild(el);
+    if (p.visual) wireVisual(el, p);
   }
 }
 
@@ -206,6 +406,8 @@ function escapeHtml(s) {
 async function loadConnections() {
   const data = await api('/api/connections');
   connections = data.connections;
+  studioSettings = data.studio || null;
+  imageGenConfigured = Boolean(studioSettings?.imageGen?.configured);
   renderCards();
 }
 
@@ -215,6 +417,32 @@ async function loadWeek() {
 }
 
 $('#btn-refresh-week').addEventListener('click', () => loadWeek());
+
+$('#btn-save-image-gen')?.addEventListener('click', async () => {
+  const msg = $('#image-gen-msg');
+  msg.textContent = 'Saving…';
+  msg.className = 'muted';
+  try {
+    const data = await api('/api/studio/image-gen', {
+      method: 'PUT',
+      body: JSON.stringify({
+        apiKey: $('#image-gen-key').value,
+        provider: $('#image-gen-provider').value,
+      }),
+    });
+    studioSettings = data.studio;
+    imageGenConfigured = Boolean(studioSettings?.imageGen?.configured);
+    $('#image-gen-key').value = '';
+    renderImageGenCard();
+    msg.textContent = imageGenConfigured
+      ? 'Image key saved on this device. Generate (AI) unlocks on This week.'
+      : 'Saved.';
+    msg.className = 'toast-ok';
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = 'toast-err';
+  }
+});
 
 $('#btn-approve').addEventListener('click', async () => {
   if (!weekData) await loadWeek();
@@ -245,12 +473,19 @@ $('#btn-approve').addEventListener('click', async () => {
           method: 'POST',
           body: JSON.stringify({ confirm: true }),
         });
-        box.innerHTML = `<h3>Publish results (${result.summary.ok}/${result.summary.total} ok)</h3>` +
+        box.innerHTML =
+          `<h3>Publish results (${result.summary.ok}/${result.summary.total} ok)</h3>` +
           result.results
             .map(
               (r) =>
-                `<div class="result-row ${r.ok ? 'ok' : 'fail'}">${r.platform} ${r.date} ${r.timeUk || ''} — ${
-                  r.ok ? `ok${r.externalId ? ` · ${r.externalId}` : ''}` : r.error
+                `<div class="result-row ${r.ok ? 'ok' : 'fail'}">${r.platform}${
+                  r.format ? `/${r.format}` : ''
+                } ${r.date} ${r.timeUk || ''} — ${
+                  r.ok
+                    ? `ok${r.externalId ? ` · ${r.externalId}` : ''}${r.mediaAttached ? ' · media' : ''}${
+                        r.warning ? ` · ${r.warning}` : ''
+                      }`
+                    : r.error
                 }</div>`,
             )
             .join('');

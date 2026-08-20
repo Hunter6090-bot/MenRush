@@ -67,6 +67,7 @@ style(icons): heritage set (claude)
 | Pride sole public offer (`/pride`; closed `/brightonpride` → redirect) | PR `#118` (folds #119) | claim + quiet public redeem | Cursor cloud — /pride Claim CTA; printed public redeem at register; Brighton grandfather |
 | Kill homepage fade + rooms skeleton blink | PR `cursor/kill-fidgety-motion-283d` | — | Cursor cloud — remove `mr-launch-fade`; RoomList refresh in place |
 | Oct 1 2026 social calendar seed (`oct1-2026`) | PR `#112` `cursor/social-oct1-2026-calendar-5921` | — | Cursor cloud — docs + idempotent seed; draft only; do not auto-publish; merged |
+| Social Studio visual workspace (logo default + Week 1 = 21–27 Aug) | PR `#117` `cursor/social-studio-visual-workspace-84c2` | — | Cursor cloud — default logo preview; Day 1 = 21 Aug opening copy; no Pride / #97–#99 |
 | Local Social Studio (Connections + week Approve) | PR `cursor/social-studio-local-0674` | — | Cursor cloud — `social-studio/`; keys in `.data/` only; no Railway outbound social; do not touch #97–#99 |
 | UK launch homepage (ComingSoon 1 Oct 2026) | PR `#111` `cursor/uk-launch-homepage-527c` | — | Cursor cloud — dated UK launch page; waitlist/invite/sign-in kept |
 | Discover Sign out confirm + START PULSE sheet wiring + radius label sync | PR `cursor/fix-discover-signout-pulse-55cd` | — | Cursor cloud — do not redo; confirm before logout; Pulse never silent no-op |
