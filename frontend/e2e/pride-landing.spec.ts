@@ -30,21 +30,23 @@ test.describe('Pride promotion landing', () => {
     await expect(conditions).toContainText(/No stacking/i);
     await expect(conditions).toContainText(/18\+/);
     await expect(conditions).toContainText(/UK-first/i);
-    await expect(conditions).toContainText(/Three months at no charge/i);
+    await expect(conditions).toContainText(/Three months of Premium at no charge/i);
+    await expect(conditions).toContainText(/will not be billed for this offer/i);
+    await expect(page.getByText(/auto-renew/i)).toHaveCount(0);
+    await expect(page.getByText(/CCBill/i)).toHaveCount(0);
+    await expect(page.getByText(/card/i)).toHaveCount(0);
 
-    // No invented company number / postal address on this page
-    await expect(page.getByText(/17249857/)).toHaveCount(0);
+    // No invented address block; Terms link is the address path
     await expect(page.getByText(/RM6 6AX/i)).toHaveCount(0);
+    await expect(page.getByText(/17249857/)).toHaveCount(0);
 
     const promoter = page.getByTestId('pride-promoter-slot');
-    await expect(promoter.getByRole('link', { name: /^Terms$/i })).toHaveAttribute('href', '/terms');
+    await expect(promoter).toContainText(/Bronze Apps UK Limited \(trading as MenRush\)/i);
+    await expect(page.getByTestId('pride-terms-link')).toHaveAttribute('href', '/terms');
     await expect(promoter.getByRole('link', { name: /^Privacy$/i })).toHaveAttribute(
       'href',
       '/privacy',
     );
-
-    await expect(page.getByText(/£/)).toHaveCount(0);
-    await expect(page.getByText(/CCBill/i)).toHaveCount(0);
 
     await expect(page.getByTestId('pride-cta')).toHaveAttribute('href', '/#waitlist');
 

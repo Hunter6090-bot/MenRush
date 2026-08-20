@@ -164,20 +164,21 @@ export const Pride = () => {
               Maximum 90 days for a Pride redeemer.
             </li>
             <li>18+ only. UK-first (London · Manchester · Birmingham · Brighton).</li>
-            <li>
-              Three months at no charge. You will not be billed for this offer. After that, Premium
-              is optional — only if you later choose to subscribe.
-            </li>
+            <li>Three months of Premium at no charge. You will not be billed for this offer.</li>
           </ul>
           <p
             className="mt-8 text-[14px] leading-[1.6] text-[var(--cream-muted)]"
             data-testid="pride-promoter-slot"
           >
-            Legal:{' '}
-            <Link to="/terms" className={publicLinkClass}>
+            Promoter:{' '}
+            <span className="font-bold text-[#F0E0C0]">
+              Bronze Apps UK Limited (trading as MenRush)
+            </span>
+            . Correspondence address is in our{' '}
+            <Link to="/terms" className={publicLinkClass} data-testid="pride-terms-link">
               Terms
             </Link>
-            {' · '}
+            . Also see{' '}
             <Link to="/privacy" className={publicLinkClass}>
               Privacy
             </Link>
@@ -185,7 +186,7 @@ export const Pride = () => {
             <Link to="/contact" className={publicLinkClass}>
               Support
             </Link>
-            . Promoter details as published on menrush.com.
+            .
           </p>
         </section>
 
