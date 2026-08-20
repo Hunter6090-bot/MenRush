@@ -13,6 +13,12 @@ import {
   readStoredInviteCode,
   storeInviteCode,
 } from '../lib/betaInvite';
+import {
+  PRIDE_PROMO_CODE,
+  isPridePromoCode,
+  readStoredPridePromoCode,
+  storePridePromoCode,
+} from '../lib/pridePromo';
 import { FEATURES } from '../lib/featureFlags';
 import {
   publicErrorClass,
@@ -61,7 +67,11 @@ function passwordScore(pw: string): 0 | 1 | 2 | 3 {
 export const Register = () => {
   const [searchParams] = useSearchParams();
   const inviteFromQuery = searchParams.get('invite')?.trim() || '';
+  const promoFromQuery = searchParams.get('promo')?.trim() || '';
   const [inviteCode] = useState(() => inviteFromQuery || readStoredInviteCode() || '');
+  const [promoCode, setPromoCode] = useState(
+    () => promoFromQuery || readStoredPridePromoCode() || '',
+  );
   const [form, setForm] = useState<FormState>({
     displayName: '',
     email: '',
@@ -81,6 +91,13 @@ export const Register = () => {
       storeInviteCode(inviteFromQuery);
     }
   }, [inviteFromQuery]);
+
+  useEffect(() => {
+    if (promoFromQuery && isPridePromoCode(promoFromQuery)) {
+      storePridePromoCode(PRIDE_PROMO_CODE);
+      setPromoCode(PRIDE_PROMO_CODE);
+    }
+  }, [promoFromQuery]);
 
   useEffect(() => {
     if (BETA_INVITE_REQUIRED && !inviteCode) {
@@ -141,6 +158,7 @@ export const Register = () => {
         date_of_birth: form.dob,
         password: form.password,
         ...(BETA_INVITE_REQUIRED ? { invite_code: inviteCode } : {}),
+        ...(promoCode.trim() ? { promo_code: promoCode.trim() } : {}),
       });
       setAuth(res.data.user, res.data.token);
       navigate(FEATURES.requireIdVerification ? '/verify/id' : '/profile/setup');
@@ -175,6 +193,15 @@ export const Register = () => {
               Invite code
             </span>
             <span className="font-mono text-sm tracking-[0.12em] text-[#F0E0C0]">{inviteCode}</span>
+          </div>
+        ) : null}
+
+        {promoCode ? (
+          <div className={publicInviteChipClass} data-testid="register-pride-promo">
+            <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-[#E0A14A]">
+              Pride promo
+            </span>
+            <span className="font-mono text-sm tracking-[0.12em] text-[#F0E0C0]">{promoCode}</span>
           </div>
         ) : null}
 

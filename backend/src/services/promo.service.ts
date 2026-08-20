@@ -62,6 +62,25 @@ export function getCampaign(id: string): CampaignConfig | null {
   return CAMPAIGNS[id] ?? null;
 }
 
+/** Public shared Pride QR code — not email-locked. Spaces ignored on match. */
+export const SHARED_PRIDE_DISPLAY_CODE = 'PRIDE 3MONTH FREE';
+export const SHARED_PRIDE_NORMALIZED = 'PRIDE3MONTHFREE';
+export const SHARED_PRIDE_CAMPAIGN = 'pride26_public';
+/** Last moment to ENTER the code (Finance/Legal). */
+export const SHARED_PRIDE_ENTER_BY = new Date('2026-09-05T23:59:59Z');
+/** Premium window clocks from launch, not redeem day. */
+export const SHARED_PRIDE_PREMIUM_START = new Date('2026-10-01T00:00:00Z');
+export const SHARED_PRIDE_PREMIUM_END = new Date('2026-12-31T23:59:59Z');
+export const SHARED_PRIDE_MONTHS_FREE = 3;
+
+export function normalizeSharedPromoCode(raw: string): string {
+  return raw.trim().toUpperCase().replace(/\s+/g, '');
+}
+
+export function isSharedPrideCode(raw: string): boolean {
+  return normalizeSharedPromoCode(raw) === SHARED_PRIDE_NORMALIZED;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Core service
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,7 +95,92 @@ export type PromoValidateResult =
   | { valid: true; monthsFree: number; campaign: string }
   | { valid: false; reason: 'not_found' | 'email_mismatch' | 'already_redeemed' | 'expired' };
 
+export type SharedPrideValidateResult =
+  | { valid: true; monthsFree: number; campaign: string; premiumStart: Date; premiumEnd: Date }
+  | { valid: false; reason: 'not_found' | 'already_redeemed' | 'expired' };
+
 export const promoService = {
+  /**
+   * Validate the public Pride QR code (PRIDE 3MONTH FREE).
+   * Spaces are ignored. One redemption per account/email. Enter-by 5 Sep 2026.
+   */
+  async validateSharedPride(
+    code: string,
+    email: string,
+  ): Promise<SharedPrideValidateResult> {
+    if (!isSharedPrideCode(code)) {
+      return { valid: false, reason: 'not_found' };
+    }
+    if (Date.now() > SHARED_PRIDE_ENTER_BY.getTime()) {
+      return { valid: false, reason: 'expired' };
+    }
+
+    const emailHash = hashEmail(email);
+    const existing = await query(
+      `SELECT 1 FROM shared_promo_redemptions
+       WHERE campaign = $1 AND email_hash = $2
+       LIMIT 1`,
+      [SHARED_PRIDE_CAMPAIGN, emailHash],
+    );
+    if (existing.rows.length > 0) {
+      return { valid: false, reason: 'already_redeemed' };
+    }
+
+    return {
+      valid: true,
+      monthsFree: SHARED_PRIDE_MONTHS_FREE,
+      campaign: SHARED_PRIDE_CAMPAIGN,
+      premiumStart: SHARED_PRIDE_PREMIUM_START,
+      premiumEnd: SHARED_PRIDE_PREMIUM_END,
+    };
+  },
+
+  /**
+   * Redeem public Pride code for a new user. Grants Premium for the launch window
+   * (1 Oct 2026 → 31 Dec 2026), replacing the 30-day waitlist gift — no stack.
+   * Does not flip Premium for any other users.
+   */
+  async redeemSharedPride(
+    code: string,
+    email: string,
+    userId: string,
+  ): Promise<{ monthsFree: number; premiumUntil: Date }> {
+    const validation = await this.validateSharedPride(code, email);
+    if (!validation.valid) {
+      throw new Error(`Pride promo cannot be redeemed: ${validation.reason}`);
+    }
+
+    const emailHash = hashEmail(email);
+    try {
+      await query(
+        `INSERT INTO shared_promo_redemptions
+           (campaign, code_normalized, user_id, email_hash)
+         VALUES ($1, $2, $3, $4)`,
+        [SHARED_PRIDE_CAMPAIGN, SHARED_PRIDE_NORMALIZED, userId, emailHash],
+      );
+    } catch (err: unknown) {
+      const pg = err as { code?: string };
+      if (pg.code === '23505') {
+        throw new Error('Pride promo cannot be redeemed: already_redeemed');
+      }
+      throw err;
+    }
+
+    await query(
+      `UPDATE users
+       SET is_premium = TRUE,
+           premium_tier = 'premium',
+           premium_until = $2,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [userId, SHARED_PRIDE_PREMIUM_END],
+    );
+
+    return {
+      monthsFree: validation.monthsFree,
+      premiumUntil: SHARED_PRIDE_PREMIUM_END,
+    };
+  },
   /**
    * Issue a promo code for the given email + campaign.
    *

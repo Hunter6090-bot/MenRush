@@ -5,17 +5,17 @@ import { SiteFooter } from '../components/SiteFooter';
 import { trackEventOnce, getAttributionParams } from '../observability/analytics';
 import { publicLinkClass, publicNavLinkPrimary, publicPrimaryButtonClass } from '../lib/publicStyles';
 import {
-  PRIDE_PROMO_COMPACT,
-  PRIDE_PROMO_DISPLAY,
-  PRIDE_PROMO_EXPIRES,
+  PRIDE_ENTER_BY,
+  PRIDE_PREMIUM_END,
+  PRIDE_PREMIUM_START,
+  PRIDE_PROMO_CODE,
+  storePridePromoCode,
 } from '../lib/pridePromo';
 
-/** Same atmospheric treatment as the UK launch homepage — charcoal / bronze / cream. */
 const PRIDE_BG = '/images/menrush/29-brighton-pride-bunting.jpeg';
 const PRIDE_GRADIENT =
   'linear-gradient(180deg, rgba(13,10,6,.55) 0%, rgba(13,10,6,.82) 45%, rgba(13,10,6,.97) 78%, #0D0A06 100%)';
 
-/** Match shipped marketing claims on ComingSoon — not a speculative Premium laundry list. */
 const WHAT_YOU_GET = [
   {
     title: 'Nearby',
@@ -31,16 +31,21 @@ const WHAT_YOU_GET = [
   },
 ] as const;
 
+/**
+ * Printed QR → menrush.com/pride.
+ * Public shared code offer (Pete) + Legal/Finance locks. Does not alter /brightonpride.
+ */
 export const Pride = () => {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     trackEventOnce('landing_viewed', { surface: 'pride', ...getAttributionParams() });
+    storePridePromoCode(PRIDE_PROMO_CODE);
   }, []);
 
   const copyCode = async () => {
     try {
-      await navigator.clipboard.writeText(PRIDE_PROMO_DISPLAY);
+      await navigator.clipboard.writeText(PRIDE_PROMO_CODE);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -67,20 +72,27 @@ export const Pride = () => {
       </header>
 
       <main className="relative z-10 flex flex-1 flex-col">
-        <section className="mx-auto flex w-full max-w-[720px] flex-col items-center px-6 pb-14 pt-4 text-center sm:pt-8">
+        <section className="mx-auto flex w-full max-w-[720px] flex-col items-center px-6 pb-10 pt-4 text-center sm:pt-8">
           <BrandMark size="hero" className="mb-8" />
 
-          <p className="mr-coming-soon-overline mb-5">PRIDE PROMOTION</p>
+          <p className="mr-coming-soon-overline mb-5">PRIDE PROMOTION · UK</p>
 
-          <h1 className="mr-coming-soon-heading max-w-[900px] text-balance">
+          <h1 className="mr-coming-soon-heading max-w-[920px] text-balance">
             3 Months Free
             <br />
             <span className="mr-coming-soon-accent">Premium</span>
           </h1>
 
-          <p className="mt-6 max-w-[540px] text-pretty text-[clamp(15px,2vw,18px)] leading-[1.65] text-[#F0E0C0]/90">
-            Thanks for scanning. You&apos;re eligible for 3 months of free premium access on
-            MenRush.
+          <p className="mt-6 max-w-[560px] text-pretty text-[clamp(15px,2vw,18px)] leading-[1.65] text-[#F0E0C0]/90">
+            Thanks for scanning. You&apos;re eligible for 3 months of free Premium on MenRush.
+          </p>
+
+          <p
+            className="mt-5 max-w-[560px] text-pretty text-[15px] font-bold leading-[1.55] text-[#E0A14A]"
+            data-testid="pride-headline-lock"
+          >
+            Enter the code by {PRIDE_ENTER_BY}. Premium runs from launch on {PRIDE_PREMIUM_START}.
+            You cannot use MenRush before launch.
           </p>
 
           <div
@@ -88,10 +100,10 @@ export const Pride = () => {
             data-testid="pride-promo-code"
           >
             <p className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#C4832A]">
-              Your promo code
+              Your promo code — enter exactly
             </p>
             <p className="mt-3 font-mono text-[clamp(18px,4vw,24px)] font-black tracking-[0.12em] text-[#F0E0C0]">
-              {PRIDE_PROMO_DISPLAY}
+              {PRIDE_PROMO_CODE}
             </p>
             <button
               type="button"
@@ -100,32 +112,85 @@ export const Pride = () => {
             >
               {copied ? 'Copied' : 'Copy code'}
             </button>
-            <p className="mt-3 text-[12px] leading-[1.55] text-[var(--cream-muted)]">
-              Spaces optional when you enter it —{' '}
-              <span className="font-mono tracking-wide text-[#F0E0C0]/85">{PRIDE_PROMO_COMPACT}</span>{' '}
-              also works.
-            </p>
           </div>
 
           <div className="mt-8 w-full max-w-[460px]">
-            <Link to="/" className={publicPrimaryButtonClass} data-testid="pride-cta">
+            <Link to="/#waitlist" className={publicPrimaryButtonClass} data-testid="pride-cta">
               Continue to MenRush
             </Link>
-            <p className="mt-4 text-sm text-[var(--cream-muted)]">
-              Next step: join the waitlist or{' '}
+            <p className="mt-4 text-sm leading-[1.55] text-[var(--cream-muted)]">
+              Signup today means join the waitlist (or{' '}
               <Link to="/beta" className={publicLinkClass}>
-                enter your invite
+                enter an invite
               </Link>{' '}
-              if you already have one. Enter this code at signup when the offer is live.
+              if you have one) and create your account. The product opens{' '}
+              {PRIDE_PREMIUM_START} — this is not in-app use today.
             </p>
           </div>
+        </section>
 
-          <ul className="mt-10 max-w-[520px] space-y-2 text-left text-[14px] leading-[1.55] text-[var(--cream-muted)]">
-            <li>Pride-exclusive offer</li>
-            <li>Valid until {PRIDE_PROMO_EXPIRES}</li>
-            <li>One code per user</li>
-            <li>Entered at signup</li>
+        {/* Significant conditions on the page — not footer-only */}
+        <section
+          className="mx-auto w-full max-w-[640px] border-t border-[rgba(61,43,14,0.55)] px-6 py-12 text-left"
+          aria-labelledby="pride-conditions-heading"
+          data-testid="pride-conditions"
+        >
+          <h2
+            id="pride-conditions-heading"
+            className="text-center text-[13px] font-extrabold uppercase tracking-[0.22em] text-[#C4832A]"
+          >
+            Offer conditions
+          </h2>
+          <ul className="mt-8 space-y-4 text-[15px] leading-[1.6] text-[var(--cream-muted)]">
+            <li>
+              <span className="font-bold text-[#F0E0C0]">{PRIDE_ENTER_BY}</span> is the last day to{' '}
+              <span className="font-bold text-[#F0E0C0]">enter</span> the code — not the end of the
+              free Premium period.
+            </li>
+            <li>
+              The 3 months of Premium run from launch on{' '}
+              <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_START}</span> (about{' '}
+              {PRIDE_PREMIUM_START} to {PRIDE_PREMIUM_END}), not from the day you scan or enter the
+              code.
+            </li>
+            <li>
+              Nothing is usable before launch. If launch slips, the 3 months honour from the actual
+              open date.
+            </li>
+            <li>
+              One per user means one MenRush account / email. Enter code{' '}
+              <span className="font-mono text-[#F0E0C0]">{PRIDE_PROMO_CODE}</span> at signup.
+            </li>
+            <li>
+              This Pride offer replaces the existing 30-day waitlist Premium gift (Terms 7.2). No
+              stacking. Maximum is 90 days (3 months) for a Pride redeemer.
+            </li>
+            <li>18+ only. UK-first launch (London · Manchester · Birmingham · Brighton).</li>
+            <li>
+              Three months at no charge. You will not be billed for this offer. After that, Premium
+              is optional — only if you later choose to subscribe. No card is required for this
+              claim.
+            </li>
           </ul>
+          <p className="mt-8 text-[14px] leading-[1.6] text-[var(--cream-muted)]">
+            Promoter:{' '}
+            <span className="font-bold text-[#F0E0C0]">
+              Bronze Apps UK Limited (trading as MenRush)
+            </span>
+            , Company No. 17249857. Registered office — see{' '}
+            <Link to="/terms" className={publicLinkClass}>
+              Terms
+            </Link>{' '}
+            (Office 9811, 321–323 High Road, Chadwell Heath, Essex RM6 6AX).{' '}
+            <Link to="/privacy" className={publicLinkClass}>
+              Privacy
+            </Link>
+            {' · '}
+            <Link to="/contact" className={publicLinkClass}>
+              Support
+            </Link>
+            .
+          </p>
         </section>
 
         <section
@@ -136,7 +201,7 @@ export const Pride = () => {
             id="pride-what-you-get-heading"
             className="text-center text-[13px] font-extrabold uppercase tracking-[0.22em] text-[#C4832A]"
           >
-            What you get
+            What you get at launch
           </h2>
           <ul className="mt-10 grid gap-8 sm:grid-cols-3 sm:gap-6">
             {WHAT_YOU_GET.map((item) => (
@@ -148,11 +213,6 @@ export const Pride = () => {
               </li>
             ))}
           </ul>
-          <p className="mx-auto mt-10 max-w-[520px] text-center text-[15px] leading-[1.65] text-[#F0E0C0]/88">
-            This offer covers <span className="font-bold text-[#E0A14A]">3 months of Premium</span>{' '}
-            when MenRush opens — same Premium axis as the main site, separate from verification
-            badges.
-          </p>
         </section>
       </main>
 

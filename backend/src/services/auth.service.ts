@@ -18,6 +18,7 @@ import {
 } from './transactional-email.template';
 import { v4 as uuidv4 } from 'uuid';
 import { inviteCodeService, isInviteRequired } from './invite-code.service';
+import { isSharedPrideCode, promoService } from './promo.service';
 import { ageFromDateOfBirth } from '../lib/age';
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -107,6 +108,23 @@ export const authService = {
     const id = uuidv4();
     const hashedPassword = await bcryptjs.hash(data.password, 10);
     const inviteCode = data.invite_code?.trim();
+    const promoCode = data.promo_code?.trim();
+
+    if (promoCode && !isSharedPrideCode(promoCode)) {
+      throw new Error('This promo code is not valid.');
+    }
+    if (promoCode && isSharedPrideCode(promoCode)) {
+      const prideCheck = await promoService.validateSharedPride(promoCode, data.email);
+      if (!prideCheck.valid) {
+        if (prideCheck.reason === 'expired') {
+          throw new Error('This Pride promo expired on 5 September 2026.');
+        }
+        if (prideCheck.reason === 'already_redeemed') {
+          throw new Error('This Pride promo has already been used for this email.');
+        }
+        throw new Error('This promo code is not valid.');
+      }
+    }
 
     if (isInviteRequired()) {
       if (!inviteCode) {
@@ -174,6 +192,26 @@ export const authService = {
       }
 
       await client.query('COMMIT');
+
+      if (promoCode && isSharedPrideCode(promoCode)) {
+        try {
+          await promoService.redeemSharedPride(promoCode, data.email, user.id);
+          const refreshed = await query(
+            `SELECT id, email, name, age, date_of_birth, photo_url, is_verified, verification_status,
+                    age_assurance_status, authenticity_status,
+                    COALESCE(is_premium, FALSE) AS is_premium,
+                    COALESCE(premium_tier, 'free') AS premium_tier,
+                    premium_until
+             FROM users WHERE id = $1`,
+            [user.id],
+          );
+          if (refreshed.rows[0]) {
+            Object.assign(user, refreshed.rows[0]);
+          }
+        } catch (promoErr) {
+          console.error('[auth] Pride promo redeem failed after register:', promoErr);
+        }
+      }
 
       const token = signToken(user.id);
       return { user, token };
