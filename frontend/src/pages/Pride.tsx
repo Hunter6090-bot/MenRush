@@ -99,20 +99,21 @@ export const Pride = () => {
             className="mt-6 max-w-[560px] rounded-[14px] border border-[rgba(196,131,42,0.35)] bg-[rgba(13,10,6,0.55)] px-5 py-4 text-left text-[14px] leading-[1.55] text-[var(--cream-muted)]"
             data-testid="pride-path-split"
           >
-            <p className="font-bold text-[#F0E0C0]">This is not the Brighton Pride claim path.</p>
-            <p className="mt-2">
-              The printed-QR offer on this page uses the public code above — last day to enter{' '}
-              {PRIDE_ENTER_BY}; 3 months of Premium from {PRIDE_PREMIUM_START} launch.
-            </p>
-            <p className="mt-2">
+            <p>
+              This is not the Brighton Pride claim path at{' '}
               <Link to="/brightonpride" className={publicLinkClass}>
-                /brightonpride
+                menrush.com/brightonpride
               </Link>{' '}
-              is a separate path: personal emailed code, redeem by 31 October 2026.
+              (personal emailed code, redeem by 31 October 2026). One person cannot take both.
+              Either Pride grant replaces the 30-day waitlist gift — it does not add to it.
             </p>
-            <p className="mt-2 font-semibold text-[#E0A14A]">
-              One person cannot take both. Both replace the 30-day waitlist Premium gift — neither
-              stacks with it or with each other.
+            <p className="mt-3">
+              This printed-QR path uses public code{' '}
+              <span className="font-mono font-bold tracking-wide text-[#F0E0C0]">
+                {PRIDE_PROMO_CODE}
+              </span>
+              . Last day to enter: {PRIDE_ENTER_BY}. Three months of Premium from{' '}
+              {PRIDE_PREMIUM_START} launch.
             </p>
           </div>
 
