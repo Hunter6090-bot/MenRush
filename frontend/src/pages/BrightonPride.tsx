@@ -1,27 +1,44 @@
 import { useState, FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API = String(import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 const CAMPAIGN = 'brightonpride26';
 
 type Stage = 'form' | 'submitting' | 'success' | 'error';
 
+/**
+ * Live Brighton Pride campaign page (QR → menrush.com/brightonpride).
+ * Email form issues a personal email-locked code — no public shared promo code.
+ * Redeem-by date on this page must stay 31 Oct 2026 unless Legal/Finance change it.
+ */
 export function BrightonPride() {
-  const [email, setEmail]   = useState('');
-  const [stage, setStage]   = useState<Stage>('form');
+  const [email, setEmail] = useState('');
+  const [adultConfirmed, setAdultConfirmed] = useState(false);
+  const [stage, setStage] = useState<Stage>('form');
   const [errorMsg, setErrorMsg] = useState('');
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;
+    if (!adultConfirmed) {
+      setErrorMsg('Confirm you are 18 or over to claim this offer.');
+      setStage('error');
+      return;
+    }
     setStage('submitting');
+    setErrorMsg('');
 
     try {
-      await axios.post(`${API}/campaigns/${CAMPAIGN}/signup`, { email: email.trim() });
+      await axios.post(`${API}/campaigns/${CAMPAIGN}/signup`, {
+        email: email.trim(),
+        adult_confirmed: true,
+      });
       setStage('success');
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { error?: string } } };
       const msg =
-        err?.response?.data?.error ||
+        ax?.response?.data?.error ||
         'Something went wrong. Please try again in a moment.';
       setErrorMsg(msg);
       setStage('error');
@@ -30,23 +47,19 @@ export function BrightonPride() {
 
   return (
     <div style={styles.root}>
-      {/* Rainbow stripe */}
       <div style={styles.rainbow} />
 
       <div style={styles.container}>
-        {/* Logo */}
         <img
           src="/brand/medallion-transparent.png"
           alt="MenRush"
           style={styles.logoImg}
         />
 
-        {/* Event badge */}
         <div style={styles.badge}>Brighton Pride · August 2026</div>
 
-        {/* Headline */}
         <h1 style={styles.headline}>
-          Who's near you<br />
+          Who&apos;s near you<br />
           <span style={styles.headlineAccent}>right now?</span>
         </h1>
 
@@ -55,13 +68,11 @@ export function BrightonPride() {
           Real men. Real close. Launching 1 October 2026.
         </p>
 
-        {/* Offer box */}
         <div style={styles.offerBox}>
           <div style={styles.offerLabel}>Brighton Pride Special Offer</div>
           <div style={styles.offerText}>3 Months Free Premium</div>
         </div>
 
-        {/* QR code — visible on mobile so people can share the link */}
         <div style={styles.qrBlock}>
           <img
             src="/brand/qr-brightonpride.png"
@@ -71,13 +82,12 @@ export function BrightonPride() {
           <div style={styles.qrHint}>menrush.com/brightonpride</div>
         </div>
 
-        {/* Form or success */}
         {stage === 'success' ? (
           <div style={styles.successBox}>
             <div style={styles.successTitle}>Check your inbox.</div>
             <p style={styles.successBody}>
               Your personal code is on its way to <strong>{email}</strong>.
-              It's locked to that address — keep the email safe.
+              It&apos;s locked to that address — keep the email safe.
             </p>
           </div>
         ) : (
@@ -91,31 +101,57 @@ export function BrightonPride() {
                 required
                 disabled={stage === 'submitting'}
                 style={styles.input}
+                aria-label="Email for Brighton Pride offer"
               />
               <button
                 type="submit"
-                disabled={stage === 'submitting' || !email.trim()}
+                disabled={stage === 'submitting' || !email.trim() || !adultConfirmed}
                 style={{
                   ...styles.button,
-                  ...(stage === 'submitting' ? styles.buttonDisabled : {}),
+                  ...(stage === 'submitting' || !adultConfirmed ? styles.buttonDisabled : {}),
                 }}
               >
                 {stage === 'submitting' ? 'Sending…' : 'Claim my code'}
               </button>
             </div>
 
-            {stage === 'error' && (
-              <p style={styles.errorText}>{errorMsg}</p>
-            )}
+            <label style={styles.adultLabel}>
+              <input
+                type="checkbox"
+                checked={adultConfirmed}
+                onChange={(e) => {
+                  setAdultConfirmed(e.target.checked);
+                  if (e.target.checked && stage === 'error') {
+                    setStage('form');
+                    setErrorMsg('');
+                  }
+                }}
+                disabled={stage === 'submitting'}
+                style={styles.adultCheckbox}
+                data-testid="brightonpride-adult-confirm"
+              />
+              <span>
+                I confirm I am 18 or over and agree to the{' '}
+                <Link to="/terms" style={styles.inlineLink}>
+                  Terms
+                </Link>{' '}
+                and{' '}
+                <Link to="/privacy" style={styles.inlineLink}>
+                  Privacy Policy
+                </Link>
+                .
+              </span>
+            </label>
+
+            {stage === 'error' && <p style={styles.errorText}>{errorMsg}</p>}
 
             <p style={styles.formNote}>
-              You'll receive a personal code locked to your email address.
-              It activates 3 months of free Premium when the app launches.
+              You&apos;ll receive a personal code locked to your email address — there is no
+              public shared code. It activates 3 months of free Premium when the app launches.
             </p>
           </form>
         )}
 
-        {/* Trust signals */}
         <div style={styles.trustRow}>
           <span style={styles.trustItem}>18+ platform</span>
           <span style={styles.trustDot}>·</span>
@@ -124,20 +160,34 @@ export function BrightonPride() {
           <span style={styles.trustItem}>No card required now</span>
         </div>
 
-        {/* Fine print */}
-        <p style={styles.finePrint}>
-          New members only. One offer per person. Redeem by 31&nbsp;Oct&nbsp;2026.
-          Premium activates at launch (1&nbsp;Oct&nbsp;2026). Cannot be combined
-          with other offers. Bronze&nbsp;Apps&nbsp;UK&nbsp;Limited — Co.&nbsp;No.&nbsp;17249857.
-        </p>
+        <div style={styles.finePrintBlock}>
+          <p style={styles.finePrint}>
+            New members only. One offer per person. Redeem by 31&nbsp;Oct&nbsp;2026.
+            Premium starts at launch (1&nbsp;Oct&nbsp;2026) and runs for three months (through
+            1&nbsp;Jan&nbsp;2027). Cannot be combined with other offers.
+          </p>
+          <p style={styles.finePrint}>
+            <strong style={styles.finePrintStrong}>Finance lock:</strong> claiming this Brighton
+            Pride offer replaces the standard 30-day waitlist Premium gift — you receive three
+            months, not both.
+          </p>
+          <p style={styles.finePrint}>
+            Bronze&nbsp;Apps&nbsp;UK&nbsp;Limited — Co.&nbsp;No.&nbsp;17249857. Registered
+            office and full legal terms:{' '}
+            <Link to="/terms" style={styles.inlineLink}>
+              Terms
+            </Link>
+            {' · '}
+            <Link to="/privacy" style={styles.inlineLink}>
+              Privacy
+            </Link>
+            . Office 9811, 321–323 High Road, Chadwell Heath, Essex, RM6 6AX, England.
+          </p>
+        </div>
       </div>
     </div>
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Styles
-// ─────────────────────────────────────────────────────────────────────────────
 
 const styles: Record<string, React.CSSProperties> = {
   root: {
@@ -175,15 +225,6 @@ const styles: Record<string, React.CSSProperties> = {
     objectFit: 'cover' as const,
     marginBottom: '16px',
     display: 'block',
-  },
-
-  brand: {
-    fontSize: '12px',
-    fontWeight: 800,
-    letterSpacing: '6px',
-    color: '#C4832A',
-    textTransform: 'uppercase',
-    marginBottom: '16px',
   },
 
   badge: {
@@ -284,6 +325,30 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'not-allowed',
   },
 
+  adultLabel: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '10px',
+    textAlign: 'left',
+    fontSize: '12px',
+    lineHeight: 1.55,
+    color: '#7a6a5a',
+    marginBottom: '10px',
+    cursor: 'pointer',
+  },
+
+  adultCheckbox: {
+    marginTop: '2px',
+    flexShrink: 0,
+    accentColor: '#C4832A',
+  },
+
+  inlineLink: {
+    color: '#C4832A',
+    textDecoration: 'underline',
+    fontWeight: 700,
+  },
+
   errorText: {
     fontSize: '13px',
     color: '#d44',
@@ -344,12 +409,24 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '11px',
   },
 
+  finePrintBlock: {
+    maxWidth: '420px',
+    margin: '0 auto',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+  },
+
   finePrint: {
     fontSize: '10px',
-    color: '#2a1a0a',
+    color: '#5a4a3a',
     lineHeight: 1.7,
-    maxWidth: '400px',
-    margin: '0 auto',
+    margin: 0,
+  },
+
+  finePrintStrong: {
+    color: '#7a6a5a',
+    fontWeight: 800,
   },
 
   qrBlock: {

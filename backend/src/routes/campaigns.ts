@@ -2,9 +2,10 @@
  * /api/campaigns — promotional campaign endpoints
  *
  * POST /api/campaigns/:campaignId/signup
- *   Body: { email: string }
+ *   Body: { email: string, adult_confirmed: true }
  *   Issues an email-locked promo code and sends it to the user.
  *   Idempotent: repeated calls for the same email re-send the existing code.
+ *   Requires adult_confirmed === true (18+ attestation on the claim form).
  *
  * POST /api/campaigns/promo/validate
  *   Body: { code: string, email: string }
@@ -95,6 +96,10 @@ function requireAdminToken(req: Request, res: Response): boolean {
 
 const SignupSchema = z.object({
   email: z.string().email('Please enter a valid email address.').toLowerCase().trim(),
+  /** Required attestation for campaign claim forms (Brighton Pride and future). */
+  adult_confirmed: z.literal(true, {
+    errorMap: () => ({ message: 'You must confirm you are 18 or over.' }),
+  }),
 });
 
 const ValidateSchema = z.object({
