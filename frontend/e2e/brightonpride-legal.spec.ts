@@ -39,6 +39,10 @@ test.describe('Brighton Pride campaign page', () => {
     await expect(page.getByTestId('brightonpride-adult-confirm')).toBeVisible();
     await expect(page.getByRole('button', { name: /Claim my code/i })).toBeDisabled();
 
+    await expect(page.getByTestId('brightonpride-path-split')).toContainText(
+      /This is not the printed-QR \/pride offer — you cannot take both/i,
+    );
+
     expect(network.expectNoSideEffects()).toEqual([]);
   });
 });

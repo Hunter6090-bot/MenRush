@@ -172,6 +172,10 @@ export function BrightonPride() {
           <span style={styles.trustItem}>Free verification for all users</span>
         </div>
 
+        <p style={styles.pathSplit} data-testid="brightonpride-path-split">
+          This is not the printed-QR /pride offer — you cannot take both.
+        </p>
+
         <p style={styles.noChargeNote} data-testid="brightonpride-no-charge">
           Three months of Premium at no charge. You will not be billed unless you later choose to
           subscribe.
@@ -425,6 +429,15 @@ const styles: Record<string, React.CSSProperties> = {
   trustDot: {
     color: '#2a1a0a',
     fontSize: '11px',
+  },
+
+  pathSplit: {
+    fontSize: '12px',
+    lineHeight: 1.55,
+    color: '#7a6a5a',
+    maxWidth: '420px',
+    margin: '0 auto 16px',
+    textAlign: 'center',
   },
 
   noChargeNote: {
