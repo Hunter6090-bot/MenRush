@@ -18,6 +18,19 @@ test.describe('Pride promotion landing', () => {
     await expect(headline).toContainText(/when MenRush opens/i);
     await expect(headline).toContainText(/cannot use Premium before launch/i);
 
+    const pathSplit = page.getByTestId('pride-path-split');
+    await expect(pathSplit).toContainText(/This is not the Brighton Pride claim path/i);
+    await expect(pathSplit).toContainText(/One person cannot take both/i);
+    await expect(pathSplit).toContainText(/5 September 2026/i);
+    await expect(pathSplit).toContainText(/1 October 2026/i);
+    await expect(pathSplit).toContainText(/31 October 2026/i);
+    await expect(pathSplit.getByRole('link', { name: /\/brightonpride/i })).toHaveAttribute(
+      'href',
+      '/brightonpride',
+    );
+    await expect(pathSplit).toContainText(/Both replace the 30-day waitlist Premium gift/i);
+    await expect(pathSplit).toContainText(/neither stacks/i);
+
     const codeBox = page.getByTestId('pride-promo-code');
     await expect(codeBox).toContainText('PRIDE 3MONTH FREE');
     await expect(codeBox.getByText('PRIDE3MONTHFREE')).toHaveCount(0);

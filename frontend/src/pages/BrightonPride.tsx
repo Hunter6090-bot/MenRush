@@ -124,6 +124,10 @@ export function BrightonPride() {
           <span style={styles.trustItem}>No card required now</span>
         </div>
 
+        <p style={styles.pathSplit} data-testid="brightonpride-path-split">
+          This is not the printed-QR /pride offer — you cannot take both.
+        </p>
+
         {/* Fine print */}
         <p style={styles.finePrint}>
           New members only. One offer per person. Redeem by 31&nbsp;Oct&nbsp;2026.
@@ -342,6 +346,15 @@ const styles: Record<string, React.CSSProperties> = {
   trustDot: {
     color: '#2a1a0a',
     fontSize: '11px',
+  },
+
+  pathSplit: {
+    fontSize: '12px',
+    lineHeight: 1.55,
+    color: '#7a6a5a',
+    maxWidth: '400px',
+    margin: '0 auto 20px',
+    textAlign: 'center',
   },
 
   finePrint: {
