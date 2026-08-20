@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Pride QR landing `/pride` + display code PRIDE 3MONTH FREE | PR `cursor/pride-landing-promo-9233` | — | Cursor cloud — branded page only; shared-code redeem not wired (email-locked promo_codes ≠ this code); do not grant Premium globally |
 | Kill homepage fade + rooms skeleton blink | PR `cursor/kill-fidgety-motion-283d` | — | Cursor cloud — remove `mr-launch-fade`; RoomList refresh in place |
 | Oct 1 2026 social calendar seed (`oct1-2026`) | PR `#112` `cursor/social-oct1-2026-calendar-5921` | — | Cursor cloud — docs + idempotent seed; draft only; do not auto-publish; merged |
 | Local Social Studio (Connections + week Approve) | PR `cursor/social-studio-local-0674` | — | Cursor cloud — `social-studio/`; keys in `.data/` only; no Railway outbound social; do not touch #97–#99 |
