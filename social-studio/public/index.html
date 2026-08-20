@@ -28,6 +28,27 @@
         <p class="muted" id="key-source"></p>
         <p class="warn" id="bearer-warn"></p>
         <div id="cards" class="cards"></div>
+        <article class="card studio-extras" id="image-gen-card">
+          <div class="card-head">
+            <h3>Image generate (optional)</h3>
+          </div>
+          <p class="card-help">Local poster Generate on This week works without a key. Remote AI Generate stays off until you save a key here. Keys stay in <code>.data/</code> only — never committed.</p>
+          <div class="fields">
+            <div class="field">
+              <label for="image-gen-provider">Provider (optional)</label>
+              <input id="image-gen-provider" type="text" autocomplete="off" placeholder="e.g. xai / openai" />
+            </div>
+            <div class="field">
+              <label for="image-gen-key">API key</label>
+              <input id="image-gen-key" type="password" autocomplete="off" placeholder="" />
+              <div class="hint-set" id="image-gen-masked"></div>
+            </div>
+          </div>
+          <div class="card-actions">
+            <button type="button" class="btn ghost" id="btn-save-image-gen">Save</button>
+          </div>
+          <div class="msg" id="image-gen-msg"></div>
+        </article>
       </section>
 
       <section id="panel-week" class="panel">
@@ -42,6 +63,7 @@
           </div>
         </div>
         <p class="hint" id="approve-hint"></p>
+        <p class="muted" id="visual-hint">Instagram, X, and Bluesky drafts include a visual workspace — preview, upload, and a poster prompt. IG Story and Reel are draft+preview only.</p>
         <div id="week-posts" class="week-posts"></div>
         <div id="approve-result" class="approve-result hidden"></div>
       </section>
