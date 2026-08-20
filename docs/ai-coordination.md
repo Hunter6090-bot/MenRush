@@ -47,8 +47,8 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
-| Brighton Pride legal fix (`/brightonpride`) | PR `cursor/brightonpride-legal-fix-9233` | — | Cursor cloud — Finance lock: enter by 5 Sep 2026; Premium 1 Oct→1 Jan (90d); replaces 30-day gift (no 120d stack); Terms/Privacy + 18+; no public code; no price; no silent grant; #118 stays draft |
-| Pride QR `/pride` Pete brief (DISPLAY / DO NOT MERGE) | draft PR `#118` `cursor/pride-landing-promo-9233` | — | STOP — Legal pulled; different commercial practice than live `/brightonpride`; leave draft until owner confirms printed QRs encode `/pride` |
+| Brighton Pride legal fix (`/brightonpride`) | PR `cursor/brightonpride-legal-fix-9233` | — | Cursor cloud — live personal-code offer; redeem-by 31 Oct; honest “redeem not open yet”; no-charge copy (no “card required now”); leave /pride as hold (draft #118 — do not merge Pete/5-Sept page) |
+| Pride QR `/pride` Pete brief (HOLD — do not merge) | draft PR `#118` `cursor/pride-landing-promo-9233` | — | Owner has not confirmed which QR is in the wild; keep /pride as 404/hold; do not merge Pete/5-Sept public-code page |
 | Kill homepage fade + rooms skeleton blink | PR `cursor/kill-fidgety-motion-283d` | — | Cursor cloud — remove `mr-launch-fade`; RoomList refresh in place |
 | Oct 1 2026 social calendar seed (`oct1-2026`) | PR `#112` `cursor/social-oct1-2026-calendar-5921` | — | Cursor cloud — docs + idempotent seed; draft only; do not auto-publish; merged |
 | Local Social Studio (Connections + week Approve) | PR `cursor/social-studio-local-0674` | — | Cursor cloud — `social-studio/`; keys in `.data/` only; no Railway outbound social; do not touch #97–#99 |

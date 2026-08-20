@@ -53,8 +53,8 @@ const CAMPAIGNS: Record<string, CampaignConfig> = {
     id: 'brightonpride26',
     codePrefix: 'PRIDE',
     monthsFree: 3,
-    // Finance lock: enter code by 5 September 2026; Premium clocks from 1 Oct 2026 (90 days).
-    expiresAt: new Date('2026-09-05T23:59:59Z'),
+    // Live Brighton Pride: redeem by 31 October 2026. Premium clocks from 1 Oct 2026.
+    expiresAt: new Date('2026-10-31T23:59:59Z'),
   },
 };
 
@@ -280,9 +280,12 @@ async function sendPromoEmail(params: {
               Your Brighton Pride<br>offer is here.
             </h1>
             <p style="margin:0 0 32px;font-size:15px;color:#7a6a5a;line-height:1.6;">
-              You're on the list. Enter the code below by 5&nbsp;September&nbsp;2026.
+              You're on the list. Your personal code is below (format PRIDE-XXXX-XXXX).
+              It is <strong style="color:#8a7a6a;">not</strong> a beta invite (MENRUSH-XXXX).
+              Keep this email — there is not yet an in-app field to type the code; we will tell
+              you where to enter it when redemption opens at account signup.
               Your ${campaign.monthsFree}&nbsp;months of Premium start on launch
-              (1&nbsp;October&nbsp;2026) — not the day you claim this email.
+              (1&nbsp;October&nbsp;2026), not the day you claim this email.
             </p>
 
             <!-- Code box -->
@@ -312,16 +315,17 @@ async function sendPromoEmail(params: {
             <!-- How to redeem -->
             <h2 style="margin:0 0 12px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#C4832A;font-weight:700;">How to redeem</h2>
             <ol style="margin:0 0 32px;padding-left:20px;color:#7a6a5a;font-size:14px;line-height:1.8;">
-              <li>Create your account using <strong style="color:#8a7a6a;">${to}</strong></li>
-              <li>Enter your code <strong style="color:#F0E0C0;">${formattedCode}</strong> by 5&nbsp;September&nbsp;2026</li>
-              <li>Premium starts on launch (1&nbsp;October&nbsp;2026) for ${campaign.monthsFree}&nbsp;months / 90 days</li>
-              <li>This replaces the standard 30-day waitlist gift — max 90 days, not stacked</li>
+              <li>Keep this email — your code is locked to <strong style="color:#8a7a6a;">${to}</strong></li>
+              <li>This is a Premium promo code (PRIDE-XXXX-XXXX), not a /beta MENRUSH invite</li>
+              <li>Redemption at account signup is not open yet — we will tell you where to type it</li>
+              <li>When redeemed, Premium starts on launch (1&nbsp;October&nbsp;2026) for ${campaign.monthsFree}&nbsp;months / 90 days</li>
+              <li>Redeem by 31&nbsp;October&nbsp;2026 once that path is live. Replaces the 30-day waitlist gift — not stacked</li>
             </ol>
 
             <!-- Fine print -->
             <p style="margin:0 0 32px;font-size:11px;color:#2a2010;line-height:1.6;border-top:1px solid #1a1210;padding-top:20px;">
-              New members only. One code per user. Enter by 5&nbsp;September&nbsp;2026.
-              Benefit clocks from 1&nbsp;October&nbsp;2026 (not claim/redeem day).
+              New members only. One code per user. Redeem by 31&nbsp;October&nbsp;2026 once signup
+              redemption is live. Benefit clocks from 1&nbsp;October&nbsp;2026 (not claim day).
               Replaces the 30-day waitlist Premium gift — maximum 90 days. Cannot be combined
               with other offers. MenRush is an 18+ platform.
               Bronze Apps UK Limited — Company No.&nbsp;17249857.
@@ -349,14 +353,15 @@ ${campaign.monthsFree} months free Premium starting 1 October 2026 (not the day 
 
 YOUR CODE: ${formattedCode}
 
-This code is locked to ${to}. It only works with this email address.
+This code is locked to ${to}. Format PRIDE-XXXX-XXXX — not a beta MENRUSH invite.
 
 How to redeem:
-1. Create your account using ${to}
-2. Enter your code by 5 September 2026
-3. Premium starts on launch (1 October 2026) for ${campaign.monthsFree} months / 90 days
+1. Keep this email
+2. Redemption at account signup is not open yet — we will tell you where to type the code
+3. When redeemed, Premium starts on launch (1 October 2026) for ${campaign.monthsFree} months / 90 days
+4. Redeem by 31 October 2026 once that path is live
 
-Enter by: 5 September 2026. Replaces the 30-day waitlist gift (max 90 days, not stacked).
+Replaces the 30-day waitlist gift (max 90 days, not stacked).
 New members only. One code per user. 18+.
 Bronze Apps UK Limited — Company No. 17249857.`;
 

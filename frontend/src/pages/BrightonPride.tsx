@@ -9,12 +9,11 @@ type Stage = 'form' | 'submitting' | 'success' | 'error';
 
 /**
  * Live Brighton Pride campaign page (QR → menrush.com/brightonpride).
- * Email form issues a personal email-locked code — no public shared promo code.
+ * Email form issues a personal email-locked code (PRIDE-XXXX-XXXX) — not a public
+ * shared code and not a /beta MENRUSH-XXXX invite.
  *
- * Finance lock (current spec; owner may override later):
- * - Pride replaces the 30-day waitlist gift; max 90 days; no stacking to 120.
- * - Enter code by 5 September 2026; Premium clocks from 1 October 2026 (not scan/claim day).
- * - No Premium price on Pride pages. One code per user. No silent global grant.
+ * Redeem UI is not wired yet: claiming here only emails the code. Do not imply
+ * the code can be typed in-app today. Redeem-by remains 31 Oct 2026 (live offer).
  */
 export function BrightonPride() {
   const [email, setEmail] = useState('');
@@ -90,10 +89,16 @@ export function BrightonPride() {
           <div style={styles.successBox}>
             <div style={styles.successTitle}>Check your inbox.</div>
             <p style={styles.successBody}>
-              Your personal code is on its way to <strong>{email}</strong>.
-              It&apos;s locked to that address — keep the email safe. Enter it by
-              5&nbsp;September&nbsp;2026. Your 3 months of Premium start on launch
-              (1&nbsp;October&nbsp;2026), not the day you claim or scan.
+              Your personal code (format <strong>PRIDE-XXXX-XXXX</strong>) is on its way to{' '}
+              <strong>{email}</strong>. It is locked to that address — keep the email safe.
+              This is <strong>not</strong> a beta invite code (those look like MENRUSH-XXXX).
+            </p>
+            <p style={{ ...styles.successBody, marginTop: '12px' }}>
+              There is not yet a place in the app to type this Premium code. Claiming here only
+              emails your code. We will tell you where to enter it when redemption opens at
+              account signup. Premium still starts on launch (1&nbsp;October&nbsp;2026) for three
+              months — not the day you claim or scan. Redeem by 31&nbsp;October&nbsp;2026 once
+              that path is live.
             </p>
           </div>
         ) : (
@@ -103,7 +108,7 @@ export function BrightonPride() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="your@email.com"
+                placeholder="your@example.com"
                 required
                 disabled={stage === 'submitting'}
                 style={styles.input}
@@ -152,10 +157,11 @@ export function BrightonPride() {
             {stage === 'error' && <p style={styles.errorText}>{errorMsg}</p>}
 
             <p style={styles.formNote}>
-              You&apos;ll receive a personal code locked to your email address — there is no
-              public shared code. Enter that code by 5&nbsp;September&nbsp;2026. The free
-              Premium period starts on launch (1&nbsp;October&nbsp;2026) and runs for three
-              months — it does not start the day you scan or claim.
+              You&apos;ll receive a personal code locked to your email (PRIDE-XXXX-XXXX) — not a
+              public shared code, and not a /beta MENRUSH-XXXX invite. Claiming here emails the
+              code only; there is not yet an in-app field to redeem it. Keep the email until
+              redemption opens at account signup. Premium starts on launch
+              (1&nbsp;October&nbsp;2026) for three months.
             </p>
           </form>
         )}
@@ -164,17 +170,19 @@ export function BrightonPride() {
           <span style={styles.trustItem}>18+ platform</span>
           <span style={styles.trustDot}>·</span>
           <span style={styles.trustItem}>Free verification for all users</span>
-          <span style={styles.trustDot}>·</span>
-          <span style={styles.trustItem}>No card required now</span>
         </div>
+
+        <p style={styles.noChargeNote} data-testid="brightonpride-no-charge">
+          Three months of Premium at no charge. You will not be billed unless you later choose to
+          subscribe.
+        </p>
 
         <div style={styles.finePrintBlock}>
           <p style={styles.finePrint}>
-            New members only. One code per user. Enter your personal code by
-            5&nbsp;September&nbsp;2026. Premium starts on launch
-            (1&nbsp;October&nbsp;2026) and runs for three months / 90 days (through
-            1&nbsp;January&nbsp;2027) — not from the day you scan, claim, or redeem.
-            Cannot be combined with other offers.
+            New members only. One code per user. Redeem by 31&nbsp;October&nbsp;2026 (once the
+            signup redeem path is live). Premium starts on launch (1&nbsp;October&nbsp;2026) and
+            runs for three months / 90 days (through 1&nbsp;January&nbsp;2027) — not from the day
+            you scan or claim. Cannot be combined with other offers.
           </p>
           <p style={styles.finePrint}>
             <strong style={styles.finePrintStrong}>Finance lock:</strong> this Brighton Pride
@@ -417,6 +425,15 @@ const styles: Record<string, React.CSSProperties> = {
   trustDot: {
     color: '#2a1a0a',
     fontSize: '11px',
+  },
+
+  noChargeNote: {
+    fontSize: '13px',
+    lineHeight: 1.55,
+    color: '#7a6a5a',
+    maxWidth: '420px',
+    margin: '0 auto 24px',
+    textAlign: 'center',
   },
 
   finePrintBlock: {
