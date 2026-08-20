@@ -14,15 +14,22 @@ test.describe('Brighton Pride campaign page', () => {
     await expect(page.getByText(/PRIDE 3MONTH FREE/i)).toHaveCount(0);
     await expect(page.getByText(/personal code locked to your email/i)).toBeVisible();
 
-    // Redeem-by unchanged
-    await expect(page.getByText(/Redeem by 31\s*Oct\s*2026/i)).toBeVisible();
+    // Redeem-by / enter-by (Finance lock)
+    await expect(page.getByText(/Enter your personal code by\s*5\s*September\s*2026/i)).toBeVisible();
 
-    // Premium window
-    await expect(page.getByText(/Premium starts at launch \(1\s*Oct\s*2026\)/i)).toBeVisible();
-    await expect(page.getByText(/through\s*1\s*Jan\s*2027/i)).toBeVisible();
+    // Premium window — clocks from launch, not scan/claim
+    await expect(page.getByText(/Premium starts on launch\s*\(1\s*October\s*2026\)/i)).toBeVisible();
+    await expect(page.getByText(/through\s*1\s*January\s*2027/i)).toBeVisible();
+    await expect(page.getByText(/not from the day you scan, claim, or redeem/i)).toBeVisible();
 
-    // Finance lock vs 30-day waitlist gift
+    // Finance lock vs 30-day waitlist gift — no stacking to 120 days
     await expect(page.getByText(/replaces the standard 30-day waitlist Premium gift/i)).toBeVisible();
+    await expect(page.getByText(/maximum of 90 days/i)).toBeVisible();
+    await expect(page.getByText(/not stacked with the waitlist gift to 120 days/i)).toBeVisible();
+
+    // No Premium price published
+    await expect(page.getByText(/£/)).toHaveCount(0);
+    await expect(page.getByText(/\$\d/)).toHaveCount(0);
 
     // Legal links + company
     await expect(page.getByRole('link', { name: /^Terms$/i }).first()).toHaveAttribute('href', '/terms');

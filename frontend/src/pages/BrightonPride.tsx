@@ -10,7 +10,11 @@ type Stage = 'form' | 'submitting' | 'success' | 'error';
 /**
  * Live Brighton Pride campaign page (QR → menrush.com/brightonpride).
  * Email form issues a personal email-locked code — no public shared promo code.
- * Redeem-by date on this page must stay 31 Oct 2026 unless Legal/Finance change it.
+ *
+ * Finance lock (current spec; owner may override later):
+ * - Pride replaces the 30-day waitlist gift; max 90 days; no stacking to 120.
+ * - Enter code by 5 September 2026; Premium clocks from 1 October 2026 (not scan/claim day).
+ * - No Premium price on Pride pages. One code per user. No silent global grant.
  */
 export function BrightonPride() {
   const [email, setEmail] = useState('');
@@ -87,7 +91,9 @@ export function BrightonPride() {
             <div style={styles.successTitle}>Check your inbox.</div>
             <p style={styles.successBody}>
               Your personal code is on its way to <strong>{email}</strong>.
-              It&apos;s locked to that address — keep the email safe.
+              It&apos;s locked to that address — keep the email safe. Enter it by
+              5&nbsp;September&nbsp;2026. Your 3 months of Premium start on launch
+              (1&nbsp;October&nbsp;2026), not the day you claim or scan.
             </p>
           </div>
         ) : (
@@ -147,7 +153,9 @@ export function BrightonPride() {
 
             <p style={styles.formNote}>
               You&apos;ll receive a personal code locked to your email address — there is no
-              public shared code. It activates 3 months of free Premium when the app launches.
+              public shared code. Enter that code by 5&nbsp;September&nbsp;2026. The free
+              Premium period starts on launch (1&nbsp;October&nbsp;2026) and runs for three
+              months — it does not start the day you scan or claim.
             </p>
           </form>
         )}
@@ -162,14 +170,16 @@ export function BrightonPride() {
 
         <div style={styles.finePrintBlock}>
           <p style={styles.finePrint}>
-            New members only. One offer per person. Redeem by 31&nbsp;Oct&nbsp;2026.
-            Premium starts at launch (1&nbsp;Oct&nbsp;2026) and runs for three months (through
-            1&nbsp;Jan&nbsp;2027). Cannot be combined with other offers.
+            New members only. One code per user. Enter your personal code by
+            5&nbsp;September&nbsp;2026. Premium starts on launch
+            (1&nbsp;October&nbsp;2026) and runs for three months / 90 days (through
+            1&nbsp;January&nbsp;2027) — not from the day you scan, claim, or redeem.
+            Cannot be combined with other offers.
           </p>
           <p style={styles.finePrint}>
-            <strong style={styles.finePrintStrong}>Finance lock:</strong> claiming this Brighton
-            Pride offer replaces the standard 30-day waitlist Premium gift — you receive three
-            months, not both.
+            <strong style={styles.finePrintStrong}>Finance lock:</strong> this Brighton Pride
+            offer replaces the standard 30-day waitlist Premium gift. A Pride redeemer gets a
+            maximum of 90 days (3 months) — not stacked with the waitlist gift to 120 days.
           </p>
           <p style={styles.finePrint}>
             Bronze&nbsp;Apps&nbsp;UK&nbsp;Limited — Co.&nbsp;No.&nbsp;17249857. Registered

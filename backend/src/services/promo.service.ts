@@ -53,8 +53,8 @@ const CAMPAIGNS: Record<string, CampaignConfig> = {
     id: 'brightonpride26',
     codePrefix: 'PRIDE',
     monthsFree: 3,
-    // Redeem by 31 October 2026 — one month after launch, gives people time to sign up
-    expiresAt: new Date('2026-10-31T23:59:59Z'),
+    // Finance lock: enter code by 5 September 2026; Premium clocks from 1 Oct 2026 (90 days).
+    expiresAt: new Date('2026-09-05T23:59:59Z'),
   },
 };
 
@@ -188,6 +188,13 @@ export const promoService = {
    * Mark a promo code as redeemed.
    * Call this AFTER the user account has been created and userId is known.
    * Returns the number of free months applied.
+   *
+   * Finance lock (when Premium grant is wired — not yet):
+   * - Benefit clocks from 1 October 2026 for monthsFree (90 days for Pride),
+   *   NOT from redeem/claim/scan day.
+   * - Pride replaces the 30-day waitlist gift; do not stack to 120 days.
+   * - Enter-by deadline is campaign expires_at (5 Sep 2026 for brightonpride26).
+   * This method currently only marks the row; it does NOT set is_premium.
    */
   async redeem(
     code: string,
@@ -273,8 +280,9 @@ async function sendPromoEmail(params: {
               Your Brighton Pride<br>offer is here.
             </h1>
             <p style="margin:0 0 32px;font-size:15px;color:#7a6a5a;line-height:1.6;">
-              You're on the list. When MenRush launches on 1&nbsp;October&nbsp;2026,
-              use the code below to activate ${campaign.monthsFree}&nbsp;months of Premium — on us.
+              You're on the list. Enter the code below by 5&nbsp;September&nbsp;2026.
+              Your ${campaign.monthsFree}&nbsp;months of Premium start on launch
+              (1&nbsp;October&nbsp;2026) — not the day you claim this email.
             </p>
 
             <!-- Code box -->
@@ -304,16 +312,18 @@ async function sendPromoEmail(params: {
             <!-- How to redeem -->
             <h2 style="margin:0 0 12px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#C4832A;font-weight:700;">How to redeem</h2>
             <ol style="margin:0 0 32px;padding-left:20px;color:#7a6a5a;font-size:14px;line-height:1.8;">
-              <li>Download MenRush on 1&nbsp;October&nbsp;2026</li>
               <li>Create your account using <strong style="color:#8a7a6a;">${to}</strong></li>
-              <li>Enter your code <strong style="color:#F0E0C0;">${formattedCode}</strong> in the Premium section</li>
-              <li>Enjoy ${campaign.monthsFree}&nbsp;months free — no card required until it expires</li>
+              <li>Enter your code <strong style="color:#F0E0C0;">${formattedCode}</strong> by 5&nbsp;September&nbsp;2026</li>
+              <li>Premium starts on launch (1&nbsp;October&nbsp;2026) for ${campaign.monthsFree}&nbsp;months / 90 days</li>
+              <li>This replaces the standard 30-day waitlist gift — max 90 days, not stacked</li>
             </ol>
 
             <!-- Fine print -->
             <p style="margin:0 0 32px;font-size:11px;color:#2a2010;line-height:1.6;border-top:1px solid #1a1210;padding-top:20px;">
-              New members only. One offer per person. Must be redeemed by 31&nbsp;October&nbsp;2026.
-              Cannot be combined with other offers. MenRush is an 18+ platform.
+              New members only. One code per user. Enter by 5&nbsp;September&nbsp;2026.
+              Benefit clocks from 1&nbsp;October&nbsp;2026 (not claim/redeem day).
+              Replaces the 30-day waitlist Premium gift — maximum 90 days. Cannot be combined
+              with other offers. MenRush is an 18+ platform.
               Bronze Apps UK Limited — Company No.&nbsp;17249857.
             </p>
 
@@ -335,18 +345,19 @@ async function sendPromoEmail(params: {
 
   const text = `Your MenRush Pride code
 
-${campaign.monthsFree} months free Premium — use it when we launch on 1 October 2026.
+${campaign.monthsFree} months free Premium starting 1 October 2026 (not the day you claim).
 
 YOUR CODE: ${formattedCode}
 
 This code is locked to ${to}. It only works with this email address.
 
 How to redeem:
-1. Download MenRush on 1 October 2026
-2. Create your account using ${to}
-3. Enter your code in the Premium section
+1. Create your account using ${to}
+2. Enter your code by 5 September 2026
+3. Premium starts on launch (1 October 2026) for ${campaign.monthsFree} months / 90 days
 
-Expires: 31 October 2026. New members only. 18+.
+Enter by: 5 September 2026. Replaces the 30-day waitlist gift (max 90 days, not stacked).
+New members only. One code per user. 18+.
 Bronze Apps UK Limited — Company No. 17249857.`;
 
   await sendTransactionalEmail({
