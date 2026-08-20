@@ -33,7 +33,7 @@ const WHAT_YOU_GET = [
 
 /**
  * Printed QR → menrush.com/pride.
- * Public shared code offer (Pete) + Legal/Finance locks. Does not alter /brightonpride.
+ * Redeem path accepts PRIDE 3MONTH FREE (spaces ignored). Print that string only.
  */
 export const Pride = () => {
   const [copied, setCopied] = useState(false);
@@ -83,16 +83,16 @@ export const Pride = () => {
             <span className="mr-coming-soon-accent">Premium</span>
           </h1>
 
-          <p className="mt-6 max-w-[560px] text-pretty text-[clamp(15px,2vw,18px)] leading-[1.65] text-[#F0E0C0]/90">
-            Thanks for scanning. You&apos;re eligible for 3 months of free Premium on MenRush.
-          </p>
-
           <p
-            className="mt-5 max-w-[560px] text-pretty text-[15px] font-bold leading-[1.55] text-[#E0A14A]"
+            className="mt-6 max-w-[560px] text-pretty text-[clamp(15px,2vw,17px)] font-semibold leading-[1.6] text-[#F0E0C0]/92"
             data-testid="pride-headline-lock"
           >
-            Enter the code by {PRIDE_ENTER_BY}. Premium runs from launch on {PRIDE_PREMIUM_START}.
-            You cannot use MenRush before launch.
+            Enter code{' '}
+            <span className="font-mono font-black tracking-[0.08em] text-[#E0A14A]">
+              {PRIDE_PROMO_CODE}
+            </span>{' '}
+            when you join the waitlist by {PRIDE_ENTER_BY}. You get 3 months of Premium from{' '}
+            {PRIDE_PREMIUM_START}, when MenRush opens. You cannot use Premium before launch.
           </p>
 
           <div
@@ -100,7 +100,7 @@ export const Pride = () => {
             data-testid="pride-promo-code"
           >
             <p className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#C4832A]">
-              Your promo code — enter exactly
+              Promo code
             </p>
             <p className="mt-3 font-mono text-[clamp(18px,4vw,24px)] font-black tracking-[0.12em] text-[#F0E0C0]">
               {PRIDE_PROMO_CODE}
@@ -119,17 +119,16 @@ export const Pride = () => {
               Continue to MenRush
             </Link>
             <p className="mt-4 text-sm leading-[1.55] text-[var(--cream-muted)]">
-              Signup today means join the waitlist (or{' '}
+              Join the waitlist now (or{' '}
               <Link to="/beta" className={publicLinkClass}>
                 enter an invite
               </Link>{' '}
-              if you have one) and create your account. The product opens{' '}
-              {PRIDE_PREMIUM_START} — this is not in-app use today.
+              if you have one). Create your account and enter the code by {PRIDE_ENTER_BY}. The
+              product opens {PRIDE_PREMIUM_START} — this is not in-app use today.
             </p>
           </div>
         </section>
 
-        {/* Significant conditions on the page — not footer-only */}
         <section
           className="mx-auto w-full max-w-[640px] border-t border-[rgba(61,43,14,0.55)] px-6 py-12 text-left"
           aria-labelledby="pride-conditions-heading"
@@ -150,38 +149,35 @@ export const Pride = () => {
             <li>
               The 3 months of Premium run from launch on{' '}
               <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_START}</span> (about{' '}
-              {PRIDE_PREMIUM_START} to {PRIDE_PREMIUM_END}), not from the day you scan or enter the
-              code.
+              {PRIDE_PREMIUM_START} to {PRIDE_PREMIUM_END}), not from scan or code entry.
             </li>
             <li>
               Nothing is usable before launch. If launch slips, the 3 months honour from the actual
               open date.
             </li>
             <li>
-              One per user means one MenRush account / email. Enter code{' '}
-              <span className="font-mono text-[#F0E0C0]">{PRIDE_PROMO_CODE}</span> at signup.
+              One per user = one MenRush account / email. Code:{' '}
+              <span className="font-mono text-[#F0E0C0]">{PRIDE_PROMO_CODE}</span>.
             </li>
             <li>
-              This Pride offer replaces the existing 30-day waitlist Premium gift (Terms 7.2). No
-              stacking. Maximum is 90 days (3 months) for a Pride redeemer.
+              Pride replaces the existing 30-day waitlist Premium gift (Terms 7.2). No stacking.
+              Maximum 90 days for a Pride redeemer.
             </li>
-            <li>18+ only. UK-first launch (London · Manchester · Birmingham · Brighton).</li>
+            <li>18+ only. UK-first (London · Manchester · Birmingham · Brighton).</li>
             <li>
               Three months at no charge. You will not be billed for this offer. After that, Premium
-              is optional — only if you later choose to subscribe. No card is required for this
-              claim.
+              is optional — only if you later choose to subscribe.
             </li>
           </ul>
-          <p className="mt-8 text-[14px] leading-[1.6] text-[var(--cream-muted)]">
-            Promoter:{' '}
-            <span className="font-bold text-[#F0E0C0]">
-              Bronze Apps UK Limited (trading as MenRush)
-            </span>
-            , Company No. 17249857. Registered office — see{' '}
+          <p
+            className="mt-8 text-[14px] leading-[1.6] text-[var(--cream-muted)]"
+            data-testid="pride-promoter-slot"
+          >
+            Legal:{' '}
             <Link to="/terms" className={publicLinkClass}>
               Terms
-            </Link>{' '}
-            (Office 9811, 321–323 High Road, Chadwell Heath, Essex RM6 6AX).{' '}
+            </Link>
+            {' · '}
             <Link to="/privacy" className={publicLinkClass}>
               Privacy
             </Link>
@@ -189,7 +185,7 @@ export const Pride = () => {
             <Link to="/contact" className={publicLinkClass}>
               Support
             </Link>
-            .
+            . Promoter details as published on menrush.com.
           </p>
         </section>
 
