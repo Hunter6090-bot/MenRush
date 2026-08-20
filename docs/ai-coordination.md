@@ -47,7 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
-| Pride sole public offer (`/pride`; closed `/brightonpride` → redirect) | draft PR `#118` `cursor/pride-landing-promo-9233` (folds #119) | — | Cursor cloud — code `PRIDE 3MONTH FREE` at register by 5 Sep; Premium 1 Oct→1 Jan 2027; launch-slip via `MENRUSH_LAUNCH_AT`; legacy Brighton codes keep 31 Oct redeem (037); no new Brighton claims; do not merge until Legal re-read |
+| Pride sole public offer (`/pride`; closed `/brightonpride` → redirect) | draft PR `#118` `cursor/pride-landing-promo-9233` (folds #119) | — | Cursor cloud — `PRIDE 3MONTH FREE` at register by 5 Sep; duration 1 Oct→1 Jan or from actual open; grandfather line for emailed Brighton codes; 035 no-op + 037 keeps 31 Oct; no new Brighton claims; do not merge until Legal re-read |
 | Kill homepage fade + rooms skeleton blink | PR `cursor/kill-fidgety-motion-283d` | — | Cursor cloud — remove `mr-launch-fade`; RoomList refresh in place |
 | Oct 1 2026 social calendar seed (`oct1-2026`) | PR `#112` `cursor/social-oct1-2026-calendar-5921` | — | Cursor cloud — docs + idempotent seed; draft only; do not auto-publish; merged |
 | Local Social Studio (Connections + week Approve) | PR `cursor/social-studio-local-0674` | — | Cursor cloud — `social-studio/`; keys in `.data/` only; no Railway outbound social; do not touch #97–#99 |

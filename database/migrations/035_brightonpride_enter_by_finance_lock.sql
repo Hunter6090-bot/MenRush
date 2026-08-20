@@ -1,10 +1,8 @@
 -- 035_brightonpride_enter_by_finance_lock.sql
--- Finance lock (current spec): Pride personal codes must be entered by
--- 5 September 2026. Benefit still clocks from 1 October 2026 (90 days).
--- Align unredeemed brightonpride26 rows issued under the old 31 Oct expiry.
+-- SUPERSEDED (Legal grandfather): do NOT shorten already-issued brightonpride26
+-- codes to 5 September. Personal emailed codes keep redeem-by 31 October 2026.
+-- See 037_brightonpride_restore_redeem_by_31_oct.sql.
+-- This file is intentionally a no-op so environments that already applied the
+-- old cut still recover via 037, and fresh applies never cut expiries.
 
-UPDATE promo_codes
-SET expires_at = TIMESTAMPTZ '2026-09-05 23:59:59+00'
-WHERE campaign = 'brightonpride26'
-  AND redeemed_at IS NULL
-  AND (expires_at IS NULL OR expires_at > TIMESTAMPTZ '2026-09-05 23:59:59+00');
+SELECT 1;

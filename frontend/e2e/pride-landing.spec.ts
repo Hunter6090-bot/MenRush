@@ -21,11 +21,19 @@ test.describe('Pride promotion landing', () => {
     await expect(headline).toContainText(/not still 1 January 2027/i);
     await expect(headline).toContainText(/cannot use Premium before launch/i);
 
-    // Sole public Pride offer — no dual-path / Brighton face copy
+    // Legal grandfather for already-issued personal Brighton codes (redirect target must carry this)
+    const grandfather = page.getByTestId('pride-grandfather');
+    await expect(grandfather).toContainText(
+      /If you already received a personal Brighton Pride code by email, that code still works on the terms in that email/i,
+    );
+    await expect(grandfather).toContainText(/Do not also enter PRIDE 3MONTH FREE/i);
+    await expect(grandfather).toContainText(/One person gets one Pride grant/i);
+
+    // No dual-path marketing / claim-form CTA — grandfather line is the only Brighton mention
     await expect(page.getByText(/brightonpride/i)).toHaveCount(0);
-    await expect(page.getByText(/Brighton Pride/i)).toHaveCount(0);
     await expect(page.getByText(/One person cannot take both/i)).toHaveCount(0);
     await expect(page.getByText(/this is not the/i)).toHaveCount(0);
+    await expect(page.getByText(/Brighton Pride Special Offer/i)).toHaveCount(0);
 
     const codeBox = page.getByTestId('pride-promo-code');
     await expect(codeBox).toContainText('PRIDE 3MONTH FREE');

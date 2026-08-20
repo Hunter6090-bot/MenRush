@@ -100,6 +100,18 @@ export const Pride = () => {
             before launch.
           </p>
 
+          <p
+            className="mt-5 max-w-[560px] text-pretty text-[14px] leading-[1.55] text-[var(--cream-muted)]"
+            data-testid="pride-grandfather"
+          >
+            If you already received a personal Brighton Pride code by email, that code still works
+            on the terms in that email. Do not also enter{' '}
+            <span className="font-mono font-bold tracking-wide text-[#F0E0C0]">
+              {PRIDE_PROMO_CODE}
+            </span>
+            . One person gets one Pride grant.
+          </p>
+
           <div
             className="mt-9 w-full max-w-[460px] rounded-[18px] border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.12)] px-5 py-6"
             data-testid="pride-promo-code"
