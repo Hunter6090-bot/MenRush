@@ -173,7 +173,9 @@ export function BrightonPride() {
         </div>
 
         <p style={styles.pathSplit} data-testid="brightonpride-path-split">
-          This is not the printed-QR /pride offer — you cannot take both.
+          This is not the printed-QR offer at menrush.com/pride (public code, claim by 5
+          September 2026). One person cannot take both. Either Pride grant replaces the 30-day
+          waitlist gift — it does not add to it.
         </p>
 
         <p style={styles.noChargeNote} data-testid="brightonpride-no-charge">

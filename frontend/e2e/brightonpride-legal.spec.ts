@@ -40,7 +40,16 @@ test.describe('Brighton Pride campaign page', () => {
     await expect(page.getByRole('button', { name: /Claim my code/i })).toBeDisabled();
 
     await expect(page.getByTestId('brightonpride-path-split')).toContainText(
-      /This is not the printed-QR \/pride offer — you cannot take both/i,
+      /This is not the printed-QR offer at menrush.com\/pride/i,
+    );
+    await expect(page.getByTestId('brightonpride-path-split')).toContainText(
+      /claim by 5\s*September\s*2026/i,
+    );
+    await expect(page.getByTestId('brightonpride-path-split')).toContainText(
+      /One person cannot take both/i,
+    );
+    await expect(page.getByTestId('brightonpride-path-split')).toContainText(
+      /replaces the 30-day waitlist gift/i,
     );
 
     expect(network.expectNoSideEffects()).toEqual([]);
