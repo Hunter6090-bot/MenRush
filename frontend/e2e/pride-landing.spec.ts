@@ -35,6 +35,10 @@ test.describe('Pride promotion landing', () => {
     await expect(page.getByText(/this is not the/i)).toHaveCount(0);
     await expect(page.getByText(/Brighton Pride Special Offer/i)).toHaveCount(0);
 
+    // Brand hold: no Brighton street / bunting photo asset
+    await expect(page.locator('img[src*="brighton-pride-bunting"]')).toHaveCount(0);
+    await expect(page.locator('[style*="brighton-pride-bunting"]')).toHaveCount(0);
+
     const codeBox = page.getByTestId('pride-promo-code');
     await expect(codeBox).toContainText('PRIDE 3MONTH FREE');
     await expect(codeBox.getByText('PRIDE3MONTHFREE')).toHaveCount(0);
@@ -80,6 +84,11 @@ test.describe('Pride promotion landing', () => {
     await expect(ctaNote).toContainText(/waitlist/i);
     await expect(ctaNote).toContainText(/alone does not redeem this code/i);
     await expect(page.getByTestId('pride-waitlist-link')).toHaveAttribute('href', '/#waitlist');
+
+    // App list at launch — not a live-before-1-October claim
+    await expect(page.getByRole('heading', { name: /What you get at launch/i })).toBeVisible();
+    await expect(page.getByText(/See who is around you when MenRush opens/i)).toBeVisible();
+    await expect(page.getByText(/right now — live proximity/i)).toHaveCount(0);
 
     expect(network.expectNoSideEffects()).toEqual([]);
   });

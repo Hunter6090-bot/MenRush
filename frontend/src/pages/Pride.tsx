@@ -12,14 +12,14 @@ import {
   storePridePromoCode,
 } from '../lib/pridePromo';
 
-const PRIDE_BG = '/images/menrush/29-brighton-pride-bunting.jpeg';
-const PRIDE_GRADIENT =
-  'linear-gradient(180deg, rgba(13,10,6,.55) 0%, rgba(13,10,6,.82) 45%, rgba(13,10,6,.97) 78%, #0D0A06 100%)';
+/** Brand-only wash — night + copper. No lifestyle / Pride street photography. */
+const PRIDE_ATMOSPHERE =
+  'radial-gradient(ellipse 90% 55% at 50% -10%, rgba(196,131,42,0.22) 0%, transparent 55%), radial-gradient(ellipse 70% 40% at 80% 100%, rgba(196,131,42,0.08) 0%, transparent 50%), linear-gradient(180deg, #120E08 0%, #0D0A06 45%, #0D0A06 100%)';
 
 const WHAT_YOU_GET = [
   {
     title: 'Nearby',
-    body: 'See who is around you right now — live proximity, not a stack of stale profiles.',
+    body: 'See who is around you when MenRush opens — proximity, not a stack of stale profiles.',
   },
   {
     title: 'Rooms',
@@ -59,11 +59,10 @@ export const Pride = () => {
   return (
     <div className="relative flex min-h-dvh flex-col overflow-hidden bg-[#0D0A06] text-[#F0E0C0]">
       <div
-        className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.38]"
-        style={{ backgroundImage: `url(${PRIDE_BG})` }}
+        className="pointer-events-none absolute inset-0"
+        style={{ background: PRIDE_ATMOSPHERE }}
         aria-hidden
       />
-      <div className="pointer-events-none absolute inset-0" style={{ background: PRIDE_GRADIENT }} aria-hidden />
 
       <header className="relative z-20 flex h-16 shrink-0 items-center justify-between px-5 sm:px-8">
         <Link to="/" className={publicLinkClass} aria-label="MenRush home">
