@@ -40,8 +40,14 @@ test.describe('Pride promotion landing', () => {
     await expect(bargain).toContainText('PRIDE 3MONTH FREE');
     await expect(bargain).toContainText(/Brighton personal PRIDE-XXXX-XXXX/i);
     await expect(bargain).toContainText(/One person gets one Pride grant/i);
+    await expect(page.getByTestId('pride-invite-form')).toHaveCount(0);
+    await expect(page.getByTestId('pride-claim-cta')).toBeVisible();
+    await expect(page.getByTestId('pride-claim-cta')).toHaveText(/Claim Pride code/i);
+    await page.getByTestId('pride-claim-cta').click();
     await expect(page.getByTestId('pride-invite-form')).toBeVisible();
     await expect(page.getByTestId('pride-invite-adult')).toBeVisible();
+    await expect(page.getByTestId('pride-invite-email')).toBeVisible();
+    await expect(page.getByTestId('pride-invite-submit')).toContainText(/Email my Pride code/i);
 
     // Path 2 on the face
     const codeBox = page.getByTestId('pride-promo-code');

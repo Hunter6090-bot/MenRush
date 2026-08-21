@@ -49,6 +49,7 @@ const WHAT_YOU_GET = [
  */
 export const Pride = () => {
   const [copied, setCopied] = useState(false);
+  const [claimOpen, setClaimOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [adultConfirmed, setAdultConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -217,71 +218,88 @@ export const Pride = () => {
             </p>
 
             {inviteOpen ? (
-              <form
-                className="mt-5 flex flex-col gap-3"
-                onSubmit={onInviteFormSubmit}
-                data-testid="pride-invite-form"
-              >
-                <label htmlFor="pride-invite-email" className="sr-only">
-                  Email
-                </label>
-                <input
-                  id="pride-invite-email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(ev) => {
-                    setFormError('');
-                    setEmail(ev.target.value);
-                  }}
-                  placeholder="Email"
-                  className={publicInputClass}
-                  data-testid="pride-invite-email"
-                  disabled={submitting}
-                />
-                <label className="flex items-start gap-3 text-[13px] leading-[1.45] text-[var(--cream-muted)]">
-                  <input
-                    type="checkbox"
-                    checked={adultConfirmed}
-                    onChange={(ev) => {
+              <div className="mt-5 flex flex-col gap-3">
+                {!claimOpen ? (
+                  <button
+                    type="button"
+                    className={publicPrimaryButtonClass}
+                    data-testid="pride-claim-cta"
+                    onClick={() => {
                       setFormError('');
-                      setAdultConfirmed(ev.target.checked);
+                      setFormSuccess('');
+                      setClaimOpen(true);
                     }}
-                    className="mt-1 h-4 w-4 accent-[#C4832A]"
-                    data-testid="pride-invite-adult"
-                    disabled={submitting}
-                  />
-                  <span>I confirm I am 18 or over.</span>
-                </label>
-                <button
-                  type="submit"
-                  className={publicPrimaryButtonClass}
-                  disabled={submitting}
-                  data-testid="pride-invite-submit"
-                >
-                  {submitting ? 'Sending…' : 'Email me my Pride invite'}
-                </button>
-                {formError ? (
-                  <p className={publicErrorClass} data-testid="pride-invite-error" role="alert">
-                    {formError}
-                  </p>
-                ) : null}
-                {formSuccess ? (
-                  <p
-                    className="text-sm font-semibold leading-[1.55] text-[#E0A14A]"
-                    data-testid="pride-invite-success"
-                    role="status"
                   >
-                    {formSuccess}
-                  </p>
-                ) : null}
-                <p className="text-[12px] leading-[1.5] text-[var(--cream-muted)]">
-                  If the invite email fails or is late, the error above will say so — try again or
-                  contact Support. Asking for this invite does not put {PRIDE_PROMO_CODE} in the
-                  register box.
-                </p>
-              </form>
+                    Claim Pride code
+                  </button>
+                ) : (
+                  <form
+                    className="flex flex-col gap-3"
+                    onSubmit={onInviteFormSubmit}
+                    data-testid="pride-invite-form"
+                  >
+                    <label htmlFor="pride-invite-email" className="sr-only">
+                      Email
+                    </label>
+                    <input
+                      id="pride-invite-email"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      value={email}
+                      onChange={(ev) => {
+                        setFormError('');
+                        setEmail(ev.target.value);
+                      }}
+                      placeholder="Email"
+                      className={publicInputClass}
+                      data-testid="pride-invite-email"
+                      disabled={submitting}
+                    />
+                    <label className="flex items-start gap-3 text-[13px] leading-[1.45] text-[var(--cream-muted)]">
+                      <input
+                        type="checkbox"
+                        checked={adultConfirmed}
+                        onChange={(ev) => {
+                          setFormError('');
+                          setAdultConfirmed(ev.target.checked);
+                        }}
+                        className="mt-1 h-4 w-4 accent-[#C4832A]"
+                        data-testid="pride-invite-adult"
+                        disabled={submitting}
+                      />
+                      <span>I confirm I am 18 or over.</span>
+                    </label>
+                    <button
+                      type="submit"
+                      className={publicPrimaryButtonClass}
+                      disabled={submitting}
+                      data-testid="pride-invite-submit"
+                    >
+                      {submitting ? 'Sending…' : 'Email my Pride code'}
+                    </button>
+                    {formError ? (
+                      <p className={publicErrorClass} data-testid="pride-invite-error" role="alert">
+                        {formError}
+                      </p>
+                    ) : null}
+                    {formSuccess ? (
+                      <p
+                        className="text-sm font-semibold leading-[1.55] text-[#E0A14A]"
+                        data-testid="pride-invite-success"
+                        role="status"
+                      >
+                        {formSuccess}
+                      </p>
+                    ) : null}
+                    <p className="text-[12px] leading-[1.5] text-[var(--cream-muted)]">
+                      If the invite email fails or is late, the error above will say so — try again or
+                      contact Support. Asking for this invite does not put {PRIDE_PROMO_CODE} in the
+                      register box.
+                    </p>
+                  </form>
+                )}
+              </div>
             ) : (
               <p className="mt-4 text-[13px] leading-[1.55] text-[var(--cream-muted)]" data-testid="pride-invite-closed">
                 Window closed. Path 2 (public code) remains until {PRIDE_ENTER_BY}.
