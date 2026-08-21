@@ -64,14 +64,13 @@ Use **OAuth 1.0a User Context** only (the four keys above).
 
 ## This week (visual workspace)
 
-- UK calendar weeks from `docs/social-oct1-2026.md` (week of 18 Aug 2026 → 1 Oct).
-- **Instagram**, **X**, and **Bluesky** drafts show a preview frame, local upload, and a poster prompt. Prompt + image path persist under `.data/` (gitignored).
-- **Generate poster** builds a local SVG preview from the prompt (no paid API). Upload your own image anytime.
-- Instagram expands to **IG Feed**, **IG Story**, and **IG Reel** slots. Story and Reel are draft+preview only — Approve never publishes them.
+- UK calendar weeks: **Week 1 is 21-27 Aug 2026** (Day 1 = 21 Aug opening signal). Not 18 Aug.
+- **Instagram**, **X**, and **Bluesky** drafts always show the **official logo** (`https://menrush.com/menrush-logo.png`) until you upload or Generate a poster. Logo is never redrawn.
+- Poster prompt + Upload / Generate poster still available; prompt + custom image path persist under `.data/` (gitignored).
+- Instagram expands to **IG Feed**, **IG Story**, and **IG Reel**. Story and Reel are draft+preview only.
 - Platforms that are **Off** are excluded.
-- **Approve** is the only action that publishes, and only to **On + Verified** platforms for publishable Feed/post drafts.
-- Attached raster images are wired into X and Bluesky publish when you Approve. Instagram Graph still needs a public `https` image URL (optional field on Feed); localhost uploads stay for preview (falls back to brand logo URL).
-- Prefer today’s drafts when present; otherwise the rest of the week for ready platforms.
+- **Approve** is the only action that publishes (Feed/post only). No auto-publish.
+- Attached raster images wire into X/Bluesky on Approve. IG Feed needs optional public https URL for Graph (else brand logo URL).
 
 Production `backend/src/routes/social.ts` stays **record-only** — this studio posts from your machine, not from Railway.
 

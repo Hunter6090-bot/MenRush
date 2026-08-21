@@ -15,6 +15,9 @@ const STORE_PATH = path.join(DATA_DIR, 'draft-media.json');
 
 const ALLOWED_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg']);
 
+/** Official MenRush medallion — unmodified. Default preview when no upload. */
+export const OFFICIAL_LOGO = 'https://menrush.com/menrush-logo.png';
+
 function assertDataPath(target) {
   const resolved = path.resolve(target);
   const root = path.resolve(DATA_DIR);
@@ -72,19 +75,23 @@ export function getDraftMedia(draftId) {
 }
 
 function publicDraftMedia(draftId, entry) {
-  const hasImage = Boolean(entry.imageRelPath);
+  const hasCustomImage = Boolean(entry.imageRelPath);
   let imageUrl = null;
-  if (hasImage) {
+  if (hasCustomImage) {
     imageUrl = `/api/drafts/${encodeURIComponent(draftId)}/image?t=${encodeURIComponent(entry.updatedAt || '')}`;
   }
   return {
     draftId,
     prompt: entry.prompt || '',
-    hasImage,
+    /** True only when owner uploaded or generated a custom asset. */
+    hasImage: hasCustomImage,
     imageRelPath: entry.imageRelPath || null,
     imageUrl,
+    /** Always set — official logo until a custom image exists. Never redraw the logo. */
+    previewUrl: imageUrl || OFFICIAL_LOGO,
+    defaultLogo: !hasCustomImage,
     publicImageUrl: entry.publicImageUrl || '',
-    source: entry.source || null,
+    source: entry.source || (hasCustomImage ? null : 'default-logo'),
     updatedAt: entry.updatedAt || null,
   };
 }
