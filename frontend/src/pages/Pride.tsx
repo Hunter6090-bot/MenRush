@@ -13,10 +13,12 @@ import {
 import {
   clearStoredPridePromoCode,
   isPrideInviteIssueOpen,
+  PRIDE_ENTER_BY,
   PRIDE_INVITE_CAMPAIGN_ID,
   PRIDE_INVITE_WINDOW_LABEL,
   PRIDE_PREMIUM_END,
   PRIDE_PREMIUM_START,
+  PRIDE_PROMO_CODE,
 } from '../lib/pridePromo';
 
 const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '') || '/api';
@@ -42,7 +44,8 @@ const WHAT_YOU_GET = [
 
 /**
  * Printed QR → menrush.com/pride.
- * One path: claim with email → unique Pride-flagged MENRUSH invite (beta + booked Premium).
+ * Main path: claim with email → unique Pride-flagged MENRUSH invite (beta + booked Premium).
+ * Printed public code PRIDE 3MONTH FREE remains redeemable at register by 5 Sep 2026 (quiet note only).
  */
 export const Pride = () => {
   const [claimOpen, setClaimOpen] = useState(false);
@@ -275,10 +278,18 @@ export const Pride = () => {
 
           <p
             className="mt-8 max-w-[560px] text-pretty text-[14px] leading-[1.55] text-[var(--cream-muted)]"
+            data-testid="pride-public-redeem-note"
+          >
+            Already have the printed public code {PRIDE_PROMO_CODE}? It still works at register by{' '}
+            {PRIDE_ENTER_BY}. One grant — do not also claim a new Pride invite.
+          </p>
+
+          <p
+            className="mt-5 max-w-[560px] text-pretty text-[14px] leading-[1.55] text-[var(--cream-muted)]"
             data-testid="pride-grandfather"
           >
             Already have a personal PRIDE-XXXX-XXXX from an earlier email? Enter that code at
-            register on the same email. One grant per person.
+            register on the same email. Redeem by 31 October 2026. One grant per person.
           </p>
         </section>
 
