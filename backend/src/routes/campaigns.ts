@@ -23,7 +23,7 @@
 
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { promoService } from '../services/promo.service';
+import { personalPrideExpiredMessage, promoService } from '../services/promo.service';
 import rateLimit from 'express-rate-limit';
 
 const router = Router();
@@ -185,7 +185,7 @@ router.post('/promo/validate', validateLimiter, async (req: Request, res: Respon
         result.reason === 'already_redeemed'
           ? 'This code has already been used.'
           : result.reason === 'expired'
-            ? 'This code has expired.'
+            ? personalPrideExpiredMessage(result.expiresAt)
             : 'This code is not valid for this email address.';
       res.json({ valid: false, message: userMessage });
     }

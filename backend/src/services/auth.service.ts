@@ -18,7 +18,7 @@ import {
 } from './transactional-email.template';
 import { v4 as uuidv4 } from 'uuid';
 import { inviteCodeService, isInviteRequired } from './invite-code.service';
-import { isSharedPrideCode, promoService } from './promo.service';
+import { isSharedPrideCode, personalPrideExpiredMessage, promoService } from './promo.service';
 import { ageFromDateOfBirth } from '../lib/age';
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -135,7 +135,7 @@ export const authService = {
           throw new Error('This Pride code is locked to a different email address.');
         }
         if (personalCheck.reason === 'expired') {
-          throw new Error('This Pride promo code has expired.');
+          throw new Error(personalPrideExpiredMessage(personalCheck.expiresAt));
         }
         if (personalCheck.reason === 'already_redeemed') {
           throw new Error('This Pride promo code has already been used.');

@@ -80,6 +80,32 @@ export function normalizeSharedPromoCode(raw: string): string {
   return raw.trim().toUpperCase().replace(/\s+/g, '');
 }
 
+export function formatPromoExpiryDate(d: Date): string {
+  const months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ] as const;
+  return `${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
+/** User-facing expiry line for a personal Pride code (uses issued row date when present). */
+export function personalPrideExpiredMessage(expiresAt?: Date | null): string {
+  if (expiresAt && !Number.isNaN(expiresAt.getTime())) {
+    return `This Pride promo code expired on ${formatPromoExpiryDate(expiresAt)}.`;
+  }
+  return 'This Pride promo code expired on 31 October 2026.';
+}
+
 export function isSharedPrideCode(raw: string): boolean {
   return normalizeSharedPromoCode(raw) === SHARED_PRIDE_NORMALIZED;
 }
@@ -114,7 +140,12 @@ export interface PromoSignupResult {
 
 export type PromoValidateResult =
   | { valid: true; monthsFree: number; campaign: string }
-  | { valid: false; reason: 'not_found' | 'email_mismatch' | 'already_redeemed' | 'expired' };
+  | {
+      valid: false;
+      reason: 'not_found' | 'email_mismatch' | 'already_redeemed' | 'expired';
+      /** Present when reason is expired — use for user-facing copy. */
+      expiresAt?: Date | null;
+    };
 
 export type SharedPrideValidateResult =
   | { valid: true; monthsFree: number; campaign: string; premiumStart: Date; premiumEnd: Date }
@@ -346,8 +377,8 @@ export const promoService = {
 
     if (row.email_hash !== emailHash) return { valid: false, reason: 'email_mismatch' };
     if (row.redeemed_at) return { valid: false, reason: 'already_redeemed' };
-    if (row.expires_at && row.expires_at.getTime() < Date.now()) {
-      return { valid: false, reason: 'expired' };
+    if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) {
+      return { valid: false, reason: 'expired', expiresAt: new Date(row.expires_at) };
     }
 
     return {
@@ -381,7 +412,7 @@ export const promoService = {
         throw new Error('This Pride code is locked to a different email address.');
       }
       if (validation.reason === 'expired') {
-        throw new Error('This Pride promo code has expired.');
+        throw new Error(personalPrideExpiredMessage(validation.expiresAt));
       }
       if (validation.reason === 'already_redeemed') {
         throw new Error('This Pride promo code has already been used.');
