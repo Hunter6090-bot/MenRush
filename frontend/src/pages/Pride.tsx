@@ -125,7 +125,7 @@ export const Pride = () => {
 
       setFormSuccess(
         data.message ||
-          'Check your inbox — your Pride-flagged invite is on its way. Submitting this form is not the Premium grant; enter that invite when you create your account.',
+          'Check your inbox — your Pride-flagged invite is on its way. Submitting this form is not the Premium grant; enter that invite at register when you create your account.',
       );
       setEmail('');
       setAdultConfirmed(false);
@@ -171,19 +171,18 @@ export const Pride = () => {
             className="mt-6 max-w-[560px] text-pretty text-[clamp(15px,2vw,17px)] font-semibold leading-[1.6] text-[#F0E0C0]/92"
             data-testid="pride-headline-lock"
           >
-            One Pride grant. Two ways to claim it this week, plus holders of an already-emailed
-            personal code. Premium starts at launch. If MenRush opens on {PRIDE_PREMIUM_START},
-            Premium ends {PRIDE_PREMIUM_END}. If launch slips, the 3 months run from the actual open
-            date — not still {PRIDE_PREMIUM_END}. You cannot use Premium before launch. 31 August is
-            not the end of Premium.
+            One Pride grant. Two ways to claim it during 21–31 August 2026, plus holders of an
+            already-emailed personal code. You cannot use Premium before launch. 31 August is not
+            the end of Premium.
           </p>
 
           <p
             className="mt-5 max-w-[560px] text-pretty text-[14px] leading-[1.55] text-[var(--cream-muted)]"
             data-testid="pride-week-why"
           >
-            This unique-invite week exists because of Southampton Pride (29–30 August) and Manchester
-            Village Pride (28–31 August). MenRush is not a sponsor of those events.
+            This unique-invite window (21–31 August 2026) exists because of Southampton Pride (29–30
+            August) and Manchester Village Pride (28–31 August). MenRush is not a sponsor of those
+            events.
           </p>
 
           {/* Path 1 — Pride-flagged invite */}
@@ -199,9 +198,14 @@ export const Pride = () => {
                 <>
                   {PRIDE_INVITE_WINDOW_LABEL} only: enter your email and confirm 18+. We email a
                   Pride-flagged beta invite (MENRUSH-XXXX-XXXX). That one code is beta access and
-                  books 3 months of Premium from launch. Submitting this form sends the invite — it
-                  is not the grant. Enter that invite when you create your account. Entering it now
-                  books Premium; you do not enter it again on 1 October.
+                  books 3 months of Premium (duration rule below). Submitting this form sends the
+                  invite — it is not the grant. Enter that invite at register on the same email.
+                  Entering it now books Premium; you do not enter it again on 1 October. Do not also
+                  enter{' '}
+                  <span className="font-mono font-bold tracking-wide text-[#E0A14A]">
+                    {PRIDE_PROMO_CODE}
+                  </span>{' '}
+                  or a Brighton personal PRIDE-XXXX-XXXX. One person gets one Pride grant.
                 </>
               ) : (
                 <>
@@ -274,8 +278,8 @@ export const Pride = () => {
                 ) : null}
                 <p className="text-[12px] leading-[1.5] text-[var(--cream-muted)]">
                   If the invite email fails or is late, the error above will say so — try again or
-                  contact Support. Do not use the public code in the register box if you asked for
-                  this invite.
+                  contact Support. Asking for this invite does not put {PRIDE_PROMO_CODE} in the
+                  register box.
                 </p>
               </form>
             ) : (
@@ -359,8 +363,8 @@ export const Pride = () => {
           </h2>
           <ul className="mt-8 space-y-4 text-[15px] leading-[1.6] text-[var(--cream-muted)]">
             <li data-testid="pride-clock-invite">
-              Pride-flagged invites: issued only {PRIDE_INVITE_WINDOW_LABEL} from this page. Entering
-              the invite at register books the grant. Premium is not usable before launch.
+              Pride-flagged invites: issued only {PRIDE_INVITE_WINDOW_LABEL} from this page. Enter
+              that invite at register to book the grant. Premium is not usable before launch.
             </li>
             <li data-testid="pride-clock-public">
               <span className="font-bold text-[#F0E0C0]">{PRIDE_ENTER_BY}</span> is the last day to{' '}
@@ -369,11 +373,12 @@ export const Pride = () => {
               not the end of the free Premium period.
             </li>
             <li data-testid="pride-duration-rule">
-              Duration rule: if MenRush opens on{' '}
-              <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_START}</span>, Premium ends{' '}
-              <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_END}</span>. If launch slips,
-              the 3 months run from the actual open date — not still {PRIDE_PREMIUM_END}. The clock
-              does not start from scan or form submit. Nothing is usable before launch.
+              Duration rule: if you book before launch, Premium starts at launch. On-time open{' '}
+              <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_START}</span> → ends{' '}
+              <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_END}</span>. If launch slips, 3
+              months from the actual open date — not still {PRIDE_PREMIUM_END}. If you first enter
+              after MenRush is open, 3 months from that redeem date. The clock does not start from
+              scan or form submit. Nothing is usable before launch.
             </li>
             <li>
               Submitting the email form sends a Pride-flagged invite. The grant happens when you enter

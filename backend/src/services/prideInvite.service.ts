@@ -26,13 +26,14 @@ const PRIDE_WELCOME_TEMPLATE_KEY = 'mr-pride-invite-2026';
 /**
  * Legal-locked email body for Pride-flagged MENRUSH invites (21–31 Aug /pride).
  * Exported so Legal can re-read the exact copy shipped.
+ * Grant URL matches the face: enter at register only (not /beta).
  */
 export function buildPrideFlaggedInviteEmail(params: {
   to: string;
   code: string;
 }): { subject: string; html: string; text: string } {
   const { to, code } = params;
-  const betaUrl = `https://menrush.com/beta?invite=${encodeURIComponent(code)}`;
+  const registerUrl = `https://menrush.com/register?invite=${encodeURIComponent(code)}`;
 
   const subject = `Your MenRush Pride invite: ${code}`;
 
@@ -61,8 +62,8 @@ export function buildPrideFlaggedInviteEmail(params: {
               Submitting the form on menrush.com/pride sent you this email. That form is
               <strong style="color:#8a7a6a;">not</strong> the Premium grant.
               This one code is your <strong style="color:#8a7a6a;">beta invite</strong>
-              and books <strong style="color:#8a7a6a;">3 months of Premium</strong>
-              from launch (or from first redeem after MenRush opens). Premium is not usable before launch.
+              and books <strong style="color:#8a7a6a;">3 months of Premium</strong>.
+              Enter it at register on the same email. Premium is not usable before launch.
             </p>
             <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
               <tr>
@@ -78,10 +79,13 @@ export function buildPrideFlaggedInviteEmail(params: {
                   <p style="margin:0;font-size:13px;color:#5a4a3a;line-height:1.6;">
                     <strong style="color:#C4832A;">Create your account with this same email</strong>
                     (<strong style="color:#8a7a6a;">${to}</strong>).
-                    Enter this code at <a href="${betaUrl}" style="color:#C4832A;">menrush.com/beta</a>
-                    (or at register). Entering it now books your Pride Premium grant —
+                    Enter this code at
+                    <a href="${registerUrl}" style="color:#C4832A;">menrush.com/register</a>
+                    (link includes your invite). Entering it now books your Pride Premium grant —
                     you do <strong style="color:#8a7a6a;">not</strong> enter it again on 1&nbsp;October.
                     This is not “already used, no Premium.”
+                    Do not also enter PRIDE&nbsp;3MONTH&nbsp;FREE or a Brighton personal PRIDE-XXXX-XXXX.
+                    One person gets one Pride grant.
                   </p>
                 </td>
               </tr>
@@ -89,8 +93,7 @@ export function buildPrideFlaggedInviteEmail(params: {
             <h2 style="margin:0 0 12px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#C4832A;font-weight:700;">The bargain</h2>
             <ul style="margin:0 0 28px;padding-left:20px;color:#7a6a5a;font-size:14px;line-height:1.8;">
               <li>One code = beta access <strong style="color:#8a7a6a;">and</strong> 3 months Premium</li>
-              <li>Premium starts at launch (1&nbsp;October&nbsp;2026) or when you first redeem after open — never usable before launch</li>
-              <li>If MenRush opens on 1&nbsp;October&nbsp;2026, Premium ends 1&nbsp;January&nbsp;2027. If launch slips, the 3 months run from the actual open date — not still 1&nbsp;January</li>
+              <li>Duration rule: if you book before launch, Premium starts at launch. On-time open 1&nbsp;October&nbsp;2026 → ends 1&nbsp;January&nbsp;2027. If launch slips, 3 months from the actual open date — not still 1&nbsp;January. If you first enter after MenRush is open, 3 months from that redeem date. Nothing usable before launch. 31&nbsp;August is not the end of Premium</li>
               <li>One Pride grant per person. Do not also enter the public code PRIDE&nbsp;3MONTH&nbsp;FREE or a Brighton personal PRIDE-XXXX-XXXX code</li>
               <li>Replaces the 30-day waitlist Premium gift (Terms 7.2). It does not add to that gift</li>
             </ul>
@@ -117,16 +120,16 @@ Submitting the form on menrush.com/pride sent you this email. That form is NOT t
 
 YOUR CODE: ${code}
 
-This one code is your beta invite AND books 3 months of Premium from launch (or from first redeem after MenRush opens). Premium is not usable before launch.
+This one code is your beta invite AND books 3 months of Premium. Enter it at register on the same email. Premium is not usable before launch.
 
 Create your account with this same email (${to}).
-Enter the code at ${betaUrl} (or at register).
+Enter the code at ${registerUrl}
 Entering it now BOOKS your Pride Premium grant — you do NOT enter it again on 1 October. This is not "already used, no Premium."
+Do not also enter PRIDE 3MONTH FREE or a Brighton personal PRIDE-XXXX-XXXX. One person gets one Pride grant.
 
 The bargain:
 - One code = beta access and 3 months Premium
-- Premium starts at launch (1 October 2026) or when you first redeem after open — never usable before launch
-- If MenRush opens on 1 October 2026, Premium ends 1 January 2027. If launch slips, the 3 months run from the actual open date — not still 1 January
+- Duration rule: if you book before launch, Premium starts at launch. On-time open 1 October 2026 → ends 1 January 2027. If launch slips, 3 months from the actual open date — not still 1 January. If you first enter after MenRush is open, 3 months from that redeem date. Nothing usable before launch. 31 August is not the end of Premium
 - One Pride grant. Do not also enter PRIDE 3MONTH FREE or a Brighton personal PRIDE-XXXX-XXXX
 - Replaces the 30-day waitlist Premium gift (Terms 7.2). It does not add to that gift
 

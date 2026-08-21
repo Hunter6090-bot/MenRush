@@ -90,9 +90,9 @@ export function isPrideInviteIssueOpen(now = new Date()): boolean {
 }
 
 /**
- * Premium window for Pride grants.
- * Before launch: starts at launch. After open: starts at first redeem (now).
- * End = start + N calendar months (on-time 1 Oct → 1 Jan; if launch slips, end moves).
+ * Premium window for Pride grants (Legal-locked).
+ * Booked before launch → starts at launch (on-time 1 Oct → 1 Jan; if launch slips, end moves).
+ * First entered after open → starts at that redeem date (3 months from then).
  */
 export function pridePremiumWindow(
   months = SHARED_PRIDE_MONTHS_FREE,

@@ -144,7 +144,7 @@ router.post('/:campaignId/signup', signupLimiter, async (req: Request, res: Resp
       res.json({
         ok: true,
         message:
-          'Check your inbox — your Pride-flagged invite is on its way. Submitting this form is not the Premium grant; enter that invite when you create your account.',
+          'Check your inbox — your Pride-flagged invite is on its way. Submitting this form is not the Premium grant; enter that invite at register when you create your account.',
       });
       console.log(`[campaigns] pride invite ${result.outcome} for ${email}`);
       return;

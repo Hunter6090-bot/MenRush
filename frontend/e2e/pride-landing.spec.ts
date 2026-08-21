@@ -13,22 +13,30 @@ test.describe('Pride promotion landing', () => {
 
     const headline = page.getByTestId('pride-headline-lock');
     await expect(headline).toContainText(/One Pride grant/i);
-    await expect(headline).toContainText(/If MenRush opens on 1 October 2026, Premium ends 1 January 2027/i);
-    await expect(headline).toContainText(/If launch slips, the 3 months run from the actual open date/i);
-    await expect(headline).toContainText(/not still 1 January 2027/i);
+    await expect(headline).toContainText(/21–31 August 2026/i);
     await expect(headline).toContainText(/cannot use Premium before launch/i);
     await expect(headline).toContainText(/31 August is not the end of Premium/i);
+    await expect(headline).not.toContainText(/this week/i);
+    // Duration detail lives once in conditions — not a conflicting second rule in the hero
+    await expect(headline).not.toContainText(/first redeem after open/i);
 
+    await expect(page.getByTestId('pride-week-why')).toContainText(/21–31 August 2026/i);
     await expect(page.getByTestId('pride-week-why')).toContainText(/Southampton Pride/i);
     await expect(page.getByTestId('pride-week-why')).toContainText(/Manchester Village Pride/i);
     await expect(page.getByTestId('pride-week-why')).toContainText(/not a sponsor/i);
+    await expect(page.getByTestId('pride-week-why')).not.toContainText(/unique-invite week/i);
 
     // Path 1 on the face (invite window open on 21 Aug 2026)
     const invitePath = page.getByTestId('pride-invite-path');
     await expect(invitePath).toContainText(/Path 1/i);
-    await expect(page.getByTestId('pride-invite-bargain')).toContainText(/Pride-flagged beta invite/i);
-    await expect(page.getByTestId('pride-invite-bargain')).toContainText(/not the grant/i);
-    await expect(page.getByTestId('pride-invite-bargain')).toContainText(/books 3 months of Premium/i);
+    const bargain = page.getByTestId('pride-invite-bargain');
+    await expect(bargain).toContainText(/Pride-flagged beta invite/i);
+    await expect(bargain).toContainText(/not the grant/i);
+    await expect(bargain).toContainText(/Enter that invite at register/i);
+    await expect(bargain).toContainText(/Do not also enter/i);
+    await expect(bargain).toContainText('PRIDE 3MONTH FREE');
+    await expect(bargain).toContainText(/Brighton personal PRIDE-XXXX-XXXX/i);
+    await expect(bargain).toContainText(/One person gets one Pride grant/i);
     await expect(page.getByTestId('pride-invite-form')).toBeVisible();
     await expect(page.getByTestId('pride-invite-adult')).toBeVisible();
 
@@ -55,6 +63,7 @@ test.describe('Pride promotion landing', () => {
 
     const conditions = page.getByTestId('pride-conditions');
     await expect(page.getByTestId('pride-clock-invite')).toContainText(/21–31 August 2026/i);
+    await expect(page.getByTestId('pride-clock-invite')).toContainText(/at register/i);
     await expect(page.getByTestId('pride-clock-public')).toContainText(/5 September 2026/);
     await expect(page.getByTestId('pride-clock-public')).toContainText(/last day to/);
     await expect(conditions).toContainText(/Submitting the email form sends a Pride-flagged invite/i);
@@ -65,9 +74,14 @@ test.describe('Pride promotion landing', () => {
     await expect(page.getByText(/waitlist form does not redeem/i)).toHaveCount(0);
 
     const duration = page.getByTestId('pride-duration-rule');
-    await expect(duration).toContainText(/if MenRush opens on 1 October 2026, Premium ends 1 January 2027/i);
-    await expect(duration).toContainText(/If launch slips, the 3 months run from the actual open date/i);
+    await expect(duration).toContainText(/if you book before launch, Premium starts at launch/i);
+    await expect(duration).toContainText(/On-time open 1 October 2026/i);
+    await expect(duration).toContainText(/ends 1 January 2027/i);
+    await expect(duration).toContainText(/If launch slips, 3 months from the actual open date/i);
     await expect(duration).toContainText(/not still 1 January 2027/i);
+    await expect(duration).toContainText(
+      /If you first enter after MenRush is open, 3 months from that redeem date/i,
+    );
     await expect(conditions).toContainText(/Terms 7\.2/i);
     await expect(conditions).toContainText(/does not add to that gift/i);
     await expect(conditions).toContainText(/18\+/);
