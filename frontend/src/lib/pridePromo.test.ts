@@ -8,6 +8,7 @@ import {
   PRIDE_INVITE_ISSUE_OPENS,
   PRIDE_PROMO_CODE,
   PRIDE_PROMO_NORMALIZED,
+  PRIDE_PUBLIC_CODE_RETIRED_MESSAGE,
 } from '../lib/pridePromo';
 
 describe('pridePromo', () => {
@@ -17,10 +18,12 @@ describe('pridePromo', () => {
     expect(normalizePridePromoCode('PRIDE3MONTHFREE')).toBe(PRIDE_PROMO_NORMALIZED);
   });
 
-  it('accepts the printed display string and compact typed form', () => {
+  it('detects the retired public code string for reject UX', () => {
     expect(isPridePromoCode(PRIDE_PROMO_CODE)).toBe(true);
     expect(isPridePromoCode('PRIDE3MONTHFREE')).toBe(true);
     expect(isPridePromoCode('PRIDE-XXXX-YYYY')).toBe(false);
+    expect(PRIDE_PUBLIC_CODE_RETIRED_MESSAGE).toMatch(/not in use/i);
+    expect(PRIDE_PUBLIC_CODE_RETIRED_MESSAGE).toMatch(/\/pride/i);
   });
 
   it('detects personal emailed codes without treating the public code as personal', () => {

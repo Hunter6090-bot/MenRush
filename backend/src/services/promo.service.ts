@@ -65,14 +65,17 @@ export function getCampaign(id: string): CampaignConfig | null {
   return CAMPAIGNS[id] ?? null;
 }
 
-/** Public shared Pride QR code — not email-locked. Spaces ignored on match. */
+/** Retired public shared Pride code. Spaces ignored on match. New redemptions disabled. */
 export const SHARED_PRIDE_DISPLAY_CODE = 'PRIDE 3MONTH FREE';
 export const SHARED_PRIDE_NORMALIZED = 'PRIDE3MONTHFREE';
 export const SHARED_PRIDE_CAMPAIGN = 'pride26_public';
+/** User-facing error when someone still types the retired public code. */
+export const SHARED_PRIDE_RETIRED_MESSAGE =
+  'This code is not in use. Claim from /pride with your email.';
 export const BRIGHTON_PRIDE_CAMPAIGN = 'brightonpride26';
-/** Booked via Pride-flagged MENRUSH invite (21–31 Aug /pride) — not a second code string. */
+/** Booked via Pride-flagged MENRUSH invite (21–31 Aug /pride). Not a second code family. */
 export const PRIDE_INVITE_CAMPAIGN = 'pride26_invite';
-/** Last moment to ENTER the public code (Finance/Legal). */
+/** Historical enter-by for the retired public code (kept for already-redeemed rows). */
 export const SHARED_PRIDE_ENTER_BY = new Date('2026-09-05T23:59:59Z');
 /**
  * Pride-flagged invite issue window (UK): 21 Aug 2026 00:00 BST → end of 31 Aug 2026 BST.
@@ -178,7 +181,7 @@ export type SharedPrideValidateResult =
   | { valid: true; monthsFree: number; campaign: string; premiumStart: Date; premiumEnd: Date }
   | {
       valid: false;
-      reason: 'not_found' | 'already_redeemed' | 'expired' | 'other_pride_path';
+      reason: 'not_found' | 'already_redeemed' | 'expired' | 'other_pride_path' | 'not_in_use';
     };
 
 export const promoService = {
@@ -312,106 +315,34 @@ export const promoService = {
   },
 
   /**
-   * Validate the public Pride QR code (PRIDE 3MONTH FREE).
-   * Spaces ignored. One per email. Enter-by 5 Sep 2026.
-   * Blocks if this email already has another Pride path (no stacking).
+   * Public PRIDE 3MONTH FREE is retired. New redemptions are closed.
+   * Claim a unique Pride-flagged invite from /pride with email instead.
+   * Already-redeemed public rows still count toward no-stack checks.
    */
   async validateSharedPride(
     code: string,
-    email: string,
+    _email: string,
   ): Promise<SharedPrideValidateResult> {
     if (!isSharedPrideCode(code)) {
       return { valid: false, reason: 'not_found' };
     }
-    if (Date.now() > SHARED_PRIDE_ENTER_BY.getTime()) {
-      return { valid: false, reason: 'expired' };
-    }
-
-    if (await this.emailHasBrightonPrideClaim(email)) {
-      return { valid: false, reason: 'other_pride_path' };
-    }
-    if (await this.emailHasPrideInviteRedeem(email)) {
-      return { valid: false, reason: 'other_pride_path' };
-    }
-    if (await this.emailHasPendingPrideInvite(email)) {
-      return { valid: false, reason: 'other_pride_path' };
-    }
-
-    const emailHash = hashEmail(email);
-    const existing = await query(
-      `SELECT 1 FROM shared_promo_redemptions
-       WHERE campaign = $1 AND email_hash = $2
-       LIMIT 1`,
-      [SHARED_PRIDE_CAMPAIGN, emailHash],
-    );
-    if (existing.rows.length > 0) {
-      return { valid: false, reason: 'already_redeemed' };
-    }
-
-    const { premiumStart, premiumEnd } = pridePremiumWindow();
-    return {
-      valid: true,
-      monthsFree: SHARED_PRIDE_MONTHS_FREE,
-      campaign: SHARED_PRIDE_CAMPAIGN,
-      premiumStart,
-      premiumEnd,
-    };
+    return { valid: false, reason: 'not_in_use' };
   },
 
   /**
-   * Redeem public Pride code for a new user.
-   * Premium: 3 calendar months from actual launch (or first redeem after open).
-   * Replaces 30-day waitlist gift. Does not stack with another Pride path.
+   * New public Pride redemptions are disabled. Always rejects.
    */
   async redeemSharedPride(
     code: string,
     email: string,
-    userId: string,
-    client?: PoolClient,
+    _userId: string,
+    _client?: PoolClient,
   ): Promise<{ monthsFree: number; premiumUntil: Date }> {
-    const db: Queryable = client ?? pool;
     const validation = await this.validateSharedPride(code, email);
-    if (!validation.valid) {
-      if (validation.reason === 'other_pride_path') {
-        throw new Error(
-          'This email already has a Pride Premium grant. The code cannot be stacked.',
-        );
-      }
-      if (validation.reason === 'expired') {
-        throw new Error('This Pride promo expired on 5 September 2026.');
-      }
-      if (validation.reason === 'already_redeemed') {
-        throw new Error('This Pride promo has already been used for this email.');
-      }
-      throw new Error('This promo code is not valid.');
+    if (!validation.valid && validation.reason === 'not_in_use') {
+      throw new Error(SHARED_PRIDE_RETIRED_MESSAGE);
     }
-
-    const emailHash = hashEmail(email);
-    try {
-      await db.query(
-        `INSERT INTO shared_promo_redemptions
-           (campaign, code_normalized, user_id, email_hash)
-         VALUES ($1, $2, $3, $4)`,
-        [SHARED_PRIDE_CAMPAIGN, SHARED_PRIDE_NORMALIZED, userId, emailHash],
-      );
-    } catch (err: unknown) {
-      const pg = err as { code?: string };
-      if (pg.code === '23505') {
-        throw new Error('This Pride promo has already been used for this email.');
-      }
-      throw err;
-    }
-
-    const { premiumUntil } = await this.applyPridePremiumGrant(
-      userId,
-      validation.monthsFree,
-      client,
-    );
-
-    return {
-      monthsFree: validation.monthsFree,
-      premiumUntil,
-    };
+    throw new Error(SHARED_PRIDE_RETIRED_MESSAGE);
   },
   /**
    * Issue a promo code for the given email + campaign.
@@ -541,7 +472,7 @@ export const promoService = {
   ): Promise<{ monthsFree: number; premiumUntil: Date }> {
     const db: Queryable = client ?? pool;
     if (isSharedPrideCode(code)) {
-      throw new Error('This promo code is not valid.');
+      throw new Error(SHARED_PRIDE_RETIRED_MESSAGE);
     }
 
     const normalised = code.trim().toUpperCase();

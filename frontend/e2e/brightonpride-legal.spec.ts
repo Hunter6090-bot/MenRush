@@ -8,7 +8,7 @@ test.describe('Closed Brighton Pride URLs', () => {
     await expect(page).toHaveURL(/\/pride\/?$/);
     await expect(page.getByTestId('pride-headline-lock')).toBeVisible();
     await expect(page.getByTestId('pride-grandfather')).toContainText(
-      /personal Brighton Pride code \(PRIDE-XXXX-XXXX\) from an earlier email/i,
+      /personal PRIDE-XXXX-XXXX from an earlier email/i,
     );
     await expect(page.getByText(/Brighton Pride Special Offer/i)).toHaveCount(0);
     await expect(page.getByTestId('brightonpride-adult-confirm')).toHaveCount(0);
@@ -19,7 +19,9 @@ test.describe('Closed Brighton Pride URLs', () => {
     const network = await guardAgainstSideEffects(page);
     await page.goto('/brightonpride26');
     await expect(page).toHaveURL(/\/pride\/?$/);
-    await expect(page.getByTestId('pride-promo-code')).toContainText('PRIDE 3MONTH FREE');
+    await expect(page.getByTestId('pride-headline-lock')).toBeVisible();
+    await expect(page.getByTestId('pride-invite-path')).toBeVisible();
+    await expect(page.getByText('PRIDE 3MONTH FREE')).toHaveCount(0);
     expect(network.expectNoSideEffects()).toEqual([]);
   });
 });

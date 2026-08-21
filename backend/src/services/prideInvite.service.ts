@@ -24,9 +24,8 @@ export type PrideInviteIssueResult = {
 const PRIDE_WELCOME_TEMPLATE_KEY = 'mr-pride-invite-2026';
 
 /**
- * Legal-locked email body for Pride-flagged MENRUSH invites (21–31 Aug /pride).
- * Exported so Legal can re-read the exact copy shipped.
- * Grant URL matches the face: enter at register only (not /beta).
+ * Email body for Pride-flagged MENRUSH invites from /pride.
+ * One code = closed beta + booked 3 months Premium from launch.
  */
 export function buildPrideFlaggedInviteEmail(params: {
   to: string;
@@ -50,25 +49,21 @@ export function buildPrideFlaggedInviteEmail(params: {
     <td align="center">
       <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
         <tr>
-          <td style="height:8px;background:linear-gradient(to right,#E40303,#FF8C00,#FFED00,#008026,#004DFF,#750787);border-radius:4px 4px 0 0;"></td>
-        </tr>
-        <tr>
-          <td style="background:#120E08;border:1px solid #2a2010;border-top:none;border-radius:0 0 4px 4px;padding:40px 36px;">
+          <td style="background:#120E08;border:1px solid #2a2010;border-radius:4px;padding:40px 36px;">
             <p style="margin:0 0 32px;font-size:13px;letter-spacing:4px;text-transform:uppercase;color:#C4832A;font-weight:700;">MENRUSH</p>
             <h1 style="margin:0 0 12px;font-size:28px;font-weight:900;color:#F0E0C0;line-height:1.1;text-transform:uppercase;letter-spacing:-0.5px;">
               Your Pride invite<br>is here.
             </h1>
             <p style="margin:0 0 24px;font-size:15px;color:#7a6a5a;line-height:1.6;">
-              Submitting the form on menrush.com/pride sent you this email. That form is
-              <strong style="color:#8a7a6a;">not</strong> the Premium grant.
-              This one code is your <strong style="color:#8a7a6a;">beta invite</strong>
-              and books <strong style="color:#8a7a6a;">3 months of Premium</strong>.
-              Enter it at register on the same email. Premium is not usable before launch.
+              You claimed this from menrush.com/pride. This one code is your
+              <strong style="color:#8a7a6a;">beta invite</strong>
+              and books <strong style="color:#8a7a6a;">3 months of Premium</strong>
+              from launch. Enter it at register on the same email. Premium is not usable before launch.
             </p>
             <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
               <tr>
                 <td style="background:#C4832A;padding:20px 24px;text-align:center;">
-                  <p style="margin:0 0 4px;font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#0D0A06;opacity:0.6;">Your Pride-flagged invite</p>
+                  <p style="margin:0 0 4px;font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#0D0A06;opacity:0.6;">Your Pride code</p>
                   <p style="margin:0;font-size:26px;font-weight:900;letter-spacing:3px;color:#0D0A06;font-family:monospace;">${code}</p>
                 </td>
               </tr>
@@ -81,10 +76,8 @@ export function buildPrideFlaggedInviteEmail(params: {
                     (<strong style="color:#8a7a6a;">${to}</strong>).
                     Enter this code at
                     <a href="${registerUrl}" style="color:#C4832A;">menrush.com/register</a>
-                    (link includes your invite). Entering it now books your Pride Premium grant —
-                    you do <strong style="color:#8a7a6a;">not</strong> enter it again on 1&nbsp;October.
-                    This is not “already used, no Premium.”
-                    Do not also enter PRIDE&nbsp;3MONTH&nbsp;FREE or a Brighton personal PRIDE-XXXX-XXXX.
+                    (link includes your invite). Entering it now books your Pride Premium grant.
+                    You do <strong style="color:#8a7a6a;">not</strong> enter it again on 1&nbsp;October.
                     One person gets one Pride grant.
                   </p>
                 </td>
@@ -93,16 +86,16 @@ export function buildPrideFlaggedInviteEmail(params: {
             <h2 style="margin:0 0 12px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#C4832A;font-weight:700;">The bargain</h2>
             <ul style="margin:0 0 28px;padding-left:20px;color:#7a6a5a;font-size:14px;line-height:1.8;">
               <li>One code = beta access <strong style="color:#8a7a6a;">and</strong> 3 months Premium</li>
-              <li>Duration rule: if you book before launch, Premium starts at launch. On-time open 1&nbsp;October&nbsp;2026 → ends 1&nbsp;January&nbsp;2027. If launch slips, 3 months from the actual open date — not still 1&nbsp;January. If you first enter after MenRush is open, 3 months from that redeem date. Nothing usable before launch. 31&nbsp;August is not the end of Premium</li>
-              <li>One Pride grant per person. Do not also enter the public code PRIDE&nbsp;3MONTH&nbsp;FREE or a Brighton personal PRIDE-XXXX-XXXX code</li>
+              <li>If you book before launch, Premium starts at launch. On-time open 1&nbsp;October&nbsp;2026 → ends 1&nbsp;January&nbsp;2027. If launch slips, 3 months from the actual open date. Nothing usable before launch.</li>
+              <li>One Pride grant per person</li>
               <li>Replaces the 30-day waitlist Premium gift (Terms 7.2). It does not add to that gift</li>
             </ul>
             <p style="margin:0 0 24px;font-size:13px;color:#5a4a3a;line-height:1.6;">
               If this email is late or you do not receive a code, reply to this message or use Support on menrush.com.
-              The public code PRIDE&nbsp;3MONTH&nbsp;FREE still works at register by 5&nbsp;September&nbsp;2026 if you prefer that path instead (one grant only).
+              You can resend from /pride to this same email.
             </p>
             <p style="margin:0;font-size:11px;color:#3a2a1a;line-height:1.6;border-top:1px solid #1a1210;padding-top:20px;">
-              Pride-flagged invites were issued only 21–31&nbsp;August&nbsp;2026 from /pride.
+              New Pride codes were issued only 21–31&nbsp;August&nbsp;2026 from /pride.
               18+ only. Bronze Apps UK Limited (trading as MenRush).
             </p>
           </td>
@@ -116,26 +109,26 @@ export function buildPrideFlaggedInviteEmail(params: {
 
   const text = `Your MenRush Pride invite
 
-Submitting the form on menrush.com/pride sent you this email. That form is NOT the Premium grant.
+You claimed this from menrush.com/pride.
 
 YOUR CODE: ${code}
 
-This one code is your beta invite AND books 3 months of Premium. Enter it at register on the same email. Premium is not usable before launch.
+This one code is your beta invite AND books 3 months of Premium from launch. Enter it at register on the same email. Premium is not usable before launch.
 
 Create your account with this same email (${to}).
 Enter the code at ${registerUrl}
-Entering it now BOOKS your Pride Premium grant — you do NOT enter it again on 1 October. This is not "already used, no Premium."
-Do not also enter PRIDE 3MONTH FREE or a Brighton personal PRIDE-XXXX-XXXX. One person gets one Pride grant.
+Entering it now BOOKS your Pride Premium grant. You do NOT enter it again on 1 October.
+One person gets one Pride grant.
 
 The bargain:
 - One code = beta access and 3 months Premium
-- Duration rule: if you book before launch, Premium starts at launch. On-time open 1 October 2026 → ends 1 January 2027. If launch slips, 3 months from the actual open date — not still 1 January. If you first enter after MenRush is open, 3 months from that redeem date. Nothing usable before launch. 31 August is not the end of Premium
-- One Pride grant. Do not also enter PRIDE 3MONTH FREE or a Brighton personal PRIDE-XXXX-XXXX
+- If you book before launch, Premium starts at launch. On-time open 1 October 2026 → ends 1 January 2027. If launch slips, 3 months from the actual open date. Nothing usable before launch.
+- One Pride grant per person
 - Replaces the 30-day waitlist Premium gift (Terms 7.2). It does not add to that gift
 
-If this email is late or missing, reply or use Support. Public PRIDE 3MONTH FREE still works at register by 5 September 2026 (one grant only).
+If this email is late or missing, reply or use Support. You can resend from /pride to this same email.
 
-Pride-flagged invites issued only 21–31 August 2026 from /pride. 18+.
+New Pride codes issued only 21–31 August 2026 from /pride. 18+.
 Bronze Apps UK Limited (trading as MenRush).`;
 
   return { subject, html, text };
@@ -199,18 +192,16 @@ async function mintPrideFlaggedInvite(email: string): Promise<string> {
 }
 
 /**
- * /pride waitlist (21–31 Aug UK only): subscribe + email a Pride-flagged MENRUSH invite.
- * Homepage /#waitlist and post-window waitlist stay ordinary invite-only.
+ * /pride claim (21–31 Aug UK for NEW codes): subscribe + email a Pride-flagged MENRUSH invite.
+ * After the window closes, resend of an existing unused invite is still allowed.
+ * Homepage /#waitlist stays ordinary invite-only.
  */
 export const prideInviteService = {
   async issueFromPridePage(emailRaw: string): Promise<PrideInviteIssueResult> {
-    if (!isPrideInviteIssueOpen()) {
-      throw new Error('issue_window_closed');
-    }
-
     const email = emailRaw.trim().toLowerCase();
+    const windowOpen = isPrideInviteIssueOpen();
 
-    // Already fully granted via another path — do not mint a Pride invite on top.
+    // Already fully granted via another path. Do not mint a Pride invite on top.
     if (await promoService.emailHasPublicPrideRedeem(email)) {
       throw new Error('other_pride_path');
     }
@@ -221,10 +212,14 @@ export const prideInviteService = {
       throw new Error('other_pride_path');
     }
 
+    const existing = await findUsablePrideInvite(email);
+    if (!windowOpen && !existing) {
+      throw new Error('issue_window_closed');
+    }
+
     const subscriber = await subscribeToWaitlist(email, 'pride');
     await markPrideWelcomeClaimed(subscriber.id);
 
-    const existing = await findUsablePrideInvite(email);
     let code = existing;
     let outcome: 'created' | 'existing' = 'existing';
     if (!code) {
@@ -249,7 +244,7 @@ export const prideInviteService = {
   },
 };
 
-/** Used by auth register — load pride flag for a code inside a transaction. */
+/** Used by auth register. Load pride flag for a code inside a transaction. */
 export async function loadPrideMonthsForInvite(
   rawCode: string,
   client: PoolClient | typeof pool = pool,
