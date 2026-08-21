@@ -301,7 +301,7 @@ export const Pride = () => {
             </li>
             <li data-testid="pride-duration-rule">
               Duration: if you book before launch, Premium starts at launch. On-time open{' '}
-              <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_START}</span> → ends{' '}
+              <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_START}</span>. Ends{' '}
               <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_END}</span>. If launch slips, 3
               months from the actual open date. Nothing usable before launch.
             </li>
