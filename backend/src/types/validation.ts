@@ -39,6 +39,8 @@ export const RegisterSchema = z.object({
   /** Preferred source of truth for age — persisted and used to recompute age. */
   date_of_birth: isoDateOnly.optional(),
   invite_code: z.string().min(1).max(64).optional(),
+  /** Optional public promo (e.g. Pride QR). Validated at register. */
+  promo_code: z.string().min(1).max(64).optional(),
 });
 
 export const LoginSchema = z.object({

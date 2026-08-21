@@ -384,7 +384,10 @@ export const Terms = () => {
                 <>
                   <Strong>7.2</Strong> Waitlist members who joined before our public launch are
                   entitled to <Strong>30 days of Premium free</Strong>, as stated at the time of
-                  sign-up.
+                  sign-up, unless a valid promotional offer (including a Pride /{' '}
+                  <span className="font-mono tracking-wide">PRIDE</span> promo code) grants a
+                  longer free Premium period instead. Where such a promo applies, it replaces the
+                  30-day waitlist reward — it is not added on top.
                 </>,
               )}
               {para(

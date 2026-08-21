@@ -2,9 +2,10 @@
  * /api/campaigns — promotional campaign endpoints
  *
  * POST /api/campaigns/:campaignId/signup
- *   Body: { email: string }
+ *   Body: { email: string, adult_confirmed: true }
  *   Issues an email-locked promo code and sends it to the user.
  *   Idempotent: repeated calls for the same email re-send the existing code.
+ *   Requires adult_confirmed === true (18+ attestation on the claim form).
  *
  * POST /api/campaigns/promo/validate
  *   Body: { code: string, email: string }
@@ -22,7 +23,7 @@
 
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { promoService } from '../services/promo.service';
+import { personalPrideExpiredMessage, promoService } from '../services/promo.service';
 import rateLimit from 'express-rate-limit';
 
 const router = Router();
@@ -95,6 +96,10 @@ function requireAdminToken(req: Request, res: Response): boolean {
 
 const SignupSchema = z.object({
   email: z.string().email('Please enter a valid email address.').toLowerCase().trim(),
+  /** Required attestation for campaign claim forms (Brighton Pride and future). */
+  adult_confirmed: z.literal(true, {
+    errorMap: () => ({ message: 'You must confirm you are 18 or over.' }),
+  }),
 });
 
 const ValidateSchema = z.object({
@@ -140,6 +145,14 @@ router.post('/:campaignId/signup', signupLimiter, async (req: Request, res: Resp
       res.status(404).json({ error: 'Campaign not found.' });
       return;
     }
+    if (err.message === 'campaign_closed') {
+      res.status(410).json({
+        error: 'This claim form is closed. Use the Pride offer at /pride.',
+        code: 'campaign_closed',
+        redirect: '/pride',
+      });
+      return;
+    }
     console.error(`[campaigns] signup error for ${email}:`, err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
@@ -172,7 +185,7 @@ router.post('/promo/validate', validateLimiter, async (req: Request, res: Respon
         result.reason === 'already_redeemed'
           ? 'This code has already been used.'
           : result.reason === 'expired'
-            ? 'This code has expired.'
+            ? personalPrideExpiredMessage(result.expiresAt)
             : 'This code is not valid for this email address.';
       res.json({ valid: false, message: userMessage });
     }
