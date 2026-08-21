@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { loadStore } from './store.js';
 import { loadWeekDrafts } from './drafts.js';
 import { publishPlatform } from './platforms.js';
-import { getDraftMedia, readDraftImageBuffer } from './media-store.js';
+import { getDraftMedia, readDraftImageBuffer, effectiveCaption } from './media-store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOG_PATH = path.join(__dirname, '..', '.data', 'publish-log.json');
@@ -84,7 +84,8 @@ export async function approveWeek({ confirm, postIds } = {}) {
       warning: null,
     };
     try {
-      const out = await publishPlatform(post.platform, post.body, publishOptsFor(post));
+      const caption = effectiveCaption(post.id, post.body);
+      const out = await publishPlatform(post.platform, caption, publishOptsFor(post));
       entry.ok = true;
       entry.externalId = out.externalId || null;
       entry.mediaAttached = Boolean(out.mediaAttached);

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350">
+  <rect width="1080" height="1350" fill="#0D0A06"/>
+  <circle cx="540" cy="420" r="220" fill="none" stroke="rgba(196,131,42,0.45)" stroke-width="3"/>
+  <circle cx="540" cy="420" r="140" fill="none" stroke="rgba(196,131,42,0.3)" stroke-width="2"/>
+  <circle cx="540" cy="420" r="56" fill="#C4832A"/>
+  <text x="540" y="760" text-anchor="middle" fill="#C4832A" font-family="Avenir Next, sans-serif" font-size="22" letter-spacing="0.35em">MENRUSH</text>
+  <text x="540" y="900" text-anchor="middle" fill="#F0E0C0" font-family="Georgia, serif" font-size="56" font-weight="600">Less noise.</text>
+  <text x="540" y="990" text-anchor="middle" fill="#F0E0C0" font-family="Georgia, serif" font-size="56" font-weight="600">More signal.</text>
+  <text x="540" y="1160" text-anchor="middle" fill="rgba(240,224,192,0.65)" font-family="Avenir Next, sans-serif" font-size="24">menrush.com</text>
+</svg>

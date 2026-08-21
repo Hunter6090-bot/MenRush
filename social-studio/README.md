@@ -62,17 +62,15 @@ Fill a card → **Verify** → leave **On** → open **This week** → **Approve
 Use **OAuth 1.0a User Context** only (the four keys above).  
 **Bearer Token / Application-Only** cannot post. Leave it out. Get keys at [developer.x.com](https://developer.x.com) → your app → Keys and tokens.
 
-## This week (visual workspace)
+## This week (card review)
 
-- UK calendar weeks: **Week 1 is 21-27 Aug 2026** (Day 1 = 21 Aug opening signal). Not 18 Aug.
-- **Instagram**, **X**, and **Bluesky** drafts always show the **official logo** (`https://menrush.com/menrush-logo.png`) until you upload or Generate a poster. Logo is never redrawn.
-- Poster prompt + Upload / Generate poster still available; prompt + custom image path persist under `.data/` (gitignored).
-- Instagram expands to **IG Feed**, **IG Story**, and **IG Reel**. Story and Reel are draft+preview only.
-- Platforms that are **Off** are excluded.
-- **Approve** is the only action that publishes (Feed/post only). No auto-publish.
-- Attached raster images wire into X/Bluesky on Approve. IG Feed needs optional public https URL for Graph (else brand logo URL).
+- **Card grid** (not a text feed): large picture, UK date/time/type, editable caption, platform hashtags, **Change front**.
+- Sticky **Approve week**. Approve is still the only publish. No auto-publish.
+- Week 1 is **21-27 Aug 2026**. Day 1 (21 Aug) defaults to the **Nearby. Verified. Now.** brand frame. Other days default to the official logo until you swap.
+- Change front opens a photo plate: official logo, Nearby. Verified. Now., Opens 1 October, Less noise / More signal, or upload your own.
+- Caption edits and custom images persist under `.data/` (gitignored).
 
-Production `backend/src/routes/social.ts` stays **record-only** — this studio posts from your machine, not from Railway.
+Production `backend/src/routes/social.ts` stays record-only. This studio posts from your machine, not Railway.
 
 ## Smoke check (no keys)
 

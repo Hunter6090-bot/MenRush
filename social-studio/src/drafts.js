@@ -8,9 +8,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getDraftMedia } from './media-store.js';
+import { getDraftMedia, effectiveCaption, PLATFORM_TAGS } from './media-store.js';
 
 export { OFFICIAL_LOGO } from './media-store.js';
+export { PLATFORM_TAGS };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PACK_PATH = path.join(__dirname, 'drafts', 'oct1-2026.json');
@@ -166,8 +167,21 @@ function expandInstagramSlots(posts) {
 
 function attachMedia(posts) {
   return posts.map((p) => {
-    if (!p.visual) return { ...p, media: null };
-    return { ...p, media: getDraftMedia(p.id) };
+    if (!p.visual) {
+      return {
+        ...p,
+        body: effectiveCaption(p.id, p.body),
+        media: null,
+        tags: PLATFORM_TAGS[p.platform] || [],
+      };
+    }
+    const media = getDraftMedia(p.id, { date: p.date });
+    return {
+      ...p,
+      body: effectiveCaption(p.id, p.body),
+      media,
+      tags: PLATFORM_TAGS[p.platform] || [],
+    };
   });
 }
 

@@ -1,5 +1,5 @@
 /**
- * Per-draft visual media (prompt + local image path).
+ * Per-draft visual media + caption overrides.
  * Lives only under social-studio/.data/ — gitignored, never secrets.
  */
 
@@ -12,11 +12,49 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, '..', '.data');
 const MEDIA_DIR = path.join(DATA_DIR, 'media');
 const STORE_PATH = path.join(DATA_DIR, 'draft-media.json');
+const VISUALS_DIR = path.join(__dirname, '..', 'public', 'visuals');
 
 const ALLOWED_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg']);
 
-/** Official MenRush medallion — unmodified. Default preview when no upload. */
+/** Official MenRush medallion — unmodified. */
 export const OFFICIAL_LOGO = 'https://menrush.com/menrush-logo.png';
+
+/** Built-in photo plate options (not Midjourney film-set scenes). */
+export const PHOTO_PLATES = [
+  {
+    id: 'logo',
+    label: 'Official logo',
+    url: OFFICIAL_LOGO,
+    day1Default: false,
+  },
+  {
+    id: 'nearby-verified-now',
+    label: 'Nearby. Verified. Now.',
+    url: '/visuals/nearby-verified-now.svg',
+    day1Default: true,
+  },
+  {
+    id: 'opens-october',
+    label: 'Opens 1 October',
+    url: '/visuals/opens-october.svg',
+    day1Default: false,
+  },
+  {
+    id: 'signal-dark',
+    label: 'Less noise. More signal.',
+    url: '/visuals/signal-dark.svg',
+    day1Default: false,
+  },
+];
+
+export const PLATFORM_TAGS = {
+  x: ['#GayMen', '#GayUK'],
+  instagram: ['#GayMen', '#LGBTQ', '#GayLondon', '#GayUK', '#GayDating'],
+  bluesky: ['#GayMen', '#LGBTQ', '#GayUK'],
+  threads: ['#GayMen', '#LGBTQ', '#GayUK'],
+  tiktok: ['#GayMen', '#LGBTQ', '#GayLondon', '#GayUK', '#GayDating'],
+  reddit: [],
+};
 
 function assertDataPath(target) {
   const resolved = path.resolve(target);
@@ -34,7 +72,7 @@ function ensureDirs() {
 }
 
 function defaultStore() {
-  return { version: 1, byDraftId: {} };
+  return { version: 2, byDraftId: {} };
 }
 
 export function loadMediaStore() {
@@ -47,7 +85,7 @@ export function loadMediaStore() {
   }
   const raw = JSON.parse(fs.readFileSync(STORE_PATH, 'utf8'));
   return {
-    version: 1,
+    version: 2,
     byDraftId: raw.byDraftId && typeof raw.byDraftId === 'object' ? raw.byDraftId : {},
   };
 }
@@ -61,6 +99,10 @@ function saveMediaStore(store) {
 function emptyEntry() {
   return {
     prompt: '',
+    caption: null,
+    headline: null,
+    subhead: null,
+    plateId: null,
     imageRelPath: null,
     publicImageUrl: '',
     source: null,
@@ -68,46 +110,97 @@ function emptyEntry() {
   };
 }
 
-export function getDraftMedia(draftId) {
-  const store = loadMediaStore();
-  const entry = store.byDraftId[draftId] || emptyEntry();
-  return publicDraftMedia(draftId, entry);
+function plateById(id) {
+  return PHOTO_PLATES.find((p) => p.id === id) || null;
 }
 
-function publicDraftMedia(draftId, entry) {
-  const hasCustomImage = Boolean(entry.imageRelPath);
+function defaultPlateForDraft(draftId, date) {
+  // Day 1 (21 Aug) uses Nearby. Verified. Now. brand frame when no custom image.
+  if (date === '2026-08-21' || (draftId && String(draftId).startsWith('2026-08-21'))) {
+    return plateById('nearby-verified-now');
+  }
+  return plateById('logo');
+}
+
+export function getDraftMedia(draftId, { date } = {}) {
+  const store = loadMediaStore();
+  const entry = store.byDraftId[draftId] || emptyEntry();
+  return publicDraftMedia(draftId, entry, date);
+}
+
+function publicDraftMedia(draftId, entry, date) {
+  const hasUpload = Boolean(entry.imageRelPath);
   let imageUrl = null;
-  if (hasCustomImage) {
+  if (hasUpload) {
     imageUrl = `/api/drafts/${encodeURIComponent(draftId)}/image?t=${encodeURIComponent(entry.updatedAt || '')}`;
   }
+
+  const plate =
+    (!hasUpload && entry.plateId && plateById(entry.plateId)) ||
+    (!hasUpload ? defaultPlateForDraft(draftId, date) : null);
+
+  const previewUrl = imageUrl || plate?.url || OFFICIAL_LOGO;
+  const isLogo = previewUrl === OFFICIAL_LOGO;
+
   return {
     draftId,
     prompt: entry.prompt || '',
-    /** True only when owner uploaded or generated a custom asset. */
-    hasImage: hasCustomImage,
+    caption: entry.caption,
+    headline: entry.headline,
+    subhead: entry.subhead,
+    hasImage: hasUpload,
     imageRelPath: entry.imageRelPath || null,
     imageUrl,
-    /** Always set — official logo until a custom image exists. Never redraw the logo. */
-    previewUrl: imageUrl || OFFICIAL_LOGO,
-    defaultLogo: !hasCustomImage,
+    plateId: hasUpload ? 'upload' : plate?.id || 'logo',
+    previewUrl,
+    defaultLogo: isLogo && !hasUpload,
     publicImageUrl: entry.publicImageUrl || '',
-    source: entry.source || (hasCustomImage ? null : 'default-logo'),
+    source: entry.source || (hasUpload ? 'upload' : plate?.id || 'default-logo'),
     updatedAt: entry.updatedAt || null,
   };
 }
 
-export function updateDraftMedia(draftId, { prompt, publicImageUrl } = {}) {
+export function listPhotoPlates() {
+  return PHOTO_PLATES.map((p) => ({
+    id: p.id,
+    label: p.label,
+    url: p.url,
+    day1Default: Boolean(p.day1Default),
+  }));
+}
+
+export function updateDraftMedia(draftId, fields = {}) {
   if (!draftId || typeof draftId !== 'string') throw new Error('draftId required');
   const store = loadMediaStore();
   const entry = { ...emptyEntry(), ...store.byDraftId[draftId] };
-  if (typeof prompt === 'string') entry.prompt = prompt.slice(0, 2000);
-  if (typeof publicImageUrl === 'string') {
-    entry.publicImageUrl = publicImageUrl.trim().slice(0, 2000);
+
+  if (typeof fields.prompt === 'string') entry.prompt = fields.prompt.slice(0, 2000);
+  if (typeof fields.publicImageUrl === 'string') {
+    entry.publicImageUrl = fields.publicImageUrl.trim().slice(0, 2000);
   }
+  if (typeof fields.caption === 'string') entry.caption = fields.caption.slice(0, 8000);
+  if (fields.caption === null) entry.caption = null;
+  if (typeof fields.headline === 'string') entry.headline = fields.headline.slice(0, 200);
+  if (typeof fields.subhead === 'string') entry.subhead = fields.subhead.slice(0, 300);
+
+  if (typeof fields.plateId === 'string') {
+    const plate = plateById(fields.plateId);
+    if (!plate) throw new Error(`Unknown plate: ${fields.plateId}`);
+    // Selecting a plate clears uploaded custom image
+    if (entry.imageRelPath) {
+      const abs = path.join(DATA_DIR, entry.imageRelPath);
+      assertDataPath(abs);
+      if (fs.existsSync(abs)) fs.unlinkSync(abs);
+    }
+    entry.imageRelPath = null;
+    entry.plateId = fields.plateId === 'logo' ? null : fields.plateId;
+    entry.source = fields.plateId;
+  }
+
   entry.updatedAt = new Date().toISOString();
   store.byDraftId[draftId] = entry;
   saveMediaStore(store);
-  return publicDraftMedia(draftId, entry);
+  return publicDraftMedia(draftId, entry, fields.date);
 }
 
 function safeExt(filename, mimeType) {
@@ -138,7 +231,6 @@ export function saveDraftImage(draftId, { buffer, mimeType, filename, source }) 
   const abs = path.join(DATA_DIR, rel);
   assertDataPath(abs);
 
-  // Remove previous local file if any
   const store = loadMediaStore();
   const prev = store.byDraftId[draftId];
   if (prev?.imageRelPath) {
@@ -150,6 +242,7 @@ export function saveDraftImage(draftId, { buffer, mimeType, filename, source }) 
   fs.writeFileSync(abs, buffer, { mode: 0o600 });
   const entry = { ...emptyEntry(), ...store.byDraftId[draftId] };
   entry.imageRelPath = rel.split(path.sep).join('/');
+  entry.plateId = null;
   entry.source = source || 'upload';
   entry.updatedAt = new Date().toISOString();
   store.byDraftId[draftId] = entry;
@@ -157,10 +250,9 @@ export function saveDraftImage(draftId, { buffer, mimeType, filename, source }) 
   return publicDraftMedia(draftId, entry);
 }
 
-export function clearDraftImage(draftId) {
+export function clearDraftImage(draftId, { date } = {}) {
   const store = loadMediaStore();
-  const entry = store.byDraftId[draftId];
-  if (!entry) return publicDraftMedia(draftId, emptyEntry());
+  const entry = { ...emptyEntry(), ...store.byDraftId[draftId] };
   if (entry.imageRelPath) {
     const abs = path.join(DATA_DIR, entry.imageRelPath);
     assertDataPath(abs);
@@ -171,10 +263,9 @@ export function clearDraftImage(draftId) {
   entry.updatedAt = new Date().toISOString();
   store.byDraftId[draftId] = entry;
   saveMediaStore(store);
-  return publicDraftMedia(draftId, entry);
+  return publicDraftMedia(draftId, entry, date);
 }
 
-/** Absolute path to local image bytes, or null. */
 export function resolveDraftImagePath(draftId) {
   const store = loadMediaStore();
   const entry = store.byDraftId[draftId];
@@ -205,6 +296,18 @@ export function readDraftImageBuffer(draftId) {
   return { buffer: buf, mimeType: mime, path: abs };
 }
 
+/** Effective caption for display/publish (override or pack body). */
+export function effectiveCaption(draftId, packBody) {
+  const store = loadMediaStore();
+  const entry = store.byDraftId[draftId];
+  if (entry && typeof entry.caption === 'string') return entry.caption;
+  return packBody || '';
+}
+
 export function mediaDataDir() {
   return DATA_DIR;
+}
+
+export function visualsDir() {
+  return VISUALS_DIR;
 }

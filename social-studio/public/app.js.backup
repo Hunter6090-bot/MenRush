@@ -278,7 +278,7 @@ function wireWeekCard(el, post) {
     msg.className = ok === true ? 'toast-ok' : ok === false ? 'toast-err' : 'muted';
   };
 
-  $('[data-change-front]', el)?.addEventListener('click', () => openPlateDialog(post, el));
+  $('[data-change-front]', el).addEventListener('click', () => openPlateDialog(post, el));
 
   $('[data-save-caption]', el).addEventListener('click', async () => {
     const caption = $('[data-caption]', el).value;
