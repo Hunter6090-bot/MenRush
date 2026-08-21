@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { loadStore } from './store.js';
 import { loadWeekDrafts } from './drafts.js';
 import { publishPlatform } from './platforms.js';
+import { getDraftMedia, readDraftImageBuffer } from './media-store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOG_PATH = path.join(__dirname, '..', '.data', 'publish-log.json');
@@ -28,6 +29,22 @@ function writeLog(log) {
   fs.writeFileSync(LOG_PATH, JSON.stringify(log, null, 2), { mode: 0o600 });
 }
 
+function publishOptsFor(post) {
+  const media = getDraftMedia(post.id);
+  const opts = { format: post.format || 'post' };
+  if (post.platform === 'instagram') {
+    if (media.publicImageUrl) opts.imageUrl = media.publicImageUrl;
+    return opts;
+  }
+  if (post.platform === 'x' || post.platform === 'bluesky') {
+    const local = readDraftImageBuffer(post.id);
+    if (local && local.mimeType !== 'image/svg+xml') {
+      opts.image = local;
+    }
+  }
+  return opts;
+}
+
 export async function approveWeek({ confirm, postIds } = {}) {
   if (confirm !== true) {
     throw new Error('Confirm required. Set confirm: true — Approve is the only action that publishes.');
@@ -41,7 +58,7 @@ export async function approveWeek({ confirm, postIds } = {}) {
 
   const enabledPlatforms = ready.map((c) => c.platform);
   const week = await loadWeekDrafts({ enabledPlatforms });
-  let posts = week.posts;
+  let posts = week.posts.filter((p) => p.publishable !== false);
   if (Array.isArray(postIds) && postIds.length) {
     const want = new Set(postIds);
     posts = posts.filter((p) => want.has(p.id));
@@ -57,16 +74,21 @@ export async function approveWeek({ confirm, postIds } = {}) {
     const entry = {
       id: post.id,
       platform: post.platform,
+      format: post.format || null,
       date: post.date,
       timeUk: post.timeUk,
       ok: false,
       error: null,
       externalId: null,
+      mediaAttached: false,
+      warning: null,
     };
     try {
-      const out = await publishPlatform(post.platform, post.body);
+      const out = await publishPlatform(post.platform, post.body, publishOptsFor(post));
       entry.ok = true;
       entry.externalId = out.externalId || null;
+      entry.mediaAttached = Boolean(out.mediaAttached);
+      entry.warning = out.warning || null;
     } catch (err) {
       entry.ok = false;
       entry.error = err.message || String(err);

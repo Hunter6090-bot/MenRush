@@ -1,6 +1,6 @@
 # MenRush Social Studio
 
-Local-only operator app for **Connections** (platform keys) and **This week** (Oct 1 2026 campaign drafts).  
+Local-only operator app for **Connections** (platform keys) and **This week** (Oct 1 2026 campaign drafts + visual workspace).  
 Keys stay on this device. Nothing here is deployed to Vercel or Railway.
 
 > Connections is where the studio gets permission to post. Keys stay on this device. On means that platform is in the week. Verify checks the key before you approve.
@@ -21,11 +21,13 @@ SOCIAL_STUDIO_NO_OPEN=1 npm start   # skip browser open
 SOCIAL_STUDIO_PORT=4000 npm start   # custom port
 ```
 
-## Where keys live
+## Where keys / media live
 
 | What | Where |
 |---|---|
 | Connection secrets | `social-studio/.data/connections.json` (mode `0600`, gitignored) |
+| Draft prompts + image paths | `social-studio/.data/draft-media.json` + `.data/media/` (gitignored) |
+| Optional image-gen key | `social-studio/.data/studio-settings.json` (gitignored) |
 | Publish results | `social-studio/.data/publish-log.json` (gitignored) |
 
 Enter keys only in the Connections UI. The studio does **not** load repo-root env files and does not import secrets from git history.
@@ -51,6 +53,8 @@ If those are unset or unreachable, the studio loads the local pack from `src/dra
 | **Bluesky** | Handle, App password | `createSession` |
 | **Threads** | Access token, Threads user id | Graph identity |
 
+Plus optional **Image generate** (API key) — does not use Verify/On. Local poster Generate on This week works without it; **Generate (AI)** stays disabled until a key is saved.
+
 Fill a card → **Verify** → leave **On** → open **This week** → **Approve & post**.
 
 ### X: Bearer Token cannot tweet
@@ -58,13 +62,15 @@ Fill a card → **Verify** → leave **On** → open **This week** → **Approve
 Use **OAuth 1.0a User Context** only (the four keys above).  
 **Bearer Token / Application-Only** cannot post. Leave it out. Get keys at [developer.x.com](https://developer.x.com) → your app → Keys and tokens.
 
-## This week
+## This week (visual workspace)
 
-- UK calendar weeks from `docs/social-oct1-2026.md` (week of 18 Aug 2026 → 1 Oct).
+- UK calendar weeks: **Week 1 is 21-27 Aug 2026** (Day 1 = 21 Aug opening signal). Not 18 Aug.
+- **Instagram**, **X**, and **Bluesky** drafts always show the **official logo** (`https://menrush.com/menrush-logo.png`) until you upload or Generate a poster. Logo is never redrawn.
+- Poster prompt + Upload / Generate poster still available; prompt + custom image path persist under `.data/` (gitignored).
+- Instagram expands to **IG Feed**, **IG Story**, and **IG Reel**. Story and Reel are draft+preview only.
 - Platforms that are **Off** are excluded.
-- **Approve** is the only action that publishes, and only to **On + Verified** platforms.
-- Confirm in the UI. Success/failure is recorded per post. No auto-publish on a timer.
-- Prefer today’s drafts when present; otherwise the rest of the week for ready platforms.
+- **Approve** is the only action that publishes (Feed/post only). No auto-publish.
+- Attached raster images wire into X/Bluesky on Approve. IG Feed needs optional public https URL for Graph (else brand logo URL).
 
 Production `backend/src/routes/social.ts` stays **record-only** — this studio posts from your machine, not from Railway.
 
