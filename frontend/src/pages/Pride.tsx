@@ -171,9 +171,9 @@ export const Pride = () => {
             className="mt-6 max-w-[560px] text-pretty text-[clamp(15px,2vw,17px)] font-semibold leading-[1.6] text-[#F0E0C0]/92"
             data-testid="pride-headline-lock"
           >
-            One Pride grant. Two ways to claim it during 21–31 August 2026, plus holders of an
-            already-emailed personal code. You cannot use Premium before launch. 31 August is not
-            the end of Premium.
+            One Pride grant. Pride-flagged invite 21–31 August 2026, or public code by 5 September
+            2026, plus holders of an already-emailed personal code. You cannot use Premium before
+            launch. 31 August is not the end of Premium.
           </p>
 
           <p

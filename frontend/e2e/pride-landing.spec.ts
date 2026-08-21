@@ -13,10 +13,13 @@ test.describe('Pride promotion landing', () => {
 
     const headline = page.getByTestId('pride-headline-lock');
     await expect(headline).toContainText(/One Pride grant/i);
-    await expect(headline).toContainText(/21–31 August 2026/i);
+    await expect(headline).toContainText(/Pride-flagged invite 21–31 August 2026/i);
+    await expect(headline).toContainText(/public code by 5 September 2026/i);
+    await expect(headline).toContainText(/already-emailed personal code/i);
     await expect(headline).toContainText(/cannot use Premium before launch/i);
     await expect(headline).toContainText(/31 August is not the end of Premium/i);
     await expect(headline).not.toContainText(/this week/i);
+    await expect(headline).not.toContainText(/Two ways to claim it during/i);
     // Duration detail lives once in conditions — not a conflicting second rule in the hero
     await expect(headline).not.toContainText(/first redeem after open/i);
 
