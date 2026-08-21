@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isPrideInviteIssueOpen,
   isPridePromoCode,
   looksLikePersonalPrideCode,
   normalizePridePromoCode,
+  PRIDE_INVITE_ISSUE_CLOSES,
+  PRIDE_INVITE_ISSUE_OPENS,
   PRIDE_PROMO_CODE,
   PRIDE_PROMO_NORMALIZED,
 } from '../lib/pridePromo';
@@ -25,5 +28,14 @@ describe('pridePromo', () => {
     expect(looksLikePersonalPrideCode('pride-a3f7-b2c1')).toBe(true);
     expect(looksLikePersonalPrideCode(PRIDE_PROMO_CODE)).toBe(false);
     expect(looksLikePersonalPrideCode('MENRUSH-A3F7-B2C1')).toBe(false);
+  });
+
+  it('opens Pride-flagged invite issue only 21–31 Aug 2026 UK', () => {
+    expect(isPrideInviteIssueOpen(new Date('2026-08-20T22:59:59Z'))).toBe(false);
+    expect(isPrideInviteIssueOpen(PRIDE_INVITE_ISSUE_OPENS)).toBe(true);
+    expect(isPrideInviteIssueOpen(new Date('2026-08-25T12:00:00Z'))).toBe(true);
+    expect(isPrideInviteIssueOpen(PRIDE_INVITE_ISSUE_CLOSES)).toBe(true);
+    expect(isPrideInviteIssueOpen(new Date('2026-08-31T23:00:00Z'))).toBe(false);
+    expect(isPrideInviteIssueOpen(new Date('2026-09-01T00:00:00Z'))).toBe(false);
   });
 });

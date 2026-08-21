@@ -8,7 +8,7 @@ test.describe('Closed Brighton Pride URLs', () => {
     await expect(page).toHaveURL(/\/pride\/?$/);
     await expect(page.getByTestId('pride-headline-lock')).toBeVisible();
     await expect(page.getByTestId('pride-grandfather')).toContainText(
-      /personal Brighton Pride code by email/i,
+      /personal Brighton Pride code \(PRIDE-XXXX-XXXX\) from an earlier email/i,
     );
     await expect(page.getByText(/Brighton Pride Special Offer/i)).toHaveCount(0);
     await expect(page.getByTestId('brightonpride-adult-confirm')).toHaveCount(0);

@@ -253,9 +253,10 @@ export const Register = () => {
             <p className={helperClass} data-testid="register-pride-note">
               {isPridePromoCode(promoCode) ? (
                 <>
-                  Public code — enter by {PRIDE_ENTER_BY}. Joining the waitlist alone does not redeem
-                  this code. If you have a personal emailed code instead, clear this box and enter
-                  that code. If redemption fails, you will see an error on this form.
+                  Public code — enter by {PRIDE_ENTER_BY}. The grant happens when you enter this code
+                  at register. If you have a personal emailed PRIDE-XXXX-XXXX or a Pride-flagged
+                  MENRUSH invite instead, clear this box and enter that code / invite. If redemption
+                  fails, you will see an error on this form.
                 </>
               ) : looksLikePersonalPrideCode(promoCode) ? (
                 <>
@@ -266,7 +267,8 @@ export const Register = () => {
               ) : (
                 <>
                   Optional. Public code {PRIDE_PROMO_CODE} (enter by {PRIDE_ENTER_BY}), or your
-                  personal emailed PRIDE-XXXX-XXXX (redeem by 31 October 2026). One Pride grant per
+                  personal emailed PRIDE-XXXX-XXXX (redeem by 31 October 2026). Pride-flagged MENRUSH
+                  invites book Premium in the invite field — leave this blank. One Pride grant per
                   person — do not stack. If redemption fails, you will see an error on this form.
                 </>
               )}

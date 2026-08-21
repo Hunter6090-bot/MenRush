@@ -81,6 +81,7 @@ export const premiumService = {
          u.premium_tier,
          u.is_premium,
          u.premium_until,
+         u.premium_starts_at,
          s.id AS subscription_id,
          s.status AS subscription_status,
          s.processor,
@@ -97,8 +98,12 @@ export const premiumService = {
     if (!row) return null;
 
     const until = row.premium_until ? new Date(row.premium_until) : null;
+    const starts = row.premium_starts_at ? new Date(row.premium_starts_at) : null;
+    const started = !starts || starts.getTime() <= Date.now();
     const active =
-      Boolean(row.is_premium) && (!until || until.getTime() > Date.now());
+      Boolean(row.is_premium) &&
+      started &&
+      (!until || until.getTime() > Date.now());
 
     const betaFree = this.isBetaPremiumFree();
     return {
@@ -106,6 +111,7 @@ export const premiumService = {
       is_premium: betaFree || active,
       beta_premium_included: betaFree,
       premium_until: until?.toISOString() ?? null,
+      premium_starts_at: starts?.toISOString() ?? null,
       subscription: row.subscription_id
         ? {
             id: row.subscription_id,
