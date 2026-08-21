@@ -29,6 +29,7 @@ import {
   saveDraftImage,
   clearDraftImage,
   readDraftImageBuffer,
+  listPhotoPlates,
 } from './media-store.js';
 import { generateLocalPoster } from './poster.js';
 import {
@@ -191,9 +192,13 @@ app.get('/api/publish-log', (_req, res) => {
   res.json(recentPublishLog());
 });
 
+app.get('/api/plates', (_req, res) => {
+  res.json({ plates: listPhotoPlates() });
+});
+
 app.get('/api/drafts/:id/media', (req, res) => {
   try {
-    res.json({ media: getDraftMedia(req.params.id) });
+    res.json({ media: getDraftMedia(req.params.id, { date: req.query.date }) });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -204,8 +209,29 @@ app.put('/api/drafts/:id/media', (req, res) => {
     const media = updateDraftMedia(req.params.id, {
       prompt: req.body?.prompt,
       publicImageUrl: req.body?.publicImageUrl,
+      caption: req.body?.caption,
+      headline: req.body?.headline,
+      subhead: req.body?.subhead,
+      plateId: req.body?.plateId,
+      date: req.body?.date,
     });
     res.json({ media });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/drafts/:id/caption', (req, res) => {
+  try {
+    if (typeof req.body?.caption !== 'string') {
+      res.status(400).json({ error: 'caption required' });
+      return;
+    }
+    const media = updateDraftMedia(req.params.id, {
+      caption: req.body.caption,
+      date: req.body?.date,
+    });
+    res.json({ media, caption: req.body.caption });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -234,7 +260,7 @@ app.post('/api/drafts/:id/image', (req, res) => {
 
 app.delete('/api/drafts/:id/image', (req, res) => {
   try {
-    const media = clearDraftImage(req.params.id);
+    const media = clearDraftImage(req.params.id, { date: req.body?.date || req.query.date });
     res.json({ media });
   } catch (err) {
     res.status(400).json({ error: err.message });
