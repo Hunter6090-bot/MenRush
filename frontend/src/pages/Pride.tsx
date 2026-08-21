@@ -41,7 +41,7 @@ export const Pride = () => {
 
   useEffect(() => {
     trackEventOnce('landing_viewed', { surface: 'pride', ...getAttributionParams() });
-    storePridePromoCode(PRIDE_PROMO_CODE);
+    // Do not stuff localStorage on visit — grandfather users must enter their personal code.
   }, []);
 
   const copyCode = async () => {
@@ -55,6 +55,9 @@ export const Pride = () => {
   };
 
   const registerHref = `/register?promo=${encodeURIComponent(PRIDE_PROMO_CODE)}`;
+  const onPublicCtaClick = () => {
+    storePridePromoCode(PRIDE_PROMO_CODE);
+  };
 
   return (
     <div className="relative flex min-h-dvh flex-col overflow-hidden bg-[#0D0A06] text-[#F0E0C0]">
@@ -103,8 +106,9 @@ export const Pride = () => {
             className="mt-5 max-w-[560px] text-pretty text-[14px] leading-[1.55] text-[var(--cream-muted)]"
             data-testid="pride-grandfather"
           >
-            If you already received a personal Brighton Pride code by email, that code still works
-            on the terms in that email. Do not also enter{' '}
+            If you already received a personal Brighton Pride code by email, enter that code at
+            register on the same email. It still works on the terms in that email (redeem by 31
+            October 2026). Clear the public code if it is pre-filled. Do not also enter{' '}
             <span className="font-mono font-bold tracking-wide text-[#F0E0C0]">
               {PRIDE_PROMO_CODE}
             </span>
@@ -131,7 +135,12 @@ export const Pride = () => {
           </div>
 
           <div className="mt-8 w-full max-w-[460px]">
-            <Link to={registerHref} className={publicPrimaryButtonClass} data-testid="pride-cta">
+            <Link
+              to={registerHref}
+              className={publicPrimaryButtonClass}
+              data-testid="pride-cta"
+              onClick={onPublicCtaClick}
+            >
               Create account &amp; enter code
             </Link>
             <p
@@ -142,7 +151,8 @@ export const Pride = () => {
               <Link to="/#waitlist" className={publicLinkClass} data-testid="pride-waitlist-link">
                 waitlist
               </Link>{' '}
-              alone does not redeem this code. Have a beta invite?{' '}
+              alone does not redeem this code. Already have a personal emailed code? Open register
+              and enter that code instead — clear the public code if it appears. Have a beta invite?{' '}
               <Link to="/beta" className={publicLinkClass}>
                 Enter it here
               </Link>

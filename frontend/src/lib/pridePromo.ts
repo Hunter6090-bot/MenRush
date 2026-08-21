@@ -26,10 +26,25 @@ export function storePridePromoCode(code: string = PRIDE_PROMO_CODE): void {
   }
 }
 
+export function clearStoredPridePromoCode(): void {
+  try {
+    localStorage.removeItem(PRIDE_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function readStoredPridePromoCode(): string {
   try {
     return localStorage.getItem(PRIDE_STORAGE_KEY)?.trim() || '';
   } catch {
     return '';
   }
+}
+
+/** Personal emailed codes look like PRIDE-XXXX-XXXX (not the public spaced code). */
+export function looksLikePersonalPrideCode(raw: string): boolean {
+  const trimmed = raw.trim().toUpperCase();
+  if (!trimmed || isPridePromoCode(trimmed)) return false;
+  return /^PRIDE-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(trimmed);
 }

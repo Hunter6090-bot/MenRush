@@ -24,8 +24,11 @@ test.describe('Pride promotion landing', () => {
     // Legal grandfather for already-issued personal Brighton codes (redirect target must carry this)
     const grandfather = page.getByTestId('pride-grandfather');
     await expect(grandfather).toContainText(
-      /If you already received a personal Brighton Pride code by email, that code still works on the terms in that email/i,
+      /If you already received a personal Brighton Pride code by email, enter that code at register on the same email/i,
     );
+    await expect(grandfather).toContainText(/still works on the terms in that email/i);
+    await expect(grandfather).toContainText(/redeem by 31\s*October\s*2026/i);
+    await expect(grandfather).toContainText(/Clear the public code if it is pre-filled/i);
     await expect(grandfather).toContainText(/Do not also enter PRIDE 3MONTH FREE/i);
     await expect(grandfather).toContainText(/One person gets one Pride grant/i);
 

@@ -14,8 +14,11 @@ import {
   storeInviteCode,
 } from '../lib/betaInvite';
 import {
+  PRIDE_ENTER_BY,
   PRIDE_PROMO_CODE,
+  clearStoredPridePromoCode,
   isPridePromoCode,
+  looksLikePersonalPrideCode,
   readStoredPridePromoCode,
   storePridePromoCode,
 } from '../lib/pridePromo';
@@ -93,10 +96,15 @@ export const Register = () => {
   }, [inviteFromQuery]);
 
   useEffect(() => {
-    if (promoFromQuery && isPridePromoCode(promoFromQuery)) {
+    if (!promoFromQuery) return;
+    if (isPridePromoCode(promoFromQuery)) {
       storePridePromoCode(PRIDE_PROMO_CODE);
       setPromoCode(PRIDE_PROMO_CODE);
+      return;
     }
+    // Personal emailed code from deep link — do not overwrite with the public code.
+    setPromoCode(promoFromQuery.trim().toUpperCase());
+    clearStoredPridePromoCode();
   }, [promoFromQuery]);
 
   useEffect(() => {
@@ -104,6 +112,17 @@ export const Register = () => {
       navigate('/beta', { replace: true });
     }
   }, [inviteCode, navigate]);
+
+  const onPromoChange = (value: string) => {
+    setError('');
+    setPromoCode(value);
+  };
+
+  const clearPromo = () => {
+    setError('');
+    setPromoCode('');
+    clearStoredPridePromoCode();
+  };
 
   const setField = <K extends keyof FormState>(field: K) =>
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -116,6 +135,8 @@ export const Register = () => {
             : e.target.value,
       }) as FormState);
     };
+
+  const helperClass = 'text-[13px] leading-[1.55] text-[var(--cream-muted)]';
 
   const age = useMemo(() => calcAge(form.dob), [form.dob]);
   const pwScore = useMemo(() => passwordScore(form.password), [form.password]);
@@ -151,6 +172,12 @@ export const Register = () => {
 
     setLoading(true);
     try {
+      const trimmedPromo = promoCode.trim();
+      if (trimmedPromo && isPridePromoCode(trimmedPromo)) {
+        storePridePromoCode(PRIDE_PROMO_CODE);
+      } else if (trimmedPromo) {
+        clearStoredPridePromoCode();
+      }
       const res = await authAPI.register({
         name: form.displayName,
         email: form.email,
@@ -158,7 +185,7 @@ export const Register = () => {
         date_of_birth: form.dob,
         password: form.password,
         ...(BETA_INVITE_REQUIRED ? { invite_code: inviteCode } : {}),
-        ...(promoCode.trim() ? { promo_code: promoCode.trim() } : {}),
+        ...(trimmedPromo ? { promo_code: trimmedPromo } : {}),
       });
       setAuth(res.data.user, res.data.token);
       navigate(FEATURES.requireIdVerification ? '/verify/id' : '/profile/setup');
@@ -168,8 +195,6 @@ export const Register = () => {
       setLoading(false);
     }
   };
-
-  const helperClass = 'text-[13px] leading-[1.55] text-[var(--cream-muted)]';
 
   const segColor = (idx: number): string => {
     if (pwScore <= idx) return '#3D2B0E';
@@ -196,22 +221,58 @@ export const Register = () => {
           </div>
         ) : null}
 
-        {promoCode ? (
-          <div className={publicInviteChipClass} data-testid="register-pride-promo">
-            <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-[#E0A14A]">
-              Pride promo
-            </span>
-            <span className="font-mono text-sm tracking-[0.12em] text-[#F0E0C0]">{promoCode}</span>
-          </div>
-        ) : null}
-        {promoCode ? (
-          <p className="text-[13px] leading-[1.55] text-[var(--cream-muted)]" data-testid="register-pride-note">
-            Create an account and enter {promoCode} by 5 September 2026. Joining the waitlist alone
-            does not redeem this code. If redemption fails, you will see an error on this form.
-          </p>
-        ) : null}
-
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <label className={publicLabelClass} htmlFor="register-promo-code">
+                Pride promo (optional)
+              </label>
+              {promoCode ? (
+                <button
+                  type="button"
+                  onClick={clearPromo}
+                  className="text-[12px] font-bold text-[#E0A14A] hover:text-[#C4832A]"
+                  data-testid="register-promo-clear"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+            <input
+              id="register-promo-code"
+              type="text"
+              value={promoCode}
+              onChange={(e) => onPromoChange(e.target.value)}
+              placeholder="PRIDE 3MONTH FREE or PRIDE-XXXX-XXXX"
+              aria-label="Pride promo code"
+              autoComplete="off"
+              spellCheck={false}
+              className={`${publicInputClass} font-mono tracking-[0.08em]`}
+              data-testid="register-promo-input"
+            />
+            <p className={helperClass} data-testid="register-pride-note">
+              {isPridePromoCode(promoCode) ? (
+                <>
+                  Public code — enter by {PRIDE_ENTER_BY}. Joining the waitlist alone does not redeem
+                  this code. If you have a personal emailed code instead, clear this box and enter
+                  that code. If redemption fails, you will see an error on this form.
+                </>
+              ) : looksLikePersonalPrideCode(promoCode) ? (
+                <>
+                  Personal emailed code — use the same email it was sent to. Redeem by 31 October
+                  2026. Do not also enter {PRIDE_PROMO_CODE}. If redemption fails, you will see an
+                  error on this form.
+                </>
+              ) : (
+                <>
+                  Optional. Public code {PRIDE_PROMO_CODE} (enter by {PRIDE_ENTER_BY}), or your
+                  personal emailed PRIDE-XXXX-XXXX (redeem by 31 October 2026). One Pride grant per
+                  person — do not stack. If redemption fails, you will see an error on this form.
+                </>
+              )}
+            </p>
+          </div>
+
           <div className="flex flex-col gap-2.5">
             <label className={publicLabelClass}>Username</label>
             <input

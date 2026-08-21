@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   isPridePromoCode,
+  looksLikePersonalPrideCode,
   normalizePridePromoCode,
   PRIDE_PROMO_CODE,
   PRIDE_PROMO_NORMALIZED,
@@ -17,5 +18,12 @@ describe('pridePromo', () => {
     expect(isPridePromoCode(PRIDE_PROMO_CODE)).toBe(true);
     expect(isPridePromoCode('PRIDE3MONTHFREE')).toBe(true);
     expect(isPridePromoCode('PRIDE-XXXX-YYYY')).toBe(false);
+  });
+
+  it('detects personal emailed codes without treating the public code as personal', () => {
+    expect(looksLikePersonalPrideCode('PRIDE-A3F7-B2C1')).toBe(true);
+    expect(looksLikePersonalPrideCode('pride-a3f7-b2c1')).toBe(true);
+    expect(looksLikePersonalPrideCode(PRIDE_PROMO_CODE)).toBe(false);
+    expect(looksLikePersonalPrideCode('MENRUSH-A3F7-B2C1')).toBe(false);
   });
 });
