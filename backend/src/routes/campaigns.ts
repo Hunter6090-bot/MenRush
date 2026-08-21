@@ -144,7 +144,9 @@ router.post('/:campaignId/signup', signupLimiter, async (req: Request, res: Resp
       res.json({
         ok: true,
         message:
-          'Check your inbox — your Pride-flagged invite is on its way. Submitting this form is not the Premium grant; enter that invite at register when you create your account.',
+          result.outcome === 'existing'
+            ? 'Check your inbox. We re-sent your Pride code. Enter it at register on the same email.'
+            : 'Check your inbox. Your Pride code is on its way. Enter it at register on the same email.',
       });
       console.log(`[campaigns] pride invite ${result.outcome} for ${email}`);
       return;
@@ -173,7 +175,7 @@ router.post('/:campaignId/signup', signupLimiter, async (req: Request, res: Resp
     if (err.message === 'issue_window_closed') {
       res.status(410).json({
         error:
-          'The Pride invite window closed after 31 August 2026. You can still enter the public code PRIDE 3MONTH FREE at register by 5 September 2026.',
+          'The Pride claim window closed after 31 August 2026. If you already claimed, use the same email on /pride to resend your code.',
         code: 'issue_window_closed',
       });
       return;
@@ -181,7 +183,7 @@ router.post('/:campaignId/signup', signupLimiter, async (req: Request, res: Resp
     if (err.message === 'other_pride_path') {
       res.status(409).json({
         error:
-          'This email already has a Pride path. Use your existing invite or personal code at register — one grant only, no stacking.',
+          'This email already has a Pride grant. Use your existing code at register. One grant only, no stacking.',
         code: 'other_pride_path',
       });
       return;
