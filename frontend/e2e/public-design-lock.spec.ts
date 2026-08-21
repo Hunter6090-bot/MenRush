@@ -17,7 +17,7 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   const heroHeading = page.locator('h1.mr-coming-soon-heading');
   await expect(heroHeading).toBeVisible();
   await expect(heroHeading).toContainText(/Real men/i);
-  await expect(heroHeading).toContainText(/Verified bodies/i);
+  await expect(heroHeading).toContainText(/Verified profiles/i);
 
   await expect(page.getByText(/OPENS 1 OCTOBER 2026/i)).toBeVisible();
   await expect(page.getByText(/LONDON · MANCHESTER · BIRMINGHAM · BRIGHTON/i)).toBeVisible();
