@@ -14,13 +14,11 @@ import {
   storeInviteCode,
 } from '../lib/betaInvite';
 import {
-  PRIDE_ENTER_BY,
-  PRIDE_PROMO_CODE,
+  PRIDE_PUBLIC_CODE_RETIRED_MESSAGE,
   clearStoredPridePromoCode,
   isPridePromoCode,
   looksLikePersonalPrideCode,
   readStoredPridePromoCode,
-  storePridePromoCode,
 } from '../lib/pridePromo';
 import { FEATURES } from '../lib/featureFlags';
 import {
@@ -72,9 +70,15 @@ export const Register = () => {
   const inviteFromQuery = searchParams.get('invite')?.trim() || '';
   const promoFromQuery = searchParams.get('promo')?.trim() || '';
   const [inviteCode] = useState(() => inviteFromQuery || readStoredInviteCode() || '');
-  const [promoCode, setPromoCode] = useState(
-    () => promoFromQuery || readStoredPridePromoCode() || '',
-  );
+  const [promoCode, setPromoCode] = useState(() => {
+    const fromQuery = promoFromQuery;
+    const fromStore = readStoredPridePromoCode();
+    // Never seed the retired public code. Personal PRIDE-XXXX only.
+    if (fromQuery && isPridePromoCode(fromQuery)) return '';
+    if (fromQuery) return fromQuery.trim().toUpperCase();
+    if (fromStore && isPridePromoCode(fromStore)) return '';
+    return fromStore || '';
+  });
   const [form, setForm] = useState<FormState>({
     displayName: '',
     email: '',
@@ -98,11 +102,12 @@ export const Register = () => {
   useEffect(() => {
     if (!promoFromQuery) return;
     if (isPridePromoCode(promoFromQuery)) {
-      storePridePromoCode(PRIDE_PROMO_CODE);
-      setPromoCode(PRIDE_PROMO_CODE);
+      // Retired public code. Do not prefill or store.
+      clearStoredPridePromoCode();
+      setPromoCode('');
       return;
     }
-    // Personal emailed code from deep link — do not overwrite with the public code.
+    // Personal emailed code from deep link.
     setPromoCode(promoFromQuery.trim().toUpperCase());
     clearStoredPridePromoCode();
   }, [promoFromQuery]);
@@ -174,8 +179,12 @@ export const Register = () => {
     try {
       const trimmedPromo = promoCode.trim();
       if (trimmedPromo && isPridePromoCode(trimmedPromo)) {
-        storePridePromoCode(PRIDE_PROMO_CODE);
-      } else if (trimmedPromo) {
+        clearStoredPridePromoCode();
+        setError(PRIDE_PUBLIC_CODE_RETIRED_MESSAGE);
+        setLoading(false);
+        return;
+      }
+      if (trimmedPromo) {
         clearStoredPridePromoCode();
       }
       const res = await authAPI.register({
@@ -243,7 +252,7 @@ export const Register = () => {
               type="text"
               value={promoCode}
               onChange={(e) => onPromoChange(e.target.value)}
-              placeholder="PRIDE 3MONTH FREE or PRIDE-XXXX-XXXX"
+              placeholder="PRIDE-XXXX-XXXX (personal emailed code)"
               aria-label="Pride promo code"
               autoComplete="off"
               spellCheck={false}
@@ -252,24 +261,18 @@ export const Register = () => {
             />
             <p className={helperClass} data-testid="register-pride-note">
               {isPridePromoCode(promoCode) ? (
-                <>
-                  Public code — enter by {PRIDE_ENTER_BY}. The grant happens when you enter this code
-                  at register. If you have a personal emailed PRIDE-XXXX-XXXX or a Pride-flagged
-                  MENRUSH invite instead, clear this box and enter that code / invite. If redemption
-                  fails, you will see an error on this form.
-                </>
+                <>{PRIDE_PUBLIC_CODE_RETIRED_MESSAGE}</>
               ) : looksLikePersonalPrideCode(promoCode) ? (
                 <>
-                  Personal emailed code — use the same email it was sent to. Redeem by 31 October
-                  2026. Do not also enter {PRIDE_PROMO_CODE}. If redemption fails, you will see an
-                  error on this form.
+                  Personal emailed code. Use the same email it was sent to. Redeem by 31 October
+                  2026. If you have a Pride-flagged MENRUSH invite, enter it in the invite field and
+                  leave this blank. One Pride grant per person.
                 </>
               ) : (
                 <>
-                  Optional. Public code {PRIDE_PROMO_CODE} (enter by {PRIDE_ENTER_BY}), or your
-                  personal emailed PRIDE-XXXX-XXXX (redeem by 31 October 2026). Pride-flagged MENRUSH
-                  invites book Premium in the invite field — leave this blank. One Pride grant per
-                  person — do not stack. If redemption fails, you will see an error on this form.
+                  Optional. Personal emailed PRIDE-XXXX-XXXX only (redeem by 31 October 2026). Pride
+                  codes from /pride are MENRUSH invites: enter them in the invite field and leave
+                  this blank. One Pride grant per person.
                 </>
               )}
             </p>

@@ -1,11 +1,14 @@
-/** Public Pride promo — printed QR lands on /pride. */
+/** Pride promo helpers. Public PRIDE 3MONTH FREE is retired; claim unique codes from /pride. */
 
 export const PRIDE_PROMO_CODE = 'PRIDE 3MONTH FREE';
-/** Internal match key after stripping spaces — do not print this as a second public code. */
+/** Internal match key after stripping spaces. Do not print as a public code. */
 export const PRIDE_PROMO_NORMALIZED = 'PRIDE3MONTHFREE';
+/** Shown when someone still types the retired public code at register. */
+export const PRIDE_PUBLIC_CODE_RETIRED_MESSAGE =
+  'This code is not in use. Claim from /pride with your email.';
 export const PRIDE_ENTER_BY = '5 September 2026';
 export const PRIDE_PREMIUM_START = '1 October 2026';
-/** On-time end only (1 Oct open → 1 Jan). If launch slips, grant end moves with actual open — never hard-code this date as premium_until. */
+/** On-time end only (1 Oct open → 1 Jan). If launch slips, grant end moves with actual open. */
 export const PRIDE_PREMIUM_END = '1 January 2027';
 export const PRIDE_STORAGE_KEY = 'menrush_pride_promo';
 
