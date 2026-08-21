@@ -10,6 +10,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getDraftMedia } from './media-store.js';
 
+export { OFFICIAL_LOGO } from './media-store.js';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PACK_PATH = path.join(__dirname, 'drafts', 'oct1-2026.json');
 
@@ -21,12 +23,12 @@ export const PUBLISHABLE_FORMATS = new Set(['feed', 'post']);
 
 /** Campaign weeks aligned with docs/social-oct1-2026.md (UK calendar). */
 export const WEEK_RANGES = [
-  { week: 1, start: '2026-08-18', end: '2026-08-24', theme: 'Launch signal' },
-  { week: 2, start: '2026-08-25', end: '2026-08-31', theme: 'Nearby / rooms energy' },
-  { week: 3, start: '2026-09-01', end: '2026-09-07', theme: 'Early Premium' },
-  { week: 4, start: '2026-09-08', end: '2026-09-14', theme: 'Founder / build' },
-  { week: 5, start: '2026-09-15', end: '2026-09-21', theme: 'Trust / discretion' },
-  { week: 6, start: '2026-09-22', end: '2026-09-28', theme: 'Countdown pressure' },
+  { week: 1, start: '2026-08-21', end: '2026-08-27', theme: 'Launch signal' },
+  { week: 2, start: '2026-08-28', end: '2026-09-03', theme: 'Nearby / rooms energy' },
+  { week: 3, start: '2026-09-04', end: '2026-09-10', theme: 'Early Premium' },
+  { week: 4, start: '2026-09-11', end: '2026-09-17', theme: 'Founder / build' },
+  { week: 5, start: '2026-09-18', end: '2026-09-24', theme: 'Trust / discretion' },
+  { week: 6, start: '2026-09-25', end: '2026-09-28', theme: 'Countdown pressure' },
   { week: 7, start: '2026-09-29', end: '2026-10-01', theme: 'Opening day' },
 ];
 

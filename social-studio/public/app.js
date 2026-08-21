@@ -188,9 +188,8 @@ function aspectClass(format) {
 function visualWorkspaceHtml(p) {
   const media = p.media || {};
   const prompt = media.prompt || '';
-  const preview = media.hasImage
-    ? `<img data-preview src="${escapeAttr(media.imageUrl)}" alt="Draft preview" />`
-    : `<div class="visual-empty">No image yet — upload or Generate poster from your prompt.</div>`;
+  const previewSrc = media.previewUrl || media.imageUrl || 'https://menrush.com/menrush-logo.png';
+  const preview = `<img data-preview src="${escapeAttr(previewSrc)}" alt="Draft preview" class="${media.defaultLogo || !media.hasImage ? 'logo-default' : ''}" />`;
   const remoteDisabled = imageGenConfigured ? '' : 'disabled';
   const remoteTitle = imageGenConfigured
     ? 'Remote AI Generate (provider not fully wired — use local poster or upload)'
@@ -217,6 +216,7 @@ function visualWorkspaceHtml(p) {
           <button type="button" class="btn ghost" data-save-prompt>Save prompt</button>
           <button type="button" class="btn ghost" data-clear-image ${media.hasImage ? '' : 'disabled'}>Clear image</button>
         </div>
+        <p class="visual-note muted">${media.hasImage ? 'Custom image on this draft.' : 'Official MenRush logo (default). Upload or Generate to replace.'}</p>
         <div class="msg" data-visual-msg></div>
       </div>
     </div>
@@ -247,12 +247,16 @@ function wireVisual(el, post) {
   const applyMedia = (media) => {
     post.media = media;
     const frame = $('.visual-frame', el);
-    if (media?.hasImage) {
-      frame.innerHTML = `<img data-preview src="${escapeAttr(media.imageUrl)}" alt="Draft preview" />`;
-    } else {
-      frame.innerHTML = `<div class="visual-empty">No image yet — upload or Generate poster from your prompt.</div>`;
-    }
+    const src = media?.previewUrl || media?.imageUrl || 'https://menrush.com/menrush-logo.png';
+    const logoClass = media?.defaultLogo || !media?.hasImage ? 'logo-default' : '';
+    frame.innerHTML = `<img data-preview src="${escapeAttr(src)}" alt="Draft preview" class="${logoClass}" />`;
     $('[data-clear-image]', el).disabled = !media?.hasImage;
+    const note = $('.visual-note', el);
+    if (note) {
+      note.textContent = media?.hasImage
+        ? 'Custom image on this draft.'
+        : 'Official MenRush logo (default). Upload or Generate to replace.';
+    }
   };
 
   $('[data-save-prompt]', el).addEventListener('click', async () => {

@@ -353,12 +353,23 @@ html, body {
   object-fit: cover;
   display: block;
 }
+.visual-frame img.logo-default {
+  object-fit: contain;
+  padding: 12%;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 20%, rgba(196, 131, 42, 0.16), transparent 60%),
+    #120e08;
+}
 .visual-empty {
   padding: 1rem;
   text-align: center;
   color: var(--cream-dim);
   font-size: 0.82rem;
   line-height: 1.4;
+}
+.visual-note {
+  margin: 0.15rem 0 0;
+  font-size: 0.75rem;
 }
 
 .visual-controls {
