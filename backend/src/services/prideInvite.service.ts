@@ -86,7 +86,7 @@ export function buildPrideFlaggedInviteEmail(params: {
             <h2 style="margin:0 0 12px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#C4832A;font-weight:700;">The bargain</h2>
             <ul style="margin:0 0 28px;padding-left:20px;color:#7a6a5a;font-size:14px;line-height:1.8;">
               <li>One code = beta access <strong style="color:#8a7a6a;">and</strong> 3 months Premium</li>
-              <li>If you book before launch, Premium starts at launch. On-time open 1&nbsp;October&nbsp;2026 → ends 1&nbsp;January&nbsp;2027. If launch slips, 3 months from the actual open date. Nothing usable before launch.</li>
+              <li>If you book before launch, Premium starts at launch. On-time open 1&nbsp;October&nbsp;2026. Ends 1&nbsp;January&nbsp;2027. If launch slips, 3 months from the actual open date. Nothing usable before launch.</li>
               <li>One Pride grant per person</li>
               <li>Replaces the 30-day waitlist Premium gift (Terms 7.2). It does not add to that gift</li>
             </ul>
@@ -122,7 +122,7 @@ One person gets one Pride grant.
 
 The bargain:
 - One code = beta access and 3 months Premium
-- If you book before launch, Premium starts at launch. On-time open 1 October 2026 → ends 1 January 2027. If launch slips, 3 months from the actual open date. Nothing usable before launch.
+- If you book before launch, Premium starts at launch. On-time open 1 October 2026. Ends 1 January 2027. If launch slips, 3 months from the actual open date. Nothing usable before launch.
 - One Pride grant per person
 - Replaces the 30-day waitlist Premium gift (Terms 7.2). It does not add to that gift
 
