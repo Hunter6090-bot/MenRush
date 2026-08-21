@@ -122,7 +122,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
       )}
 
       {/* Photo area — photo taps open profile; Match stays a separate control */}
-      <div className="relative h-52 bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--bg-card)] flex-shrink-0">
+      <div className="relative h-44 md:h-40 lg:h-44 bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--bg-card)] flex-shrink-0">
         <ProfilePhotoLink
           userId={user.id}
           name={user.name}

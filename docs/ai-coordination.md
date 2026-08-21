@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Tablet profile tile density (Discover/Matches/Stream) | PR `cursor/tablet-profile-tile-density-0d4b` | — | Cursor cloud — md 768+ denser grid; phone stays 2-col |
 | Verified profiles landing copy (replace Verified bodies) | PR `#120` `cursor/verified-profiles-landing-51f5` | — | Cursor cloud — ComingSoon hero + design-lock e2e + marketing rule; merged |
 | Pride sole public offer (`/pride`; closed `/brightonpride` → redirect) | PR `#118` `cursor/pride-landing-promo-9233` (folds #119) | — | Cursor cloud — owner go-live 21 Aug 2026; public + personal Pride redeem at register; brand-only /pride |
 | Kill homepage fade + rooms skeleton blink | PR `cursor/kill-fidgety-motion-283d` | — | Cursor cloud — remove `mr-launch-fade`; RoomList refresh in place |

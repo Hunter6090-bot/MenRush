@@ -4,6 +4,10 @@ import { VerifiedBadge } from './VerifiedBadge';
 import { useResolvingPhotoSrc } from './UserAvatar';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { formatActiveStatus, formatDistanceMiles, getTribeTag } from '../lib/discoveryFormat';
+import {
+  PROFILE_TILE_GRID_CLASS,
+  PROFILE_TILE_SKELETON_CLASS,
+} from '../lib/profileTileGrid';
 import { Link } from 'react-router-dom';
 
 interface NearbyProfileGridProps {
@@ -56,11 +60,11 @@ export function NearbyProfileGrid({
   if (loading && users.length === 0) {
     return (
       <div
-        className="grid grid-cols-2 gap-3 lg:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] lg:gap-3.5"
+        className={PROFILE_TILE_GRID_CLASS}
         data-testid="nearby-profile-grid-loading"
       >
         {[...Array(6)].map((_, i) => (
-          <div key={i} className="aspect-square animate-pulse rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]" />
+          <div key={i} className={PROFILE_TILE_SKELETON_CLASS} />
         ))}
       </div>
     );
@@ -169,10 +173,10 @@ export function NearbyProfileGrid({
     );
   }
 
-  // Mobile/tablet (Discover lg:hidden sheet): exactly 2 per row. Desktop sidebar: denser auto-fill.
+  // Phone: 2 cols. Tablet md+: denser auto-fill so iPad is not two giant squares.
   return (
     <div
-      className="grid grid-cols-2 gap-3 lg:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] lg:gap-3.5"
+      className={PROFILE_TILE_GRID_CLASS}
       data-testid="nearby-profile-grid"
     >
       {users.map((user) => {
@@ -244,7 +248,7 @@ function GridCardFace({ user, meta }: { user: NearbyUser; meta: string }) {
           <span
             className={`h-2 w-2 shrink-0 rounded-full ${user.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
           />
-          <span className="truncate text-[14px] font-bold text-[#FFF6E6]">
+          <span className="truncate text-[13px] font-bold text-[#FFF6E6] md:text-[12px] lg:text-[13px]">
             {user.name} {user.age}
           </span>
           {user.is_verified ? <VerifiedBadge size="sm" /> : null}
@@ -272,7 +276,7 @@ function GridPhoto({
   if (!src) {
     return (
       <div className="flex h-full items-center justify-center">
-        <SilhouetteAvatar size={80} variant="card" />
+        <SilhouetteAvatar size={56} variant="card" />
       </div>
     );
   }
