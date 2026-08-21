@@ -137,7 +137,7 @@ export const ComingSoon = () => {
           <h1 className="mr-coming-soon-heading max-w-[900px] text-balance">
             Real men.
             <br />
-            <span className="mr-coming-soon-accent">Verified bodies.</span>
+            <span className="mr-coming-soon-accent">Verified profiles.</span>
             <br />
             Total discretion.
           </h1>
