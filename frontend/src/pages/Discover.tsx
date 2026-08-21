@@ -1963,7 +1963,7 @@ export const Discover = () => {
               </div>
             </details>
 
-            {/* Profiles: two squares per row, directly under map */}
+            {/* Profiles: denser grid from tablet up (see PROFILE_TILE_GRID_CLASS) */}
             {!needsLocationGate ? (
               <>
                 <NearbyProfileGrid

@@ -7,6 +7,7 @@ import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { useResolvingPhotoSrc } from '../components/UserAvatar';
 import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
+import { PROFILE_TILE_GRID_CLASS } from '../lib/profileTileGrid';
 
 interface Match {
   id: string;
@@ -102,7 +103,7 @@ function PersonGridCard({
             />
           ) : (
             <div className="flex h-full items-center justify-center">
-              <SilhouetteAvatar size={80} variant="card" />
+              <SilhouetteAvatar size={56} variant="card" />
             </div>
           )}
           <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent px-3 pb-2.5 pt-10">
@@ -110,7 +111,7 @@ function PersonGridCard({
               <span
                 className={`h-2 w-2 shrink-0 rounded-full ${person.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
               />
-              <span className="truncate text-[15px] font-bold text-[#FFF6E6]">
+              <span className="truncate text-[13px] font-bold text-[#FFF6E6] md:text-[12px] lg:text-[13px]">
                 {person.name} {person.age}
               </span>
               {person.is_verified ? (
@@ -186,7 +187,7 @@ export const Matches = () => {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] sm:gap-3.5">
+          <div className={PROFILE_TILE_GRID_CLASS}>
             {[...Array(6)].map((_, i) => (
               <div
                 key={i}
@@ -243,7 +244,7 @@ export const Matches = () => {
                       : `${receivedLikes.length} men liked you`}
                   </p>
                 </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] sm:gap-3.5">
+                <div className={PROFILE_TILE_GRID_CLASS}>
                   {receivedLikes.map((like) => (
                     <PersonGridCard
                       key={like.id}
@@ -269,7 +270,7 @@ export const Matches = () => {
                     Mutual matches
                   </h2>
                 ) : null}
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] sm:gap-3.5">
+                <div className={PROFILE_TILE_GRID_CLASS}>
                   {matches.map((match) => (
                     <PersonGridCard
                       key={match.id}
