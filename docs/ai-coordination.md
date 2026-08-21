@@ -49,7 +49,8 @@ style(icons): heritage set (claude)
 | --- | --- | --- | --- |
 | Tablet profile tile density (Discover/Matches/Stream) | PR `cursor/tablet-profile-tile-density-0d4b` | — | Cursor cloud — md 768+ denser grid; phone stays 2-col |
 | Verified profiles landing copy (replace Verified bodies) | PR `#120` `cursor/verified-profiles-landing-51f5` | — | Cursor cloud — ComingSoon hero + design-lock e2e + marketing rule; merged |
-| Pride redeem-only restore (printed PRIDE 3MONTH FREE at register by 5 Sep; quiet /pride note) | — | branch `cursor/pride-public-redeem-restore-6934` | Cursor cloud — Legal 21 Aug 2026; Claim Pride CTA only; no Path 2 card; Brighton grandfather to 31 Oct |
+| Pride short face copy (/pride claim-only hero) | — | branch `cursor/pride-short-face-copy-6824` | Cursor cloud — Owner 21 Aug 2026; face = short Premium claim + Claim Pride code; conditions below; no Free app essay |
+| Pride redeem-only restore (printed PRIDE 3MONTH FREE at register by 5 Sep; quiet /pride note) | PR `#126` on main | — | Cursor cloud — Legal 21 Aug 2026; Claim Pride CTA only; no Path 2 card; Brighton grandfather to 31 Oct |
 | Pride one path only (kill public PRIDE 3MONTH FREE) | superseded | — | Superseded by redeem-only restore — public code works at register again through 5 Sep |
 | Pride-flagged waitlist invite (one code = beta + booked 3mo Premium; 21–31 Aug /pride) | PR `#121` on main | claim path + public redeem | Cursor cloud — Claim Pride email invite; printed public redeem restored |
 | Pride sole public offer (`/pride`; closed `/brightonpride` → redirect) | PR `#118` (folds #119) | claim + quiet public redeem | Cursor cloud — /pride Claim CTA; printed public redeem at register; Brighton grandfather |
