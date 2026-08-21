@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { guardAgainstSideEffects } from './support/network-guard';
 
 test.describe('Pride promotion landing', () => {
-  test('/pride shows one claim path: email → unique code', async ({ page }) => {
+  test('/pride claim CTA + quiet public redeem note (no Path 2 card)', async ({ page }) => {
     const network = await guardAgainstSideEffects(page);
     await page.goto('/pride');
 
@@ -47,18 +47,28 @@ test.describe('Pride promotion landing', () => {
     await expect(page.getByTestId('pride-invite-email')).toBeVisible();
     await expect(page.getByTestId('pride-invite-submit')).toContainText(/Email my Pride code/i);
 
-    // Path 2 / public code must be gone from the face
+    // No Path 2 card / second gold CTA — quiet redeem-only note only
     await expect(page.getByTestId('pride-promo-code')).toHaveCount(0);
     await expect(page.getByTestId('pride-cta')).toHaveCount(0);
     await expect(page.getByTestId('pride-cta-note')).toHaveCount(0);
     await expect(page.getByTestId('pride-clock-public')).toHaveCount(0);
-    await expect(page.getByText('PRIDE 3MONTH FREE')).toHaveCount(0);
     await expect(page.getByText(/Create account & enter public code/i)).toHaveCount(0);
     await expect(page.getByText(/Copy code/i)).toHaveCount(0);
+    await expect(page.getByText(/Path 2/i)).toHaveCount(0);
+    await expect(page.getByText(/not in use|this code is dead|this code is invalid/i)).toHaveCount(0);
+
+    const publicNote = page.getByTestId('pride-public-redeem-note');
+    await expect(publicNote).toBeVisible();
+    await expect(publicNote).toContainText('PRIDE 3MONTH FREE');
+    await expect(publicNote).toContainText(/5 September 2026/i);
+    await expect(publicNote).toContainText(/still works at register/i);
+    await expect(publicNote).toContainText(/One grant/i);
+    await expect(publicNote).toContainText(/do not also claim a new Pride invite/i);
 
     // Grandfather: personal codes still redeem; do not promote Brighton campaign
     const grandfather = page.getByTestId('pride-grandfather');
     await expect(grandfather).toContainText(/personal PRIDE-XXXX-XXXX/i);
+    await expect(grandfather).toContainText(/31 October 2026/i);
     await expect(grandfather).toContainText(/One grant per person/i);
     await expect(grandfather).not.toContainText(/Brighton/i);
     await expect(page.getByText(/Brighton Pride Special Offer/i)).toHaveCount(0);
@@ -69,7 +79,6 @@ test.describe('Pride promotion landing', () => {
     await expect(page.getByTestId('pride-clock-invite')).toContainText(/21–31 August 2026/i);
     await expect(page.getByTestId('pride-clock-invite')).toContainText(/Resend/i);
     await expect(conditions).not.toContainText(/PRIDE 3MONTH FREE/i);
-    await expect(conditions).not.toContainText(/public code/i);
 
     const duration = page.getByTestId('pride-duration-rule');
     await expect(duration).toContainText(/Premium starts at launch/i);
@@ -84,6 +93,9 @@ test.describe('Pride promotion landing', () => {
     await expect(page.getByText(/CCBill/i)).toHaveCount(0);
     await expect(page.getByText(/Path 1/i)).toHaveCount(0);
     await expect(page.getByText(/Path 2/i)).toHaveCount(0);
+
+    // Only one gold primary CTA on the page (Claim / Email my Pride code)
+    await expect(page.getByTestId('pride-claim-cta').or(page.getByTestId('pride-invite-submit'))).toHaveCount(1);
 
     const promoter = page.getByTestId('pride-promoter-slot');
     await expect(promoter).toContainText(/Bronze Apps UK Limited \(trading as MenRush\)/i);

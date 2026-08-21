@@ -22,7 +22,7 @@ import {
   isSharedPrideCode,
   personalPrideExpiredMessage,
   promoService,
-  SHARED_PRIDE_RETIRED_MESSAGE,
+  SHARED_PRIDE_EXPIRED_MESSAGE,
 } from './promo.service';
 import { assertPrideInviteEmailMatch } from './prideInvite.service';
 import { ageFromDateOfBirth } from '../lib/age';
@@ -132,8 +132,21 @@ export const authService = {
     }
 
     if (usingSharedPride) {
-      // Public PRIDE 3MONTH FREE is retired. Unique codes only via /pride email claim.
-      throw new Error(SHARED_PRIDE_RETIRED_MESSAGE);
+      const prideCheck = await promoService.validateSharedPride(promoCode!, data.email);
+      if (!prideCheck.valid) {
+        if (prideCheck.reason === 'expired') {
+          throw new Error(SHARED_PRIDE_EXPIRED_MESSAGE);
+        }
+        if (prideCheck.reason === 'already_redeemed') {
+          throw new Error('This Pride promo has already been used for this email.');
+        }
+        if (prideCheck.reason === 'other_pride_path') {
+          throw new Error(
+            'This email already has a Pride path. Enter that invite or personal code instead — do not stack with PRIDE 3MONTH FREE.',
+          );
+        }
+        throw new Error('This promo code is not valid.');
+      }
     } else if (usingPersonalPride) {
       const personalCheck = await promoService.validate(promoCode!, data.email);
       if (!personalCheck.valid) {
@@ -233,11 +246,13 @@ export const authService = {
           prideInviteMonths,
           client,
         );
+      } else if (usingSharedPride) {
+        await promoService.redeemSharedPride(promoCode!, data.email, user.id, client);
       } else if (usingPersonalPride) {
         await promoService.redeemPersonalPride(promoCode!, data.email, user.id, client);
       }
 
-      if (prideInviteMonths || usingPersonalPride) {
+      if (prideInviteMonths || usingSharedPride || usingPersonalPride) {
         const refreshed = await client.query(
           `SELECT id, email, name, age, date_of_birth, photo_url, is_verified, verification_status,
                   age_assurance_status, authenticity_status,

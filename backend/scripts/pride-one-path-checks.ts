@@ -1,5 +1,5 @@
 /**
- * Pride one-path checks (issue / resend / public retired / Brighton grandfather).
+ * Pride path checks (public redeem + invite claim + Brighton grandfather).
  * Pure + service-surface tests. Does not write to the database.
  *
  * Run from backend/: npx ts-node scripts/pride-one-path-checks.ts
@@ -10,9 +10,9 @@ import {
   isSharedPrideCode,
   PRIDE_INVITE_ISSUE_CLOSES,
   PRIDE_INVITE_ISSUE_OPENS,
-  promoService,
   SHARED_PRIDE_DISPLAY_CODE,
-  SHARED_PRIDE_RETIRED_MESSAGE,
+  SHARED_PRIDE_ENTER_BY,
+  SHARED_PRIDE_EXPIRED_MESSAGE,
 } from '../src/services/promo.service';
 import { buildPrideFlaggedInviteEmail } from '../src/services/prideInvite.service';
 
@@ -30,25 +30,15 @@ function prideIssueDecision(windowOpen: boolean, hasExisting: boolean): 'create'
   return 'closed';
 }
 
-test('public PRIDE 3MONTH FREE is recognised but retired for new redeem', async () => {
+test('public PRIDE 3MONTH FREE is recognised for redeem (spaces ignored)', () => {
   assert.strictEqual(isSharedPrideCode(SHARED_PRIDE_DISPLAY_CODE), true);
   assert.strictEqual(isSharedPrideCode('PRIDE3MONTHFREE'), true);
   assert.strictEqual(isSharedPrideCode('pride 3month free'), true);
   assert.strictEqual(isSharedPrideCode('PRIDE-A3F7-B2C1'), false);
 
-  const check = await promoService.validateSharedPride(SHARED_PRIDE_DISPLAY_CODE, 'a@example.com');
-  assert.strictEqual(check.valid, false);
-  if (!check.valid) {
-    assert.strictEqual(check.reason, 'not_in_use');
-  }
-
-  await assert.rejects(
-    () => promoService.redeemSharedPride(SHARED_PRIDE_DISPLAY_CODE, 'a@example.com', '00000000-0000-0000-0000-000000000001'),
-    (err: unknown) => err instanceof Error && err.message === SHARED_PRIDE_RETIRED_MESSAGE,
-  );
-
-  assert.match(SHARED_PRIDE_RETIRED_MESSAGE, /not in use/i);
-  assert.match(SHARED_PRIDE_RETIRED_MESSAGE, /\/pride/);
+  assert.strictEqual(SHARED_PRIDE_ENTER_BY.toISOString().startsWith('2026-09-05'), true);
+  assert.match(SHARED_PRIDE_EXPIRED_MESSAGE, /5 September 2026/);
+  assert.doesNotMatch(SHARED_PRIDE_EXPIRED_MESSAGE, /not in use|dead|invalid/i);
 });
 
 test('Pride invite issue window: create in window, resend after close, closed for new', () => {
@@ -64,7 +54,7 @@ test('Pride invite issue window: create in window, resend after close, closed fo
   assert.strictEqual(prideIssueDecision(false, false), 'closed');
 });
 
-test('Pride invite email is one-path (no public code promotion)', () => {
+test('Pride invite email is claim path only (no Path 2 / public code promotion)', () => {
   const mail = buildPrideFlaggedInviteEmail({
     to: 'claim@example.com',
     code: 'MENRUSH-A3F7-B2C1',
@@ -79,11 +69,10 @@ test('Pride invite email is one-path (no public code promotion)', () => {
   assert.doesNotMatch(mail.html, /Path 1|Path 2/);
 });
 
-test('Brighton personal codes are not the retired public code (grandfather path stays open)', () => {
+test('Brighton personal codes are not the public code (grandfather path stays open)', () => {
   // Personal emailed codes go through validate/redeemPersonalPride, not validateSharedPride.
   assert.strictEqual(isSharedPrideCode('PRIDE-A3F7-B2C1'), false);
   assert.strictEqual(isSharedPrideCode('PRIDE-ZZ99-KK88'), false);
-  // Shared-path reject must not apply to personal format.
   assert.notStrictEqual(SHARED_PRIDE_DISPLAY_CODE, 'PRIDE-A3F7-B2C1');
 });
 
@@ -103,7 +92,7 @@ async function main() {
     console.error(`\n${failed} test(s) failed`);
     process.exit(1);
   }
-  console.log(`\n${tests.length} Pride one-path checks passed`);
+  console.log(`\n${tests.length} Pride path checks passed`);
 }
 
 main().catch((err) => {

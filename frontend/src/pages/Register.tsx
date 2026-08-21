@@ -14,11 +14,13 @@ import {
   storeInviteCode,
 } from '../lib/betaInvite';
 import {
-  PRIDE_PUBLIC_CODE_RETIRED_MESSAGE,
+  PRIDE_ENTER_BY,
+  PRIDE_PROMO_CODE,
   clearStoredPridePromoCode,
   isPridePromoCode,
   looksLikePersonalPrideCode,
   readStoredPridePromoCode,
+  storePridePromoCode,
 } from '../lib/pridePromo';
 import { FEATURES } from '../lib/featureFlags';
 import {
@@ -73,10 +75,7 @@ export const Register = () => {
   const [promoCode, setPromoCode] = useState(() => {
     const fromQuery = promoFromQuery;
     const fromStore = readStoredPridePromoCode();
-    // Never seed the retired public code. Personal PRIDE-XXXX only.
-    if (fromQuery && isPridePromoCode(fromQuery)) return '';
-    if (fromQuery) return fromQuery.trim().toUpperCase();
-    if (fromStore && isPridePromoCode(fromStore)) return '';
+    if (fromQuery) return fromQuery.trim().toUpperCase().replace(/\s+/g, ' ');
     return fromStore || '';
   });
   const [form, setForm] = useState<FormState>({
@@ -102,9 +101,9 @@ export const Register = () => {
   useEffect(() => {
     if (!promoFromQuery) return;
     if (isPridePromoCode(promoFromQuery)) {
-      // Retired public code. Do not prefill or store.
-      clearStoredPridePromoCode();
-      setPromoCode('');
+      const display = promoFromQuery.trim().toUpperCase().replace(/\s+/g, ' ');
+      setPromoCode(display || PRIDE_PROMO_CODE);
+      storePridePromoCode(PRIDE_PROMO_CODE);
       return;
     }
     // Personal emailed code from deep link.
@@ -178,12 +177,6 @@ export const Register = () => {
     setLoading(true);
     try {
       const trimmedPromo = promoCode.trim();
-      if (trimmedPromo && isPridePromoCode(trimmedPromo)) {
-        clearStoredPridePromoCode();
-        setError(PRIDE_PUBLIC_CODE_RETIRED_MESSAGE);
-        setLoading(false);
-        return;
-      }
       if (trimmedPromo) {
         clearStoredPridePromoCode();
       }
@@ -252,7 +245,7 @@ export const Register = () => {
               type="text"
               value={promoCode}
               onChange={(e) => onPromoChange(e.target.value)}
-              placeholder="PRIDE-XXXX-XXXX (personal emailed code)"
+              placeholder="PRIDE 3MONTH FREE or PRIDE-XXXX-XXXX"
               aria-label="Pride promo code"
               autoComplete="off"
               spellCheck={false}
@@ -261,18 +254,25 @@ export const Register = () => {
             />
             <p className={helperClass} data-testid="register-pride-note">
               {isPridePromoCode(promoCode) ? (
-                <>{PRIDE_PUBLIC_CODE_RETIRED_MESSAGE}</>
+                <>
+                  Public code — enter by {PRIDE_ENTER_BY}. The grant happens when you enter this code
+                  at register. If you have a personal emailed PRIDE-XXXX-XXXX or a Pride-flagged
+                  MENRUSH invite instead, clear this box and enter that code / invite. One Pride grant
+                  — do not stack.
+                </>
               ) : looksLikePersonalPrideCode(promoCode) ? (
                 <>
                   Personal emailed code. Use the same email it was sent to. Redeem by 31 October
-                  2026. If you have a Pride-flagged MENRUSH invite, enter it in the invite field and
-                  leave this blank. One Pride grant per person.
+                  2026. Do not also enter {PRIDE_PROMO_CODE}. If you have a Pride-flagged MENRUSH
+                  invite, enter it in the invite field and leave this blank. One Pride grant per
+                  person.
                 </>
               ) : (
                 <>
-                  Optional. Personal emailed PRIDE-XXXX-XXXX only (redeem by 31 October 2026). Pride
-                  codes from /pride are MENRUSH invites: enter them in the invite field and leave
-                  this blank. One Pride grant per person.
+                  Optional. Public code {PRIDE_PROMO_CODE} (enter by {PRIDE_ENTER_BY}), or your
+                  personal emailed PRIDE-XXXX-XXXX (redeem by 31 October 2026). Pride-flagged MENRUSH
+                  invites book Premium in the invite field — leave this blank. One Pride grant per
+                  person — do not stack.
                 </>
               )}
             </p>
