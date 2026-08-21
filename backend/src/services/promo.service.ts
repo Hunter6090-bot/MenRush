@@ -70,6 +70,13 @@ export const SHARED_PRIDE_DISPLAY_CODE = 'PRIDE 3MONTH FREE';
 export const SHARED_PRIDE_NORMALIZED = 'PRIDE3MONTHFREE';
 export const SHARED_PRIDE_CAMPAIGN = 'pride26_public';
 export const BRIGHTON_PRIDE_CAMPAIGN = 'brightonpride26';
+/**
+ * Beta-invite Pride grant redemption marker (shared_promo_redemptions).
+ * Kept here so promo stacking checks do not import invite-code.service.
+ */
+export const PRIDE_INVITE_REDEEM_CAMPAIGN = 'pride26_invite';
+/** beta_invite_codes.campaign for /pride waitlist MENRUSH invites. */
+export const PRIDE_WAITLIST_INVITE_CAMPAIGN = 'pride26';
 /** Last moment to ENTER the public code (Finance/Legal). */
 export const SHARED_PRIDE_ENTER_BY = new Date('2026-09-05T23:59:59Z');
 /** Scheduled UK launch — override with MENRUSH_LAUNCH_AT (ISO) if launch slips. */
@@ -167,21 +174,41 @@ export const promoService = {
     return result.rows.length > 0;
   },
 
+  /** True if this email already has a /pride waitlist MENRUSH invite with Premium attached. */
+  async emailHasPrideWaitlistInvite(email: string): Promise<boolean> {
+    const emailHash = hashEmail(email);
+    const result = await query(
+      `SELECT 1 FROM beta_invite_codes
+       WHERE campaign = $1 AND issued_to_email_hash = $2 AND revoked_at IS NULL
+       LIMIT 1`,
+      [PRIDE_WAITLIST_INVITE_CAMPAIGN, emailHash],
+    );
+    return result.rows.length > 0;
+  },
+
   async emailHasPublicPrideRedeem(email: string): Promise<boolean> {
     const emailHash = hashEmail(email);
     const result = await query(
       `SELECT 1 FROM shared_promo_redemptions
-       WHERE campaign = $1 AND email_hash = $2
+       WHERE campaign = ANY($1::text[]) AND email_hash = $2
        LIMIT 1`,
-      [SHARED_PRIDE_CAMPAIGN, emailHash],
+      [[SHARED_PRIDE_CAMPAIGN, PRIDE_INVITE_REDEEM_CAMPAIGN], emailHash],
     );
     return result.rows.length > 0;
+  },
+
+  /** Any Pride grant path already taken for this email (Brighton, public, or pride invite). */
+  async emailHasAnyPridePath(email: string): Promise<boolean> {
+    if (await this.emailHasBrightonPrideClaim(email)) return true;
+    if (await this.emailHasPrideWaitlistInvite(email)) return true;
+    if (await this.emailHasPublicPrideRedeem(email)) return true;
+    return false;
   },
 
   /**
    * Validate the public Pride QR code (PRIDE 3MONTH FREE).
    * Spaces ignored. One per email. Enter-by 5 Sep 2026.
-   * Blocks if this email already has a legacy personal Pride code (no stacking).
+   * Blocks if this email already has another Pride path (no stacking).
    */
   async validateSharedPride(
     code: string,
@@ -195,15 +222,18 @@ export const promoService = {
     }
 
     const emailHash = hashEmail(email);
-    if (await this.emailHasBrightonPrideClaim(email)) {
+    if (
+      (await this.emailHasBrightonPrideClaim(email)) ||
+      (await this.emailHasPrideWaitlistInvite(email))
+    ) {
       return { valid: false, reason: 'other_pride_path' };
     }
 
     const existing = await query(
       `SELECT 1 FROM shared_promo_redemptions
-       WHERE campaign = $1 AND email_hash = $2
+       WHERE campaign = ANY($1::text[]) AND email_hash = $2
        LIMIT 1`,
-      [SHARED_PRIDE_CAMPAIGN, emailHash],
+      [[SHARED_PRIDE_CAMPAIGN, PRIDE_INVITE_REDEEM_CAMPAIGN], emailHash],
     );
     if (existing.rows.length > 0) {
       return { valid: false, reason: 'already_redeemed' };
@@ -423,6 +453,11 @@ export const promoService = {
     if (await this.emailHasPublicPrideRedeem(email)) {
       throw new Error(
         'This email already has a Pride Premium grant. The code cannot be stacked.',
+      );
+    }
+    if (await this.emailHasPrideWaitlistInvite(email)) {
+      throw new Error(
+        'This email already has a Pride invite with Premium. Enter that MENRUSH invite instead. Do not stack.',
       );
     }
 

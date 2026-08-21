@@ -123,7 +123,7 @@ export const authService = {
         }
         if (prideCheck.reason === 'other_pride_path') {
           throw new Error(
-            'This email already has a personal Pride code. Enter that code instead — do not stack with PRIDE 3MONTH FREE.',
+            'This email already has a Pride invite or personal Pride code. Enter that instead. Do not stack with PRIDE 3MONTH FREE.',
           );
         }
         throw new Error('This promo code is not valid.');
@@ -211,7 +211,32 @@ export const authService = {
       const user = result.rows[0];
 
       if (isInviteRequired() && inviteCode) {
-        await inviteCodeService.redeemForRegistration(inviteCode, user.id, client);
+        const redeemed = await inviteCodeService.redeemForRegistration(
+          inviteCode,
+          user.id,
+          client,
+        );
+
+        // Pride waitlist MENRUSH invite carries 3 months Premium from launch.
+        // Do not stack with a separate Pride promo_code on the same registration.
+        if (redeemed.premiumMonthsFromLaunch && redeemed.premiumMonthsFromLaunch > 0) {
+          if (usingSharedPride || usingPersonalPride) {
+            throw new Error(
+              'This Pride invite already includes Premium. Do not also enter a Pride promo code.',
+            );
+          }
+          if (await promoService.emailHasBrightonPrideClaim(data.email)) {
+            throw new Error(
+              'This email already has a Pride Premium grant. The code cannot be stacked.',
+            );
+          }
+          await inviteCodeService.applyPridePremiumFromInvite(
+            user.id,
+            data.email,
+            redeemed.premiumMonthsFromLaunch,
+            client,
+          );
+        }
       }
 
       // Redeem inside the same transaction so a failed Pride grant rolls back
@@ -222,7 +247,12 @@ export const authService = {
         await promoService.redeemPersonalPride(promoCode!, data.email, user.id, client);
       }
 
-      if (usingSharedPride || usingPersonalPride) {
+      const shouldRefreshPremium =
+        usingSharedPride ||
+        usingPersonalPride ||
+        (isInviteRequired() && !!inviteCode);
+
+      if (shouldRefreshPremium) {
         const refreshed = await client.query(
           `SELECT id, email, name, age, date_of_birth, photo_url, is_verified, verification_status,
                   age_assurance_status, authenticity_status,

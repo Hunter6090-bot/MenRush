@@ -19,6 +19,7 @@
     "verification:purge-sensitive": "ts-node src/scripts/purge-verification-files.ts",
     "test:security": "ts-node scripts/security-checks.ts",
     "test:official-rooms": "ts-node scripts/official-rooms-checks.ts",
+    "test:pride-waitlist": "ts-node scripts/pride-waitlist-checks.ts",
     "test:push": "ts-node scripts/test-push.ts",
     "test:features": "bash ../test-features.sh",
     "test:smoke": "node ../scripts/smoke-critical-path.mjs",

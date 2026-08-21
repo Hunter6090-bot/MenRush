@@ -19,6 +19,7 @@ test.describe('Closed Brighton Pride URLs', () => {
     const network = await guardAgainstSideEffects(page);
     await page.goto('/brightonpride26');
     await expect(page).toHaveURL(/\/pride\/?$/);
+    await expect(page.getByTestId('pride-waitlist')).toBeVisible();
     await expect(page.getByTestId('pride-promo-code')).toContainText('PRIDE 3MONTH FREE');
     expect(network.expectNoSideEffects()).toEqual([]);
   });

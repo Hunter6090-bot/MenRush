@@ -24,6 +24,10 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { personalPrideExpiredMessage, promoService } from '../services/promo.service';
+import {
+  inviteCodeService,
+  PRIDE_WAITLIST_ISSUE_CLOSES_AT,
+} from '../services/invite-code.service';
 import rateLimit from 'express-rate-limit';
 
 const router = Router();
@@ -119,7 +123,9 @@ const RedeemSchema = z.object({
 
 /**
  * POST /api/campaigns/:campaignId/signup
- * Public — rate limited. Issues an email-locked promo code.
+ * Public — rate limited.
+ * - campaignId `pride`: /pride waitlist → emails usual MENRUSH beta invite with 3 months Premium from launch.
+ * - other campaigns: email-locked promo codes (brightonpride26 is closed).
  */
 router.post('/:campaignId/signup', signupLimiter, async (req: Request, res: Response) => {
   const { campaignId } = req.params;
@@ -133,6 +139,16 @@ router.post('/:campaignId/signup', signupLimiter, async (req: Request, res: Resp
   const { email } = parsed.data;
 
   try {
+    if (campaignId === 'pride') {
+      const result = await inviteCodeService.issueOrResendPrideWaitlistInvite(email);
+      res.json({
+        ok: true,
+        message: 'Check your inbox. Your beta invite is on its way.',
+      });
+      console.log(`[campaigns] pride waitlist ${result.outcome} invite for ${email}`);
+      return;
+    }
+
     const result = await promoService.issueCode(email, campaignId);
     // Don't reveal whether the email was new or existing — prevents enumeration
     res.json({
@@ -150,6 +166,24 @@ router.post('/:campaignId/signup', signupLimiter, async (req: Request, res: Resp
         error: 'This claim form is closed. Use the Pride offer at /pride.',
         code: 'campaign_closed',
         redirect: '/pride',
+      });
+      return;
+    }
+    if (err.message === 'pride_issuance_closed') {
+      const closes = PRIDE_WAITLIST_ISSUE_CLOSES_AT;
+      res.status(410).json({
+        error:
+          'This Pride waitlist closed on 31 August 2026. New personal invites are no longer issued from this form. If you already signed up, check your inbox for your MENRUSH invite, or use the public code PRIDE 3MONTH FREE at register by 5 September 2026.',
+        code: 'pride_issuance_closed',
+        closed_on: closes.toISOString(),
+      });
+      return;
+    }
+    if (err.message === 'already_has_pride_grant') {
+      res.status(409).json({
+        error:
+          'This email already has a Pride Premium grant. One person gets one Pride grant. Check your inbox for your existing code.',
+        code: 'already_has_pride_grant',
       });
       return;
     }
