@@ -19,6 +19,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { inviteCodeService, isInviteRequired } from './invite-code.service';
 import { isSharedPrideCode, personalPrideExpiredMessage, promoService } from './promo.service';
+import { assertPrideInviteEmailMatch } from './prideInvite.service';
 import { ageFromDateOfBirth } from '../lib/age';
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -112,6 +113,19 @@ export const authService = {
     const usingSharedPride = !!(promoCode && isSharedPrideCode(promoCode));
     const usingPersonalPride = !!(promoCode && !isSharedPrideCode(promoCode));
 
+    let prideInviteMonths: number | null = null;
+    if (inviteCode) {
+      prideInviteMonths = await inviteCodeService.getPrideMonths(inviteCode);
+      if (prideInviteMonths) {
+        await assertPrideInviteEmailMatch(inviteCode, data.email);
+        if (usingSharedPride || usingPersonalPride) {
+          throw new Error(
+            'This Pride invite already books Premium. Clear the promo code field — do not stack.',
+          );
+        }
+      }
+    }
+
     if (usingSharedPride) {
       const prideCheck = await promoService.validateSharedPride(promoCode!, data.email);
       if (!prideCheck.valid) {
@@ -123,7 +137,7 @@ export const authService = {
         }
         if (prideCheck.reason === 'other_pride_path') {
           throw new Error(
-            'This email already has a personal Pride code. Enter that code instead — do not stack with PRIDE 3MONTH FREE.',
+            'This email already has a Pride path. Enter that invite or personal code instead — do not stack with PRIDE 3MONTH FREE.',
           );
         }
         throw new Error('This promo code is not valid.');
@@ -142,7 +156,10 @@ export const authService = {
         }
         throw new Error('This promo code is not valid.');
       }
-      if (await promoService.emailHasPublicPrideRedeem(data.email)) {
+      if (
+        (await promoService.emailHasPublicPrideRedeem(data.email)) ||
+        (await promoService.emailHasPrideInviteRedeem(data.email))
+      ) {
         throw new Error(
           'This email already has a Pride Premium grant. The code cannot be stacked.',
         );
@@ -210,25 +227,34 @@ export const authService = {
 
       const user = result.rows[0];
 
-      if (isInviteRequired() && inviteCode) {
+      if (inviteCode && (isInviteRequired() || prideInviteMonths)) {
         await inviteCodeService.redeemForRegistration(inviteCode, user.id, client);
       }
 
       // Redeem inside the same transaction so a failed Pride grant rolls back
       // registration and the error is returned to the client (not silent).
-      if (usingSharedPride) {
+      if (prideInviteMonths) {
+        // Entering the Pride-flagged invite NOW books Premium — no second entry at launch.
+        await promoService.bookPrideInviteGrant(
+          data.email,
+          user.id,
+          prideInviteMonths,
+          client,
+        );
+      } else if (usingSharedPride) {
         await promoService.redeemSharedPride(promoCode!, data.email, user.id, client);
       } else if (usingPersonalPride) {
         await promoService.redeemPersonalPride(promoCode!, data.email, user.id, client);
       }
 
-      if (usingSharedPride || usingPersonalPride) {
+      if (prideInviteMonths || usingSharedPride || usingPersonalPride) {
         const refreshed = await client.query(
           `SELECT id, email, name, age, date_of_birth, photo_url, is_verified, verification_status,
                   age_assurance_status, authenticity_status,
                   COALESCE(is_premium, FALSE) AS is_premium,
                   COALESCE(premium_tier, 'free') AS premium_tier,
-                  premium_until
+                  premium_until,
+                  premium_starts_at
            FROM users WHERE id = $1`,
           [user.id],
         );

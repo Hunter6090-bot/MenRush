@@ -70,11 +70,38 @@ export const SHARED_PRIDE_DISPLAY_CODE = 'PRIDE 3MONTH FREE';
 export const SHARED_PRIDE_NORMALIZED = 'PRIDE3MONTHFREE';
 export const SHARED_PRIDE_CAMPAIGN = 'pride26_public';
 export const BRIGHTON_PRIDE_CAMPAIGN = 'brightonpride26';
+/** Booked via Pride-flagged MENRUSH invite (21–31 Aug /pride) — not a second code string. */
+export const PRIDE_INVITE_CAMPAIGN = 'pride26_invite';
 /** Last moment to ENTER the public code (Finance/Legal). */
 export const SHARED_PRIDE_ENTER_BY = new Date('2026-09-05T23:59:59Z');
+/**
+ * Pride-flagged invite issue window (UK): 21 Aug 2026 00:00 BST → end of 31 Aug 2026 BST.
+ * BST = UTC+1 → opens 2026-08-20T23:00:00Z, closes 2026-08-31T22:59:59Z.
+ */
+export const PRIDE_INVITE_ISSUE_OPENS = new Date('2026-08-20T23:00:00Z');
+export const PRIDE_INVITE_ISSUE_CLOSES = new Date('2026-08-31T22:59:59Z');
 /** Scheduled UK launch — override with MENRUSH_LAUNCH_AT (ISO) if launch slips. */
 export const SHARED_PRIDE_SCHEDULED_LAUNCH = new Date('2026-10-01T00:00:00Z');
 export const SHARED_PRIDE_MONTHS_FREE = 3;
+
+export function isPrideInviteIssueOpen(now = new Date()): boolean {
+  const t = now.getTime();
+  return t >= PRIDE_INVITE_ISSUE_OPENS.getTime() && t <= PRIDE_INVITE_ISSUE_CLOSES.getTime();
+}
+
+/**
+ * Premium window for Pride grants (Legal-locked).
+ * Booked before launch → starts at launch (on-time 1 Oct → 1 Jan; if launch slips, end moves).
+ * First entered after open → starts at that redeem date (3 months from then).
+ */
+export function pridePremiumWindow(
+  months = SHARED_PRIDE_MONTHS_FREE,
+  now = new Date(),
+): { premiumStart: Date; premiumEnd: Date } {
+  const launch = getMenRushLaunchDate();
+  const premiumStart = now.getTime() >= launch.getTime() ? now : launch;
+  return { premiumStart, premiumEnd: premiumEndFromLaunch(premiumStart, months) };
+}
 
 export function normalizeSharedPromoCode(raw: string): string {
   return raw.trim().toUpperCase().replace(/\s+/g, '');
@@ -178,10 +205,116 @@ export const promoService = {
     return result.rows.length > 0;
   },
 
+  /** True if this email already booked Pride via a Pride-flagged MENRUSH invite. */
+  async emailHasPrideInviteRedeem(email: string): Promise<boolean> {
+    const emailHash = hashEmail(email);
+    const result = await query(
+      `SELECT 1 FROM shared_promo_redemptions
+       WHERE campaign = $1 AND email_hash = $2
+       LIMIT 1`,
+      [PRIDE_INVITE_CAMPAIGN, emailHash],
+    );
+    return result.rows.length > 0;
+  },
+
+  /** Outstanding unused Pride-flagged invite for this email. */
+  async emailHasPendingPrideInvite(email: string): Promise<boolean> {
+    const normalised = email.trim().toLowerCase();
+    const pendingInvite = await query(
+      `SELECT 1 FROM beta_invite_codes
+       WHERE LOWER(issued_email) = $1
+         AND pride_months_free IS NOT NULL
+         AND revoked_at IS NULL
+         AND use_count < max_uses
+         AND (expires_at IS NULL OR expires_at > NOW())
+       LIMIT 1`,
+      [normalised],
+    );
+    return pendingInvite.rows.length > 0;
+  },
+
+  /**
+   * Any Pride path already claimed or outstanding (one grant, no stack).
+   */
+  async emailHasAnyPridePath(email: string): Promise<boolean> {
+    if (await this.emailHasPublicPrideRedeem(email)) return true;
+    if (await this.emailHasPrideInviteRedeem(email)) return true;
+    if (await this.emailHasBrightonPrideClaim(email)) return true;
+    if (await this.emailHasPendingPrideInvite(email)) return true;
+    return false;
+  },
+
+  /**
+   * Book / apply Pride Premium. Sets premium_starts_at so entitlement is not
+   * usable before launch (or before first redeem after open). No second entry later.
+   */
+  async applyPridePremiumGrant(
+    userId: string,
+    monthsFree: number,
+    client?: PoolClient,
+  ): Promise<{ premiumStart: Date; premiumUntil: Date }> {
+    const db: Queryable = client ?? pool;
+    const { premiumStart, premiumEnd } = pridePremiumWindow(monthsFree);
+    await db.query(
+      `UPDATE users
+       SET is_premium = TRUE,
+           premium_tier = 'premium',
+           premium_starts_at = $2,
+           premium_until = $3,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [userId, premiumStart, premiumEnd],
+    );
+    return { premiumStart, premiumUntil: premiumEnd };
+  },
+
+  /**
+   * Record Pride-flagged invite redemption + book Premium.
+   */
+  async bookPrideInviteGrant(
+    email: string,
+    userId: string,
+    monthsFree: number,
+    client?: PoolClient,
+  ): Promise<{ monthsFree: number; premiumUntil: Date }> {
+    const db: Queryable = client ?? pool;
+    const emailHash = hashEmail(email);
+
+    if (
+      (await this.emailHasPublicPrideRedeem(email)) ||
+      (await this.emailHasBrightonPrideClaim(email)) ||
+      (await this.emailHasPrideInviteRedeem(email))
+    ) {
+      throw new Error(
+        'This email already has a Pride Premium grant. The code cannot be stacked.',
+      );
+    }
+
+    try {
+      await db.query(
+        `INSERT INTO shared_promo_redemptions
+           (campaign, code_normalized, user_id, email_hash)
+         VALUES ($1, $2, $3, $4)`,
+        [PRIDE_INVITE_CAMPAIGN, 'MENRUSHPRIDEINVITE', userId, emailHash],
+      );
+    } catch (err: unknown) {
+      const pg = err as { code?: string };
+      if (pg.code === '23505') {
+        throw new Error(
+          'This email already has a Pride Premium grant. The code cannot be stacked.',
+        );
+      }
+      throw err;
+    }
+
+    const { premiumUntil } = await this.applyPridePremiumGrant(userId, monthsFree, client);
+    return { monthsFree, premiumUntil };
+  },
+
   /**
    * Validate the public Pride QR code (PRIDE 3MONTH FREE).
    * Spaces ignored. One per email. Enter-by 5 Sep 2026.
-   * Blocks if this email already has a legacy personal Pride code (no stacking).
+   * Blocks if this email already has another Pride path (no stacking).
    */
   async validateSharedPride(
     code: string,
@@ -194,11 +327,17 @@ export const promoService = {
       return { valid: false, reason: 'expired' };
     }
 
-    const emailHash = hashEmail(email);
     if (await this.emailHasBrightonPrideClaim(email)) {
       return { valid: false, reason: 'other_pride_path' };
     }
+    if (await this.emailHasPrideInviteRedeem(email)) {
+      return { valid: false, reason: 'other_pride_path' };
+    }
+    if (await this.emailHasPendingPrideInvite(email)) {
+      return { valid: false, reason: 'other_pride_path' };
+    }
 
+    const emailHash = hashEmail(email);
     const existing = await query(
       `SELECT 1 FROM shared_promo_redemptions
        WHERE campaign = $1 AND email_hash = $2
@@ -209,8 +348,7 @@ export const promoService = {
       return { valid: false, reason: 'already_redeemed' };
     }
 
-    const premiumStart = getMenRushLaunchDate();
-    const premiumEnd = premiumEndFromLaunch(premiumStart);
+    const { premiumStart, premiumEnd } = pridePremiumWindow();
     return {
       valid: true,
       monthsFree: SHARED_PRIDE_MONTHS_FREE,
@@ -222,8 +360,8 @@ export const promoService = {
 
   /**
    * Redeem public Pride code for a new user.
-   * Premium: 3 calendar months from actual launch (MENRUSH_LAUNCH_AT or 1 Oct 2026).
-   * Replaces 30-day waitlist gift. Does not stack with a prior personal Pride code.
+   * Premium: 3 calendar months from actual launch (or first redeem after open).
+   * Replaces 30-day waitlist gift. Does not stack with another Pride path.
    */
   async redeemSharedPride(
     code: string,
@@ -264,19 +402,15 @@ export const promoService = {
       throw err;
     }
 
-    await db.query(
-      `UPDATE users
-       SET is_premium = TRUE,
-           premium_tier = 'premium',
-           premium_until = $2,
-           updated_at = NOW()
-       WHERE id = $1`,
-      [userId, validation.premiumEnd],
+    const { premiumUntil } = await this.applyPridePremiumGrant(
+      userId,
+      validation.monthsFree,
+      client,
     );
 
     return {
       monthsFree: validation.monthsFree,
-      premiumUntil: validation.premiumEnd,
+      premiumUntil,
     };
   },
   /**
@@ -284,6 +418,7 @@ export const promoService = {
    *
    * New brightonpride26 claims are closed (public offer is /pride only).
    * Already-issued personal codes stay redeemable via validate/redeem.
+   * Pride waitlist uses Pride-flagged MENRUSH invites (prideInvite.service) — not this.
    */
   async issueCode(
     email: string,
@@ -294,6 +429,10 @@ export const promoService = {
 
     if (campaignId === BRIGHTON_PRIDE_CAMPAIGN) {
       throw new Error('campaign_closed');
+    }
+    if (campaignId === 'pride26_waitlist') {
+      // Face form posts here historically — route layer should call prideInviteService.
+      throw new Error('use_pride_invite');
     }
 
     const normalised = email.trim().toLowerCase();
@@ -425,8 +564,11 @@ export const promoService = {
         'This email already has a Pride Premium grant. The code cannot be stacked.',
       );
     }
-
-    const premiumEnd = premiumEndFromLaunch(getMenRushLaunchDate(), validation.monthsFree);
+    if (await this.emailHasPrideInviteRedeem(email)) {
+      throw new Error(
+        'This email already has a Pride Premium grant. The code cannot be stacked.',
+      );
+    }
 
     const updated = await db.query(
       `UPDATE promo_codes
@@ -439,19 +581,15 @@ export const promoService = {
       throw new Error('This Pride promo code has already been used.');
     }
 
-    await db.query(
-      `UPDATE users
-       SET is_premium = TRUE,
-           premium_tier = 'premium',
-           premium_until = $2,
-           updated_at = NOW()
-       WHERE id = $1`,
-      [userId, premiumEnd],
+    const { premiumUntil } = await this.applyPridePremiumGrant(
+      userId,
+      validation.monthsFree,
+      client,
     );
 
     return {
       monthsFree: validation.monthsFree,
-      premiumUntil: premiumEnd,
+      premiumUntil,
     };
   },
 

@@ -1,16 +1,28 @@
-import { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BrandMark } from '../components/BrandMark';
 import { SiteFooter } from '../components/SiteFooter';
 import { trackEventOnce, getAttributionParams } from '../observability/analytics';
-import { publicLinkClass, publicNavLinkPrimary, publicPrimaryButtonClass } from '../lib/publicStyles';
 import {
+  publicErrorClass,
+  publicInputClass,
+  publicLinkClass,
+  publicNavLinkPrimary,
+  publicPrimaryButtonClass,
+} from '../lib/publicStyles';
+import {
+  clearStoredPridePromoCode,
+  isPrideInviteIssueOpen,
   PRIDE_ENTER_BY,
+  PRIDE_INVITE_CAMPAIGN_ID,
+  PRIDE_INVITE_WINDOW_LABEL,
   PRIDE_PREMIUM_END,
   PRIDE_PREMIUM_START,
   PRIDE_PROMO_CODE,
   storePridePromoCode,
 } from '../lib/pridePromo';
+
+const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '') || '/api';
 
 /** Brand-only wash — night + copper. No lifestyle / Pride street photography. */
 const PRIDE_ATMOSPHERE =
@@ -19,7 +31,7 @@ const PRIDE_ATMOSPHERE =
 const WHAT_YOU_GET = [
   {
     title: 'Nearby',
-    body: 'See who is around you when MenRush opens — proximity, not a stack of stale profiles.',
+    body: 'See who is around you when MenRush opens. Proximity, not a stack of stale profiles.',
   },
   {
     title: 'Rooms',
@@ -27,17 +39,23 @@ const WHAT_YOU_GET = [
   },
   {
     title: 'Matches',
-    body: 'Mutual interest opens chat. Direct when it is real — no endless maybe.',
+    body: 'Mutual interest opens chat. Direct when it is real. No endless maybe.',
   },
 ] as const;
 
 /**
  * Printed QR → menrush.com/pride.
- * Sole public Pride offer. Redeem PRIDE 3MONTH FREE at account register (spaces ignored).
- * Waitlist alone does not redeem.
+ * Three paths, one Pride grant. Pride-flagged invite (21–31 Aug) = beta + booked Premium.
  */
 export const Pride = () => {
   const [copied, setCopied] = useState(false);
+  const [claimOpen, setClaimOpen] = useState(false);
+  const [email, setEmail] = useState('');
+  const [adultConfirmed, setAdultConfirmed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [formSuccess, setFormSuccess] = useState('');
+  const inviteOpen = isPrideInviteIssueOpen();
 
   useEffect(() => {
     trackEventOnce('landing_viewed', { surface: 'pride', ...getAttributionParams() });
@@ -57,6 +75,68 @@ export const Pride = () => {
   const registerHref = `/register?promo=${encodeURIComponent(PRIDE_PROMO_CODE)}`;
   const onPublicCtaClick = () => {
     storePridePromoCode(PRIDE_PROMO_CODE);
+  };
+
+  const onInviteFormSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setFormError('');
+    setFormSuccess('');
+    if (!inviteOpen) {
+      setFormError(
+        `The Pride invite window closed after 31 August 2026. You can still enter ${PRIDE_PROMO_CODE} at register by ${PRIDE_ENTER_BY}.`,
+      );
+      return;
+    }
+    if (!adultConfirmed) {
+      setFormError('Confirm you are 18 or over.');
+      return;
+    }
+    const trimmed = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setFormError('Enter a valid email address.');
+      return;
+    }
+
+    setSubmitting(true);
+    // Asking for a unique/Pride invite must not pre-fill the public code at register.
+    clearStoredPridePromoCode();
+
+    try {
+      const res = await fetch(`${API_BASE}/campaigns/${PRIDE_INVITE_CAMPAIGN_ID}/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmed, adult_confirmed: true }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+        error?: string;
+        code?: string;
+      };
+
+      if (!res.ok) {
+        setFormError(
+          data.error ||
+            (data.code === 'email_send_failed'
+              ? 'We could not send the invite email just now. Please try again in a few minutes.'
+              : 'Something went wrong. Please try again.'),
+        );
+        return;
+      }
+
+      setFormSuccess(
+        data.message ||
+          'Check your inbox — your Pride-flagged invite is on its way. Submitting this form is not the Premium grant; enter that invite at register when you create your account.',
+      );
+      setEmail('');
+      setAdultConfirmed(false);
+    } catch {
+      setFormError(
+        'We could not reach the server to send your invite. Please try again. If the email is late, use Support.',
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -92,37 +172,157 @@ export const Pride = () => {
             className="mt-6 max-w-[560px] text-pretty text-[clamp(15px,2vw,17px)] font-semibold leading-[1.6] text-[#F0E0C0]/92"
             data-testid="pride-headline-lock"
           >
-            Create an account and enter code{' '}
-            <span className="font-mono font-black tracking-[0.08em] text-[#E0A14A]">
-              {PRIDE_PROMO_CODE}
-            </span>{' '}
-            by {PRIDE_ENTER_BY}. You get 3 months of Premium from launch. If MenRush opens on{' '}
-            {PRIDE_PREMIUM_START}, Premium ends {PRIDE_PREMIUM_END}. If launch slips, the 3 months
-            run from the actual open date — not still {PRIDE_PREMIUM_END}. You cannot use Premium
-            before launch.
+            One Pride grant. Pride-flagged invite 21–31 August 2026, or public code by 5 September
+            2026, plus holders of an already-emailed personal code. You cannot use Premium before
+            launch. 31 August is not the end of Premium.
           </p>
 
           <p
             className="mt-5 max-w-[560px] text-pretty text-[14px] leading-[1.55] text-[var(--cream-muted)]"
-            data-testid="pride-grandfather"
+            data-testid="pride-week-why"
           >
-            If you already received a personal Brighton Pride code by email, enter that code at
-            register on the same email. It still works on the terms in that email (redeem by 31
-            October 2026). Clear the public code if it is pre-filled. Do not also enter{' '}
-            <span className="font-mono font-bold tracking-wide text-[#F0E0C0]">
-              {PRIDE_PROMO_CODE}
-            </span>
-            . One person gets one Pride grant.
+            This unique-invite window (21–31 August 2026) exists because of Southampton Pride (29–30
+            August) and Manchester Village Pride (28–31 August). MenRush is not a sponsor of those
+            events.
           </p>
 
+          {/* Path 1 — Pride-flagged invite */}
           <div
-            className="mt-9 w-full max-w-[460px] rounded-[18px] border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.12)] px-5 py-6"
+            className="mt-9 w-full max-w-[460px] rounded-[18px] border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.12)] px-5 py-6 text-left"
+            data-testid="pride-invite-path"
+          >
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#C4832A]">
+              Path 1 · Pride-flagged invite
+            </p>
+            <p className="mt-3 text-[15px] leading-[1.55] text-[#F0E0C0]" data-testid="pride-invite-bargain">
+              {inviteOpen ? (
+                <>
+                  {PRIDE_INVITE_WINDOW_LABEL} only: enter your email and confirm 18+. We email a
+                  Pride-flagged beta invite (MENRUSH-XXXX-XXXX). That one code is beta access and
+                  books 3 months of Premium (duration rule below). Submitting this form sends the
+                  invite — it is not the grant. Enter that invite at register on the same email.
+                  Entering it now books Premium; you do not enter it again on 1 October. Do not also
+                  enter{' '}
+                  <span className="font-mono font-bold tracking-wide text-[#E0A14A]">
+                    {PRIDE_PROMO_CODE}
+                  </span>{' '}
+                  or a Brighton personal PRIDE-XXXX-XXXX. One person gets one Pride grant.
+                </>
+              ) : (
+                <>
+                  The Pride-flagged invite window closed after 31 August 2026. New waitlist signups
+                  from this page no longer get the 3-month Pride grant on the invite. Use Path 2
+                  below while it is still open.
+                </>
+              )}
+            </p>
+
+            {inviteOpen ? (
+              <div className="mt-5 flex flex-col gap-3">
+                {!claimOpen ? (
+                  <button
+                    type="button"
+                    className={publicPrimaryButtonClass}
+                    data-testid="pride-claim-cta"
+                    onClick={() => {
+                      setFormError('');
+                      setFormSuccess('');
+                      setClaimOpen(true);
+                    }}
+                  >
+                    Claim Pride code
+                  </button>
+                ) : (
+                  <form
+                    className="flex flex-col gap-3"
+                    onSubmit={onInviteFormSubmit}
+                    data-testid="pride-invite-form"
+                  >
+                    <label htmlFor="pride-invite-email" className="sr-only">
+                      Email
+                    </label>
+                    <input
+                      id="pride-invite-email"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      value={email}
+                      onChange={(ev) => {
+                        setFormError('');
+                        setEmail(ev.target.value);
+                      }}
+                      placeholder="Email"
+                      className={publicInputClass}
+                      data-testid="pride-invite-email"
+                      disabled={submitting}
+                    />
+                    <label className="flex items-start gap-3 text-[13px] leading-[1.45] text-[var(--cream-muted)]">
+                      <input
+                        type="checkbox"
+                        checked={adultConfirmed}
+                        onChange={(ev) => {
+                          setFormError('');
+                          setAdultConfirmed(ev.target.checked);
+                        }}
+                        className="mt-1 h-4 w-4 accent-[#C4832A]"
+                        data-testid="pride-invite-adult"
+                        disabled={submitting}
+                      />
+                      <span>I confirm I am 18 or over.</span>
+                    </label>
+                    <button
+                      type="submit"
+                      className={publicPrimaryButtonClass}
+                      disabled={submitting}
+                      data-testid="pride-invite-submit"
+                    >
+                      {submitting ? 'Sending…' : 'Email my Pride code'}
+                    </button>
+                    {formError ? (
+                      <p className={publicErrorClass} data-testid="pride-invite-error" role="alert">
+                        {formError}
+                      </p>
+                    ) : null}
+                    {formSuccess ? (
+                      <p
+                        className="text-sm font-semibold leading-[1.55] text-[#E0A14A]"
+                        data-testid="pride-invite-success"
+                        role="status"
+                      >
+                        {formSuccess}
+                      </p>
+                    ) : null}
+                    <p className="text-[12px] leading-[1.5] text-[var(--cream-muted)]">
+                      If the invite email fails or is late, the error above will say so — try again or
+                      contact Support. Asking for this invite does not put {PRIDE_PROMO_CODE} in the
+                      register box.
+                    </p>
+                  </form>
+                )}
+              </div>
+            ) : (
+              <p className="mt-4 text-[13px] leading-[1.55] text-[var(--cream-muted)]" data-testid="pride-invite-closed">
+                Window closed. Path 2 (public code) remains until {PRIDE_ENTER_BY}.
+              </p>
+            )}
+          </div>
+
+          {/* Path 2 — public code */}
+          <div
+            className="mt-6 w-full max-w-[460px] rounded-[18px] border border-[rgba(240,224,192,0.25)] bg-[rgba(13,10,6,0.35)] px-5 py-6"
             data-testid="pride-promo-code"
           >
             <p className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#C4832A]">
-              Promo code
+              Path 2 · Public code
             </p>
-            <p className="mt-3 font-mono text-[clamp(18px,4vw,24px)] font-black tracking-[0.12em] text-[#F0E0C0]">
+            <p className="mt-3 text-[15px] leading-[1.55] text-[#F0E0C0]" data-testid="pride-public-path">
+              Still works. Create an account and enter{' '}
+              <span className="font-mono font-black tracking-[0.08em] text-[#E0A14A]">
+                {PRIDE_PROMO_CODE}
+              </span>{' '}
+              by {PRIDE_ENTER_BY}. Printed material that shows this code is not dead.
+            </p>
+            <p className="mt-4 font-mono text-[clamp(18px,4vw,24px)] font-black tracking-[0.12em] text-[#F0E0C0]">
               {PRIDE_PROMO_CODE}
             </p>
             <button
@@ -132,33 +332,40 @@ export const Pride = () => {
             >
               {copied ? 'Copied' : 'Copy code'}
             </button>
-          </div>
-
-          <div className="mt-8 w-full max-w-[460px]">
-            <Link
-              to={registerHref}
-              className={publicPrimaryButtonClass}
-              data-testid="pride-cta"
-              onClick={onPublicCtaClick}
-            >
-              Create account &amp; enter code
-            </Link>
+            <div className="mt-5">
+              <Link
+                to={registerHref}
+                className={publicPrimaryButtonClass}
+                data-testid="pride-cta"
+                onClick={onPublicCtaClick}
+              >
+                Create account &amp; enter public code
+              </Link>
+            </div>
             <p
               className="mt-4 text-sm leading-[1.55] text-[var(--cream-muted)]"
               data-testid="pride-cta-note"
             >
-              Create an account and enter {PRIDE_PROMO_CODE} by {PRIDE_ENTER_BY}. Joining the{' '}
-              <Link to="/#waitlist" className={publicLinkClass} data-testid="pride-waitlist-link">
-                waitlist
-              </Link>{' '}
-              alone does not redeem this code. Already have a personal emailed code? Open register
-              and enter that code instead — clear the public code if it appears. Have a beta invite?{' '}
+              Enter {PRIDE_PROMO_CODE} at register by {PRIDE_ENTER_BY}. Have a beta invite from the
+              homepage waitlist (not Pride-flagged)?{' '}
               <Link to="/beta" className={publicLinkClass}>
                 Enter it here
               </Link>
               .
             </p>
           </div>
+
+          <p
+            className="mt-8 max-w-[560px] text-pretty text-[14px] leading-[1.55] text-[var(--cream-muted)]"
+            data-testid="pride-grandfather"
+          >
+            Already have a personal Brighton Pride code (PRIDE-XXXX-XXXX) from an earlier email?
+            Enter that code at register on the same email. It still works on the terms in that email
+            (redeem by 31 October 2026). Clear any pre-filled public or new invite code. Do not also
+            enter{' '}
+            <span className="font-mono font-bold tracking-wide text-[#F0E0C0]">{PRIDE_PROMO_CODE}</span>{' '}
+            or a new Pride-flagged invite. One person gets one Pride grant.
+          </p>
         </section>
 
         <section
@@ -173,21 +380,30 @@ export const Pride = () => {
             Offer conditions
           </h2>
           <ul className="mt-8 space-y-4 text-[15px] leading-[1.6] text-[var(--cream-muted)]">
-            <li>
+            <li data-testid="pride-clock-invite">
+              Pride-flagged invites: issued only {PRIDE_INVITE_WINDOW_LABEL} from this page. Enter
+              that invite at register to book the grant. Premium is not usable before launch.
+            </li>
+            <li data-testid="pride-clock-public">
               <span className="font-bold text-[#F0E0C0]">{PRIDE_ENTER_BY}</span> is the last day to{' '}
-              <span className="font-bold text-[#F0E0C0]">enter</span> the code at account register —
-              not the end of the free Premium period. The waitlist form does not redeem the code.
+              <span className="font-bold text-[#F0E0C0]">enter</span> the public code{' '}
+              <span className="font-mono text-[#F0E0C0]">{PRIDE_PROMO_CODE}</span> at account register —
+              not the end of the free Premium period.
             </li>
             <li data-testid="pride-duration-rule">
-              Duration rule: if MenRush opens on{' '}
-              <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_START}</span>, Premium ends{' '}
-              <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_END}</span>. If launch
-              slips, the 3 months run from the actual open date — not still {PRIDE_PREMIUM_END}.
-              The clock does not start from scan or code entry. Nothing is usable before launch.
+              Duration rule: if you book before launch, Premium starts at launch. On-time open{' '}
+              <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_START}</span> → ends{' '}
+              <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_END}</span>. If launch slips, 3
+              months from the actual open date — not still {PRIDE_PREMIUM_END}. If you first enter
+              after MenRush is open, 3 months from that redeem date. The clock does not start from
+              scan or form submit. Nothing is usable before launch.
             </li>
             <li>
-              One per user = one MenRush account / email. Code:{' '}
-              <span className="font-mono text-[#F0E0C0]">{PRIDE_PROMO_CODE}</span>.
+              Submitting the email form sends a Pride-flagged invite. The grant happens when you enter
+              that invite at register (or when you enter the public / personal code on their paths).
+            </li>
+            <li>
+              One per user = one MenRush account / email. One Pride grant. No stacking across paths.
             </li>
             <li>
               Pride replaces the existing 30-day waitlist Premium gift (Terms 7.2). It does not add

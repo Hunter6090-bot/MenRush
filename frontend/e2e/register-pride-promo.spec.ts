@@ -12,7 +12,7 @@ test.describe('Register Pride promo field', () => {
     await expect(promo).toHaveValue('PRIDE 3MONTH FREE');
     await expect(page.getByTestId('register-pride-note')).toContainText(/Public code/i);
     await expect(page.getByTestId('register-pride-note')).toContainText(
-      /personal emailed code instead/i,
+      /grant happens when you enter this code/i,
     );
 
     await page.getByTestId('register-promo-clear').click();
