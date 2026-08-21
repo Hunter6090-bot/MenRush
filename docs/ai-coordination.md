@@ -49,6 +49,7 @@ style(icons): heritage set (claude)
 | --- | --- | --- | --- |
 | Tablet profile tile density (Discover/Matches/Stream) | PR `cursor/tablet-profile-tile-density-0d4b` | — | Cursor cloud — md 768+ denser grid; phone stays 2-col |
 | Verified profiles landing copy (replace Verified bodies) | PR `#120` `cursor/verified-profiles-landing-51f5` | — | Cursor cloud — ComingSoon hero + design-lock e2e + marketing rule; merged |
+| Pride-flagged waitlist invite (one code = beta + booked 3mo Premium; 21–31 Aug /pride) | — | branch `cursor/pride-waitlist-unique-code-9233` | Cursor cloud — Legal one-code model; do not merge until owner says |
 | Pride sole public offer (`/pride`; closed `/brightonpride` → redirect) | PR `#118` `cursor/pride-landing-promo-9233` (folds #119) | — | Cursor cloud — owner go-live 21 Aug 2026; public + personal Pride redeem at register; brand-only /pride |
 | Kill homepage fade + rooms skeleton blink | PR `cursor/kill-fidgety-motion-283d` | — | Cursor cloud — remove `mr-launch-fade`; RoomList refresh in place |
 | Oct 1 2026 social calendar seed (`oct1-2026`) | PR `#112` `cursor/social-oct1-2026-calendar-5921` | — | Cursor cloud — docs + idempotent seed; draft only; do not auto-publish; merged |

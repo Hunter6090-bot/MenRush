@@ -24,6 +24,10 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { personalPrideExpiredMessage, promoService } from '../services/promo.service';
+import {
+  PRIDE_WAITLIST_CAMPAIGN_ID,
+  prideInviteService,
+} from '../services/prideInvite.service';
 import rateLimit from 'express-rate-limit';
 
 const router = Router();
@@ -119,7 +123,9 @@ const RedeemSchema = z.object({
 
 /**
  * POST /api/campaigns/:campaignId/signup
- * Public — rate limited. Issues an email-locked promo code.
+ * Public — rate limited.
+ * - pride26_waitlist (21–31 Aug UK): Pride-flagged MENRUSH invite (beta + booked Premium)
+ * - brightonpride26: closed
  */
 router.post('/:campaignId/signup', signupLimiter, async (req: Request, res: Response) => {
   const { campaignId } = req.params;
@@ -133,6 +139,17 @@ router.post('/:campaignId/signup', signupLimiter, async (req: Request, res: Resp
   const { email } = parsed.data;
 
   try {
+    if (campaignId === PRIDE_WAITLIST_CAMPAIGN_ID) {
+      const result = await prideInviteService.issueFromPridePage(email);
+      res.json({
+        ok: true,
+        message:
+          'Check your inbox — your Pride-flagged invite is on its way. Submitting this form is not the Premium grant; enter that invite when you create your account.',
+      });
+      console.log(`[campaigns] pride invite ${result.outcome} for ${email}`);
+      return;
+    }
+
     const result = await promoService.issueCode(email, campaignId);
     // Don't reveal whether the email was new or existing — prevents enumeration
     res.json({
@@ -141,7 +158,7 @@ router.post('/:campaignId/signup', signupLimiter, async (req: Request, res: Resp
     });
     console.log(`[campaigns] ${result.outcome} code for ${email} on ${campaignId}`);
   } catch (err: any) {
-    if (err.message?.startsWith('Unknown campaign')) {
+    if (err.message?.startsWith('Unknown campaign') || err.message === 'use_pride_invite') {
       res.status(404).json({ error: 'Campaign not found.' });
       return;
     }
@@ -150,6 +167,30 @@ router.post('/:campaignId/signup', signupLimiter, async (req: Request, res: Resp
         error: 'This claim form is closed. Use the Pride offer at /pride.',
         code: 'campaign_closed',
         redirect: '/pride',
+      });
+      return;
+    }
+    if (err.message === 'issue_window_closed') {
+      res.status(410).json({
+        error:
+          'The Pride invite window closed after 31 August 2026. You can still enter the public code PRIDE 3MONTH FREE at register by 5 September 2026.',
+        code: 'issue_window_closed',
+      });
+      return;
+    }
+    if (err.message === 'other_pride_path') {
+      res.status(409).json({
+        error:
+          'This email already has a Pride path. Use your existing invite or personal code at register — one grant only, no stacking.',
+        code: 'other_pride_path',
+      });
+      return;
+    }
+    if (err.message === 'email_send_failed') {
+      res.status(502).json({
+        error:
+          'We saved your request but could not send the invite email just now. Please try again in a few minutes, or contact Support if it stays late.',
+        code: 'email_send_failed',
       });
       return;
     }
