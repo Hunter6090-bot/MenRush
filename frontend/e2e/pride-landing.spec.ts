@@ -74,8 +74,9 @@ test.describe('Pride promotion landing', () => {
     const duration = page.getByTestId('pride-duration-rule');
     await expect(duration).toContainText(/Premium starts at launch/i);
     await expect(duration).toContainText(/1 October 2026/i);
-    await expect(duration).toContainText(/1 January 2027/i);
+    await expect(duration).toContainText(/Ends 1 January 2027/i);
     await expect(duration).toContainText(/If launch slips/i);
+    await expect(duration).not.toContainText('→');
     await expect(conditions).toContainText(/Terms 7\.2/i);
     await expect(conditions).toContainText(/18\+/);
     await expect(conditions).toContainText(/will not be billed for this offer/i);
