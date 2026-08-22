@@ -15,7 +15,7 @@ export const PRIDE_STORAGE_KEY = 'menrush_pride_promo';
 /** Pride-flagged invite issue window (UK): 21 Aug 00:00 BST → end of 31 Aug BST. */
 export const PRIDE_INVITE_ISSUE_OPENS = new Date('2026-08-20T23:00:00Z');
 export const PRIDE_INVITE_ISSUE_CLOSES = new Date('2026-08-31T22:59:59Z');
-export const PRIDE_INVITE_WINDOW_LABEL = '21–31 August 2026';
+export const PRIDE_INVITE_WINDOW_LABEL = '21 to 31 August 2026';
 export const PRIDE_INVITE_CAMPAIGN_ID = 'pride26_waitlist';
 
 export function isPrideInviteIssueOpen(now = new Date()): boolean {

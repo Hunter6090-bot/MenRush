@@ -1,0 +1,45 @@
+---
+description: Owner lock for menrush.com/pride — claim-only face; grant rules in Terms; no Brighton.
+globs: frontend/src/pages/Pride.tsx,frontend/e2e/pride-landing.spec.ts,frontend/e2e/brightonpride-legal.spec.ts,frontend/src/pages/Terms.tsx
+alwaysApply: false
+---
+
+# Pride landing (`/pride`) — claim-only lock
+
+Owner brand lock for the live Pride promotion. **Do not reintroduce an Offer conditions block on the face.**
+
+## Face (claim-only)
+
+Keep only:
+
+- Official bronze medallion (`BrandMark`)
+- Overline: `PRIDE PROMOTION · UK`
+- Headline: `3 months Premium from launch`
+- One gold **Claim Pride code** button (opens email + 18+ confirm form)
+- Form-adjacent: submitting the form sends the invite. It is not the grant. Enter the code at register. You cannot use Premium before launch.
+- Quiet printed-code line (no Brighton): Already have the printed public code PRIDE 3MONTH FREE? It still works at register by 5 September 2026. One grant. Do not also claim a new Pride invite.
+- One quiet line: **Terms and conditions apply.** linked to `/terms`
+
+## Forbidden on `/pride`
+
+- Offer conditions heading, numbered list, or grant-rule bullets
+- The word **Brighton** (face, conditions, email preview, or e2e that render this page)
+- City-launch lists (London / Birmingham / Manchester / Brighton)
+- Path 2 cards, Free app essay, second gold CTA
+- Em dash / en dash in new copy (write `21 to 31 August`, not `21–31`)
+
+## Grant rules live in Terms (clause 7.7)
+
+Honest Pride grant rules belong in `Terms.tsx` §7.7, not on the face. Include: new invites 21 to 31 August 2026 only; printed PRIDE 3MONTH FREE by 5 September 2026; personal earlier-email codes by 31 October 2026; 3 months Premium from launch; one grant; no stacking; replaces 7.2 waitlist gift; 18+; UK-first; not billed; not a sponsor of Southampton Pride or Manchester Village Pride; duration from launch (on-time 1 Oct 2026 → 1 Jan 2027; slip = 3 months from actual open).
+
+## Look
+
+Night `#0D0A06`, copper `#C4832A`, cream `#F0E0C0`, official logo unmodified. No layout redesign.
+
+## Behaviour (do not change)
+
+Register still accepts personal `PRIDE-XXXX-XXXX` by 31 October 2026 and printed `PRIDE 3MONTH FREE` by 5 September 2026. Claim form, Resend, clocks, payment, adult-assurance stay as shipped.
+
+## Tests
+
+`frontend/e2e/pride-landing.spec.ts` and `brightonpride-legal.spec.ts` enforce claim-only face + Terms 7.7 + no Brighton on `/pride`.

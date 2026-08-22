@@ -35,7 +35,7 @@ describe('pridePromo', () => {
     expect(looksLikePersonalPrideCode('MENRUSH-A3F7-B2C1')).toBe(false);
   });
 
-  it('opens Pride-flagged invite issue only 21–31 Aug 2026 UK', () => {
+  it('opens Pride-flagged invite issue only 21 to 31 Aug 2026 UK', () => {
     expect(isPrideInviteIssueOpen(new Date('2026-08-20T22:59:59Z'))).toBe(false);
     expect(isPrideInviteIssueOpen(PRIDE_INVITE_ISSUE_OPENS)).toBe(true);
     expect(isPrideInviteIssueOpen(new Date('2026-08-25T12:00:00Z'))).toBe(true);
