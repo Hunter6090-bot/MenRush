@@ -13,21 +13,25 @@ import {
 import {
   clearStoredPridePromoCode,
   isPrideInviteIssueOpen,
-  PRIDE_ENTER_BY,
   PRIDE_INVITE_CAMPAIGN_ID,
-  PRIDE_PROMO_CODE,
 } from '../lib/pridePromo';
 
 const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '') || '/api';
 
-/** Brand-only wash. Night + copper. No lifestyle / Pride street photography. */
-const PRIDE_ATMOSPHERE =
-  'radial-gradient(ellipse 90% 55% at 50% -10%, rgba(196,131,42,0.22) 0%, transparent 55%), radial-gradient(ellipse 70% 40% at 80% 100%, rgba(196,131,42,0.08) 0%, transparent 50%), linear-gradient(180deg, #120E08 0%, #0D0A06 45%, #0D0A06 100%)';
+/** Owner-supplied Pride parade photograph (full-bleed). */
+const PRIDE_BG = '/images/menrush/21-pride-parade-flags.jpeg';
+
+/**
+ * Night + copper wash so cream/gold type stays readable over the parade photo.
+ * Photo shows through slightly (claim face, not a brochure).
+ */
+const PRIDE_WASH =
+  'linear-gradient(180deg, rgba(13,10,6,0.58) 0%, rgba(13,10,6,0.72) 32%, rgba(18,12,6,0.86) 62%, rgba(13,10,6,0.94) 82%, #0D0A06 100%), radial-gradient(ellipse 85% 50% at 50% 8%, rgba(196,131,42,0.18) 0%, transparent 55%)';
 
 /**
  * Printed QR → menrush.com/pride.
- * Face: short claim + one gold Claim CTA + operational lines. Grant rules live in Terms.
- * No Offer conditions block. No Brighton. No city list. No Free app essay.
+ * Face: parade photo under wash + short claim + one gold Claim CTA.
+ * Grant rules live in Terms. No printed-code CTA. No Offer conditions. No Brighton.
  */
 export const Pride = () => {
   const [claimOpen, setClaimOpen] = useState(false);
@@ -103,8 +107,19 @@ export const Pride = () => {
   return (
     <div className="relative flex min-h-dvh flex-col overflow-hidden bg-[#0D0A06] text-[#F0E0C0]">
       <div
+        className="pointer-events-none absolute inset-0 bg-cover bg-no-repeat"
+        style={{
+          backgroundImage: `url(${PRIDE_BG})`,
+          // Keep parade faces in frame (crowd is mid/lower). Avoid top-heavy crop.
+          backgroundPosition: 'center 42%',
+        }}
+        data-testid="pride-bg-photo"
+        aria-hidden
+      />
+      <div
         className="pointer-events-none absolute inset-0"
-        style={{ background: PRIDE_ATMOSPHERE }}
+        style={{ background: PRIDE_WASH }}
+        data-testid="pride-bg-wash"
         aria-hidden
       />
 
@@ -222,14 +237,6 @@ export const Pride = () => {
               You cannot use Premium before launch.
             </p>
           </div>
-
-          <p
-            className="mt-8 max-w-[560px] text-pretty text-[14px] leading-[1.55] text-[var(--cream-muted)]"
-            data-testid="pride-public-redeem-note"
-          >
-            Already have the printed public code {PRIDE_PROMO_CODE}? It still works at register by{' '}
-            {PRIDE_ENTER_BY}. One grant. Do not also claim a new Pride invite.
-          </p>
 
           <p
             className="mt-10 text-[13px] leading-[1.55] text-[var(--cream-muted)]"

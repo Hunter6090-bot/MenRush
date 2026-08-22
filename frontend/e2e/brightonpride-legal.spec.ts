@@ -23,7 +23,8 @@ test.describe('Closed Brighton Pride URLs', () => {
     await expect(page).toHaveURL(/\/pride\/?$/);
     await expect(page.getByTestId('pride-headline-lock')).toBeVisible();
     await expect(page.getByTestId('pride-invite-path')).toBeVisible();
-    await expect(page.getByTestId('pride-public-redeem-note')).toContainText('PRIDE 3MONTH FREE');
+    await expect(page.getByTestId('pride-bg-photo')).toBeAttached();
+    await expect(page.getByTestId('pride-public-redeem-note')).toHaveCount(0);
     await expect(page.getByTestId('pride-promo-code')).toHaveCount(0);
     await expect(page.getByText(/Brighton/i)).toHaveCount(0);
     expect(network.expectNoSideEffects()).toEqual([]);
