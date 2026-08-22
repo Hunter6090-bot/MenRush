@@ -15,9 +15,6 @@ import {
   isPrideInviteIssueOpen,
   PRIDE_ENTER_BY,
   PRIDE_INVITE_CAMPAIGN_ID,
-  PRIDE_INVITE_WINDOW_LABEL,
-  PRIDE_PREMIUM_END,
-  PRIDE_PREMIUM_START,
   PRIDE_PROMO_CODE,
 } from '../lib/pridePromo';
 
@@ -29,8 +26,8 @@ const PRIDE_ATMOSPHERE =
 
 /**
  * Printed QR → menrush.com/pride.
- * Face: short claim + one gold Claim CTA + grant disclaimer next to form + quiet printed code.
- * Conditions on the same page. No Free app / Nearby / Rooms / Matches essay.
+ * Face: short claim + one gold Claim CTA + operational lines. Grant rules live in Terms.
+ * No Offer conditions block. No Brighton. No city list. No Free app essay.
  */
 export const Pride = () => {
   const [claimOpen, setClaimOpen] = useState(false);
@@ -121,7 +118,7 @@ export const Pride = () => {
       </header>
 
       <main className="relative z-10 flex flex-1 flex-col">
-        <section className="mx-auto flex w-full max-w-[720px] flex-col items-center px-6 pb-10 pt-4 text-center sm:pt-8">
+        <section className="mx-auto flex w-full max-w-[720px] flex-col items-center px-6 pb-14 pt-4 text-center sm:pt-8">
           <BrandMark size="hero" className="mb-8" />
 
           <p className="mr-coming-soon-overline mb-5">PRIDE PROMOTION · UK</p>
@@ -233,71 +230,14 @@ export const Pride = () => {
             Already have the printed public code {PRIDE_PROMO_CODE}? It still works at register by{' '}
             {PRIDE_ENTER_BY}. One grant. Do not also claim a new Pride invite.
           </p>
-        </section>
 
-        <section
-          className="mx-auto w-full max-w-[640px] border-t border-[rgba(61,43,14,0.55)] px-6 py-12 text-left"
-          aria-labelledby="pride-conditions-heading"
-          data-testid="pride-conditions"
-        >
-          <h2
-            id="pride-conditions-heading"
-            className="text-center text-[13px] font-extrabold uppercase tracking-[0.22em] text-[#C4832A]"
-          >
-            Offer conditions
-          </h2>
-          <ul className="mt-8 space-y-4 text-[15px] leading-[1.6] text-[var(--cream-muted)]">
-            <li data-testid="pride-clock-invite">
-              New invites: {PRIDE_INVITE_WINDOW_LABEL} only. Resend to the same email still works
-              after the window closes. 31 August ends new invites, not Premium.
-            </li>
-            <li>
-              Printed public code {PRIDE_PROMO_CODE}: enter at register by {PRIDE_ENTER_BY}. One
-              grant. Do not also claim a new Pride invite.
-            </li>
-            <li data-testid="pride-grandfather">
-              Already have a personal PRIDE-XXXX-XXXX from an earlier email? Enter that code at
-              register on the same email. Redeem by 31 October 2026. No new Brighton Pride codes. One
-              grant per person.
-            </li>
-            <li data-testid="pride-duration-rule">
-              Duration: book before launch. Premium starts at launch. On-time open{' '}
-              <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_START}</span>. Ends{' '}
-              <span className="font-bold text-[#F0E0C0]">{PRIDE_PREMIUM_END}</span>. If launch slips, 3
-              months from the actual open date. First enter after open: 3 months from that redeem.
-            </li>
-            <li>One Pride grant per email. No stacking.</li>
-            <li>
-              Pride replaces the existing 30-day waitlist Premium gift (Terms 7.2). It does not add to
-              that gift.
-            </li>
-            <li>18+ only. UK-first.</li>
-            <li>Three months of Premium at no charge. You will not be billed for this offer.</li>
-            <li data-testid="pride-week-why">
-              MenRush is not a sponsor of Southampton Pride or Manchester Village Pride.
-            </li>
-          </ul>
           <p
-            className="mt-8 text-[14px] leading-[1.6] text-[var(--cream-muted)]"
-            data-testid="pride-promoter-slot"
+            className="mt-10 text-[13px] leading-[1.55] text-[var(--cream-muted)]"
+            data-testid="pride-terms-apply"
           >
-            Promoter:{' '}
-            <span className="font-bold text-[#F0E0C0]">
-              Bronze Apps UK Limited (trading as MenRush)
-            </span>
-            . Correspondence address is in our{' '}
             <Link to="/terms" className={publicLinkClass} data-testid="pride-terms-link">
-              Terms
+              Terms and conditions apply.
             </Link>
-            . Also see{' '}
-            <Link to="/privacy" className={publicLinkClass}>
-              Privacy
-            </Link>
-            {' · '}
-            <Link to="/contact" className={publicLinkClass}>
-              Support
-            </Link>
-            .
           </p>
         </section>
       </main>
