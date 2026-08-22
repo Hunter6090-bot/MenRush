@@ -257,8 +257,8 @@ export const Pride = () => {
             </li>
             <li data-testid="pride-grandfather">
               Already have a personal PRIDE-XXXX-XXXX from an earlier email? Enter that code at
-              register on the same email. Redeem by 31 October 2026. No new Brighton codes. One grant
-              per person.
+              register on the same email. Redeem by 31 October 2026. No new Brighton Pride codes. One
+              grant per person.
             </li>
             <li data-testid="pride-duration-rule">
               Duration: book before launch. Premium starts at launch. On-time open{' '}
@@ -271,7 +271,7 @@ export const Pride = () => {
               Pride replaces the existing 30-day waitlist Premium gift (Terms 7.2). It does not add to
               that gift.
             </li>
-            <li>18+ only. UK-first (London · Manchester · Birmingham).</li>
+            <li>18+ only. UK-first.</li>
             <li>Three months of Premium at no charge. You will not be billed for this offer.</li>
             <li data-testid="pride-week-why">
               MenRush is not a sponsor of Southampton Pride or Manchester Village Pride.

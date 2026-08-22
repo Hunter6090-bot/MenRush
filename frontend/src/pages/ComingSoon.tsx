@@ -194,10 +194,6 @@ export const ComingSoon = () => {
           <p className="mt-10 text-[15px] font-bold uppercase tracking-[0.08em] text-[#F0E0C0]/85">
             &ldquo;Your next nearby meet is real.&rdquo;
           </p>
-
-          <p className="mt-5 text-[11px] font-semibold tracking-[0.22em] text-[#6B5840]">
-            LONDON · MANCHESTER · BIRMINGHAM · BRIGHTON
-          </p>
         </section>
 
         {/* What you get — shipped product surfaces only */}

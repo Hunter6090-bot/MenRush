@@ -20,7 +20,9 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   await expect(heroHeading).toContainText(/Verified profiles/i);
 
   await expect(page.getByText(/OPENS 1 OCTOBER 2026/i)).toBeVisible();
-  await expect(page.getByText(/LONDON · MANCHESTER · BIRMINGHAM · BRIGHTON/i)).toBeVisible();
+  await expect(page.getByText(/opens across the UK/i)).toBeVisible();
+  await expect(page.getByText(/UK first/i)).toBeVisible();
+  await expect(page.getByText(/LONDON · MANCHESTER · BIRMINGHAM · BRIGHTON/i)).toHaveCount(0);
 
   await expect(page.getByRole('heading', { name: /What you get/i })).toBeVisible();
   await expect(page.getByRole('heading', { name: /^Nearby$/i })).toBeVisible();

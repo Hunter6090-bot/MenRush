@@ -14,7 +14,7 @@ Run: `npm run test:e2e -- public-design-lock` (from `frontend/`)
 ## Landing (`/` and `/coming-soon`) — UK launch page
 
 - Implemented in `ComingSoon.tsx` with the **London rooftop** hero (`31-london-rooftop-dusk.jpeg`), bronze medallion via `BrandMark`, and copper/cream tokens.
-- **Must** name the opening: **1 October 2026**, UK-first (London · Manchester · Birmingham · Brighton). Do not invent US cities.
+- **Must** name the opening: **1 October 2026**, UK-wide (`OPENS 1 OCTOBER 2026 · UK`, opens across the UK, UK first). Do **not** list launch cities (no London / Manchester / Birmingham / Brighton ticker). Do not invent US cities.
 - Hero typography uses `mr-coming-soon-heading` + `mr-coming-soon-accent` (keep “Real men / Verified profiles / Total discretion” voice unless product rewrites).
 - Canonical waitlist anchor: **`#waitlist`** (element `id="waitlist"`), email input `#waitlist-email`.
 - Waitlist submit CTA: **“Join waitlist”** — same backend `POST /api/waitlist` + Zoho backup + analytics events.
