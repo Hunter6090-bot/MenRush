@@ -39,15 +39,16 @@ test.describe('Pride promotion landing', () => {
     await expect(bargain).not.toContainText(/PRIDE 3MONTH FREE/i);
     await expect(bargain).not.toContainText(/Brighton/i);
 
-    // Quiet printed-code line on the face
-    const publicNote = page.getByTestId('pride-public-redeem-note');
-    await expect(publicNote).toBeVisible();
-    await expect(publicNote).toContainText('PRIDE 3MONTH FREE');
-    await expect(publicNote).toContainText(/5 September 2026/i);
-    await expect(publicNote).toContainText(/still works at register/i);
-    await expect(publicNote).toContainText(/One grant/i);
-    await expect(publicNote).toContainText(/Do not also claim a new Pride invite/i);
-    await expect(publicNote).not.toContainText(/Brighton/i);
+    // Parade photo under night/copper wash (claim face, not brochure)
+    const bg = page.getByTestId('pride-bg-photo');
+    await expect(bg).toBeAttached();
+    await expect(bg).toHaveCSS('background-image', /21-pride-parade-flags\.jpeg/);
+    await expect(page.getByTestId('pride-bg-wash')).toBeAttached();
+
+    // No public printed-code CTA on the face
+    await expect(page.getByTestId('pride-public-redeem-note')).toHaveCount(0);
+    await expect(page.getByText(/PRIDE 3MONTH FREE/i)).toHaveCount(0);
+    await expect(page.getByText(/Already have the printed public code/i)).toHaveCount(0);
 
     await page.getByTestId('pride-claim-cta').click();
     await expect(page.getByTestId('pride-invite-form')).toBeVisible();
