@@ -416,6 +416,21 @@ export const Terms = () => {
                   settings.
                 </>,
               )}
+              {para(
+                <>
+                  <Strong>7.7</Strong> Pride promotional offer (menrush.com/pride). New Pride
+                  invites are issued 21 to 31 August 2026 only. The printed public code{' '}
+                  <span className="font-mono tracking-wide">PRIDE 3MONTH FREE</span> may be entered
+                  at register by 5 September 2026. A personal code from an earlier email still works
+                  at register by 31 October 2026. Redeeming a valid Pride code grants 3 months of
+                  Premium from launch. One grant per person. No stacking. Pride replaces the 30-day
+                  waitlist Premium gift in clause 7.2. It does not add to that gift. 18+ only.
+                  UK-first. You will not be billed for this offer. MenRush is not a sponsor of
+                  Southampton Pride or Manchester Village Pride. Duration: if booked before launch,
+                  Premium starts at launch. On-time open 1 October 2026 ends 1 January 2027. If
+                  launch slips, 3 months from the actual open date.
+                </>,
+              )}
             </section>
 
             {/* 8. Refunds */}
