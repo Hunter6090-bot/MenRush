@@ -81,7 +81,9 @@ test.describe('Pride promotion landing', () => {
     const grandfather = page.getByTestId('pride-grandfather');
     await expect(grandfather).toContainText(/personal PRIDE-XXXX-XXXX/i);
     await expect(grandfather).toContainText(/31 October 2026/i);
-    await expect(grandfather).toContainText(/No new Brighton codes/i);
+    await expect(grandfather).toContainText(/No new Brighton Pride codes/i);
+    await expect(conditions).toContainText(/18\+ only\. UK-first\./i);
+    await expect(conditions).not.toContainText(/London · Manchester · Birmingham/i);
     await expect(grandfather).toContainText(/One grant per person/i);
     await expect(page.getByText(/Brighton Pride Special Offer/i)).toHaveCount(0);
     await expect(page.getByText(/brightonpride/i)).toHaveCount(0);
