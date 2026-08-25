@@ -24,7 +24,7 @@ user-generated nightlife pin linked via `hot_spots.event_id`.
 
 ## Migration
 
-`039_nightlife_venue_checkin.sql` — nightlife category + `event_id` column.
+`040_nightlife_venue_checkin.sql` — nightlife category + `event_id` column.
 
 ## Copy guardrails
 
