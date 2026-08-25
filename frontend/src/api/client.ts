@@ -637,6 +637,27 @@ export const hotSpotsAPI = {
     apiClient.get<{ check_in: unknown | null }>('/hot-spots/me/check-in'),
 };
 
+/** Community Space — short local text posts (≤280). Free for all. */
+export interface CommunityPostDTO {
+  id: string;
+  user_id: string;
+  body: string;
+  created_at: string;
+  author_name: string;
+  author_photo_url: string | null;
+  distance_km: string;
+  distance_label: string;
+}
+
+export const communityAPI = {
+  listPosts: (lat: number, lng: number, radiusKm?: number) =>
+    apiClient.get<{ posts: CommunityPostDTO[] }>('/community/posts', {
+      params: { lat, lng, radiusKm },
+    }),
+  createPost: (body: string) =>
+    apiClient.post<{ post: CommunityPostDTO }>('/community/posts', { body }),
+};
+
 export const aiAPI = {
   generateImage: (prompt: string, numberOfImages?: number) =>
     apiClient.post<{ images: Array<{ imageBase64: string; mimeType: string }> }>(

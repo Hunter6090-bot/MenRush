@@ -135,6 +135,6 @@ export function mobilePageTitle(pathname: string): string {
 
   if (pathname === '/albums') return 'Albums';
   if (pathname === '/premium') return 'Premium';
-  if (pathname === '/stream') return ROUTE_LABELS.liveProfileList;
+  if (pathname === '/stream') return ROUTE_LABELS.community;
   return 'MenRush';
 }
