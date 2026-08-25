@@ -1,5 +1,6 @@
 import { expect, test, request as apiRequest, type BrowserContext } from '@playwright/test';
 import { TEST_PASSWORD, ALICE, BOB } from './test-accounts';
+import { PLAYWRIGHT_BASE_URL as BASE_URL } from './support/base-url';
 
 // Kept separate from notifications.spec.ts deliberately: that file's
 // describe.configure({mode:'serial'}) means one already-tracked, unrelated
@@ -9,7 +10,6 @@ import { TEST_PASSWORD, ALICE, BOB } from './test-accounts';
 // on its own regardless of that pre-existing issue's status.
 test.describe.configure({ mode: 'serial' });
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
 
 type LoginResult = {
   token: string;

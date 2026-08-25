@@ -1,5 +1,6 @@
 import { expect, test, request as apiRequest, type BrowserContext } from '@playwright/test';
 import { ALICE, HOTSPOT_FILLERS, TEST_PASSWORD } from './test-accounts';
+import { PLAYWRIGHT_BASE_URL as BASE_URL } from './support/base-url';
 
 /**
  * Incoming likes must be visible on Matches without a MenRush+ PremiumGate.
@@ -7,7 +8,6 @@ import { ALICE, HOTSPOT_FILLERS, TEST_PASSWORD } from './test-accounts';
  */
 test.describe.configure({ mode: 'serial' });
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
 const LIKER = HOTSPOT_FILLERS[0];
 
 type LoginResult = {

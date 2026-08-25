@@ -1,7 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
+import { PLAYWRIGHT_BASE_URL } from './e2e/support/base-url';
 
 const externalBaseUrl = process.env.PLAYWRIGHT_BASE_URL;
-const baseURL = externalBaseUrl || 'http://127.0.0.1:4173';
+const baseURL = PLAYWRIGHT_BASE_URL;
 
 const isCI = Boolean(process.env.CI);
 
