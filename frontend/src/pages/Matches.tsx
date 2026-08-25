@@ -209,7 +209,7 @@ export const Matches = () => {
             </div>
             <h2 className="text-lg font-bold text-[var(--cream)]">No matches yet</h2>
             <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-[var(--cream-muted)]">
-              Tap Match on Nearby or the live list. When it&apos;s mutual, they land here — ready to
+              Tap Match on Nearby or Community. When it&apos;s mutual, they land here — ready to
               chat. Be direct. Consent first.
             </p>
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
@@ -223,7 +223,7 @@ export const Matches = () => {
                 to="/stream"
                 className="inline-flex rounded-full border border-[rgba(196,131,42,0.5)] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
               >
-                Live list
+                Community
               </Link>
             </div>
           </div>

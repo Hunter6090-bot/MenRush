@@ -25,6 +25,7 @@ import { ActivationBanner } from '../components/ActivationBanner';
 import { DiscoveryFilterPills } from '../components/DiscoveryFilterPills';
 import { DiscoveryFilterPanel } from '../components/DiscoveryFilterPanel';
 import { NearbyProfileGrid } from '../components/NearbyProfileGrid';
+import { CommunityFeed } from '../components/CommunityFeed';
 import { DiscoveryShellPublisher } from '../context/DiscoveryShellContext';
 import type { ProfileSetupSnapshot } from '../lib/profileSetup';
 import { resolveDistanceUnitSystem } from '../lib/localeUnits';
@@ -1711,22 +1712,15 @@ export const Discover = () => {
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {!needsLocationGate ? (
-            <NearbyProfileGrid
-              users={displayUsers}
-              loading={loading}
-              onMatch={handleLike}
-              likedUserIds={likedUsers}
-              mutualUserIds={matchedUsers}
-              matchingUserId={matchingUserId}
-              onExpandRadius={handleRadiusCycle}
-              onFinishProfile={() => navigate('/profile/setup')}
-              onStartPulse={requestOpenPulse}
-              pulseOn={!!pulseUntil}
-              pulseBlockedReason={pulseBlockedReason}
-              onOpenHotSpots={() => navigate('/hot-spots')}
-              radiusLabel={formatRadiusControlLabel(radius)}
-              beyondRadiusCount={beyondRadiusCount}
-            />
+            <div data-testid="discover-community-panel">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h3 className="text-[12px] font-extrabold uppercase tracking-[0.14em] text-[#C4832A]">
+                  {ROUTE_LABELS.community}
+                </h3>
+                <p className="text-[11px] text-[var(--cream-muted)]">Short local text · free for all</p>
+              </div>
+              <CommunityFeed compact radiusKm={radius} />
+            </div>
           ) : null}
         </div>
       </div>
@@ -1910,9 +1904,10 @@ export const Discover = () => {
                   to="/stream"
                   className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] transition-colors hover:text-[var(--copper)]"
                   style={{ color: 'var(--cream-soft)' }}
-                  aria-label={`Switch to ${ROUTE_LABELS.liveProfileList}`}
+                  aria-label={`Switch to ${ROUTE_LABELS.community}`}
+                  data-testid="discover-community-toggle"
                 >
-                  {ROUTE_LABELS.liveProfileList}
+                  {ROUTE_LABELS.community}
                 </Link>
               </div>
             </div>
