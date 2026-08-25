@@ -2,7 +2,9 @@
 export const ROUTE_LABELS = {
   nearby: 'Nearby',
   map: 'Map',
-  liveProfileList: 'Live profile list',
+  community: 'Community',
+  /** @deprecated Use `community` — Live profile list was replaced by Community Space. */
+  liveProfileList: 'Community',
   matches: 'Matches',
   messages: 'Messages',
   alerts: 'Alerts',
