@@ -533,11 +533,15 @@ export function useWebRTC() {
         !remote ||
         remote.getTracks().length === 0 ||
         ((video?.muted ?? true) && (audio?.muted ?? true));
+      // Only treat genuinely bad ICE states as a reason to restart. `checking`
+      // and `connecting` are normal in-progress states right after the answer is
+      // received (callStatus flips to 'connected' before ICE completes), and can
+      // legitimately persist past 3.5s on slow TURN/TLS-relayed mobile paths.
+      // Restarting on them would tear down a healthy negotiation that was about
+      // to connect — the exact hang this is meant to fix.
       const iceBad =
-        pcRef.current?.iceConnectionState === 'checking' ||
         pcRef.current?.iceConnectionState === 'disconnected' ||
-        pcRef.current?.iceConnectionState === 'failed' ||
-        pcRef.current?.connectionState === 'connecting';
+        pcRef.current?.iceConnectionState === 'failed';
       if ((mediaStuck || iceBad) && pcRef.current?.connectionState !== 'closed') {
         console.warn('[webrtc] remote media still muted — attempting ICE restart', {
           ice: pcRef.current?.iceConnectionState,

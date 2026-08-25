@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| TURN black-video / 3.5s ICE watchdog (#95) | PR `#95` `fix/call-turn-tls-first` | — | Cursor cloud — Vercel review: iceBad = disconnected\|failed only; Metered TURN kept |
 | Tablet profile tile density (Discover/Matches/Stream) | PR `cursor/tablet-profile-tile-density-0d4b` | — | Cursor cloud — md 768+ denser grid; phone stays 2-col |
 | Verified profiles landing copy (replace Verified bodies) | PR `#120` `cursor/verified-profiles-landing-51f5` | — | Cursor cloud — ComingSoon hero + design-lock e2e + marketing rule; merged |
 | Pride parade photo wash on /pride (claim-only; no printed-code CTA on face) | branch `cursor/pride-parade-bg-26c8` | — | Cursor cloud — Owner 22 Aug 2026; full-bleed 21-pride-parade-flags + night/copper wash |
