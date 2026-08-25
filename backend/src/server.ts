@@ -28,6 +28,7 @@ import betaRoutes from './routes/beta';
 import adminRoutes from './routes/admin.routes';
 import campaignRoutes from './routes/campaigns';
 import socialRoutes from './routes/social';
+import communityRoutes from './routes/community';
 import { startPulseExpiryCron } from './services/pulse.service';
 import { startRoomTempIdentityPurgeCron } from './services/room.service';
 import {
@@ -130,6 +131,7 @@ app.use('/api/beta', betaRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/social', socialRoutes);
+app.use('/api/community', communityRoutes);
 
 // Waitlist signup — POSTs to /api/waitlist land here; the dripRoutes router
 // handles the rest (unsubscribe + admin endpoints). New signups get the
