@@ -32,7 +32,13 @@ export const Notifications = () => {
   // default (unread) view rather than piling up — "All" is one tap away, so
   // history isn't lost, just not the default.
   const [filter, setFilter] = useState<Filter>('unread');
-  const readCount = notifications.length - unreadCount;
+  // Prefer loaded rows over (length - unreadCount): the list API is capped
+  // (e.g. 50) while unread_count is global, so length - unread can go negative
+  // and hide "Delete read" even when read items are on screen.
+  const readCount = useMemo(
+    () => notifications.filter((n) => n.read).length,
+    [notifications],
+  );
   const visibleNotifications = useMemo(
     () => (filter === 'unread' ? notifications.filter((n) => !n.read) : notifications),
     [notifications, filter],

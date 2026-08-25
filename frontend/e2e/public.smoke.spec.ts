@@ -1,10 +1,14 @@
 import { expect, test } from '@playwright/test';
 import { guardAgainstSideEffects } from './support/network-guard';
 
+/** Accessible name of ComingSoon's h1 (br-separated lines collapse to one name). */
+const LANDING_H1 =
+  /Real men\.\s*Verified profiles\.\s*Total discretion\./i;
+
 test.describe('public routes', () => {
   const routes = [
     // Pre-launch: App.tsx renders <ComingSoon /> at "/" (see CLAUDE.md).
-    { path: '/', heading: 'Real men.' },
+    { path: '/', heading: LANDING_H1 },
     { path: '/terms', heading: 'Terms and Conditions' },
     { path: '/privacy', heading: 'Private by design, clear by default.' },
     { path: '/cookies', heading: 'Cookies' },
@@ -31,9 +35,10 @@ test('waitlist rejects invalid input without making a request', async ({ page })
   const network = await guardAgainstSideEffects(page);
 
   await page.goto('/');
-  // ComingSoon uses #waitlist-email (aria-label); CTA copy is "Join waitlist".
-  const emailInput = page.locator('#waitlist-email');
+  // Prefer accessible name (aria-label="Email for waitlist"); id is the design-lock anchor.
+  const emailInput = page.getByRole('textbox', { name: 'Email for waitlist' });
   await expect(emailInput).toBeVisible();
+  await expect(page.locator('#waitlist-email')).toBeVisible();
   await emailInput.fill('not-an-email');
   await page.getByRole('button', { name: /^Join waitlist$/i }).click();
 
@@ -69,14 +74,14 @@ test.describe('anonymous route protection', () => {
   ];
 
   for (const path of protectedRoutes) {
-    test(`${path} redirects to login`, async ({ page }) => {
+    test(`${path} redirects to login with next=`, async ({ page }) => {
       await page.goto('/');
       await page.evaluate(() => localStorage.clear());
 
       await page.goto(path);
 
-      // App.tsx appends `?next=<path>` so the user lands back where they started after signing in.
-      await expect(page).toHaveURL(/\/login(\?.*)?$/);
+      // App.tsx appends `?next=<encoded path>` so sign-in returns the user here.
+      await expect(page).toHaveURL(`/login?next=${encodeURIComponent(path)}`);
       await expect(page.getByRole('button', { name: 'Sign In' })).toBeVisible();
     });
   }

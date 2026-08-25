@@ -1456,7 +1456,7 @@ export const Discover = () => {
         nearbyCount={nearbyCount}
         radiusLabel={formatRadiusControlLabel(radius)}
         pulseOn={!!pulseUntil}
-        togglePulse={() => void togglePulseHeader()}
+        togglePulse={togglePulseHeader}
       />
       <h1 className="sr-only">Nearby discovery map</h1>
 
