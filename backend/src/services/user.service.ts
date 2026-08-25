@@ -5,6 +5,9 @@ import { accessControl } from '../security/access';
 import { ProfileInput } from '../types/validation';
 import { ageFromDateOfBirth } from '../lib/age';
 import { premiumService } from './premium.service';
+import { discreetBlurForViewer } from '../lib/discreet';
+import { bucketDistanceKm, bucketDistanceLabel } from '../lib/distanceLabel';
+import { sentinelService, type SentinelSource } from './sentinel.service';
 
 /**
  * Privacy fuzz for map pins: keep people near where they actually are, with a
@@ -174,25 +177,10 @@ export const userService = {
 
     const result = await query(queryStr, values);
 
-    return result.rows.map((row) => {
-      const km = row.distance_m / 1000;
-      // Distance labels stay bucketed for list privacy; map pins stay near real coords.
-      let bucketed: number;
-      let label: string;
-      if (km < 0.3) {
-        bucketed = 0.2;
-        label = '< 300 m';
-      } else if (km < 1) {
-        bucketed = Math.round(km * 10) / 10; // 0.1km steps under 1km
-        label = `${Math.round(bucketed * 1000)} m`;
-      } else if (km < 5) {
-        bucketed = Math.round(km * 2) / 2; // 0.5km steps
-        label = `${bucketed.toFixed(1)} km`;
-      } else {
-        bucketed = Math.round(km); // 1km steps above 5km
-        label = `${bucketed} km`;
-      }
+    const viewerIsPremium = await premiumService.isPremium(userId);
+    const discreetBlur = discreetBlurForViewer({ viewerIsPremium, isOwn: false, hasVisualMedia: true });
 
+    return result.rows.map((row) => {
       const realLat = Number(row.real_lat);
       const realLng = Number(row.real_lng);
       const mapPoint =
@@ -212,8 +200,10 @@ export const userService = {
         ...publicRow,
         lat: mapPoint.lat,
         lng: mapPoint.lng,
-        distance_km: bucketed.toFixed(2),
-        distance_label: label,
+        distance_km: bucketDistanceKm(row.distance_m),
+        distance_label: bucketDistanceLabel(row.distance_m),
+        discreet_blur: discreetBlur,
+        viewer_is_premium: viewerIsPremium,
       };
     });
   },
@@ -370,7 +360,18 @@ export const userService = {
        WHERE u.id = $1`,
       [targetId, viewerId],
     );
-    return result.rows[0];
+    const profile = result.rows[0];
+    if (!profile) return profile;
+    const viewerIsPremium = await premiumService.isPremium(viewerId);
+    return {
+      ...profile,
+      discreet_blur: discreetBlurForViewer({
+        viewerIsPremium,
+        isOwn: viewerId === targetId,
+        hasVisualMedia: true,
+      }),
+      viewer_is_premium: viewerIsPremium,
+    };
   },
 
   async getDisplayName(userId: string) {
@@ -612,21 +613,56 @@ export const userService = {
     return result.rows;
   },
 
-  async reportUser(reporterId: string, reportedId: string, reason: string, details?: string) {
+  async reportUser(
+    reporterId: string,
+    reportedId: string | null,
+    reason: string,
+    details?: string,
+    extras?: {
+      conversationId?: string | null;
+      roomId?: string | null;
+      source?: SentinelSource;
+    },
+  ) {
+    if (reportedId && reporterId === reportedId) {
+      throw new Error('Cannot report yourself.');
+    }
+    const source = extras?.source ?? 'profile';
     const result = await query(
-      `INSERT INTO reports (reporter_id, reported_id, reason, details)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO reports (reporter_id, reported_id, reason, details, conversation_id, room_id, source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id, created_at`,
-      [reporterId, reportedId, reason, details ?? null],
+      [
+        reporterId,
+        reportedId,
+        reason,
+        details ?? null,
+        extras?.conversationId ?? null,
+        extras?.roomId ?? null,
+        source,
+      ],
     );
     const report = result.rows[0] as { id: string; created_at: string };
 
-    // Best-effort notify team — never fail the report submission if mail is down.
-    void this.notifyTeamOfReport(reporterId, reportedId, reason, details, report.id).catch(
-      (err) => console.error('[reports] notify failed', err),
-    );
+    const queued = await sentinelService.enqueue({
+      reportId: report.id,
+      reporterId,
+      reportedId,
+      conversationId: extras?.conversationId,
+      roomId: extras?.roomId,
+      source,
+      reason,
+      details,
+    });
 
-    return report;
+    // Best-effort notify team — never fail the report submission if mail is down.
+    if (reportedId) {
+      void this.notifyTeamOfReport(reporterId, reportedId, reason, details, report.id).catch(
+        (err) => console.error('[reports] notify failed', err),
+      );
+    }
+
+    return { ...report, sentinel_id: queued.id };
   },
 
   async notifyTeamOfReport(

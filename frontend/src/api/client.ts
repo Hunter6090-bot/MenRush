@@ -250,8 +250,24 @@ export const usersAPI = {
         blocked_at: string;
       }>;
     }>('/users/blocks'),
-  reportUser: (id: string, reason: string, details?: string) =>
-    apiClient.post(`/users/report/${id}`, { reason, details }),
+  reportUser: (
+    id: string,
+    reason: string,
+    details?: string,
+    extras?: { conversation_id?: string; room_id?: string; source?: string },
+  ) => apiClient.post(`/users/report/${id}`, { reason, details, ...extras }),
+  reportToSentinel: (payload: {
+    reason: string;
+    details?: string;
+    reported_id?: string;
+    conversation_id?: string;
+    room_id?: string;
+    source?: 'profile' | 'chat' | 'room' | 'panic';
+  }) =>
+    apiClient.post<{ reported: true; id: string; sentinel_id: string; queue: 'SENTINEL' }>(
+      '/users/sentinel',
+      payload,
+    ),
   getTeamStatus: () => apiClient.get<{ is_team: boolean }>('/users/me/team'),
   listReports: () =>
     apiClient.get<{
@@ -339,6 +355,9 @@ export interface MessageDTO {
   expired: boolean;
   /** Set when the sender withdraws media from the chat. */
   withdrawn_at?: string | null;
+  /** Server-verified Premium flag — blur photos/videos when false for the viewer. */
+  discreet_blur?: boolean;
+  viewer_is_premium?: boolean;
 }
 
 export interface SendMediaOptions {
@@ -532,6 +551,7 @@ export interface AlbumDTO {
   updated_at: string;
   /** Present only when listing someone else's albums via /albums/user/:id. */
   unlocked?: boolean;
+  discreet_blur?: boolean;
 }
 
 export interface AlbumPhotoDTO {
@@ -539,7 +559,25 @@ export interface AlbumPhotoDTO {
   photo_url: string;
   position: number;
   created_at: string;
+  discreet_blur?: boolean;
 }
+
+export interface CommunityPostDTO {
+  id: string;
+  user_id: string;
+  author_name: string;
+  body: string;
+  created_at: string;
+  distance_m: number | null;
+  distance_label: string;
+}
+
+export const communityAPI = {
+  list: (lat: number, lng: number) =>
+    apiClient.get<{ posts: CommunityPostDTO[] }>('/community', { params: { lat, lng } }),
+  create: (body: string, lat?: number, lng?: number) =>
+    apiClient.post<{ post: CommunityPostDTO }>('/community', { body, lat, lng }),
+};
 
 export const albumsAPI = {
   listMine: () =>
@@ -590,6 +628,8 @@ export const eventsAPI = {
     apiClient.get<EventDTO[]>('/events/nearby', {
       params: { lat, lng, radius: radiusKm, limit },
     }),
+  checkIn: (id: string, anonymous = false) =>
+    apiClient.post<{ ok: boolean; spot: HotSpotDTO }>(`/events/${id}/check-in`, { anonymous }),
 };
 
 // ── Hot Spots (venue check-ins — not user Pulse boost) ───────────────────
@@ -617,6 +657,7 @@ export interface HotSpotDTO {
   live_count_exact: number;
   is_checked_in: boolean;
   my_checkin_anonymous: boolean | null;
+  checkin_ttl_hours?: number;
 }
 
 export const hotSpotsAPI = {

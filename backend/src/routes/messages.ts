@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import fs from 'fs';
 import multer from 'multer';
 import { messageService } from '../services/message.service';
+import { premiumService } from '../services/premium.service';
 import { sendPushToUser } from '../services/push.service';
 import { notificationService } from '../services/notification.service';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
@@ -168,9 +169,10 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
     });
 
     const io = req.app.get('io');
+    const receiverPremium = await premiumService.isPremium(receiver_id);
     io.to(`user:${receiver_id}`).emit(
       'message',
-      messageService.forViewer(message, receiver_id),
+      messageService.forViewer(message, receiver_id, receiverPremium),
     );
     const pushBody =
       kind === 'image' ? '\u{1F4F7} Photo' : kind === 'video' ? '\u{1F3AC} Video' : '\u{1F3A4} Voice note';

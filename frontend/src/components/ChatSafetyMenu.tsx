@@ -17,11 +17,13 @@ type ReportReason = (typeof REPORT_REASONS)[number]['value'];
 interface ChatSafetyMenuProps {
   peerId: string;
   peerName: string;
+  conversationId?: string;
+  roomId?: string;
   onNotice?: (message: string, tone?: 'success' | 'error') => void;
   onBlocked?: () => void;
 }
 
-export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSafetyMenuProps) {
+export function ChatSafetyMenu({ peerId, peerName, conversationId, roomId, onNotice, onBlocked }: ChatSafetyMenuProps) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [blockOpen, setBlockOpen] = useState(false);
@@ -73,7 +75,11 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
   const handleReport = async () => {
     setSubmitting(true);
     try {
-      await usersAPI.reportUser(peerId, reportReason, reportDetails.trim() || undefined);
+      await usersAPI.reportUser(peerId, reportReason, reportDetails.trim() || undefined, {
+        conversation_id: conversationId ?? peerId,
+        room_id: roomId,
+        source: roomId ? 'room' : 'chat',
+      });
       setReportOpen(false);
       setMenuOpen(false);
       setReportDetails('');

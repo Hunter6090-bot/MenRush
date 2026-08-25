@@ -25,6 +25,8 @@ import { ActivationBanner } from '../components/ActivationBanner';
 import { DiscoveryFilterPills } from '../components/DiscoveryFilterPills';
 import { DiscoveryFilterPanel } from '../components/DiscoveryFilterPanel';
 import { NearbyProfileGrid } from '../components/NearbyProfileGrid';
+import { CommunityFeed } from '../components/CommunityFeed';
+import { MoreFiltersDrawer } from '../components/MoreFiltersDrawer';
 import { DiscoveryShellPublisher } from '../context/DiscoveryShellContext';
 import type { ProfileSetupSnapshot } from '../lib/profileSetup';
 import { resolveDistanceUnitSystem } from '../lib/localeUnits';
@@ -1217,6 +1219,7 @@ export const Discover = () => {
         age: user.age,
         isPulsing,
         isVerified: !!(user as any).is_verified,
+        discreet_blur: !!(user as { discreet_blur?: boolean }).discreet_blur,
       };
       const lngLat: [number, number] = [Number(user.lng), Number(user.lat)];
       const existing = markersRef.current.get(user.id);
@@ -1238,7 +1241,9 @@ export const Discover = () => {
           prev.name !== user.name ||
           prev.photo_url !== user.photo_url ||
           isUserPulsing(prev) !== isPulsing ||
-          !!(prev as any).is_verified !== !!(user as any).is_verified;
+          !!(prev as any).is_verified !== !!(user as any).is_verified ||
+          !!(prev as { discreet_blur?: boolean }).discreet_blur !==
+            !!(user as { discreet_blur?: boolean }).discreet_blur;
         if (visualChanged) {
           const markerSize = isPulsing ? 52 : 44;
           existing.root.render(<MapMarker user={markerUser} size={markerSize} />);
@@ -1661,6 +1666,9 @@ export const Discover = () => {
               <div className={moodSaving ? 'pointer-events-none opacity-60' : ''}>
                 <MoodPicker current={mood} onSelect={handleMoodSelect} />
               </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <MoreFiltersDrawer value={discoveryFilters} onChange={handleDiscoveryFiltersChange} />
+              </div>
               <DiscoveryFilterPanel
                 variant="inline"
                 value={discoveryFilters}
@@ -1709,24 +1717,9 @@ export const Discover = () => {
             </p>
           ) : null}
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto pb-4">
           {!needsLocationGate ? (
-            <NearbyProfileGrid
-              users={displayUsers}
-              loading={loading}
-              onMatch={handleLike}
-              likedUserIds={likedUsers}
-              mutualUserIds={matchedUsers}
-              matchingUserId={matchingUserId}
-              onExpandRadius={handleRadiusCycle}
-              onFinishProfile={() => navigate('/profile/setup')}
-              onStartPulse={requestOpenPulse}
-              pulseOn={!!pulseUntil}
-              pulseBlockedReason={pulseBlockedReason}
-              onOpenHotSpots={() => navigate('/hot-spots')}
-              radiusLabel={formatRadiusControlLabel(radius)}
-              beyondRadiusCount={beyondRadiusCount}
-            />
+            <CommunityFeed lat={lat} lng={lng} compact />
           ) : null}
         </div>
       </div>
@@ -1955,6 +1948,9 @@ export const Discover = () => {
                     <MoodPicker current={mood} onSelect={handleMoodSelect} />
                   </div>
                 ) : null}
+                <div className="flex flex-wrap items-center gap-2">
+                  <MoreFiltersDrawer value={discoveryFilters} onChange={handleDiscoveryFiltersChange} />
+                </div>
                 <DiscoveryFilterPanel
                   variant="inline"
                   value={discoveryFilters}

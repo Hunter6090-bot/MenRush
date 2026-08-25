@@ -14,6 +14,8 @@ import { SelfieCaptureModal } from '../components/SelfieCaptureModal';
 import { CameraCaptureChooser } from '../components/CameraCaptureChooser';
 import { VideoNoteCaptureModal } from '../components/VideoNoteCaptureModal';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
+import { PanicReportButton } from '../components/PanicReportButton';
+import { DiscreetMedia } from '../components/DiscreetMedia';
 import { placeOutgoingCall } from '../lib/callBridge';
 import { mapCallMediaError } from '../lib/callMedia';
 import { MobileBackButton } from '../components/MobileBackButton';
@@ -42,6 +44,7 @@ interface Message extends Partial<MessageDTO> {
   view_count?: number;
   remaining_views?: number | null;
   expired?: boolean;
+  discreet_blur?: boolean;
 }
 
 /** Sender's chosen viewing rule for an outgoing image. */
@@ -727,15 +730,23 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         )}
 
         {otherId && (
-          <ChatSafetyMenu
-            peerId={otherId}
-            peerName={otherUser?.name ?? 'this user'}
-            onNotice={(msg, tone = 'success') => setSafetyNotice({ msg, tone })}
-            onBlocked={() => {
-              // Land on the unblock list so the action is obvious.
-              window.setTimeout(() => navigate('/settings#blocked'), 600);
-            }}
-          />
+          <>
+            <PanicReportButton
+              peerId={otherId}
+              conversationId={otherId}
+              onNotice={(msg, tone = 'success') => setSafetyNotice({ msg, tone })}
+            />
+            <ChatSafetyMenu
+              peerId={otherId}
+              peerName={otherUser?.name ?? 'this user'}
+              conversationId={otherId}
+              onNotice={(msg, tone = 'success') => setSafetyNotice({ msg, tone })}
+              onBlocked={() => {
+                // Land on the unblock list so the action is obvious.
+                window.setTimeout(() => navigate('/settings#blocked'), 600);
+              }}
+            />
+          </>
         )}
       </header>
 
@@ -1720,12 +1731,14 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
             boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
           }}
         >
-          <img
-            src={url}
-            alt={msg.message || 'photo'}
-            className="block max-w-[260px] max-h-[340px] object-cover cursor-zoom-in"
-            onClick={() => onOpen(msg)}
-          />
+          <DiscreetMedia blur={!!msg.discreet_blur && !isMine}>
+            <img
+              src={url}
+              alt={msg.message || 'photo'}
+              className="block max-w-[260px] max-h-[340px] object-cover cursor-zoom-in"
+              onClick={() => onOpen(msg)}
+            />
+          </DiscreetMedia>
         </div>
         {onWithdraw && (
           <WithdrawMediaButton onClick={onWithdraw} loading={withdrawing} />
@@ -2205,13 +2218,15 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
         }}
       >
         {url ? (
-          <video
-            src={url}
-            controls
-            playsInline
-            preload="metadata"
-            className="block w-full max-h-[320px] bg-black"
-          />
+          <DiscreetMedia blur={!!msg.discreet_blur && !isMine}>
+            <video
+              src={url}
+              controls
+              playsInline
+              preload="metadata"
+              className="block w-full max-h-[320px] bg-black"
+            />
+          </DiscreetMedia>
         ) : (
           <div className="px-4 py-6 text-xs text-[var(--cream-muted)]">Video unavailable</div>
         )}

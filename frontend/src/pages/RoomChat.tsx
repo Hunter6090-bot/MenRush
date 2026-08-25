@@ -9,6 +9,7 @@ import { PulseRing } from '../components/PulseRing';
 import { MobileBackButton } from '../components/MobileBackButton';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
+import { PanicReportButton } from '../components/PanicReportButton';
 import { profilePathForUser } from '../lib/profileLinks';
 import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 import { getPhotoUrl } from '../components/UserAvatar';
@@ -616,6 +617,11 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
         </button>
 
         {/* Settings */}
+        <PanicReportButton
+          roomId={roomId}
+          conversationId={roomId}
+          onNotice={(msg) => setSettingsNotice(msg)}
+        />
         <button
           onClick={() => setSettingsOpen((v) => !v)}
           aria-label="Room settings"

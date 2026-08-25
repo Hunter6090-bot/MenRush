@@ -2,6 +2,8 @@ import { query } from '../db';
 import { v4 as uuidv4 } from 'uuid';
 import { accessControl, SecurityError } from '../security/access';
 import { signedMediaUrl } from '../security/media';
+import { discreetBlurForViewer } from '../lib/discreet';
+import { premiumService } from './premium.service';
 
 /**
  * Private albums.
@@ -67,8 +69,17 @@ export const albumService = {
    * Returns the album metadata + photo_count. The locked flag tells the
    * frontend whether to blur the teaser. Photos themselves require addPhoto/listPhotos.
    */
-  async listAlbumsForViewer(ownerId: string, viewerId: string): Promise<Array<AlbumRow & { unlocked: boolean }>> {
+  async listAlbumsForViewer(
+    ownerId: string,
+    viewerId: string,
+  ): Promise<Array<AlbumRow & { unlocked: boolean; discreet_blur: boolean; viewer_is_premium: boolean }>> {
     await accessControl.assertProfileView(viewerId, ownerId);
+    const viewerIsPremium = await premiumService.isPremium(viewerId);
+    const discreetBlur = discreetBlurForViewer({
+      viewerIsPremium,
+      isOwn: ownerId === viewerId,
+      hasVisualMedia: true,
+    });
     const res = await query(
       `SELECT a.id, a.user_id, a.name, a.description, a.is_locked, a.cover_url,
               a.created_at, a.updated_at,
@@ -85,8 +96,9 @@ export const albumService = {
       [ownerId, viewerId]
     );
     return res.rows.map((row) => {
-      if (row.is_locked && !row.unlocked) return { ...row, cover_url: null };
-      return presentCover(row, viewerId);
+      const base =
+        row.is_locked && !row.unlocked ? { ...row, cover_url: null } : presentCover(row, viewerId);
+      return { ...base, discreet_blur: discreetBlur, viewer_is_premium: viewerIsPremium };
     });
   },
 
@@ -121,7 +133,13 @@ export const albumService = {
     albumId: string,
     viewerId: string,
     isOwner: boolean
-  ): Promise<{ photos: Array<{ id: string; photo_url: string; position: number; created_at: string }>; unlocked: boolean; locked: boolean }> {
+  ): Promise<{
+    photos: Array<{ id: string; photo_url: string; position: number; created_at: string; discreet_blur?: boolean }>;
+    unlocked: boolean;
+    locked: boolean;
+    discreet_blur: boolean;
+    viewer_is_premium: boolean;
+  }> {
     const albumRes = await query(`SELECT user_id, is_locked FROM albums WHERE id = $1`, [albumId]);
     if (albumRes.rows.length === 0) throw new Error('album_not_found');
 
@@ -143,8 +161,15 @@ export const albumService = {
       unlocked = grant.rows.length > 0;
     }
 
+    const viewerIsPremium = await premiumService.isPremium(viewerId);
+    const discreetBlur = discreetBlurForViewer({
+      viewerIsPremium,
+      isOwn: ownerView,
+      hasVisualMedia: true,
+    });
+
     if (!unlocked) {
-      return { photos: [], unlocked: false, locked: true };
+      return { photos: [], unlocked: false, locked: true, discreet_blur: discreetBlur, viewer_is_premium: viewerIsPremium };
     }
 
     const photosRes = await query(
@@ -159,9 +184,12 @@ export const albumService = {
       photos: photosRes.rows.map((photo) => ({
         ...photo,
         photo_url: signedMediaUrl(photo.photo_url, viewerId),
+        discreet_blur: discreetBlur,
       })),
       unlocked: true,
       locked,
+      discreet_blur: discreetBlur,
+      viewer_is_premium: viewerIsPremium,
     };
   },
 

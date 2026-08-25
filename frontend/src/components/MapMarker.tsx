@@ -10,6 +10,7 @@ export interface MapMarkerUser {
   age?: number;
   isPulsing: boolean;
   isVerified?: boolean;
+  discreet_blur?: boolean;
 }
 
 interface MapMarkerProps {
@@ -41,7 +42,13 @@ export function MapMarker({ user, size = 44 }: MapMarkerProps) {
               : '0 3px 10px rgba(196,131,42,0.45)',
           }}
         >
-          <MapPhoto name={user.name} photoUrl={user.photo_url} age={user.age} size={size} />
+          <MapPhoto
+            name={user.name}
+            photoUrl={user.photo_url}
+            age={user.age}
+            size={size}
+            blur={!!user.discreet_blur}
+          />
         </div>
       </PulsingAvatar>
     </div>
@@ -53,11 +60,13 @@ function MapPhoto({
   photoUrl,
   age,
   size,
+  blur,
 }: {
   name: string;
   photoUrl?: string;
   age?: number;
   size: number;
+  blur?: boolean;
 }) {
   const { src, onError } = useResolvingPhotoSrc(photoUrl, age);
   if (!src) {
@@ -73,14 +82,21 @@ function MapPhoto({
       </div>
     );
   }
-  return (
+  const img = (
     <img
       src={src}
       alt={name}
-      className="w-full h-full object-cover"
+      className={`w-full h-full object-cover ${blur ? 'blur-md scale-110' : ''}`}
       draggable={false}
       onError={onError}
     />
+  );
+  return blur ? (
+    <div className="h-full w-full" data-testid="discreet-media-blur">
+      {img}
+    </div>
+  ) : (
+    img
   );
 }
 
