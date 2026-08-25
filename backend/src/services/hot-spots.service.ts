@@ -303,17 +303,14 @@ export const hotSpotsService = {
       id: string;
       name: string;
       venue_name: string | null;
-      lat: number | null;
-      lng: number | null;
+      lat: number | null | string;
+      lng: number | null | string;
     },
     anonymous = false,
   ) {
-    if (
-      event.lat == null ||
-      event.lng == null ||
-      !Number.isFinite(event.lat) ||
-      !Number.isFinite(event.lng)
-    ) {
+    const lat = event.lat == null ? NaN : Number(event.lat);
+    const lng = event.lng == null ? NaN : Number(event.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
       throw new Error('Event has no venue location');
     }
 
@@ -334,7 +331,7 @@ export const hotSpotsService = {
             )
           ORDER BY name = $3 DESC
           LIMIT 1`,
-        [event.lat, event.lng, event.venue_name ?? event.name],
+        [lat, lng, event.venue_name ?? event.name],
       );
       spotId = nearby.rows[0]?.id as string | undefined;
     }
@@ -352,8 +349,8 @@ export const hotSpotsService = {
           categoryId,
           venueLabel,
           `Venue pin for ${event.name}`.slice(0, 240),
-          event.lat,
-          event.lng,
+          lat,
+          lng,
           event.id,
         ],
       );
