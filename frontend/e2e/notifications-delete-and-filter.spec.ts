@@ -209,8 +209,12 @@ test('delete-all-read only removes read notifications, keeps unread, persists ac
     extraHTTPHeaders: { Authorization: `Bearer ${alice.token}` },
   });
   try {
-    // Prune prior read noise so the notifications page stays responsive on dirty DBs.
-    await aliceSetupApi.delete('/api/notifications');
+    // Wipe Alice's inbox first — list API is capped (50) while unread_count is
+    // global; leftover unread from prior runs hide "Delete read" and blow up the UI.
+    const markAll = await aliceSetupApi.post('/api/notifications/read-all');
+    expect(markAll.ok()).toBeTruthy();
+    const prune = await aliceSetupApi.delete('/api/notifications');
+    expect(prune.ok()).toBeTruthy();
   } finally {
     await aliceSetupApi.dispose();
   }
