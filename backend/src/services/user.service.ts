@@ -612,19 +612,40 @@ export const userService = {
     return result.rows;
   },
 
-  async reportUser(reporterId: string, reportedId: string, reason: string, details?: string) {
+  async reportUser(
+    reporterId: string,
+    reportedId: string,
+    reason: string,
+    details?: string,
+    threadId?: string,
+  ) {
+    const detailParts: string[] = [];
+    if (threadId) {
+      // Machine-readable marker for SENTINEL / team inbox — keep calm user copy elsewhere.
+      detailParts.push(`thread_id=${threadId}`);
+    }
+    if (details?.trim()) {
+      detailParts.push(details.trim());
+    }
+    const storedDetails = detailParts.length ? detailParts.join('\n') : null;
+
     const result = await query(
       `INSERT INTO reports (reporter_id, reported_id, reason, details)
        VALUES ($1, $2, $3, $4)
        RETURNING id, created_at`,
-      [reporterId, reportedId, reason, details ?? null],
+      [reporterId, reportedId, reason, storedDetails],
     );
     const report = result.rows[0] as { id: string; created_at: string };
 
     // Best-effort notify team — never fail the report submission if mail is down.
-    void this.notifyTeamOfReport(reporterId, reportedId, reason, details, report.id).catch(
-      (err) => console.error('[reports] notify failed', err),
-    );
+    void this.notifyTeamOfReport(
+      reporterId,
+      reportedId,
+      reason,
+      storedDetails ?? undefined,
+      report.id,
+      threadId,
+    ).catch((err) => console.error('[reports] notify failed', err));
 
     return report;
   },
@@ -635,6 +656,7 @@ export const userService = {
     reason: string,
     details: string | undefined,
     reportId: string,
+    threadId?: string,
   ) {
     const { sendEmail } = await import('./mailer.service');
     const { getReportNotifyEmails } = await import('./team.service');
@@ -661,7 +683,7 @@ export const userService = {
     const recipients = getReportNotifyEmails();
     if (!recipients.length) return;
 
-    const subject = `[MenRush] Report: ${reason} — ${reported?.name ?? reportedId}`;
+    const subject = `[MenRush][SENTINEL] Report: ${reason} — ${reported?.name ?? reportedId}`;
     const bodyHtml =
       transactionalParagraph(
         `<strong style="color:#F0E0C0;">Reason:</strong> ${esc(reason)}`,
@@ -675,6 +697,12 @@ export const userService = {
         `<strong style="color:#F0E0C0;">Reported:</strong> ${esc(reported?.name ?? 'unknown')} (${esc(reported?.email ?? reportedId)})`,
         true,
       ) +
+      (threadId
+        ? transactionalParagraph(
+            `<strong style="color:#F0E0C0;">Thread ID (SENTINEL):</strong> ${esc(threadId)}`,
+            true,
+          )
+        : '') +
       (details
         ? transactionalParagraph(
             `<strong style="color:#F0E0C0;">Details:</strong> ${esc(details)}`,
@@ -699,7 +727,7 @@ export const userService = {
           to,
           subject,
           html,
-          text: `MenRush report ${reportId}: ${reason}. Reporter ${reporter?.email ?? reporterId} → ${reported?.email ?? reportedId}. ${details ?? ''}`.trim(),
+          text: `MenRush report ${reportId}: ${reason}. Thread ${threadId ?? 'n/a'}. Reporter ${reporter?.email ?? reporterId} → ${reported?.email ?? reportedId}. ${details ?? ''}`.trim(),
         });
       } catch (err) {
         console.error('[reports] email to', to, 'failed', err);
