@@ -342,7 +342,11 @@ function LayoutInner({ children }: LayoutProps) {
                     <NotificationDot
                       count={badge}
                       visible={badge > 0}
-                      data-testid={`badge-mobile-${item.to.replace(/\//g, '')}`}
+                      data-testid={
+                        item.to === '/conversations'
+                          ? 'badge-conversations'
+                          : `badge-mobile-${item.to.replace(/\//g, '')}`
+                      }
                       className="-top-2 -right-2.5 min-w-[16px] h-[16px] text-[9px] bg-[var(--copper)] border-[var(--bg-elevated)]"
                     />
                   </span>

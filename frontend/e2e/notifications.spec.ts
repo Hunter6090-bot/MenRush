@@ -36,6 +36,10 @@ async function authenticate(context: BrowserContext, result: LoginResult) {
   }, result);
 }
 
+function conversationsBadge(page: Page) {
+  return page.getByTestId('badge-conversations');
+}
+
 // ── Notification settings (permission gating) ────────────────────────────────
 
 test('notification permission is requested only by a clear user action', async ({ browser }) => {
@@ -58,6 +62,17 @@ test('notification permission is requested only by a clear user action', async (
   });
 
   const page = await ctx.newPage();
+  // CI/local often lack VAPID keys — stub so the settings card offers the turn-on path.
+  await page.route('**/api/push/vapid-public', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        publicKey: 'BFakeVapidPublicKeyForE2ETestsOnly0123456789abcdef',
+        configured: true,
+      }),
+    });
+  });
   await page.goto('/notifications');
 
   const card = page.getByTestId('notification-settings');
@@ -87,6 +102,17 @@ test('unsupported browsers show an honest, disabled state', async ({ browser }) 
   });
 
   const page = await ctx.newPage();
+  // Stub VAPID configured so the UI reaches the browser-support branch.
+  await page.route('**/api/push/vapid-public', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        publicKey: 'BFakeVapidPublicKeyForE2ETestsOnly0123456789abcdef',
+        configured: true,
+      }),
+    });
+  });
   await page.goto('/notifications');
 
   await expect(page.getByTestId('notification-settings-status')).toContainText(/doesn’t support|does not support/i);
@@ -98,13 +124,18 @@ test('unsupported browsers show an honest, disabled state', async ({ browser }) 
 // ── Foreground unread badge ──────────────────────────────────────────────────
 
 test('a new message raises the unread badge and opening the chat clears it', async ({ browser }) => {
-  const bobCtx = await browser.newContext();
+  // Badge testid lives on the mobile tab bar (desktop sidebar badges are unlabelled).
+  const bobCtx = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await authenticate(bobCtx, bob);
   const bobPage: Page = await bobCtx.newPage();
 
   // Bob sits on discovery so his socket is connected but he's not in the chat.
   await bobPage.goto('/discover');
   await bobPage.waitForTimeout(1500); // allow the socket to authenticate
+
+  const badge = conversationsBadge(bobPage);
+  const beforeCount =
+    (await badge.count()) > 0 ? Number((await badge.textContent()) || 0) : 0;
 
   // Alice sends Bob a message via the API (server pushes it over the socket).
   const aliceApi = await apiRequest.newContext({
@@ -121,16 +152,23 @@ test('a new message raises the unread badge and opening the chat clears it', asy
   }
 
   // The Messages tab badge reflects the unread message in real time.
-  await expect(bobPage.getByTestId('badge-conversations')).toHaveText('1', { timeout: 10_000 });
+  const afterSend = beforeCount + 1;
+  await expect(badge).toHaveText(String(afterSend), { timeout: 10_000 });
 
   // Opening the conversations list keeps the badge until the thread is read.
   await bobPage.goto('/conversations');
-  await expect(bobPage.getByTestId('badge-conversations')).toHaveText('1');
+  await expect(badge).toHaveText(String(afterSend));
 
   await bobPage.goto(`/messages/${alice.user.id}`);
   await expect(bobPage.getByRole('button', { name: /Open .*profile/i })).toBeVisible();
   await bobPage.goto('/discover');
-  await expect(bobPage.getByTestId('badge-conversations')).toHaveCount(0);
+  // Opening Alice's thread clears her unread (may be >1 if prior Alice mail existed).
+  await expect
+    .poll(async () => {
+      if ((await badge.count()) === 0) return 0;
+      return Number((await badge.textContent()) || 0);
+    }, { timeout: 10_000 })
+    .toBeLessThan(afterSend);
 
   await bobCtx.close();
 });
@@ -188,12 +226,16 @@ test('a pending real-time notification never renders as a toast after logging ou
 });
 
 test('opening a conversation thread clears that sender from the unread badge', async ({ browser }) => {
-  const bobCtx = await browser.newContext();
+  const bobCtx = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await authenticate(bobCtx, bob);
   const bobPage = await bobCtx.newPage();
 
   await bobPage.goto('/discover');
   await bobPage.waitForTimeout(1500);
+
+  const badge = conversationsBadge(bobPage);
+  const beforeCount =
+    (await badge.count()) > 0 ? Number((await badge.textContent()) || 0) : 0;
 
   const aliceApi = await apiRequest.newContext({
     baseURL: BASE_URL,
@@ -208,13 +250,19 @@ test('opening a conversation thread clears that sender from the unread badge', a
     await aliceApi.dispose();
   }
 
-  await expect(bobPage.getByTestId('badge-conversations')).toHaveText('1', { timeout: 10_000 });
+  const afterSend = beforeCount + 1;
+  await expect(badge).toHaveText(String(afterSend), { timeout: 10_000 });
 
   // Opening the thread directly (full-screen chat) clears that sender's unread.
   await bobPage.goto(`/messages/${alice.user.id}`);
   await expect(bobPage.getByRole('button', { name: /Open .*profile/i })).toBeVisible();
   await bobPage.goto('/discover');
-  await expect(bobPage.getByTestId('badge-conversations')).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      if ((await badge.count()) === 0) return 0;
+      return Number((await badge.textContent()) || 0);
+    }, { timeout: 10_000 })
+    .toBeLessThan(afterSend);
 
   await bobCtx.close();
 });

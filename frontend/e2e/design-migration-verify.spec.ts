@@ -59,8 +59,8 @@ test.describe('desktop design migration @ 1440px', () => {
     const page = await ctx.newPage();
     await page.goto('/discover');
 
-    await expect(page.getByText('MENRUSH').first()).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Nearby' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /MenRush home/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Nearby', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Nearby', exact: true })).toBeVisible();
     await expect(page.getByText(/in your radius/i).first()).toBeVisible();
     await expect(page.getByRole('button', { name: /Toggle pulse visibility/i })).toBeVisible();
