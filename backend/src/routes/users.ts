@@ -388,6 +388,8 @@ router.get('/blocks', async (req: AuthRequest, res: Response) => {
 const ReportSchema = z.object({
   reason: z.enum(['spam', 'harassment', 'fake_profile', 'inappropriate_content', 'underage', 'other']),
   details: z.string().max(1000).optional(),
+  /** Conversation or room id for SENTINEL review — optional, free for all users. */
+  thread_id: z.string().min(1).max(128).optional(),
 });
 
 router.post('/report/:id', async (req: AuthRequest, res: Response) => {
@@ -404,6 +406,7 @@ router.post('/report/:id', async (req: AuthRequest, res: Response) => {
       req.params.id,
       parsed.data.reason,
       parsed.data.details,
+      parsed.data.thread_id,
     );
     res.json({ reported: true, id: report.id });
   } catch (error: any) {
