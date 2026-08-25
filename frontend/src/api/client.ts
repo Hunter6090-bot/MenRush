@@ -250,8 +250,12 @@ export const usersAPI = {
         blocked_at: string;
       }>;
     }>('/users/blocks'),
-  reportUser: (id: string, reason: string, details?: string) =>
-    apiClient.post(`/users/report/${id}`, { reason, details }),
+  reportUser: (id: string, reason: string, details?: string, threadId?: string) =>
+    apiClient.post(`/users/report/${id}`, {
+      reason,
+      details,
+      ...(threadId ? { thread_id: threadId } : {}),
+    }),
   getTeamStatus: () => apiClient.get<{ is_team: boolean }>('/users/me/team'),
   listReports: () =>
     apiClient.get<{

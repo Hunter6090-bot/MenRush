@@ -14,6 +14,7 @@ import { SelfieCaptureModal } from '../components/SelfieCaptureModal';
 import { CameraCaptureChooser } from '../components/CameraCaptureChooser';
 import { VideoNoteCaptureModal } from '../components/VideoNoteCaptureModal';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
+import { PanicReportButton } from '../components/PanicReportButton';
 import { placeOutgoingCall } from '../lib/callBridge';
 import { mapCallMediaError } from '../lib/callMedia';
 import { MobileBackButton } from '../components/MobileBackButton';
@@ -729,15 +730,26 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         )}
 
         {otherId && (
-          <ChatSafetyMenu
-            peerId={otherId}
-            peerName={otherUser?.name ?? 'this user'}
-            onNotice={(msg, tone = 'success') => setSafetyNotice({ msg, tone })}
-            onBlocked={() => {
-              // Land on the unblock list so the action is obvious.
-              window.setTimeout(() => navigate('/settings#blocked'), 600);
-            }}
-          />
+          <>
+            <PanicReportButton
+              reportedUserId={otherId}
+              threadId={
+                user?.id
+                  ? `dm:${[user.id, otherId].sort().join('_')}`
+                  : `dm:${otherId}`
+              }
+              onNotice={(msg, tone = 'success') => setSafetyNotice({ msg, tone })}
+            />
+            <ChatSafetyMenu
+              peerId={otherId}
+              peerName={otherUser?.name ?? 'this user'}
+              onNotice={(msg, tone = 'success') => setSafetyNotice({ msg, tone })}
+              onBlocked={() => {
+                // Land on the unblock list so the action is obvious.
+                window.setTimeout(() => navigate('/settings#blocked'), 600);
+              }}
+            />
+          </>
         )}
       </header>
 
