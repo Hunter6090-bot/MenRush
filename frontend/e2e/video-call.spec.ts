@@ -1,9 +1,9 @@
 import { expect, test, request as apiRequest, type BrowserContext } from '@playwright/test';
 import { TEST_PASSWORD, ALICE, BOB } from './test-accounts';
+import { PLAYWRIGHT_BASE_URL as BASE_URL } from './support/base-url';
 
 test.describe.configure({ mode: 'serial' });
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
 
 type LoginResult = {
   token: string;

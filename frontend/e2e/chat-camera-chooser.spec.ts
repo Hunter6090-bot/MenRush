@@ -1,7 +1,7 @@
 import { expect, test, request as apiRequest, type BrowserContext, type Page } from '@playwright/test';
 import { TEST_PASSWORD, ALICE, BOB } from './test-accounts';
+import { PLAYWRIGHT_BASE_URL as BASE_URL } from './support/base-url';
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
 
 type LoginResult = {
   token: string;

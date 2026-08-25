@@ -14,10 +14,12 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   await expect(signInLink).toHaveCount(1);
   await expect(signInLink).toHaveAttribute('href', '/login');
 
-  const heroHeading = page.locator('h1.mr-coming-soon-heading');
+  const heroHeading = page.getByRole('heading', {
+    level: 1,
+    name: /Real men\.\s*Verified profiles\.\s*Total discretion\./i,
+  });
   await expect(heroHeading).toBeVisible();
-  await expect(heroHeading).toContainText(/Real men/i);
-  await expect(heroHeading).toContainText(/Verified profiles/i);
+  await expect(heroHeading).toHaveClass(/mr-coming-soon-heading/);
 
   await expect(page.getByText(/OPENS 1 OCTOBER 2026/i)).toBeVisible();
   await expect(page.getByText(/opens across the UK/i)).toBeVisible();
@@ -35,6 +37,8 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   }
 
   await expect(page.locator('#waitlist')).toBeVisible();
+  // Accessibility name is the contract; #waitlist-email is the stable design-lock id.
+  await expect(page.getByRole('textbox', { name: 'Email for waitlist' })).toBeVisible();
   await expect(page.locator('#waitlist-email')).toBeVisible();
   await expect(page.getByRole('button', { name: /^Join waitlist$/i })).toHaveCount(1);
 
