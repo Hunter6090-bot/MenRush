@@ -1,10 +1,10 @@
 import { expect, test, request as apiRequest, type APIRequestContext, type BrowserContext } from '@playwright/test';
 import { ALICE, BOB, HOTSPOT_FILLERS, PREMIUM_TESTER, TEST_HOT_SPOT, TEST_PASSWORD } from './test-accounts';
+import { PLAYWRIGHT_BASE_URL as BASE_URL } from './support/base-url';
 
 // #67: unify Nearby into one map with independent People / Hot Spots layers.
 test.describe.configure({ mode: 'serial' });
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
 // Matches backend/scripts/seed-test-users.ts's TEST_LAT/TEST_LNG — the deterministic
 // e2e fixture Hot Spot (TEST_HOT_SPOT) always exists at this exact coordinate.
 const FIXTURE_GEO = { latitude: TEST_HOT_SPOT.lat, longitude: TEST_HOT_SPOT.lng };

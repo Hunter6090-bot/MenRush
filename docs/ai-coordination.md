@@ -51,7 +51,8 @@ style(icons): heritage set (claude)
 | Discreet Mode media blur (item 2/5; Ghost untouched) | PR `#136` on main | — | Cursor cloud — `media_clear` + CSS blur; `DISCREET_MEDIA_BLUR` opt-in (default off); no public copy |
 | Safety & Trust (Identity Checked badge + panic report) | PR `#137` on main | — | Cursor cloud — badge prominence + one-tap report w/ thread_id → SENTINEL |
 | Discovery More filters drawer (vibe/scene/connection) | PR `#138` on main | — | Cursor cloud — item 4 of 5 only |
-| Nightlife venue check-in (Events → Hot Spot pin, 4h TTL) | PR `cursor/nightlife-venue-checkin-0f5e` | — | Cursor cloud — item 5; migration renumbered 040 after #134 took 039 |
+| Nightlife venue check-in (Events → Hot Spot pin, 4h TTL) | PR `#139` on main | — | Cursor cloud — item 5; migration renumbered 040 after #134 took 039 |
+| Browser smoke e2e gate (4173 base URL + live public assertions) | PR `cursor/browser-smoke-public-assertions-c3c3` | — | Cursor cloud — Oct 1 UK launch gate; no /pride or product copy |
 | Verified profiles landing copy (replace Verified bodies) | PR `#120` `cursor/verified-profiles-landing-51f5` | — | Cursor cloud — ComingSoon hero + design-lock e2e + marketing rule; merged |
 | Pride parade photo wash on /pride (claim-only; no printed-code CTA on face) | branch `cursor/pride-parade-bg-26c8` | — | Cursor cloud — Owner 22 Aug 2026; full-bleed 21-pride-parade-flags + night/copper wash |
 | Pride claim-only face (Terms 7.7 grant rules; no Offer conditions; no Brighton on /pride) | PR `#129` on main | — | Cursor cloud — face = claim + Terms apply line; grant rules in Terms 7.7 |
