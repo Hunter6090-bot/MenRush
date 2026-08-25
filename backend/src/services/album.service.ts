@@ -2,6 +2,7 @@ import { query } from '../db';
 import { v4 as uuidv4 } from 'uuid';
 import { accessControl, SecurityError } from '../security/access';
 import { signedMediaUrl } from '../security/media';
+import { computeMediaClear, isDiscreetMediaBlurEnabled, viewerSeesClearMedia } from './discreet-media';
 
 /**
  * Private albums.
@@ -10,6 +11,9 @@ import { signedMediaUrl } from '../security/media';
  * Paid tier: unlimited.
  *
  * Per-viewer grants control who can see each album. Owner can grant/revoke.
+ * Discreet media blur (when DISCREET_MEDIA_BLUR=true): non-Premium viewers get
+ * media_clear=false on photos; owners always see clear. Presence/incognito
+ * toggle is unchanged.
  */
 
 export const FREE_PHOTO_CAP = 6;
@@ -24,12 +28,33 @@ export interface AlbumRow {
   created_at: string;
   updated_at: string;
   photo_count: number;
+  media_clear?: boolean;
 }
 
-function presentCover<T extends { cover_url: string | null }>(row: T, viewerId: string): T {
-  return row.cover_url
-    ? { ...row, cover_url: signedMediaUrl(row.cover_url, viewerId) }
-    : row;
+async function resolveViewerPremium(viewerId: string): Promise<boolean> {
+  if (!isDiscreetMediaBlurEnabled()) return true;
+  return viewerSeesClearMedia(viewerId);
+}
+
+function presentCover<T extends { cover_url: string | null; user_id?: string }>(
+  row: T,
+  viewerId: string,
+  viewerIsPremium: boolean,
+): T & { media_clear: boolean } {
+  const media_clear = computeMediaClear({
+    enabled: isDiscreetMediaBlurEnabled(),
+    viewerIsPremium,
+    isOwnMedia: row.user_id === viewerId,
+    mediaType: 'image',
+  });
+  if (row.cover_url) {
+    return {
+      ...row,
+      cover_url: signedMediaUrl(row.cover_url, viewerId),
+      media_clear,
+    };
+  }
+  return { ...row, media_clear };
 }
 
 export const albumService = {
@@ -59,7 +84,8 @@ export const albumService = {
         ORDER BY a.created_at DESC`,
       [userId]
     );
-    return res.rows.map((row) => presentCover(row, userId));
+    // Owner always sees clear media.
+    return res.rows.map((row) => presentCover(row, userId, true));
   },
 
   /**
@@ -69,6 +95,7 @@ export const albumService = {
    */
   async listAlbumsForViewer(ownerId: string, viewerId: string): Promise<Array<AlbumRow & { unlocked: boolean }>> {
     await accessControl.assertProfileView(viewerId, ownerId);
+    const viewerIsPremium = await resolveViewerPremium(viewerId);
     const res = await query(
       `SELECT a.id, a.user_id, a.name, a.description, a.is_locked, a.cover_url,
               a.created_at, a.updated_at,
@@ -85,8 +112,19 @@ export const albumService = {
       [ownerId, viewerId]
     );
     return res.rows.map((row) => {
-      if (row.is_locked && !row.unlocked) return { ...row, cover_url: null };
-      return presentCover(row, viewerId);
+      if (row.is_locked && !row.unlocked) {
+        return {
+          ...row,
+          cover_url: null,
+          media_clear: computeMediaClear({
+            enabled: isDiscreetMediaBlurEnabled(),
+            viewerIsPremium,
+            isOwnMedia: false,
+            mediaType: 'image',
+          }),
+        };
+      }
+      return presentCover(row, viewerId, viewerIsPremium);
     });
   },
 
@@ -95,7 +133,7 @@ export const albumService = {
     albumId: string,
     storageKey: string,
     mimeType: string,
-  ): Promise<{ id: string; photo_url: string }> {
+  ): Promise<{ id: string; photo_url: string; media_clear: boolean }> {
     const ownsRes = await query(`SELECT 1 FROM albums WHERE id = $1 AND user_id = $2`, [albumId, userId]);
     if (ownsRes.rows.length === 0) throw new Error('album_not_owned');
 
@@ -114,14 +152,19 @@ export const albumService = {
       albumId,
       photoUrl,
     ]);
-    return { id, photo_url: signedMediaUrl(photoUrl, userId) };
+    return { id, photo_url: signedMediaUrl(photoUrl, userId), media_clear: true };
   },
 
   async listPhotos(
     albumId: string,
     viewerId: string,
     isOwner: boolean
-  ): Promise<{ photos: Array<{ id: string; photo_url: string; position: number; created_at: string }>; unlocked: boolean; locked: boolean }> {
+  ): Promise<{
+    photos: Array<{ id: string; photo_url: string; position: number; created_at: string; media_clear: boolean }>;
+    unlocked: boolean;
+    locked: boolean;
+    media_clear: boolean;
+  }> {
     const albumRes = await query(`SELECT user_id, is_locked FROM albums WHERE id = $1`, [albumId]);
     if (albumRes.rows.length === 0) throw new Error('album_not_found');
 
@@ -144,8 +187,16 @@ export const albumService = {
     }
 
     if (!unlocked) {
-      return { photos: [], unlocked: false, locked: true };
+      return { photos: [], unlocked: false, locked: true, media_clear: true };
     }
+
+    const viewerIsPremium = ownerView ? true : await resolveViewerPremium(viewerId);
+    const media_clear = computeMediaClear({
+      enabled: isDiscreetMediaBlurEnabled(),
+      viewerIsPremium,
+      isOwnMedia: ownerView,
+      mediaType: 'image',
+    });
 
     const photosRes = await query(
       `SELECT id, photo_url, position, created_at
@@ -159,9 +210,11 @@ export const albumService = {
       photos: photosRes.rows.map((photo) => ({
         ...photo,
         photo_url: signedMediaUrl(photo.photo_url, viewerId),
+        media_clear,
       })),
       unlocked: true,
       locked,
+      media_clear,
     };
   },
 
@@ -255,6 +308,17 @@ export const albumService = {
     return {
       storageKey: row.storage_key as string,
       mimeType: row.mime_type as string,
+      ownerId: row.owner_id as string,
     };
+  },
+
+  async viewerMediaClear(viewerId: string, ownerId: string): Promise<boolean> {
+    const viewerIsPremium = await resolveViewerPremium(viewerId);
+    return computeMediaClear({
+      enabled: isDiscreetMediaBlurEnabled(),
+      viewerIsPremium,
+      isOwnMedia: viewerId === ownerId,
+      mediaType: 'image',
+    });
   },
 };
