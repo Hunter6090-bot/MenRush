@@ -204,6 +204,22 @@ export const usersAPI = {
       is_premium: boolean;
       preview?: Array<{ id: string; name: string; age: number; photo_url?: string | null }>;
     }>('/users/likes/received/summary'),
+  /** Incoming likes (not yet mutual) — not gated behind MenRush+. */
+  getReceivedLikes: () =>
+    apiClient.get<
+      Array<{
+        id: string;
+        name: string;
+        age: number;
+        bio?: string;
+        photo_url?: string | null;
+        online?: boolean;
+        last_seen?: string;
+        liked_at?: string;
+        is_verified?: boolean;
+        authenticity_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
+      }>
+    >('/users/likes/received'),
   getProfileViews: () =>
     apiClient.get<{
       viewers: Array<{
@@ -388,12 +404,25 @@ export const meetAPI = {
 
 export const roomsAPI = {
   createRoom: (data: any) => apiClient.post('/rooms', data),
-  getRooms: () => apiClient.get('/rooms'),
+  getRooms: () =>
+    apiClient.get<{
+      member_rooms: Array<Record<string, unknown>>;
+      nearby_rooms: Array<Record<string, unknown>>;
+      official_rooms: Array<Record<string, unknown>>;
+    }>('/rooms'),
   getRoom: (roomId: string) => apiClient.get(`/rooms/${roomId}`),
   getMembers: (roomId: string) =>
-    apiClient.get<Array<{ id: string; name: string; photo_url?: string; role?: string }>>(
-      `/rooms/${roomId}/members`,
-    ),
+    apiClient.get<
+      Array<{
+        id: string;
+        name: string;
+        photo_url?: string;
+        role?: string;
+        is_verified?: boolean;
+        authenticity_status?: string;
+        using_temp_identity?: boolean;
+      }>
+    >(`/rooms/${roomId}/members`),
   addMember: (roomId: string, userId: string) =>
     apiClient.post(`/rooms/${roomId}/members`, { user_id: userId }),
   joinRoom: (roomId: string) => apiClient.post(`/rooms/${roomId}/join`),
@@ -402,6 +431,45 @@ export const roomsAPI = {
     apiClient.get(`/rooms/${roomId}/messages`, { params: { before } }),
   sendMessage: (roomId: string, message: string, replyTo?: string) =>
     apiClient.post(`/rooms/${roomId}/messages`, { message, reply_to: replyTo }),
+  sendMedia: (roomId: string, file: File | Blob, caption?: string) => {
+    const fd = new FormData();
+    const filename =
+      file instanceof File && file.name
+        ? file.name
+        : `room-media-${Date.now()}.jpg`;
+    fd.append('media', file, filename);
+    if (caption) fd.append('caption', caption);
+    return apiClient.post(`/rooms/${roomId}/messages/media`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  getTempIdentity: (roomId: string) =>
+    apiClient.get<{
+      display_name?: string | null;
+      photo_url?: string | null;
+      save_name?: boolean;
+      save_photo?: boolean;
+    }>(`/rooms/${roomId}/temp-identity`),
+  setTempIdentity: (
+    roomId: string,
+    data: {
+      display_name: string;
+      photo_url?: string | null;
+      save_name?: boolean;
+      save_photo?: boolean;
+    },
+  ) => apiClient.put(`/rooms/${roomId}/temp-identity`, data),
+  uploadTempPhoto: (roomId: string, file: File) => {
+    const fd = new FormData();
+    fd.append('photo', file);
+    return apiClient.post<{ photo_url: string }>(`/rooms/${roomId}/temp-identity/photo`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  clearTempIdentity: (roomId: string) =>
+    apiClient.post<{ cleared: true }>(`/rooms/${roomId}/temp-identity/clear`),
+  deleteTempIdentity: (roomId: string) =>
+    apiClient.delete(`/rooms/${roomId}/temp-identity`),
 };
 
 export type ContactSubmitPayload = {

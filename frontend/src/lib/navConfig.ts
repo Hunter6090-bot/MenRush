@@ -71,7 +71,8 @@ export function getNavItems(): NavItem[] {
       to: '/rooms',
       label: ROUTE_LABELS.rooms,
       Icon: IconRooms,
-      desktopNav: false,
+      desktopNav: true,
+      mobileMore: true,
     },
     {
       to: '/profile',

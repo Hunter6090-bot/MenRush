@@ -21,7 +21,7 @@ import { Contact } from './pages/Contact';
 import { Safety } from './pages/Safety';
 import { CommunityGuidelines } from './pages/CommunityGuidelines';
 import { Help } from './pages/Help';
-import { BrightonPride } from './pages/BrightonPride';
+import { Pride } from './pages/Pride';
 import { MessagingRoute } from './components/MessagingRoute';
 import { RoomsRoute } from './components/RoomsRoute';
 import { Verify } from './pages/Verify';
@@ -47,6 +47,7 @@ import { FEATURES } from './lib/featureFlags';
 import { VideoCallModal } from './components/VideoCallModal';
 import { ToastNotifications } from './components/ToastNotifications';
 import { savePostAuthRedirect } from './lib/profileLinks';
+import { RoomTempIdentityGatePreview } from './pages/RoomTempIdentityGatePreview';
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
   const token = useAuthStore((s) => s.token);
@@ -164,12 +165,15 @@ function AppShell() {
 
   return (
     <>
-      <ToastNotifications />
+      {token ? <ToastNotifications /> : null}
       <Routes>
         <Route path="/" element={<ComingSoon />} />
         <Route path="/app" element={<AppEntry />} />
         <Route path="/coming-soon" element={<ComingSoon />} />
-        <Route path="/brightonpride" element={<BrightonPride />} />
+        {/* Closed campaign URLs → sole public Pride offer */}
+        <Route path="/brightonpride" element={<Navigate to="/pride" replace />} />
+        <Route path="/brightonpride26" element={<Navigate to="/pride" replace />} />
+        <Route path="/pride" element={<Pride />} />
         <Route path="/beta" element={<BetaAccess />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -205,6 +209,10 @@ function AppShell() {
         <Route path="/messages/:otherId" element={<RequireVerified><MessagingRoute /></RequireVerified>} />
         <Route path="/rooms" element={<RequireVerified><RoomsRoute /></RequireVerified>} />
         <Route path="/rooms/:roomId" element={<RequireVerified><RoomsRoute /></RequireVerified>} />
+        {import.meta.env.DEV ||
+        (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) ? (
+          <Route path="/dev/room-temp-gate" element={<RoomTempIdentityGatePreview />} />
+        ) : null}
         <Route path="*" element={<NotFound />} />
       </Routes>
       {token && FEATURES.videoCalls && <VideoCallModal />}

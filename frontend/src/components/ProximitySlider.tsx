@@ -1,24 +1,24 @@
-import { formatRadiusFromKm, resolveDistanceUnitSystem } from '../lib/localeUnits';
-
-export const RADIUS_OPTIONS = [1, 5, 10, 25, 50] as const;
-export type RadiusKm = (typeof RADIUS_OPTIONS)[number];
+import {
+  formatRadiusControlLabel,
+  normalizeRadiusKm,
+  radiusStepOptionsKm,
+} from '../lib/discoveryFormat';
+import { resolveDistanceUnitSystem } from '../lib/localeUnits';
+import { useLocaleUnits } from '../hooks/useLocaleUnits';
 
 interface ProximitySliderProps {
   value: number;
-  onChange: (km: RadiusKm) => void;
+  onChange: (km: number) => void;
   className?: string;
   variant?: 'card' | 'map';
 }
 
-function indexForRadius(km: number): number {
-  if (!Number.isFinite(km)) return RADIUS_OPTIONS.indexOf(5);
-  // At or above max slider stop → pin to max so Expand/+ is not a no-op loop.
-  if (km >= RADIUS_OPTIONS[RADIUS_OPTIONS.length - 1]) {
-    return RADIUS_OPTIONS.length - 1;
-  }
+function indexForRadius(km: number, steps: number[]): number {
+  if (!Number.isFinite(km) || steps.length === 0) return 0;
+  if (km >= steps[steps.length - 1] - 0.5) return steps.length - 1;
   let best = 0;
-  for (let i = 1; i < RADIUS_OPTIONS.length; i += 1) {
-    if (Math.abs(RADIUS_OPTIONS[i] - km) < Math.abs(RADIUS_OPTIONS[best] - km)) {
+  for (let i = 1; i < steps.length; i += 1) {
+    if (Math.abs(steps[i] - km) < Math.abs(steps[best] - km)) {
       best = i;
     }
   }
@@ -31,18 +31,20 @@ export function ProximitySlider({
   className = '',
   variant = 'card',
 }: ProximitySliderProps) {
-  const index = indexForRadius(value);
+  const { unitSystem } = useLocaleUnits();
+  const steps = radiusStepOptionsKm(unitSystem);
+  const index = indexForRadius(normalizeRadiusKm(value, unitSystem), steps);
   const atMin = index <= 0;
-  const atMax = index >= RADIUS_OPTIONS.length - 1;
+  const atMax = index >= steps.length - 1;
   const isMap = variant === 'map';
-  const radiusLabel = formatRadiusFromKm(value, resolveDistanceUnitSystem());
+  const radiusLabel = formatRadiusControlLabel(value, unitSystem);
   const mapChip =
     'border-[rgba(196,131,42,0.45)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] text-[#3D2B0E] shadow-md';
   const cardChip = 'border-[var(--border-default)] bg-[var(--bg-card)]/90 text-[var(--cream)]';
 
   const setIndex = (next: number) => {
-    const clamped = Math.max(0, Math.min(RADIUS_OPTIONS.length - 1, next));
-    onChange(RADIUS_OPTIONS[clamped]);
+    const clamped = Math.max(0, Math.min(steps.length - 1, next));
+    onChange(steps[clamped]);
   };
 
   const controls = (
@@ -62,13 +64,13 @@ export function ProximitySlider({
         <input
           type="range"
           min={0}
-          max={RADIUS_OPTIONS.length - 1}
+          max={steps.length - 1}
           step={1}
           value={index}
           onChange={(event) => setIndex(Number(event.target.value))}
           aria-label={`Search radius ${radiusLabel}`}
-          aria-valuemin={RADIUS_OPTIONS[0]}
-          aria-valuemax={RADIUS_OPTIONS[RADIUS_OPTIONS.length - 1]}
+          aria-valuemin={steps[0]}
+          aria-valuemax={steps[steps.length - 1]}
           aria-valuenow={value}
           className="proximity-range min-w-0 flex-1"
         />
@@ -85,7 +87,10 @@ export function ProximitySlider({
         +
       </button>
       {isMap ? (
-        <span className={`rounded-full border px-2.5 py-1.5 text-[11px] font-extrabold tabular-nums tracking-wide ${mapChip}`}>
+        <span
+          className={`rounded-full border px-2.5 py-1.5 text-[11px] font-extrabold tabular-nums tracking-wide ${mapChip}`}
+          data-testid="map-radius-pill"
+        >
           {radiusLabel}
         </span>
       ) : null}
@@ -119,3 +124,7 @@ export function ProximitySlider({
     </div>
   );
 }
+
+/** @deprecated Prefer radiusStepOptionsKm — kept for any external imports. */
+export const RADIUS_OPTIONS = radiusStepOptionsKm(resolveDistanceUnitSystem());
+export type RadiusKm = number;

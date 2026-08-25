@@ -39,6 +39,8 @@ export const RegisterSchema = z.object({
   /** Preferred source of truth for age — persisted and used to recompute age. */
   date_of_birth: isoDateOnly.optional(),
   invite_code: z.string().min(1).max(64).optional(),
+  /** Optional public promo (e.g. Pride QR). Validated at register. */
+  promo_code: z.string().min(1).max(64).optional(),
 });
 
 export const LoginSchema = z.object({
@@ -174,6 +176,14 @@ export const AddRoomMemberSchema = z.object({
   user_id: z.string().uuid(),
 });
 
+/** Temporary identity for a specific room — never written to main profile. */
+export const RoomTempIdentitySchema = z.object({
+  display_name: z.string().trim().min(1).max(40),
+  photo_url: z.string().trim().max(500).nullable().optional(),
+  save_name: z.boolean().optional(),
+  save_photo: z.boolean().optional(),
+});
+
 export const ContactFormSchema = z.object({
   name: z.string().trim().min(2, 'Name must be at least 2 characters').max(120),
   email: z.string().trim().email('Enter a valid email address'),
@@ -229,6 +239,7 @@ export type LocationInput = z.infer<typeof LocationSchema>;
 export type MessageInput = z.infer<typeof MessageSchema>;
 export type CreateRoomInput = z.infer<typeof CreateRoomSchema>;
 export type RoomMessageInput = z.infer<typeof RoomMessageSchema>;
+export type RoomTempIdentityInput = z.infer<typeof RoomTempIdentitySchema>;
 export type ContactFormInput = z.infer<typeof ContactFormSchema>;
 export type Mood = (typeof MOOD_VALUES)[number];
 export type MoodInput = z.infer<typeof MoodSchema>;

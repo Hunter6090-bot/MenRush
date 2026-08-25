@@ -9,6 +9,15 @@ import { PulseRing } from '../components/PulseRing';
 import { MobileBackButton } from '../components/MobileBackButton';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
+import { profilePathForUser } from '../lib/profileLinks';
+import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
+import { getPhotoUrl } from '../components/UserAvatar';
+import { parseRoomImageMessage } from '../lib/roomMediaMessage';
+import { RoomTempIdentityGate } from '../components/RoomTempIdentityGate';
+
+const ROOM_EMOJI_PICKER = [
+  '😀', '😂', '🔥', '❤️', '👍', '👀', '😈', '🥵', '💪', '🎉', '😏', '🙌',
+] as const;
 
 interface RoomMessage {
   id?: string;
@@ -34,6 +43,9 @@ interface RoomMember {
   name: string;
   photo_url?: string;
   role?: string;
+  is_verified?: boolean;
+  authenticity_status?: string;
+  using_temp_identity?: boolean;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -107,9 +119,15 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   const [messages, setMessages] = useState<RoomMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [mediaError, setMediaError] = useState('');
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({}); // userId → name
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [identityReady, setIdentityReady] = useState(false);
+  const [loadingRoom, setLoadingRoom] = useState(true);
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   const {
     participants,
@@ -126,22 +144,67 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     toggleCamera,
     toggleMic,
     photoUrl,
-  } = useRoomVideo({ roomId, userId: user?.id, enabled: !!roomId });
+  } = useRoomVideo({ roomId, userId: user?.id, enabled: identityReady && !!roomId });
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Load room info + messages ────────────────────────────────────────────
+  // Load room; ensure membership; always gate on temp identity before video.
   useEffect(() => {
     if (!roomId) return;
-    roomsAPI.getRoom(roomId).then((r) => setRoom(r.data)).catch(() => {});
+    let cancelled = false;
+    setLoadingRoom(true);
+    setJoinError(null);
+    setIdentityReady(false);
+
+    (async () => {
+      try {
+        const r = await roomsAPI.getRoom(roomId);
+        if (cancelled) return;
+        const data = r.data as RoomInfo;
+        setRoom(data);
+
+        if (!data.user_role) {
+          try {
+            await roomsAPI.joinRoom(roomId);
+            const refreshed = await roomsAPI.getRoom(roomId);
+            if (cancelled) return;
+            setRoom(refreshed.data as RoomInfo);
+          } catch (err: unknown) {
+            const msg =
+              (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+            setJoinError(msg || 'Could not join this room.');
+            setLoadingRoom(false);
+            return;
+          }
+        }
+        setLoadingRoom(false);
+      } catch {
+        if (!cancelled) {
+          setJoinError('Could not load this room.');
+          setLoadingRoom(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      // Session exit: wipe unsaved temp identity (never touches main profile).
+      void roomsAPI.clearTempIdentity(roomId).catch(() => {});
+    };
+  }, [roomId]);
+
+  // Load messages + members only after identity confirmed.
+  useEffect(() => {
+    if (!roomId || !identityReady) return;
     roomsAPI.getMessages(roomId).then((r) => setMessages(r.data)).catch(() => {});
     roomsAPI
       .getMembers(roomId)
       .then((r) => loadMembers(r.data.map((m) => ({ id: m.id, name: m.name, photo_url: m.photo_url }))))
       .catch(() => {});
-  }, [roomId, loadMembers]);
+  }, [roomId, identityReady, loadMembers]);
 
   useEffect(() => {
     if (!roomId || !settingsOpen) return;
@@ -301,6 +364,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
 
     const text = input.trim();
     setInput('');
+    setEmojiOpen(false);
     setSending(true);
     inputRef.current?.focus();
 
@@ -312,6 +376,53 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     } finally {
       setSending(false);
     }
+  };
+
+  const handleAttachClick = () => {
+    if (uploadingMedia || sending) return;
+    setMediaError('');
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !roomId || !user) return;
+    if (!file.type.startsWith('image/')) {
+      setMediaError('Only images can be attached in rooms.');
+      return;
+    }
+
+    setUploadingMedia(true);
+    setMediaError('');
+    setEmojiOpen(false);
+    try {
+      const res = await roomsAPI.sendMedia(roomId, file);
+      setMessages((prev) => [...prev, res.data]);
+      setChatOpen(true);
+    } catch (err: unknown) {
+      const code = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setMediaError(code || 'Failed to send file');
+    } finally {
+      setUploadingMedia(false);
+    }
+  };
+
+  const insertEmoji = (emoji: string) => {
+    const el = inputRef.current;
+    if (!el) {
+      setInput((prev) => prev + emoji);
+      return;
+    }
+    const start = el.selectionStart ?? input.length;
+    const end = el.selectionEnd ?? input.length;
+    const next = `${input.slice(0, start)}${emoji}${input.slice(end)}`;
+    setInput(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      const caret = start + emoji.length;
+      el.setSelectionRange(caret, caret);
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -364,6 +475,71 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   );
 
   // ── Render ────────────────────────────────────────────────────────────────
+
+  if (loadingRoom) {
+    return (
+      <div
+        className={embedded ? 'flex h-full min-h-0 flex-col items-center justify-center' : 'fixed inset-0 flex flex-col items-center justify-center'}
+        style={{ background: 'var(--bg-primary)' }}
+      >
+        <PulseRing size={32} label="Loading room" />
+      </div>
+    );
+  }
+
+  if (joinError) {
+    return (
+      <div
+        className={embedded ? 'flex h-full min-h-0 flex-col' : 'fixed inset-0 flex flex-col'}
+        style={{ background: 'var(--bg-primary)' }}
+      >
+        <header className="flex shrink-0 items-center gap-2 border-b border-[var(--border-default)] px-3 py-3">
+          <MobileBackButton fallback="/rooms" onClick={() => navigate('/rooms')} className="-ml-1" />
+          <p className="flex-1 truncate text-sm font-semibold text-[var(--cream)]">Group</p>
+        </header>
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+          <p className="text-sm text-[var(--cream)]">{joinError}</p>
+          <button
+            type="button"
+            onClick={() => navigate('/rooms')}
+            className="rounded-xl bg-[var(--copper)] px-4 py-2 text-sm font-bold text-[#1A0E03]"
+          >
+            Back to rooms
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!identityReady && room) {
+    return (
+      <div
+        className={embedded ? 'flex h-full min-h-0 flex-col' : 'fixed inset-0 flex flex-col'}
+        style={{
+          background: 'var(--bg-primary)',
+          paddingTop: embedded ? undefined : 'env(safe-area-inset-top, 0px)',
+        }}
+      >
+        <RoomTempIdentityGate
+          roomId={roomId!}
+          roomName={room.name}
+          roomDescription={room.description}
+          activeCount={room.member_count}
+          roomTheme={room.name}
+          onReady={async ({ displayName, photoUrl: gatePhotoUrl, saveName, savePhoto }) => {
+            await roomsAPI.setTempIdentity(roomId!, {
+              display_name: displayName,
+              photo_url: gatePhotoUrl ?? null,
+              save_name: saveName,
+              save_photo: savePhoto,
+            });
+            setIdentityReady(true);
+          }}
+          onCancel={() => navigate('/rooms')}
+        />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -496,14 +672,26 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
               <div className="space-y-1">
                 {members.map((member) => (
                   <div key={member.id} className="flex items-center gap-2">
-                    <span className="flex-1 text-sm truncate" style={{ color: 'var(--cream)' }}>
-                      {member.name}
-                      {member.role === 'owner' ? (
-                        <span className="ml-1 text-[10px]" style={{ color: '#C4832A' }}>
-                          · owner
-                        </span>
-                      ) : null}
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => navigate(profilePathForUser(member.id, user?.id))}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      data-testid={`room-member-${member.id}`}
+                    >
+                      <span className="flex-1 text-sm truncate" style={{ color: 'var(--cream)' }}>
+                        {member.name}
+                        {member.is_verified ? (
+                          <span className="ml-1 text-[10px]" style={{ color: '#8FC773' }} title="Adult assurance">
+                            · verified
+                          </span>
+                        ) : null}
+                        {member.role === 'owner' ? (
+                          <span className="ml-1 text-[10px]" style={{ color: '#C4832A' }}>
+                            · owner
+                          </span>
+                        ) : null}
+                      </span>
+                    </button>
                     {member.id !== user?.id && (
                       <ChatSafetyMenu
                         peerId={member.id}
@@ -657,17 +845,23 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                 {!isMine && (
                   <div className="w-8 flex-shrink-0 mr-2 flex items-end mb-1">
                     {showTail && (
-                      <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                        style={{
-                          background: `${color}22`,
-                          border: `1px solid ${color}44`,
-                          color,
-                          flexShrink: 0,
-                        }}
+                      <ProfilePhotoLink
+                        userId={msg.sender_id}
+                        name={msg.sender_name}
+                        data-testid={`room-msg-avatar-${msg.sender_id}`}
                       >
-                        {initials(msg.sender_name)}
-                      </div>
+                        <div
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                          style={{
+                            background: `${color}22`,
+                            border: `1px solid ${color}44`,
+                            color,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {initials(msg.sender_name)}
+                        </div>
+                      </ProfilePhotoLink>
                     )}
                   </div>
                 )}
@@ -707,7 +901,25 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                           }
                     }
                   >
-                    {msg.message}
+                    {(() => {
+                      const image = parseRoomImageMessage(msg.message);
+                      if (image) {
+                        const src = getPhotoUrl(image.url);
+                        return (
+                          <div className="space-y-2" data-testid="room-image-message">
+                            {src ? (
+                              <img
+                                src={src}
+                                alt={image.caption || 'Attached image'}
+                                className="max-h-56 max-w-full rounded-xl object-cover"
+                              />
+                            ) : null}
+                            {image.caption ? <p>{image.caption}</p> : null}
+                          </div>
+                        );
+                      }
+                      return msg.message;
+                    })()}
                   </div>
                   {showTail && (
                     <span className="text-[10px] mt-1 px-1" style={{ color: '#6B5035' }}>
@@ -744,17 +956,36 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       <div
         className="flex-shrink-0 border-t border-[var(--border-default)] px-4 py-3 bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl"
       >
-        <form onSubmit={handleSend} className="flex items-center gap-2">
+        {mediaError ? (
+          <p className="mb-2 text-xs text-red-400" role="alert" data-testid="room-media-error">
+            {mediaError}
+          </p>
+        ) : null}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          aria-label="Choose from gallery"
+          onChange={(e) => void handleFileChange(e)}
+        />
+        <form onSubmit={handleSend} className="relative flex items-center gap-2">
           {/* Attachment icon */}
           <button
             type="button"
             aria-label="Attach file"
-            className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150 hover:bg-[var(--border-default)]/50 active:scale-95"
+            onClick={handleAttachClick}
+            disabled={uploadingMedia || sending}
+            className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150 hover:bg-[var(--border-default)]/50 active:scale-95 disabled:opacity-40"
             style={{ color: '#6B5035' }}
             onMouseEnter={(e) => (e.currentTarget.style.color = '#A89070')}
             onMouseLeave={(e) => (e.currentTarget.style.color = '#6B5035')}
           >
-            <AttachIcon className="w-5 h-5" />
+            {uploadingMedia ? (
+              <PulseRing size={16} label="Uploading" />
+            ) : (
+              <AttachIcon className="w-5 h-5" />
+            )}
           </button>
 
           {/* Text input */}
@@ -787,10 +1018,16 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           <button
             type="button"
             aria-label="Emoji"
+            aria-expanded={emojiOpen}
+            onClick={() => setEmojiOpen((v) => !v)}
             className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150 hover:bg-[var(--border-default)]/50 active:scale-95"
-            style={{ color: '#6B5035' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#A89070')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#6B5035')}
+            style={{ color: emojiOpen ? '#C4832A' : '#6B5035' }}
+            onMouseEnter={(e) => {
+              if (!emojiOpen) e.currentTarget.style.color = '#A89070';
+            }}
+            onMouseLeave={(e) => {
+              if (!emojiOpen) e.currentTarget.style.color = '#6B5035';
+            }}
           >
             <EmojiIcon className="w-5 h-5" />
           </button>
@@ -798,7 +1035,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           {/* Send button */}
           <button
             type="submit"
-            disabled={!input.trim() || sending}
+            disabled={!input.trim() || sending || uploadingMedia}
             aria-label="Send message"
             className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
             style={{
@@ -812,6 +1049,28 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
               <SendIcon className="w-4 h-4 text-white" />
             )}
           </button>
+
+          {emojiOpen ? (
+            <div
+              data-testid="room-emoji-picker"
+              className="absolute bottom-[calc(100%+0.5rem)] right-0 z-30 grid grid-cols-6 gap-1 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-2 shadow-[0_12px_32px_rgba(0,0,0,0.45)]"
+              role="listbox"
+              aria-label="Emoji picker"
+            >
+              {ROOM_EMOJI_PICKER.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  role="option"
+                  aria-label={`Insert ${emoji}`}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-lg transition-colors hover:bg-[var(--border-default)]/50"
+                  onClick={() => insertEmoji(emoji)}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </form>
       </div>
       </div>

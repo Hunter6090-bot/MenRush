@@ -47,6 +47,24 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Tablet profile tile density (Discover/Matches/Stream) | PR `cursor/tablet-profile-tile-density-0d4b` | — | Cursor cloud — md 768+ denser grid; phone stays 2-col |
+| Verified profiles landing copy (replace Verified bodies) | PR `#120` `cursor/verified-profiles-landing-51f5` | — | Cursor cloud — ComingSoon hero + design-lock e2e + marketing rule; merged |
+| Pride parade photo wash on /pride (claim-only; no printed-code CTA on face) | branch `cursor/pride-parade-bg-26c8` | — | Cursor cloud — Owner 22 Aug 2026; full-bleed 21-pride-parade-flags + night/copper wash |
+| Pride claim-only face (Terms 7.7 grant rules; no Offer conditions; no Brighton on /pride) | PR `#129` on main | — | Cursor cloud — face = claim + Terms apply line; grant rules in Terms 7.7 |
+| Pride short face copy (/pride claim-only hero) | superseded by Terms-face lock | — | Superseded — do not ship numbered Offer conditions on face |
+| Pride redeem-only restore (printed PRIDE 3MONTH FREE at register by 5 Sep; quiet /pride note) | PR `#126` on main | — | Cursor cloud — Legal 21 Aug 2026; Claim Pride CTA only; no Path 2 card; personal codes to 31 Oct (do not name Brighton on /pride) |
+| Pride one path only (kill public PRIDE 3MONTH FREE) | superseded | — | Superseded by redeem-only restore — public code works at register again through 5 Sep |
+| Pride-flagged waitlist invite (one code = beta + booked 3mo Premium; 21–31 Aug /pride) | PR `#121` on main | claim path + public redeem | Cursor cloud — Claim Pride email invite; printed public redeem restored |
+| Pride sole public offer (`/pride`; closed `/brightonpride` → redirect) | PR `#118` (folds #119) | claim + quiet public redeem | Cursor cloud — /pride Claim CTA; printed public redeem at register; Brighton grandfather |
+| Kill homepage fade + rooms skeleton blink | PR `cursor/kill-fidgety-motion-283d` | — | Cursor cloud — remove `mr-launch-fade`; RoomList refresh in place |
+| Oct 1 2026 social calendar seed (`oct1-2026`) | PR `#112` `cursor/social-oct1-2026-calendar-5921` | — | Cursor cloud — docs + idempotent seed; draft only; do not auto-publish; merged |
+| Local Social Studio (Connections + week Approve) | PR `cursor/social-studio-local-0674` | — | Cursor cloud — `social-studio/`; keys in `.data/` only; no Railway outbound social; do not touch #97–#99 |
+| UK launch homepage (ComingSoon 1 Oct 2026) | PR `#111` `cursor/uk-launch-homepage-527c` | — | Cursor cloud — dated UK launch page; waitlist/invite/sign-in kept |
+| Discover Sign out confirm + START PULSE sheet wiring + radius label sync | PR `cursor/fix-discover-signout-pulse-55cd` | — | Cursor cloud — do not redo; confirm before logout; Pulse never silent no-op |
+| Dead pressables (Events Tickets, RoomChat attach/emoji, search label) | PR `#104` `cursor/fix-dead-pressables-8f37` | — | Cursor cloud — draft; do not merge yet |
+| Chat camera Picture|Video chooser | PR branch `cursor/chat-camera-picture-video-chooser-c19f` | — | Cursor cloud — camera tap → chooser → live capture; no hold-for-video |
+| Incoming likes ungated on Matches (no MenRush+ lock) | PR `cursor/incoming-likes-no-paywall-b610` (#103) | GET /likes/received; Matches Liked you section; e2e | Cursor cloud — do not reintroduce PremiumGate on likes |
+| Login toast dump / badge-only (#74 leftover) | PR `cursor/fix-notification-toast-backfill-7723` | — | Cursor cloud — `setFromServer` never toasts; live upsert after sync may |
 | Full profile settings (DOB, name, stats, delete) | PR branch `cursor/complete-profile-settings-6691` | — | Cursor cloud — editable post-signup parity |
 | Settings tidy + change password | pending push | Account section, POST /auth/change-password, grouped Settings UI | Grok |
 | Mutual chat gate + Match coach (likes dead-end fix) | `246aec0` — pushed + Vercel prod | Chat only on mutual; Matched vs Open chat; first-Match coach | Grok CEO cycle 18 |

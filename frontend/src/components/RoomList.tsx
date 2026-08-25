@@ -12,6 +12,10 @@ export interface RoomRow {
   last_message?: string;
   last_message_at?: string;
   unread_count?: number;
+  is_official?: boolean;
+  official_slug?: string | null;
+  user_role?: string | null;
+  is_location_based?: boolean;
 }
 
 function roomInitials(name: string): string {
@@ -49,28 +53,43 @@ export const RoomList: React.FC<RoomListProps> = ({
 }) => {
   const navigate = useNavigate();
   const socket = useSocket();
-  const [rooms, setRooms] = useState<RoomRow[]>([]);
+  const [memberRooms, setMemberRooms] = useState<RoomRow[]>([]);
+  const [officialRooms, setOfficialRooms] = useState<RoomRow[]>([]);
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
+  /** Initial fetch only — never flip back to true on refresh (avoids pulse-skeleton blink). */
+  const [initialLoading, setInitialLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
+  const [joiningId, setJoiningId] = useState<string | null>(null);
+  const [joinError, setJoinError] = useState<string | null>(null);
   const isSidebar = variant === 'sidebar';
 
   const refreshRooms = () => {
+    // Refresh in place: keep existing rows visible; do not re-enter skeleton state.
     roomsAPI
       .getRooms()
       .then((r) => {
-        // Backend returns { member_rooms, nearby_rooms } — not a bare array / rooms.
-        const data = r.data as
+        const data = r.data as unknown as
           | RoomRow[]
-          | { member_rooms?: RoomRow[]; rooms?: RoomRow[]; nearby_rooms?: RoomRow[] }
+          | {
+              member_rooms?: RoomRow[];
+              rooms?: RoomRow[];
+              nearby_rooms?: RoomRow[];
+              official_rooms?: RoomRow[];
+            }
           | undefined;
-        const list = Array.isArray(data)
-          ? data
-          : (data?.member_rooms ?? data?.rooms ?? []);
-        setRooms(list);
+        if (Array.isArray(data)) {
+          setMemberRooms(data);
+          setOfficialRooms([]);
+          return;
+        }
+        setMemberRooms(data?.member_rooms ?? data?.rooms ?? []);
+        setOfficialRooms(data?.official_rooms ?? []);
       })
-      .catch(() => setRooms([]))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        setMemberRooms([]);
+        setOfficialRooms([]);
+      })
+      .finally(() => setInitialLoading(false));
   };
 
   useEffect(() => {
@@ -85,20 +104,21 @@ export const RoomList: React.FC<RoomListProps> = ({
       created_at: string;
       sender_name?: string;
     }) => {
-      setRooms((prev) =>
-        prev.map((r) =>
-          r.id === data.room_id
+      const patch = (prev: RoomRow[]) =>
+        prev.map((room) =>
+          room.id === data.room_id
             ? {
-                ...r,
+                ...room,
                 last_message: data.sender_name
                   ? `${data.sender_name}: ${data.message}`
                   : data.message,
                 last_message_at: data.created_at,
-                unread_count: (r.unread_count ?? 0) + 1,
+                unread_count: (room.unread_count ?? 0) + 1,
               }
-            : r,
-        ),
-      );
+            : room,
+        );
+      setMemberRooms(patch);
+      setOfficialRooms(patch);
     };
     socket.on('room:message', onRoomMessage);
     return () => {
@@ -106,7 +126,39 @@ export const RoomList: React.FC<RoomListProps> = ({
     };
   }, [socket]);
 
-  const filtered = rooms.filter((r) => r.name.toLowerCase().includes(search.toLowerCase()));
+  const q = search.toLowerCase();
+  const filteredMembers = memberRooms.filter((room) => room.name.toLowerCase().includes(q));
+  const filteredOfficial = officialRooms.filter(
+    (room) =>
+      room.name.toLowerCase().includes(q) ||
+      (room.description ?? '').toLowerCase().includes(q),
+  );
+  const hasAny = filteredMembers.length > 0 || filteredOfficial.length > 0;
+
+  const openRoom = (roomId: string) => {
+    navigate(`/rooms/${roomId}`);
+  };
+
+  const joinOfficial = async (room: RoomRow, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (room.user_role) {
+      openRoom(room.id);
+      return;
+    }
+    setJoiningId(room.id);
+    setJoinError(null);
+    try {
+      await roomsAPI.joinRoom(room.id);
+      openRoom(room.id);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+        'Could not join this room.';
+      setJoinError(msg);
+    } finally {
+      setJoiningId(null);
+    }
+  };
 
   return (
     <div className={`flex min-h-0 flex-col ${className}`}>
@@ -133,7 +185,7 @@ export const RoomList: React.FC<RoomListProps> = ({
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)]">
                 Groups
               </p>
-              <p className="text-sm font-semibold text-[var(--cream)]">Your rooms</p>
+              <p className="text-sm font-semibold text-[var(--cream)]">Rooms</p>
             </div>
           )}
           <button
@@ -171,16 +223,21 @@ export const RoomList: React.FC<RoomListProps> = ({
             }}
           />
         </div>
+        {joinError && (
+          <p className="mt-2 text-xs text-red-400" role="alert">
+            {joinError}
+          </p>
+        )}
       </div>
 
       <div className={`min-h-0 flex-1 overflow-y-auto ${isSidebar ? 'px-2 pb-3' : ''}`}>
-        {loading ? (
+        {initialLoading ? (
           <div className="flex flex-col gap-2">
             {[...Array(5)].map((_, i) => (
               <div key={i} className="h-16 animate-pulse rounded-2xl" style={{ background: 'var(--bg-card)' }} />
             ))}
           </div>
-        ) : filtered.length === 0 ? (
+        ) : !hasAny ? (
           <div className="flex select-none flex-col items-center justify-center py-20">
             <div
               className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl"
@@ -206,70 +263,176 @@ export const RoomList: React.FC<RoomListProps> = ({
             )}
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
-            {filtered.map((room) => {
-              const active = activeRoomId === room.id;
-              return (
-                <button
-                  key={room.id}
-                  onClick={() => navigate(`/rooms/${room.id}`)}
-                  className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-all duration-150 active:scale-[0.98] ${
-                    isSidebar && active
-                      ? 'border border-[var(--copper)]/40 bg-[var(--copper)]/12 shadow-[inset_3px_0_0_var(--copper)]'
-                      : ''
-                  }`}
-                  style={
-                    isSidebar && active
-                      ? undefined
-                      : { background: 'var(--bg-card)', border: '1px solid var(--border-default)' }
-                  }
-                >
-                  <div
-                    className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl text-base font-bold"
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(196,131,42,0.25), rgba(139,69,19,0.15))',
-                      border: '1px solid rgba(196,131,42,0.25)',
-                      color: '#C4832A',
-                    }}
-                  >
-                    {roomInitials(room.name)}
-                  </div>
+          <div className="flex flex-col gap-5">
+            {filteredOfficial.length > 0 && (
+              <section aria-label="Official rooms">
+                <div className="mb-2 flex items-baseline justify-between gap-2 px-1">
+                  <h2 className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--cream-muted)]">
+                    Official rooms
+                  </h2>
+                  <span className="text-[10px] text-[var(--cream-muted)]">Browse & join</span>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {filteredOfficial.map((room) => {
+                    const active = activeRoomId === room.id;
+                    const joined = Boolean(room.user_role);
+                    return (
+                      <div
+                        key={room.id}
+                        data-testid={`official-room-${room.official_slug ?? room.id}`}
+                        className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left ${
+                          isSidebar && active
+                            ? 'border border-[var(--copper)]/40 bg-[var(--copper)]/12 shadow-[inset_3px_0_0_var(--copper)]'
+                            : ''
+                        }`}
+                        style={
+                          isSidebar && active
+                            ? undefined
+                            : { background: 'var(--bg-card)', border: '1px solid var(--border-default)' }
+                        }
+                      >
+                        <div
+                          className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl text-base font-bold"
+                          style={{
+                            background: 'linear-gradient(135deg, rgba(196,131,42,0.25), rgba(139,69,19,0.15))',
+                            border: '1px solid rgba(196,131,42,0.25)',
+                            color: '#C4832A',
+                          }}
+                        >
+                          {roomInitials(room.name)}
+                        </div>
 
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-semibold" style={{ color: 'var(--cream)' }}>
-                        {room.name}
-                      </span>
-                      <span className="flex-shrink-0 text-[10px]" style={{ color: '#6B5035' }}>
-                        {formatRelative(room.last_message_at)}
-                      </span>
-                    </div>
-                    <div className="mt-0.5 flex items-center justify-between gap-2">
-                      <span className="truncate text-xs" style={{ color: '#6B5035' }}>
-                        {room.last_message ?? `${room.member_count} members`}
-                      </span>
-                      <div className="flex flex-shrink-0 items-center gap-1.5">
-                        <span className="text-[10px]" style={{ color: '#6B5035' }}>
-                          <GroupIcon className="mr-0.5 inline h-3 w-3" />
-                          {room.member_count}
-                        </span>
-                        {(room.unread_count ?? 0) > 0 && (
-                          <span
-                            className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[9px] font-bold"
-                            style={{
-                              background: 'linear-gradient(135deg, #C4832A, #A45E18)',
-                              color: '#fff',
-                            }}
-                          >
-                            {(room.unread_count ?? 0) > 9 ? '9+' : room.unread_count}
-                          </span>
-                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate text-sm font-semibold" style={{ color: 'var(--cream)' }}>
+                              {room.name}
+                            </span>
+                            <span
+                              className="flex-shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide"
+                              style={{
+                                background: 'rgba(196,131,42,0.15)',
+                                color: '#C4832A',
+                              }}
+                            >
+                              Official
+                            </span>
+                          </div>
+                          <p className="mt-0.5 truncate text-xs" style={{ color: '#6B5035' }}>
+                            {room.description ?? `${room.member_count} members`}
+                          </p>
+                          <div className="mt-1.5 flex items-center justify-between gap-2">
+                            <span className="text-[10px]" style={{ color: '#6B5035' }}>
+                              <GroupIcon className="mr-0.5 inline h-3 w-3" />
+                              {room.member_count}
+                            </span>
+                            {joined ? (
+                              <button
+                                type="button"
+                                onClick={() => openRoom(room.id)}
+                                className="rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-all active:scale-95"
+                                style={{ color: 'var(--cream-muted)' }}
+                              >
+                                Open
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                data-testid={`join-official-${room.official_slug ?? room.id}`}
+                                disabled={joiningId === room.id}
+                                onClick={(e) => void joinOfficial(room, e)}
+                                className="rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all active:scale-95 disabled:opacity-70"
+                                style={{
+                                  background: 'linear-gradient(135deg, #C4832A, #A45E18)',
+                                  color: '#FFF5E6',
+                                }}
+                              >
+                                {joiningId === room.id ? 'Joining…' : 'Join'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {filteredMembers.length > 0 && (
+              <section aria-label="Your rooms">
+                <div className="mb-2 px-1">
+                  <h2 className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--cream-muted)]">
+                    Your rooms
+                  </h2>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {filteredMembers.map((room) => {
+                    const active = activeRoomId === room.id;
+                    return (
+                      <button
+                        key={room.id}
+                        type="button"
+                        onClick={() => openRoom(room.id)}
+                        className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-all duration-150 active:scale-[0.98] ${
+                          isSidebar && active
+                            ? 'border border-[var(--copper)]/40 bg-[var(--copper)]/12 shadow-[inset_3px_0_0_var(--copper)]'
+                            : ''
+                        }`}
+                        style={
+                          isSidebar && active
+                            ? undefined
+                            : { background: 'var(--bg-card)', border: '1px solid var(--border-default)' }
+                        }
+                      >
+                        <div
+                          className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl text-base font-bold"
+                          style={{
+                            background: 'linear-gradient(135deg, rgba(196,131,42,0.25), rgba(139,69,19,0.15))',
+                            border: '1px solid rgba(196,131,42,0.25)',
+                            color: '#C4832A',
+                          }}
+                        >
+                          {roomInitials(room.name)}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate text-sm font-semibold" style={{ color: 'var(--cream)' }}>
+                              {room.name}
+                            </span>
+                            <span className="flex-shrink-0 text-[10px]" style={{ color: '#6B5035' }}>
+                              {formatRelative(room.last_message_at)}
+                            </span>
+                          </div>
+                          <div className="mt-0.5 flex items-center justify-between gap-2">
+                            <span className="truncate text-xs" style={{ color: '#6B5035' }}>
+                              {room.last_message ?? `${room.member_count} members`}
+                            </span>
+                            <div className="flex flex-shrink-0 items-center gap-1.5">
+                              <span className="text-[10px]" style={{ color: '#6B5035' }}>
+                                <GroupIcon className="mr-0.5 inline h-3 w-3" />
+                                {room.member_count}
+                              </span>
+                              {(room.unread_count ?? 0) > 0 && (
+                                <span
+                                  className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[9px] font-bold"
+                                  style={{
+                                    background: 'linear-gradient(135deg, #C4832A, #A45E18)',
+                                    color: '#fff',
+                                  }}
+                                >
+                                  {(room.unread_count ?? 0) > 9 ? '9+' : room.unread_count}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
           </div>
         )}
       </div>

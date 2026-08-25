@@ -76,7 +76,7 @@ test.describe('desktop design migration @ 1440px', () => {
     await page.goto('/matches');
 
     await expect(page.getByRole('heading', { name: 'Matches' })).toBeVisible();
-    await expect(page.getByText(/Mutual likes/i)).toBeVisible();
+    await expect(page.getByText(/Who liked you and mutual matches/i)).toBeVisible();
     await expect(page.getByText('Bob').first()).toBeVisible();
 
     await assertNoHorizontalOverflow(page);
