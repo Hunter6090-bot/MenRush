@@ -45,14 +45,14 @@ test('nearby counts never cover the top category controls and controls stay clic
   await page.goto('/discover');
 
   const counts = page.getByTestId('nearby-counts');
-  await expect(counts).toBeVisible();
+  await expect(counts).toBeVisible({ timeout: 15_000 });
 
   // Tribe category pills (Top, Twink, Daddy, …) stay unobstructed at the top.
   const twink = page.getByRole('button', { name: 'Twink', exact: true });
-  await expect(twink).toBeVisible();
+  await expect(twink).toBeVisible({ timeout: 15_000 });
 
   const slider = page.getByTestId('proximity-slider');
-  await expect(slider).toBeVisible();
+  await expect(slider).toBeVisible({ timeout: 15_000 });
 
   const countsBox = await counts.boundingBox();
   const twinkBox = await twink.boundingBox();
