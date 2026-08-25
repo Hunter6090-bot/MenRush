@@ -606,6 +606,9 @@ export const eventsAPI = {
     apiClient.get<EventDTO[]>('/events/nearby', {
       params: { lat, lng, radius: radiusKm, limit },
     }),
+  /** Free venue check-in — creates/uses a Hot Spot pin that expires after 4 hours. */
+  checkIn: (id: string, anonymous = false) =>
+    apiClient.post<{ ok: boolean; spot: HotSpotDTO }>(`/events/${id}/check-in`, { anonymous }),
 };
 
 // ── Hot Spots (venue check-ins — not user Pulse boost) ───────────────────
@@ -633,6 +636,10 @@ export interface HotSpotDTO {
   live_count_exact: number;
   is_checked_in: boolean;
   my_checkin_anonymous: boolean | null;
+  /** Short-lived check-in window in hours (product default: 4). */
+  checkin_ttl_hours?: number;
+  /** True when at least one non-expired check-in is present. */
+  has_active_checkins?: boolean;
 }
 
 export const hotSpotsAPI = {

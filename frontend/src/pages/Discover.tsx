@@ -1317,6 +1317,7 @@ export const Discover = () => {
         name: spot.name,
         category_icon: spot.category_icon,
         live_count_exact: spot.live_count_exact,
+        live_count: spot.live_count,
       };
 
       if (existing) {
@@ -1326,6 +1327,7 @@ export const Discover = () => {
         if (
           prevOccupied !== nextOccupied ||
           existing.spot.live_count_exact !== spot.live_count_exact ||
+          existing.spot.live_count !== spot.live_count ||
           existing.spot.name !== spot.name ||
           existing.spot.category_icon !== spot.category_icon
         ) {
