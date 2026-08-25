@@ -2,12 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { EventDTO, eventsAPI } from '../api/client';
 import { Layout } from '../components/Layout';
-import { useLocationStore } from '../hooks/store';
+import { useAuthStore, useLocationStore } from '../hooks/store';
+import { isBetaPremiumFree } from '../lib/betaInvite';
 import { mondayFirstLeadingBlanks, MONDAY_FIRST_WEEKDAY_LABELS } from '../lib/calendarGrid';
 import { eventTicketUrl } from '../lib/eventTickets';
 import { resolveLocaleTag } from '../lib/localeUnits';
 
 const CATEGORIES = ['All', 'Nightclub', 'Drag', 'Live', 'Bar', 'Pride', 'Fetish'] as const;
+
+/** Matches backend ACTIVE_CHECKIN_TTL_HOURS — venue pins expire after this many hours. */
+const CHECKIN_TTL_HOURS = 4;
 
 function eventCategory(ev: EventDTO): string {
   const name = `${ev.name} ${ev.description ?? ''}`.toLowerCase();
@@ -22,10 +26,15 @@ function eventCategory(ev: EventDTO): string {
 export const Events = () => {
   const { lat, lng } = useLocationStore();
   const navigate = useNavigate();
+  const isPremium = useAuthStore((s) =>
+    Boolean(isBetaPremiumFree() || s.user?.is_premium || s.user?.beta_premium_included),
+  );
   const [events, setEvents] = useState<EventDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('All');
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [checkingInId, setCheckingInId] = useState<string | null>(null);
+  const [checkInNotice, setCheckInNotice] = useState('');
 
   useEffect(() => {
     if (lat == null || lng == null) {
@@ -73,18 +82,28 @@ export const Events = () => {
         <div className="mb-5 flex flex-wrap items-baseline gap-3">
           <h1 className="flex-1 text-2xl font-extrabold text-[var(--cream)]">Events across the UK</h1>
           <Link
-            to="/contact"
+            to={isPremium ? '/contact' : '/premium'}
+            data-testid="promote-event"
             className="rounded-full border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.1)] px-5 py-2.5 text-[13px] font-extrabold tracking-wide text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.2)]"
           >
-            PROMOTE YOUR EVENT
+            {isPremium ? 'PROMOTE YOUR EVENT' : 'PROMOTE YOUR EVENT · PREMIUM'}
           </Link>
         </div>
         <p className="mb-5 text-sm text-[var(--cream-muted)]">
           Gay events and venues, by what you&apos;re into.{' '}
           <Link to="/hot-spots" className="font-semibold text-[#C4832A] hover:text-[#E0A14A]">
-            Browse Hot Spots check-ins →
+            Browse Hot Spots →
           </Link>
         </p>
+        {checkInNotice ? (
+          <p
+            role="status"
+            data-testid="event-checkin-notice"
+            className="mb-4 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--cream)]"
+          >
+            {checkInNotice}
+          </p>
+        ) : null}
 
         <div className="mb-5 flex flex-wrap gap-1.5">
           {CATEGORIES.map((cat) => (
@@ -143,7 +162,7 @@ export const Events = () => {
               >
                 <p className="text-[15px] font-extrabold text-[var(--cream)]">No events in this filter</p>
                 <p className="mx-auto mt-2 max-w-sm text-[13px] text-[var(--cream-muted)]">
-                  Clear the day filter or category, or check Hot Spots for live venues.
+                  Clear the day filter or category, or check Hot Spots for venues near you.
                 </p>
                 <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
                   <button
@@ -183,7 +202,7 @@ export const Events = () => {
                       {ev.description ? (
                         <p className="text-[13px] leading-relaxed text-[var(--cream-muted)]">{ev.description}</p>
                       ) : null}
-                      <div className="mt-auto flex gap-2 pt-2">
+                      <div className="mt-auto flex flex-wrap gap-2 pt-2">
                         {ticketUrl ? (
                           <a
                             href={ticketUrl}
@@ -206,6 +225,29 @@ export const Events = () => {
                           }
                         >
                           Who&apos;s going
+                        </button>
+                        <button
+                          type="button"
+                          disabled={checkingInId === ev.id || ev.lat == null || ev.lng == null}
+                          data-testid={`event-checkin-${ev.id}`}
+                          onClick={() => {
+                            setCheckingInId(ev.id);
+                            setCheckInNotice('');
+                            void eventsAPI
+                              .checkIn(ev.id)
+                              .then(() => {
+                                setCheckInNotice(
+                                  `Checked in at ${ev.venue_name || ev.name}. Pin stays on the map for ${CHECKIN_TTL_HOURS} hours.`,
+                                );
+                              })
+                              .catch((err: { response?: { data?: { error?: string } } }) => {
+                                setCheckInNotice(err.response?.data?.error || 'Check-in failed.');
+                              })
+                              .finally(() => setCheckingInId(null));
+                          }}
+                          className="flex-1 rounded-full border border-[rgba(196,131,42,0.5)] py-2 text-[13px] font-bold text-[#C4832A] hover:bg-[rgba(196,131,42,0.12)] disabled:opacity-50"
+                        >
+                          {checkingInId === ev.id ? 'Checking in…' : 'Check in'}
                         </button>
                       </div>
                     </div>
