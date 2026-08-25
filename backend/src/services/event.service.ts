@@ -56,4 +56,21 @@ export const eventService = {
 
     return res.rows;
   },
+
+  async getEvent(eventId: string): Promise<NearbyEventRow | null> {
+    const res = await query(
+      `SELECT r.id, r.name, r.description, r.avatar_url, r.created_by,
+              r.starts_at, r.ends_at, r.venue_name, r.lat, r.lng,
+              COUNT(rm.id)::int AS member_count,
+              NULL::float AS distance_m,
+              (r.starts_at IS NOT NULL AND r.starts_at <= NOW()
+                AND (r.ends_at IS NULL OR r.ends_at > NOW())) AS is_live
+         FROM rooms r
+         LEFT JOIN room_members rm ON rm.room_id = r.id
+        WHERE r.id = $1 AND r.kind = 'event'
+        GROUP BY r.id`,
+      [eventId],
+    );
+    return (res.rows[0] as NearbyEventRow) ?? null;
+  },
 };
