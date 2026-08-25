@@ -24,6 +24,7 @@ import { profilePathForUser } from '../lib/profileLinks';
 import { ActivationBanner } from '../components/ActivationBanner';
 import { DiscoveryFilterPills } from '../components/DiscoveryFilterPills';
 import { DiscoveryFilterPanel } from '../components/DiscoveryFilterPanel';
+import { MoreFiltersDrawer } from '../components/MoreFiltersDrawer';
 import { NearbyProfileGrid } from '../components/NearbyProfileGrid';
 import { CommunityFeed } from '../components/CommunityFeed';
 import { DiscoveryShellPublisher } from '../context/DiscoveryShellContext';
@@ -1204,10 +1205,11 @@ export const Discover = () => {
     if (!map || !mapLoaded) return;
 
     const visibleIds = new Set<string>();
+    const mapUsers = applyDiscoveryClientFilters(users, discoveryFilters);
 
     // People layer off: leave visibleIds empty so the cleanup loop below removes every
     // existing marker. Self marker is independent (selfMarkerRef) and stays regardless.
-    if (peopleLayerOn) users.forEach((user) => {
+    if (peopleLayerOn) mapUsers.forEach((user) => {
       if (user.lat == null || user.lng == null) return;
       visibleIds.add(user.id);
       const isPulsing = isUserPulsing(user);
@@ -1273,7 +1275,7 @@ export const Discover = () => {
       setTimeout(() => root.unmount(), 0);
       markersRef.current.delete(userId);
     });
-  }, [users, mapLoaded, peopleLayerOn]);
+  }, [users, mapLoaded, peopleLayerOn, discoveryFilters, navigate]);
 
   // Hot Spot pins (dim when empty, solid when check-ins present) — hidden entirely
   // when the Hot Spots layer is off, same visibleIds-empty-set pattern as People above.
@@ -1411,8 +1413,6 @@ export const Discover = () => {
     // mapStyleVersion: setStyle() (theme swap) wipes this GL source/layer — re-add it.
   }, [mapLoaded, lat, lng, radius, mapStyleVersion]);
 
-  const onlineCount = users.filter((u) => u.online).length;
-  const nearbyCount = users.length;
   const sortedUsers = [...users].sort((a, b) => {
     const ap = isUserPulsing(a) ? 1 : 0;
     const bp = isUserPulsing(b) ? 1 : 0;
@@ -1421,6 +1421,8 @@ export const Discover = () => {
   });
 
   const displayUsers = applyDiscoveryClientFilters(sortedUsers, discoveryFilters);
+  const onlineCount = displayUsers.filter((u) => u.online).length;
+  const nearbyCount = displayUsers.length;
 
   // Expanded mobile map must be near-fullscreen — dismissible banners above it push
   // the map past the viewport, which reintroduces page-level scroll that fights the
@@ -1661,6 +1663,9 @@ export const Discover = () => {
             <div className="mt-3 space-y-3" data-testid="discover-mood-strip">
               <div className={moodSaving ? 'pointer-events-none opacity-60' : ''}>
                 <MoodPicker current={mood} onSelect={handleMoodSelect} />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <MoreFiltersDrawer value={discoveryFilters} onChange={handleDiscoveryFiltersChange} />
               </div>
               <DiscoveryFilterPanel
                 variant="inline"
@@ -1950,6 +1955,9 @@ export const Discover = () => {
                     <MoodPicker current={mood} onSelect={handleMoodSelect} />
                   </div>
                 ) : null}
+                <div className="flex flex-wrap items-center gap-2">
+                  <MoreFiltersDrawer value={discoveryFilters} onChange={handleDiscoveryFiltersChange} />
+                </div>
                 <DiscoveryFilterPanel
                   variant="inline"
                   value={discoveryFilters}

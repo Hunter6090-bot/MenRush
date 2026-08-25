@@ -1,8 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   AGE_PRESETS,
-  DISCOVERY_FILTER_CATEGORIES,
   MOOD_FILTER_OPTIONS,
+  PRIMARY_DISCOVERY_FILTER_CATEGORIES,
   STATUS_FILTER_OPTIONS,
   countActiveDiscoveryFilters,
   type DiscoveryFilterState,
@@ -27,7 +27,7 @@ export function DiscoveryFilterPanel({
   className = '',
 }: DiscoveryFilterPanelProps) {
   const [open, setOpen] = useState(variant === 'inline');
-  const [activeCategory, setActiveCategory] = useState<string>(DISCOVERY_FILTER_CATEGORIES[0].id);
+  const [activeCategory, setActiveCategory] = useState<string>(PRIMARY_DISCOVERY_FILTER_CATEGORIES[0].id);
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const activeCount = countActiveDiscoveryFilters(value);
@@ -71,7 +71,7 @@ export function DiscoveryFilterPanel({
     });
   };
 
-  const category = DISCOVERY_FILTER_CATEGORIES.find((c) => c.id === activeCategory);
+  const category = PRIMARY_DISCOVERY_FILTER_CATEGORIES.find((c) => c.id === activeCategory);
 
   return (
     <div ref={rootRef} className={`relative ${className}`} data-testid="discovery-filter-panel">
@@ -120,7 +120,7 @@ export function DiscoveryFilterPanel({
           }
         >
           <div className="flex gap-1 overflow-x-auto border-b border-[var(--border-default)] px-2 py-2">
-            {DISCOVERY_FILTER_CATEGORIES.map((cat) => {
+            {PRIMARY_DISCOVERY_FILTER_CATEGORIES.map((cat) => {
               const selectedInCategory =
                 cat.id === 'looking_for'
                   ? value.intent !== 'All'
