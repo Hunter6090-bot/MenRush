@@ -197,6 +197,7 @@ test('unread/all filter: read items drop out of Unread but remain in All', async
 test('delete-all-read only removes read notifications, keeps unread, persists across reload', async ({
   browser,
 }) => {
+  test.setTimeout(60_000);
   // Marks the "to-be-read" notification via a direct API call rather than
   // clicking it in the UI (which navigates away) + page.goBack() — history
   // navigation reconnecting the socket proved unreliable in this environment

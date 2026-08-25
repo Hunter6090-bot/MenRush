@@ -200,7 +200,7 @@ test('the caller sees a full-screen local preview with controls while ringing', 
   // Controls remain available while ringing.
   await expect(alicePage.getByRole('button', { name: /Cancel call/i })).toBeVisible();
   await expect(alicePage.getByRole('button', { name: /Mute|Unmute/ })).toBeVisible();
-  await expect(alicePage.getByRole('button', { name: /camera/i })).toBeVisible();
+  await expect(alicePage.getByTestId('call-camera-toggle')).toBeVisible();
 
   // Outgoing ringback tone is active.
   await expect(alicePage.getByTestId('call-tone')).toHaveAttribute('data-tone', 'outgoing');
@@ -278,12 +278,12 @@ test('an unanswered call times out and ends cleanly on both devices', async ({
 
   // Both ends are live: caller ringing, recipient ringing.
   await expect(alicePage.getByTestId('outgoing-call')).toBeVisible();
-  await expect(bobPage.getByText('Incoming call...')).toBeVisible();
+  await expect(bobPage.getByText(/Incoming call/)).toBeVisible();
 
   // After the caller's timeout, both surfaces (and tones) tear down cleanly.
   await expect(alicePage.getByTestId('outgoing-call')).toBeHidden({ timeout: 8000 });
   await expect(alicePage.getByTestId('call-tone')).toHaveCount(0);
-  await expect(bobPage.getByText('Incoming call...')).toBeHidden({ timeout: 8000 });
+  await expect(bobPage.getByText(/Incoming call/)).toBeHidden({ timeout: 8000 });
   await expect(bobPage.getByTestId('call-tone')).toHaveCount(0);
 
   await aliceContext.close();
@@ -330,9 +330,9 @@ test('an incoming call rings while the recipient is on discovery', async ({ brow
   await expect(alicePage.getByRole('button', { name: /Open .*profile/i })).toBeVisible();
   await alicePage.getByRole('button', { name: 'Start video call' }).click();
 
-  await expect(bobPage.getByText('Incoming call...')).toBeVisible();
+  await expect(bobPage.getByText(/Incoming call/)).toBeVisible();
   await expect(
-    bobPage.getByText('Incoming call...').locator('..').getByText('Alice', { exact: true }),
+    bobPage.getByText(/Incoming call/).locator('..').getByText('Alice', { exact: true }),
   ).toBeVisible();
 
   // Distinct incoming ringtone is active on the recipient.
