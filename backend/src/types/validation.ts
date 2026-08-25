@@ -209,6 +209,29 @@ export const GhostSchema = z.object({
   is_ghost: z.boolean(),
 });
 
+export const CommunityPostSchema = z.object({
+  body: z.string().trim().min(1, 'Write something').max(280, 'Keep it to 280 characters'),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
+});
+
+export const SentinelReportSchema = z.object({
+  reason: z.enum([
+    'spam',
+    'harassment',
+    'fake_profile',
+    'inappropriate_content',
+    'underage',
+    'panic',
+    'other',
+  ]),
+  details: z.string().max(1000).optional(),
+  reported_id: z.string().uuid().optional(),
+  conversation_id: z.string().max(80).optional(),
+  room_id: z.string().uuid().optional(),
+  source: z.enum(['profile', 'chat', 'room', 'panic']).optional(),
+});
+
 export const LiveLocationSharingSchema = z.object({
   enabled: z.boolean(),
 });
@@ -244,6 +267,8 @@ export type ContactFormInput = z.infer<typeof ContactFormSchema>;
 export type Mood = (typeof MOOD_VALUES)[number];
 export type MoodInput = z.infer<typeof MoodSchema>;
 export type GhostInput = z.infer<typeof GhostSchema>;
+export type CommunityPostInput = z.infer<typeof CommunityPostSchema>;
+export type SentinelReportInput = z.infer<typeof SentinelReportSchema>;
 export type CreateAlbumInput = z.infer<typeof CreateAlbumSchema>;
 export type AddAlbumPhotoInput = z.infer<typeof AddAlbumPhotoSchema>;
 export type GrantAlbumInput = z.infer<typeof GrantAlbumSchema>;

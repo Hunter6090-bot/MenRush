@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { albumsAPI, AlbumDTO, AlbumPhotoDTO, usersAPI } from '../api/client';
 import { getPhotoUrl } from './UserAvatar';
+import { DiscreetMedia } from './DiscreetMedia';
 
 type SheetMode = 'owner' | 'viewer';
 
@@ -44,6 +45,8 @@ export function AlbumViewerSheet({
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   const isPrivateToViewer = mode === 'viewer' && album.is_locked && !album.unlocked;
+  const discreetBlur = photos.some((photo) => (photo as { discreet_blur?: boolean }).discreet_blur)
+    || (album as { discreet_blur?: boolean }).discreet_blur;
 
   useEffect(() => {
     if (isPrivateToViewer) {
@@ -218,12 +221,14 @@ export function AlbumViewerSheet({
                       onClick={() => setLightboxUrl(getPhotoUrl(photo.photo_url) ?? null)}
                       className="h-full w-full active:scale-[0.98] transition-transform"
                     >
-                      <img
-                        src={getPhotoUrl(photo.photo_url)}
-                        alt=""
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                      />
+                      <DiscreetMedia blur={!!(photo as { discreet_blur?: boolean }).discreet_blur || !!discreetBlur} className="h-full w-full">
+                        <img
+                          src={getPhotoUrl(photo.photo_url)}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      </DiscreetMedia>
                     </button>
                     {mode === 'owner' && (
                       <button

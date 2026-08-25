@@ -1,4 +1,6 @@
 import { query } from '../db';
+import { discreetBlurForViewer } from '../lib/discreet';
+import { premiumService } from './premium.service';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
@@ -87,8 +89,18 @@ function scrubExpired<T extends ConversationRow>(row: T): T {
   };
 }
 
-function presentMessage<T extends ConversationRow>(row: T, viewerId: string): T {
+function presentMessage<T extends ConversationRow>(
+  row: T,
+  viewerId: string,
+  viewerIsPremium = false,
+): T & { discreet_blur: boolean; viewer_is_premium: boolean } {
   const scrubbed = scrubExpired(row);
+  const isVisual = scrubbed.media_type === 'image' || scrubbed.media_type === 'video';
+  const discreet_blur = discreetBlurForViewer({
+    viewerIsPremium,
+    isOwn: scrubbed.sender_id === viewerId,
+    hasVisualMedia: Boolean(isVisual && scrubbed.media_url),
+  });
   if (scrubbed.media_url) {
     const mediaPath = scrubbed.media_url.split('?', 1)[0];
     return {
@@ -96,9 +108,17 @@ function presentMessage<T extends ConversationRow>(row: T, viewerId: string): T 
       media_url: signedMediaUrl(mediaPath, viewerId),
       media_storage_key: undefined,
       media_mime_type: undefined,
+      discreet_blur,
+      viewer_is_premium: viewerIsPremium,
     };
   }
-  return { ...scrubbed, media_storage_key: undefined, media_mime_type: undefined };
+  return {
+    ...scrubbed,
+    media_storage_key: undefined,
+    media_mime_type: undefined,
+    discreet_blur,
+    viewer_is_premium: viewerIsPremium,
+  };
 }
 
 async function attachSenderName<T extends { sender_id: string }>(
@@ -110,8 +130,8 @@ async function attachSenderName<T extends { sender_id: string }>(
 }
 
 export const messageService = {
-  forViewer<T extends ConversationRow>(message: T, viewerId: string): T {
-    return presentMessage(message, viewerId);
+  forViewer<T extends ConversationRow>(message: T, viewerId: string, viewerIsPremium = false) {
+    return presentMessage(message, viewerId, viewerIsPremium);
   },
 
   async sendMessage(senderId: string, receiverId: string, message: string) {
@@ -332,7 +352,10 @@ export const messageService = {
       [userId, otherId],
     );
 
-    return result.rows.reverse().map((r) => presentMessage(r as ConversationRow, userId));
+    const viewerIsPremium = await premiumService.isPremium(userId);
+    return result.rows
+      .reverse()
+      .map((r) => presentMessage(r as ConversationRow, userId, viewerIsPremium));
   },
 
   async getUnreadSummary(userId: string) {

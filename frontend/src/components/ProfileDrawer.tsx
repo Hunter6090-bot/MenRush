@@ -9,6 +9,7 @@ import { IconPulse, IconClose } from "./icons";
 import { StatusBadge } from "./StatusBadge";
 import { DistancePill } from "./DistancePill";
 import { VerifiedBadge } from "./VerifiedBadge";
+import { DiscreetMedia } from "./DiscreetMedia";
 import { ChatSafetyMenu } from "./ChatSafetyMenu";
 import { getDistanceLabel, isUserPulsing } from "../lib/discovery";
 import { profilePathForUser } from "../lib/profileLinks";
@@ -240,14 +241,18 @@ export function ProfileDrawer({
           }}
         >
           {cover ? (
-            <img src={cover} alt="" className="w-full h-full object-cover" onError={onCoverError} />
+            <DiscreetMedia blur={!!user.discreet_blur} className="h-full w-full">
+              <img src={cover} alt="" className="w-full h-full object-cover" onError={onCoverError} />
+            </DiscreetMedia>
           ) : photo ? (
-            <img
-              src={photo}
-              alt={user.name}
-              className="w-full h-full object-cover"
-              onError={onPhotoError}
-            />
+            <DiscreetMedia blur={!!user.discreet_blur} className="h-full w-full">
+              <img
+                src={photo}
+                alt={user.name}
+                className="w-full h-full object-cover"
+                onError={onPhotoError}
+              />
+            </DiscreetMedia>
           ) : (
             <div className="w-full h-full flex items-center justify-center">
               <SilhouetteAvatar size={180} variant="card" />
@@ -288,7 +293,9 @@ export function ProfileDrawer({
                   }}
                 >
                   {photo ? (
-                    <img src={photo} alt="" className="w-full h-full object-cover" onError={onPhotoError} />
+                    <DiscreetMedia blur={!!user.discreet_blur} className="h-full w-full">
+                      <img src={photo} alt="" className="w-full h-full object-cover" onError={onPhotoError} />
+                    </DiscreetMedia>
                   ) : (
                     <SilhouetteAvatar size={56} variant="card" />
                   )}

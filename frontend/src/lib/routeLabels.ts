@@ -2,7 +2,8 @@
 export const ROUTE_LABELS = {
   nearby: 'Nearby',
   map: 'Map',
-  liveProfileList: 'Live profile list',
+  liveProfileList: 'Community',
+  community: 'Community',
   matches: 'Matches',
   messages: 'Messages',
   alerts: 'Alerts',

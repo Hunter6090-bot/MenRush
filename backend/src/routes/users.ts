@@ -386,8 +386,19 @@ router.get('/blocks', async (req: AuthRequest, res: Response) => {
 });
 
 const ReportSchema = z.object({
-  reason: z.enum(['spam', 'harassment', 'fake_profile', 'inappropriate_content', 'underage', 'other']),
+  reason: z.enum([
+    'spam',
+    'harassment',
+    'fake_profile',
+    'inappropriate_content',
+    'underage',
+    'panic',
+    'other',
+  ]),
   details: z.string().max(1000).optional(),
+  conversation_id: z.string().max(80).optional(),
+  room_id: z.string().uuid().optional(),
+  source: z.enum(['profile', 'chat', 'room', 'panic']).optional(),
 });
 
 router.post('/report/:id', async (req: AuthRequest, res: Response) => {
@@ -404,8 +415,44 @@ router.post('/report/:id', async (req: AuthRequest, res: Response) => {
       req.params.id,
       parsed.data.reason,
       parsed.data.details,
+      {
+        conversationId: parsed.data.conversation_id,
+        roomId: parsed.data.room_id,
+        source: parsed.data.source ?? 'profile',
+      },
     );
-    res.json({ reported: true, id: report.id });
+    res.json({ reported: true, id: report.id, sentinel_id: report.sentinel_id });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/sentinel', async (req: AuthRequest, res: Response) => {
+  const parsed = ReportSchema.extend({
+    reported_id: z.string().uuid().optional(),
+  }).safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.errors[0].message });
+  }
+  if (parsed.data.reported_id && parsed.data.reported_id === req.userId) {
+    return res.status(400).json({ error: 'Cannot report yourself.' });
+  }
+  if (!parsed.data.reported_id && !parsed.data.room_id && !parsed.data.conversation_id) {
+    return res.status(400).json({ error: 'Need a person, chat, or room to report.' });
+  }
+  try {
+    const report = await userService.reportUser(
+      req.userId!,
+      parsed.data.reported_id ?? null,
+      parsed.data.reason,
+      parsed.data.details,
+      {
+        conversationId: parsed.data.conversation_id,
+        roomId: parsed.data.room_id,
+        source: parsed.data.source ?? 'panic',
+      },
+    );
+    res.json({ reported: true, id: report.id, sentinel_id: report.sentinel_id, queue: 'SENTINEL' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

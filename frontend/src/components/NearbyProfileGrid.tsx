@@ -1,6 +1,7 @@
 import type { NearbyUser } from './ProfileCard';
 import { SilhouetteAvatar } from './SilhouetteAvatar';
 import { VerifiedBadge } from './VerifiedBadge';
+import { DiscreetMedia } from './DiscreetMedia';
 import { useResolvingPhotoSrc } from './UserAvatar';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { formatActiveStatus, formatDistanceMiles, getTribeTag } from '../lib/discoveryFormat';
@@ -242,7 +243,7 @@ export function NearbyProfileGrid({
 function GridCardFace({ user, meta }: { user: NearbyUser; meta: string }) {
   return (
     <div className="relative aspect-square w-full bg-[var(--bg-elevated)]">
-      <GridPhoto name={user.name} photoUrl={user.photo_url} age={user.age} />
+      <GridPhoto name={user.name} photoUrl={user.photo_url} age={user.age} blur={!!user.discreet_blur} />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent px-2.5 pb-2 pt-10">
         <div className="flex items-center gap-1">
           <span
@@ -266,10 +267,12 @@ function GridPhoto({
   name,
   age,
   photoUrl,
+  blur,
 }: {
   name: string;
   photoUrl?: string;
   age?: number;
+  blur?: boolean;
 }) {
   const { src, onError } = useResolvingPhotoSrc(photoUrl, age);
 
@@ -282,12 +285,14 @@ function GridPhoto({
   }
 
   return (
-    <img
-      src={src}
-      alt={name}
-      className="h-full w-full object-cover"
-      loading="lazy"
-      onError={onError}
-    />
+    <DiscreetMedia blur={!!blur} className="h-full w-full">
+      <img
+        src={src}
+        alt={name}
+        className="h-full w-full object-cover"
+        loading="lazy"
+        onError={onError}
+      />
+    </DiscreetMedia>
   );
 }

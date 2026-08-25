@@ -27,6 +27,7 @@ export type HotSpotRow = {
   live_count_exact: number;
   is_checked_in: boolean;
   my_checkin_anonymous: boolean | null;
+  checkin_ttl_hours: number;
 };
 
 function formatLiveCount(exact: number, isPremium: boolean): number | string {
@@ -54,6 +55,7 @@ function mapSpotRow(row: Record<string, unknown>, isPremium: boolean): HotSpotRo
     is_checked_in: Boolean(row.is_checked_in),
     my_checkin_anonymous:
       row.my_checkin_anonymous == null ? null : Boolean(row.my_checkin_anonymous),
+    checkin_ttl_hours: ACTIVE_CHECKIN_TTL_HOURS,
   };
 }
 
@@ -284,4 +286,72 @@ export const hotSpotsService = {
     );
     return res.rows[0] ?? null;
   },
+
+  /** Find or create a nightlife pin for an event venue, then check in (4h TTL). */
+  async checkInAtEvent(
+    userId: string,
+    event: {
+      id: string;
+      name: string;
+      venue_name: string | null;
+      lat: number | null;
+      lng: number | null;
+    },
+    anonymous = false,
+  ) {
+    if (event.lat == null || event.lng == null || !Number.isFinite(event.lat) || !Number.isFinite(event.lng)) {
+      throw new Error('Event has no venue location');
+    }
+
+    const existing = await query(`SELECT id FROM hot_spots WHERE event_id = $1 AND is_active = TRUE`, [
+      event.id,
+    ]);
+    let spotId = existing.rows[0]?.id as string | undefined;
+
+    if (!spotId) {
+      const nearby = await query(
+        `SELECT id FROM hot_spots
+          WHERE is_active = TRUE
+            AND ST_DWithin(
+              ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography,
+              ST_MakePoint($2, $1)::geography,
+              80
+            )
+          ORDER BY name = $3 DESC
+          LIMIT 1`,
+        [event.lat, event.lng, event.venue_name ?? event.name],
+      );
+      spotId = nearby.rows[0]?.id as string | undefined;
+    }
+
+    if (!spotId) {
+      const cat = await query(`SELECT id FROM hot_spot_categories WHERE slug = 'nightlife'`);
+      const categoryId = cat.rows[0]?.id;
+      if (!categoryId) throw new Error('Nightlife category missing');
+      const created = await query(
+        `INSERT INTO hot_spots (category_id, name, city, description, latitude, longitude, is_user_generated, event_id)
+         VALUES ($1, $2, NULL, $3, $4, $5, TRUE, $6)
+         RETURNING id`,
+        [
+          categoryId,
+          (event.venue_name || event.name).slice(0, 120),
+          `Live check-in for ${event.name}`.slice(0, 240),
+          event.lat,
+          event.lng,
+          event.id,
+        ],
+      );
+      spotId = created.rows[0].id as string;
+    } else {
+      await query(`UPDATE hot_spots SET event_id = COALESCE(event_id, $2) WHERE id = $1`, [
+        spotId,
+        event.id,
+      ]);
+    }
+
+    const spot = await this.checkIn(userId, spotId, anonymous);
+    return { ...spot, checkin_ttl_hours: ACTIVE_CHECKIN_TTL_HOURS };
+  },
 };
+
+export { ACTIVE_CHECKIN_TTL_HOURS };

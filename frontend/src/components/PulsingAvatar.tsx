@@ -17,7 +17,7 @@ export function PulsingAvatar({
   className = "",
   isVerified = false,
 }: PulsingAvatarProps) {
-  const badgeSize = Math.max(14, Math.round(size * 0.32));
+  const badgeSize = Math.max(16, Math.round(size * 0.38));
   const isLive = isPulsing && intensity === "live";
   const ringInset = Math.round(size * -0.35);
 
@@ -101,19 +101,20 @@ export function PulsingAvatar({
 
       {isVerified && (
         <span
-          aria-label="ID verified"
-          title="Government-ID verified"
+          aria-label="Identity checked"
+          title="Identity checked"
+          data-testid="map-identity-badge"
           className="absolute z-20 rounded-full flex items-center justify-center"
           style={{
             width: badgeSize,
             height: badgeSize,
-            right: 0,
-            bottom: 0,
+            right: -2,
+            bottom: -2,
             background:
-              "linear-gradient(135deg, #D4943B 0%, #C4832A 50%, #A45E18 100%)",
-            border: "1.5px solid var(--bg-primary)",
+              "linear-gradient(135deg, #E0A14A 0%, #C4832A 50%, #A45E18 100%)",
+            border: "2px solid var(--bg-primary)",
             boxShadow:
-              "0 1px 3px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,225,180,0.45), inset 0 -1px 0 rgba(0,0,0,0.35)",
+              "0 0 0 2px rgba(196,131,42,0.45), 0 2px 8px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,225,180,0.55)",
           }}
         >
           <svg
