@@ -18,6 +18,7 @@
     "notify:id-verification-paused": "ts-node src/scripts/send-id-verification-paused.ts",
     "verification:purge-sensitive": "ts-node src/scripts/purge-verification-files.ts",
     "test:security": "ts-node scripts/security-checks.ts",
+    "test:discreet-media-blur": "ts-node scripts/discreet-media-blur-checks.ts",
     "test:pride-one-path": "ts-node scripts/pride-one-path-checks.ts",
     "test:official-rooms": "ts-node scripts/official-rooms-checks.ts",
     "test:push": "ts-node scripts/test-push.ts",

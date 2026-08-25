@@ -244,8 +244,8 @@ async function recordMissedCall(callerId: string, calleeId: string) {
   try {
     const callerName = (await userService.getDisplayName(callerId)) ?? 'Someone';
     const row = await messageService.recordMissedCall(callerId, calleeId);
-    const forCallee = messageService.forViewer(row, calleeId);
-    const forCaller = messageService.forViewer(row, callerId);
+    const forCallee = await messageService.forViewer(row, calleeId);
+    const forCaller = await messageService.forViewer(row, callerId);
     io.to(`user:${calleeId}`).emit('message', forCallee);
     io.to(`user:${callerId}`).emit('message', forCaller);
 

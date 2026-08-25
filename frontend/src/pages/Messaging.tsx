@@ -24,6 +24,7 @@ import { openMapsDirections } from '../lib/maps';
 import { parseLocationPayload } from '../lib/locationMessage';
 import { profilePathForUser } from '../lib/profileLinks';
 import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
+import { SoftBlurMedia, shouldBlurMedia } from '../components/SoftBlurMedia';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
 interface Message extends Partial<MessageDTO> {
@@ -42,6 +43,7 @@ interface Message extends Partial<MessageDTO> {
   view_count?: number;
   remaining_views?: number | null;
   expired?: boolean;
+  media_clear?: boolean;
 }
 
 /** Sender's chosen viewing rule for an outgoing image. */
@@ -1708,6 +1710,7 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
   // Permanent image → inline, always available.
   if (!isDisappearing) {
     if (!url) return null;
+    const blurred = shouldBlurMedia(msg.media_clear);
     return (
       <div className="flex flex-col items-end gap-1">
         <div
@@ -1720,12 +1723,14 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
             boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
           }}
         >
-          <img
-            src={url}
-            alt={msg.message || 'photo'}
-            className="block max-w-[260px] max-h-[340px] object-cover cursor-zoom-in"
-            onClick={() => onOpen(msg)}
-          />
+          <SoftBlurMedia blurred={blurred}>
+            <img
+              src={url}
+              alt={msg.message || 'photo'}
+              className="block max-w-[260px] max-h-[340px] object-cover cursor-zoom-in"
+              onClick={() => onOpen(msg)}
+            />
+          </SoftBlurMedia>
         </div>
         {onWithdraw && (
           <WithdrawMediaButton onClick={onWithdraw} loading={withdrawing} />
@@ -1927,17 +1932,19 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
             </div>
           )}
           {url && (
-            <img
-              key={imgAttempt}
-              src={url}
-              alt={msg.message || 'photo'}
-              data-testid="image-viewer-img"
-              draggable={false}
-              onLoad={handleLoad}
-              onError={handleError}
-              className="max-w-[92vw] max-h-[78vh] object-contain select-none"
-              style={{ opacity: status === 'shown' ? 1 : 0 }}
-            />
+            <SoftBlurMedia blurred={shouldBlurMedia(msg.media_clear)}>
+              <img
+                key={imgAttempt}
+                src={url}
+                alt={msg.message || 'photo'}
+                data-testid="image-viewer-img"
+                draggable={false}
+                onLoad={handleLoad}
+                onError={handleError}
+                className="max-w-[92vw] max-h-[78vh] object-contain select-none"
+                style={{ opacity: status === 'shown' ? 1 : 0 }}
+              />
+            </SoftBlurMedia>
           )}
           {status === 'shown' && !isPermanent && (
             <div
@@ -2205,13 +2212,15 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
         }}
       >
         {url ? (
-          <video
-            src={url}
-            controls
-            playsInline
-            preload="metadata"
-            className="block w-full max-h-[320px] bg-black"
-          />
+          <SoftBlurMedia blurred={shouldBlurMedia(msg.media_clear)} data-testid="video-bubble">
+            <video
+              src={url}
+              controls={!shouldBlurMedia(msg.media_clear)}
+              playsInline
+              preload="metadata"
+              className="block w-full max-h-[320px] bg-black"
+            />
+          </SoftBlurMedia>
         ) : (
           <div className="px-4 py-6 text-xs text-[var(--cream-muted)]">Video unavailable</div>
         )}
