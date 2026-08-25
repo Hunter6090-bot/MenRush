@@ -339,6 +339,11 @@ export interface MessageDTO {
   expired: boolean;
   /** Set when the sender withdraws media from the chat. */
   withdrawn_at?: string | null;
+  /**
+   * Verified backend Premium gate for Discreet media blur.
+   * false → soft-blur photos/videos for this viewer; omit/true → clear.
+   */
+  media_clear?: boolean;
 }
 
 export interface SendMediaOptions {
@@ -532,6 +537,8 @@ export interface AlbumDTO {
   updated_at: string;
   /** Present only when listing someone else's albums via /albums/user/:id. */
   unlocked?: boolean;
+  /** Verified backend Premium gate for cover blur when unlocked. */
+  media_clear?: boolean;
 }
 
 export interface AlbumPhotoDTO {
@@ -539,6 +546,8 @@ export interface AlbumPhotoDTO {
   photo_url: string;
   position: number;
   created_at: string;
+  /** Verified backend Premium gate — false soft-blurs for free viewers. */
+  media_clear?: boolean;
 }
 
 export const albumsAPI = {
@@ -550,9 +559,12 @@ export const albumsAPI = {
   removePhoto: (albumId: string, photoId: string) =>
     apiClient.delete<{ deleted: true }>(`/albums/${albumId}/photos/${photoId}`),
   listPhotos: (albumId: string) =>
-    apiClient.get<{ photos: AlbumPhotoDTO[]; unlocked: boolean; locked: boolean }>(
-      `/albums/${albumId}/photos`,
-    ),
+    apiClient.get<{
+      photos: AlbumPhotoDTO[];
+      unlocked: boolean;
+      locked: boolean;
+      media_clear?: boolean;
+    }>(`/albums/${albumId}/photos`),
   upload: (albumId: string, file: File) => {
     const fd = new FormData();
     fd.append('photo', file);

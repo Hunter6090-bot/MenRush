@@ -184,7 +184,9 @@ test('source guards preserve location, push, socket, and media privacy boundarie
   assert.match(users, /getNearbyUsers\(\s*userId:\s*string,\s*radiusKm/s);
   assert.match(messages, /router\.get\('\/:messageId\/media'/);
   assert.match(messages, /messageService\.forViewer\(message,\s*receiver_id\)/);
+  assert.match(messages, /X-MenRush-Media-Clear/);
   assert.match(albums, /router\.get\('\/media\/:photoId'/);
+  assert.match(albums, /X-MenRush-Media-Clear/);
 });
 
 async function main() {
