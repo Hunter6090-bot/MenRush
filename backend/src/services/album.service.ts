@@ -95,7 +95,7 @@ export const albumService = {
     albumId: string,
     storageKey: string,
     mimeType: string,
-  ): Promise<{ id: string; photo_url: string }> {
+  ): Promise<{ id: string; photo_url: string; mime_type: string }> {
     const ownsRes = await query(`SELECT 1 FROM albums WHERE id = $1 AND user_id = $2`, [albumId, userId]);
     if (ownsRes.rows.length === 0) throw new Error('album_not_owned');
 
@@ -110,18 +110,24 @@ export const albumService = {
       [id, albumId, userId, photoUrl, storageKey, mimeType]
     );
 
-    await query(`UPDATE albums SET updated_at = NOW(), cover_url = COALESCE(cover_url, $2) WHERE id = $1`, [
-      albumId,
-      photoUrl,
-    ]);
-    return { id, photo_url: signedMediaUrl(photoUrl, userId) };
+    await query(
+      `UPDATE albums
+          SET updated_at = NOW(),
+              cover_url = CASE
+                WHEN $3 LIKE 'image/%' THEN COALESCE(cover_url, $2)
+                ELSE cover_url
+              END
+        WHERE id = $1`,
+      [albumId, photoUrl, mimeType],
+    );
+    return { id, photo_url: signedMediaUrl(photoUrl, userId), mime_type: mimeType };
   },
 
   async listPhotos(
     albumId: string,
     viewerId: string,
     isOwner: boolean
-  ): Promise<{ photos: Array<{ id: string; photo_url: string; position: number; created_at: string }>; unlocked: boolean; locked: boolean }> {
+  ): Promise<{ photos: Array<{ id: string; photo_url: string; mime_type: string | null; position: number; created_at: string }>; unlocked: boolean; locked: boolean }> {
     const albumRes = await query(`SELECT user_id, is_locked FROM albums WHERE id = $1`, [albumId]);
     if (albumRes.rows.length === 0) throw new Error('album_not_found');
 
@@ -148,7 +154,7 @@ export const albumService = {
     }
 
     const photosRes = await query(
-      `SELECT id, photo_url, position, created_at
+      `SELECT id, photo_url, mime_type, position, created_at
          FROM album_photos
         WHERE album_id = $1
         ORDER BY position ASC, created_at ASC`,
@@ -210,6 +216,7 @@ export const albumService = {
       const nextCover = await query(
         `SELECT photo_url FROM album_photos
           WHERE album_id = $1
+            AND mime_type LIKE 'image/%'
           ORDER BY position ASC, created_at ASC
           LIMIT 1`,
         [albumId],
