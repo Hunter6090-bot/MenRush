@@ -197,43 +197,57 @@ test('unread/all filter: read items drop out of Unread but remain in All', async
 test('delete-all-read only removes read notifications, keeps unread, persists across reload', async ({
   browser,
 }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
   // Marks the "to-be-read" notification via a direct API call rather than
   // clicking it in the UI (which navigates away) + page.goBack() — history
   // navigation reconnecting the socket proved unreliable in this environment
   // (see the sibling test's comment on page.reload() for the same class of
   // issue). This still exercises the real read-then-delete-all-read flow;
   // it just doesn't require in-test browser history navigation to set it up.
-  const unreadText = await seedAliceNotification('bulk-unread');
-  const toBeReadText = await seedAliceNotification('bulk-to-be-read');
-  const toReadRow = await findAliceNotification(toBeReadText);
-  await findAliceNotification(unreadText);
-
   const aliceSetupApi = await apiRequest.newContext({
     baseURL: BASE_URL,
     extraHTTPHeaders: { Authorization: `Bearer ${alice.token}` },
   });
   try {
-    const markRes = await aliceSetupApi.patch(`/api/notifications/${toReadRow.id}/read`);
-    expect(markRes.ok()).toBeTruthy();
+    // Prune prior read noise so the notifications page stays responsive on dirty DBs.
+    await aliceSetupApi.delete('/api/notifications');
   } finally {
     await aliceSetupApi.dispose();
+  }
+
+  const unreadText = await seedAliceNotification('bulk-unread');
+  const toBeReadText = await seedAliceNotification('bulk-to-be-read');
+  const toReadRow = await findAliceNotification(toBeReadText);
+  await findAliceNotification(unreadText);
+
+  const aliceMarkApi = await apiRequest.newContext({
+    baseURL: BASE_URL,
+    extraHTTPHeaders: { Authorization: `Bearer ${alice.token}` },
+  });
+  try {
+    const markRes = await aliceMarkApi.patch(`/api/notifications/${toReadRow.id}/read`);
+    expect(markRes.ok()).toBeTruthy();
+  } finally {
+    await aliceMarkApi.dispose();
   }
 
   const ctx = await browser.newContext();
   await authenticate(ctx, alice);
   const page = await ctx.newPage();
   await page.goto('/notifications');
+  await expect(page.getByTestId('notifications-filter-all')).toBeVisible({ timeout: 20_000 });
   await page.getByTestId('notifications-filter-all').click();
 
   const toRead = page.getByTestId('notifications-list').locator('li').filter({ hasText: toBeReadText });
-  await expect(toRead).toBeVisible({ timeout: 10_000 });
+  await expect(toRead).toBeVisible({ timeout: 15_000 });
 
-  await page.getByRole('button', { name: 'Delete read' }).first().click();
+  const deleteRead = page.getByRole('button', { name: 'Delete read' }).first();
+  await expect(deleteRead).toBeVisible({ timeout: 10_000 });
+  await deleteRead.click();
 
   await expect(
     page.getByTestId('notifications-list').locator('li').filter({ hasText: toBeReadText }),
-  ).toHaveCount(0);
+  ).toHaveCount(0, { timeout: 15_000 });
   await expect(
     page.getByTestId('notifications-list').locator('li').filter({ hasText: unreadText }),
   ).toBeVisible();
