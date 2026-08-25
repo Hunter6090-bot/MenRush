@@ -36,8 +36,10 @@ router.get('/media/:photoId', async (req, res) => {
     const resource = `/api/albums/media/${req.params.photoId}`;
     const grant = verifyMediaAccess(String(req.query.access || ''), resource);
     const media = await albumService.getMedia(grant.viewerId, req.params.photoId);
+    const mediaClear = await albumService.viewerMediaClear(grant.viewerId, media.ownerId);
     res.type(media.mimeType);
     res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-MenRush-Media-Clear', mediaClear ? '1' : '0');
     return res.sendFile(resolveMediaPath(uploadsDir, media.storageKey));
   } catch (error) {
     if (error instanceof SecurityError) {
