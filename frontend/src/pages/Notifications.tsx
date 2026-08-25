@@ -238,7 +238,7 @@ export const Notifications = () => {
                   to="/stream"
                   className="rounded-full border border-[rgba(196,131,42,0.5)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
                 >
-                  Live list
+                  Community
                 </Link>
                 <Link
                   to="/matches"
