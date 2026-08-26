@@ -432,7 +432,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       };
       mr.onstop = async () => {
         const duration = Date.now() - recordStartRef.current;
-        const blob = new Blob(recordChunksRef.current, { type: mr.mimeType || 'audio/webm' });
+        // Base MIME only — keep multipart Content-Type busboy-safe (see mediaMime.ts).
+        const audioType = (mr.mimeType || 'audio/webm').split(';')[0].trim() || 'audio/webm';
+        const blob = new Blob(recordChunksRef.current, { type: audioType });
         // Tear down the mic stream so the OS indicator goes away immediately.
         recordStreamRef.current?.getTracks().forEach((t) => t.stop());
         recordStreamRef.current = null;
