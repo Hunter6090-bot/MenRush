@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Video note send MIME (MediaRecorder codecs→text/plain reject) | PR on main | — | Cursor cloud — client strips base MIME; API names mime reject; desktop webm + iPhone mp4 |
 | Community Space (replace Live Profile List) | PR `#134` on main | — | Cursor cloud — item 1/5; text posts ≤280; MAP\|COMMUNITY toggle; desktop list = feed |
 | Discreet Mode media blur (item 2/5; Ghost untouched) | PR `#136` on main | — | Cursor cloud — `media_clear` + CSS blur; `DISCREET_MEDIA_BLUR` opt-in (default off); no public copy |
 | Safety & Trust (Identity Checked badge + panic report) | PR `#137` on main | — | Cursor cloud — badge prominence + one-tap report w/ thread_id → SENTINEL |
