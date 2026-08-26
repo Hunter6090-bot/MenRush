@@ -1,11 +1,16 @@
-/** MIME helpers for MediaRecorder blobs (iPhone records MP4, not WebM). */
+/**
+ * MIME helpers for MediaRecorder blobs.
+ * iPhone/Safari writes MP4. Android Chrome / Firefox / desktop Chrome write WebM.
+ * Always sniff bytes so we never ship the wrong container.
+ */
 
 export function canonicalMediaMime(mimetype: string | undefined | null): string {
   const base = String(mimetype || '')
     .split(';')[0]
     .trim()
     .toLowerCase();
-  if (base === 'video/quicktime') return 'video/mp4';
+  if (base === 'video/quicktime' || base === 'video/3gpp' || base === 'video/3gpp2') return 'video/mp4';
+  if (base === 'video/x-matroska') return 'video/webm';
   if (base === 'audio/x-m4a' || base === 'audio/aac') return 'audio/mp4';
   return base;
 }
@@ -26,12 +31,12 @@ export function extensionForMediaMime(mime: string, kind: 'video' | 'audio' | 'i
   return 'jpg';
 }
 
-function isAppleWebKit(): boolean {
+export function isAppleWebKit(): boolean {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent || '';
   const iOS = /iPad|iPhone|iPod/.test(ua);
   const iPadOs = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
-  const safari = /Safari/.test(ua) && !/Chrome|Chromium|Edg|Firefox/.test(ua);
+  const safari = /Safari/.test(ua) && !/Chrome|Chromium|Edg|Firefox|Android/.test(ua);
   return iOS || iPadOs || safari;
 }
 
@@ -47,14 +52,49 @@ const WEBM_TYPES = [
   'video/webm',
 ];
 
-/** Prefer MP4 (iPhone can play it). Never default to WebM on WebKit. */
-export function pickVideoRecorderMimeType(): string {
+function recorderSupported(type: string): boolean {
+  return (
+    typeof MediaRecorder !== 'undefined' &&
+    typeof MediaRecorder.isTypeSupported === 'function' &&
+    MediaRecorder.isTypeSupported(type)
+  );
+}
+
+/**
+ * Apple: MP4 first (the only container Safari can play).
+ * Android / Chrome / Firefox: WebM first — they actually record that.
+ * MP4 is still tried afterwards when the engine supports it.
+ */
+export function listVideoRecorderMimeTypes(): string[] {
   if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') {
-    return '';
+    return [];
   }
-  // MP4 first so iPhone (and anyone receiving on iPhone) can actually play it.
-  const order = [...MP4_TYPES, ...WEBM_TYPES];
-  return order.find((type) => MediaRecorder.isTypeSupported(type)) ?? '';
+  const order = isAppleWebKit() ? [...MP4_TYPES, ...WEBM_TYPES] : [...WEBM_TYPES, ...MP4_TYPES];
+  return order.filter((type) => recorderSupported(type));
+}
+
+export function pickVideoRecorderMimeType(): string {
+  return listVideoRecorderMimeTypes()[0] ?? '';
+}
+
+/** Construct a recorder, falling through mime types if one throws. */
+export function createVideoMediaRecorder(stream: MediaStream): MediaRecorder {
+  if (typeof MediaRecorder === 'undefined') {
+    throw new Error('Video recording is not supported on this device.');
+  }
+  const candidates = [...listVideoRecorderMimeTypes(), ''];
+  const tried = new Set<string>();
+  let lastErr: unknown;
+  for (const mime of candidates) {
+    if (tried.has(mime)) continue;
+    tried.add(mime);
+    try {
+      return mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('Video recording is not supported on this device.');
 }
 
 export function sniffVideoMime(bytes: Uint8Array, reported?: string): string {
@@ -74,6 +114,7 @@ export function sniffVideoMime(bytes: Uint8Array, reported?: string): string {
   const reportedMime = canonicalMediaMime(reported);
   if (reportedMime === 'video/mp4' || reportedMime === 'video/webm') return reportedMime;
   // WebKit often leaves mimeType blank; the bytes are MP4.
+  // Android Chrome / Firefox default to WebM.
   if (isAppleWebKit()) return 'video/mp4';
   return reportedMime.startsWith('video/') ? reportedMime : 'video/webm';
 }

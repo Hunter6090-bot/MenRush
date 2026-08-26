@@ -32,7 +32,8 @@ export function canonicalUploadMime(mimetype: string): string {
     .split(';')[0]
     .trim()
     .toLowerCase();
-  if (base === 'video/quicktime') return 'video/mp4';
+  if (base === 'video/quicktime' || base === 'video/3gpp' || base === 'video/3gpp2') return 'video/mp4';
+  if (base === 'video/x-matroska') return 'video/webm';
   if (base === 'audio/x-m4a' || base === 'audio/aac') return 'audio/mp4';
   return base;
 }

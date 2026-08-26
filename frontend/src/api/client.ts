@@ -381,7 +381,7 @@ export const messagesAPI = {
     if (opts.maxViews != null) fd.append('max_views', String(Math.round(opts.maxViews)));
     if (opts.durationMs != null) fd.append('duration_ms', String(Math.round(opts.durationMs)));
     // Blobs from MediaRecorder don't have a filename — give them one so multer is happy.
-    // iPhone recordings are MP4; never force .webm onto those or Safari says "media not supported".
+    // iPhone = MP4, Android/Chrome/Firefox = WebM. Extension follows the real type.
     const filename =
       file instanceof File && file.name
         ? file.name

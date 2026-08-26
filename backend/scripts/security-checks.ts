@@ -135,7 +135,10 @@ test('uploads use allowlisted MIME types, generated extensions, and magic bytes'
   assert.equal(allowedUpload('audio/webm', 'message'), true);
   assert.equal(allowedUpload('video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'message'), true);
   assert.equal(allowedUpload('video/quicktime', 'message'), true);
+  assert.equal(allowedUpload('video/webm;codecs=vp8,opus', 'message'), true);
+  assert.equal(allowedUpload('video/3gpp', 'message'), true);
   assert.equal(safeUploadFilename('message', 'user-1', 'video/mp4;codecs=avc1').endsWith('.mp4'), true);
+  assert.equal(safeUploadFilename('message', 'user-1', 'video/webm;codecs=vp8,opus').endsWith('.webm'), true);
 
   const generated = safeUploadFilename('profile', 'user-1', 'image/jpeg');
   assert.match(generated, /^profile-user-1-[a-f0-9-]+\.jpg$/);

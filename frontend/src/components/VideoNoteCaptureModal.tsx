@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { pickVideoRecorderMimeType, videoFileFromRecorderBlob } from '../lib/recordedMedia';
+import { createVideoMediaRecorder, videoFileFromRecorderBlob } from '../lib/recordedMedia';
 
 interface VideoNoteCaptureModalProps {
   open: boolean;
@@ -170,10 +170,9 @@ export function VideoNoteCaptureModal({
     const stream = streamRef.current;
     if (!stream || recording || pendingBlob) return;
 
-    const mime = pickVideoRecorderMimeType();
     let mr: MediaRecorder;
     try {
-      mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      mr = createVideoMediaRecorder(stream);
     } catch {
       onErrorRef.current('Video recording is not supported on this device.');
       return;
@@ -187,7 +186,7 @@ export function VideoNoteCaptureModal({
     mr.onstop = () => {
       clearTimers();
       const duration = Date.now() - startRef.current;
-      const raw = new Blob(chunksRef.current, { type: mr.mimeType || mime || '' });
+      const raw = new Blob(chunksRef.current, { type: mr.mimeType || '' });
       setRecording(false);
       setSeconds(0);
       recorderRef.current = null;
