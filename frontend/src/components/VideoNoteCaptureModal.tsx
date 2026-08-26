@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { pickVideoRecorderMimeType, videoFileFromRecorderBlob } from '../lib/recordedMedia';
 
 interface VideoNoteCaptureModalProps {
   open: boolean;
@@ -169,11 +170,7 @@ export function VideoNoteCaptureModal({
     const stream = streamRef.current;
     if (!stream || recording || pendingBlob) return;
 
-    const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
-      ? 'video/webm;codecs=vp8,opus'
-      : MediaRecorder.isTypeSupported('video/webm')
-        ? 'video/webm'
-        : '';
+    const mime = pickVideoRecorderMimeType();
     let mr: MediaRecorder;
     try {
       mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
@@ -190,20 +187,26 @@ export function VideoNoteCaptureModal({
     mr.onstop = () => {
       clearTimers();
       const duration = Date.now() - startRef.current;
-      const blob = new Blob(chunksRef.current, { type: mr.mimeType || 'video/webm' });
+      const raw = new Blob(chunksRef.current, { type: mr.mimeType || mime || '' });
       setRecording(false);
       setSeconds(0);
       recorderRef.current = null;
-      if (duration < 600 || blob.size < 2000) {
+      if (duration < 600 || raw.size < 2000) {
         onErrorRef.current('Video was too short — hold a moment longer.');
         return;
       }
-      setPendingBlob(blob);
-      setPendingDuration(duration);
-      setPendingUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return URL.createObjectURL(blob);
-      });
+      void videoFileFromRecorderBlob(raw)
+        .then((file) => {
+          setPendingBlob(file);
+          setPendingDuration(duration);
+          setPendingUrl((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return URL.createObjectURL(file);
+          });
+        })
+        .catch(() => {
+          onErrorRef.current('Could not prepare the video. Try recording again.');
+        });
     };
 
     startRef.current = Date.now();
@@ -274,6 +277,7 @@ export function VideoNoteCaptureModal({
               src={pendingUrl}
               controls
               playsInline
+              {...{ 'webkit-playsinline': 'true' }}
               className="absolute inset-0 h-full w-full object-cover"
             />
           ) : (

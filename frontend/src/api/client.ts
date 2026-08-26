@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { useAuthStore } from '../hooks/store';
+import { canonicalMediaMime, extensionForMediaMime } from '../lib/recordedMedia';
 
 /** Strip whitespace and accidental literal "\\n" from Vercel env paste mistakes. */
 function sanitizeEnvUrl(raw: unknown, fallback = ''): string {
@@ -380,13 +381,16 @@ export const messagesAPI = {
     if (opts.maxViews != null) fd.append('max_views', String(Math.round(opts.maxViews)));
     if (opts.durationMs != null) fd.append('duration_ms', String(Math.round(opts.durationMs)));
     // Blobs from MediaRecorder don't have a filename — give them one so multer is happy.
+    // iPhone recordings are MP4; never force .webm onto those or Safari says "media not supported".
     const filename =
-      file instanceof File
+      file instanceof File && file.name
         ? file.name
-        : `${opts.kind}-${Date.now()}.${
-            opts.kind === 'audio' ? 'webm' : opts.kind === 'video' ? 'webm' : 'jpg'
-          }`;
-    fd.append('media', file, filename);
+        : `${opts.kind}-${Date.now()}.${extensionForMediaMime(file.type, opts.kind)}`;
+    const typed =
+      file instanceof File
+        ? file
+        : new File([file], filename, { type: canonicalMediaMime(file.type) || file.type });
+    fd.append('media', typed, filename);
     return apiClient.post<MessageDTO>('/messages/media', fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });

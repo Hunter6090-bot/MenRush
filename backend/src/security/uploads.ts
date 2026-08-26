@@ -26,13 +26,25 @@ const CONTEXT_MIMES: Record<UploadContext, Set<string>> = {
   'room-temp': new Set(['image/jpeg', 'image/png', 'image/webp']),
 };
 
+/** Strip codec params (`video/mp4;codecs=avc1...`) so iPhone recordings match the allowlist. */
+export function canonicalUploadMime(mimetype: string): string {
+  const base = String(mimetype || '')
+    .split(';')[0]
+    .trim()
+    .toLowerCase();
+  if (base === 'video/quicktime') return 'video/mp4';
+  if (base === 'audio/x-m4a' || base === 'audio/aac') return 'audio/mp4';
+  return base;
+}
+
 export function allowedUpload(mimetype: string, context: UploadContext): boolean {
-  return CONTEXT_MIMES[context].has(mimetype);
+  return CONTEXT_MIMES[context].has(canonicalUploadMime(mimetype));
 }
 
 export function uploadFileFilter(context: UploadContext) {
   return (_req: Request, file: Express.Multer.File, callback: FileFilterCallback) => {
     if (allowedUpload(file.mimetype, context)) {
+      file.mimetype = canonicalUploadMime(file.mimetype);
       callback(null, true);
       return;
     }
@@ -45,8 +57,9 @@ export function safeUploadFilename(
   userId: string,
   mimetype: string,
 ): string {
-  const extension = MIME_EXTENSIONS[mimetype];
-  if (!extension || !allowedUpload(mimetype, context)) {
+  const mime = canonicalUploadMime(mimetype);
+  const extension = MIME_EXTENSIONS[mime];
+  if (!extension || !allowedUpload(mime, context)) {
     throw new Error('Unsupported upload type');
   }
   const safeUserId = userId.replace(/[^a-zA-Z0-9-]/g, '');
@@ -60,7 +73,7 @@ export async function validateFileSignature(filePath: string, mimetype: string):
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
     const bytes = buffer.subarray(0, bytesRead);
 
-    switch (mimetype) {
+    switch (canonicalUploadMime(mimetype)) {
       case 'image/jpeg':
         return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
       case 'image/png':
