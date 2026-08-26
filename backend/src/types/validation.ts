@@ -261,4 +261,3 @@ export type MediaKind = (typeof MEDIA_KINDS)[number];
 export type MessageMediaKind = (typeof MESSAGE_MEDIA_KINDS)[number];
 export type LocationMessageInput = z.infer<typeof LocationMessageSchema>;
 export type MediaMessageFormInput = z.infer<typeof MediaMessageFormSchema>;
-export type RoomTempIdentityInput = z.infer<typeof RoomTempIdentitySchema>;

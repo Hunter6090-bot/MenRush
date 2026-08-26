@@ -96,16 +96,6 @@ router.get('/', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// GET /official — list official curated rooms (seeds on first call)
-router.get('/official', async (req: AuthRequest, res: Response) => {
-  try {
-    const rooms = await roomService.ensureOfficialRooms(req.userId!);
-    res.json({ rooms });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // GET /:roomId — room details
 router.get('/:roomId', async (req: AuthRequest, res: Response) => {
   try {
@@ -250,34 +240,6 @@ router.get('/:roomId/members', async (req: AuthRequest, res: Response) => {
     res.json(members);
   } catch (error: any) {
     res.status(error.message.includes('not a member') ? 403 : 500).json({ error: error.message });
-  }
-});
-
-// GET /:roomId/temp-identity — get caller's temp identity in this room
-router.get('/:roomId/temp-identity', async (req: AuthRequest, res: Response) => {
-  try {
-    const member = await roomService.isMember(req.userId!, req.params.roomId);
-    if (!member) return res.status(403).json({ error: 'not_a_member' });
-    const identity = await roomService.getTempIdentity(req.userId!, req.params.roomId);
-    res.json(identity ?? {});
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// PUT /:roomId/temp-identity — set/update caller's temp identity
-router.put('/:roomId/temp-identity', async (req: AuthRequest, res: Response) => {
-  try {
-    const member = await roomService.isMember(req.userId!, req.params.roomId);
-    if (!member) return res.status(403).json({ error: 'not_a_member' });
-    const data = RoomTempIdentitySchema.parse(req.body);
-    const identity = await roomService.setTempIdentity(req.userId!, req.params.roomId, data);
-    res.json(identity);
-  } catch (err: any) {
-    if (err.name === 'ZodError') {
-      return res.status(400).json({ error: 'Validation error', details: err.errors });
-    }
-    res.status(500).json({ error: err.message });
   }
 });
 
