@@ -6,6 +6,7 @@ import { createAccessControl, SecurityError } from '../src/security/access';
 import {
   allowedUpload,
   safeUploadFilename,
+  sniffMediaMime,
   validateFileSignature,
 } from '../src/security/uploads';
 import {
@@ -133,6 +134,17 @@ test('uploads use allowlisted MIME types, generated extensions, and magic bytes'
   assert.equal(allowedUpload('image/svg+xml', 'profile'), false);
   assert.equal(allowedUpload('image/jpeg', 'profile'), true);
   assert.equal(allowedUpload('audio/webm', 'message'), true);
+  assert.equal(allowedUpload('video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'message'), true);
+  assert.equal(allowedUpload('video/quicktime', 'message'), true);
+  assert.equal(allowedUpload('video/webm;codecs=vp8,opus', 'message'), true);
+  assert.equal(allowedUpload('video/webm;codecs=vp9,opus', 'message'), true);
+  assert.equal(allowedUpload('video/3gpp', 'message'), true);
+  assert.equal(safeUploadFilename('message', 'user-1', 'video/mp4;codecs=avc1').endsWith('.mp4'), true);
+  assert.equal(safeUploadFilename('message', 'user-1', 'video/webm;codecs=vp8,opus').endsWith('.webm'), true);
+  const webmHeader = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x00, 0x00, 0x00, 0x00]);
+  assert.equal(sniffMediaMime(webmHeader, 'video'), 'video/webm');
+  const mp4Header = Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d]);
+  assert.equal(sniffMediaMime(mp4Header, 'video'), 'video/mp4');
 
   const generated = safeUploadFilename('profile', 'user-1', 'image/jpeg');
   assert.match(generated, /^profile-user-1-[a-f0-9-]+\.jpg$/);

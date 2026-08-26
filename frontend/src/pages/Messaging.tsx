@@ -13,6 +13,7 @@ import { FEATURES } from '../lib/featureFlags';
 import { SelfieCaptureModal } from '../components/SelfieCaptureModal';
 import { CameraCaptureChooser } from '../components/CameraCaptureChooser';
 import { VideoNoteCaptureModal } from '../components/VideoNoteCaptureModal';
+import { videoFileFromRecorderBlob } from '../lib/recordedMedia';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 import { PanicReportButton } from '../components/PanicReportButton';
 import { placeOutgoingCall } from '../lib/callBridge';
@@ -357,13 +358,19 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       setUploadingMedia(true);
       setMediaError('');
       try {
-        const res = await messagesAPI.sendMedia(otherId, blob, {
+        const file = blob instanceof File ? blob : await videoFileFromRecorderBlob(blob);
+        const res = await messagesAPI.sendMedia(otherId, file, {
           kind: 'video',
           durationMs,
         });
         setMessages((prev) => [...prev, res.data]);
       } catch (err: any) {
-        setMediaError(err?.response?.data?.error || 'Failed to send video');
+        const code = String(err?.response?.data?.error || '');
+        setMediaError(
+          /unsupported|not supported|does not match/i.test(code)
+            ? 'This video could not be sent. Record again and tap Send.'
+            : code || 'Failed to send video',
+        );
       } finally {
         setUploadingMedia(false);
       }
@@ -2229,6 +2236,7 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
               src={url}
               controls={!shouldBlurMedia(msg.media_clear)}
               playsInline
+              {...{ 'webkit-playsinline': 'true' }}
               preload="metadata"
               className="block w-full max-h-[320px] bg-black"
             />
