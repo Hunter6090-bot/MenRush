@@ -40,18 +40,14 @@ router.post('/', postLimiter, async (req: AuthRequest, res: Response) => {
     const { message } = PostMapFeedSchema.parse(req.body);
     const saved = await mapFeedService.post(req.userId!, message);
 
-    // Fan out to nearby sockets
+    // Fan out via user rooms (sockets join `user:${id}` on authenticate).
+    // Do not pass userSockets Set values to io.to() — that never delivers.
     const io = req.app.get('io');
-    const userSockets: Map<string, string> = req.app.get('userSockets');
-
-    if (io && userSockets) {
+    if (io) {
       const nearbyIds = await mapFeedService.nearbyUserIds(saved.lat, saved.lng, 5);
       for (const uid of nearbyIds) {
         if (uid === req.userId) continue;
-        const socketId = userSockets.get(uid);
-        if (socketId) {
-          io.to(socketId).emit('map:feed:message', saved);
-        }
+        io.to(`user:${uid}`).emit('map:feed:message', saved);
       }
     }
 
