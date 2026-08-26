@@ -25,6 +25,7 @@ function pushNewMessage(receiverId: string, senderName: string, senderId: string
     body,
     url: `/messages/${senderId}`,
     tag: `msg-${senderId}`,
+    kind: 'message',
   }).catch(() => undefined);
 }
 

@@ -32,12 +32,20 @@ export interface PushPayload {
   /** Collapses repeat notifications for the same context (e.g. one chat). */
   tag?: string;
   icon?: string;
+  /** Drives sound/urgency in the service worker (call vs message). */
+  kind?: 'message' | 'call' | 'missed_call';
+}
+
+export interface PushSendOptions {
+  TTL?: number;
+  urgency?: 'very-low' | 'low' | 'normal' | 'high';
 }
 
 export interface PushSender {
   sendNotification: (
     subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
     payload: string,
+    options?: PushSendOptions,
   ) => Promise<unknown>;
 }
 
@@ -66,6 +74,12 @@ export async function deliverPush(
   let sent = 0;
   let pruned = 0;
   const body = JSON.stringify(payload);
+  const isCall = payload.kind === 'call';
+  const options: PushSendOptions = {
+    // Incoming calls expire quickly; messages should still land after a locked-phone delay.
+    TTL: isCall ? 45 : 86400,
+    urgency: 'high',
+  };
 
   await Promise.all(
     subs.rows.map(async (s: { endpoint: string; p256dh: string; auth: string }) => {
@@ -73,6 +87,7 @@ export async function deliverPush(
         await deps.sender.sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
           body,
+          options,
         );
         sent += 1;
       } catch (err: any) {
