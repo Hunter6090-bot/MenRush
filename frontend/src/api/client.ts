@@ -391,9 +391,8 @@ export const messagesAPI = {
         ? file
         : new File([file], filename, { type: canonicalMediaMime(file.type) || file.type });
     fd.append('media', typed, filename);
-    return apiClient.post<MessageDTO>('/messages/media', fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    // Do not set Content-Type: axios must add the multipart boundary itself.
+    return apiClient.post<MessageDTO>('/messages/media', fd);
   },
   markViewed: (messageId: string) =>
     apiClient.post<MessageDTO>(`/messages/${messageId}/view`),
