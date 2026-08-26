@@ -93,6 +93,10 @@ async function installFakeMedia(context: BrowserContext) {
         return 480;
       },
     });
+    // Fake streams have no real decoder — make play() succeed so capture modals enable Record.
+    HTMLMediaElement.prototype.play = async function play() {
+      return undefined;
+    };
   });
 }
 
@@ -235,8 +239,9 @@ test('video note send strips codec MIME so upload is accepted', async ({ browser
   await page.getByTestId('chat-camera-button').click();
   await page.getByTestId('camera-choose-video').click();
   await expect(page.getByTestId('video-note-capture')).toBeVisible();
+  await expect(page.getByTestId('video-note-record')).toBeEnabled({ timeout: 10_000 });
 
-  // Advance fake timers enough for the 600ms minimum duration.
+  // Advance enough for the 600ms minimum duration.
   await page.getByTestId('video-note-record').click();
   await page.waitForTimeout(700);
   await page.getByTestId('video-note-stop').click();
