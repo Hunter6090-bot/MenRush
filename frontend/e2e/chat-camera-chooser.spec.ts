@@ -93,6 +93,10 @@ async function installFakeMedia(context: BrowserContext) {
         return 480;
       },
     });
+    // Fake streams have no real decoder — make play() succeed so capture modals enable Record.
+    HTMLMediaElement.prototype.play = async function play() {
+      return undefined;
+    };
   });
 }
 
@@ -154,6 +158,104 @@ test('Video opens the video note recorder', async ({ browser }) => {
   await expect(page.getByRole('dialog', { name: 'Record a video note' })).toBeVisible();
   await expect(page.getByTestId('video-note-record')).toBeVisible();
   await expect(page.getByTestId('camera-capture-chooser')).toHaveCount(0);
+
+  await ctx.close();
+});
+
+/**
+ * Regression: MediaRecorder historically produced
+ * `video/webm;codecs=vp8,opus`. FormData serialises that with an unquoted
+ * comma → busboy reports text/plain → API "Unsupported upload type".
+ * The client must strip to base MIME before upload.
+ */
+test('video note send strips codec MIME so upload is accepted', async ({ browser }) => {
+  const ctx = await browser.newContext();
+  await authenticate(ctx, alice);
+  await installFakeMedia(ctx);
+  await ctx.addInitScript(() => {
+    class FakeRecorder {
+      state = 'inactive';
+      mimeType = 'video/webm;codecs=vp8,opus';
+      ondataavailable: ((ev: any) => void) | null = null;
+      onstop: (() => void) | null = null;
+      start() {
+        this.state = 'recording';
+        // ≥2KB so the modal does not reject as "too short".
+        const bytes = new Uint8Array(2500);
+        bytes[0] = 0x1a;
+        bytes[1] = 0x45;
+        bytes[2] = 0xdf;
+        bytes[3] = 0xa3;
+        const data = new Blob([bytes], { type: this.mimeType });
+        queueMicrotask(() => this.ondataavailable?.({ data }));
+      }
+      stop() {
+        this.state = 'inactive';
+        queueMicrotask(() => this.onstop?.());
+      }
+    }
+    (FakeRecorder as any).isTypeSupported = (t: string) =>
+      t === 'video/webm' || t.startsWith('video/webm;') || t === 'video/mp4';
+    Object.defineProperty(window, 'MediaRecorder', { configurable: true, value: FakeRecorder });
+  });
+
+  const page = await ctx.newPage();
+  let uploadedMime: string | null = null;
+  let uploadStatus: number | null = null;
+
+  await page.route('**/api/messages/media', async (route) => {
+    const req = route.request();
+    const buffer = req.postDataBuffer();
+    const contentType = req.headers()['content-type'] || '';
+    // Multipart body embeds each part's Content-Type — assert base MIME only.
+    const bodyText = buffer ? buffer.toString('latin1') : '';
+    const partMime = bodyText.match(/Content-Type:\s*([^\r\n]+)/i)?.[1]?.trim() || null;
+    uploadedMime = partMime;
+
+    // If the API is up, forward; otherwise stub success so the UI path still completes.
+    try {
+      const response = await route.fetch();
+      uploadStatus = response.status();
+      await route.fulfill({ response });
+    } catch {
+      uploadStatus = 201;
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'msg-video-note-1',
+          sender_id: alice.user.id,
+          receiver_id: bob.user.id,
+          message: '',
+          media_type: 'video',
+          media_url: '/api/messages/msg-video-note-1/media',
+          created_at: new Date().toISOString(),
+        }),
+      });
+    }
+  });
+
+  await openThread(page);
+  await page.getByTestId('chat-camera-button').click();
+  await page.getByTestId('camera-choose-video').click();
+  await expect(page.getByTestId('video-note-capture')).toBeVisible();
+  await expect(page.getByTestId('video-note-record')).toBeEnabled({ timeout: 10_000 });
+
+  // Advance enough for the 600ms minimum duration.
+  await page.getByTestId('video-note-record').click();
+  await page.waitForTimeout(700);
+  await page.getByTestId('video-note-stop').click();
+  await expect(page.getByTestId('video-note-send')).toBeVisible();
+  await page.getByTestId('video-note-send').click();
+
+  await expect.poll(() => uploadedMime).not.toBeNull();
+  // Must NOT be text/plain or include codecs=
+  expect(uploadedMime).toBe('video/webm');
+  expect(uploadedMime).not.toMatch(/codecs/i);
+  expect(uploadedMime).not.toBe('text/plain');
+  // Upload accepted (real API or stub).
+  await expect.poll(() => uploadStatus).toBeTruthy();
+  expect(uploadStatus).toBeLessThan(400);
 
   await ctx.close();
 });

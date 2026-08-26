@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { baseMediaMime, pickVideoRecorderMime } from '../lib/mediaMime';
 
 interface VideoNoteCaptureModalProps {
   open: boolean;
@@ -169,11 +170,10 @@ export function VideoNoteCaptureModal({
     const stream = streamRef.current;
     if (!stream || recording || pendingBlob) return;
 
-    const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
-      ? 'video/webm;codecs=vp8,opus'
-      : MediaRecorder.isTypeSupported('video/webm')
-        ? 'video/webm'
-        : '';
+    // Prefer MP4 (Safari / iPhone) then WebM (Chrome desktop + Android).
+    // Recorder may still report codecs=… on mimeType — we strip those when
+    // building the upload Blob so multipart Content-Type stays busboy-safe.
+    const mime = pickVideoRecorderMime();
     let mr: MediaRecorder;
     try {
       mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
@@ -190,7 +190,12 @@ export function VideoNoteCaptureModal({
     mr.onstop = () => {
       clearTimers();
       const duration = Date.now() - startRef.current;
-      const blob = new Blob(chunksRef.current, { type: mr.mimeType || 'video/webm' });
+      // Base MIME only — `video/webm;codecs=vp8,opus` becomes text/plain in multer.
+      const uploadType =
+        baseMediaMime(mr.mimeType) ||
+        baseMediaMime(mime) ||
+        'video/webm';
+      const blob = new Blob(chunksRef.current, { type: uploadType });
       setRecording(false);
       setSeconds(0);
       recorderRef.current = null;
