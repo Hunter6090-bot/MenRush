@@ -8,6 +8,23 @@ import { apiClient } from '../api/client';
 
 export type PushSupport = 'unsupported' | 'granted' | 'denied' | 'default';
 
+export function isIosDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+/** iOS only delivers web push from a Home Screen / installed PWA. */
+export function isStandalonePwa(): boolean {
+  if (typeof window === 'undefined') return false;
+  const nav = window.navigator as Navigator & { standalone?: boolean };
+  return window.matchMedia('(display-mode: standalone)').matches || nav.standalone === true;
+}
+
+export function iosNeedsHomeScreenForPush(): boolean {
+  return isIosDevice() && !isStandalonePwa();
+}
+
 export function getPushSupport(): PushSupport {
   if (typeof window === 'undefined') return 'unsupported';
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {

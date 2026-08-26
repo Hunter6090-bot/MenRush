@@ -224,8 +224,34 @@ interface PendingCall {
   callerId: string;
   calleeId: string;
   answered: boolean;
+  offer?: unknown;
+  fromName?: string;
+  ice: unknown[];
+  deliveredIncoming: boolean;
+  timeout?: ReturnType<typeof setTimeout>;
 }
 const pendingCalls = new Map<string, PendingCall>();
+const CALL_RING_WAIT_MS = 35_000;
+
+function deliverPendingIncoming(pending: PendingCall) {
+  if (pending.deliveredIncoming || pending.answered || !pending.offer) return;
+  pending.deliveredIncoming = true;
+  io.to(`user:${pending.calleeId}`).emit('call:incoming', {
+    from: pending.callerId,
+    fromName: pending.fromName,
+    offer: pending.offer,
+  });
+  for (const candidate of pending.ice) {
+    io.to(`user:${pending.calleeId}`).emit('call:ice-candidate', {
+      from: pending.callerId,
+      candidate,
+    });
+  }
+  logCallMetric('call_incoming_emitted', {
+    callerId: pending.callerId,
+    calleeId: pending.calleeId,
+  });
+}
 
 function pendingCallKey(callerId: string, calleeId: string) {
   return `${callerId}:${calleeId}`;
@@ -237,6 +263,8 @@ function findPendingCall(actorId: string, targetId: string): PendingCall | undef
 }
 
 function clearPendingCall(callerId: string, calleeId: string) {
+  const pending = pendingCalls.get(pendingCallKey(callerId, calleeId));
+  if (pending?.timeout) clearTimeout(pending.timeout);
   pendingCalls.delete(pendingCallKey(callerId, calleeId));
 }
 
@@ -263,6 +291,7 @@ async function recordMissedCall(callerId: string, calleeId: string) {
       body: 'Missed video call',
       url: `/messages/${callerId}`,
       tag: `missed-call-${callerId}`,
+      kind: 'missed_call',
     }).catch(() => undefined);
   } catch (err) {
     console.error('recordMissedCall failed:', err);
@@ -319,6 +348,12 @@ io.on('connection', (socket: Socket) => {
       await userService.setOnlineStatus(decoded.userId, true);
       socket.join(`user:${decoded.userId}`);
       socket.emit('authenticated', { userId: decoded.userId });
+      // They opened the app from a missed-ring push — attach any waiting offer.
+      for (const pending of pendingCalls.values()) {
+        if (pending.calleeId === decoded.userId && !pending.answered) {
+          deliverPendingIncoming(pending);
+        }
+      }
     } catch (error) {
       socket.emit('authentication:error', { error: 'authentication_failed' });
     }
@@ -343,44 +378,51 @@ io.on('connection', (socket: Socket) => {
         callerId: authorized.actorId,
         calleeId: authorized.targetId,
       });
-      // No live socket for this user → they cannot answer WebRTC (push alone is not enough).
-      // Re-check after a short wait — mobile tabs often reconnect a beat after unlock.
+      // Brief wait — mobile tabs often reconnect a beat after unlock.
       if (!isUserSocketOnline(authorized.targetId)) {
         await new Promise((r) => setTimeout(r, 1500));
       }
-      if (!isUserSocketOnline(authorized.targetId)) {
-        logCallMetric('call_offline', {
-          callerId: authorized.actorId,
-          calleeId: authorized.targetId,
-        });
-        socket.emit('call:error', { error: 'target_offline' });
-        return;
-      }
       const fromName = await userService.getDisplayName(authorized.actorId) ?? '';
-      pendingCalls.set(pendingCallKey(authorized.actorId, authorized.targetId), {
+      const online = isUserSocketOnline(authorized.targetId);
+      const pending: PendingCall = {
         callerId: authorized.actorId,
         calleeId: authorized.targetId,
         answered: false,
-      });
-      io.to(`user:${authorized.targetId}`).emit('call:incoming', {
-        from: authorized.actorId,
-        fromName,
         offer: data.offer,
-      });
-      logCallMetric('call_incoming_emitted', {
-        callerId: authorized.actorId,
-        calleeId: authorized.targetId,
-      });
-      // Best-effort heads-up when the recipient's app is backgrounded/locked.
-      // The service worker suppresses this if a foreground tab is focused, so
-      // an in-app session won't double-alert. Web push cannot wake a live
-      // WebRTC answer on a locked phone — this only surfaces the missed call.
+        fromName,
+        ice: [],
+        deliveredIncoming: false,
+      };
+      pendingCalls.set(pendingCallKey(authorized.actorId, authorized.targetId), pending);
+
+      // Always push so a locked / closed installed app still rings.
       void sendPushToUser(authorized.targetId, {
         title: fromName || 'MenRush',
         body: 'Incoming video call',
         url: `/messages/${authorized.actorId}`,
         tag: `call-${authorized.actorId}`,
+        kind: 'call',
       }).catch(() => undefined);
+
+      if (online) {
+        deliverPendingIncoming(pending);
+      } else {
+        logCallMetric('call_offline_ringing', {
+          callerId: authorized.actorId,
+          calleeId: authorized.targetId,
+        });
+        pending.timeout = setTimeout(() => {
+          const still = pendingCalls.get(pendingCallKey(authorized.actorId, authorized.targetId));
+          if (!still || still.answered) return;
+          clearPendingCall(still.callerId, still.calleeId);
+          logCallMetric('call_no_answer', {
+            callerId: still.callerId,
+            calleeId: still.calleeId,
+          });
+          io.to(`user:${still.callerId}`).emit('call:error', { error: 'no_answer' });
+          void recordMissedCall(still.callerId, still.calleeId);
+        }, CALL_RING_WAIT_MS);
+      }
     } catch {
       logCallMetric('call_error', { code: 'target_not_authorized' });
       socket.emit('call:error', { error: 'target_not_authorized' });
@@ -417,6 +459,11 @@ io.on('connection', (socket: Socket) => {
   socket.on('call:ice-candidate', async (data: { to: string; candidate: any }) => {
     const authorized = await authorizeCallTarget(socket, data?.to);
     if (!authorized || !data.candidate) return;
+    const pending = findPendingCall(authorized.actorId, authorized.targetId);
+    if (pending && !isUserSocketOnline(authorized.targetId)) {
+      pending.ice.push(data.candidate);
+      return;
+    }
     io.to(`user:${authorized.targetId}`).emit('call:ice-candidate', {
       from: authorized.actorId,
       candidate: data.candidate,
