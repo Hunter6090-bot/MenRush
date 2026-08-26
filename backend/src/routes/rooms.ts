@@ -1,13 +1,59 @@
 import { Router, Response } from 'express';
+import fs from 'fs';
+import multer from 'multer';
 import { roomService } from '../services/room.service';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { SecurityError } from '../security/access';
-import { AddRoomMemberSchema, CreateRoomSchema, RoomMessageSchema, RoomTempIdentitySchema } from '../types/validation';
+import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
+import {
+  AddRoomMemberSchema,
+  CreateRoomSchema,
+  RoomMessageSchema,
+  RoomTempIdentitySchema,
+} from '../types/validation';
 import { PremiumRequiredError } from '../services/premium.service';
+import { getUploadSubdir } from '../lib/uploads-root';
 
 const router = Router();
 
 router.use(authMiddleware, verifiedMiddleware);
+
+const roomMediaDir = getUploadSubdir('rooms');
+fs.mkdirSync(roomMediaDir, { recursive: true });
+
+const roomMediaUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, roomMediaDir),
+    filename: (req: any, file, cb) => {
+      try {
+        // Reuse message mime allow-list; files still land under uploads/rooms/.
+        cb(null, safeUploadFilename('message', req.userId, file.mimetype).replace(/^message-/, 'room-'));
+      } catch (error) {
+        cb(error as Error, '');
+      }
+    },
+  }),
+  limits: { fileSize: 12 * 1024 * 1024 },
+  fileFilter: uploadFileFilter('message'),
+});
+
+const tempPhotoDir = getUploadSubdir('room-temp');
+fs.mkdirSync(tempPhotoDir, { recursive: true });
+
+const tempPhotoUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, tempPhotoDir),
+    filename: (req: any, file, cb) => {
+      try {
+        cb(null, safeUploadFilename('room-temp', req.userId, file.mimetype));
+      } catch (error) {
+        cb(error as Error, '');
+      }
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: uploadFileFilter('room-temp'),
+});
 
 function handleRoomError(res: Response, error: unknown) {
   if (error instanceof PremiumRequiredError) {
@@ -114,6 +160,89 @@ router.post('/:roomId/leave', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// GET /:roomId/temp-identity — caller's temp identity (if any / saved)
+router.get('/:roomId/temp-identity', async (req: AuthRequest, res: Response) => {
+  try {
+    const member = await roomService.isMember(req.userId!, req.params.roomId);
+    if (!member) return res.status(403).json({ error: 'not_a_member' });
+    const identity = await roomService.getTempIdentity(req.userId!, req.params.roomId);
+    res.json(identity ?? {});
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /:roomId/temp-identity — set/update temp identity (never touches main profile)
+router.put('/:roomId/temp-identity', async (req: AuthRequest, res: Response) => {
+  try {
+    const member = await roomService.isMember(req.userId!, req.params.roomId);
+    if (!member) return res.status(403).json({ error: 'not_a_member' });
+    const data = RoomTempIdentitySchema.parse(req.body);
+    const identity = await roomService.setTempIdentity(req.userId!, req.params.roomId, data);
+    res.json(identity);
+  } catch (err: any) {
+    if (err.name === 'ZodError') {
+      return res.status(400).json({ error: 'Validation error', details: err.errors });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /:roomId/temp-identity/photo — upload temp photo (room-scoped file; not profile)
+router.post(
+  '/:roomId/temp-identity/photo',
+  tempPhotoUpload.single('photo'),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const member = await roomService.isMember(req.userId!, req.params.roomId);
+      if (!member) {
+        if (req.file?.path) fs.unlinkSync(req.file.path);
+        return res.status(403).json({ error: 'not_a_member' });
+      }
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+      if (!(await validateFileSignature(req.file.path, req.file.mimetype))) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ error: 'File content does not match its type' });
+      }
+      const photo_url = `/uploads/room-temp/${req.file.filename}`;
+      res.status(201).json({ photo_url });
+    } catch (err: any) {
+      if (req.file?.path) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch {
+          /* ignore */
+        }
+      }
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+// POST /:roomId/temp-identity/clear — wipe unsaved temp identity (session exit)
+router.post('/:roomId/temp-identity/clear', async (req: AuthRequest, res: Response) => {
+  try {
+    await roomService.clearTempIdentityOnLeave(req.userId!, req.params.roomId);
+    res.json({ cleared: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /:roomId/temp-identity — manual clear of saved/unsaved identity (immediate)
+router.delete('/:roomId/temp-identity', async (req: AuthRequest, res: Response) => {
+  try {
+    const member = await roomService.isMember(req.userId!, req.params.roomId);
+    if (!member) return res.status(403).json({ error: 'not_a_member' });
+    await roomService.deleteTempIdentity(req.userId!, req.params.roomId);
+    res.status(204).send();
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /:roomId/members — roster for gallery view
 router.get('/:roomId/members', async (req: AuthRequest, res: Response) => {
   try {
@@ -195,5 +324,43 @@ router.post('/:roomId/messages', async (req: AuthRequest, res: Response) => {
     res.status(400).json({ error: error.message });
   }
 });
+
+// POST /:roomId/messages/media — attach an image (1:1-style gallery pick → send)
+router.post(
+  '/:roomId/messages/media',
+  roomMediaUpload.single('media'),
+  async (req: AuthRequest, res: Response) => {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    if (!req.file.mimetype.startsWith('image/')) {
+      try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+      return res.status(400).json({ error: 'Expected an image upload' });
+    }
+
+    if (!(await validateFileSignature(req.file.path, req.file.mimetype))) {
+      try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+      return res.status(400).json({ error: 'File content does not match its type' });
+    }
+
+    try {
+      const publicUrl = `/uploads/rooms/${req.file.filename}`;
+      const caption = typeof req.body?.caption === 'string' ? req.body.caption : undefined;
+      const message = await roomService.sendImageMessage(
+        req.userId!,
+        req.params.roomId,
+        publicUrl,
+        caption,
+      );
+
+      const io = req.app.get('io');
+      io.to(`room:${req.params.roomId}`).emit('room:message', message);
+
+      res.status(201).json(message);
+    } catch (error: any) {
+      try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+      res.status(400).json({ error: error.message });
+    }
+  },
+);
 
 export default router;

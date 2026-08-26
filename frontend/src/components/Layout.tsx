@@ -5,7 +5,7 @@ import { useAuthStore, useNotificationStore, useUnreadStore } from '../hooks/sto
 import { UserAvatar } from './UserAvatar';
 import { mobileBackFallback, shouldShowMobileBack } from '../lib/mobileBack';
 import { MobileBackButton } from './MobileBackButton';
-import { IconMapExpand, IconMore, IconNotifications, IconPulse } from './icons';
+import { IconMapExpand, IconMore, IconNotifications, IconPulse, IconSignOut } from './icons';
 import { BrandMark } from './BrandMark';
 import { ProfileSearchModal } from './ProfileSearchModal';
 import { NotificationDot } from './NotificationDot';
@@ -54,6 +54,7 @@ function LayoutInner({ children }: LayoutProps) {
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   const [matchCount, setMatchCount] = useState(0);
   const [sidebarExpanded, setSidebarExpanded] = useState(readSidebarExpanded);
   const { state: discoveryShell } = useDiscoveryShell();
@@ -87,7 +88,12 @@ function LayoutInner({ children }: LayoutProps) {
     setMoreMenuOpen(false);
   }, [location.pathname]);
 
-  const handleLogout = () => {
+  const requestSignOut = () => {
+    setSignOutConfirmOpen(true);
+  };
+
+  const confirmSignOut = () => {
+    setSignOutConfirmOpen(false);
     logout();
     navigate('/login');
   };
@@ -179,21 +185,27 @@ function LayoutInner({ children }: LayoutProps) {
           {sidebarExpanded ? (
             <button
               type="button"
-              onClick={handleLogout}
-              className="mt-3 w-full px-1 py-2 text-left text-sm text-nn-faint transition-colors hover:text-nn-danger"
+              onClick={requestSignOut}
+              data-testid="desktop-sign-out"
+              title="Sign out"
+              aria-label="Sign out"
+              className="mt-3 flex w-full items-center gap-2.5 px-1 py-2 text-left text-sm text-nn-faint transition-colors hover:text-nn-danger"
             >
-              Sign out.
+              <IconSignOut size={18} className="shrink-0" />
+              Sign out
             </button>
           ) : (
             <button
               type="button"
-              onClick={handleLogout}
+              onClick={requestSignOut}
+              data-testid="desktop-sign-out"
               title="Sign out"
               aria-label="Sign out"
-              className="mt-3 mx-auto flex h-9 w-9 items-center justify-center rounded-full text-nn-faint transition-colors hover:bg-nn-card hover:text-nn-danger"
+              className="mt-3 mx-auto flex w-11 flex-col items-center justify-center gap-0.5 rounded-xl py-1.5 text-nn-faint transition-colors hover:bg-nn-card hover:text-nn-danger"
             >
-              <span className="text-lg leading-none" aria-hidden>
-                ⎋
+              <IconSignOut size={18} />
+              <span className="text-[9px] font-bold uppercase tracking-wide" aria-hidden>
+                Out
               </span>
             </button>
           )}
@@ -245,6 +257,7 @@ function LayoutInner({ children }: LayoutProps) {
                 <NotificationDot
                   count={notificationUnread}
                   visible={notificationUnread > 0}
+                  data-testid="badge-notifications"
                   className="-top-0.5 -right-0.5 min-w-[16px] h-4 text-[9px] bg-[var(--copper)] border-[var(--bg-primary)]"
                 />
               </Link>
@@ -259,13 +272,7 @@ function LayoutInner({ children }: LayoutProps) {
             className="flex max-w-[520px] flex-1 items-center gap-2.5 rounded-full border border-nn-border bg-nn-card px-4 py-2.5 text-left transition-colors hover:border-nn-copper/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--copper)]"
           >
             <SearchIcon className="h-4 w-4 shrink-0 text-nn-muted" />
-            <span className="text-sm text-nn-muted">
-              {location.pathname.startsWith('/events')
-                ? 'Search events'
-                : location.pathname.startsWith('/matches')
-                  ? 'Search matches'
-                  : 'Search by name'}
-            </span>
+            <span className="text-sm text-nn-muted">Search profiles</span>
           </button>
           <div className="flex-1" />
           <ThemeToggle variant="header" className="text-nn-muted hover:text-nn-copper" />
@@ -292,13 +299,16 @@ function LayoutInner({ children }: LayoutProps) {
             ) : null}
             <IconPulse size={20} className="relative z-[1]" />
           </button>
-          <Link to="/profile" className="shrink-0">
+          <Link to="/profile" className="shrink-0" aria-label="Open your profile">
             <UserAvatar
               name={user?.name ?? '?'}
               photoUrl={user?.photo_url}
+              userId={user?.id}
+              linkToProfile={false}
               size="md"
               showStatus={false}
               className="!w-[42px] !h-[42px] ring-2 ring-nn-copper"
+              data-testid="header-own-avatar"
             />
           </Link>
         </div>
@@ -332,7 +342,11 @@ function LayoutInner({ children }: LayoutProps) {
                     <NotificationDot
                       count={badge}
                       visible={badge > 0}
-                      data-testid={`badge-mobile-${item.to.replace(/\//g, '')}`}
+                      data-testid={
+                        item.to === '/conversations'
+                          ? 'badge-conversations'
+                          : `badge-mobile-${item.to.replace(/\//g, '')}`
+                      }
                       className="-top-2 -right-2.5 min-w-[16px] h-[16px] text-[9px] bg-[var(--copper)] border-[var(--bg-elevated)]"
                     />
                   </span>
@@ -371,6 +385,49 @@ function LayoutInner({ children }: LayoutProps) {
       </div>
 
       <ProfileSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
+
+      {signOutConfirmOpen ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4"
+          role="presentation"
+          onClick={() => setSignOutConfirmOpen(false)}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="sign-out-confirm-title"
+            aria-describedby="sign-out-confirm-desc"
+            data-testid="sign-out-confirm"
+            className="w-full max-w-sm rounded-2xl border border-nn-border bg-nn-bg p-5 shadow-[var(--shadow-lg)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="sign-out-confirm-title" className="text-lg font-extrabold text-nn-text">
+              Sign out?
+            </h2>
+            <p id="sign-out-confirm-desc" className="mt-2 text-sm leading-relaxed text-nn-muted">
+              You will need to sign in again to use MenRush on this device.
+            </p>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                data-testid="sign-out-cancel"
+                onClick={() => setSignOutConfirmOpen(false)}
+                className="rounded-full border border-nn-border px-4 py-2 text-sm font-bold text-nn-muted transition-colors hover:text-nn-text"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                data-testid="sign-out-confirm-btn"
+                onClick={confirmSignOut}
+                className="rounded-full bg-[#B0432E] px-4 py-2 text-sm font-extrabold text-white transition-opacity hover:opacity-90"
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

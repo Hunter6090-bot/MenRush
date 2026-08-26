@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useNotificationStore, Notification } from '../hooks/store';
 import { useNavigate } from 'react-router-dom';
 import { notificationsAPI } from '../api/client';
@@ -6,34 +6,29 @@ import { IconChat, IconMatches, IconNotifications, IconProfile } from './icons';
 import { MissedCallIcon } from './MissedCallIcon';
 import { notificationDestination } from '../lib/notifications';
 
+/**
+ * Live toast previews for notifications that arrive *after* the session has
+ * already synced with the server. Login / refresh backfill stays badge-only —
+ * users open the bell (`/notifications`) to read the list.
+ */
 export const ToastNotifications = () => {
-  const { notifications, markAsRead, setUnreadCount } = useNotificationStore();
-  const [activeToasts, setActiveToasts] = useState<Notification[]>([]);
+  const pendingToasts = useNotificationStore((s) => s.pendingToasts);
+  const dismissToast = useNotificationStore((s) => s.dismissToast);
+  const markAsRead = useNotificationStore((s) => s.markAsRead);
+  const setUnreadCount = useNotificationStore((s) => s.setUnreadCount);
   const navigate = useNavigate();
-  const hydratedRef = useRef(false);
-  const seenIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
-    if (!hydratedRef.current) {
-      notifications.forEach((n) => seenIdsRef.current.add(n.id));
-      hydratedRef.current = true;
-      return;
-    }
-
-    const newToasts = notifications.filter(
-      (n) => !n.read && !seenIdsRef.current.has(n.id),
-    );
-    if (newToasts.length === 0) return;
-
-    newToasts.forEach((n) => seenIdsRef.current.add(n.id));
-    setActiveToasts((prev) => [...prev, ...newToasts]);
-
-    newToasts.forEach((nt) => {
+    if (pendingToasts.length === 0) return;
+    const timers = pendingToasts.map((nt) =>
       window.setTimeout(() => {
-        setActiveToasts((current) => current.filter((at) => at.id !== nt.id));
-      }, 5000);
-    });
-  }, [notifications]);
+        dismissToast(nt.id);
+      }, 5000),
+    );
+    return () => {
+      timers.forEach((id) => window.clearTimeout(id));
+    };
+  }, [pendingToasts, dismissToast]);
 
   const persistRead = async (id: string) => {
     markAsRead(id);
@@ -47,18 +42,18 @@ export const ToastNotifications = () => {
 
   const handleToastClick = (toast: Notification) => {
     void persistRead(toast.id);
-    setActiveToasts((current) => current.filter((at) => at.id !== toast.id));
+    dismissToast(toast.id);
     navigate(notificationDestination(toast));
   };
 
-  if (activeToasts.length === 0) return null;
+  if (pendingToasts.length === 0) return null;
 
   return (
     <div
       data-testid="toast-notifications"
       className="fixed top-16 right-4 z-[3000] flex flex-col gap-3 max-w-[320px] w-full pointer-events-none"
     >
-      {activeToasts.map((toast) => (
+      {pendingToasts.map((toast) => (
         <div
           key={toast.id}
           onClick={() => handleToastClick(toast)}
@@ -95,7 +90,7 @@ export const ToastNotifications = () => {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              setActiveToasts((current) => current.filter((at) => at.id !== toast.id));
+              dismissToast(toast.id);
             }}
             className="text-[var(--cream-muted)]/40 hover:text-[var(--cream-muted)] transition-colors p-1"
             aria-label="Dismiss alert preview"

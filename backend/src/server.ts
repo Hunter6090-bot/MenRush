@@ -29,7 +29,9 @@ import adminRoutes from './routes/admin.routes';
 import campaignRoutes from './routes/campaigns';
 import socialRoutes from './routes/social';
 import mapFeedRoutes from './routes/map-feed';
+import communityRoutes from './routes/community';
 import { startPulseExpiryCron } from './services/pulse.service';
+import { startRoomTempIdentityPurgeCron } from './services/room.service';
 import {
   hasWelcomeBeenSent,
   isWaitlistEmailPaused,
@@ -131,6 +133,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/social', socialRoutes);
 app.use('/api/map-feed', mapFeedRoutes);
+app.use('/api/community', communityRoutes);
 
 // Waitlist signup — POSTs to /api/waitlist land here; the dripRoutes router
 // handles the rest (unsubscribe + admin endpoints). New signups get the
@@ -244,8 +247,8 @@ async function recordMissedCall(callerId: string, calleeId: string) {
   try {
     const callerName = (await userService.getDisplayName(callerId)) ?? 'Someone';
     const row = await messageService.recordMissedCall(callerId, calleeId);
-    const forCallee = messageService.forViewer(row, calleeId);
-    const forCaller = messageService.forViewer(row, callerId);
+    const forCallee = await messageService.forViewer(row, calleeId);
+    const forCaller = await messageService.forViewer(row, callerId);
     io.to(`user:${calleeId}`).emit('message', forCallee);
     io.to(`user:${callerId}`).emit('message', forCaller);
 
@@ -457,19 +460,15 @@ io.on('connection', (socket: Socket) => {
 
       socket.join(`room:${roomId}`);
 
-      const profile = await query(
-        `SELECT name, photo_url FROM users WHERE id = $1`,
-        [userId],
-      );
-      const name = profile.rows[0]?.name ?? 'Member';
-      const photo_url = profile.rows[0]?.photo_url ?? null;
+      const presence = await roomService.resolveRoomPresence(userId, roomId);
 
       socket.to(`room:${roomId}`).emit('room:presence', {
         room_id: roomId,
         type: 'join',
         user_id: userId,
-        name,
-        photo_url,
+        name: presence.name,
+        photo_url: presence.photo_url,
+        is_verified: presence.is_verified,
       });
 
       const peers = await io.in(`room:${roomId}`).fetchSockets();
@@ -483,11 +482,12 @@ io.on('connection', (socket: Socket) => {
 
       const rosterDetails = await Promise.all(
         roster.map(async (entry: any) => {
-          const r = await query(`SELECT name, photo_url FROM users WHERE id = $1`, [entry.user_id]);
+          const p = await roomService.resolveRoomPresence(entry.user_id, roomId);
           return {
             user_id: entry.user_id,
-            name: r.rows[0]?.name ?? 'Member',
-            photo_url: r.rows[0]?.photo_url ?? null,
+            name: p.name,
+            photo_url: p.photo_url,
+            is_verified: p.is_verified,
           };
         }),
       );
@@ -668,6 +668,7 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   startPulseExpiryCron();
+  startRoomTempIdentityPurgeCron();
   startVerificationRetentionWorker();
   // Optional: in-process drip worker. Prefer an external cron in production
   // (POST /api/waitlist/admin/run); only enable in-process when running a

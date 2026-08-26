@@ -1,7 +1,8 @@
 import { query } from '../db';
 import { premiumService } from './premium.service';
 
-const ACTIVE_CHECKIN_TTL_HOURS = 4;
+/** Venue check-in pins expire after this many hours (documented product choice). */
+export const ACTIVE_CHECKIN_TTL_HOURS = 4;
 
 export type HotSpotCategory = {
   id: number;
@@ -27,6 +28,10 @@ export type HotSpotRow = {
   live_count_exact: number;
   is_checked_in: boolean;
   my_checkin_anonymous: boolean | null;
+  /** Short-lived check-in window in hours (same for every spot). */
+  checkin_ttl_hours: number;
+  /** True when at least one non-expired check-in is present. */
+  has_active_checkins: boolean;
 };
 
 function formatLiveCount(exact: number, isPremium: boolean): number | string {
@@ -54,6 +59,8 @@ function mapSpotRow(row: Record<string, unknown>, isPremium: boolean): HotSpotRo
     is_checked_in: Boolean(row.is_checked_in),
     my_checkin_anonymous:
       row.my_checkin_anonymous == null ? null : Boolean(row.my_checkin_anonymous),
+    checkin_ttl_hours: ACTIVE_CHECKIN_TTL_HOURS,
+    has_active_checkins: exact > 0,
   };
 }
 
@@ -283,5 +290,78 @@ export const hotSpotsService = {
       [userId, String(ACTIVE_CHECKIN_TTL_HOURS)],
     );
     return res.rows[0] ?? null;
+  },
+
+  /**
+   * Nightlife Integration: find or create a Hot Spot pin for an event venue,
+   * then check in. Pin activity uses the same 4-hour TTL as other Hot Spots.
+   * Check-in is free (no premium gate).
+   */
+  async checkInAtEvent(
+    userId: string,
+    event: {
+      id: string;
+      name: string;
+      venue_name: string | null;
+      lat: number | null | string;
+      lng: number | null | string;
+    },
+    anonymous = false,
+  ) {
+    const lat = event.lat == null ? NaN : Number(event.lat);
+    const lng = event.lng == null ? NaN : Number(event.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      throw new Error('Event has no venue location');
+    }
+
+    const existing = await query(
+      `SELECT id FROM hot_spots WHERE event_id = $1 AND is_active = TRUE`,
+      [event.id],
+    );
+    let spotId = existing.rows[0]?.id as string | undefined;
+
+    if (!spotId) {
+      const nearby = await query(
+        `SELECT id FROM hot_spots
+          WHERE is_active = TRUE
+            AND ST_DWithin(
+              ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography,
+              ST_MakePoint($2, $1)::geography,
+              80
+            )
+          ORDER BY name = $3 DESC
+          LIMIT 1`,
+        [lat, lng, event.venue_name ?? event.name],
+      );
+      spotId = nearby.rows[0]?.id as string | undefined;
+    }
+
+    if (!spotId) {
+      const cat = await query(`SELECT id FROM hot_spot_categories WHERE slug = 'nightlife'`);
+      const categoryId = cat.rows[0]?.id;
+      if (!categoryId) throw new Error('Nightlife category missing');
+      const venueLabel = (event.venue_name || event.name).slice(0, 120);
+      const created = await query(
+        `INSERT INTO hot_spots (category_id, name, city, description, latitude, longitude, is_user_generated, event_id)
+         VALUES ($1, $2, NULL, $3, $4, $5, TRUE, $6)
+         RETURNING id`,
+        [
+          categoryId,
+          venueLabel,
+          `Venue pin for ${event.name}`.slice(0, 240),
+          lat,
+          lng,
+          event.id,
+        ],
+      );
+      spotId = created.rows[0].id as string;
+    } else {
+      await query(`UPDATE hot_spots SET event_id = COALESCE(event_id, $2) WHERE id = $1`, [
+        spotId,
+        event.id,
+      ]);
+    }
+
+    return this.checkIn(userId, spotId, anonymous);
   },
 };

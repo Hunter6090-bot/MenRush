@@ -75,6 +75,24 @@ export const DISCOVERY_FILTER_CATEGORIES = [
 
 export type DiscoveryFilterCategoryId = (typeof DISCOVERY_FILTER_CATEGORIES)[number]['id'];
 
+/** Vibe / scene / connection live in the More filters drawer (not a new nav tab). */
+export const MORE_FILTER_CATEGORY_IDS = ['vibe', 'scene', 'connection'] as const;
+
+export type MoreFilterCategoryId = (typeof MORE_FILTER_CATEGORY_IDS)[number];
+
+export function isMoreFilterCategoryId(id: string): id is MoreFilterCategoryId {
+  return (MORE_FILTER_CATEGORY_IDS as readonly string[]).includes(id);
+}
+
+/** Categories shown in the inline Filters panel (Looking for, position, …). */
+export const PRIMARY_DISCOVERY_FILTER_CATEGORIES = DISCOVERY_FILTER_CATEGORIES.filter(
+  (category) => !isMoreFilterCategoryId(category.id),
+);
+
+export function getMoreFilterCategories() {
+  return DISCOVERY_FILTER_CATEGORIES.filter((category) => isMoreFilterCategoryId(category.id));
+}
+
 export const API_LOOKING_FOR_INTENTS = new Set<string>(INTENT_FILTERS.filter((v) => v !== 'All'));
 
 export const AGE_PRESETS = [
@@ -126,6 +144,13 @@ export function countActiveDiscoveryFilters(state: DiscoveryFilterState): number
   count += state.status.length;
   if (state.mood) count += 1;
   return count;
+}
+
+export function countMoreFilterSelections(state: DiscoveryFilterState): number {
+  const moreTags = new Set(
+    getMoreFilterCategories().flatMap((category) => category.tags as readonly string[]),
+  );
+  return state.interests.filter((tag) => moreTags.has(tag)).length;
 }
 
 export function getAgeRange(presetId: AgePresetId): { minAge?: number; maxAge?: number } {

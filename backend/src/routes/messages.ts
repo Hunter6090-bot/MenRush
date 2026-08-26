@@ -52,8 +52,14 @@ router.get('/:messageId/media', async (req, res) => {
     const resource = `/api/messages/${req.params.messageId}/media`;
     const grant = verifyMediaAccess(String(req.query.access || ''), resource);
     const media = await messageService.getMedia(grant.viewerId, req.params.messageId);
+    const mediaClear = await messageService.viewerMediaClear(
+      grant.viewerId,
+      media.senderId,
+      media.mediaType,
+    );
     res.type(media.mimeType);
     res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-MenRush-Media-Clear', mediaClear ? '1' : '0');
     return res.sendFile(resolveMediaPath(mediaDir, media.storageKey));
   } catch (error) {
     if (error instanceof SecurityError) {
@@ -170,7 +176,7 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
     const io = req.app.get('io');
     io.to(`user:${receiver_id}`).emit(
       'message',
-      messageService.forViewer(message, receiver_id),
+      await messageService.forViewer(message, receiver_id),
     );
     const pushBody =
       kind === 'image' ? '\u{1F4F7} Photo' : kind === 'video' ? '\u{1F3AC} Video' : '\u{1F3A4} Voice note';

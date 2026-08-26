@@ -39,6 +39,8 @@ export const RegisterSchema = z.object({
   /** Preferred source of truth for age — persisted and used to recompute age. */
   date_of_birth: isoDateOnly.optional(),
   invite_code: z.string().min(1).max(64).optional(),
+  /** Optional public promo (e.g. Pride QR). Validated at register. */
+  promo_code: z.string().min(1).max(64).optional(),
 });
 
 export const LoginSchema = z.object({
@@ -114,6 +116,15 @@ export const LocationSchema = z.object({
   lng: z.number().min(-180).max(180),
 });
 
+/** Community Space — short local text only (≤280). No media. */
+export const CommunityCreatePostSchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Post cannot be empty')
+    .max(280, 'Post must be 280 characters or fewer'),
+});
+
 export const MessageSchema = z.object({
   receiver_id: z.string().uuid(),
   message: z.string().min(1).max(1000),
@@ -174,6 +185,7 @@ export const AddRoomMemberSchema = z.object({
   user_id: z.string().uuid(),
 });
 
+/** Temporary identity for a specific room — never written to main profile. */
 export const RoomTempIdentitySchema = z.object({
   display_name: z.string().trim().min(1).max(40),
   photo_url: z.string().trim().max(500).nullable().optional(),
@@ -233,9 +245,11 @@ export type ChangeEmailInput = z.infer<typeof ChangeEmailSchema>;
 export type ProfileInput = z.infer<typeof ProfileSchema>;
 export type DeleteAccountInput = z.infer<typeof DeleteAccountSchema>;
 export type LocationInput = z.infer<typeof LocationSchema>;
+export type CommunityCreatePostInput = z.infer<typeof CommunityCreatePostSchema>;
 export type MessageInput = z.infer<typeof MessageSchema>;
 export type CreateRoomInput = z.infer<typeof CreateRoomSchema>;
 export type RoomMessageInput = z.infer<typeof RoomMessageSchema>;
+export type RoomTempIdentityInput = z.infer<typeof RoomTempIdentitySchema>;
 export type ContactFormInput = z.infer<typeof ContactFormSchema>;
 export type Mood = (typeof MOOD_VALUES)[number];
 export type MoodInput = z.infer<typeof MoodSchema>;

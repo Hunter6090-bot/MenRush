@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   fallbackAvatarForAge,
-  isUploadPath,
   resolveAssetUrl,
   resolveUploadUrlCandidates,
 } from '../lib/assetUrl';
+import { profilePathForUser } from '../lib/profileLinks';
+import { useAuthStore } from '../hooks/store';
 
 type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 
@@ -18,6 +20,15 @@ interface UserAvatarProps {
   className?: string;
   /** When false, renders without the copper border ring. Default: true */
   framed?: boolean;
+  /**
+   * When set, the avatar links to that user's profile (/profile for self,
+   * /profile/:id otherwise). New surfaces inherit the product rule by passing userId.
+   */
+  userId?: string;
+  /** Override auto-linking when userId is set (e.g. already wrapped in a Link). */
+  linkToProfile?: boolean;
+  onClick?: (event: React.MouseEvent) => void;
+  'data-testid'?: string;
 }
 
 const sizes: Record<Size, { outer: string; text: string; dot: string; dotPos: string }> = {
@@ -75,6 +86,13 @@ export function useResolvingPhotoSrc(
   return { src, onError };
 }
 
+/** Resolves the href for a face/photo tap (self → /profile, else /profile/:id). */
+export function useProfilePhotoHref(userId?: string | null): string | null {
+  const authUserId = useAuthStore((s) => s.user?.id);
+  if (!userId) return null;
+  return profilePathForUser(userId, authUserId);
+}
+
 export const UserAvatar: React.FC<UserAvatarProps> = ({
   name,
   photoUrl,
@@ -84,31 +102,77 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   showStatus = true,
   className = '',
   framed = true,
+  userId,
+  linkToProfile,
+  onClick,
+  'data-testid': testId,
 }) => {
   const s = sizes[size];
   const initial = name?.[0]?.toUpperCase() ?? '?';
   const { src, onError } = useResolvingPhotoSrc(photoUrl, age);
+  const href = useProfilePhotoHref(userId);
+  const shouldLink = Boolean(href) && linkToProfile !== false;
 
-  return (
+  const face = (
+    <div
+      className={`${s.outer} rounded-full overflow-hidden bg-gradient-to-br from-[#C4832A]/30 to-[#C4832A]/10 flex items-center justify-center font-semibold text-[var(--cream)]${
+        framed ? ' border border-[var(--border-default)]' : ''
+      }`}
+    >
+      {src ? (
+        <img
+          src={src}
+          alt={name}
+          className="w-full h-full object-cover"
+          onError={onError}
+          loading="lazy"
+        />
+      ) : (
+        <span className={s.text}>{initial}</span>
+      )}
+    </div>
+  );
+
+  const content = (
     <div className={`relative flex-shrink-0 ${className}`}>
-      <div
-        className={`${s.outer} rounded-full overflow-hidden bg-gradient-to-br from-[#C4832A]/30 to-[#C4832A]/10 flex items-center justify-center font-semibold text-[var(--cream)]${framed ? ' border border-[var(--border-default)]' : ''}`}
-      >
-        {src ? (
-          <img
-            src={src}
-            alt={name}
-            className="w-full h-full object-cover"
-            onError={onError}
-            loading="lazy"
-          />
-        ) : (
-          <span className={s.text}>{initial}</span>
-        )}
-      </div>
+      {face}
       {showStatus && online !== undefined && (
         <StatusDot online={online} className={`absolute ${s.dotPos} ${s.dot}`} />
       )}
+    </div>
+  );
+
+  if (shouldLink && href) {
+    return (
+      <Link
+        to={href}
+        onClick={onClick}
+        aria-label={`Open ${name}'s profile`}
+        data-testid={testId ?? 'user-avatar-profile-link'}
+        className="inline-flex shrink-0 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--copper)]"
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={`Open ${name}'s profile`}
+        data-testid={testId}
+        className="inline-flex shrink-0 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--copper)]"
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div data-testid={testId} className="inline-flex shrink-0">
+      {content}
     </div>
   );
 };

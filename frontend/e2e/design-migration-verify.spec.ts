@@ -1,7 +1,6 @@
 import { expect, test, request as apiRequest, type BrowserContext, type Page } from '@playwright/test';
 import { TEST_PASSWORD, ALICE, BOB } from './test-accounts';
-
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
+import { PLAYWRIGHT_BASE_URL as BASE_URL } from './support/base-url';
 
 type LoginResult = {
   token: string;
@@ -51,16 +50,17 @@ test.beforeAll(async () => {
 });
 
 test.describe('desktop design migration @ 1440px', () => {
-  test.use({ viewport: { width: 1440, height: 900 } });
+  const desktopViewport = { width: 1440, height: 900 } as const;
 
   test('Discover shell and grid', async ({ browser }) => {
-    const ctx = await browser.newContext();
+    // test.use viewport does not apply to manually created contexts.
+    const ctx = await browser.newContext({ viewport: { ...desktopViewport } });
     await authenticate(ctx, alice);
     const page = await ctx.newPage();
     await page.goto('/discover');
 
     await expect(page.getByRole('link', { name: /MenRush home/i }).first()).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Nearby' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Nearby', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Nearby', exact: true })).toBeVisible();
     await expect(page.getByText(/in your radius|nearby/i).first()).toBeVisible();
     await expect(page.getByRole('button', { name: /Toggle pulse visibility/i })).toBeVisible();
@@ -70,13 +70,13 @@ test.describe('desktop design migration @ 1440px', () => {
   });
 
   test('Matches page', async ({ browser }) => {
-    const ctx = await browser.newContext();
+    const ctx = await browser.newContext({ viewport: { ...desktopViewport } });
     await authenticate(ctx, alice);
     const page = await ctx.newPage();
     await page.goto('/matches');
 
     await expect(page.getByRole('heading', { name: 'Matches' })).toBeVisible();
-    await expect(page.getByText(/Mutual likes/i)).toBeVisible();
+    await expect(page.getByText(/Who liked you and mutual matches/i)).toBeVisible();
     await expect(page.getByText('Bob').first()).toBeVisible();
 
     await assertNoHorizontalOverflow(page);
@@ -84,7 +84,7 @@ test.describe('desktop design migration @ 1440px', () => {
   });
 
   test('Messages split view and send text', async ({ browser }) => {
-    const ctx = await browser.newContext();
+    const ctx = await browser.newContext({ viewport: { ...desktopViewport } });
     await authenticate(ctx, alice);
     const page = await ctx.newPage();
     await page.goto('/conversations');
@@ -111,7 +111,7 @@ test.describe('desktop design migration @ 1440px', () => {
   });
 
   test('Settings page', async ({ browser }) => {
-    const ctx = await browser.newContext();
+    const ctx = await browser.newContext({ viewport: { ...desktopViewport } });
     await authenticate(ctx, alice);
     const page = await ctx.newPage();
     await page.goto('/settings');
@@ -125,10 +125,10 @@ test.describe('desktop design migration @ 1440px', () => {
 });
 
 test.describe('mobile design migration @ 390px', () => {
-  test.use({ viewport: { width: 390, height: 844 } });
+  const mobileViewport = { width: 390, height: 844 } as const;
 
   test('Discover mobile shell', async ({ browser }) => {
-    const ctx = await browser.newContext();
+    const ctx = await browser.newContext({ viewport: { ...mobileViewport } });
     await authenticate(ctx, alice);
     const page = await ctx.newPage();
     await page.goto('/discover');
@@ -141,7 +141,7 @@ test.describe('mobile design migration @ 390px', () => {
   });
 
   test('Matches and messages mobile', async ({ browser }) => {
-    const ctx = await browser.newContext();
+    const ctx = await browser.newContext({ viewport: { ...mobileViewport } });
     await authenticate(ctx, alice);
     const page = await ctx.newPage();
 

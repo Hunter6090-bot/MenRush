@@ -6,12 +6,15 @@ interface VerifiedBadgeProps {
 
 /** Precise trust claim — free for all users and separate from Premium. */
 export function VerifiedBadge({ size = 'sm', className = '', level = 'identity_checked' }: VerifiedBadgeProps) {
-  const pad = size === 'lg' ? 'px-3 py-1.5 text-xs' : 'px-2 py-0.5 text-[10.5px]';
-  const iconSize = size === 'lg' ? 13 : 11;
+  // Slightly larger/heavier than the original pill so Identity Checked reads on
+  // dense profile cards without inventing a new verification system.
+  const pad = size === 'lg' ? 'px-3.5 py-1.5 text-[13px]' : 'px-2.5 py-1 text-[11.5px]';
+  const iconSize = size === 'lg' ? 14 : 12;
 
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full bg-nn-copper/13 text-nn-copper border border-nn-copper/50 font-semibold tracking-wide ${pad} ${className}`}
+      data-testid={level === 'identity_checked' ? 'identity-checked-badge' : 'authentic-person-badge'}
+      className={`inline-flex items-center gap-1 rounded-full bg-nn-copper/18 text-nn-copper border border-nn-copper/65 font-bold tracking-wide shadow-[0_0_0_1px_rgba(196,131,42,0.12)] ${pad} ${className}`}
     >
       <CheckIcon size={iconSize} />
       {level === 'identity_checked' ? 'Identity checked' : 'Authentic person'}
@@ -21,7 +24,7 @@ export function VerifiedBadge({ size = 'sm', className = '', level = 'identity_c
 
 function CheckIcon({ size }: { size: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3.25} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <polyline points="20 6 9 17 4 12" />
     </svg>
   );

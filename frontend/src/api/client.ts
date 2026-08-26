@@ -204,6 +204,22 @@ export const usersAPI = {
       is_premium: boolean;
       preview?: Array<{ id: string; name: string; age: number; photo_url?: string | null }>;
     }>('/users/likes/received/summary'),
+  /** Incoming likes (not yet mutual) — not gated behind MenRush+. */
+  getReceivedLikes: () =>
+    apiClient.get<
+      Array<{
+        id: string;
+        name: string;
+        age: number;
+        bio?: string;
+        photo_url?: string | null;
+        online?: boolean;
+        last_seen?: string;
+        liked_at?: string;
+        is_verified?: boolean;
+        authenticity_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
+      }>
+    >('/users/likes/received'),
   getProfileViews: () =>
     apiClient.get<{
       viewers: Array<{
@@ -234,8 +250,12 @@ export const usersAPI = {
         blocked_at: string;
       }>;
     }>('/users/blocks'),
-  reportUser: (id: string, reason: string, details?: string) =>
-    apiClient.post(`/users/report/${id}`, { reason, details }),
+  reportUser: (id: string, reason: string, details?: string, threadId?: string) =>
+    apiClient.post(`/users/report/${id}`, {
+      reason,
+      details,
+      ...(threadId ? { thread_id: threadId } : {}),
+    }),
   getTeamStatus: () => apiClient.get<{ is_team: boolean }>('/users/me/team'),
   listReports: () =>
     apiClient.get<{
@@ -323,6 +343,11 @@ export interface MessageDTO {
   expired: boolean;
   /** Set when the sender withdraws media from the chat. */
   withdrawn_at?: string | null;
+  /**
+   * Verified backend Premium gate for Discreet media blur.
+   * false → soft-blur photos/videos for this viewer; omit/true → clear.
+   */
+  media_clear?: boolean;
 }
 
 export interface SendMediaOptions {
@@ -387,17 +412,26 @@ export const meetAPI = {
 };
 
 export const roomsAPI = {
-  createRoom: (data: unknown) => apiClient.post('/rooms', data),
-  getRooms: () => apiClient.get('/rooms'),
-  getOfficialRooms: () =>
-    apiClient.get<{ rooms: Array<{ id: string; name: string; description?: string; member_count: number; is_official: boolean }> }>(
-      '/rooms/official',
-    ),
+  createRoom: (data: any) => apiClient.post('/rooms', data),
+  getRooms: () =>
+    apiClient.get<{
+      member_rooms: Array<Record<string, unknown>>;
+      nearby_rooms: Array<Record<string, unknown>>;
+      official_rooms: Array<Record<string, unknown>>;
+    }>('/rooms'),
   getRoom: (roomId: string) => apiClient.get(`/rooms/${roomId}`),
   getMembers: (roomId: string) =>
-    apiClient.get<Array<{ id: string; name: string; photo_url?: string; role?: string }>>(
-      `/rooms/${roomId}/members`,
-    ),
+    apiClient.get<
+      Array<{
+        id: string;
+        name: string;
+        photo_url?: string;
+        role?: string;
+        is_verified?: boolean;
+        authenticity_status?: string;
+        using_temp_identity?: boolean;
+      }>
+    >(`/rooms/${roomId}/members`),
   addMember: (roomId: string, userId: string) =>
     apiClient.post(`/rooms/${roomId}/members`, { user_id: userId }),
   joinRoom: (roomId: string) => apiClient.post(`/rooms/${roomId}/join`),
@@ -407,15 +441,45 @@ export const roomsAPI = {
     apiClient.get(`/rooms/${roomId}/messages`, { params: { before } }),
   sendMessage: (roomId: string, message: string, replyTo?: string) =>
     apiClient.post(`/rooms/${roomId}/messages`, { message, reply_to: replyTo }),
+  sendMedia: (roomId: string, file: File | Blob, caption?: string) => {
+    const fd = new FormData();
+    const filename =
+      file instanceof File && file.name
+        ? file.name
+        : `room-media-${Date.now()}.jpg`;
+    fd.append('media', file, filename);
+    if (caption) fd.append('caption', caption);
+    return apiClient.post(`/rooms/${roomId}/messages/media`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   getTempIdentity: (roomId: string) =>
-    apiClient.get<{ display_name: string | null; photo_url: string | null }>(
-      `/rooms/${roomId}/temp-identity`,
-    ),
-  setTempIdentity: (roomId: string, data: { display_name: string; photo_url?: string }) =>
-    apiClient.put<{ display_name: string; photo_url: string | null }>(
-      `/rooms/${roomId}/temp-identity`,
-      data,
-    ),
+    apiClient.get<{
+      display_name?: string | null;
+      photo_url?: string | null;
+      save_name?: boolean;
+      save_photo?: boolean;
+    }>(`/rooms/${roomId}/temp-identity`),
+  setTempIdentity: (
+    roomId: string,
+    data: {
+      display_name: string;
+      photo_url?: string | null;
+      save_name?: boolean;
+      save_photo?: boolean;
+    },
+  ) => apiClient.put(`/rooms/${roomId}/temp-identity`, data),
+  uploadTempPhoto: (roomId: string, file: File) => {
+    const fd = new FormData();
+    fd.append('photo', file);
+    return apiClient.post<{ photo_url: string }>(`/rooms/${roomId}/temp-identity/photo`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  clearTempIdentity: (roomId: string) =>
+    apiClient.post<{ cleared: true }>(`/rooms/${roomId}/temp-identity/clear`),
+  deleteTempIdentity: (roomId: string) =>
+    apiClient.delete(`/rooms/${roomId}/temp-identity`),
 };
 
 // ── Map feed (Sniffies-style anonymous location chat) ─────────────────────
@@ -498,6 +562,8 @@ export interface AlbumDTO {
   updated_at: string;
   /** Present only when listing someone else's albums via /albums/user/:id. */
   unlocked?: boolean;
+  /** Verified backend Premium gate for cover blur when unlocked. */
+  media_clear?: boolean;
 }
 
 export interface AlbumPhotoDTO {
@@ -505,6 +571,8 @@ export interface AlbumPhotoDTO {
   photo_url: string;
   position: number;
   created_at: string;
+  /** Verified backend Premium gate — false soft-blurs for free viewers. */
+  media_clear?: boolean;
 }
 
 export const albumsAPI = {
@@ -516,9 +584,12 @@ export const albumsAPI = {
   removePhoto: (albumId: string, photoId: string) =>
     apiClient.delete<{ deleted: true }>(`/albums/${albumId}/photos/${photoId}`),
   listPhotos: (albumId: string) =>
-    apiClient.get<{ photos: AlbumPhotoDTO[]; unlocked: boolean; locked: boolean }>(
-      `/albums/${albumId}/photos`,
-    ),
+    apiClient.get<{
+      photos: AlbumPhotoDTO[];
+      unlocked: boolean;
+      locked: boolean;
+      media_clear?: boolean;
+    }>(`/albums/${albumId}/photos`),
   upload: (albumId: string, file: File) => {
     const fd = new FormData();
     fd.append('photo', file);
@@ -556,6 +627,9 @@ export const eventsAPI = {
     apiClient.get<EventDTO[]>('/events/nearby', {
       params: { lat, lng, radius: radiusKm, limit },
     }),
+  /** Free venue check-in — creates/uses a Hot Spot pin that expires after 4 hours. */
+  checkIn: (id: string, anonymous = false) =>
+    apiClient.post<{ ok: boolean; spot: HotSpotDTO }>(`/events/${id}/check-in`, { anonymous }),
 };
 
 // ── Hot Spots (venue check-ins — not user Pulse boost) ───────────────────
@@ -583,6 +657,10 @@ export interface HotSpotDTO {
   live_count_exact: number;
   is_checked_in: boolean;
   my_checkin_anonymous: boolean | null;
+  /** Short-lived check-in window in hours (product default: 4). */
+  checkin_ttl_hours?: number;
+  /** True when at least one non-expired check-in is present. */
+  has_active_checkins?: boolean;
 }
 
 export const hotSpotsAPI = {
@@ -601,6 +679,27 @@ export const hotSpotsAPI = {
       : apiClient.post<{ ok: boolean }>('/hot-spots/check-out'),
   getMyCheckIn: () =>
     apiClient.get<{ check_in: unknown | null }>('/hot-spots/me/check-in'),
+};
+
+/** Community Space — short local text posts (≤280). Free for all. */
+export interface CommunityPostDTO {
+  id: string;
+  user_id: string;
+  body: string;
+  created_at: string;
+  author_name: string;
+  author_photo_url: string | null;
+  distance_km: string;
+  distance_label: string;
+}
+
+export const communityAPI = {
+  listPosts: (lat: number, lng: number, radiusKm?: number) =>
+    apiClient.get<{ posts: CommunityPostDTO[] }>('/community/posts', {
+      params: { lat, lng, radiusKm },
+    }),
+  createPost: (body: string) =>
+    apiClient.post<{ post: CommunityPostDTO }>('/community/posts', { body }),
 };
 
 export const aiAPI = {

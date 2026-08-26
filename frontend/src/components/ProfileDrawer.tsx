@@ -4,12 +4,15 @@ import { NearbyUser } from "./ProfileCard";
 import { SilhouetteAvatar } from "./SilhouetteAvatar";
 import { PulsingAvatar } from "./PulsingAvatar";
 import { useResolvingPhotoSrc } from "./UserAvatar";
+import { ProfilePhotoLink } from "./ProfilePhotoLink";
 import { IconPulse, IconClose } from "./icons";
 import { StatusBadge } from "./StatusBadge";
 import { DistancePill } from "./DistancePill";
 import { VerifiedBadge } from "./VerifiedBadge";
 import { ChatSafetyMenu } from "./ChatSafetyMenu";
 import { getDistanceLabel, isUserPulsing } from "../lib/discovery";
+import { profilePathForUser } from "../lib/profileLinks";
+import { useAuthStore } from "../hooks/store";
 import { useIsDesktopLayout } from "../hooks/useMediaQuery";
 
 type SheetSnap = "half" | "tall" | "full";
@@ -62,6 +65,7 @@ export function ProfileDrawer({
   onBlocked,
 }: ProfileDrawerProps) {
   const navigate = useNavigate();
+  const authUserId = useAuthStore((s) => s.user?.id);
   const isDesktop = useIsDesktopLayout();
   const [mounted, setMounted] = useState(false);
   const [snap, setSnap] = useState<SheetSnap>("tall");
@@ -266,20 +270,27 @@ export function ProfileDrawer({
 
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4">
           <div className="flex items-end justify-between gap-3 -mt-14 mb-4">
-            <PulsingAvatar isPulsing={isPulsing} size={isDesktop ? 112 : 80} intensity="subtle">
-              <div
-                className="w-full h-full rounded-full overflow-hidden flex items-center justify-center"
-                style={{
-                  background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
-                }}
-              >
-                {photo ? (
-                  <img src={photo} alt="" className="w-full h-full object-cover" onError={onPhotoError} />
-                ) : (
-                  <SilhouetteAvatar size={isDesktop ? 100 : 68} variant="card" />
-                )}
-              </div>
-            </PulsingAvatar>
+            <ProfilePhotoLink
+              userId={user.id}
+              name={user.name}
+              className="inline-flex"
+              data-testid={`drawer-avatar-${user.id}`}
+            >
+              <PulsingAvatar isPulsing={isPulsing} size={isDesktop ? 112 : 80} intensity="subtle">
+                <div
+                  className="w-full h-full rounded-full overflow-hidden flex items-center justify-center"
+                  style={{
+                    background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
+                  }}
+                >
+                  {photo ? (
+                    <img src={photo} alt="" className="w-full h-full object-cover" onError={onPhotoError} />
+                  ) : (
+                    <SilhouetteAvatar size={isDesktop ? 100 : 68} variant="card" />
+                  )}
+                </div>
+              </PulsingAvatar>
+            </ProfilePhotoLink>
           </div>
 
           <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -345,7 +356,7 @@ export function ProfileDrawer({
             type="button"
             onClick={() => {
               onClose();
-              navigate(`/profile/${user.id}`);
+              navigate(profilePathForUser(user.id, authUserId));
             }}
             className="w-full py-2.5 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream)] font-bold text-sm hover:border-[var(--copper)] hover:text-[var(--copper)] transition-colors"
           >

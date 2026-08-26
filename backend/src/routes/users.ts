@@ -268,6 +268,16 @@ router.get('/likes/received/summary', verifiedMiddleware, async (req: AuthReques
   }
 });
 
+/** Incoming likes (not yet mutual) — visible to all members, not MenRush+. */
+router.get('/likes/received', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const likes = await userService.getReceivedLikes(req.userId!);
+    res.json(likes);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 /** Outbound likes — ids only, so Discover/Stream Match CTAs survive reload. */
 router.get('/likes/sent', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
@@ -378,6 +388,8 @@ router.get('/blocks', async (req: AuthRequest, res: Response) => {
 const ReportSchema = z.object({
   reason: z.enum(['spam', 'harassment', 'fake_profile', 'inappropriate_content', 'underage', 'other']),
   details: z.string().max(1000).optional(),
+  /** Conversation or room id for SENTINEL review — optional, free for all users. */
+  thread_id: z.string().min(1).max(128).optional(),
 });
 
 router.post('/report/:id', async (req: AuthRequest, res: Response) => {
@@ -394,6 +406,7 @@ router.post('/report/:id', async (req: AuthRequest, res: Response) => {
       req.params.id,
       parsed.data.reason,
       parsed.data.details,
+      parsed.data.thread_id,
     );
     res.json({ reported: true, id: report.id });
   } catch (error: any) {
