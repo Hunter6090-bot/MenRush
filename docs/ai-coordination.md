@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Profile tag pick-one / pick-several UX cue | PR `cursor/profile-tag-pick-cue-4040` | — | Cursor cloud — cue only under each tag subsection; selection rules unchanged; do not touch #97–#99 |
 | Discover Map\|Community parity + phone pinch zoom | PR `cursor/discover-map-community-parity-2402` | — | Cursor cloud — desktop under-map = Nearby (not Community); shared MAP\|COMMUNITY tabs; phone map pinch via touch-action/overflow + disableRotation; do not touch #97–#99 |
 | Pride exclude drip + wave-2; invite email copy (30-day gift, no em dashes) | PR `cursor/pride-exclude-drip-wave2-a4e8` | — | Cursor cloud — source=pride out of drip/wave-2; Pride email bargain reword; do not touch /pride face or #97–#99 |
 | Video note send MIME (MediaRecorder codecs→text/plain reject) | PR on main | — | Cursor cloud — client strips base MIME; API names mime reject; desktop webm + iPhone mp4 |
