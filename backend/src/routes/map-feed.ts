@@ -41,12 +41,15 @@ router.post('/', postLimiter, async (req: AuthRequest, res: Response) => {
     const saved = await mapFeedService.post(req.userId!, message);
 
     // Fan out via user rooms (sockets join `user:${id}` on authenticate).
-    // Do not pass userSockets Set values to io.to() — that never delivers.
+    // Never pass userSockets Map values to io.to() — they are Set<string>, not room ids.
     const io = req.app.get('io');
     if (io) {
-      const nearbyIds = await mapFeedService.nearbyUserIds(saved.lat, saved.lng, 5);
+      const lat = Number(saved.lat);
+      const lng = Number(saved.lng);
+      const nearbyIds = await mapFeedService.nearbyUserIds(lat, lng, 5);
+      // Include the poster: Discover dock does not optimistically render until this
+      // event (or the HTTP body) lands — skipping self made own posts look undelivered.
       for (const uid of nearbyIds) {
-        if (uid === req.userId) continue;
         io.to(`user:${uid}`).emit('map:feed:message', saved);
       }
     }

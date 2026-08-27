@@ -95,6 +95,7 @@ export function DiscoverChatDock({
     if (!socket) return;
     const onFeedMsg = (data: MapFeedMessage) => {
       setMessages((prev) => {
+        if (prev.some((m) => m.id === data.id)) return prev;
         const next = [...prev, data].filter((m) => msgAge(m) < FADE_AFTER_MS);
         return next.slice(-MAX_VISIBLE * 3);
       });
@@ -137,12 +138,21 @@ export function DiscoverChatDock({
     setInput('');
     setSending(true);
     try {
-      await mapFeedAPI.post({
+      const res = await mapFeedAPI.post({
         message: text,
         lat: lat ?? undefined,
         lng: lng ?? undefined,
         display_name: user?.name ?? 'Anonymous',
       });
+      // HTTP path: show own post even if socket room join lagged or emit missed self.
+      const saved = res.data;
+      if (saved?.id) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === saved.id)) return prev;
+          const next = [...prev, saved].filter((m) => msgAge(m) < FADE_AFTER_MS);
+          return next.slice(-MAX_VISIBLE * 3);
+        });
+      }
     } catch {
       setInput(text);
     } finally {
