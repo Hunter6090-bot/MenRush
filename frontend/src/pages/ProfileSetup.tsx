@@ -16,7 +16,12 @@ import {
   type PhotoChoice,
 } from '../lib/genericAvatar';
 import { normalizeProfileImageFile } from '../lib/imageUpload';
-import { PROFILE_LOOKING_FOR_TAGS, PROFILE_TAG_GROUPS, toggleProfileInterest } from '../lib/profileTags';
+import {
+  PROFILE_LOOKING_FOR_TAGS,
+  PROFILE_TAG_GROUPS,
+  profileTagSelectHint,
+  toggleProfileInterest,
+} from '../lib/profileTags';
 import { PROFILE_INTERESTS_MAX } from '../lib/profileDetails';
 import {
   clearProfileSetupSkip,
@@ -528,7 +533,14 @@ export const ProfileSetup: React.FC = () => {
         ) : null}
 
         {step === 'looking' ? (
-          <div className="flex flex-wrap gap-2">
+          <div>
+            <p
+              className="mb-2 text-[10px] font-medium text-[var(--cream-muted)]/50"
+              data-testid="tag-select-hint-Looking for"
+            >
+              {profileTagSelectHint(true)}
+            </p>
+            <div className="flex flex-wrap gap-2">
             {PROFILE_LOOKING_FOR_TAGS.map((tag) => {
               const active = lookingFor === tag;
               return (
@@ -546,6 +558,7 @@ export const ProfileSetup: React.FC = () => {
                 </button>
               );
             })}
+            </div>
           </div>
         ) : null}
 
@@ -556,8 +569,14 @@ export const ProfileSetup: React.FC = () => {
             </p>
             {tagGroups.map((group) => (
               <div key={group.label}>
-                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-[var(--cream-muted)]/70">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--cream-muted)]/70">
                   {group.label}
+                </p>
+                <p
+                  className="mt-0.5 mb-2 text-[10px] font-medium text-[var(--cream-muted)]/50"
+                  data-testid={`tag-select-hint-${group.label}`}
+                >
+                  {profileTagSelectHint(group.singleSelect)}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {group.tags.map((tag) => {
