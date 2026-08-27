@@ -10,7 +10,20 @@ import {
 } from './localeUnits';
 
 const TRIBE_TAGS = [
-  'Twink', 'Twunk', 'Otter', 'Bear', 'Cub', 'Daddy', 'Wolf', 'Jock', 'Leather', 'Rugged', 'Geek',
+  'Twink',
+  'Twunk',
+  'Otter',
+  'Bear',
+  'Cub',
+  'Daddy',
+  'Wolf',
+  'Jock',
+  'Leather',
+  'Rugged',
+  'Geek',
+  'Pup',
+  'Chub',
+  'Muscle',
 ];
 
 /** Matches backend `/users/nearby` clamp: Math.min(Math.max(radius, 0.8), 161). */
@@ -30,7 +43,8 @@ export const RADIUS_MILE_OPTIONS = [
 
 export type RadiusMilesSelection = 'all' | number;
 
-export const INTENT_FILTERS = ['All', 'Chat', 'Drinks', 'Date', 'NSA'] as const;
+/** Legacy special nearby intents that still use the lookingFor API path (NSA only). */
+export const INTENT_FILTERS = ['All', 'NSA'] as const;
 export type IntentFilter = (typeof INTENT_FILTERS)[number];
 
 export function milesToKm(miles: number): number {
@@ -142,12 +156,6 @@ export function matchesIntentFilter(user: NearbyUser, filter: IntentFilter): boo
   const interests = (user.interests ?? []).map((t) => t.toLowerCase());
 
   switch (filter) {
-    case 'Chat':
-      return user.online || mood.includes('chat') || interests.includes('chat');
-    case 'Drinks':
-      return mood.includes('drink') || lookingFor.includes('drink') || interests.includes('drinks');
-    case 'Date':
-      return lookingFor.includes('dat') || mood.includes('date') || interests.includes('dating');
     case 'NSA':
       return lookingFor.includes('nsa') || mood.includes('nsa') || interests.includes('nsa');
     default:
