@@ -8,18 +8,28 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getDraftMedia, effectiveCaption, PLATFORM_TAGS } from './media-store.js';
+
+export { OFFICIAL_LOGO } from './media-store.js';
+export { PLATFORM_TAGS };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PACK_PATH = path.join(__dirname, 'drafts', 'oct1-2026.json');
 
+/** Platforms that get a visual workspace (preview + prompt + upload). */
+export const VISUAL_PLATFORMS = new Set(['instagram', 'x', 'bluesky']);
+
+/** Formats that Approve may publish (Story/Reel stay draft+preview only). */
+export const PUBLISHABLE_FORMATS = new Set(['feed', 'post']);
+
 /** Campaign weeks aligned with docs/social-oct1-2026.md (UK calendar). */
 export const WEEK_RANGES = [
-  { week: 1, start: '2026-08-18', end: '2026-08-24', theme: 'Launch signal' },
-  { week: 2, start: '2026-08-25', end: '2026-08-31', theme: 'Nearby / rooms energy' },
-  { week: 3, start: '2026-09-01', end: '2026-09-07', theme: 'Early Premium' },
-  { week: 4, start: '2026-09-08', end: '2026-09-14', theme: 'Founder / build' },
-  { week: 5, start: '2026-09-15', end: '2026-09-21', theme: 'Trust / discretion' },
-  { week: 6, start: '2026-09-22', end: '2026-09-28', theme: 'Countdown pressure' },
+  { week: 1, start: '2026-08-21', end: '2026-08-27', theme: 'Launch signal' },
+  { week: 2, start: '2026-08-28', end: '2026-09-03', theme: 'Nearby / rooms energy' },
+  { week: 3, start: '2026-09-04', end: '2026-09-10', theme: 'Early Premium' },
+  { week: 4, start: '2026-09-11', end: '2026-09-17', theme: 'Founder / build' },
+  { week: 5, start: '2026-09-18', end: '2026-09-24', theme: 'Trust / discretion' },
+  { week: 6, start: '2026-09-25', end: '2026-09-28', theme: 'Countdown pressure' },
   { week: 7, start: '2026-09-29', end: '2026-10-01', theme: 'Opening day' },
 ];
 
@@ -76,6 +86,7 @@ async function tryFetchRemote() {
         timeUk: '',
         week: Number(p.variables?.week || 0) || null,
         kind: p.variables?.kind || 'full',
+        format: p.variables?.format || (p.platform === 'instagram' ? 'feed' : 'post'),
         status: p.status,
         source: 'remote',
       })),
@@ -83,6 +94,95 @@ async function tryFetchRemote() {
   } catch (err) {
     return { ok: false, reason: `Remote social API unreachable (${err.message})` };
   }
+}
+
+function normalizePost(p) {
+  const format =
+    p.format ||
+    (p.platform === 'instagram' ? 'feed' : VISUAL_PLATFORMS.has(p.platform) ? 'post' : 'text');
+  const visual = VISUAL_PLATFORMS.has(p.platform);
+  const publishable = visual
+    ? PUBLISHABLE_FORMATS.has(format)
+    : p.platform !== 'instagram';
+  return {
+    ...p,
+    format,
+    visual,
+    publishable,
+    slotLabel: slotLabel(p.platform, format),
+  };
+}
+
+function slotLabel(platform, format) {
+  if (platform === 'instagram') {
+    if (format === 'story') return 'IG Story';
+    if (format === 'reel') return 'IG Reel';
+    return 'IG Feed';
+  }
+  if (platform === 'x') return 'X';
+  if (platform === 'bluesky') return 'Bluesky';
+  if (platform === 'reddit') return 'Reddit';
+  if (platform === 'threads') return 'Threads';
+  return String(platform || '').toUpperCase();
+}
+
+/**
+ * For each Instagram feed draft in the week, add Story + Reel preview slots
+ * (same day / caption seed). Owner edits visuals locally; Approve does not
+ * auto-publish Story/Reel.
+ */
+function expandInstagramSlots(posts) {
+  const out = [...posts];
+  const existing = new Set(posts.map((p) => p.id));
+  for (const p of posts) {
+    if (p.platform !== 'instagram') continue;
+    const format = p.format || 'feed';
+    if (format !== 'feed') continue;
+
+    for (const slot of [
+      { format: 'story', suffix: 'story', timeUk: p.timeUk || '19:30', kind: 'story-preview' },
+      { format: 'reel', suffix: 'reel', timeUk: p.timeUk || '19:30', kind: 'reel-preview' },
+    ]) {
+      const id = `${p.date}:instagram:${slot.suffix}`;
+      if (existing.has(id)) continue;
+      existing.add(id);
+      out.push(
+        normalizePost({
+          id,
+          platform: 'instagram',
+          date: p.date,
+          timeUk: slot.timeUk,
+          body: p.body,
+          week: p.week,
+          kind: slot.kind,
+          format: slot.format,
+          source: p.source || 'local-pack',
+          companionOf: p.id,
+        }),
+      );
+    }
+  }
+  return out.map((p) => normalizePost(p));
+}
+
+function attachMedia(posts) {
+  return posts.map((p) => {
+    if (!p.visual) {
+      return {
+        ...p,
+        body: effectiveCaption(p.id, p.body),
+        media: null,
+        tags: PLATFORM_TAGS[p.platform] || [],
+      };
+    }
+    const media = getDraftMedia(p.id, { date: p.date });
+    return {
+      ...p,
+      body: effectiveCaption(p.id, p.body),
+      media,
+      tags: PLATFORM_TAGS[p.platform] || [],
+    };
+  });
 }
 
 export async function loadWeekDrafts({ enabledPlatforms } = {}) {
@@ -101,6 +201,7 @@ export async function loadWeekDrafts({ enabledPlatforms } = {}) {
   // Studio Connections platforms only — TikTok drafts stay visible but not approvable here
   const STUDIO_PLATFORMS = new Set(['x', 'instagram', 'reddit', 'bluesky', 'threads']);
   posts = posts.filter((p) => STUDIO_PLATFORMS.has(p.platform));
+  posts = expandInstagramSlots(posts.map((p) => normalizePost(p)));
 
   if (enabledPlatforms && enabledPlatforms.length) {
     const allow = new Set(enabledPlatforms);
@@ -110,8 +211,15 @@ export async function loadWeekDrafts({ enabledPlatforms } = {}) {
   posts.sort((a, b) => {
     const d = (a.date || '').localeCompare(b.date || '');
     if (d) return d;
-    return (a.timeUk || '').localeCompare(b.timeUk || '') || a.platform.localeCompare(b.platform);
+    const t = (a.timeUk || '').localeCompare(b.timeUk || '');
+    if (t) return t;
+    const plat = a.platform.localeCompare(b.platform);
+    if (plat) return plat;
+    const order = { feed: 0, post: 0, text: 0, story: 1, reel: 2 };
+    return (order[a.format] ?? 9) - (order[b.format] ?? 9);
   });
+
+  posts = attachMedia(posts);
 
   return {
     campaign: 'oct1-2026',
