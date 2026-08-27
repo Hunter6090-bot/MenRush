@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { EventDTO, HotSpotDTO, Mood, hotSpotsAPI, profileMetaAPI, pulseAPI, usersAPI } from '../api/client';
 import { useLocationStore, useAuthStore } from '../hooks/store';
 import { NearbyUser } from '../components/ProfileCard';
@@ -26,7 +26,7 @@ import { DiscoveryFilterPills } from '../components/DiscoveryFilterPills';
 import { DiscoveryFilterPanel } from '../components/DiscoveryFilterPanel';
 import { MoreFiltersDrawer } from '../components/MoreFiltersDrawer';
 import { NearbyProfileGrid } from '../components/NearbyProfileGrid';
-import { CommunityFeed } from '../components/CommunityFeed';
+import { DiscoverySurfaceToggle } from '../components/DiscoverySurfaceToggle';
 import { DiscoveryShellPublisher } from '../context/DiscoveryShellContext';
 import type { ProfileSetupSnapshot } from '../lib/profileSetup';
 import { resolveDistanceUnitSystem } from '../lib/localeUnits';
@@ -49,7 +49,6 @@ import {
   RADIUS_CIRCLE_LAYER,
   RADIUS_CIRCLE_SOURCE,
 } from '../lib/mapRadiusCircle';
-import { ROUTE_LABELS } from '../lib/routeLabels';
 import { mapboxStyleForTheme, resolvedThemeNow, THEME_CHANGED_EVENT } from '../lib/mapTheme';
 import { readLayerVisible, writeLayerVisible } from '../lib/discoveryLayers';
 import { useIsDesktopLayout } from '../hooks/useMediaQuery';
@@ -227,7 +226,9 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
       width: 100% !important;
       height: 100% !important;
     }
-    /* Keep pan / pinch / wheel on the map — parent scroll must not steal gestures. */
+    /* Keep pan / pinch / wheel on the map — parent scroll must not steal gestures.
+       Mapbox sets touch-action via .mapboxgl-touch-* classes; force none so phone
+       web never falls back to pan-x/pan-y (which blocks JS pinch). */
     .discover-map-surface,
     .discover-map-surface .mapboxgl-map,
     .discover-map-surface .mapboxgl-canvas-container,
@@ -239,6 +240,10 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
     }
     .discover-map-host {
       z-index: 0;
+    }
+    /* Markers stay tappable but must not own multi-touch (pinch lands on canvas). */
+    .discover-map-surface .mapboxgl-marker {
+      touch-action: none;
     }
     .discover-map-surface .mapboxgl-canvas-container.mapboxgl-interactive,
     .discover-map-surface .mapboxgl-canvas.mapboxgl-interactive {
@@ -295,6 +300,32 @@ const INSECURE_GPS_NOTICE =
 
 const BROWSER_GPS_DENIED_NOTICE =
   'Location is blocked. Allow it in browser or phone settings, then tap Allow location. Your exact pin is not shown publicly — only approximate distance.';
+
+/**
+ * Re-assert Mapbox gesture handlers after layout thrash.
+ * Pinch zoom must stay enabled on phone web; disableRotation keeps pinch as zoom-only
+ * (rotation fighting the gesture feels like "pinch does nothing" on small screens).
+ */
+function assertMapGestures(map: mapboxgl.Map) {
+  map.dragPan.enable();
+  map.scrollZoom.enable();
+  map.touchZoomRotate.enable();
+  map.touchZoomRotate.disableRotation();
+  map.doubleClickZoom.enable();
+  map.boxZoom.enable();
+  map.keyboard.enable();
+  const canvas = map.getCanvas();
+  const container = map.getCanvasContainer();
+  if (canvas) {
+    canvas.style.pointerEvents = 'auto';
+    canvas.style.touchAction = 'none';
+  }
+  if (container) {
+    container.style.pointerEvents = 'auto';
+    container.style.touchAction = 'none';
+    container.classList.add('mapboxgl-touch-zoom-rotate', 'mapboxgl-touch-drag-pan');
+  }
+}
 
 /** Min interval between nearby roster API calls during live GPS. */
 const NEARBY_FETCH_MIN_MS = 20_000;
@@ -889,22 +920,7 @@ export const Discover = () => {
     const revive = () => {
       try {
         map.resize();
-        map.dragPan.enable();
-        map.scrollZoom.enable();
-        map.touchZoomRotate.enable();
-        map.doubleClickZoom.enable();
-        map.boxZoom.enable();
-        map.keyboard.enable();
-        const canvas = map.getCanvas();
-        const container = map.getCanvasContainer();
-        if (canvas) {
-          canvas.style.pointerEvents = 'auto';
-          canvas.style.touchAction = 'none';
-        }
-        if (container) {
-          container.style.pointerEvents = 'auto';
-          container.style.touchAction = 'none';
-        }
+        assertMapGestures(map);
       } catch {
         /* map mid-teardown */
       }
@@ -1103,25 +1119,16 @@ export const Discover = () => {
     const resizeMap = () => map.resize();
     map.on('load', () => {
       // Re-assert handlers in case a prior layout left Mapbox in a dead state.
-      map.dragPan.enable();
-      map.scrollZoom.enable();
-      map.touchZoomRotate.enable();
-      map.doubleClickZoom.enable();
-      map.boxZoom.enable();
-      map.keyboard.enable();
-      const canvas = map.getCanvas();
-      const container = map.getCanvasContainer();
-      if (canvas) {
-        canvas.style.pointerEvents = 'auto';
-        canvas.style.touchAction = 'none';
-      }
-      if (container) {
-        container.style.pointerEvents = 'auto';
-        container.style.touchAction = 'none';
-      }
+      assertMapGestures(map);
       resizeMap();
       setMapLoaded(true);
     });
+    // iOS / phone web: when Discover sits in a scrollable shell, the browser can steal
+    // two-finger pinch for page zoom. Keep multi-touch on the map surface.
+    const guardPinch = (e: TouchEvent) => {
+      if (e.touches.length >= 2) e.preventDefault();
+    };
+    host.addEventListener('touchmove', guardPinch, { passive: false });
     window.addEventListener('resize', resizeMap);
     requestAnimationFrame(resizeMap);
     window.setTimeout(resizeMap, 100);
@@ -1158,6 +1165,7 @@ export const Discover = () => {
 
     mapRef.current = map;
     return () => {
+      host.removeEventListener('touchmove', guardPinch);
       window.removeEventListener('resize', resizeMap);
       markersRef.current.forEach(({ marker, root }) => {
         marker.remove();
@@ -1460,7 +1468,10 @@ export const Discover = () => {
       />
       <h1 className="sr-only">Nearby discovery map</h1>
 
+      {/* Contain Discover in the viewport so body scroll cannot steal phone pinch-zoom. */}
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {!mobileMapExpanded ? (
+      <div className="shrink-0">
       <>
       {activationProfile ? (
         <ActivationBanner
@@ -1646,8 +1657,10 @@ export const Discover = () => {
         </div>
       ) : null}
       </>
+      </div>
       ) : null}
 
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Desktop: only mount when layout matches — never attach Mapbox to a display:none node. */}
       {isDesktopLayout ? (
       <div className="flex h-full min-h-0 flex-col px-6 py-5">
@@ -1677,7 +1690,7 @@ export const Discover = () => {
             </div>
           </details>
         ) : null}
-        {/* Map grows on expand; profile grid stays visible below (NordVPN desktop pattern). */}
+        {/* Map grows on expand; nearby profiles stay below — never Community under the map. */}
         <div
           className="discover-map-surface relative mb-3 min-h-[280px] shrink-0 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[#11100E] shadow-[var(--shadow-md)] transition-[height] duration-300 ease-[var(--ease-out)]"
           style={{ height: desktopMapHeightCss(desktopMapExpanded) }}
@@ -1718,21 +1731,65 @@ export const Discover = () => {
           ) : null}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div
+              data-testid="nearby-counts"
+              className="inline-flex min-h-[36px] items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
+            >
+              <p className="text-[11px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
+                {loading && nearbyCount === 0 ? (
+                  <span className="text-[var(--cream-muted)]">Scanning…</span>
+                ) : nearbyCount === 0 ? (
+                  <button
+                    type="button"
+                    onClick={handleRadiusCycle}
+                    data-testid="expand-radius-chip"
+                    className="text-[var(--copper)]"
+                  >
+                    EXPAND YOUR RADIUS →
+                  </button>
+                ) : (
+                  <>
+                    <span className="font-black text-[var(--copper)]">{nearbyCount}</span> NEARBY
+                    <span className="mx-1.5 text-[var(--cream-muted)]">·</span>
+                    <span className="font-black text-[var(--copper)]">{onlineCount}</span> ONLINE
+                  </>
+                )}
+              </p>
+            </div>
+            <div className="ml-auto">
+              <DiscoverySurfaceToggle active="map" />
+            </div>
+          </div>
           {!needsLocationGate ? (
-            <div data-testid="discover-community-panel">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h3 className="text-[12px] font-extrabold uppercase tracking-[0.14em] text-[#C4832A]">
-                  {ROUTE_LABELS.community}
-                </h3>
-                <p className="text-[11px] text-[var(--cream-muted)]">Short local text · free for all</p>
-              </div>
-              <CommunityFeed compact radiusKm={radius} />
+            <div data-testid="discover-nearby-panel">
+              <NearbyProfileGrid
+                users={displayUsers}
+                loading={loading}
+                onMatch={handleLike}
+                likedUserIds={likedUsers}
+                mutualUserIds={matchedUsers}
+                matchingUserId={matchingUserId}
+                onExpandRadius={handleRadiusCycle}
+                onFinishProfile={() => navigate('/profile/setup')}
+                onStartPulse={requestOpenPulse}
+                pulseOn={!!pulseUntil}
+                pulseBlockedReason={pulseBlockedReason}
+                onOpenHotSpots={() => navigate('/hot-spots')}
+                radiusLabel={formatRadiusControlLabel(radius)}
+                beyondRadiusCount={beyondRadiusCount}
+              />
+              <EventsRail
+                lat={lat}
+                lng={lng}
+                onSelect={(ev: EventDTO) => navigate(`/rooms/${ev.id}`)}
+              />
             </div>
           ) : null}
         </div>
       </div>
       ) : (
-      <div className="relative flex h-full min-h-0 flex-col">
+      <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
         {/* Map outside the scroll region so pan/pinch aren't stolen by page scroll. */}
         <div
           className={`discover-map-panel discover-map-surface relative w-full shrink-0 overflow-hidden border-b border-[var(--border-default)] bg-[#11100E] ${
@@ -1894,28 +1951,8 @@ export const Discover = () => {
                 </p>
               </div>
               <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
-              <div
-                className="ml-auto flex items-center overflow-hidden rounded-full border bg-[var(--bg-elevated)]/85 backdrop-blur-sm"
-                style={{ borderColor: 'var(--border-default)' }}
-                role="group"
-                aria-label="Discovery surface"
-              >
-                <span
-                  className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em]"
-                  style={{ background: 'var(--copper)', color: 'var(--bg-primary)' }}
-                  aria-current="page"
-                >
-                  {ROUTE_LABELS.map}
-                </span>
-                <Link
-                  to="/stream"
-                  className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] transition-colors hover:text-[var(--copper)]"
-                  style={{ color: 'var(--cream-soft)' }}
-                  aria-label={`Switch to ${ROUTE_LABELS.community}`}
-                  data-testid="discover-community-toggle"
-                >
-                  {ROUTE_LABELS.community}
-                </Link>
+              <div className="ml-auto">
+                <DiscoverySurfaceToggle active="map" />
               </div>
             </div>
 
@@ -1998,6 +2035,8 @@ export const Discover = () => {
         </div>
       </div>
       )}
+      </div>
+      </div>
 
       <PulseFab
         isPulsing={!!pulseUntil}
