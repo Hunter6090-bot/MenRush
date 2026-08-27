@@ -72,7 +72,11 @@ type Toast = { type: 'success' | 'error'; msg: string };
 
 /** Quiet single/multi cue beside a tag subsection label — copy only. */
 const ProfileSelectCue: React.FC<{ singleSelect: boolean }> = ({ singleSelect }) => (
-  <span className="ml-2 text-[10px] font-medium normal-case tracking-normal text-[var(--cream-muted)]/45">
+  <span
+    data-testid="profile-tag-select-cue"
+    data-select={singleSelect ? 'one' : 'several'}
+    className="ml-2 text-[10px] font-medium normal-case tracking-normal text-[var(--cream-muted)]/45"
+  >
     {profileTagSelectCue(singleSelect)}
   </span>
 );
@@ -1176,7 +1180,7 @@ export const Profile = () => {
                 </span>
               </label>
               {PROFILE_TAG_GROUPS.map((group) => (
-                <div key={group.label}>
+                <div key={group.label} data-testid={`profile-tag-group-${group.label}`}>
                   <p className="mb-2 text-[10px] font-black uppercase tracking-[.18em] text-[var(--cream-muted)]/60">
                     {group.label}
                     <ProfileSelectCue singleSelect={group.singleSelect} />
