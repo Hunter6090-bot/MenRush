@@ -231,10 +231,43 @@ interface PendingCall {
   timeout?: ReturnType<typeof setTimeout>;
 }
 const pendingCalls = new Map<string, PendingCall>();
-const CALL_RING_WAIT_MS = 35_000;
+/** How long the callee has to answer after the offer is actually delivered. */
+const CALL_RING_WAIT_MS = Number(process.env.CALL_RING_WAIT_MS) || 35_000;
+/** How long to hold an undelivered offer while the callee is offline / cold-starting. */
+const CALL_OFFER_HOLD_MS = Number(process.env.CALL_OFFER_HOLD_MS) || 35_000;
+
+function expireNoAnswer(pending: PendingCall) {
+  const still = pendingCalls.get(pendingCallKey(pending.callerId, pending.calleeId));
+  if (!still || still.answered) return;
+  clearPendingCall(still.callerId, still.calleeId);
+  logCallMetric('call_no_answer', {
+    callerId: still.callerId,
+    calleeId: still.calleeId,
+  });
+  io.to(`user:${still.callerId}`).emit('call:error', { error: 'no_answer' });
+  void recordMissedCall(still.callerId, still.calleeId);
+}
+
+/**
+ * Ring / missed-call window starts only when the callee has received the offer.
+ * Arming at call:initiate caused false missed calls on cold-start answers.
+ */
+function armRingTimeout(pending: PendingCall) {
+  if (pending.timeout) {
+    clearTimeout(pending.timeout);
+    pending.timeout = undefined;
+  }
+  if (pending.answered) return;
+  pending.timeout = setTimeout(() => expireNoAnswer(pending), CALL_RING_WAIT_MS);
+}
 
 function deliverPendingIncoming(pending: PendingCall) {
   if (pending.deliveredIncoming || pending.answered || !pending.offer) return;
+  // Drop any undelivered-offer hold before marking delivered / arming the ring.
+  if (pending.timeout) {
+    clearTimeout(pending.timeout);
+    pending.timeout = undefined;
+  }
   pending.deliveredIncoming = true;
   io.to(`user:${pending.calleeId}`).emit('call:incoming', {
     from: pending.callerId,
@@ -251,6 +284,7 @@ function deliverPendingIncoming(pending: PendingCall) {
     callerId: pending.callerId,
     calleeId: pending.calleeId,
   });
+  armRingTimeout(pending);
 }
 
 function pendingCallKey(callerId: string, calleeId: string) {
@@ -384,6 +418,8 @@ io.on('connection', (socket: Socket) => {
       }
       const fromName = await userService.getDisplayName(authorized.actorId) ?? '';
       const online = isUserSocketOnline(authorized.targetId);
+      // Replace any prior pending for this pair so an old timer cannot fire late.
+      clearPendingCall(authorized.actorId, authorized.targetId);
       const pending: PendingCall = {
         callerId: authorized.actorId,
         calleeId: authorized.targetId,
@@ -411,17 +447,15 @@ io.on('connection', (socket: Socket) => {
           callerId: authorized.actorId,
           calleeId: authorized.targetId,
         });
+        // Hold the offer for a cold-start open — do NOT start the answer/missed
+        // ring here. The ring window arms in deliverPendingIncoming when they
+        // actually receive the offer (authenticate / socket online).
         pending.timeout = setTimeout(() => {
           const still = pendingCalls.get(pendingCallKey(authorized.actorId, authorized.targetId));
-          if (!still || still.answered) return;
-          clearPendingCall(still.callerId, still.calleeId);
-          logCallMetric('call_no_answer', {
-            callerId: still.callerId,
-            calleeId: still.calleeId,
-          });
-          io.to(`user:${still.callerId}`).emit('call:error', { error: 'no_answer' });
-          void recordMissedCall(still.callerId, still.calleeId);
-        }, CALL_RING_WAIT_MS);
+          // If the offer was delivered, the ring timer owns expiry now.
+          if (!still || still.answered || still.deliveredIncoming) return;
+          expireNoAnswer(still);
+        }, CALL_OFFER_HOLD_MS);
       }
     } catch {
       logCallMetric('call_error', { code: 'target_not_authorized' });
@@ -433,7 +467,14 @@ io.on('connection', (socket: Socket) => {
     const authorized = await authorizeCallTarget(socket, data?.to);
     if (!authorized || !data.answer) return;
     const pending = findPendingCall(authorized.actorId, authorized.targetId);
-    if (pending) pending.answered = true;
+    if (pending) {
+      pending.answered = true;
+      // Cancel ring timeout immediately so a late timer cannot write a false miss.
+      if (pending.timeout) {
+        clearTimeout(pending.timeout);
+        pending.timeout = undefined;
+      }
+    }
     logCallMetric('call_answer', {
       calleeId: authorized.actorId,
       callerId: authorized.targetId,
