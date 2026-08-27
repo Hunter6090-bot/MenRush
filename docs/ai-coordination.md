@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Pride exclude drip + wave-2; invite email copy (30-day gift, no em dashes) | PR `cursor/pride-exclude-drip-wave2-a4e8` | — | Cursor cloud — source=pride out of drip/wave-2; Pride email bargain reword; do not touch /pride face or #97–#99 |
 | Video note send MIME (MediaRecorder codecs→text/plain reject) | PR on main | — | Cursor cloud — client strips base MIME; API names mime reject; desktop webm + iPhone mp4 |
 | Community Space (replace Live Profile List) | PR `#134` on main | — | Cursor cloud — item 1/5; text posts ≤280; MAP\|COMMUNITY toggle; desktop list = feed |
 | Discreet Mode media blur (item 2/5; Ghost untouched) | PR `#136` on main | — | Cursor cloud — `media_clear` + CSS blur; `DISCREET_MEDIA_BLUR` opt-in (default off); no public copy |
