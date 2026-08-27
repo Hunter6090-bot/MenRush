@@ -169,7 +169,7 @@ app.get('/api/week', async (_req, res) => {
       readyPlatforms,
       imageGenConfigured: hasImageGenKey(),
       approveHint:
-        'Approve publishes only to On + Verified platforms for Feed/post drafts. IG Story and Reel stay draft+preview — never auto-published. No timers.',
+        'Approve publishes only to On + Verified platforms for Feed/post drafts. Instagram auto-hosts your uploaded owner photo to a public https URL (never the logo). Drafts with no owner photo are skipped. IG Story and Reel stay draft+preview. No timers.',
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

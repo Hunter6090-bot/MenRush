@@ -66,8 +66,9 @@ Use **OAuth 1.0a User Context** only (the four keys above).
 
 - **Card grid** (not a text feed): large picture, UK date/time/type, editable caption, platform hashtags, **Change front**.
 - Sticky **Approve week**. Approve is still the only publish. No auto-publish.
-- Week 1 is **21-27 Aug 2026**. Day 1 (21 Aug) defaults to the **Nearby. Verified. Now.** brand frame. Other days default to the official logo until you swap.
-- Change front opens a photo plate: official logo, Nearby. Verified. Now., Opens 1 October, Less noise / More signal, or upload your own.
+- Week 1 is **21-27 Aug 2026**. Day 1 (21 Aug) defaults to the **Nearby. Verified. Now.** brand frame for preview only. Other days may show the medallion as a card placeholder until you upload.
+- Change front opens a photo plate (brand frames for preview) or **upload your own** owner picture.
+- **Instagram Approve** uses the draft’s owner-photo public `https://` URL (preferred: `https://menrush.com/images/ig/…`, or an already-live `https://menrush.com/images/…` library match). Local uploads are staged into `frontend/public/images/ig/` and, if that URL is not live yet, temporarily hosted so Graph can fetch immediately. You do **not** paste a URL. The medallion logo is **never** used as the post image. Drafts with no owner photo are **skipped**.
 - Caption edits and custom images persist under `.data/` (gitignored).
 
 Production `backend/src/routes/social.ts` stays record-only. This studio posts from your machine, not Railway.
@@ -81,4 +82,7 @@ sleep 1
 curl -s http://127.0.0.1:3847/api/health
 curl -s http://127.0.0.1:3847/api/connections | head
 curl -s http://127.0.0.1:3847/api/week | head
+node scripts/test-owner-photo-https.mjs
 ```
+
+`test-owner-photo-https.mjs` saves a tiny owner PNG into a draft, hosts it to public https, asserts the URL is fetchable, and asserts the logo is never accepted as a post image.

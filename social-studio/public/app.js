@@ -498,20 +498,21 @@ $('#btn-approve').addEventListener('click', async () => {
           body: JSON.stringify({ confirm: true }),
         });
         box.innerHTML =
-          `<h3>Publish results (${result.summary.ok}/${result.summary.total} ok)</h3>` +
+          `<h3>Publish results (${result.summary.ok}/${result.summary.total} ok${
+            result.summary.skipped ? `, ${result.summary.skipped} skipped` : ''
+          })</h3>` +
           result.results
-            .map(
-              (r) =>
-                `<div class="result-row ${r.ok ? 'ok' : 'fail'}">${r.platform}${
-                  r.format ? `/${r.format}` : ''
-                } ${r.date} ${r.timeUk || ''} · ${
-                  r.ok
-                    ? `ok${r.externalId ? ` · ${r.externalId}` : ''}${r.mediaAttached ? ' · media' : ''}${
-                        r.warning ? ` · ${r.warning}` : ''
-                      }`
-                    : r.error
-                }</div>`,
-            )
+            .map((r) => {
+              const cls = r.ok ? 'ok' : r.skipped ? 'skip' : 'fail';
+              const detail = r.ok
+                ? `ok${r.externalId ? ` · ${r.externalId}` : ''}${r.mediaAttached ? ' · media' : ''}${
+                    r.imageUrl ? ' · owner photo https' : ''
+                  }${r.warning ? ` · ${r.warning}` : ''}`
+                : r.error;
+              return `<div class="result-row ${cls}">${r.platform}${
+                r.format ? `/${r.format}` : ''
+              } ${r.date} ${r.timeUk || ''} · ${escapeHtml(detail || '')}</div>`;
+            })
             .join('');
       } catch (err) {
         box.innerHTML = `<p class="toast-err">${escapeHtml(err.message)}</p>`;

@@ -105,6 +105,10 @@ function emptyEntry() {
     plateId: null,
     imageRelPath: null,
     publicImageUrl: '',
+    publicImageHash: null,
+    publicImageHost: null,
+    publicImageHostedAt: null,
+    menrushIgUrl: null,
     source: null,
     updatedAt: null,
   };
@@ -142,6 +146,7 @@ function publicDraftMedia(draftId, entry, date) {
   const previewUrl = imageUrl || plate?.url || OFFICIAL_LOGO;
   const isLogo = previewUrl === OFFICIAL_LOGO;
 
+  const publicImageUrl = entry.publicImageUrl || '';
   return {
     draftId,
     prompt: entry.prompt || '',
@@ -149,12 +154,15 @@ function publicDraftMedia(draftId, entry, date) {
     headline: entry.headline,
     subhead: entry.subhead,
     hasImage: hasUpload,
+    hasOwnerPhoto: hasUpload,
     imageRelPath: entry.imageRelPath || null,
     imageUrl,
     plateId: hasUpload ? 'upload' : plate?.id || 'logo',
     previewUrl,
     defaultLogo: isLogo && !hasUpload,
-    publicImageUrl: entry.publicImageUrl || '',
+    publicImageUrl,
+    publicImageHash: entry.publicImageHash || null,
+    publicImageHost: entry.publicImageHost || null,
     source: entry.source || (hasUpload ? 'upload' : plate?.id || 'default-logo'),
     updatedAt: entry.updatedAt || null,
   };
@@ -176,7 +184,21 @@ export function updateDraftMedia(draftId, fields = {}) {
 
   if (typeof fields.prompt === 'string') entry.prompt = fields.prompt.slice(0, 2000);
   if (typeof fields.publicImageUrl === 'string') {
-    entry.publicImageUrl = fields.publicImageUrl.trim().slice(0, 2000);
+    const next = fields.publicImageUrl.trim().slice(0, 2000);
+    // Never store the sacred logo as a post image URL.
+    if (/menrush-logo\.png/i.test(next)) {
+      entry.publicImageUrl = '';
+      entry.publicImageHash = null;
+      entry.publicImageHost = null;
+      entry.publicImageHostedAt = null;
+    } else {
+      entry.publicImageUrl = next;
+      if (typeof fields.publicImageHash === 'string') entry.publicImageHash = fields.publicImageHash;
+      if (typeof fields.publicImageHost === 'string') entry.publicImageHost = fields.publicImageHost;
+      if (typeof fields.publicImageHostedAt === 'string') {
+        entry.publicImageHostedAt = fields.publicImageHostedAt;
+      }
+    }
   }
   if (typeof fields.caption === 'string') entry.caption = fields.caption.slice(0, 8000);
   if (fields.caption === null) entry.caption = null;
@@ -244,6 +266,11 @@ export function saveDraftImage(draftId, { buffer, mimeType, filename, source }) 
   entry.imageRelPath = rel.split(path.sep).join('/');
   entry.plateId = null;
   entry.source = source || 'upload';
+  // Local bytes changed — invalidate any prior hosted URL so Approve re-hosts this file.
+  entry.publicImageUrl = '';
+  entry.publicImageHash = null;
+  entry.publicImageHost = null;
+  entry.publicImageHostedAt = null;
   entry.updatedAt = new Date().toISOString();
   store.byDraftId[draftId] = entry;
   saveMediaStore(store);
@@ -310,4 +337,127 @@ export function mediaDataDir() {
 
 export function visualsDir() {
   return VISUALS_DIR;
+}
+
+/**
+ * Ensure a draft's owner-saved local photo has a public https URL for Graph.
+ * Prefers https://menrush.com/images/ig/… (and already-live /images/menrush/ matches).
+ * Falls back to anonymous public hosts so Graph can fetch before the next Vercel deploy.
+ * Never returns the logo.
+ */
+export async function ensurePublicOwnerImageUrl(draftId) {
+  const {
+    hostOwnerPhotoPublic,
+    isPublicHttpsImageUrl,
+    contentHash,
+    isRasterOwnerPhoto,
+    syncOwnerPhotoToMenrushIg,
+    findLiveMenrushImageUrl,
+    probePublicImageUrl,
+  } = await import('./public-image.js');
+
+  const local = readDraftImageBuffer(draftId);
+  if (!local) {
+    return { ok: false, reason: 'no-owner-photo', url: null };
+  }
+  if (!isRasterOwnerPhoto(local.mimeType)) {
+    return {
+      ok: false,
+      reason: 'not-raster',
+      url: null,
+      error:
+        'Owner photo must be a real picture (PNG/JPEG/WebP/GIF). Local SVG/logo plates are not posted.',
+    };
+  }
+
+  const store = loadMediaStore();
+  const entry = { ...emptyEntry(), ...store.byDraftId[draftId] };
+  const hash = contentHash(local.buffer);
+
+  if (
+    entry.publicImageUrl &&
+    entry.publicImageHash === hash &&
+    isPublicHttpsImageUrl(entry.publicImageUrl)
+  ) {
+    const stillLive = await probePublicImageUrl(entry.publicImageUrl);
+    if (stillLive) {
+      return {
+        ok: true,
+        url: entry.publicImageUrl,
+        reused: true,
+        host: entry.publicImageHost || null,
+        hash,
+      };
+    }
+  }
+
+  // Drop stale / forbidden cached URLs before hosting.
+  if (entry.publicImageUrl && !isPublicHttpsImageUrl(entry.publicImageUrl)) {
+    entry.publicImageUrl = '';
+    entry.publicImageHash = null;
+    entry.publicImageHost = null;
+    entry.publicImageHostedAt = null;
+  }
+
+  // 1) Already-live MenRush library photo with the same bytes
+  const libraryUrl = await findLiveMenrushImageUrl(local.buffer);
+  if (libraryUrl) {
+    entry.publicImageUrl = libraryUrl;
+    entry.publicImageHash = hash;
+    entry.publicImageHost = 'menrush.com/images';
+    entry.publicImageHostedAt = new Date().toISOString();
+    entry.updatedAt = entry.publicImageHostedAt;
+    store.byDraftId[draftId] = entry;
+    saveMediaStore(store);
+    return { ok: true, url: libraryUrl, reused: false, host: 'menrush.com/images', hash };
+  }
+
+  // 2) Stage under frontend/public/images/ig for durable menrush.com hosting
+  const staged = syncOwnerPhotoToMenrushIg(draftId, local);
+  if (staged?.url) {
+    const live = await probePublicImageUrl(staged.url);
+    if (live) {
+      entry.publicImageUrl = staged.url;
+      entry.publicImageHash = hash;
+      entry.publicImageHost = 'menrush.com/images/ig';
+      entry.publicImageHostedAt = new Date().toISOString();
+      entry.updatedAt = entry.publicImageHostedAt;
+      store.byDraftId[draftId] = entry;
+      saveMediaStore(store);
+      return {
+        ok: true,
+        url: staged.url,
+        reused: false,
+        host: 'menrush.com/images/ig',
+        hash,
+      };
+    }
+  }
+
+  // 3) Immediate public host so Graph can fetch before the next Vercel deploy
+  const hosted = await hostOwnerPhotoPublic({
+    buffer: local.buffer,
+    mimeType: local.mimeType,
+    filename: path.basename(local.path || staged?.filename || 'owner-photo.png'),
+  });
+
+  entry.publicImageUrl = hosted.url;
+  entry.publicImageHash = hash;
+  entry.publicImageHost = hosted.host;
+  entry.publicImageHostedAt = new Date().toISOString();
+  entry.updatedAt = entry.publicImageHostedAt;
+  if (staged?.url) {
+    entry.menrushIgUrl = staged.url; // canonical after deploy
+  }
+  store.byDraftId[draftId] = entry;
+  saveMediaStore(store);
+
+  return {
+    ok: true,
+    url: hosted.url,
+    reused: false,
+    host: hosted.host,
+    hash,
+    menrushIgUrl: staged?.url || null,
+  };
 }

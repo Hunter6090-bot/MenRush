@@ -446,6 +446,7 @@ html, body {
 }
 .result-row.ok { color: var(--ok); }
 .result-row.fail { color: var(--danger); }
+.result-row.skip { color: #c9a66b; }
 
 .foot {
   margin-top: 2rem;

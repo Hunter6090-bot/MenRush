@@ -6,8 +6,8 @@
 import crypto from 'node:crypto';
 import OAuth from 'oauth-1.0a';
 import { getSecrets } from './store.js';
+import { isPublicHttpsImageUrl, isForbiddenLogoUrl } from './public-image.js';
 
-const LOGO = 'https://menrush.com/menrush-logo.png';
 const USER_AGENT = 'MenRushSocialStudio/1.0 (local; +https://menrush.com)';
 
 function requireFields(secrets, keys) {
@@ -154,8 +154,17 @@ export async function publishInstagram(text, { imageUrl, format } = {}) {
   if (format === 'story' || format === 'reel') {
     throw new Error('IG Story/Reel stay draft+preview in this studio — not published on Approve.');
   }
-  // Graph requires a publicly reachable image_url. Local uploads are preview-only.
-  const url = (imageUrl && /^https:\/\//i.test(imageUrl) ? imageUrl : LOGO).trim();
+
+  const url = typeof imageUrl === 'string' ? imageUrl.trim() : '';
+  if (!url || !isPublicHttpsImageUrl(url)) {
+    throw new Error(
+      'Instagram needs a public https owner-photo URL. Upload a real picture on the draft — Studio hosts it automatically. The brand logo is never used as the post image.',
+    );
+  }
+  if (isForbiddenLogoUrl(url)) {
+    throw new Error('Refusing to post the MenRush logo as the Instagram image.');
+  }
+
   const createUrl = new URL(`https://graph.facebook.com/v21.0/${secrets.igUserId}/media`);
   createUrl.searchParams.set('image_url', url);
   createUrl.searchParams.set('caption', text);
@@ -177,11 +186,8 @@ export async function publishInstagram(text, { imageUrl, format } = {}) {
   }
   return {
     externalId: pubJson.id || creationId,
-    mediaAttached: url !== LOGO,
-    warning:
-      url === LOGO
-        ? 'Instagram Graph needs a public https image URL — used brand logo. Local uploads stay for preview.'
-        : null,
+    mediaAttached: true,
+    warning: null,
   };
 }
 
