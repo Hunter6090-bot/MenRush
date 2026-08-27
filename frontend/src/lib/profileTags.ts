@@ -10,6 +10,11 @@ export const PROFILE_TAG_GROUPS = DISCOVERY_FILTER_CATEGORIES.map((category) => 
 export const PROFILE_LOOKING_FOR_TAGS =
   DISCOVERY_FILTER_CATEGORIES.find((c) => c.id === 'looking_for')?.tags.filter((t) => t !== 'All') ?? [];
 
+/** Quiet on-screen cue for single- vs multi-select tag subsections. */
+export function profileTagSelectCue(singleSelect: boolean): 'Pick one' | 'Pick several' {
+  return singleSelect ? 'Pick one' : 'Pick several';
+}
+
 export function toggleProfileInterest(
   interests: string[],
   tag: string,

@@ -17,7 +17,12 @@ import { QRCodeSVG } from 'qrcode.react';
 import { profileUrl as buildProfileUrl } from '../lib/profileLinks';
 import { getPhotoUrl } from '../components/UserAvatar';
 
-import { PROFILE_TAG_GROUPS, PROFILE_LOOKING_FOR_TAGS, toggleProfileInterest } from '../lib/profileTags';
+import {
+  PROFILE_TAG_GROUPS,
+  PROFILE_LOOKING_FOR_TAGS,
+  profileTagSelectCue,
+  toggleProfileInterest,
+} from '../lib/profileTags';
 import { clearProfileSetupSkip, isProfileSetupComplete } from '../lib/profileSetup';
 import { isGenericAvatarUrl } from '../lib/genericAvatar';
 import { isBetaPremiumFree } from '../lib/betaInvite';
@@ -64,6 +69,13 @@ interface ProfileData {
 }
 
 type Toast = { type: 'success' | 'error'; msg: string };
+
+/** Quiet single/multi cue beside a tag subsection label — copy only. */
+const ProfileSelectCue: React.FC<{ singleSelect: boolean }> = ({ singleSelect }) => (
+  <span className="ml-2 text-[10px] font-medium normal-case tracking-normal text-[var(--cream-muted)]/45">
+    {profileTagSelectCue(singleSelect)}
+  </span>
+);
 
 export const Profile = () => {
   const { user, token, setAuth, patchUser, logout } = useAuthStore();
@@ -946,6 +958,7 @@ export const Profile = () => {
             <div>
               <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">
                 Looking for
+                <ProfileSelectCue singleSelect />
               </label>
               <div className="flex flex-wrap gap-2">
                 {PROFILE_LOOKING_FOR_TAGS.map((tag) => {
@@ -1014,6 +1027,7 @@ export const Profile = () => {
             <div>
               <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">
                 Relationship
+                <ProfileSelectCue singleSelect />
               </label>
               <div className="flex flex-wrap gap-2">
                 {RELATIONSHIP_STATUS_OPTIONS.map((opt) => {
@@ -1039,6 +1053,7 @@ export const Profile = () => {
             <div>
               <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">
                 Hosting
+                <ProfileSelectCue singleSelect />
               </label>
               <div className="flex flex-wrap gap-2">
                 {HOSTING_STATUS_OPTIONS.map((opt) => {
@@ -1063,7 +1078,9 @@ export const Profile = () => {
 
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]/30 p-4 space-y-3">
               <p className="text-xs font-medium text-[var(--cream-muted)] uppercase tracking-wide">
-                Sexual health <span className="normal-case text-[var(--cream-muted)]/50">(optional)</span>
+                Sexual health
+                <ProfileSelectCue singleSelect />
+                <span className="normal-case text-[var(--cream-muted)]/50"> (optional)</span>
               </p>
               <div className="flex flex-wrap gap-2">
                 {SEXUAL_HEALTH_STATUS_OPTIONS.map((opt) => {
@@ -1160,7 +1177,10 @@ export const Profile = () => {
               </label>
               {PROFILE_TAG_GROUPS.map((group) => (
                 <div key={group.label}>
-                  <p className="text-[10px] font-black text-[var(--cream-muted)]/60 uppercase tracking-[.18em] mb-2">{group.label}</p>
+                  <p className="mb-2 text-[10px] font-black uppercase tracking-[.18em] text-[var(--cream-muted)]/60">
+                    {group.label}
+                    <ProfileSelectCue singleSelect={group.singleSelect} />
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     {group.tags.map((tag) => {
                       const active = interests.includes(tag);
@@ -1245,7 +1265,10 @@ export const Profile = () => {
         <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 shadow-card">
           <div className="flex items-end justify-between mb-3">
             <div>
-              <p className="text-[var(--cream)]/80 text-sm font-semibold">Mood</p>
+              <p className="text-[var(--cream)]/80 text-sm font-semibold">
+                Mood
+                <ProfileSelectCue singleSelect />
+              </p>
               <p className="text-[var(--cream-muted)] text-xs mt-0.5">
                 Auto-clears in 6 hours. Shows on your card.
               </p>
