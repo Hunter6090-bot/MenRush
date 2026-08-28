@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ComingSoon } from './pages/ComingSoon';
+import { GetTheApp } from './pages/GetTheApp';
 import { BetaAccess } from './pages/BetaAccess';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
@@ -168,6 +169,8 @@ function AppShell() {
       {token ? <ToastNotifications /> : null}
       <Routes>
         <Route path="/" element={<ComingSoon />} />
+        <Route path="/get-the-app" element={<GetTheApp />} />
+        <Route path="/install" element={<Navigate to="/get-the-app" replace />} />
         <Route path="/app" element={<AppEntry />} />
         <Route path="/coming-soon" element={<ComingSoon />} />
         {/* Closed campaign URLs → sole public Pride offer */}
