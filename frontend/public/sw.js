@@ -2,6 +2,12 @@
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
+// Network pass-through so Chromium treats the worker as a fetch handler
+// without caching the app shell.
+self.addEventListener('fetch', (event) => {
+  event.respondWith(fetch(event.request));
+});
+
 self.addEventListener('push', (event) => {
   let data = {};
   try {
@@ -14,7 +20,6 @@ self.addEventListener('push', (event) => {
     body: data.body || 'New activity on MenRush',
     icon: data.icon || '/brand/icon-192.png',
     badge: '/brand/icon-48.png',
-    // Per-conversation tag collapses repeats so a chat doesn't spam the tray.
     tag: data.tag || 'menrush',
     renotify: true,
     data: { url },
@@ -22,8 +27,6 @@ self.addEventListener('push', (event) => {
 
   event.waitUntil(
     (async () => {
-      // Dedupe with the foreground app: skip push only when a visible, focused tab
-      // is already on the target conversation — not for every focused tab.
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       const active = windows.find((c) => c.visibilityState === 'visible' && c.focused);
       if (active) {
