@@ -283,4 +283,30 @@ describe('RoomTempIdentityGate', () => {
     expect(alert).toHaveStyle({ color: '#B0432E' });
     expect(screen.queryByTestId('room-temp-photo-preview')).not.toBeInTheDocument();
   });
+
+  it('keeps previous temp photo when a re-upload fails (never clears to account)', async () => {
+    const user = userEvent.setup();
+    mockedGet.mockResolvedValue({
+      data: {
+        display_name: 'Gear Bear',
+        photo_url: '/uploads/room-temp/saved.jpg',
+        save_name: true,
+        save_photo: true,
+      },
+    } as never);
+
+    renderGate();
+    await waitFor(() => expect(screen.getByTestId('room-temp-photo-preview')).toBeInTheDocument());
+    const firstSrc = (screen.getByTestId('room-temp-photo-preview') as HTMLImageElement).src;
+
+    mockedUpload.mockRejectedValueOnce(new Error('network'));
+    const gallery = screen.getByTestId('room-temp-gallery-input');
+    const file = new File([new Uint8Array([2])], 'next.png', { type: 'image/png' });
+    await user.upload(gallery, file);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/Could not upload photo/i);
+    const preview = await screen.findByTestId('room-temp-photo-preview');
+    expect((preview as HTMLImageElement).src).toBe(firstSrc);
+  });
 });

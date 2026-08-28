@@ -91,7 +91,7 @@ describe('RoomList refresh', () => {
         }),
     );
 
-    await user.click(screen.getByLabelText('Create group'));
+    await user.click(screen.getByLabelText('Create small group'));
     await user.click(screen.getByTestId('mock-create-refresh'));
 
     expect(getRooms).toHaveBeenCalledTimes(2);

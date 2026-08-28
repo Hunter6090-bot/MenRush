@@ -167,6 +167,10 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     [],
   );
 
+  const ensurePeerRef = useRef<(peerId: string, options?: { initiate?: boolean }) => Promise<void>>(
+    async () => {},
+  );
+
   const ensurePeer = useCallback(
     async (peerId: string, options?: { initiate?: boolean }) => {
       const myId = userIdRef.current;
@@ -212,11 +216,31 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
         };
 
         pc.onconnectionstatechange = () => {
-          if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-            // Keep slot for a soft reconnect attempt via re-offer from the impolite side.
-            if (pc.connectionState === 'closed') {
-              closePeer(peerId);
+          if (pc.connectionState === 'failed') {
+            // Soft recovery: ICE restart from the impolite (offer) side so audio
+            // comes back without forcing the user to leave/rejoin the room.
+            if (shouldCreateOffer(myId, peerId)) {
+              void (async () => {
+                try {
+                  if (pc.signalingState !== 'stable') return;
+                  const offer = await pc.createOffer({ iceRestart: true });
+                  await pc.setLocalDescription(offer);
+                  activeSocket.emit('room:webrtc-offer', {
+                    roomId: rid,
+                    to: peerId,
+                    offer: sessionDescriptionPayload(pc.localDescription ?? offer),
+                  });
+                } catch (err) {
+                  console.error('[room-webrtc] iceRestart failed', peerId, err);
+                  closePeer(peerId);
+                  void ensurePeerRef.current(peerId);
+                }
+              })();
             }
+            return;
+          }
+          if (pc.connectionState === 'closed') {
+            closePeer(peerId);
           }
         };
       }
@@ -249,6 +273,7 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     },
     [closePeer, publishRemoteStream],
   );
+  ensurePeerRef.current = ensurePeer;
 
   const upsertParticipant = useCallback((entry: RoomParticipant) => {
     setParticipants((prev) => {

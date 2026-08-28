@@ -277,7 +277,11 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
     setFormError(null);
     setUploading(true);
 
-    revokeLocalPreview();
+    // Keep prior temp photo for rollback — never fall back to account photo.
+    const previousPhotoUrl = photoUrl;
+    const previousPreview = photoPreview;
+    const previousLocal = localPreviewRef.current;
+
     const localUrl = URL.createObjectURL(file);
     localPreviewRef.current = localUrl;
     setPhotoPreview(localUrl);
@@ -288,14 +292,28 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
       if (!serverUrl) {
         throw new Error('missing_photo_url');
       }
+      // Success: drop the previous blob preview if any.
+      if (previousLocal && previousLocal !== localUrl) {
+        try {
+          URL.revokeObjectURL(previousLocal);
+        } catch {
+          /* ignore */
+        }
+      }
       // Payload keeps the server path; avatar keeps the local object URL so the
       // preview always updates (API /uploads may be on another origin).
       setPhotoUrl(serverUrl);
       setPhotoPreview(localUrl);
     } catch {
-      revokeLocalPreview();
-      setPhotoUrl(undefined);
-      setPhotoPreview(undefined);
+      try {
+        URL.revokeObjectURL(localUrl);
+      } catch {
+        /* ignore */
+      }
+      // Restore previous temp photo / blank placeholder — never account media.
+      localPreviewRef.current = previousLocal;
+      setPhotoUrl(previousPhotoUrl);
+      setPhotoPreview(previousPreview);
       setFormError('Could not upload photo. Try another image.');
     } finally {
       setUploading(false);

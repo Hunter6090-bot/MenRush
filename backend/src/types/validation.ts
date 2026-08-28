@@ -172,8 +172,8 @@ export const CreateRoomSchema = z.object({
   lat: z.number().min(-90).max(90).optional(),
   lng: z.number().min(-180).max(180).optional(),
   max_members: z.number().int().min(2).max(1000).optional(),
-  /** Premium invite-only groups: add these members after create (owner stays owner). */
-  member_ids: z.array(z.string().uuid()).max(49).optional(),
+  /** Premium invite-only small groups (capacity 3–5): add these after create. */
+  member_ids: z.array(z.string().uuid()).max(4).optional(),
 });
 
 export const RoomMessageSchema = z.object({

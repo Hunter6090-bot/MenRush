@@ -4,6 +4,12 @@ import { messagesAPI, roomsAPI, usersAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
 import { isBetaPremiumFree } from '../lib/betaInvite';
 
+/** Private small-group capacity (creator counts as 1). Official rooms stay separate. */
+export const SMALL_GROUP_MIN = 3;
+export const SMALL_GROUP_MAX = 5;
+const MAX_INVITES = SMALL_GROUP_MAX - 1; // 4
+const MIN_INVITES = SMALL_GROUP_MIN - 1; // 2
+
 interface Candidate {
   id: string;
   name: string;
@@ -68,11 +74,19 @@ export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalP
   const toggleMember = (id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else if (next.size < MAX_INVITES) {
+        next.add(id);
+      }
       return next;
     });
   };
+
+  const inviteCount = selected.size;
+  const totalSize = inviteCount + 1;
+  const canCreate =
+    Boolean(name.trim()) && inviteCount >= MIN_INVITES && inviteCount <= MAX_INVITES;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +95,10 @@ export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalP
       return;
     }
     if (!name.trim()) return;
+    if (inviteCount < MIN_INVITES || inviteCount > MAX_INVITES) {
+      setError(`Pick ${MIN_INVITES}–${MAX_INVITES} people (group of ${SMALL_GROUP_MIN}–${SMALL_GROUP_MAX}).`);
+      return;
+    }
 
     setCreating(true);
     setError(null);
@@ -90,7 +108,8 @@ export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalP
         name: name.trim(),
         description: description.trim() || undefined,
         is_location_based: false,
-        member_ids: memberIds.length ? memberIds : undefined,
+        max_members: SMALL_GROUP_MAX,
+        member_ids: memberIds,
       });
       const roomId = res.data.id as string;
       const rawErrors: string[] = Array.isArray(res.data.member_errors)
@@ -142,18 +161,20 @@ export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalP
           boxShadow: '0 24px 80px rgba(0,0,0,0.7)',
         }}
         onClick={(e) => e.stopPropagation()}
+        data-testid="create-small-group-modal"
       >
         <h2 className="text-lg font-bold mb-1" style={{ color: 'var(--cream)' }}>
-          Create group
+          Create small group
         </h2>
         <p className="text-xs mb-5 leading-relaxed" style={{ color: '#A89070' }}>
-          Premium members can create private groups. Only Premium members can be added.
+          Private group for {SMALL_GROUP_MIN}–{SMALL_GROUP_MAX} people. Premium only — official
+          rooms stay separate.
         </p>
 
         {!isPremium ? (
           <div className="space-y-4">
             <p className="text-sm" style={{ color: 'var(--cream)' }}>
-              Upgrade to Premium to create groups and invite other Premium members.
+              Upgrade to Premium to create small groups and invite other Premium members.
             </p>
             <div className="flex gap-3">
               <button
@@ -217,8 +238,11 @@ export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalP
             </div>
 
             <div>
-              <p className="text-xs font-semibold mb-2" style={{ color: '#A89070' }}>
+              <p className="text-xs font-semibold mb-1" style={{ color: '#A89070' }}>
                 Add Premium members
+              </p>
+              <p className="text-[11px] mb-2" style={{ color: '#6B5035' }}>
+                Select {MIN_INVITES}–{MAX_INVITES} people · {totalSize}/{SMALL_GROUP_MAX} in group
               </p>
               {loadingCandidates ? (
                 <p className="text-xs py-4 text-center" style={{ color: '#6B5035' }}>
@@ -233,23 +257,30 @@ export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalP
                   className="max-h-40 overflow-y-auto rounded-xl border"
                   style={{ borderColor: 'var(--border-default)' }}
                 >
-                  {candidates.map((c) => (
-                    <label
-                      key={c.id}
-                      className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-[var(--border-default)]/30 border-b last:border-b-0"
-                      style={{ borderColor: 'var(--border-default)' }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected.has(c.id)}
-                        onChange={() => toggleMember(c.id)}
-                        className="accent-[#C4832A]"
-                      />
-                      <span className="text-sm truncate" style={{ color: 'var(--cream)' }}>
-                        {c.name}
-                      </span>
-                    </label>
-                  ))}
+                  {candidates.map((c) => {
+                    const checked = selected.has(c.id);
+                    const atCap = !checked && selected.size >= MAX_INVITES;
+                    return (
+                      <label
+                        key={c.id}
+                        className={`flex items-center gap-3 px-3 py-2.5 border-b last:border-b-0 ${
+                          atCap ? 'cursor-not-allowed opacity-40' : 'cursor-pointer hover:bg-[var(--border-default)]/30'
+                        }`}
+                        style={{ borderColor: 'var(--border-default)' }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={atCap}
+                          onChange={() => toggleMember(c.id)}
+                          className="accent-[#C4832A]"
+                        />
+                        <span className="text-sm truncate" style={{ color: 'var(--cream)' }}>
+                          {c.name}
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -272,7 +303,8 @@ export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalP
               </button>
               <button
                 type="submit"
-                disabled={!name.trim() || creating}
+                disabled={!canCreate || creating}
+                data-testid="create-small-group-submit"
                 className="flex-1 py-3 rounded-xl text-sm font-semibold disabled:opacity-40"
                 style={{
                   background: 'linear-gradient(135deg, #C4832A, #A45E18)',

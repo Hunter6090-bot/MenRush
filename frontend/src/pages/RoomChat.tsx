@@ -243,14 +243,22 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       .catch(() => setAddCandidates([]));
   }, [addPanelOpen, members, user?.id]);
 
-  // ── Socket: join/leave ───────────────────────────────────────────────────
+  // ── Socket: join/leave — only after temp identity is set (never leak real ID) ─
   useEffect(() => {
-    if (!socket || !roomId) return;
-    socket.emit('room:join', { roomId });
+    if (!socket || !roomId || !identityReady) return;
+
+    const join = () => {
+      socket.emit('room:join', { roomId });
+    };
+    join();
+    // Re-join after reconnect so mesh/presence recover without a full page reload.
+    socket.on('connect', join);
+
     return () => {
+      socket.off('connect', join);
       socket.emit('room:leave', { roomId });
     };
-  }, [socket, roomId]);
+  }, [socket, roomId, identityReady]);
 
   // ── Socket: events ───────────────────────────────────────────────────────
   useEffect(() => {

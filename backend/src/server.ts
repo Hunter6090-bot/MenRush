@@ -458,15 +458,18 @@ io.on('connection', (socket: Socket) => {
       socket.join(`room:${roomId}`);
 
       const presence = await roomService.resolveRoomPresence(userId, roomId);
-
-      socket.to(`room:${roomId}`).emit('room:presence', {
-        room_id: roomId,
-        type: 'join',
-        user_id: userId,
-        name: presence.name,
-        photo_url: presence.photo_url,
-        is_verified: presence.is_verified,
-      });
+      // Do not fan out join presence until a temp identity is set — otherwise
+      // account name/photo leak to everyone in the room (P0).
+      if (presence.using_temp_identity) {
+        socket.to(`room:${roomId}`).emit('room:presence', {
+          room_id: roomId,
+          type: 'join',
+          user_id: userId,
+          name: presence.name,
+          photo_url: presence.photo_url,
+          is_verified: presence.is_verified,
+        });
+      }
 
       const peers = await io.in(`room:${roomId}`).fetchSockets();
       const roster = peers
@@ -477,17 +480,20 @@ io.on('connection', (socket: Socket) => {
         })
         .filter(Boolean);
 
-      const rosterDetails = await Promise.all(
-        roster.map(async (entry: any) => {
-          const p = await roomService.resolveRoomPresence(entry.user_id, roomId);
-          return {
-            user_id: entry.user_id,
-            name: p.name,
-            photo_url: p.photo_url,
-            is_verified: p.is_verified,
-          };
-        }),
-      );
+      const rosterDetails = (
+        await Promise.all(
+          roster.map(async (entry: any) => {
+            const p = await roomService.resolveRoomPresence(entry.user_id, roomId);
+            if (!p.using_temp_identity) return null;
+            return {
+              user_id: entry.user_id,
+              name: p.name,
+              photo_url: p.photo_url,
+              is_verified: p.is_verified,
+            };
+          }),
+        )
+      ).filter(Boolean);
 
       socket.emit('room:presence-sync', { room_id: roomId, participants: rosterDetails });
     } catch {
@@ -526,15 +532,21 @@ io.on('connection', (socket: Socket) => {
     const userId = socketToUser.get(socket.id);
     const roomId = resolveRoomId(data);
     if (!userId || !roomId || typeof data.typing !== 'boolean') return;
-    const name = (await userService.getDisplayName(userId)) ?? 'Member';
-    socket.to(`room:${roomId}`).emit('room:typing', {
-      roomId,
-      room_id: roomId,
-      userId,
-      user_id: userId,
-      user_name: name,
-      typing: data.typing,
-    });
+    try {
+      const presence = await roomService.resolveRoomPresence(userId, roomId);
+      // Never broadcast account display name into the room typing indicator.
+      const name = presence.using_temp_identity ? presence.name : 'Member';
+      socket.to(`room:${roomId}`).emit('room:typing', {
+        roomId,
+        room_id: roomId,
+        userId,
+        user_id: userId,
+        user_name: name,
+        typing: data.typing,
+      });
+    } catch {
+      /* ignore */
+    }
   });
 
   // Group video mesh signalling (1:1 style offer/answer/ICE, scoped to a room).
