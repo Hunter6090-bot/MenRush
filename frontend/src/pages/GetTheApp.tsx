@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SiteFooter } from '../components/SiteFooter';
 import { registerServiceWorker } from '../lib/push';
+import { getInstallPlatform, isStandaloneDisplay } from '../lib/pwaInstall';
+import { trackEvent, trackEventOnce } from '../observability/analytics';
 
 type Platform = 'ios' | 'android';
 
@@ -20,11 +22,7 @@ const ANDROID = [
 ];
 
 function detectPlatform(): Platform {
-  const ua = navigator.userAgent || '';
-  const isIOS =
-    /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const isAndroid = /Android/i.test(ua);
-  return isAndroid && !isIOS ? 'android' : 'ios';
+  return getInstallPlatform() === 'android' ? 'android' : 'ios';
 }
 
 function isIosSafari(): boolean {
@@ -39,21 +37,33 @@ export function GetTheApp() {
   const [step, setStep] = useState(0);
   const [done, setDone] = useState(false);
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
-  const standalone =
-    typeof window !== 'undefined' &&
-    (window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as Navigator & { standalone?: boolean }).standalone === true);
+  const standalone = typeof window !== 'undefined' && isStandaloneDisplay();
 
   useEffect(() => {
     setPlatform(detectPlatform());
+    trackEventOnce('install_guide_viewed', { platform: getInstallPlatform(), surface: 'get_the_app' });
     void registerServiceWorker();
     const onPrompt = (event: Event) => {
       event.preventDefault();
       setDeferred(event as BeforeInstallPromptEvent);
+      trackEventOnce(
+        'install_native_available',
+        { platform: getInstallPlatform(), surface: 'get_the_app' },
+        'install_native_available_get_the_app',
+      );
     };
     window.addEventListener('beforeinstallprompt', onPrompt);
     return () => window.removeEventListener('beforeinstallprompt', onPrompt);
   }, []);
+
+  useEffect(() => {
+    if (done) return;
+    trackEvent('install_guide_step', {
+      platform,
+      surface: 'get_the_app',
+      step: step + 1,
+    });
+  }, [platform, step, done]);
 
   const steps = platform === 'ios' ? IOS : ANDROID;
   const current = steps[step];
@@ -65,6 +75,11 @@ export function GetTheApp() {
       : 'rounded-full border border-[rgba(196,131,42,0.35)] px-4 py-3 text-[15px] font-bold text-[#F0E0C0]';
 
   const progress = useMemo(() => ((step + 1) / steps.length) * 100, [step, steps.length]);
+
+  const markDone = () => {
+    setDone(true);
+    trackEvent('install_guide_done', { platform, surface: 'get_the_app' });
+  };
 
   return (
     <div className="flex min-h-dvh flex-col bg-[#0D0A06] text-[#F0E0C0]">
@@ -103,10 +118,37 @@ export function GetTheApp() {
         )}
         <div className="mt-4 flex gap-2.5">
           <button type="button" className="flex-1 rounded-full border border-[rgba(196,131,42,0.35)] px-4 py-3.5 text-[15px] font-bold text-[#F0E0C0] disabled:opacity-40" disabled={done || step === 0} onClick={() => setStep((s) => Math.max(0, s - 1))}>Back</button>
-          <button type="button" className="flex-1 rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3.5 text-[15px] font-bold text-[#FFF6E6]" onClick={() => { if (done) return; if (step < steps.length - 1) setStep((s) => s + 1); else setDone(true); }}>{done || step === steps.length - 1 ? 'Done' : 'Next'}</button>
+          <button type="button" className="flex-1 rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3.5 text-[15px] font-bold text-[#FFF6E6]" onClick={() => { if (done) return; if (step < steps.length - 1) setStep((s) => s + 1); else markDone(); }}>{done || step === steps.length - 1 ? 'Done' : 'Next'}</button>
         </div>
         {platform === 'android' && deferred ? (
-          <button type="button" className="mt-3 w-full rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3.5 text-[15px] font-bold text-[#FFF6E6]" onClick={async () => { await deferred.prompt(); await deferred.userChoice; setDeferred(null); }}>Install MenRush</button>
+          <button
+            type="button"
+            className="mt-3 w-full rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3.5 text-[15px] font-bold text-[#FFF6E6]"
+            onClick={async () => {
+              trackEvent('install_cta_clicked', {
+                platform: 'android',
+                surface: 'get_the_app',
+                method: 'native',
+              });
+              await deferred.prompt();
+              const choice = await deferred.userChoice;
+              trackEvent('install_native_outcome', {
+                platform: 'android',
+                surface: 'get_the_app',
+                outcome: choice.outcome,
+              });
+              if (choice.outcome === 'accepted') {
+                trackEventOnce(
+                  'install_success',
+                  { platform: 'android', method: 'native', source: 'user_choice', surface: 'get_the_app' },
+                  'install_success',
+                );
+              }
+              setDeferred(null);
+            }}
+          >
+            Install MenRush
+          </button>
         ) : null}
         <p className="mt-8 text-center text-[13px] leading-[1.5] text-[#6B5840]">No App Store. No Play Store.<br />18+ only. <Link to="/" className="font-bold text-[#C4832A]">Waitlist</Link></p>
       </main>

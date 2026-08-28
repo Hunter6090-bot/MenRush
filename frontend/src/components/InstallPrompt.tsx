@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { registerServiceWorker } from '../lib/push';
+import { getInstallPlatform, isStandaloneDisplay } from '../lib/pwaInstall';
+import { trackEvent, trackEventOnce } from '../observability/analytics';
 
 const DISMISS_KEY = 'menrush_install_prompt_dismissed';
 
@@ -9,50 +11,71 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
-function isStandalone() {
-  return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
-  );
-}
-
 function isIos() {
-  const ua = navigator.userAgent || '';
-  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  return getInstallPlatform() === 'ios';
 }
 
 export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
   const location = useLocation();
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [hidden, setHidden] = useState(true);
+  const surface = variant === 'card' ? 'login_card' : 'post_login_sheet';
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (isStandalone()) return;
+    if (isStandaloneDisplay()) return;
     if (location.pathname === '/get-the-app' || location.pathname === '/install') return;
     if (variant === 'sheet' && localStorage.getItem(DISMISS_KEY) === '1') return;
 
     setHidden(false);
+    trackEventOnce(
+      'install_prompt_shown',
+      { platform: getInstallPlatform(), surface },
+      `install_prompt_shown_${surface}`,
+    );
     void registerServiceWorker();
     const onPrompt = (event: Event) => {
       event.preventDefault();
       setDeferred(event as BeforeInstallPromptEvent);
+      trackEventOnce(
+        'install_native_available',
+        { platform: getInstallPlatform(), surface },
+        `install_native_available_${surface}`,
+      );
     };
     window.addEventListener('beforeinstallprompt', onPrompt);
     return () => window.removeEventListener('beforeinstallprompt', onPrompt);
-  }, [location.pathname, variant]);
+  }, [location.pathname, variant, surface]);
 
   if (hidden) return null;
 
   const dismiss = () => {
     localStorage.setItem(DISMISS_KEY, '1');
+    trackEvent('install_prompt_dismissed', { platform: getInstallPlatform(), surface });
     setHidden(true);
   };
 
   const install = async () => {
     if (!deferred) return;
+    trackEvent('install_cta_clicked', {
+      platform: getInstallPlatform(),
+      surface,
+      method: 'native',
+    });
     await deferred.prompt();
-    await deferred.userChoice;
+    const choice = await deferred.userChoice;
+    trackEvent('install_native_outcome', {
+      platform: getInstallPlatform(),
+      surface,
+      outcome: choice.outcome,
+    });
+    if (choice.outcome === 'accepted') {
+      trackEventOnce(
+        'install_success',
+        { platform: getInstallPlatform(), method: 'native', source: 'user_choice', surface },
+        'install_success',
+      );
+    }
     setDeferred(null);
     dismiss();
   };
@@ -83,6 +106,13 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
         ) : (
           <Link
             to="/get-the-app"
+            onClick={() =>
+              trackEvent('install_cta_clicked', {
+                platform: getInstallPlatform(),
+                surface,
+                method: 'guide',
+              })
+            }
             className="flex-1 rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3 text-center text-[14px] font-bold text-[#FFF6E6]"
           >
             Show me how

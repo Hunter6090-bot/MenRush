@@ -1,4 +1,5 @@
 import { StatsigClient } from '@statsig/js-client';
+import { getInstallPlatform, isStandaloneDisplay } from '../lib/pwaInstall';
 
 type AnalyticsEvent =
   | 'landing_viewed'
@@ -8,12 +9,22 @@ type AnalyticsEvent =
   | 'verification_transition'
   | 'location_permission_outcome'
   | 'first_discovery_load'
-  | 'first_message_success';
+  | 'first_message_success'
+  | 'install_prompt_shown'
+  | 'install_prompt_dismissed'
+  | 'install_cta_clicked'
+  | 'install_native_available'
+  | 'install_native_outcome'
+  | 'install_guide_viewed'
+  | 'install_guide_step'
+  | 'install_guide_done'
+  | 'install_success';
 
 type MetadataValue = string | number | boolean;
 type EventMetadata = Record<string, MetadataValue | undefined>;
 
 const ATTRIBUTION_METADATA_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content'] as const;
+const INSTALL_METADATA_KEYS = ['platform', 'surface', 'method', 'outcome', 'source', 'step'] as const;
 
 const ALLOWED_METADATA: Record<AnalyticsEvent, ReadonlySet<string>> = {
   landing_viewed: new Set(['surface', ...ATTRIBUTION_METADATA_KEYS]),
@@ -24,9 +35,19 @@ const ALLOWED_METADATA: Record<AnalyticsEvent, ReadonlySet<string>> = {
   location_permission_outcome: new Set(['outcome']),
   first_discovery_load: new Set(['outcome', 'result_bucket']),
   first_message_success: new Set(['kind', 'surface']),
+  install_prompt_shown: new Set(INSTALL_METADATA_KEYS),
+  install_prompt_dismissed: new Set(INSTALL_METADATA_KEYS),
+  install_cta_clicked: new Set(INSTALL_METADATA_KEYS),
+  install_native_available: new Set(INSTALL_METADATA_KEYS),
+  install_native_outcome: new Set(INSTALL_METADATA_KEYS),
+  install_guide_viewed: new Set(INSTALL_METADATA_KEYS),
+  install_guide_step: new Set(INSTALL_METADATA_KEYS),
+  install_guide_done: new Set(INSTALL_METADATA_KEYS),
+  install_success: new Set(INSTALL_METADATA_KEYS),
 };
 
 let client: StatsigClient | null = null;
+let installTrackingStarted = false;
 
 function getAnonymousSessionId(): string {
   const storageKey = 'menrush_analytics_session';
@@ -50,9 +71,34 @@ function sanitizeMetadata(event: AnalyticsEvent, metadata: EventMetadata): Recor
   );
 }
 
+function startInstallTracking(): void {
+  if (typeof window === 'undefined' || installTrackingStarted) return;
+  installTrackingStarted = true;
+
+  const platform = getInstallPlatform();
+  if (isStandaloneDisplay()) {
+    trackEventOnce(
+      'install_success',
+      { platform, method: 'standalone', source: 'display_mode' },
+      'install_success',
+    );
+  }
+
+  window.addEventListener('appinstalled', () => {
+    trackEventOnce(
+      'install_success',
+      { platform: getInstallPlatform(), method: 'native', source: 'appinstalled' },
+      'install_success',
+    );
+  });
+}
+
 export function initializeAnalytics(): void {
   const clientKey = String(import.meta.env.VITE_STATSIG_CLIENT_KEY || '').trim();
-  if (!clientKey || client) return;
+  if (!clientKey || client) {
+    startInstallTracking();
+    return;
+  }
 
   client = new StatsigClient(
     clientKey,
@@ -68,6 +114,7 @@ export function initializeAnalytics(): void {
   void client.initializeAsync().catch(() => {
     client = null;
   });
+  startInstallTracking();
 }
 
 export function trackEvent(event: AnalyticsEvent, metadata: EventMetadata = {}): void {
