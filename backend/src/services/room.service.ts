@@ -2,9 +2,23 @@ import { query } from '../db';
 import { v4 as uuidv4 } from 'uuid';
 import { premiumService, PremiumRequiredError } from './premium.service';
 import { accessControl } from '../security/access';
+import {
+  ROOM_TEMP_IDENTITY_TTL_DAYS,
+  roomTempNameSql,
+  roomTempPhotoSql,
+  roomUsingTempIdentitySql,
+  sanitizeRoomPresence,
+} from './room-temp-identity';
 
-/** Soft TTL for saved room temp identities (strategy 3). Unsaved wipe on leave. */
-export const ROOM_TEMP_IDENTITY_TTL_DAYS = 30;
+export {
+  ROOM_TEMP_IDENTITY_TTL_DAYS,
+  ROOM_ANON_DISPLAY_NAME,
+  roomTempNameSql,
+  roomTempPhotoSql,
+  roomUsingTempIdentitySql,
+  sanitizeRoomPresence,
+} from './room-temp-identity';
+
 const ROOM_TEMP_IDENTITY_PURGE_MS = 6 * 60 * 60 * 1000;
 interface CreateRoomData {
   name: string;
@@ -338,23 +352,10 @@ export const roomService = {
     const msg = result.rows[0] as any;
 
     // Temp identity is room-scoped only — never mutates users.name / photo_url.
+    // Never fall back to canonical profile name/photo (privacy).
     const senderRes = await query(
-      `SELECT COALESCE(
-                CASE
-                  WHEN ti.last_used_at > NOW() - ($3 || ' days')::interval
-                  THEN ti.display_name
-                  ELSE NULL
-                END,
-                u.name
-              ) AS sender_name,
-              COALESCE(
-                CASE
-                  WHEN ti.last_used_at > NOW() - ($3 || ' days')::interval
-                  THEN ti.photo_url
-                  ELSE NULL
-                END,
-                u.photo_url
-              ) AS sender_photo_url
+      `SELECT ${roomTempNameSql('$3')} AS sender_name,
+              ${roomTempPhotoSql('$3')} AS sender_photo_url
          FROM users u
          LEFT JOIN room_temp_identities ti
            ON ti.user_id = u.id AND ti.room_id = $2
@@ -407,22 +408,8 @@ export const roomService = {
 
     const result = await query(
       `SELECT rm.id, rm.room_id, rm.sender_id, rm.message, rm.reply_to, rm.created_at,
-              COALESCE(
-                CASE
-                  WHEN ti.last_used_at > NOW() - (${ttlParam} || ' days')::interval
-                  THEN ti.display_name
-                  ELSE NULL
-                END,
-                u.name
-              ) AS sender_name,
-              COALESCE(
-                CASE
-                  WHEN ti.last_used_at > NOW() - (${ttlParam} || ' days')::interval
-                  THEN ti.photo_url
-                  ELSE NULL
-                END,
-                u.photo_url
-              ) AS sender_photo_url
+              ${roomTempNameSql(ttlParam)} AS sender_name,
+              ${roomTempPhotoSql(ttlParam)} AS sender_photo_url
        FROM room_messages rm
        JOIN users u ON u.id = rm.sender_id
        LEFT JOIN room_temp_identities ti
@@ -468,42 +455,21 @@ export const roomService = {
 
     // Roster shows temp display name/photo inside the room; verification badge
     // still reflects the real account (host can see adult assurance, not real name).
+    // CRITICAL: never COALESCE to u.name / u.photo_url — null temp photo must stay null.
     const result = await query(
       `SELECT u.id,
-              COALESCE(
-                CASE
-                  WHEN ti.last_used_at > NOW() - ($2 || ' days')::interval
-                  THEN ti.display_name
-                  ELSE NULL
-                END,
-                u.name
-              ) AS name,
-              COALESCE(
-                CASE
-                  WHEN ti.last_used_at > NOW() - ($2 || ' days')::interval
-                  THEN ti.photo_url
-                  ELSE NULL
-                END,
-                u.photo_url
-              ) AS photo_url,
+              ${roomTempNameSql('$2')} AS name,
+              ${roomTempPhotoSql('$2')} AS photo_url,
               rm.role,
               u.is_verified,
               u.authenticity_status,
-              (ti.display_name IS NOT NULL AND ti.last_used_at > NOW() - ($2 || ' days')::interval)
-                AS using_temp_identity
+              ${roomUsingTempIdentitySql('$2')} AS using_temp_identity
        FROM room_members rm
        JOIN users u ON u.id = rm.user_id
        LEFT JOIN room_temp_identities ti
          ON ti.user_id = u.id AND ti.room_id = $1
        WHERE rm.room_id = $1
-       ORDER BY COALESCE(
-         CASE
-           WHEN ti.last_used_at > NOW() - ($2 || ' days')::interval
-           THEN ti.display_name
-           ELSE NULL
-         END,
-         u.name
-       ) ASC`,
+       ORDER BY ${roomTempNameSql('$2')} ASC`,
       [roomId, String(ROOM_TEMP_IDENTITY_TTL_DAYS)],
     );
     return result.rows;
@@ -616,26 +582,11 @@ export const roomService = {
   /** Resolve display name/photo for socket presence inside a room. */
   async resolveRoomPresence(userId: string, roomId: string) {
     const res = await query(
-      `SELECT COALESCE(
-                CASE
-                  WHEN ti.last_used_at > NOW() - ($3 || ' days')::interval
-                  THEN ti.display_name
-                  ELSE NULL
-                END,
-                u.name
-              ) AS name,
-              COALESCE(
-                CASE
-                  WHEN ti.last_used_at > NOW() - ($3 || ' days')::interval
-                  THEN ti.photo_url
-                  ELSE NULL
-                END,
-                u.photo_url
-              ) AS photo_url,
+      `SELECT ${roomTempNameSql('$3')} AS name,
+              ${roomTempPhotoSql('$3')} AS photo_url,
               u.is_verified,
               u.authenticity_status,
-              (ti.display_name IS NOT NULL AND ti.last_used_at > NOW() - ($3 || ' days')::interval)
-                AS using_temp_identity
+              ${roomUsingTempIdentitySql('$3')} AS using_temp_identity
          FROM users u
          LEFT JOIN room_temp_identities ti
            ON ti.user_id = u.id AND ti.room_id = $2
@@ -645,11 +596,18 @@ export const roomService = {
     if (res.rows[0]?.using_temp_identity) {
       await this.touchTempIdentity(userId, roomId);
     }
+    // Defense in depth: never emit canonical profile fields even if SQL drifts.
+    const safe = sanitizeRoomPresence({
+      tempName: res.rows[0]?.name,
+      tempPhoto: res.rows[0]?.photo_url,
+      tempActive: !!res.rows[0]?.using_temp_identity,
+    });
     return {
-      name: res.rows[0]?.name ?? 'Member',
-      photo_url: res.rows[0]?.photo_url ?? null,
+      name: safe.name,
+      photo_url: safe.photo_url,
       is_verified: !!res.rows[0]?.is_verified,
       authenticity_status: res.rows[0]?.authenticity_status ?? null,
+      using_temp_identity: safe.using_temp_identity,
     };
   },
 

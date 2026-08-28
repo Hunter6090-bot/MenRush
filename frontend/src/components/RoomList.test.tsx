@@ -117,4 +117,21 @@ describe('RoomList refresh', () => {
     });
     expect(document.querySelectorAll('.animate-pulse').length).toBe(0);
   });
+
+  it('keeps Create group when hub hides the list header', async () => {
+    getRooms.mockResolvedValueOnce({ data: officialPayload });
+
+    render(
+      <MemoryRouter>
+        <RoomList variant="sidebar" showHeader={false} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('official-room-london-after-dark')).toBeInTheDocument();
+    });
+
+    expect(screen.getByLabelText('Create group')).toBeInTheDocument();
+    expect(screen.getByTestId('rooms-create-group')).toBeInTheDocument();
+  });
 });

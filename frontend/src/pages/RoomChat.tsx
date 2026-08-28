@@ -244,17 +244,20 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   }, [addPanelOpen, members, user?.id]);
 
   // ── Socket: join/leave ───────────────────────────────────────────────────
+  // CRITICAL: join only AFTER temp identity is saved. Early join broadcast
+  // resolveRoomPresence before the gate → real name/photo leak + dropped
+  // WebRTC offers (mesh handlers are disabled until identityReady).
   useEffect(() => {
-    if (!socket || !roomId) return;
+    if (!socket || !roomId || !identityReady) return;
     socket.emit('room:join', { roomId });
     return () => {
       socket.emit('room:leave', { roomId });
     };
-  }, [socket, roomId]);
+  }, [socket, roomId, identityReady]);
 
   // ── Socket: events ───────────────────────────────────────────────────────
   useEffect(() => {
-    if (!socket || !roomId) return;
+    if (!socket || !roomId || !identityReady) return;
 
     const onMessage = (data: RoomMessage) => {
       if (data.room_id !== roomId) return;
@@ -334,7 +337,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       socket.off('room:presence-sync', onPresenceSync);
       socket.off('room:typing', onTyping);
     };
-  }, [socket, roomId, user?.id, upsertParticipant, markOffline, applyPresenceSync]);
+  }, [socket, roomId, identityReady, user?.id, upsertParticipant, markOffline, applyPresenceSync]);
 
   // ── Scroll to bottom ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -703,26 +706,47 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
               <div className="space-y-1">
                 {members.map((member) => (
                   <div key={member.id} className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => navigate(profilePathForUser(member.id, user?.id))}
-                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                      data-testid={`room-member-${member.id}`}
-                    >
-                      <span className="flex-1 text-sm truncate" style={{ color: 'var(--cream)' }}>
-                        {member.name}
-                        {member.is_verified ? (
-                          <span className="ml-1 text-[10px]" style={{ color: '#8FC773' }} title="Adult assurance">
-                            · verified
-                          </span>
-                        ) : null}
-                        {member.role === 'owner' ? (
-                          <span className="ml-1 text-[10px]" style={{ color: '#C4832A' }}>
-                            · owner
-                          </span>
-                        ) : null}
-                      </span>
-                    </button>
+                    {member.using_temp_identity ? (
+                      <div
+                        className="flex min-w-0 flex-1 items-center gap-2"
+                        data-testid={`room-member-${member.id}`}
+                      >
+                        <span className="flex-1 text-sm truncate" style={{ color: 'var(--cream)' }}>
+                          {member.name}
+                          {member.is_verified ? (
+                            <span className="ml-1 text-[10px]" style={{ color: '#8FC773' }} title="Adult assurance">
+                              · verified
+                            </span>
+                          ) : null}
+                          {member.role === 'owner' ? (
+                            <span className="ml-1 text-[10px]" style={{ color: '#C4832A' }}>
+                              · owner
+                            </span>
+                          ) : null}
+                        </span>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => navigate(profilePathForUser(member.id, user?.id))}
+                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                        data-testid={`room-member-${member.id}`}
+                      >
+                        <span className="flex-1 text-sm truncate" style={{ color: 'var(--cream)' }}>
+                          {member.name}
+                          {member.is_verified ? (
+                            <span className="ml-1 text-[10px]" style={{ color: '#8FC773' }} title="Adult assurance">
+                              · verified
+                            </span>
+                          ) : null}
+                          {member.role === 'owner' ? (
+                            <span className="ml-1 text-[10px]" style={{ color: '#C4832A' }}>
+                              · owner
+                            </span>
+                          ) : null}
+                        </span>
+                      </button>
+                    )}
                     {member.id !== user?.id && (
                       <ChatSafetyMenu
                         peerId={member.id}

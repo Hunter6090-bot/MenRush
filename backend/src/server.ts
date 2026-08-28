@@ -526,13 +526,14 @@ io.on('connection', (socket: Socket) => {
     const userId = socketToUser.get(socket.id);
     const roomId = resolveRoomId(data);
     if (!userId || !roomId || typeof data.typing !== 'boolean') return;
-    const name = (await userService.getDisplayName(userId)) ?? 'Member';
+    // Room typing must use temp identity — never the canonical profile name.
+    const presence = await roomService.resolveRoomPresence(userId, roomId);
     socket.to(`room:${roomId}`).emit('room:typing', {
       roomId,
       room_id: roomId,
       userId,
       user_id: userId,
-      user_name: name,
+      user_name: presence.name,
       typing: data.typing,
     });
   });
