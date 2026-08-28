@@ -47,6 +47,7 @@ import { readThemePreference, applyTheme } from './lib/theme';
 import { FEATURES } from './lib/featureFlags';
 import { VideoCallModal } from './components/VideoCallModal';
 import { ToastNotifications } from './components/ToastNotifications';
+import { InstallPrompt } from './components/InstallPrompt';
 import { savePostAuthRedirect } from './lib/profileLinks';
 import { RoomTempIdentityGatePreview } from './pages/RoomTempIdentityGatePreview';
 
@@ -124,7 +125,6 @@ function AppEntry() {
     if (user?.verification_status === 'rejected') return <Navigate to="/verify/rejected" replace />;
     return <Navigate to="/verify/id" replace />;
   }
-  // Signed-in home: Nearby (Discover). Profile setup is gated by RequireProfileSetup.
   return <Navigate to="/discover" replace />;
 }
 
@@ -132,8 +132,6 @@ function AppShell() {
   const token = useAuthStore((s) => s.token);
   const logout = useAuthStore((s) => s.logout);
 
-  // Zombie sessions: store.token set but localStorage cleared (or vice versa) → 401 spam.
-  // Heal on boot and whenever token flips.
   useEffect(() => {
     const lsToken = localStorage.getItem('token');
     if (token && !lsToken) {
@@ -146,7 +144,6 @@ function AppShell() {
     }
   }, [token, logout]);
 
-  // Follow OS theme when preference is "system".
   useEffect(() => {
     applyTheme(readThemePreference());
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
@@ -173,7 +170,6 @@ function AppShell() {
         <Route path="/install" element={<Navigate to="/get-the-app" replace />} />
         <Route path="/app" element={<AppEntry />} />
         <Route path="/coming-soon" element={<ComingSoon />} />
-        {/* Closed campaign URLs → sole public Pride offer */}
         <Route path="/brightonpride" element={<Navigate to="/pride" replace />} />
         <Route path="/brightonpride26" element={<Navigate to="/pride" replace />} />
         <Route path="/pride" element={<Pride />} />
@@ -218,6 +214,7 @@ function AppShell() {
         ) : null}
         <Route path="*" element={<NotFound />} />
       </Routes>
+      {token ? <InstallPrompt variant="sheet" /> : null}
       {token && FEATURES.videoCalls && <VideoCallModal />}
     </>
   );
