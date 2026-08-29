@@ -194,6 +194,9 @@ export const usersAPI = {
     });
   },
   likeUser: (id: string) => apiClient.post(`/users/like/${id}`),
+  /** Unmatch — removes both like directions. Does not touch rooms. */
+  unmatchUser: (id: string) =>
+    apiClient.delete<{ unmatched: boolean; removed: number }>(`/users/like/${id}`),
   updateVisibility: (isVisible: boolean) =>
     apiClient.patch('/users/visibility', { is_visible: isVisible }),
   getMatches: () => apiClient.get('/users/matches'),

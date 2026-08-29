@@ -250,6 +250,19 @@ router.post('/like/:id', verifiedMiddleware, async (req: AuthRequest, res: Respo
   }
 });
 
+/** Unmatch — delete both like directions. Does not touch rooms or messages. */
+router.delete('/like/:id', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await userService.unmatchUser(req.userId!, req.params.id);
+    res.json({ unmatched: true, removed: result.removed });
+  } catch (error: any) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
+    res.status(400).json({ error: error.message || 'Could not unmatch' });
+  }
+});
+
 router.get('/matches', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const matches = await userService.getMatches(req.userId!);
