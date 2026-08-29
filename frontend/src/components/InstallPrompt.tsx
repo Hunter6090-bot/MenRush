@@ -49,9 +49,11 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
 
   if (hidden) return null;
 
-  const dismiss = () => {
+  const hide = (trackDismiss: boolean) => {
     localStorage.setItem(DISMISS_KEY, '1');
-    trackEvent('install_prompt_dismissed', { platform: getInstallPlatform(), surface });
+    if (trackDismiss) {
+      trackEvent('install_prompt_dismissed', { platform: getInstallPlatform(), surface });
+    }
     setHidden(true);
   };
 
@@ -77,7 +79,7 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
       );
     }
     setDeferred(null);
-    dismiss();
+    hide(choice.outcome !== 'accepted');
   };
 
   const wrap =
@@ -120,7 +122,7 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
         )}
         <button
           type="button"
-          onClick={dismiss}
+          onClick={() => hide(true)}
           className="rounded-full border border-[rgba(196,131,42,0.35)] px-4 py-3 text-[14px] font-bold text-[#F0E0C0]"
         >
           Not now
