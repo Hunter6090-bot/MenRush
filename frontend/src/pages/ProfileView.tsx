@@ -65,6 +65,7 @@ export const ProfileView = () => {
   const [liked, setLiked] = useState(false);
   const [mutual, setMutual] = useState(false);
   const [matching, setMatching] = useState(false);
+  const [unmatching, setUnmatching] = useState(false);
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(
     null,
   );
@@ -98,11 +99,7 @@ export const ProfileView = () => {
   }, []);
 
   const handleMatch = useCallback(async () => {
-    if (!user || matching) return;
-    if (mutual) {
-      navigate(`/messages/${user.id}`);
-      return;
-    }
+    if (!user || matching || mutual) return;
     if (liked) {
       flash(`Match already sent to ${user.name}. Chat unlocks when he matches back · consent first.`);
       return;
@@ -128,7 +125,7 @@ export const ProfileView = () => {
     } finally {
       setMatching(false);
     }
-  }, [user, matching, mutual, liked, navigate, flash]);
+  }, [user, matching, mutual, liked, flash]);
 
   const handleMessage = useCallback(() => {
     if (!user) return;
@@ -138,6 +135,34 @@ export const ProfileView = () => {
     }
     flash('Chat unlocks after a mutual match. Tap Match first · consent first.');
   }, [user, mutual, navigate, flash]);
+
+  const handleUnmatch = useCallback(async () => {
+    if (!user || unmatching || !mutual) return;
+    if (
+      !window.confirm(
+        `Unmatch with ${user.name}? Chat locks again until you both match.`,
+      )
+    ) {
+      return;
+    }
+    setUnmatching(true);
+    try {
+      await usersAPI.unmatchUser(user.id);
+      setMutual(false);
+      setLiked(false);
+      flash(`Unmatched with ${user.name}.`);
+    } catch (err: unknown) {
+      const apiError = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      flash(
+        typeof apiError === 'string' && apiError.length > 0
+          ? apiError
+          : 'Could not unmatch. Try again.',
+        'error',
+      );
+    } finally {
+      setUnmatching(false);
+    }
+  }, [user, unmatching, mutual, flash]);
 
   const handlePass = useCallback(() => {
     navigate(-1);
@@ -297,33 +322,51 @@ export const ProfileView = () => {
           >
             Pass
           </button>
-          <button
-            type="button"
-            disabled={matching}
-            onClick={() => void handleMatch()}
-            data-testid="profile-view-match"
-            className={`flex-[1.4] min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide active:scale-[0.98] transition-all disabled:opacity-60 ${
-              mutual
-                ? 'border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] text-[var(--copper)]'
-                : liked
-                  ? 'border border-[var(--copper)]/50 bg-transparent text-[var(--copper)]'
-                  : 'bg-[var(--copper)] text-[var(--nn-on-copper)] hover:bg-[var(--copper-light,#E0A14A)]'
-            }`}
-          >
-            {matching ? 'Sending…' : mutual ? 'Open chat' : liked ? 'Matched' : 'Match'}
-          </button>
-          <button
-            type="button"
-            onClick={handleMessage}
-            data-testid="profile-view-message"
-            className={`flex-1 min-w-[5.5rem] py-3 rounded-xl font-bold text-sm transition-all ${
-              mutual
-                ? 'border border-[var(--copper)]/40 text-[var(--copper)] hover:bg-[rgba(196,131,42,0.12)]'
-                : 'border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] hover:border-[var(--copper)]/40 hover:text-[var(--copper)]'
-            }`}
-          >
-            Message
-          </button>
+          {mutual ? (
+            <>
+              <button
+                type="button"
+                onClick={handleMessage}
+                data-testid="profile-view-message"
+                className="flex-[1.4] min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide active:scale-[0.98] transition-all border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] text-[var(--copper)]"
+              >
+                Open chat
+              </button>
+              <button
+                type="button"
+                disabled={unmatching}
+                onClick={() => void handleUnmatch()}
+                data-testid="profile-view-unmatch"
+                className="flex-1 min-w-[5.5rem] py-3 rounded-xl font-bold text-sm transition-all border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] hover:border-[#c45a4a]/55 hover:text-[#e08a7a] disabled:opacity-60"
+              >
+                {unmatching ? 'Unmatching…' : 'Unmatch'}
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                disabled={matching}
+                onClick={() => void handleMatch()}
+                data-testid="profile-view-match"
+                className={`flex-[1.4] min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide active:scale-[0.98] transition-all disabled:opacity-60 ${
+                  liked
+                    ? 'border border-[var(--copper)]/50 bg-transparent text-[var(--copper)]'
+                    : 'bg-[var(--copper)] text-[var(--nn-on-copper)] hover:bg-[var(--copper-light,#E0A14A)]'
+                }`}
+              >
+                {matching ? 'Sending…' : liked ? 'Matched' : 'Match'}
+              </button>
+              <button
+                type="button"
+                onClick={handleMessage}
+                data-testid="profile-view-message"
+                className="flex-1 min-w-[5.5rem] py-3 rounded-xl font-bold text-sm transition-all border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] hover:border-[var(--copper)]/40 hover:text-[var(--copper)]"
+              >
+                Message
+              </button>
+            </>
+          )}
         </div>
         <p className="text-center text-[11px] text-[var(--cream-muted)]">
           Match is mutual interest · Chat unlocks when he matches back · Report anytime

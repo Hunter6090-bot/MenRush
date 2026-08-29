@@ -535,6 +535,22 @@ export const userService = {
     return result.rows.length > 0;
   },
 
+  /**
+   * Unmatch: remove both directions of the like so the mutual match is gone.
+   * Does not delete message history or touch room memberships.
+   */
+  async unmatchUser(userId: string, otherId: string): Promise<{ removed: number }> {
+    await accessControl.assertInteraction(userId, otherId);
+    const result = await query(
+      `DELETE FROM likes
+       WHERE (liker_id = $1 AND liked_id = $2)
+          OR (liker_id = $2 AND liked_id = $1)
+       RETURNING id`,
+      [userId, otherId],
+    );
+    return { removed: result.rows.length };
+  },
+
   /** Video calls allowed for mutual matches or anyone you've already messaged. */
   async canVideoCall(userId: string, peerId: string): Promise<boolean> {
     if (!peerId || userId === peerId) return false;
