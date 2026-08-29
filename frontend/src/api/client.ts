@@ -194,6 +194,8 @@ export const usersAPI = {
     });
   },
   likeUser: (id: string) => apiClient.post(`/users/like/${id}`),
+  /** Unmatch — deletes likes both ways. */
+  unlikeUser: (id: string) => apiClient.delete(`/users/like/${id}`),
   updateVisibility: (isVisible: boolean) =>
     apiClient.patch('/users/visibility', { is_visible: isVisible }),
   getMatches: () => apiClient.get('/users/matches'),

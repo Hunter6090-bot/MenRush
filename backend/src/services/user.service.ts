@@ -535,6 +535,22 @@ export const userService = {
     return result.rows.length > 0;
   },
 
+  /**
+   * Unmatch — remove likes both ways between the pair.
+   * Same likes table as Match; no separate match model.
+   */
+  async unlikeUser(userId: string, otherId: string) {
+    if (!otherId || userId === otherId) {
+      throw new Error('Invalid user');
+    }
+    await query(
+      `DELETE FROM likes
+       WHERE (liker_id = $1 AND liked_id = $2)
+          OR (liker_id = $2 AND liked_id = $1)`,
+      [userId, otherId],
+    );
+  },
+
   /** Video calls allowed for mutual matches or anyone you've already messaged. */
   async canVideoCall(userId: string, peerId: string): Promise<boolean> {
     if (!peerId || userId === peerId) return false;

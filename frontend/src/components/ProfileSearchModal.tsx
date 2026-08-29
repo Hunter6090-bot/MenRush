@@ -29,6 +29,8 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [mutualIds, setMutualIds] = useState<Set<string>>(new Set());
   const [matchingId, setMatchingId] = useState<string | null>(null);
+  const [unmatchTarget, setUnmatchTarget] = useState<SearchHit | null>(null);
+  const [unmatching, setUnmatching] = useState(false);
   const [notice, setNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
@@ -37,6 +39,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
       setResults([]);
       setError('');
       setNotice(null);
+      setUnmatchTarget(null);
       return;
     }
     inputRef.current?.focus();
@@ -149,13 +152,33 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
     flash(`Passed on ${hit.name}.`);
   };
 
-  const handleMessage = (hit: SearchHit) => {
-    if (mutualIds.has(hit.id)) {
-      onClose();
-      navigate(`/messages/${hit.id}`);
-      return;
+  const confirmUnmatch = async () => {
+    if (!unmatchTarget || unmatching) return;
+    const hit = unmatchTarget;
+    setUnmatching(true);
+    try {
+      await usersAPI.unlikeUser(hit.id);
+      setLikedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(hit.id);
+        return next;
+      });
+      setMutualIds((prev) => {
+        const next = new Set(prev);
+        next.delete(hit.id);
+        return next;
+      });
+      setResults((prev) => prev.filter((r) => r.id !== hit.id));
+      setUnmatchTarget(null);
+    } catch (err: unknown) {
+      const apiError = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      flash(
+        typeof apiError === 'string' && apiError.length > 0 ? apiError : 'Could not unmatch.',
+        'error',
+      );
+    } finally {
+      setUnmatching(false);
     }
-    flash('Chat unlocks after a mutual match. Tap Match first · consent first.');
   };
 
   return (
@@ -279,10 +302,11 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleMessage(hit)}
-                    className="rounded-full border border-[var(--border-default)] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-[var(--cream-muted)] hover:border-[#C4832A]/40 hover:text-[#C4832A]"
+                    onClick={() => setUnmatchTarget(hit)}
+                    data-testid={`search-unmatch-${hit.id}`}
+                    className="rounded-full border border-[var(--border-default)] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-[var(--cream-muted)] hover:border-[var(--nn-danger)]/40 hover:text-[var(--nn-danger)]"
                   >
-                    Message
+                    Unmatch
                   </button>
                 </div>
               </div>
@@ -293,6 +317,50 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
           Match first · Chat unlocks when mutual
         </p>
       </div>
+
+      {unmatchTarget ? (
+        <div
+          className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 p-4"
+          role="presentation"
+          onClick={() => !unmatching && setUnmatchTarget(null)}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="search-unmatch-title"
+            aria-describedby="search-unmatch-desc"
+            data-testid="search-unmatch-confirm"
+            className="w-full max-w-sm rounded-2xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-5 shadow-[var(--shadow-lg)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="search-unmatch-title" className="text-lg font-extrabold text-[var(--cream)]">
+              Unmatch {unmatchTarget.name}?
+            </h2>
+            <p id="search-unmatch-desc" className="mt-2 text-sm leading-relaxed text-[var(--cream-muted)]">
+              Chat closes.
+            </p>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                disabled={unmatching}
+                onClick={() => setUnmatchTarget(null)}
+                className="rounded-full border border-[var(--border-default)] px-4 py-2 text-sm font-bold text-[var(--cream-muted)] transition-colors hover:text-[var(--cream)] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={unmatching}
+                data-testid="search-unmatch-confirm-btn"
+                onClick={() => void confirmUnmatch()}
+                className="rounded-full bg-[var(--nn-danger)] px-4 py-2 text-sm font-extrabold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {unmatching ? 'Unmatching…' : 'Unmatch'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

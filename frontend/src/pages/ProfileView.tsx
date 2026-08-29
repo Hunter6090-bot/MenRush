@@ -65,6 +65,8 @@ export const ProfileView = () => {
   const [liked, setLiked] = useState(false);
   const [mutual, setMutual] = useState(false);
   const [matching, setMatching] = useState(false);
+  const [unmatchConfirmOpen, setUnmatchConfirmOpen] = useState(false);
+  const [unmatching, setUnmatching] = useState(false);
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(
     null,
   );
@@ -130,18 +132,30 @@ export const ProfileView = () => {
     }
   }, [user, matching, mutual, liked, navigate, flash]);
 
-  const handleMessage = useCallback(() => {
-    if (!user) return;
-    if (mutual) {
-      navigate(`/messages/${user.id}`);
-      return;
-    }
-    flash('Chat unlocks after a mutual match. Tap Match first · consent first.');
-  }, [user, mutual, navigate, flash]);
-
   const handlePass = useCallback(() => {
     navigate(-1);
   }, [navigate]);
+
+  const confirmUnmatch = useCallback(async () => {
+    if (!user || unmatching) return;
+    setUnmatching(true);
+    try {
+      await usersAPI.unlikeUser(user.id);
+      setLiked(false);
+      setMutual(false);
+      setUnmatchConfirmOpen(false);
+      // Same exit as Pass — chat actions leave with the match.
+      navigate(-1);
+    } catch (err: unknown) {
+      const apiError = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      flash(
+        typeof apiError === 'string' && apiError.length > 0 ? apiError : 'Could not unmatch.',
+        'error',
+      );
+    } finally {
+      setUnmatching(false);
+    }
+  }, [user, unmatching, navigate, flash]);
 
   if (loading) {
     return (
@@ -314,21 +328,62 @@ export const ProfileView = () => {
           </button>
           <button
             type="button"
-            onClick={handleMessage}
-            data-testid="profile-view-message"
-            className={`flex-1 min-w-[5.5rem] py-3 rounded-xl font-bold text-sm transition-all ${
-              mutual
-                ? 'border border-[var(--copper)]/40 text-[var(--copper)] hover:bg-[rgba(196,131,42,0.12)]'
-                : 'border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] hover:border-[var(--copper)]/40 hover:text-[var(--copper)]'
-            }`}
+            onClick={() => setUnmatchConfirmOpen(true)}
+            data-testid="profile-view-unmatch"
+            className="flex-1 min-w-[5.5rem] py-3 rounded-xl font-bold text-sm transition-all border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] hover:border-[var(--nn-danger)]/50 hover:text-[var(--nn-danger)]"
           >
-            Message
+            Unmatch
           </button>
         </div>
         <p className="text-center text-[11px] text-[var(--cream-muted)]">
           Match is mutual interest · Chat unlocks when he matches back · Report anytime
         </p>
       </div>
+
+      {unmatchConfirmOpen ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4"
+          role="presentation"
+          onClick={() => !unmatching && setUnmatchConfirmOpen(false)}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="unmatch-confirm-title"
+            aria-describedby="unmatch-confirm-desc"
+            data-testid="unmatch-confirm"
+            className="w-full max-w-sm rounded-2xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-5 shadow-[var(--shadow-lg)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="unmatch-confirm-title" className="text-lg font-extrabold text-[var(--cream)]">
+              Unmatch {user.name}?
+            </h2>
+            <p id="unmatch-confirm-desc" className="mt-2 text-sm leading-relaxed text-[var(--cream-muted)]">
+              Chat closes.
+            </p>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                data-testid="unmatch-cancel"
+                disabled={unmatching}
+                onClick={() => setUnmatchConfirmOpen(false)}
+                className="rounded-full border border-[var(--border-default)] px-4 py-2 text-sm font-bold text-[var(--cream-muted)] transition-colors hover:text-[var(--cream)] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                data-testid="unmatch-confirm-btn"
+                disabled={unmatching}
+                onClick={() => void confirmUnmatch()}
+                className="rounded-full bg-[var(--nn-danger)] px-4 py-2 text-sm font-extrabold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {unmatching ? 'Unmatching…' : 'Unmatch'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </Layout>
   );
 };

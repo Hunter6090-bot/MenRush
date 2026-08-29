@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * Product rule smoke: photo hrefs for other/self, and Match/Message stay
+ * Product rule smoke: photo hrefs for other/self, and Match/Unmatch stay
  * dedicated controls (not nested inside the photo link).
  * Logic under test mirrors `profilePathForUser` in src/lib/profileLinks.ts.
  */
 test.describe('avatar photo taps open profiles', () => {
-  test('other → /profile/:id, own → /profile, Match/Message remain separate', async ({
+  test('other → /profile/:id, own → /profile, Match/Unmatch remain separate', async ({
     page,
   }) => {
     await page.setContent(`<!doctype html>
@@ -16,7 +16,7 @@ test.describe('avatar photo taps open profiles', () => {
   <div data-testid="card">
     <a data-testid="card-photo" href="/profile/22222222-2222-2222-2222-222222222222">photo</a>
     <button type="button" data-testid="match-btn" data-action="match">Match</button>
-    <button type="button" data-testid="message-btn" data-action="message">Message</button>
+    <button type="button" data-testid="unmatch-btn" data-action="unmatch">Unmatch</button>
   </div>
   <script>
     function profilePathForUser(userId, currentUserId) {
@@ -43,8 +43,8 @@ test.describe('avatar photo taps open profiles', () => {
     );
     await expect(page.getByTestId('own-photo')).toHaveAttribute('href', '/profile');
     await expect(page.getByTestId('match-btn')).toHaveAttribute('data-action', 'match');
-    await expect(page.getByTestId('message-btn')).toHaveAttribute('data-action', 'message');
+    await expect(page.getByTestId('unmatch-btn')).toHaveAttribute('data-action', 'unmatch');
     await expect(page.locator('[data-testid="match-btn"]').locator('xpath=ancestor::a')).toHaveCount(0);
-    await expect(page.locator('[data-testid="message-btn"]').locator('xpath=ancestor::a')).toHaveCount(0);
+    await expect(page.locator('[data-testid="unmatch-btn"]').locator('xpath=ancestor::a')).toHaveCount(0);
   });
 });

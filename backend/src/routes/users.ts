@@ -250,6 +250,19 @@ router.post('/like/:id', verifiedMiddleware, async (req: AuthRequest, res: Respo
   }
 });
 
+/** Unmatch — clears likes both ways (same likes table as Match). */
+router.delete('/like/:id', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    await userService.unlikeUser(req.userId!, req.params.id);
+    res.json({ ok: true });
+  } catch (error: any) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
+    res.status(400).json({ error: error.message || 'Could not unmatch' });
+  }
+});
+
 router.get('/matches', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const matches = await userService.getMatches(req.userId!);
