@@ -67,17 +67,6 @@ test('mutual profile shows Pass, Open chat, Unmatch — not two chat buttons', a
   await authenticate(context, alice);
   const page = await context.newPage();
 
-  let unmatchCalled = false;
-  await page.route(`**/api/users/like/${bobId}`, async (route) => {
-    if (route.request().method() === 'DELETE') {
-      unmatchCalled = true;
-      // Let the real API run so is_match flips; still assert the DELETE fired.
-      await route.continue();
-      return;
-    }
-    await route.continue();
-  });
-
   await page.goto(`/profile/${bobId}`);
   await expect(page.getByTestId('profile-view-message')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId('profile-view-message')).toHaveText('Open chat');
@@ -89,9 +78,20 @@ test('mutual profile shows Pass, Open chat, Unmatch — not two chat buttons', a
   await expect(page.getByRole('button', { name: 'Message' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Open chat' })).toHaveCount(1);
 
+  // Dismiss Home Screen install banner if it covers the action row.
+  const dismissInstall = page.getByRole('button', { name: /Not now/i });
+  if (await dismissInstall.isVisible().catch(() => false)) {
+    await dismissInstall.click();
+  }
+
+  const unmatchReq = page.waitForRequest(
+    (req) =>
+      req.method() === 'DELETE' &&
+      req.url().includes(`/api/users/like/${bobId}`),
+  );
   page.once('dialog', (dialog) => void dialog.accept());
   await page.getByTestId('profile-view-unmatch').click();
-  await expect.poll(() => unmatchCalled).toBe(true);
+  await unmatchReq;
 
   // After unmatch, Match + Message return (no longer mutual).
   await expect(page.getByTestId('profile-view-match')).toBeVisible({ timeout: 5_000 });
