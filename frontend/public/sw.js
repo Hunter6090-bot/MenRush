@@ -2,9 +2,10 @@
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
-// Network pass-through so Chromium treats the worker as a fetch handler
-// without caching the app shell.
+// Fetch handler required for installability. Do not claim navigations —
+// a rejected fetch() here blanked SPA routes (profile/chat) on flaky networks.
 self.addEventListener('fetch', (event) => {
+  if (event.request.mode === 'navigate') return;
   event.respondWith(fetch(event.request));
 });
 
