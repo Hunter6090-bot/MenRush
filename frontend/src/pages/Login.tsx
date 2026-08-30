@@ -9,7 +9,6 @@ import {
   PublicAuthShell,
 } from '../components/PublicAuthShell';
 import { PulseRing } from '../components/PulseRing';
-import { InstallPrompt } from '../components/InstallPrompt';
 import {
   publicErrorClass,
   publicInputClass,
@@ -245,7 +244,6 @@ export const Login = () => {
           </div>
         </form>
       </div>
-      <InstallPrompt variant="card" />
     </PublicAuthShell>
   );
 };
