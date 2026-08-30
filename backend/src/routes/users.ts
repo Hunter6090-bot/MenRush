@@ -13,6 +13,7 @@ import { LocationSchema, ProfileSchema } from '../types/validation';
 import { getUploadSubdir } from '../lib/uploads-root';
 import { finalizeLocalUpload } from '../services/media-storage.service';
 import { optimizeImageFile } from '../services/image-optimize.service';
+import { normalizeDiscoveryAgeRange, parseDiscoveryAgeBound } from '../lib/age';
 
 const router = Router();
 const uploadsDir = getUploadSubdir('profiles');
@@ -131,9 +132,13 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
       return res.status(400).json({ error: 'Invalid radius' });
     }
 
+    const ageBounds = normalizeDiscoveryAgeRange(
+      parseDiscoveryAgeBound(minAge),
+      parseDiscoveryAgeBound(maxAge),
+    );
     const filters = {
-      minAge: minAge ? parseInt(minAge as string) : undefined,
-      maxAge: maxAge ? parseInt(maxAge as string) : undefined,
+      minAge: ageBounds.minAge,
+      maxAge: ageBounds.maxAge,
       interests: (interests as string)?.split(',').filter(Boolean),
       onlyPulse: onlyPulse === 'true' || onlyPulse === '1',
       lookingFor: typeof lookingFor === 'string' ? lookingFor : undefined,
