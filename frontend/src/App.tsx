@@ -214,7 +214,7 @@ function AppShell() {
         ) : null}
         <Route path="*" element={<NotFound />} />
       </Routes>
-      {token ? <InstallPrompt variant="sheet" /> : null}
+      <InstallPrompt variant="sheet" />
       {token && FEATURES.videoCalls && <VideoCallModal />}
     </>
   );
