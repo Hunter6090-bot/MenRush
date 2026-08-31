@@ -78,7 +78,7 @@ export function getNavItems(): NavItem[] {
     {
       to: '/rooms',
       label: ROUTE_LABELS.rooms,
-      shortLabel: 'Rooms',
+      // Phone tab shows full ROUTE_LABELS.rooms ("Video rooms") — never shorten to Rooms.
       Icon: IconRooms,
       // First-class chrome entry — not nested under Chat / messages.
       mobileTab: true,

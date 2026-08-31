@@ -1,4 +1,4 @@
--- 043_community_post_comments.sql
+-- 044_community_post_comments.sql
 -- Comments on Community posts — text only (≤280), free for all.
 -- Idempotent: safe to run multiple times.
 

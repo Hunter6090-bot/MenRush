@@ -138,15 +138,21 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     cameraOn,
     micMuted,
     mediaError: videoError,
-    loadMembers,
     applyPresenceSync,
     upsertParticipant,
-    markOffline,
+    removeParticipant,
     getStreamFor,
     toggleCamera,
     toggleMic,
+    stopCamera,
     photoUrl,
   } = useRoomVideo({ roomId, userId: user?.id, enabled: identityReady && !!roomId });
+
+  const leaveRoomSurface = useCallback(() => {
+    // Hard-stop local A/V before navigate so iOS camera indicator clears immediately.
+    stopCamera();
+    navigate('/rooms');
+  }, [navigate, stopCamera]);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -198,15 +204,16 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     };
   }, [roomId]);
 
-  // Load messages + members only after identity confirmed.
+  // Load messages after identity confirmed. Occupancy comes from socket presence only —
+  // never seed the video grid from DB membership (that left stale AWAY tiles).
   useEffect(() => {
     if (!roomId || !identityReady) return;
     roomsAPI.getMessages(roomId).then((r) => setMessages(r.data)).catch(() => {});
     roomsAPI
       .getMembers(roomId)
-      .then((r) => loadMembers(r.data.map((m) => ({ id: m.id, name: m.name, photo_url: m.photo_url }))))
+      .then((r) => setMembers(r.data))
       .catch(() => {});
-  }, [roomId, identityReady, loadMembers]);
+  }, [roomId, identityReady]);
 
   useEffect(() => {
     if (!roomId || !settingsOpen) return;
@@ -275,7 +282,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     }) => {
       if (data.room_id !== roomId) return;
       if (data.type === 'leave') {
-        markOffline(data.user_id);
+        removeParticipant(data.user_id);
         return;
       }
       upsertParticipant({
@@ -334,7 +341,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       socket.off('room:presence-sync', onPresenceSync);
       socket.off('room:typing', onTyping);
     };
-  }, [socket, roomId, user?.id, upsertParticipant, markOffline, applyPresenceSync]);
+  }, [socket, roomId, user?.id, upsertParticipant, removeParticipant, applyPresenceSync]);
 
   // ── Scroll to bottom ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -443,7 +450,8 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     return `${names[0]} and ${names.length - 1} others are typing...`;
   })();
 
-  const liveCount = participants.filter((p) => p.isLive).length;
+  // Occupancy = currently present people (camera on or off). Left people are removed.
+  const presentCount = participants.length;
   const isOwner = room?.user_role === 'owner';
   const isPrivateGroup = room?.is_location_based === false;
 
@@ -502,14 +510,14 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
         style={{ background: 'var(--bg-primary)' }}
       >
         <header className="flex shrink-0 items-center gap-2 border-b border-[var(--border-default)] px-3 py-3">
-          <MobileBackButton fallback="/rooms" onClick={() => navigate('/rooms')} className="-ml-1" />
+          <MobileBackButton fallback="/rooms" onClick={leaveRoomSurface} className="-ml-1" />
           <p className="flex-1 truncate text-sm font-semibold text-[var(--cream)]">Group</p>
         </header>
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
           <p className="text-sm text-[var(--cream)]">{joinError}</p>
           <button
             type="button"
-            onClick={() => navigate('/rooms')}
+            onClick={leaveRoomSurface}
             className="rounded-xl bg-[var(--copper)] px-4 py-2 text-sm font-bold text-[#1A0E03]"
           >
             Back to rooms
@@ -543,7 +551,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             });
             setIdentityReady(true);
           }}
-          onCancel={() => navigate('/rooms')}
+          onCancel={leaveRoomSurface}
         />
       </div>
     );
@@ -566,7 +574,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       >
         <MobileBackButton
           fallback="/rooms"
-          onClick={() => navigate('/rooms')}
+          onClick={leaveRoomSurface}
           className="-ml-1"
         />
 
@@ -589,7 +597,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           </p>
           <p className="text-[10px] mt-0.5 text-[var(--cream-muted)]">
             <GroupIcon className="w-3 h-3 inline mr-0.5" />
-            {liveCount > 0 ? `${liveCount} live` : `${room?.member_count ?? '—'} members`}
+            {presentCount > 0 ? `${presentCount} here` : 'Waiting…'}
           </p>
         </div>
 
@@ -773,12 +781,13 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             <button
               onClick={async () => {
                 if (!roomId) return;
+                stopCamera();
                 try {
                   await roomsAPI.leaveRoom(roomId);
-                  navigate('/rooms');
                 } catch {
-                  // ignore
+                  // ignore — still leave the surface so camera stays off
                 }
+                navigate('/rooms');
               }}
               className="w-full px-4 py-3 text-sm text-left transition-all duration-150 hover:bg-[var(--border-default)]/50"
               style={{ color: '#EF4444' }}

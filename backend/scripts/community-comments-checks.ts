@@ -9,7 +9,7 @@ import { join } from 'path';
 const root = join(__dirname, '..');
 
 const migration = readFileSync(
-  join(root, 'database/migrations/043_community_post_comments.sql'),
+  join(root, 'database/migrations/044_community_post_comments.sql'),
   'utf8',
 );
 assert.match(migration, /CREATE TABLE IF NOT EXISTS community_post_comments/);

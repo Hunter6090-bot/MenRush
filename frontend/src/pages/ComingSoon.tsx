@@ -12,15 +12,15 @@ const COMING_SOON_GRADIENT =
 const WHAT_YOU_GET = [
   {
     title: 'Nearby',
-    body: 'See who is around you right now — live proximity, not a stack of stale profiles.',
+    body: 'See who is around you right now. Live proximity, not a stack of stale profiles.',
   },
   {
-    title: 'Rooms',
+    title: 'Video rooms',
     body: 'Group spaces for men who already know the vibe. Less noise. More signal.',
   },
   {
     title: 'Matches',
-    body: 'Mutual interest opens chat. Direct when it is real — no endless maybe.',
+    body: 'Mutual interest opens chat. Direct when it is real. No endless maybe.',
   },
 ] as const;
 
@@ -124,9 +124,9 @@ export const ComingSoon = () => {
         {/* Early access promise */}
         <section className="mx-auto w-full max-w-[560px] px-6 pb-16 text-center">
           <p className="text-[15px] leading-[1.65] text-[#F0E0C0]/88">
-            Early waitlist members get{' '}
-            <span className="font-bold text-[#E0A14A]">30 days of Premium</span> free when we open
-            on 1 October 2026. UK first. Invite-only until then.
+            Sign up before 1 October 2026 and get{' '}
+            <span className="font-bold text-[#E0A14A]">30 days of Premium</span> free. A Pride promo
+            replaces that gift and does not stack.
           </p>
           <p className="mt-6">
             <a href="#waitlist" className={publicLinkClass}>

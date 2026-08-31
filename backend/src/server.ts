@@ -13,6 +13,7 @@ import roomRoutes from './routes/rooms';
 import pushRoutes from './routes/push';
 import pulseRoutes from './routes/pulse';
 import verifyRoutes from './routes/verify';
+import veriffRoutes from './routes/veriff';
 import premiumRoutes from './routes/premium';
 import premiumWebhookRoutes from './routes/premium-webhook';
 import contactRoutes from './routes/contact';
@@ -80,6 +81,8 @@ const io: any = new SocketIOServer(server, {
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use('/api/premium/webhook', premiumWebhookRoutes);
+// Veriff decision webhook needs the raw body for HMAC (before express.json).
+app.use('/api/verify/veriff', veriffRoutes);
 app.use(express.json());
 app.use('/api/verify', verifyRoutes);
 // Profile / message / album media. fallthrough:true so missing files hit a clean 404
@@ -559,19 +562,21 @@ io.on('connection', (socket: Socket) => {
       });
 
       const peers = await io.in(`room:${roomId}`).fetchSockets();
-      const roster = peers
-        .map((peer: { id: string }) => {
-          const peerUserId = socketToUser.get(peer.id);
-          if (!peerUserId) return null;
-          return { socket_id: peer.id, user_id: peerUserId };
-        })
-        .filter(Boolean);
+      // One tile per user even if they have multiple tabs/sockets.
+      const seen = new Set<string>();
+      const uniqueUserIds: string[] = [];
+      for (const peer of peers) {
+        const peerUserId = socketToUser.get(peer.id);
+        if (!peerUserId || seen.has(peerUserId)) continue;
+        seen.add(peerUserId);
+        uniqueUserIds.push(peerUserId);
+      }
 
       const rosterDetails = await Promise.all(
-        roster.map(async (entry: any) => {
-          const p = await roomService.resolveRoomPresence(entry.user_id, roomId);
+        uniqueUserIds.map(async (peerUserId: string) => {
+          const p = await roomService.resolveRoomPresence(peerUserId, roomId);
           return {
-            user_id: entry.user_id,
+            user_id: peerUserId,
             name: p.name,
             photo_url: p.photo_url,
             is_verified: p.is_verified,
@@ -585,12 +590,24 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
+  /** True if this user still has any other socket in the Socket.IO room. */
+  const userStillInRoom = async (userId: string, roomId: string, exceptSocketId?: string) => {
+    const peers = await io.in(`room:${roomId}`).fetchSockets();
+    return peers.some(
+      (peer: { id: string }) =>
+        peer.id !== exceptSocketId && socketToUser.get(peer.id) === userId,
+    );
+  };
+
   socket.on('room:leave', async (data: { roomId?: string; room_id?: string }) => {
     const roomId = resolveRoomId(data);
     const userId = socketToUser.get(socket.id);
     if (!roomId) return;
     socket.leave(`room:${roomId}`);
-    if (userId) {
+    if (!userId) return;
+    // Only broadcast leave when no remaining socket of this user is in the room.
+    const stillHere = await userStillInRoom(userId, roomId);
+    if (!stillHere) {
       socket.to(`room:${roomId}`).emit('room:presence', {
         room_id: roomId,
         type: 'leave',
@@ -722,6 +739,26 @@ io.on('connection', (socket: Socket) => {
     },
   );
 
+  // Use disconnecting (not disconnect) so socket.rooms still lists group rooms.
+  socket.on('disconnecting', () => {
+    const userId = socketToUser.get(socket.id);
+    if (!userId) return;
+    for (const roomName of socket.rooms) {
+      if (!roomName.startsWith('room:')) continue;
+      const roomId = roomName.slice('room:'.length);
+      void (async () => {
+        const stillHere = await userStillInRoom(userId, roomId, socket.id);
+        if (!stillHere) {
+          socket.to(roomName).emit('room:presence', {
+            room_id: roomId,
+            type: 'leave',
+            user_id: userId,
+          });
+        }
+      })();
+    }
+  });
+
   socket.on('disconnect', () => {
     const userId = socketToUser.get(socket.id);
     if (userId) {
@@ -730,17 +767,6 @@ io.on('connection', (socket: Socket) => {
       // Only mark offline when no other tab/device remains authenticated.
       if (fullyOffline) {
         userService.setOnlineStatus(userId, false);
-      }
-      // Notify any group rooms this socket was in.
-      for (const roomName of socket.rooms) {
-        if (roomName.startsWith('room:')) {
-          const roomId = roomName.slice('room:'.length);
-          socket.to(roomName).emit('room:presence', {
-            room_id: roomId,
-            type: 'leave',
-            user_id: userId,
-          });
-        }
       }
     }
     console.log('User disconnected:', socket.id);
