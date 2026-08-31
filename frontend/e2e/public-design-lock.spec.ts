@@ -54,10 +54,11 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
     page.getByText('Group spaces for men who already know the vibe. Less noise. More signal.'),
   ).toBeVisible();
 
-  // Early waitlist Premium fact stays; invite-only-until-open contradicts Sign up free / UK BETA OPEN.
+  // Product lock 31 Aug 2026: open signup waitlist gift; Pride replaces it (no stack).
+  // Do not say invite-only until open — hero is Sign up free / UK BETA OPEN.
+  await expect(page.getByText(/Sign up before 1 October 2026/i)).toBeVisible();
   await expect(page.getByText(/30 days of Premium/i)).toBeVisible();
-  await expect(page.getByText(/1 October 2026/i)).toBeVisible();
-  await expect(page.getByText(/UK first/i)).toBeVisible();
+  await expect(page.getByText(/Pride promo replaces that gift and does not stack/i)).toBeVisible();
   await expect(page.getByText(/invite-only until/i)).toHaveCount(0);
   await expect(page.getByText(/Invite-only until then/i)).toHaveCount(0);
 
@@ -117,38 +118,46 @@ test.describe('public design lock — landing', () => {
 });
 
 test.describe('public design lock — auth pages', () => {
-  test('/login uses auth shell and invite-holder copy', async ({ page }) => {
+  test('/login uses auth shell and open-signup copy', async ({ page }) => {
     const network = await guardAgainstSideEffects(page);
     await page.goto('/login');
     await assertAuthShell(page);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Sign in and see who's/i);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/near you right now/i);
-    await expect(page.getByText(/For invite holders only/i)).toBeVisible();
-    expect(network.expectNoSideEffects()).toEqual([]);
-  });
-
-  test('/beta validates invite UI shell', async ({ page }) => {
-    const network = await guardAgainstSideEffects(page);
-    await page.goto('/beta');
-    await assertAuthShell(page);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/You're in the/i);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/MenRush beta/i);
-    await expect(page.locator('#beta-invite-code')).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Continue$/i })).toHaveCount(1);
-    await expect(page.getByRole('link', { name: /Join the waitlist/i })).toHaveAttribute(
+    await expect(page.getByText(/For invite holders only/i)).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /Create an account/i })).toHaveAttribute(
       'href',
-      '/coming-soon#waitlist',
+      '/register',
     );
     expect(network.expectNoSideEffects()).toEqual([]);
   });
 
-  test('/register uses auth shell, cream inputs, and beta copy', async ({ page }) => {
+  test('/beta keeps optional invite UI shell', async ({ page }) => {
     const network = await guardAgainstSideEffects(page);
-    await page.goto('/register?invite=MR-BETA-TEST1');
+    await page.goto('/beta');
+    await assertAuthShell(page);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Have an invite/i);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Enter your code/i);
+    await expect(page.locator('#beta-invite-code')).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Continue$/i })).toHaveCount(1);
+    await expect(page.getByRole('link', { name: /Sign up free/i })).toHaveAttribute(
+      'href',
+      '/register',
+    );
+    expect(network.expectNoSideEffects()).toEqual([]);
+  });
+
+  test('/register stays open without invite bounce', async ({ page }) => {
+    const network = await guardAgainstSideEffects(page);
+    await page.goto('/register');
+    await expect(page).toHaveURL(/\/register/);
     await assertAuthShell(page);
     await assertCreamInputs(page);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/You're in/i);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Set up your account/i);
+    await expect(page.getByText(/Your invite code checks out/i)).toHaveCount(0);
+    await expect(page.getByText(/use the email your invite was sent to/i)).toHaveCount(0);
+    await expect(page.getByTestId('register-promo-input')).toBeVisible();
     expect(network.expectNoSideEffects()).toEqual([]);
   });
 });

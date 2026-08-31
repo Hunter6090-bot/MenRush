@@ -1,5 +1,20 @@
-import { query } from '../db';
+import type { PoolClient } from 'pg';
+import pool, { query } from '../db';
 import { ccbillService, CCBillTier } from './ccbill.service';
+
+type Queryable = PoolClient | typeof pool;
+
+/**
+ * Waitlist gift cutoff: UK launch midnight 1 Oct 2026 (BST = UTC+1).
+ * Anyone who registers before this gets 30 days Premium with no code.
+ * Pride grants replace this gift (do not stack).
+ */
+export const WAITLIST_GIFT_CUTOFF = new Date('2026-09-30T23:00:00Z');
+export const WAITLIST_GIFT_DAYS = 30;
+
+export function isWaitlistGiftOpen(now = new Date()): boolean {
+  return now.getTime() < WAITLIST_GIFT_CUTOFF.getTime();
+}
 
 export type PremiumTier = 'free' | 'premium' | 'premium_plus';
 export type PremiumFeature =
@@ -128,6 +143,31 @@ export const premiumService = {
 
   isBetaPremiumFree(): boolean {
     return process.env.BETA_PREMIUM_FREE === 'true';
+  },
+
+  /**
+   * Immediate 30-day Premium for open signup before UK launch (Terms 7.2).
+   * Call only when no Pride path applied for this registration.
+   */
+  async grantWaitlistGift(
+    userId: string,
+    client?: PoolClient,
+    now = new Date(),
+  ): Promise<{ premiumUntil: Date } | null> {
+    if (!isWaitlistGiftOpen(now)) return null;
+    const db: Queryable = client ?? pool;
+    const premiumUntil = new Date(now.getTime() + WAITLIST_GIFT_DAYS * 24 * 60 * 60 * 1000);
+    await db.query(
+      `UPDATE users
+       SET is_premium = TRUE,
+           premium_tier = 'premium',
+           premium_starts_at = $2,
+           premium_until = $3,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [userId, now, premiumUntil],
+    );
+    return { premiumUntil };
   },
 
   async isPremium(userId: string): Promise<boolean> {
