@@ -29,6 +29,7 @@ import { SoftBlurMedia, shouldBlurMedia } from '../components/SoftBlurMedia';
 import {
   appendUniqueMessage,
   CHAT_LIVE_REFRESH_EVENT,
+  conversationFingerprint,
   mergeConversationRows,
 } from '../lib/pushDeepLink';
 
@@ -189,7 +190,16 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       .getConversation(otherId)
       .then((r) => {
         const rows = Array.isArray(r.data) ? (r.data as Message[]) : [];
-        setMessages((prev) => (opts?.replace ? rows : mergeConversationRows(prev, rows)));
+        setMessages((prev) => {
+          const next = opts?.replace ? rows : mergeConversationRows(prev, rows);
+          if (
+            !opts?.replace &&
+            conversationFingerprint(prev) === conversationFingerprint(next)
+          ) {
+            return prev;
+          }
+          return next;
+        });
       })
       .catch(() => {
         if (opts?.replace) setMessages([]);
@@ -225,8 +235,21 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     return () => window.clearInterval(id);
   }, [otherId]);
 
-  // iPhone PWA: socket often misses media while suspended. Refetch when the
-  // thread becomes visible again, on reconnect, or when a push hints this chat.
+  // Live delivery while sitting in the thread: iPhone PWAs often keep the page
+  // visible but miss the Socket.IO event (suspend / silent disconnect). Remount
+  // fixed it because getConversation ran again — poll so we do not need leave/reenter.
+  useEffect(() => {
+    if (!otherId) return;
+    const OPEN_THREAD_POLL_MS = 2500;
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      loadConversation();
+    };
+    const id = window.setInterval(tick, OPEN_THREAD_POLL_MS);
+    return () => window.clearInterval(id);
+  }, [otherId, loadConversation]);
+
+  // iPhone PWA: also refetch on visibility / reconnect / push hint (faster than poll).
   useEffect(() => {
     if (!otherId) return;
 
@@ -1835,7 +1858,27 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
 
   // Permanent image → inline, always available.
   if (!isDisappearing) {
-    if (!url) return null;
+    if (!url) {
+      // Socket payloads can arrive before a signed URL is usable; never paint
+      // an empty hole — show the caption/fallback until refetch fills media_url.
+      return (
+        <div
+          className="px-4 py-3 text-sm"
+          data-testid="image-pending"
+          style={{
+            background: isMine
+              ? 'linear-gradient(135deg, #C4832A, #A45E18)'
+              : 'var(--bg-card)',
+            color: isMine ? '#FFF5E6' : 'var(--cream)',
+            border: isMine ? 'none' : '1px solid var(--border-default)',
+            borderRadius: radius,
+            minWidth: 160,
+          }}
+        >
+          {msg.message || '📷 Photo'}
+        </div>
+      );
+    }
     const blurred = shouldBlurMedia(msg.media_clear);
     return (
       <div className="flex flex-col items-end gap-1">

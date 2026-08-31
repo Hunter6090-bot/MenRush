@@ -107,6 +107,66 @@ test.describe('open-thread incoming media', () => {
     await ctx.close();
   });
 
+  test('open-thread poll paints media without socket hint or leave/reenter', async ({ browser }) => {
+    const alice = await login(ALICE.email);
+    const bob = await login(BOB.email);
+
+    const api = await apiRequest.newContext({ baseURL: BASE_URL });
+    try {
+      await api.post('/api/users/like/' + bob.user.id, {
+        headers: { Authorization: `Bearer ${alice.token}` },
+      });
+      await api.post('/api/users/like/' + alice.user.id, {
+        headers: { Authorization: `Bearer ${bob.token}` },
+      });
+    } finally {
+      await api.dispose();
+    }
+
+    const ctx = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+    });
+    await authenticate(ctx, bob);
+    const page = await ctx.newPage();
+
+    // Kill websocket so only the open-thread poll / HTTP path can paint.
+    await page.route('**/socket.io/**', (route) => route.abort());
+
+    await page.goto(`/messages/${alice.user.id}`);
+    await expect(page.getByTestId('chat-composer')).toBeVisible({ timeout: 15000 });
+    const beforeCount = await page.getByTestId('image-permanent').count();
+
+    const sendApi = await apiRequest.newContext({ baseURL: BASE_URL });
+    try {
+      const png = tinyPngPath();
+      const res = await sendApi.post('/api/messages/media', {
+        headers: { Authorization: `Bearer ${alice.token}` },
+        multipart: {
+          media: {
+            name: 'poll.png',
+            mimeType: 'image/png',
+            buffer: fs.readFileSync(png),
+          },
+          receiver_id: bob.user.id,
+          kind: 'image',
+        },
+      });
+      expect(res.ok(), await res.text()).toBeTruthy();
+    } finally {
+      await sendApi.dispose();
+    }
+
+    // Poll interval is 2.5s — wait without leave/reenter and without SW hint.
+    await expect
+      .poll(async () => page.getByTestId('image-permanent').count(), { timeout: 12000 })
+      .toBeGreaterThan(beforeCount);
+    await expect(page).toHaveURL(new RegExp(`/messages/${alice.user.id}`));
+
+    await ctx.close();
+  });
+
   test('push chat hint refreshes open thread without navigation', async ({ browser }) => {
     const alice = await login(ALICE.email);
     const bob = await login(BOB.email);
@@ -135,7 +195,6 @@ test.describe('open-thread incoming media', () => {
     await expect(page.getByTestId('chat-composer')).toBeVisible({ timeout: 15000 });
     const beforeCount = await page.getByTestId('image-permanent').count();
 
-    // Insert via API (simulates missed socket), then SW hint triggers refetch.
     const sendApi = await apiRequest.newContext({ baseURL: BASE_URL });
     try {
       const png = tinyPngPath();

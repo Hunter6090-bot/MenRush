@@ -83,3 +83,16 @@ export function mergeConversationRows<T extends { id?: string }>(
   const localsOnly = current.filter((m) => !m.id || !serverIds.has(m.id));
   return [...fromServer, ...localsOnly];
 }
+
+/** Stable fingerprint so open-thread polls do not re-render/scroll when unchanged. */
+export function conversationFingerprint(
+  rows: Array<{ id?: string; media_url?: string | null; message?: string; view_count?: number }>,
+): string {
+  if (!Array.isArray(rows) || rows.length === 0) return '';
+  return rows
+    .map(
+      (m) =>
+        `${m.id ?? ''}\u0001${m.media_url ?? ''}\u0001${m.message ?? ''}\u0001${m.view_count ?? ''}`,
+    )
+    .join('\u0002');
+}

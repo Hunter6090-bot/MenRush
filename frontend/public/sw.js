@@ -43,6 +43,17 @@ function pathFromHref(href) {
   }
 }
 
+function isLikelyIOS() {
+  const ua = (self.navigator && self.navigator.userAgent) || '';
+  if (/iPad|iPhone|iPod/i.test(ua)) return true;
+  // iPadOS desktop UA
+  return Boolean(
+    self.navigator &&
+      self.navigator.platform === 'MacIntel' &&
+      (self.navigator.maxTouchPoints || 0) > 1,
+  );
+}
+
 self.addEventListener('push', (event) => {
   let data = {};
   try {
@@ -98,39 +109,44 @@ self.addEventListener('notificationclick', (event) => {
   const raw = event.notification.data && event.notification.data.url;
   const href = resolveNotificationHref(raw, '/discover');
   const path = pathFromHref(href);
+  const ios = isLikelyIOS();
 
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       for (const client of windows) {
         if (!client.url || !client.url.startsWith(self.location.origin)) continue;
-
-        // Prefer SPA postMessage — WindowClient.navigate() often no-ops on
-        // iOS Safari / Home Screen PWAs after focus(), which only dismissed
-        // the banner without opening the chat.
         try {
           client.postMessage({ type: 'MENRUSH_NOTIFICATION_NAVIGATE', url: path });
         } catch {
           /* ignore */
         }
+      }
 
+      // iPhone Home Screen PWAs: focus()+navigate(relative) often no-ops after
+      // closing the banner. openWindow(absolute) is what actually opens the chat.
+      if (ios) {
+        const opened = await self.clients.openWindow(href);
+        if (opened) return;
+      }
+
+      for (const client of windows) {
+        if (!client.url || !client.url.startsWith(self.location.origin)) continue;
         try {
           if (typeof client.focus === 'function') await client.focus();
         } catch {
           /* ignore */
         }
-
         if ('navigate' in client && typeof client.navigate === 'function') {
           try {
             await client.navigate(href);
           } catch {
-            /* iOS: expected — postMessage is the real navigation */
+            /* ignore */
           }
         }
         return;
       }
 
-      // Cold start: absolute URL is required on iOS.
       await self.clients.openWindow(href);
     })(),
   );

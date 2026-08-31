@@ -4,6 +4,7 @@ import {
   mergeConversationRows,
   peerIdFromMessagesUrl,
   resolveNotificationHref,
+  conversationFingerprint,
 } from './pushDeepLink';
 
 describe('resolveNotificationHref', () => {
@@ -68,5 +69,16 @@ describe('appendUniqueMessage / mergeConversationRows', () => {
       { id: 'm2', body: 'photo' },
       { id: 'local', body: 'pending' },
     ]);
+  });
+});
+
+describe('conversationFingerprint', () => {
+  it('changes when a new media row appears', () => {
+    const before = conversationFingerprint([{ id: '1', message: 'hi', media_url: null }]);
+    const after = conversationFingerprint([
+      { id: '1', message: 'hi', media_url: null },
+      { id: '2', message: '📷 Photo', media_url: '/api/messages/2/media?access=x' },
+    ]);
+    expect(before).not.toEqual(after);
   });
 });
