@@ -400,7 +400,13 @@ export const userService = {
     const index = slot + 1;
     const result = await query(
       `UPDATE users
-          SET secondary_photo_urls[$2] = $3,
+          SET secondary_photo_urls = (
+                SELECT array_agg(
+                         CASE WHEN i = $2 THEN $3 ELSE secondary_photo_urls[i] END
+                         ORDER BY i
+                       )
+                  FROM generate_series(1, 3) AS i
+              ),
               updated_at = NOW()
         WHERE id = $1
         RETURNING secondary_photo_urls`,

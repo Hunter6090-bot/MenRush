@@ -10,7 +10,7 @@ const FORBIDDEN_CTA_PATTERNS = [
 ];
 
 async function assertComingSoonDesignLock(page: import('@playwright/test').Page) {
-  const signInLink = page.getByRole('link', { name: /Already have an invite\? Sign in/i });
+  const signInLink = page.getByRole('link', { name: /^Sign in$/i });
   await expect(signInLink).toHaveCount(1);
   await expect(signInLink).toHaveAttribute('href', '/login');
 
@@ -26,7 +26,8 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
 
   await expect(page.locator('#waitlist')).toBeVisible();
   await expect(page.locator('#waitlist-email')).toBeVisible();
-  await expect(page.getByRole('button', { name: /Join the verified waitlist/i })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /Join the beta/i })).toHaveCount(1);
+  await expect(page.getByRole('link', { name: /Enter your code/i })).toHaveCount(1);
   await assertBrandMark(page);
 }
 
@@ -77,8 +78,8 @@ test.describe('public design lock — auth pages', () => {
     const network = await guardAgainstSideEffects(page);
     await page.goto('/beta');
     await assertAuthShell(page);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Beta access is/i);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/invite-only/i);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/You're in the/i);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/MenRush beta/i);
     await expect(page.locator('#beta-invite-code')).toBeVisible();
     await expect(page.getByRole('button', { name: /^Continue$/i })).toHaveCount(1);
     expect(network.expectNoSideEffects()).toEqual([]);

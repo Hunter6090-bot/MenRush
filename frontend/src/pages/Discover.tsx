@@ -177,7 +177,7 @@ function MapFloatingChrome({
           ) : null}
         </div>
       </div>
-      <div className={`${mapStatusCardClass} ${statusBottomClass}`}>
+      <div className={`${mapStatusCardClass} ${statusBottomClass}`} data-testid="nearby-counts">
         <span className="inline-flex h-2.5 w-2.5 rounded-full bg-[#3D7A2E]" />
         <div className="min-w-0">
           <p className="text-[13px] font-bold leading-tight text-[#1A1208]">{nearbyCount} nearby</p>
