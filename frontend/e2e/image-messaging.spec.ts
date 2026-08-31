@@ -73,9 +73,17 @@ async function aliceSendsImage(
       await page.getByRole('button', { name: btn }).click();
     }
   }
+  // Wait out client-side compress ("Preparing…") so Send actually fires the upload.
+  await expect(page.getByTestId('image-composer-send')).toHaveText('Send', { timeout: 20_000 });
+  const sendResponse = page.waitForResponse(
+    (res) => res.url().includes('/api/messages/media') && res.request().method() === 'POST',
+    { timeout: 30_000 },
+  );
   await page.getByTestId('image-composer-send').click();
+  const uploaded = await sendResponse;
+  expect(uploaded.ok(), `media upload failed: ${uploaded.status()}`).toBeTruthy();
   // Composer closes once the upload completes.
-  await expect(page.getByTestId('image-composer')).toHaveCount(0);
+  await expect(page.getByTestId('image-composer')).toHaveCount(0, { timeout: 15_000 });
 }
 
 test('selecting an image shows a preview with view-rule and Send/Cancel controls', async ({
