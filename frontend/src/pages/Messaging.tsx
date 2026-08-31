@@ -33,6 +33,13 @@ import {
   conversationFingerprint,
   mergeConversationRows,
 } from '../lib/pushDeepLink';
+import {
+  appendCachedThreadMessage,
+  readCachedThread,
+  stripPreviewSeedMessages,
+  threadLikelyHasHistory,
+  writeCachedThread,
+} from '../lib/conversationHistoryCache';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
 interface Message extends Partial<MessageDTO> {
@@ -52,6 +59,11 @@ interface Message extends Partial<MessageDTO> {
   remaining_views?: number | null;
   expired?: boolean;
   media_clear?: boolean;
+}
+
+function messagesFromCache(peerId: string | undefined): Message[] {
+  const cached = readCachedThread(peerId);
+  return cached ? (cached as Message[]) : [];
 }
 
 /** Sender's chosen viewing rule for an outgoing image. */
@@ -142,7 +154,11 @@ function canWithdrawMedia(msg: Message, userId?: string): boolean {
 
 export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const { otherId } = useParams<{ otherId: string }>();
-  const [messages, setMessages] = useState<Message[]>([]);
+  // Seed from session cache / inbox preview so existing threads never flash empty.
+  const [messages, setMessages] = useState<Message[]>(() => messagesFromCache(otherId));
+  const [historyReady, setHistoryReady] = useState(
+    () => readCachedThread(otherId) !== undefined,
+  );
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
@@ -186,6 +202,20 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const recordStreamRef = useRef<MediaStream | null>(null);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  /** Append a confirmed server row to the open thread + session cache. */
+  const commitThreadMessage = useCallback(
+    (msg: Message) => {
+      if (!otherId) return;
+      setMessages((prev) => {
+        const next = appendUniqueMessage(stripPreviewSeedMessages(prev), msg);
+        appendCachedThreadMessage(otherId, msg);
+        return next;
+      });
+      setHistoryReady(true);
+    },
+    [otherId],
+  );
+
   const loadConversation = useCallback((opts?: { replace?: boolean }) => {
     if (!otherId) return;
     messagesAPI
@@ -193,23 +223,42 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       .then((r) => {
         const rows = Array.isArray(r.data) ? (r.data as Message[]) : [];
         setMessages((prev) => {
-          const next = opts?.replace ? rows : mergeConversationRows(prev, rows);
+          const base = stripPreviewSeedMessages(prev);
+          const next = opts?.replace ? rows : mergeConversationRows(base, rows);
           if (
             !opts?.replace &&
-            conversationFingerprint(prev) === conversationFingerprint(next)
+            conversationFingerprint(base) === conversationFingerprint(next)
           ) {
             return prev;
           }
+          writeCachedThread(otherId, next);
           return next;
         });
+        setHistoryReady(true);
       })
       .catch(() => {
-        if (opts?.replace) setMessages([]);
+        if (opts?.replace) {
+          // Keep any cached/preview paint; only clear when we had nothing to show.
+          setMessages((prev) => {
+            if (prev.length > 0) return prev;
+            writeCachedThread(otherId, []);
+            return [];
+          });
+          setHistoryReady(true);
+        }
       });
   }, [otherId]);
 
   useEffect(() => {
     if (!otherId) return;
+    // Swap peer immediately: paint cache/preview (or loading), never leave prior peer
+    // or a false empty-state on screen while the next fetch is in flight.
+    const cached = readCachedThread(otherId);
+    setMessages(cached ? (cached as Message[]) : []);
+    setHistoryReady(cached !== undefined);
+    setOtherUser(null);
+    setMeetState(null);
+    setIsOtherTyping(false);
     loadConversation({ replace: true });
     usersAPI
       .getProfile(otherId)
@@ -284,7 +333,12 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
     const onMessage = (data: Message) => {
       if (data.sender_id === otherId || data.receiver_id === otherId) {
-        setMessages((prev) => appendUniqueMessage(prev, data));
+        setMessages((prev) => {
+          const next = appendUniqueMessage(stripPreviewSeedMessages(prev), data);
+          appendCachedThreadMessage(otherId, data);
+          return next;
+        });
+        setHistoryReady(true);
       }
     };
     const onTyping = ({ typing }: { typing: boolean }) => setIsOtherTyping(typing);
@@ -449,7 +503,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         disappearing,
         maxViews,
       });
-      setMessages((prev) => [...prev, res.data]);
+      commitThreadMessage(res.data);
       clearPendingImage();
       trackEventOnce(
         'first_message_success',
@@ -496,14 +550,14 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
           kind: 'video',
           durationMs,
         });
-        setMessages((prev) => [...prev, res.data]);
+        commitThreadMessage(res.data);
       } catch (err: any) {
         setMediaError(err?.response?.data?.error || 'Failed to send video');
       } finally {
         setUploadingMedia(false);
       }
     },
-    [otherId, uploadingMedia],
+    [otherId, uploadingMedia, commitThreadMessage],
   );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -548,7 +602,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             kind: 'audio',
             durationMs: duration,
           });
-          setMessages((prev) => [...prev, res.data]);
+          commitThreadMessage(res.data);
         } catch (err: any) {
           setMediaError(err?.response?.data?.error || 'Failed to send voice note');
         } finally {
@@ -574,7 +628,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       setMediaError('Microphone access denied.');
       setRecording(false);
     }
-  }, [recording, uploadingMedia, otherId]);
+  }, [recording, uploadingMedia, otherId, commitThreadMessage]);
 
   const handleStopRecording = useCallback(() => {
     const mr = mediaRecorderRef.current;
@@ -616,7 +670,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       try {
         const res = await messagesAPI.sendMessage(otherId, current);
         const saved: Message = res.data;
-        setMessages((prev) => (prev.some((m) => m.id === saved.id) ? prev : [...prev, saved]));
+        commitThreadMessage(saved);
         trackEventOnce(
           'first_message_success',
           { kind: 'text', surface: 'direct_message' },
@@ -646,7 +700,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         setSending(false);
       }
     },
-    [otherId, user, emitTyping],
+    [otherId, user, emitTyping, commitThreadMessage],
   );
 
   const handleSend = async (e?: React.FormEvent | React.KeyboardEvent) => {
@@ -725,7 +779,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             position.coords.latitude,
             position.coords.longitude,
           );
-          setMessages((prev) => [...prev, res.data]);
+          commitThreadMessage(res.data);
         } catch {
           setMediaError('Could not share your location.');
         } finally {
@@ -927,7 +981,31 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         className="flex-1 overflow-y-auto px-4 py-4"
         style={{ scrollbarWidth: 'thin' }}
       >
-        {messages.length === 0 && !sending && (
+        {messages.length === 0 &&
+          !sending &&
+          (!historyReady || threadLikelyHasHistory(otherId)) && (
+          <div
+            className="flex flex-col gap-3 pt-2"
+            data-testid="chat-history-loading"
+            aria-busy="true"
+            aria-label="Loading conversation"
+          >
+            {[0.92, 0.7, 0.84].map((width, i) => (
+              <div
+                key={i}
+                className={`h-11 animate-pulse rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] ${
+                  i % 2 === 0 ? 'self-start' : 'self-end'
+                }`}
+                style={{ width: `${Math.round(width * 100)}%`, maxWidth: 280 }}
+              />
+            ))}
+          </div>
+        )}
+
+        {messages.length === 0 &&
+          !sending &&
+          historyReady &&
+          !threadLikelyHasHistory(otherId) && (
           <div
             className="flex flex-col items-center justify-center h-full select-none px-4"
             data-testid="chat-icebreakers"
