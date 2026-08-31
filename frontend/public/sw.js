@@ -2,10 +2,12 @@
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
-// Network pass-through so Chromium treats the worker as a fetch handler
-// without caching the app shell.
-self.addEventListener('fetch', (event) => {
-  event.respondWith(fetch(event.request));
+// Keep a fetch listener for installability heuristics, but NEVER call
+// respondWith. Proxying every request through the SW added multi-second lag
+// on mobile Safari/Chrome (phones parse a heavy SPA; SW double-hop made every
+// API + Mapbox + asset fetch worse). Browser handles network natively.
+self.addEventListener('fetch', () => {
+  /* no-op — do not intercept */
 });
 
 self.addEventListener('push', (event) => {

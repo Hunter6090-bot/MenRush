@@ -24,6 +24,24 @@ function devProxy(pathPrefix: string, options: ProxyOptions = {}): ProxyOptions 
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    // Mobile phones were parsing a ~2.8MB monolith (Mapbox + every route).
+    // Split vendors so chat/profile/matches do not download mapbox-gl.
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return;
+          if (id.includes('mapbox-gl')) return 'mapbox';
+          if (id.includes('@sentry')) return 'sentry';
+          if (id.includes('@statsig')) return 'statsig';
+          if (id.includes('socket.io')) return 'socket';
+          if (id.includes('heic2any')) return 'heic2any';
+          return 'vendor';
+        },
+      },
+    },
+    chunkSizeWarningLimit: 900,
+  },
   server: {
     host: true,
     port: process.env.PORT ? parseInt(process.env.PORT) : 5173,

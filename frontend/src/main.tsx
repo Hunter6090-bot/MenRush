@@ -1,7 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './styles/menrush-tokens.css';
-import 'leaflet/dist/leaflet.css';
 import './styles/globals.css';
 import App from './App';
 import { initializeAnalytics } from './observability/analytics';
