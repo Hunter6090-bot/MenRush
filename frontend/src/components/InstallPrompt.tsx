@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { isPhoneDevice } from '../lib/device';
 import { registerServiceWorker } from '../lib/push';
 
 const DISMISS_KEY = 'menrush_install_prompt_dismissed';
@@ -26,18 +27,24 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [hidden, setHidden] = useState(true);
 
-  // Never cover chat/room composers — the sheet sits at z-60 over the send bar.
-  const blocksComposer =
-    location.pathname.startsWith('/messages') ||
-    location.pathname.startsWith('/conversations') ||
-    /^\/rooms\/[^/]+/.test(location.pathname);
-
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (isStandalone()) return;
-    if (location.pathname === '/get-the-app' || location.pathname === '/install') return;
-    if (blocksComposer) return;
-    if (variant === 'sheet' && localStorage.getItem(DISMISS_KEY) === '1') return;
+    if (!isPhoneDevice()) {
+      setHidden(true);
+      return;
+    }
+    if (isStandalone()) {
+      setHidden(true);
+      return;
+    }
+    if (location.pathname === '/get-the-app' || location.pathname === '/install') {
+      setHidden(true);
+      return;
+    }
+    if (variant === 'sheet' && localStorage.getItem(DISMISS_KEY) === '1') {
+      setHidden(true);
+      return;
+    }
 
     setHidden(false);
     void registerServiceWorker();
@@ -47,9 +54,9 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
     };
     window.addEventListener('beforeinstallprompt', onPrompt);
     return () => window.removeEventListener('beforeinstallprompt', onPrompt);
-  }, [location.pathname, variant, blocksComposer]);
+  }, [location.pathname, variant]);
 
-  if (hidden || blocksComposer) return null;
+  if (hidden) return null;
 
   const dismiss = () => {
     localStorage.setItem(DISMISS_KEY, '1');

@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { SiteFooter } from '../components/SiteFooter';
 import { registerServiceWorker } from '../lib/push';
 
 type Platform = 'ios' | 'android';
 
 const IOS = [
-  { t: 'Open Safari', d: 'Go to menrush.com in Safari. Not Chrome. Not Instagram\u2019s browser.' },
-  { t: 'Tap Share', d: 'The square with the arrow pointing up. It\u2019s on the Safari bar.' },
+  { t: 'Open Safari', d: "Go to menrush.com in Safari. Not Chrome. Not Instagram's browser." },
+  { t: 'Tap Share', d: "The square with the arrow pointing up. It's on the Safari bar." },
   { t: 'Add to Home Screen', d: 'Scroll the list if you need to. Tap Add to Home Screen.' },
   { t: 'Tap Add', d: 'Leave the name as MenRush. Then open it from your Home Screen.' },
 ];
@@ -35,6 +35,7 @@ function isIosSafari(): boolean {
 }
 
 export function GetTheApp() {
+  const navigate = useNavigate();
   const [platform, setPlatform] = useState<Platform>('ios');
   const [step, setStep] = useState(0);
   const [done, setDone] = useState(false);
@@ -66,6 +67,26 @@ export function GetTheApp() {
 
   const progress = useMemo(() => ((step + 1) / steps.length) * 100, [step, steps.length]);
 
+  const goBack = () => {
+    if (done) {
+      setDone(false);
+      return;
+    }
+    setStep((s) => Math.max(0, s - 1));
+  };
+
+  const goNext = () => {
+    if (done) {
+      navigate('/login');
+      return;
+    }
+    if (step < steps.length - 1) {
+      setStep((s) => s + 1);
+      return;
+    }
+    setDone(true);
+  };
+
   return (
     <div className="flex min-h-dvh flex-col bg-[#0D0A06] text-[#F0E0C0]">
       <main className="mx-auto w-full max-w-[440px] flex-1 px-5 pb-12 pt-8">
@@ -84,7 +105,7 @@ export function GetTheApp() {
           <p className="mt-4 rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[rgba(196,131,42,0.08)] px-3.5 py-3 text-[13px] leading-[1.45]">Use Safari on iPhone. Chrome cannot add MenRush to the Home Screen.</p>
         ) : null}
         {standalone ? (
-          <p className="mt-4 rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[rgba(196,131,42,0.08)] px-3.5 py-3 text-[13px] leading-[1.45]">This already looks installed. If you opened it from the Home Screen, you\u2019re done.</p>
+          <p className="mt-4 rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[rgba(196,131,42,0.08)] px-3.5 py-3 text-[13px] leading-[1.45]">This already looks installed. If you opened it from the Home Screen, you're done.</p>
         ) : null}
         <div className="mt-4 h-1 overflow-hidden rounded-full bg-[rgba(196,131,42,0.18)]" aria-hidden>
           <div className="h-full bg-gradient-to-r from-[#C4832A] to-[#E0A14A]" style={{ width: `${progress}%` }} />
@@ -97,13 +118,13 @@ export function GetTheApp() {
           </section>
         ) : (
           <section className="mt-4 text-center">
-            <h2 className="text-[24px] font-extrabold">It\u2019s on your Home Screen.</h2>
+            <h2 className="text-[24px] font-extrabold">It's on your Home Screen.</h2>
             <p className="mt-2 text-[15px] text-[#A89070]">Open the MenRush icon. Sign in if you already have an invite.</p>
           </section>
         )}
         <div className="mt-4 flex gap-2.5">
-          <button type="button" className="flex-1 rounded-full border border-[rgba(196,131,42,0.35)] px-4 py-3.5 text-[15px] font-bold text-[#F0E0C0] disabled:opacity-40" disabled={done || step === 0} onClick={() => setStep((s) => Math.max(0, s - 1))}>Back</button>
-          <button type="button" className="flex-1 rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3.5 text-[15px] font-bold text-[#FFF6E6]" onClick={() => { if (done) return; if (step < steps.length - 1) setStep((s) => s + 1); else setDone(true); }}>{done || step === steps.length - 1 ? 'Done' : 'Next'}</button>
+          <button type="button" className="flex-1 rounded-full border border-[rgba(196,131,42,0.35)] px-4 py-3.5 text-[15px] font-bold text-[#F0E0C0] disabled:opacity-40" disabled={!done && step === 0} onClick={goBack}>Back</button>
+          <button type="button" className="flex-1 rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3.5 text-[15px] font-bold text-[#FFF6E6]" onClick={goNext}>{done || step === steps.length - 1 ? 'Done' : 'Next'}</button>
         </div>
         {platform === 'android' && deferred ? (
           <button type="button" className="mt-3 w-full rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3.5 text-[15px] font-bold text-[#FFF6E6]" onClick={async () => { await deferred.prompt(); await deferred.userChoice; setDeferred(null); }}>Install MenRush</button>
