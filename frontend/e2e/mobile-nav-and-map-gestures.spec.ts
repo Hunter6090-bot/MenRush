@@ -33,6 +33,8 @@ async function authenticate(context: BrowserContext, result: LoginResult) {
   await context.addInitScript(({ token, user }) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
+    // Keep Get-the-App sheet from covering bottom nav / Sign out in mobile e2e.
+    localStorage.setItem('menrush_install_prompt_dismissed', '1');
   }, result);
 }
 

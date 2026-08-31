@@ -327,6 +327,11 @@ export const userService = {
     const row = result.rows[0];
     if (!row) return row;
 
+    // Always expose numeric lat/lng (or null) so Discover / setup can detect a saved pin.
+    // pg may return numeric columns as strings; never invent a city-centre fallback.
+    row.lat = row.lat != null && Number.isFinite(Number(row.lat)) ? Number(row.lat) : null;
+    row.lng = row.lng != null && Number.isFinite(Number(row.lng)) ? Number(row.lng) : null;
+
     // Overlay beta / subscription entitlement so the client does not treat
     // raw users.is_premium=false as "locked" while Premium is free in beta.
     const status = await premiumService.getStatus(userId);

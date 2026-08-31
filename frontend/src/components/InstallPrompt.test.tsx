@@ -116,4 +116,20 @@ describe('InstallPrompt phone-only gate', () => {
       unmount();
     }
   });
+
+  it('hides the sticky banner on /settings so Sign out stays tappable', () => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      get: () => phoneUa,
+    });
+
+    const { container } = render(
+      <MemoryRouter initialEntries={['/settings']}>
+        <InstallPrompt variant="sheet" />
+      </MemoryRouter>,
+    );
+
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByText('Show me how')).toBeNull();
+  });
 });
