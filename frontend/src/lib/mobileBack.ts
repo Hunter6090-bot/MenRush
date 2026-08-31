@@ -1,6 +1,7 @@
 /** Primary mobile tabs — in-app back not shown (bottom nav is enough). */
 export const MOBILE_TAB_ROOTS = new Set([
   '/discover',
+  '/stream',
   '/matches',
   '/conversations',
   '/rooms',
@@ -21,7 +22,7 @@ export function mobileBackFallback(pathname: string): string {
   if (pathname === '/settings' || pathname === '/notifications') return APP_HOME;
   if (pathname.startsWith('/profile/setup')) return APP_HOME;
   if (pathname.startsWith('/profile/')) return APP_HOME;
-  if (pathname === '/stream' || pathname === '/events' || pathname === '/hot-spots') {
+  if (pathname === '/events' || pathname === '/hot-spots') {
     return APP_HOME;
   }
   if (pathname.startsWith('/messages/')) return '/conversations';

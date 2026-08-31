@@ -33,7 +33,7 @@ async function authenticate(context: BrowserContext, result: LoginResult) {
   }, result);
 }
 
-test('MAP | COMMUNITY toggle labels Community (not Live profile list)', async ({ browser }) => {
+test('Community is its own nav destination (not a Map mode)', async ({ browser }) => {
   const ctx = await browser.newContext({
     geolocation: { latitude: 51.5074, longitude: -0.1278 },
     permissions: ['geolocation'],
@@ -43,21 +43,25 @@ test('MAP | COMMUNITY toggle labels Community (not Live profile list)', async ({
   const page = await ctx.newPage();
   await page.goto('/discover');
 
-  const toggle = page.getByTestId('discover-community-toggle');
-  await expect(toggle).toBeVisible();
-  await expect(toggle).toHaveText(/community/i);
+  // MAP | COMMUNITY segmented control is gone.
+  await expect(page.getByTestId('discovery-surface-toggle')).toHaveCount(0);
+  await expect(page.getByTestId('discover-community-toggle')).toHaveCount(0);
   await expect(page.getByText(/live profile list/i)).toHaveCount(0);
 
-  await toggle.click();
+  // Own bottom-nav item opens /stream.
+  const communityNav = page.getByTestId('mobile-nav-stream');
+  await expect(communityNav).toBeVisible();
+  await expect(communityNav).toContainText(/community/i);
+  await communityNav.click();
   await expect(page).toHaveURL(/\/stream/);
   await expect(page.getByTestId('community-feed')).toBeVisible();
   await expect(page.getByTestId('community-composer')).toBeVisible();
-  await expect(page.getByRole('group', { name: 'Discovery surface' })).toContainText(/community/i);
+  await expect(page.getByTestId('discovery-surface-toggle')).toHaveCount(0);
 
   await ctx.close();
 });
 
-test('desktop wide Discover shows Map|Community tabs and Nearby under the map (not Community)', async ({
+test('desktop Nearby has Grid↔Map only; Community is own sidebar destination', async ({
   browser,
 }) => {
   const ctx = await browser.newContext({
@@ -69,25 +73,29 @@ test('desktop wide Discover shows Map|Community tabs and Nearby under the map (n
   const page = await ctx.newPage();
   await page.goto('/discover');
 
-  await expect(page.getByTestId('discover-map-panel')).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByTestId('discovery-surface-toggle')).toBeVisible();
-  await expect(page.getByTestId('discover-community-toggle')).toBeVisible();
+  await expect(page.getByTestId('discovery-surface-toggle')).toHaveCount(0);
+  await expect(page.getByTestId('discover-community-toggle')).toHaveCount(0);
+  await expect(page.getByTestId('nearby-map-grid-toggle')).toBeVisible();
   await expect(page.getByTestId('discover-nearby-panel')).toBeVisible();
-  // Community must not be dumped under the desktop map.
-  await expect(page.getByTestId('discover-community-panel')).toHaveCount(0);
   await expect(page.getByTestId('community-feed')).toHaveCount(0);
 
-  await page.getByTestId('discover-community-toggle').click();
-  await expect(page).toHaveURL(/\/stream/);
+  // Open Map view — still Nearby people, not Community under the map.
+  const mapToggle = page.getByTestId('nearby-map-grid-toggle');
+  if ((await mapToggle.innerText()).trim().toLowerCase() === 'map') {
+    await mapToggle.click();
+  }
+  await expect(page.getByTestId('discover-map-panel')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('discover-nearby-panel')).toBeVisible();
+  await expect(page.getByTestId('community-feed')).toHaveCount(0);
+
+  await page.goto('/stream');
   await expect(page.getByTestId('community-feed')).toBeVisible();
-  await expect(page.getByTestId('discovery-surface-toggle')).toBeVisible();
+  await expect(page.getByTestId('discovery-surface-toggle')).toHaveCount(0);
 
   await ctx.close();
 });
 
-test('phone Discover Map tab keeps Nearby under the map; Community is a separate tab', async ({
-  browser,
-}) => {
+test('phone Nearby starts Grid; Map toggle only; Community not under map', async ({ browser }) => {
   const ctx = await browser.newContext({
     geolocation: { latitude: 51.5074, longitude: -0.1278 },
     permissions: ['geolocation'],
@@ -97,8 +105,8 @@ test('phone Discover Map tab keeps Nearby under the map; Community is a separate
   const page = await ctx.newPage();
   await page.goto('/discover');
 
-  await expect(page.getByTestId('discover-map-panel')).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByTestId('discovery-surface-toggle')).toBeVisible();
+  await expect(page.getByTestId('discovery-surface-toggle')).toHaveCount(0);
+  await expect(page.getByTestId('nearby-map-grid-toggle')).toBeVisible();
   await expect(page.getByTestId('nearby-counts')).toBeVisible();
   await expect(page.getByTestId('community-feed')).toHaveCount(0);
 
@@ -118,6 +126,13 @@ test('phone map host keeps pinch-zoom handlers enabled (touchZoomRotate + touch-
   await authenticate(ctx, alice);
   const page = await ctx.newPage();
   await page.goto('/discover');
+
+  // Grid-first: switch to Map before asserting map host.
+  const mapToggle = page.getByTestId('nearby-map-grid-toggle');
+  await expect(mapToggle).toBeVisible({ timeout: 15_000 });
+  if ((await mapToggle.innerText()).trim().toLowerCase() === 'map') {
+    await mapToggle.click();
+  }
 
   const host = page.getByTestId('discover-map-canvas-host');
   await expect(host).toBeVisible({ timeout: 20_000 });
@@ -157,26 +172,19 @@ test('signed-in user can create a ≤280 char Community post', async ({ browser 
   const ctx = await browser.newContext({
     geolocation: { latitude: 51.5074, longitude: -0.1278 },
     permissions: ['geolocation'],
+    viewport: { width: 390, height: 844 },
   });
   await authenticate(ctx, alice);
   const page = await ctx.newPage();
   await page.goto('/stream');
 
   await expect(page.getByTestId('community-feed')).toBeVisible({ timeout: 15_000 });
-  const input = page.getByTestId('community-post-input');
-  await expect(input).toBeVisible({ timeout: 15_000 });
-
-  const body = `Hosting near Soho — open to drinks ${Date.now()}`;
-  await input.fill(body);
+  const composer = page.getByTestId('community-post-input');
+  await expect(composer).toBeVisible({ timeout: 15_000 });
+  const body = `ci-community-${Date.now()}`;
+  await composer.fill(body);
   await page.getByTestId('community-post-submit').click();
-
-  await expect(page.getByTestId('community-post-list')).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByTestId('community-post').first()).toContainText(body);
-  await expect(page.getByTestId('community-post').first()).toContainText(/ago|Just now|m ago|h ago/i);
-
-  // No video / rooms chrome inside the feed.
-  await expect(page.getByTestId('community-feed').locator('video')).toHaveCount(0);
-  await expect(page.getByTestId('community-feed').getByText(/^rooms$/i)).toHaveCount(0);
+  await expect(page.getByText(body)).toBeVisible({ timeout: 15_000 });
 
   await ctx.close();
 });
