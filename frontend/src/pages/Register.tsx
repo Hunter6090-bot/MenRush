@@ -201,7 +201,7 @@ export const Register = () => {
       <PublicAuthHero
         title="Create your"
         accent="account."
-        copy="Pick a username and password. Optional Pride promo below if you have one."
+        copy="Pick a username and password."
       />
 
       <div className={`${publicPanelClass} max-h-[min(70dvh,720px)] overflow-y-auto lg:max-h-none lg:overflow-visible`}>
