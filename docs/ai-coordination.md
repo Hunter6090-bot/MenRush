@@ -47,7 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
-| My Photos (public / view once / private / revoke viewers-only) | PR `cursor/my-photos-album-states-38f0` | — | Cursor cloud — four album states; revoke viewers-only never wipe; DISCREET_MEDIA_BLUR stays off; do not mix #165/#150/Video rooms/Cruise; #97–#99 parked; hold merge until Product logged-in preview |
+| My Photos (public / view once / private / revoke viewers-only) | PR `#171` `cursor/my-photos-album-states-38f0` | — | Cursor cloud — four album states; revoke viewers-only never wipe; **media property lock**: existing photo_url/cover/album_photos stay; 041 backfill unlocked→public locked→private; DISCREET_MEDIA_BLUR stays off; do not mix #165/#150/Cruise; #97–#99 parked; hold merge until Product logged-in preview |
 | Discovery age From–To selects (18–99; Age tab only) | PR `cursor/discovery-age-range-filter-9f19` | — | Cursor cloud — From/To `<select>` only; no presets; not Veriff/#97; do not merge #148/#165/#171; owner deploys pack |
 | Android Chrome one-tap Install (persist beforeinstallprompt) | PR `cursor/android-one-tap-install-b87f` | — | Cursor cloud — module store + early capture; Android Install app / Install MenRush; Safari Show me how; do not mix Grid #165 / Community / My Photos #171 / rooms #150/#169 / Cruise #170 / age #159 / icons / #97–#99 |
 | Nav icons: Settings gear + Rooms camera/people (kill Doric columns) | PR `cursor/nav-settings-rooms-icons-d7d9` | — | Cursor cloud — IconSettings=6-tooth cog; IconRooms=camera+2 people; preview HTML dupes; do not mix #150/#165/#170/#171/#169 |

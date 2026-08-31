@@ -173,6 +173,7 @@ CREATE TABLE IF NOT EXISTS album_photos (
   mime_type  TEXT,
   position   INT NOT NULL DEFAULT 0,
   -- public | view_once | private — owner discretion; not DISCREET_MEDIA_BLUR.
+  -- Existing unlocked-album photos migrate to public; locked → private (see 041).
   visibility TEXT NOT NULL DEFAULT 'private'
     CHECK (visibility IN ('public', 'view_once', 'private')),
   created_at TIMESTAMP DEFAULT NOW()

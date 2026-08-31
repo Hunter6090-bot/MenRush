@@ -64,3 +64,24 @@ describe('Revoke viewers-only copy', () => {
     expect(revokedStatus(1)).toBe('Access revoked. 1 viewer removed.');
   });
 });
+
+describe('Media property lock', () => {
+  it('never shows a re-upload empty state when private photos already exist', () => {
+    const tiles = buildTiles({
+      public_photos: [],
+      view_once_photos: [],
+      private_count: 4,
+    });
+    expect(tiles.find((t) => t.kind === 'private_album')?.count).toBe(4);
+    expect(tiles.map((t) => t.kind)).toEqual(['private_album', 'add']);
+  });
+
+  it('keeps existing public tiles on the grid after load', () => {
+    const tiles = buildTiles({
+      public_photos: [{ id: 'p1' }, { id: 'p2' }],
+      view_once_photos: [],
+      private_count: 1,
+    });
+    expect(tiles.filter((t) => t.kind === 'photo')).toHaveLength(2);
+  });
+});
