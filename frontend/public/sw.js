@@ -1,4 +1,4 @@
-// MenRush Service Worker — handles background push notifications.
+// MenRush Service Worker — background push for messages and incoming calls, with deep-link recovery.
 // SW_VERSION=2026-08-31-notif-deeplink-v4 — bump to force clients onto new click logic.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
@@ -78,19 +78,30 @@ self.addEventListener('push', (event) => {
     if (event.data) data = event.data.json();
   } catch {}
 
-  const title = data.title || 'MenRush';
   const href = resolveNotificationHref(data.url, '/discover');
   const path = pathFromHref(href);
   const otherId = peerIdFromMessagesHref(href) || null;
+  const kind = data.kind || (String(data.tag || '').startsWith('call-') ? 'call' : 'message');
+  const isCall = kind === 'call';
+  const title = data.title || (isCall ? 'Incoming call' : 'MenRush');
   // tag encodes peer id so notificationclick can recover if data is stripped.
-  const tag = data.tag || (otherId ? 'msg-' + otherId : 'menrush');
+  const tag = data.tag || (otherId ? 'msg-' + otherId : isCall ? 'menrush-call' : 'menrush');
   const options = {
-    body: data.body || 'New activity on MenRush',
+    body: data.body || (isCall ? 'Incoming video call' : 'New activity on MenRush'),
     icon: data.icon || '/brand/icon-192.png',
     badge: '/brand/icon-48.png',
     tag,
     renotify: true,
-    data: { url: href, path, otherId },
+    silent: false,
+    requireInteraction: isCall,
+    vibrate: isCall ? [300, 120, 300, 120, 300, 120, 400] : [180, 80, 180],
+    data: { url: href, path, otherId, kind },
+    actions: isCall
+      ? [
+          { action: 'answer', title: 'Answer' },
+          { action: 'dismiss', title: 'Decline' },
+        ]
+      : [],
   };
 
   event.waitUntil(
@@ -110,6 +121,8 @@ self.addEventListener('push', (event) => {
 
       const active = windows.find((c) => c.visibilityState === 'visible' && c.focused);
       if (active) {
+        // In-app socket already rings the call UI / shows the thread.
+        if (isCall) return;
         try {
           if (new URL(active.url).pathname === path) return;
         } catch {
@@ -122,7 +135,9 @@ self.addEventListener('push', (event) => {
 });
 
 self.addEventListener('notificationclick', (event) => {
+  const action = event.action;
   event.notification.close();
+  if (action === 'dismiss') return;
   const href = hrefFromNotification(event.notification);
   const path = pathFromHref(href);
   const ios = isLikelyIOS();

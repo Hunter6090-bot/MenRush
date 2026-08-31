@@ -15,6 +15,7 @@ import { DiscoveryShellProvider, useDiscoveryShell } from '../context/DiscoveryS
 import { LocationPresenceStrip } from './LocationPresenceStrip';
 import { ProfileDepthStrip } from './ProfileDepthStrip';
 import { ThemeToggle } from './ThemeToggle';
+import { PushAlertBanner } from './PushAlertBanner';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -337,6 +338,7 @@ function LayoutInner({ children }: LayoutProps) {
         <main className="flex-1 min-h-0 max-lg:pt-[var(--mobile-header-height)] max-lg:pb-[var(--mobile-tab-bar-height)] lg:pb-0">
           <LocationPresenceStrip />
           <ProfileDepthStrip />
+          <PushAlertBanner />
           <div className="page-enter h-full min-h-0">{children}</div>
         </main>
 
