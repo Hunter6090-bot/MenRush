@@ -92,7 +92,7 @@ export const Events = () => {
         <p className="mb-5 text-sm text-[var(--cream-muted)]">
           Gay events and venues, by what you&apos;re into.{' '}
           <Link to="/hot-spots" className="font-semibold text-[#C4832A] hover:text-[#E0A14A]">
-            Browse Hot Spots →
+            Browse Cruise →
           </Link>
         </p>
         {checkInNotice ? (
@@ -144,7 +144,7 @@ export const Events = () => {
                     to="/hot-spots"
                     className="rounded-full border border-[rgba(196,131,42,0.5)] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
                   >
-                    Hot Spots
+                    Cruise
                   </Link>
                 </div>
                 <p className="mt-4 text-[11px] text-[var(--cream-muted)]">Meet in public · Consent first</p>
@@ -162,7 +162,7 @@ export const Events = () => {
               >
                 <p className="text-[15px] font-extrabold text-[var(--cream)]">No events in this filter</p>
                 <p className="mx-auto mt-2 max-w-sm text-[13px] text-[var(--cream-muted)]">
-                  Clear the day filter or category, or check Hot Spots for venues near you.
+                  Clear the day filter or category, or check Cruise for venues near you.
                 </p>
                 <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
                   <button
@@ -179,7 +179,7 @@ export const Events = () => {
                     to="/hot-spots"
                     className="rounded-full border border-[rgba(196,131,42,0.5)] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A]"
                   >
-                    Hot Spots
+                    Cruise
                   </Link>
                 </div>
               </div>

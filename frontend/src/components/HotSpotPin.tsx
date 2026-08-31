@@ -1,4 +1,5 @@
 import { createRoot, type Root } from 'react-dom/client';
+import { IconCruise } from './icons';
 
 export type HotSpotPinData = {
   id: string;
@@ -16,9 +17,10 @@ interface HotSpotPinProps {
 }
 
 /**
- * Always-visible Hot Spot marker — must read as a cruising venue at a glance.
+ * Always-visible Cruise marker on the Nearby map — cruise-ship icon at a glance.
  * Empty: solid copper pin (slightly quieter, never near-invisible).
  * Occupied: larger glow + pulse + venue name + approximate check-in count.
+ * Does not invent venues or occupancy — only renders existing check-in data.
  */
 export function HotSpotPin({ spot, size = 48 }: HotSpotPinProps) {
   const occupied = spot.live_count_exact > 0;
@@ -36,7 +38,7 @@ export function HotSpotPin({ spot, size = 48 }: HotSpotPinProps) {
       title={
         occupied
           ? `${spot.name} · ${countLabel} checked in`
-          : `${spot.name} · Hot Spot`
+          : `${spot.name} · Cruise`
       }
       style={{
         width: pinSize,
@@ -51,6 +53,7 @@ export function HotSpotPin({ spot, size = 48 }: HotSpotPinProps) {
       data-testid={`hotspot-pin-${occupied ? 'solid' : 'dim'}`}
       data-hotspot-id={spot.id}
       data-hotspot-name={spot.name}
+      data-cruise-pin="1"
     >
       {occupied ? (
         <span
@@ -88,14 +91,15 @@ export function HotSpotPin({ spot, size = 48 }: HotSpotPinProps) {
           boxShadow: occupied
             ? '0 0 20px rgba(196,131,42,0.85), 0 4px 14px rgba(0,0,0,0.55)'
             : '0 0 10px rgba(196,131,42,0.45), 0 3px 10px rgba(0,0,0,0.5)',
-          fontSize: pinSize * 0.4,
-          lineHeight: 1,
           color: '#FFF6E6',
         }}
       >
-        <span aria-hidden style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.45))' }}>
-          {spot.category_icon || '📍'}
-        </span>
+        <IconCruise
+          size={Math.round(pinSize * 0.52)}
+          aria-hidden
+          data-testid="cruise-ship-icon"
+          style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.45))' }}
+        />
       </div>
       {occupied ? (
         <span

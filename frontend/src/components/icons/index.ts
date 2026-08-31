@@ -17,7 +17,7 @@ export { IconRooms } from "./IconRooms";
 export { IconProfile } from "./IconProfile";
 export { IconClose } from "./IconClose";
 export { IconEvents } from "./IconEvents";
-export { IconHotSpots } from "./IconHotSpots";
+export { IconHotSpots, IconCruise } from "./IconHotSpots";
 export { IconSettings } from "./IconSettings";
 export { IconMapExpand } from "./IconMapExpand";
 export { IconMore } from "./IconMore";

@@ -155,7 +155,7 @@ export function NearbyProfileGrid({
               data-testid="empty-hot-spots"
               className="min-h-[44px] rounded-full border border-[rgba(196,131,42,0.5)] bg-transparent px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
             >
-              Hot Spots
+              Cruise
             </button>
           ) : null}
           {onFinishProfile ? (
