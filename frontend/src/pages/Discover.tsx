@@ -25,7 +25,6 @@ import { DiscoveryFilterPills } from '../components/DiscoveryFilterPills';
 import { DiscoveryFilterPanel } from '../components/DiscoveryFilterPanel';
 import { MoreFiltersDrawer } from '../components/MoreFiltersDrawer';
 import { NearbyProfileGrid } from '../components/NearbyProfileGrid';
-import { DiscoverySurfaceToggle } from '../components/DiscoverySurfaceToggle';
 import { NearbyMapGridToggle, readNearbyView, writeNearbyView, type NearbyView } from '../components/NearbyMapGridToggle';
 import { DiscoveryShellPublisher } from '../context/DiscoveryShellContext';
 import type { ProfileSetupSnapshot } from '../lib/profileSetup';
@@ -1741,7 +1740,6 @@ export const Discover = () => {
           </h2>
           <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
           <NearbyMapGridToggle view={nearbyView} onChange={setNearbySurface} />
-          <DiscoverySurfaceToggle active="map" />
         </div>
         {nearbyView === 'grid' && !needsLocationGate ? (
           <details className="mb-3 shrink-0 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/70 px-4 py-2.5">
@@ -2009,7 +2007,6 @@ export const Discover = () => {
               <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
               <div className="ml-auto flex items-center gap-2">
                 <NearbyMapGridToggle view={nearbyView} onChange={setNearbySurface} />
-                <DiscoverySurfaceToggle active="map" />
               </div>
             </div>
 

@@ -12,6 +12,7 @@ export { IconDiscover } from "./IconDiscover";
 export { IconPulse } from "./IconPulse";
 export { IconMatches } from "./IconMatches";
 export { IconChat } from "./IconChat";
+export { IconCommunity } from "./IconCommunity";
 export { IconNotifications } from "./IconNotifications";
 export { IconRooms } from "./IconRooms";
 export { IconProfile } from "./IconProfile";
