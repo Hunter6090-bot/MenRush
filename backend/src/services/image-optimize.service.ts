@@ -11,9 +11,12 @@ export type ImageOptimizeKind = 'profile' | 'cover' | 'chat' | 'display';
 const LIMITS: Record<ImageOptimizeKind, { maxEdge: number; quality: number }> = {
   profile: { maxEdge: 1080, quality: 78 },
   cover: { maxEdge: 1600, quality: 78 },
-  chat: { maxEdge: 1280, quality: 76 },
+  chat: { maxEdge: 1080, quality: 70 },
   display: { maxEdge: 480, quality: 72 },
 };
+
+/** Skip sharp when the client already sent a small JPEG (common after compressChatImageFile). */
+const CHAT_SKIP_OPTIMIZE_BYTES = 220_000;
 
 /**
  * Replaces `absolutePath` with a resized JPEG (same basename, `.jpg`).
@@ -25,6 +28,23 @@ export async function optimizeImageFile(
 ): Promise<{ path: string; mimeType: string; filename: string; bytesBefore: number; bytesAfter: number }> {
   const limits = LIMITS[kind];
   const before = (await fs.stat(absolutePath)).size;
+  const ext = path.extname(absolutePath).toLowerCase();
+
+  // Client already compressed — skip a second sharp pass (was adding seconds on Railway).
+  if (
+    kind === 'chat'
+    && before <= CHAT_SKIP_OPTIMIZE_BYTES
+    && (ext === '.jpg' || ext === '.jpeg')
+  ) {
+    return {
+      path: absolutePath,
+      mimeType: 'image/jpeg',
+      filename: path.basename(absolutePath),
+      bytesBefore: before,
+      bytesAfter: before,
+    };
+  }
+
   const dir = path.dirname(absolutePath);
   const base = path.basename(absolutePath, path.extname(absolutePath));
   const finalPath = path.join(dir, `${base}.jpg`);

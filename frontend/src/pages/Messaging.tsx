@@ -149,6 +149,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   // Image composer: hold the selected file for preview + view-rule choice
   // before sending (instead of sending immediately on pick).
   const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [pendingPreparing, setPendingPreparing] = useState(false);
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
   const [viewRule, setViewRule] = useState<ViewRule>('once');
   const [customViews, setCustomViews] = useState(3);
@@ -326,12 +327,66 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     const normalized = normalizeImageFile(file);
     if (!normalized || !otherId) return;
     setMediaError('');
+    setViewRule('once');
     setPendingPreviewUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return URL.createObjectURL(normalized);
     });
     setPendingImage(normalized);
-    setViewRule('once');
+    // Compress while the user picks view-once / send — Android originals
+    // were multi‑MB and dominated the ~50s Al→Pete send.
+    setPendingPreparing(true);
+    void compressChatImageFile(normalized)
+      .then((compressed) => {
+        setPendingImage(compressed);
+        setPendingPreviewUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return URL.createObjectURL(compressed);
+        });
+      })
+      .catch(() => undefined)
+      .finally(() => setPendingPreparing(false));
+  };
+
+  const clearPendingImage = useCallback(() => {
+    setPendingImage(null);
+    setPendingPreparing(false);
+    setPendingPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  }, []);
+
+  const handleSendPendingImage = async () => {
+    if (!pendingImage || !otherId || uploadingMedia) return;
+    const { disappearing, maxViews } = ruleToSendOptions(viewRule, customViews);
+    setMediaError('');
+    setUploadingMedia(true);
+    try {
+      // Re-run compress if staging still preparing, or as a cheap no-op when small.
+      const file = await compressChatImageFile(pendingImage);
+      const res = await messagesAPI.sendMedia(otherId, file, {
+        kind: 'image',
+        disappearing,
+        maxViews,
+      });
+      setMessages((prev) => [...prev, res.data]);
+      clearPendingImage();
+      trackEventOnce(
+        'first_message_success',
+        { kind: 'image', surface: 'direct_message' },
+        'first_message_success',
+      );
+    } catch (err: any) {
+      const code = err?.response?.data?.error;
+      setMediaError(
+        code === 'match_required' || code === 'A mutual match is required'
+          ? 'You need a mutual match before sending photos.'
+          : code || 'Failed to send photo',
+      );
+    } finally {
+      setUploadingMedia(false);
+    }
   };
 
   // ── Media: gallery attach + camera chooser (Picture | Video) ─────────────
@@ -377,46 +432,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     e.target.value = '';
     if (!file) return;
     stageImageFile(file);
-  };
-
-  const clearPendingImage = useCallback(() => {
-    setPendingImage(null);
-    setPendingPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
-  }, []);
-
-  const handleSendPendingImage = async () => {
-    if (!pendingImage || !otherId || uploadingMedia) return;
-    const { disappearing, maxViews } = ruleToSendOptions(viewRule, customViews);
-    setMediaError('');
-    setUploadingMedia(true);
-    try {
-      // Compress before upload — owner timings: Pete→Al ~15s / Al→Pete ~50s on originals.
-      const file = await compressChatImageFile(pendingImage);
-      const res = await messagesAPI.sendMedia(otherId, file, {
-        kind: 'image',
-        disappearing,
-        maxViews,
-      });
-      setMessages((prev) => [...prev, res.data]);
-      clearPendingImage();
-      trackEventOnce(
-        'first_message_success',
-        { kind: 'image', surface: 'direct_message' },
-        'first_message_success',
-      );
-    } catch (err: any) {
-      const code = err?.response?.data?.error;
-      setMediaError(
-        code === 'match_required' || code === 'A mutual match is required'
-          ? 'You need a mutual match before sending photos.'
-          : code || 'Failed to send photo',
-      );
-    } finally {
-      setUploadingMedia(false);
-    }
   };
 
   // ── Media: voice notes (tap to start, tap again to stop) ──────────────
@@ -1066,6 +1081,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             rule={viewRule}
             customViews={customViews}
             uploading={uploadingMedia}
+            preparing={pendingPreparing}
             onRuleChange={setViewRule}
             onCustomViewsChange={setCustomViews}
             onCancel={clearPendingImage}
@@ -1523,6 +1539,7 @@ interface ImageComposerProps {
   rule: ViewRule;
   customViews: number;
   uploading: boolean;
+  preparing?: boolean;
   onRuleChange: (rule: ViewRule) => void;
   onCustomViewsChange: (n: number) => void;
   onCancel: () => void;
@@ -1534,11 +1551,13 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
   rule,
   customViews,
   uploading,
+  preparing = false,
   onRuleChange,
   onCustomViewsChange,
   onCancel,
   onSend,
 }) => {
+  const busy = uploading || preparing;
   const rules: ViewRule[] = ['permanent', 'once', 'twice', 'custom'];
   const ruleSummary =
     rule === 'permanent'
@@ -1623,7 +1642,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
         <button
           type="button"
           onClick={onCancel}
-          disabled={uploading}
+          disabled={busy}
           data-testid="image-composer-cancel"
           className="text-xs px-4 py-2 rounded-full disabled:opacity-40"
           style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', color: 'var(--cream-muted)' }}
@@ -1633,7 +1652,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
         <button
           type="button"
           onClick={onSend}
-          disabled={uploading}
+          disabled={busy}
           data-testid="image-composer-send"
           className="text-xs font-semibold px-5 py-2 rounded-full disabled:opacity-50 active:scale-95"
           style={{
@@ -1642,7 +1661,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
             boxShadow: '0 2px 12px rgba(196,131,42,0.4)',
           }}
         >
-          {uploading ? 'Sending…' : 'Send'}
+          {preparing ? 'Preparing…' : uploading ? 'Sending…' : 'Send'}
         </button>
       </div>
     </div>
