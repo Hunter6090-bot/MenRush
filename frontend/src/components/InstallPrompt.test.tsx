@@ -82,4 +82,38 @@ describe('InstallPrompt phone-only gate', () => {
 
     expect(screen.getByText('Show me how')).toBeTruthy();
   });
+
+  it('hides the sticky banner on /messages even on iPhone', () => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      get: () => phoneUa,
+    });
+
+    const { container } = render(
+      <MemoryRouter initialEntries={['/messages/abc']}>
+        <InstallPrompt variant="sheet" />
+      </MemoryRouter>,
+    );
+
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByText('Show me how')).toBeNull();
+  });
+
+  it('hides the sticky banner on /conversations and room threads on iPhone', () => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      get: () => phoneUa,
+    });
+
+    for (const path of ['/conversations', '/rooms/room-1']) {
+      const { container, unmount } = render(
+        <MemoryRouter initialEntries={[path]}>
+          <InstallPrompt variant="sheet" />
+        </MemoryRouter>,
+      );
+      expect(container).toBeEmptyDOMElement();
+      expect(screen.queryByText('Show me how')).toBeNull();
+      unmount();
+    }
+  });
 });

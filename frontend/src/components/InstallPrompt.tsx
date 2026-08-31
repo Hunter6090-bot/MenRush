@@ -27,6 +27,12 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [hidden, setHidden] = useState(true);
 
+  // Never cover chat/room composers — the sheet sits at z-60 over the send bar.
+  const blocksComposer =
+    location.pathname.startsWith('/messages') ||
+    location.pathname.startsWith('/conversations') ||
+    /^\/rooms\/[^/]+/.test(location.pathname);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!isPhoneDevice()) {
@@ -38,6 +44,10 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
       return;
     }
     if (location.pathname === '/get-the-app' || location.pathname === '/install') {
+      setHidden(true);
+      return;
+    }
+    if (blocksComposer) {
       setHidden(true);
       return;
     }
@@ -54,9 +64,9 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
     };
     window.addEventListener('beforeinstallprompt', onPrompt);
     return () => window.removeEventListener('beforeinstallprompt', onPrompt);
-  }, [location.pathname, variant]);
+  }, [location.pathname, variant, blocksComposer]);
 
-  if (hidden) return null;
+  if (hidden || blocksComposer) return null;
 
   const dismiss = () => {
     localStorage.setItem(DISMISS_KEY, '1');
