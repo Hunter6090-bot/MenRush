@@ -145,6 +145,8 @@ describe('GetTheApp walkthrough', () => {
 
     await user.click(screen.getByRole('button', { name: 'Install MenRush' }));
     expect(prompt).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.getByText("It's on your Home Screen.")).toBeTruthy());
+    expect(screen.queryByText(/Step 1 of/)).toBeNull();
   });
 
   it('Android without deferred: shows Chrome-menu how-to fallback', () => {

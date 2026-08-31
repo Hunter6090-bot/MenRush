@@ -43,6 +43,8 @@ export function GetTheApp() {
   const [platform, setPlatform] = useState<Platform>('ios');
   const [step, setStep] = useState(0);
   const [done, setDone] = useState(false);
+  // After native prompt() succeeds, keep the one-tap UI — do not snap back to the 4-step how-to.
+  const [androidInstalled, setAndroidInstalled] = useState(false);
   const standalone =
     typeof window !== 'undefined' &&
     (window.matchMedia('(display-mode: standalone)').matches ||
@@ -56,7 +58,7 @@ export function GetTheApp() {
   const current = steps[step];
   const showSafariNote = platform === 'ios' && !isIosSafari() && !standalone;
   // Android Chrome with a captured prompt: one-tap Install — no four-step how-to.
-  const androidCanInstall = platform === 'android' && Boolean(deferred) && !standalone;
+  const androidCanInstall = platform === 'android' && Boolean(deferred) && !standalone && !androidInstalled;
 
   const tabClass = (active: boolean) =>
     active
@@ -88,8 +90,12 @@ export function GetTheApp() {
   const installNative = async () => {
     if (!deferred) return;
     await deferred.prompt();
-    await deferred.userChoice;
+    const { outcome } = await deferred.userChoice;
     clearDeferredInstallPrompt();
+    if (outcome === 'accepted') {
+      setAndroidInstalled(true);
+      setDone(true);
+    }
   };
 
   return (
@@ -126,6 +132,18 @@ export function GetTheApp() {
               One tap. Chrome puts MenRush on your Home Screen.
             </p>
           </div>
+        ) : androidInstalled ? (
+          <section className="mt-6 text-center">
+            <h2 className="text-[24px] font-extrabold">It's on your Home Screen.</h2>
+            <p className="mt-2 text-[15px] text-[#A89070]">Open the MenRush icon. Sign in if you already have an invite.</p>
+            <button
+              type="button"
+              className="mt-4 w-full rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3.5 text-[15px] font-bold text-[#FFF6E6]"
+              onClick={() => navigate('/login')}
+            >
+              Done
+            </button>
+          </section>
         ) : (
           <>
             <div className="mt-4 h-1 overflow-hidden rounded-full bg-[rgba(196,131,42,0.18)]" aria-hidden>
