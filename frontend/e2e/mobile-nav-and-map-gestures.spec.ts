@@ -43,7 +43,7 @@ async function isMobileViewport(page: Page) {
   return !!size && size.width < MOBILE_BREAKPOINT;
 }
 
-// Mobile bottom nav: Nearby, Matches, Chat, Rooms (Video rooms), Profile + More.
+// Mobile bottom nav: Nearby, Matches, Chat, Video rooms, Profile + More.
 // Video rooms is first-class chrome — not nested under Chat. Events and Settings
 // remain in the More sheet. Cruise (formerly Hot Spots) stays a Nearby map layer (#67).
 test('mobile More menu restores Events and Settings without losing primary tabs', async ({
@@ -62,7 +62,8 @@ test('mobile More menu restores Events and Settings without losing primary tabs'
     await expect(primaryNav.locator(`a[href="${href}"]`)).toBeVisible();
   }
   await expect(primaryNav.locator('a[href="/conversations"]')).toContainText(/Chat/i);
-  await expect(primaryNav.locator('a[href="/rooms"]')).toContainText(/Rooms/i);
+  await expect(primaryNav.locator('a[href="/rooms"]')).toContainText(/^Video rooms$/i);
+  await expect(primaryNav.locator('a[href="/rooms"]')).not.toHaveText(/^Rooms$/i);
 
   const moreTab = page.getByTestId('mobile-more-tab');
   await expect(moreTab).toBeVisible();
@@ -74,7 +75,7 @@ test('mobile More menu restores Events and Settings without losing primary tabs'
   await expect(menu.getByRole('link', { name: 'Events' })).toBeVisible();
   await expect(menu.getByRole('link', { name: 'Settings' })).toBeVisible();
   // Video rooms is primary chrome — not buried in More.
-  await expect(menu.getByRole('link', { name: /Video rooms|Rooms/i })).toHaveCount(0);
+  await expect(menu.getByRole('link', { name: /Video rooms/i })).toHaveCount(0);
   await expect(menu.getByRole('link', { name: 'Hot Spots' })).toHaveCount(0);
   await expect(menu.getByRole('link', { name: 'Cruise' })).toHaveCount(0);
 
