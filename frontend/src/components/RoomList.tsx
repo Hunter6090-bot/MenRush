@@ -190,8 +190,10 @@ export const RoomList: React.FC<RoomListProps> = ({
             </div>
           )}
           <button
+            type="button"
             onClick={() => setCreateOpen(true)}
             aria-label="Create group"
+            data-testid="rooms-create-group"
             className="flex h-10 w-10 items-center justify-center rounded-2xl transition-all duration-150 active:scale-95"
             style={{
               background: 'linear-gradient(135deg, #C4832A, #A45E18)',
@@ -204,25 +206,44 @@ export const RoomList: React.FC<RoomListProps> = ({
         </div>
       )}
 
+      {/* Create group must stay available when hub hides the list header (mobile + desktop MessagingHub). */}
       <div className={`shrink-0 ${isSidebar ? 'px-3 pt-3' : 'mb-4'}`}>
-        <div className="relative">
-          <SearchIcon
-            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2"
-            style={{ color: '#6B5035' }}
-          />
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search rooms..."
-            className="w-full rounded-2xl py-3 pl-10 pr-4 text-sm transition-all duration-200 focus:outline-none"
-            style={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border-default)',
-              color: 'var(--cream)',
-              caretColor: '#C4832A',
-            }}
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative min-w-0 flex-1">
+            <SearchIcon
+              className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2"
+              style={{ color: '#6B5035' }}
+            />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search rooms..."
+              className="w-full rounded-2xl py-3 pl-10 pr-4 text-sm transition-all duration-200 focus:outline-none"
+              style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-default)',
+                color: 'var(--cream)',
+                caretColor: '#C4832A',
+              }}
+            />
+          </div>
+          {!showHeader && (
+            <button
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              aria-label="Create group"
+              data-testid="rooms-create-group"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-all duration-150 active:scale-95"
+              style={{
+                background: 'linear-gradient(135deg, #C4832A, #A45E18)',
+                boxShadow: '0 2px 12px rgba(196,131,42,0.35)',
+                color: '#fff',
+              }}
+            >
+              <PlusIcon className="h-5 w-5" />
+            </button>
+          )}
         </div>
         {joinError && (
           <p className="mt-2 text-xs text-red-400" role="alert">
