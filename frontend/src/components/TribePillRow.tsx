@@ -10,7 +10,7 @@ const TRIBE_TAGS = [
   'Daddy',
   'Hosting',
   'Right Now',
-  'Dating',
+  'Hookup',
 ];
 
 interface TribePillRowProps {
