@@ -47,7 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
-| P0 mobile web page weight (phones slow; desktop OK) | PR `#160` `cursor/mobile-web-page-weight-b5a8` | Nearby list-first (lazy mapbox) + grid photo downscale queue + live nearby gate | Cursor cloud — Nearby/Matches iPhone photos; backend hot-path + display still need Railway deploy for API budget; Chat 3–4s floor; #158 open-thread/push-tap; no host move; #97–#99 parked |
+| P0 mobile web page weight (phones slow; desktop OK) | PR `#160` `cursor/mobile-web-page-weight-b5a8` | Matches progressive paint + Chat 3–4s control e2e | Cursor cloud — Nearby/Matches iPhone; Chat list floor; #158 open-thread/push-tap; no host move; #97–#99 parked |
 | Mutual profile: Pass · Open chat · Unmatch (drop duplicate Message) | PR `cursor/mutual-profile-unmatch-fd7a` | — | Cursor cloud — DELETE /users/like/:id removes both like dirs; ProfileView only; do not touch #97–#99 / rooms / public copy |
 | Profile tag pick-one / pick-several UX cue | PR `cursor/profile-tag-pick-cue-4040` | — | Cursor cloud — cue only under each tag subsection; selection rules unchanged; do not touch #97–#99 |
 | Discover Map\|Community parity + phone pinch zoom | PR `cursor/discover-map-community-parity-2402` | — | Cursor cloud — desktop under-map = Nearby (not Community); shared MAP\|COMMUNITY tabs; phone map pinch via touch-action/overflow + disableRotation; do not touch #97–#99 |

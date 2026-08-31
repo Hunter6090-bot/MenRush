@@ -261,7 +261,11 @@ export function useGridPhotoSrc(
   return { src, phase };
 }
 
-/** Test helpers */
+/** Test helpers + route handoff */
+export function clearGridPhotoQueue(): void {
+  queue.length = 0;
+}
+
 export const __gridPhotoTest = {
   reset() {
     queue.length = 0;
@@ -277,4 +281,5 @@ export const __gridPhotoTest = {
   enqueueGridPhoto,
   sameOriginUploadUrl,
   displayUrl,
+  clearGridPhotoQueue,
 };

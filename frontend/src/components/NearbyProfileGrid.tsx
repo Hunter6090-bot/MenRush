@@ -7,8 +7,9 @@ import {
   PROFILE_TILE_GRID_CLASS,
   PROFILE_TILE_SKELETON_CLASS,
 } from '../lib/profileTileGrid';
-import { useGridPhotoSrc } from '../lib/nearbyPhotoSrc';
+import { useGridPhotoSrc, clearGridPhotoQueue } from '../lib/nearbyPhotoSrc';
 import { Link } from 'react-router-dom';
+import { useEffect } from 'react';
 
 interface NearbyProfileGridProps {
   users: NearbyUser[];
@@ -57,6 +58,10 @@ export function NearbyProfileGrid({
   radiusLabel,
   beyondRadiusCount = 0,
 }: NearbyProfileGridProps) {
+  useEffect(() => {
+    clearGridPhotoQueue();
+  }, []);
+
   if (loading && users.length === 0) {
     return (
       <div

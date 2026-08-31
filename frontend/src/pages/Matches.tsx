@@ -5,7 +5,7 @@ import { Layout } from '../components/Layout';
 import { IconMatches } from '../components/icons';
 import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
 import { VerifiedBadge } from '../components/VerifiedBadge';
-import { useGridPhotoSrc } from '../lib/nearbyPhotoSrc';
+import { useGridPhotoSrc, clearGridPhotoQueue } from '../lib/nearbyPhotoSrc';
 import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 import { PROFILE_TILE_GRID_CLASS } from '../lib/profileTileGrid';
 
@@ -150,22 +150,29 @@ export const Matches = () => {
   const navigate = useNavigate();
 
   const fetchMatches = useCallback(async () => {
+    // Paint mutual matches as soon as that API returns — do not wait on likes
+    // (iPhone was sitting on a full-page skeleton for 25–30s while photos/likes lagged).
     try {
-      const [matchesRes, likesRes] = await Promise.all([
-        usersAPI.getMatches(),
-        usersAPI.getReceivedLikes().catch(() => ({ data: [] as ReceivedLike[] })),
-      ]);
-      setMatches(matchesRes.data);
-      setReceivedLikes(Array.isArray(likesRes.data) ? likesRes.data : []);
+      const matchesRes = await usersAPI.getMatches();
+      setMatches(matchesRes.data ?? []);
       setError('');
     } catch {
       setError('Could not load matches.');
     } finally {
       setLoading(false);
     }
+
+    try {
+      const likesRes = await usersAPI.getReceivedLikes();
+      setReceivedLikes(Array.isArray(likesRes.data) ? likesRes.data : []);
+    } catch {
+      setReceivedLikes([]);
+    }
   }, []);
 
   useEffect(() => {
+    // Drop Discover's pending multi‑MB photo jobs so Matches tiles get the queue.
+    clearGridPhotoQueue();
     void fetchMatches();
   }, [fetchMatches]);
 
