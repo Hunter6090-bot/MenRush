@@ -4,8 +4,9 @@ import { messagesAPI } from '../api/client';
 import { ConversationItem } from './ConversationItem';
 import { CreateGroupModal } from './CreateGroupModal';
 import { FEATURES } from '../lib/featureFlags';
-import { useUnreadStore } from '../hooks/store';
+import { useAuthStore, useUnreadStore } from '../hooks/store';
 import { useSocket } from '../hooks/useSocket';
+import { rememberInboxThread } from '../lib/conversationHistoryCache';
 
 export interface ConversationRow {
   other_user_id: string;
@@ -35,16 +36,29 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   const [groupOpen, setGroupOpen] = useState(false);
   const navigate = useNavigate();
   const unreadBySender = useUnreadStore((s) => s.unreadBySender);
+  const selfId = useAuthStore((s) => s.user?.id);
   const socket = useSocket();
   const isSidebar = variant === 'sidebar';
 
   const fetchConversations = useCallback(() => {
     messagesAPI
       .getConversations()
-      .then((r) => setConvs(r.data))
+      .then((r) => {
+        const rows = Array.isArray(r.data) ? (r.data as ConversationRow[]) : [];
+        setConvs(rows);
+        // Seed thread cache from inbox previews so open-chat paints last-known text immediately.
+        for (const row of rows) {
+          if (!row?.other_user_id) continue;
+          rememberInboxThread(row.other_user_id, {
+            lastMessage: row.last_message,
+            lastMessageTime: row.last_message_time,
+            selfId,
+          });
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [selfId]);
 
   useEffect(() => {
     fetchConversations();
