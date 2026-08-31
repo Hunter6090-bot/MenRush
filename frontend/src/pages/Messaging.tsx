@@ -26,6 +26,11 @@ import { parseLocationPayload } from '../lib/locationMessage';
 import { profilePathForUser } from '../lib/profileLinks';
 import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 import { SoftBlurMedia, shouldBlurMedia } from '../components/SoftBlurMedia';
+import {
+  appendUniqueMessage,
+  CHAT_LIVE_REFRESH_EVENT,
+  mergeConversationRows,
+} from '../lib/pushDeepLink';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
 interface Message extends Partial<MessageDTO> {
@@ -178,12 +183,22 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const recordStreamRef = useRef<MediaStream | null>(null);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
+  const loadConversation = useCallback((opts?: { replace?: boolean }) => {
     if (!otherId) return;
     messagesAPI
       .getConversation(otherId)
-      .then((r) => setMessages(Array.isArray(r.data) ? r.data : []))
-      .catch(() => setMessages([]));
+      .then((r) => {
+        const rows = Array.isArray(r.data) ? (r.data as Message[]) : [];
+        setMessages((prev) => (opts?.replace ? rows : mergeConversationRows(prev, rows)));
+      })
+      .catch(() => {
+        if (opts?.replace) setMessages([]);
+      });
+  }, [otherId]);
+
+  useEffect(() => {
+    if (!otherId) return;
+    loadConversation({ replace: true });
     usersAPI
       .getProfile(otherId)
       .then((r) => {
@@ -195,7 +210,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       .catch(() => {});
     meetAPI.getState(otherId).then((r) => setMeetState(r.data)).catch(() => setMeetState(null));
     useUnreadStore.getState().clearUnreadFrom(otherId);
-  }, [otherId]);
+  }, [otherId, loadConversation]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -210,12 +225,41 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     return () => window.clearInterval(id);
   }, [otherId]);
 
+  // iPhone PWA: socket often misses media while suspended. Refetch when the
+  // thread becomes visible again, on reconnect, or when a push hints this chat.
+  useEffect(() => {
+    if (!otherId) return;
+
+    const refreshIfVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      loadConversation();
+    };
+
+    const onLiveRefresh = (event: Event) => {
+      const detail = (event as CustomEvent<{ otherId?: string | null }>).detail;
+      if (detail?.otherId && detail.otherId !== otherId) return;
+      refreshIfVisible();
+    };
+
+    document.addEventListener('visibilitychange', refreshIfVisible);
+    window.addEventListener('pageshow', refreshIfVisible);
+    window.addEventListener(CHAT_LIVE_REFRESH_EVENT, onLiveRefresh as EventListener);
+    socket?.on('connect', refreshIfVisible);
+
+    return () => {
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+      window.removeEventListener('pageshow', refreshIfVisible);
+      window.removeEventListener(CHAT_LIVE_REFRESH_EVENT, onLiveRefresh as EventListener);
+      socket?.off('connect', refreshIfVisible);
+    };
+  }, [otherId, loadConversation, socket]);
+
   useEffect(() => {
     if (!socket || !otherId) return;
 
     const onMessage = (data: Message) => {
       if (data.sender_id === otherId || data.receiver_id === otherId) {
-        setMessages((prev) => [...prev, data]);
+        setMessages((prev) => appendUniqueMessage(prev, data));
       }
     };
     const onTyping = ({ typing }: { typing: boolean }) => setIsOtherTyping(typing);

@@ -181,6 +181,9 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
       'message',
       await messageService.forViewer(message, receiver_id),
     );
+    // Respond before fan-out so the sender is not blocked on notify/push.
+    res.status(201).json(message);
+
     const pushBody =
       kind === 'image' ? '\u{1F4F7} Photo' : kind === 'video' ? '\u{1F3AC} Video' : '\u{1F3A4} Voice note';
     pushNewMessage(
@@ -190,8 +193,8 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
       pushBody,
     );
 
-    try {
-      await notificationService.notify(io, {
+    void notificationService
+      .notify(io, {
         userId: receiver_id,
         actorId: req.userId!,
         type: kind === 'image' ? 'photo' : 'voice',
@@ -203,12 +206,8 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
               : `${message.sender_name ?? 'Someone'} sent a voice note`,
         body: caption || undefined,
         linkPath: `/messages/${req.userId}`,
-      });
-    } catch (notifyErr) {
-      console.error('[notification:media]', notifyErr);
-    }
-
-    res.status(201).json(message);
+      })
+      .catch((notifyErr) => console.error('[notification:media]', notifyErr));
   } catch (error: any) {
     // Roll back the upload if the DB insert / match check fails.
     try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }

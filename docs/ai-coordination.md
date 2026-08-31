@@ -47,7 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
-| P0 beta: chat reply send + blank profile + crash guards | PR `cursor/p0-chat-profile-beta-0e36` | — | Cursor cloud — mobile send (pointerdown/IME/InstallPrompt), messages 201-before-notify, RequireProfileSetup exempt `/profile/:id`, normalize profile interests; BOA90 service pass; do not touch #97–#99 / rooms / public copy |
+| P0 beta: chat reply send + blank profile + crash guards + push-tap + open-thread media | PR `#158` `cursor/p0-chat-profile-beta-0e36` | — | Cursor cloud — mobile send; profile blank; SW tap→SPA navigate; open-thread media refetch on push/visibility; hold merge for owner phones; do not touch #97–#99 / rooms / public copy; timings stay on #160 |
 | Mutual profile: Pass · Open chat · Unmatch (drop duplicate Message) | PR `cursor/mutual-profile-unmatch-fd7a` | — | Cursor cloud — DELETE /users/like/:id removes both like dirs; ProfileView only; do not touch #97–#99 / rooms / public copy |
 | Profile tag pick-one / pick-several UX cue | PR `cursor/profile-tag-pick-cue-4040` | — | Cursor cloud — cue only under each tag subsection; selection rules unchanged; do not touch #97–#99 |
 | Discover Map\|Community parity + phone pinch zoom | PR `cursor/discover-map-community-parity-2402` | — | Cursor cloud — desktop under-map = Nearby (not Community); shared MAP\|COMMUNITY tabs; phone map pinch via touch-action/overflow + disableRotation; do not touch #97–#99 |
