@@ -46,4 +46,71 @@ export const MENRUSH_BACKGROUND_IMAGES = [
   "/images/menrush/45-string-lights-crowd.jpeg",
   "/images/menrush/46-pool-bears-rooftop.jpeg",
   "/images/menrush/47-rooftop-berlin-night.jpeg",
+  "/images/menrush/48-1990s-bear-community-events.jpeg",
+  "/images/menrush/49-2020s-modern-bear-subculture.jpeg",
+  "/images/menrush/50-bears-biker-club-house.jpeg",
+  "/images/menrush/51-bears-leather-biker.jpeg",
+  "/images/menrush/52-brighton-beach-sunset.jpeg",
+  "/images/menrush/53-cruiser-copse.jpeg",
+  "/images/menrush/54-give-it-all-leather.jpeg",
+  "/images/menrush/55-hampstead-cruising-spot.jpeg",
+  "/images/menrush/56-in-the-bar.jpeg",
+  "/images/menrush/57-lads-meet.jpeg",
+  "/images/menrush/58-mens-only.jpeg",
+  "/images/menrush/59-muscular-hairy-type.jpeg",
+  "/images/menrush/60-older-gray-haired-bear.jpeg",
+  "/images/menrush/61-outside-after-the-club.jpeg",
+  "/images/menrush/62-party-stage-night.jpeg",
+  "/images/menrush/63-sitges-night-crowd.jpeg",
+  "/images/menrush/64-west-heath-lane.jpeg",
+  "/images/menrush/65-wood-meet.jpeg",
 ] as const;
+
+export type MenrushBackgroundImage = (typeof MENRUSH_BACKGROUND_IMAGES)[number];
+
+/** One photo per tab until a hard refresh. Shared by /login and /register. */
+export const AUTH_BACKGROUND_SESSION_KEY = 'menrush.authBackground';
+
+const BACKGROUND_SET = new Set<string>(MENRUSH_BACKGROUND_IMAGES);
+
+let pickedThisJsLoad: MenrushBackgroundImage | null = null;
+
+function randomBackground(): MenrushBackgroundImage {
+  return (
+    MENRUSH_BACKGROUND_IMAGES[Math.floor(Math.random() * MENRUSH_BACKGROUND_IMAGES.length)] ??
+    MENRUSH_BACKGROUND_IMAGES[0]
+  );
+}
+
+function isReloadNavigation(): boolean {
+  const entry = performance.getEntriesByType('navigation')[0] as
+    | PerformanceNavigationTiming
+    | undefined;
+  return entry?.type === 'reload';
+}
+
+export function resetAuthBackgroundPickForTests(): void {
+  pickedThisJsLoad = null;
+}
+
+export function pickSessionAuthBackground(): MenrushBackgroundImage {
+  if (pickedThisJsLoad) return pickedThisJsLoad;
+
+  try {
+    if (!isReloadNavigation()) {
+      const stored = sessionStorage.getItem(AUTH_BACKGROUND_SESSION_KEY);
+      if (stored && BACKGROUND_SET.has(stored)) {
+        pickedThisJsLoad = stored as MenrushBackgroundImage;
+        return pickedThisJsLoad;
+      }
+    }
+    const next = randomBackground();
+    sessionStorage.setItem(AUTH_BACKGROUND_SESSION_KEY, next);
+    pickedThisJsLoad = next;
+    return next;
+  } catch {
+    const next = randomBackground();
+    pickedThisJsLoad = next;
+    return next;
+  }
+}

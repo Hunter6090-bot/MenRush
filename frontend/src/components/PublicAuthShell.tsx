@@ -36,6 +36,7 @@ export function PublicAuthShell({
   return (
     <div className="relative flex min-h-dvh flex-col overflow-hidden bg-[#0D0A06] text-[#F0E0C0]">
       <div
+        data-testid="auth-background"
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{ backgroundImage: `url(${backgroundImage})`, opacity: backgroundOpacity }}
         aria-hidden

@@ -4,10 +4,10 @@ import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
 import { consumePostAuthRedirect, safeNextPath, savePostAuthRedirect } from '../lib/profileLinks';
 import {
-  AUTH_BACKGROUNDS,
   PublicAuthHero,
   PublicAuthShell,
 } from '../components/PublicAuthShell';
+import { pickSessionAuthBackground } from '../lib/menrushBackgrounds';
 import { PulseRing } from '../components/PulseRing';
 import { InstallPrompt } from '../components/InstallPrompt';
 import {
@@ -60,6 +60,7 @@ export const Login = () => {
   const [searchParams] = useSearchParams();
   const setAuth = useAuthStore((s) => s.setAuth);
   const nextPath = safeNextPath(searchParams.get('next'));
+  const [backgroundImage] = useState(() => pickSessionAuthBackground());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,7 +115,7 @@ export const Login = () => {
   const registerPath = BETA_INVITE_REQUIRED ? '/beta' : '/register';
 
   return (
-    <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.login}>
+    <PublicAuthShell backgroundImage={backgroundImage}>
       <PublicAuthHero
         title={pendingToken ? 'Enter your' : "Sign in and see who's"}
         accent={pendingToken ? 'authenticator code.' : 'near you right now.'}
