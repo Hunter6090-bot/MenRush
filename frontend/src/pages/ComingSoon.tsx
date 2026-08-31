@@ -46,7 +46,11 @@ export const ComingSoon = () => {
       />
       <div className="pointer-events-none absolute inset-0" style={{ background: COMING_SOON_GRADIENT }} aria-hidden />
 
-      <header className="relative z-20 flex h-16 shrink-0 items-center justify-end px-5 sm:px-8">
+      <header className="relative z-20 flex h-16 shrink-0 items-center px-5 sm:px-8">
+        <Link to="/" aria-label="MenRush" className="inline-flex shrink-0 items-center">
+          <BrandMark size="sm" />
+        </Link>
+        <div className="flex-1" aria-hidden />
         <Link to="/login" className={publicNavLinkPrimary}>
           Sign in
         </Link>

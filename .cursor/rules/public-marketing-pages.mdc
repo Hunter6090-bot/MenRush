@@ -18,7 +18,7 @@ Run: `npm run test:e2e -- public-design-lock` (from `frontend/`)
 - Hero typography uses `mr-coming-soon-heading` + `mr-coming-soon-accent` (keep “Real men / Verified profiles / Total discretion” voice unless product rewrites).
 - Primary CTA: **“Sign up free”** → `/register` (real account signup). No email capture field and no Zoho/waitlist form on the hero.
 - Keep `#waitlist` as a stable scroll anchor on the CTA block for older deep links.
-- Header: one **Sign in** link → `/login`.
+- Header: compact `BrandMark` (`size="sm"`) top-left linked to `/` with `aria-label="MenRush"` (no MENRUSH type beside it); **Sign in** top-right → `/login`. Hero keeps its own centered `BrandMark` (`size="hero"`).
 - Body: **Already have an invite? Enter your code** → `/beta`.
 - Include a short **What you get** section matching shipped product (Nearby / Rooms / Matches). Do not claim an official themed-room catalog unless it is live on main.
 - Do **not** invent social network URLs. Footer is `SiteFooter` (Contact, Safety, legal).
