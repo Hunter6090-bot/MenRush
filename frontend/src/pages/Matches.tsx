@@ -85,7 +85,7 @@ function PersonGridCard({
   return (
     <div
       data-testid={testId}
-      className="group relative overflow-hidden rounded-2xl border border-[rgba(196,131,42,0.35)] bg-nn-card text-left shadow-card transition-all hover:-translate-y-[3px] hover:border-[rgba(196,131,42,0.4)]"
+      className="group relative overflow-hidden rounded-xl border border-[rgba(196,131,42,0.35)] bg-nn-card text-left shadow-card transition-all hover:-translate-y-[3px] hover:border-[rgba(196,131,42,0.4)] md:rounded-2xl"
     >
       <ProfilePhotoLink
         userId={person.id}
@@ -108,12 +108,12 @@ function PersonGridCard({
               <SilhouetteAvatar size={56} variant="card" />
             </div>
           )}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent px-3 pb-2.5 pt-10">
-            <div className="flex items-center gap-1.5">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent px-1.5 pb-1.5 pt-8 md:px-3 md:pb-2.5 md:pt-10">
+            <div className="flex items-center gap-0.5 md:gap-1.5">
               <span
-                className={`h-2 w-2 shrink-0 rounded-full ${person.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
+                className={`h-1.5 w-1.5 shrink-0 rounded-full md:h-2 md:w-2 ${person.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
               />
-              <span className="truncate text-[13px] font-bold text-[#FFF6E6] md:text-[12px] lg:text-[13px]">
+              <span className="truncate text-[11px] font-bold leading-tight text-[#FFF6E6] md:text-[12px] lg:text-[13px]">
                 {person.name} {person.age}
               </span>
               {person.is_verified ? (
@@ -122,17 +122,17 @@ function PersonGridCard({
                 <VerifiedBadge size="sm" level="authentic_person" />
               ) : null}
             </div>
-            <p className="mt-0.5 truncate text-xs font-semibold text-[var(--cream)]">{subtitle}</p>
+            <p className="mt-0.5 truncate text-[9px] font-semibold text-[var(--cream)] md:text-xs">{subtitle}</p>
           </div>
         </div>
       </ProfilePhotoLink>
       {onMessage ? (
-        <div className="border-t border-[var(--border-default)] p-1.5">
+        <div className="border-t border-[var(--border-default)] p-1 md:p-1.5">
           <button
             type="button"
             onClick={onMessage}
             data-testid={`match-message-${person.id}`}
-            className="w-full rounded-xl border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] py-2 text-[11px] font-extrabold uppercase tracking-wide text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.28)]"
+            className="w-full rounded-lg border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] py-1.5 text-[10px] font-extrabold uppercase tracking-wide text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.28)] md:rounded-xl md:py-2 md:text-[11px]"
           >
             Message
           </button>

@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:unit": "node --experimental-strip-types --test src/lib/notificationToasts.test.ts src/lib/profileLinks.test.ts",
+    "test:unit": "node --experimental-strip-types --test src/lib/notificationToasts.test.ts src/lib/profileLinks.test.ts src/lib/profileTileGrid.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:install": "playwright install chromium"
