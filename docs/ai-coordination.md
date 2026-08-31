@@ -47,12 +47,10 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
-<<<<<<< HEAD
+| My Photos (public / view once / private / revoke viewers-only) | PR `#171` `cursor/my-photos-album-states-38f0` | — | Cursor cloud — four album states; revoke viewers-only never wipe; **media property lock**: existing photo_url/cover/album_photos stay; 041 backfill unlocked→public locked→private; DISCREET_MEDIA_BLUR stays off; do not mix #165/#150/Cruise; #97–#99 parked; hold merge until Product logged-in preview |
+| Discovery age From–To selects (18–99; Age tab only) | PR `cursor/discovery-age-range-filter-9f19` | — | Cursor cloud — From/To `<select>` only; no presets; not Veriff/#97; do not merge #148/#165/#171; owner deploys pack |
 | Android Chrome one-tap Install (persist beforeinstallprompt) | PR `cursor/android-one-tap-install-b87f` | — | Cursor cloud — module store + early capture; Android Install app / Install MenRush; Safari Show me how; do not mix Grid #165 / Community / My Photos #171 / rooms #150/#169 / Cruise #170 / age #159 / icons / #97–#99 |
 | Nav icons: Settings gear + Rooms camera/people (kill Doric columns) | PR `cursor/nav-settings-rooms-icons-d7d9` | — | Cursor cloud — IconSettings=6-tooth cog; IconRooms=camera+2 people; preview HTML dupes; do not mix #150/#165/#170/#171/#169 |
-=======
-| Discovery age From–To selects (18–99; Age tab only) | PR `cursor/discovery-age-range-filter-9f19` | — | Cursor cloud — From/To `<select>` only; no presets; not Veriff/#97; do not merge #148/#165/#171; owner deploys pack |
->>>>>>> d6c5572 (feat(discover): age From–To selects (18–99) (cursor))
 | Landing header BrandMark top-left (ComingSoon) | PR `cursor/landing-header-brandmark-35ee` | — | Cursor cloud — sm BrandMark → `/` left; Sign in right; hero mark kept; overline LIVE NOW. UK BETA OPEN; do not mix #165/#163/#97–#99 |
 | P0 Go live / Discover bounce (location ≠ incomplete profile) | PR `cursor/fix-go-live-discovery-bounce-d9b8` | — | Cursor cloud — honest live ticks; RequireProfileSetup never redirects for GPS; ActivationBanner Settings not Finish profile; /me lat/lng coerce; Safari how-to; do not touch #97–#99 / #158 / #160 / #162 / held PRs |
 | PWA Get the App: apostrophe leak + desktop banner + Done→/login | PR `cursor/fix-pwa-install-prompt-6d80` | — | Cursor cloud — JSX `\u2019`→real `'`; InstallPrompt phone-only via `isPhoneDevice`; Done→/login; do not touch #97–#99 / #158 / #160 / landing copy |

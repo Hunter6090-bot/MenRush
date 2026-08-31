@@ -21,6 +21,7 @@
     "test:video-note-mime": "ts-node scripts/video-note-mime-checks.ts",
     "test:discovery-age-filter": "ts-node scripts/discovery-age-filter-checks.ts",
     "test:discreet-media-blur": "ts-node scripts/discreet-media-blur-checks.ts",
+    "test:my-photos": "ts-node scripts/my-photos-checks.ts",
     "test:pride-one-path": "ts-node scripts/pride-one-path-checks.ts",
     "test:official-rooms": "ts-node scripts/official-rooms-checks.ts",
     "test:nightlife-checkin": "ts-node scripts/nightlife-checkin-checks.ts",

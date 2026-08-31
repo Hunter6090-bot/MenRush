@@ -222,6 +222,8 @@ export const LiveLocationSharingSchema = z.object({
   enabled: z.boolean(),
 });
 
+export const PHOTO_VISIBILITIES = ['public', 'view_once', 'private'] as const;
+
 export const CreateAlbumSchema = z.object({
   name: z.string().trim().min(1, 'Album name is required').max(80),
   description: z.string().trim().max(500).optional(),
@@ -235,6 +237,8 @@ export const AddAlbumPhotoSchema = z.object({
 export const GrantAlbumSchema = z.object({
   viewer_id: z.string().uuid('Invalid viewer id'),
 });
+
+export const PhotoVisibilitySchema = z.enum(PHOTO_VISIBILITIES);
 
 export type RegisterInput = z.infer<typeof RegisterSchema>;
 export type LoginInput = z.infer<typeof LoginSchema>;
@@ -257,6 +261,7 @@ export type GhostInput = z.infer<typeof GhostSchema>;
 export type CreateAlbumInput = z.infer<typeof CreateAlbumSchema>;
 export type AddAlbumPhotoInput = z.infer<typeof AddAlbumPhotoSchema>;
 export type GrantAlbumInput = z.infer<typeof GrantAlbumSchema>;
+export type PhotoVisibility = z.infer<typeof PhotoVisibilitySchema>;
 export type MediaKind = (typeof MEDIA_KINDS)[number];
 export type MessageMediaKind = (typeof MESSAGE_MEDIA_KINDS)[number];
 export type LocationMessageInput = z.infer<typeof LocationMessageSchema>;

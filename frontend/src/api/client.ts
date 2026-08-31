@@ -538,7 +538,9 @@ export const profileMetaAPI = {
     apiClient.post<{ enabled: boolean }>('/profile-meta/live-location-sharing', { enabled }),
 };
 
-// ── Albums ────────────────────────────────────────────────────────────────
+// ── Albums / My Photos ────────────────────────────────────────────────────
+export type PhotoVisibility = 'public' | 'view_once' | 'private';
+
 export interface AlbumDTO {
   id: string;
   user_id: string;
@@ -560,13 +562,41 @@ export interface AlbumPhotoDTO {
   photo_url: string;
   position: number;
   created_at: string;
-  /** Verified backend Premium gate — false soft-blurs for free viewers. */
+  visibility?: PhotoVisibility;
+  /** false soft-blurs — view-once until opened, or Discreet Mode when enabled. */
   media_clear?: boolean;
 }
 
+export interface LibraryPhotoDTO {
+  id: string;
+  album_id: string;
+  photo_url: string;
+  visibility: PhotoVisibility;
+  position: number;
+  created_at: string;
+  media_clear: boolean;
+}
+
+export interface AlbumViewerDTO {
+  id: string;
+  name: string;
+  photo_url: string | null;
+  granted_at: string;
+}
+
+export interface MyPhotosLibraryDTO {
+  public_photos: LibraryPhotoDTO[];
+  view_once_photos: LibraryPhotoDTO[];
+  private_photos: LibraryPhotoDTO[];
+  private_album: AlbumDTO | null;
+  viewers: AlbumViewerDTO[];
+  photo_total: number;
+  free_cap: number;
+  albums: AlbumDTO[];
+}
+
 export const albumsAPI = {
-  listMine: () =>
-    apiClient.get<{ albums: AlbumDTO[]; photo_total: number; free_cap: number }>('/albums/mine'),
+  listMine: () => apiClient.get<MyPhotosLibraryDTO>('/albums/mine'),
   create: (data: { name: string; description?: string; is_locked?: boolean }) =>
     apiClient.post<AlbumDTO>('/albums', data),
   remove: (albumId: string) => apiClient.delete<{ deleted: true }>(`/albums/${albumId}`),
@@ -579,19 +609,36 @@ export const albumsAPI = {
       locked: boolean;
       media_clear?: boolean;
     }>(`/albums/${albumId}/photos`),
-  upload: (albumId: string, file: File) => {
+  upload: (albumId: string, file: File, visibility: PhotoVisibility = 'private') => {
     const fd = new FormData();
     fd.append('photo', file);
-    return apiClient.post<{ photo_url: string }>(`/albums/${albumId}/upload`, fd, {
+    fd.append('visibility', visibility);
+    return apiClient.post<{
+      id: string;
+      photo_url: string;
+      media_clear: boolean;
+      visibility: PhotoVisibility;
+    }>(`/albums/${albumId}/upload`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  openPhoto: (photoId: string) =>
+    apiClient.post<{ opened: boolean; media_clear: boolean }>(`/albums/photos/${photoId}/open`),
   listForUser: (userId: string) =>
     apiClient.get<{ albums: AlbumDTO[] }>(`/albums/user/${userId}`),
+  listGrants: (albumId: string) =>
+    apiClient.get<{ viewers: AlbumViewerDTO[] }>(`/albums/${albumId}/grants`),
   grant: (albumId: string, viewerId: string) =>
     apiClient.post<{ granted: true }>(`/albums/${albumId}/grant`, { viewer_id: viewerId }),
   revoke: (albumId: string, viewerId: string) =>
     apiClient.delete<{ granted: false }>(`/albums/${albumId}/grant/${viewerId}`),
+  /** Viewers only — never wipes media. Photos stay on the owner's album. */
+  revokeAll: (albumId: string) =>
+    apiClient.delete<{
+      revoked: true;
+      viewers_removed: number;
+      photo_count: number;
+    }>(`/albums/${albumId}/grants`),
 };
 
 // ── Events (After Hours) ──────────────────────────────────────────────────
