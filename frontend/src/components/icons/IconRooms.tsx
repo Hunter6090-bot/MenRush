@@ -2,8 +2,7 @@ import { SVGProps } from "react";
 
 /**
  * MenRush — Rooms icon
- * Two Doric columns supporting a horizontal beam.
- * "Place to gather, structure, meeting hall." Classical architecture vocabulary.
+ * Video camera + two overlapping people — group video rooms.
  */
 export function IconRooms({ size = 24, ...props }: SVGProps<SVGSVGElement> & { size?: number }) {
   return (
@@ -16,27 +15,23 @@ export function IconRooms({ size = 24, ...props }: SVGProps<SVGSVGElement> & { s
       stroke="currentColor"
       strokeWidth="1.5"
       strokeLinecap="round"
+      strokeLinejoin="round"
       {...props}
     >
-      {/* Top beam (architrave) */}
-      <line x1="3" y1="5" x2="21" y2="5" />
+      {/* Back person — head + shoulders */}
+      <circle cx="6" cy="5.75" r="2.1" />
+      <path d="M2.5 13.25c0-1.85 1.55-3.35 3.5-3.35" />
 
-      {/* Left column capital */}
-      <line x1="4" y1="7" x2="9" y2="7" />
-      {/* Left column shaft */}
-      <rect x="5.5" y="7" width="2" height="12" />
-      {/* Left column base */}
-      <line x1="4" y1="19" x2="9" y2="19" />
+      {/* Front person — overlapping */}
+      <circle cx="10.75" cy="6.5" r="2.1" />
+      <path d="M7.25 13.5c0-1.7 1.55-3.05 3.5-3.05s3.5 1.35 3.5 3.05" />
 
-      {/* Right column capital */}
-      <line x1="15" y1="7" x2="20" y2="7" />
-      {/* Right column shaft */}
-      <rect x="16.5" y="7" width="2" height="12" />
-      {/* Right column base */}
-      <line x1="15" y1="19" x2="20" y2="19" />
+      {/* Camcorder body + lens */}
+      <rect x="2.75" y="14.25" width="11.5" height="6.75" rx="1.5" />
+      <circle cx="8.5" cy="17.6" r="1.85" />
 
-      {/* Floor line */}
-      <line x1="3" y1="21" x2="21" y2="21" />
+      {/* Side viewfinder housing */}
+      <path d="M14.25 15.75l4.5-2.35v8.2l-4.5-2.35" />
     </svg>
   );
 }
