@@ -24,6 +24,7 @@
     "test:my-photos": "ts-node scripts/my-photos-checks.ts",
     "test:pride-one-path": "ts-node scripts/pride-one-path-checks.ts",
     "test:official-rooms": "ts-node scripts/official-rooms-checks.ts",
+    "test:community-comments": "ts-node scripts/community-comments-checks.ts",
     "test:nightlife-checkin": "ts-node scripts/nightlife-checkin-checks.ts",
     "test:nightlife-integration": "ts-node scripts/nightlife-checkin-integration.ts",
     "test:push": "ts-node scripts/test-push.ts",
