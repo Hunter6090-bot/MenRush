@@ -130,4 +130,19 @@ test.describe('public design lock — auth pages', () => {
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Set up your account/i);
     expect(network.expectNoSideEffects()).toEqual([]);
   });
+
+  test('login and signup share one photo until refresh', async ({ page }) => {
+    const network = await guardAgainstSideEffects(page);
+    await page.goto('/login');
+    const loginBg = page.getByTestId('auth-background');
+    await expect(loginBg).toHaveCSS('background-image', /\/images\/menrush\/\d{2}-.+\.jpeg/);
+    const first = await loginBg.evaluate((el) => getComputedStyle(el).backgroundImage);
+
+    await page.goto('/register?invite=MR-BETA-TEST1');
+    const registerBg = page.getByTestId('auth-background');
+    await expect(registerBg).toHaveCSS('background-image', /\/images\/menrush\/\d{2}-.+\.jpeg/);
+    const second = await registerBg.evaluate((el) => getComputedStyle(el).backgroundImage);
+    expect(second).toBe(first);
+    expect(network.expectNoSideEffects()).toEqual([]);
+  });
 });

@@ -3,10 +3,10 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
 import {
-  AUTH_BACKGROUNDS,
   PublicAuthHero,
   PublicAuthShell,
 } from '../components/PublicAuthShell';
+import { pickSessionAuthBackground } from '../lib/menrushBackgrounds';
 import { PulseRing } from '../components/PulseRing';
 import {
   BETA_INVITE_REQUIRED,
@@ -72,6 +72,7 @@ export const Register = () => {
   const inviteFromQuery = searchParams.get('invite')?.trim() || '';
   const promoFromQuery = searchParams.get('promo')?.trim() || '';
   const [inviteCode] = useState(() => inviteFromQuery || readStoredInviteCode() || '');
+  const [backgroundImage] = useState(() => pickSessionAuthBackground());
   const [promoCode, setPromoCode] = useState(() => {
     const fromQuery = promoFromQuery;
     const fromStore = readStoredPridePromoCode();
@@ -206,7 +207,7 @@ export const Register = () => {
   };
 
   return (
-    <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.register}>
+    <PublicAuthShell backgroundImage={backgroundImage}>
       <PublicAuthHero
         title="You're in."
         accent="Set up your account."

@@ -2,10 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { betaAPI } from '../api/client';
 import {
-  AUTH_BACKGROUNDS,
   PublicAuthHero,
   PublicAuthShell,
 } from '../components/PublicAuthShell';
+import { pickSessionAuthBackground } from '../lib/menrushBackgrounds';
 import { PulseRing } from '../components/PulseRing';
 import { BETA_INVITE_REQUIRED, storeInviteCode } from '../lib/betaInvite';
 import {
@@ -23,6 +23,7 @@ function normalizeClientInviteCode(raw: string): string {
 
 export const BetaAccess = () => {
   const [code, setCode] = useState('');
+  const [backgroundImage] = useState(() => pickSessionAuthBackground());
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -89,7 +90,7 @@ export const BetaAccess = () => {
   };
 
   return (
-    <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.beta} showFooter>
+    <PublicAuthShell backgroundImage={backgroundImage} showFooter>
       <PublicAuthHero
         title="You're in the"
         accent="MenRush beta."
