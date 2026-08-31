@@ -9,16 +9,13 @@ import {
 } from '../components/PublicAuthShell';
 import { PulseRing } from '../components/PulseRing';
 import {
-  BETA_INVITE_REQUIRED,
   readStoredInviteCode,
   storeInviteCode,
 } from '../lib/betaInvite';
 import {
-  PRIDE_ENTER_BY,
   PRIDE_PROMO_CODE,
   clearStoredPridePromoCode,
   isPridePromoCode,
-  looksLikePersonalPrideCode,
   readStoredPridePromoCode,
   storePridePromoCode,
 } from '../lib/pridePromo';
@@ -111,12 +108,6 @@ export const Register = () => {
     clearStoredPridePromoCode();
   }, [promoFromQuery]);
 
-  useEffect(() => {
-    if (BETA_INVITE_REQUIRED && !inviteCode) {
-      navigate('/beta', { replace: true });
-    }
-  }, [inviteCode, navigate]);
-
   const onPromoChange = (value: string) => {
     setError('');
     setPromoCode(value);
@@ -169,10 +160,6 @@ export const Register = () => {
       setError('Please confirm the ID verification consent.');
       return;
     }
-    if (BETA_INVITE_REQUIRED && !inviteCode) {
-      setError('A beta invite code is required.');
-      return;
-    }
 
     setLoading(true);
     try {
@@ -186,11 +173,15 @@ export const Register = () => {
         age: age ?? 0,
         date_of_birth: form.dob,
         password: form.password,
-        ...(BETA_INVITE_REQUIRED ? { invite_code: inviteCode } : {}),
+        ...(inviteCode ? { invite_code: inviteCode } : {}),
         ...(trimmedPromo ? { promo_code: trimmedPromo } : {}),
       });
       setAuth(res.data.user, res.data.token);
-      navigate(FEATURES.requireIdVerification ? '/verify/id' : '/profile/setup');
+      navigate(
+        FEATURES.veriffAfterSignup || FEATURES.requireIdVerification
+          ? '/verify/id'
+          : '/profile/setup',
+      );
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed. Please try again.');
     } finally {
@@ -208,13 +199,13 @@ export const Register = () => {
   return (
     <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.register}>
       <PublicAuthHero
-        title="You're in."
-        accent="Set up your account."
-        copy="Your invite code checks out. Pick a username and password to join the beta."
+        title="Create your"
+        accent="account."
+        copy="Pick a username and password."
       />
 
       <div className={`${publicPanelClass} max-h-[min(70dvh,720px)] overflow-y-auto lg:max-h-none lg:overflow-visible`}>
-        {BETA_INVITE_REQUIRED && inviteCode ? (
+        {inviteCode ? (
           <div className={publicInviteChipClass}>
             <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-[#E0A14A]">
               Invite code
@@ -225,62 +216,11 @@ export const Register = () => {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           <div className="flex flex-col gap-2.5">
-            <div className="flex items-center justify-between gap-3">
-              <label className={publicLabelClass} htmlFor="register-promo-code">
-                Pride promo (optional)
-              </label>
-              {promoCode ? (
-                <button
-                  type="button"
-                  onClick={clearPromo}
-                  className="text-[12px] font-bold text-[#E0A14A] hover:text-[#C4832A]"
-                  data-testid="register-promo-clear"
-                >
-                  Clear
-                </button>
-              ) : null}
-            </div>
+            <label className={publicLabelClass} htmlFor="register-username">
+              Username
+            </label>
             <input
-              id="register-promo-code"
-              type="text"
-              value={promoCode}
-              onChange={(e) => onPromoChange(e.target.value)}
-              placeholder="PRIDE 3MONTH FREE or PRIDE-XXXX-XXXX"
-              aria-label="Pride promo code"
-              autoComplete="off"
-              spellCheck={false}
-              className={`${publicInputClass} font-mono tracking-[0.08em]`}
-              data-testid="register-promo-input"
-            />
-            <p className={helperClass} data-testid="register-pride-note">
-              {isPridePromoCode(promoCode) ? (
-                <>
-                  Public code — enter by {PRIDE_ENTER_BY}. The grant happens when you enter this code
-                  at register. If you have a personal emailed PRIDE-XXXX-XXXX or a Pride-flagged
-                  MENRUSH invite instead, clear this box and enter that code / invite. One Pride grant
-                  — do not stack.
-                </>
-              ) : looksLikePersonalPrideCode(promoCode) ? (
-                <>
-                  Personal emailed code. Use the same email it was sent to. Redeem by 31 October
-                  2026. Do not also enter {PRIDE_PROMO_CODE}. If you have a Pride-flagged MENRUSH
-                  invite, enter it in the invite field and leave this blank. One Pride grant per
-                  person.
-                </>
-              ) : (
-                <>
-                  Optional. Public code {PRIDE_PROMO_CODE} (enter by {PRIDE_ENTER_BY}), or your
-                  personal emailed PRIDE-XXXX-XXXX (redeem by 31 October 2026). Pride-flagged MENRUSH
-                  invites book Premium in the invite field — leave this blank. One Pride grant per
-                  person — do not stack.
-                </>
-              )}
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-2.5">
-            <label className={publicLabelClass}>Username</label>
-            <input
+              id="register-username"
               type="text"
               value={form.displayName}
               onChange={setField('displayName')}
@@ -290,12 +230,16 @@ export const Register = () => {
               minLength={2}
               maxLength={24}
               className={publicInputClass}
+              data-testid="register-username-input"
             />
           </div>
 
           <div className="flex flex-col gap-2.5">
-            <label className={publicLabelClass}>Email</label>
+            <label className={publicLabelClass} htmlFor="register-email">
+              Email
+            </label>
             <input
+              id="register-email"
               type="email"
               value={form.email}
               onChange={setField('email')}
@@ -304,13 +248,16 @@ export const Register = () => {
               required
               className={publicInputClass}
             />
-            <p className={helperClass}>Use the email your invite was sent to.</p>
+            <p className={helperClass}>We&apos;ll use this to sign you in.</p>
           </div>
 
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <div className="flex flex-col gap-2.5">
-              <label className={publicLabelClass}>Date of Birth</label>
+              <label className={publicLabelClass} htmlFor="register-dob">
+                Date of Birth
+              </label>
               <input
+                id="register-dob"
                 type="date"
                 value={form.dob}
                 onChange={setField('dob')}
@@ -318,11 +265,14 @@ export const Register = () => {
                 required
                 className={publicInputClass}
               />
-              <p className={helperClass}>Must match the date on your government ID.</p>
+              <p className={helperClass}>You must be 18 or older.</p>
             </div>
             <div className="flex flex-col gap-2.5">
-              <label className={publicLabelClass}>Password</label>
+              <label className={publicLabelClass} htmlFor="register-password">
+                Password
+              </label>
               <input
+                id="register-password"
                 type="password"
                 value={form.password}
                 onChange={setField('password')}
@@ -391,10 +341,44 @@ export const Register = () => {
             </span>
           </label>
 
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <label className={publicLabelClass} htmlFor="register-promo-code">
+                Pride promo (optional)
+              </label>
+              {promoCode ? (
+                <button
+                  type="button"
+                  onClick={clearPromo}
+                  className="text-[12px] font-bold text-[#E0A14A] hover:text-[#C4832A]"
+                  data-testid="register-promo-clear"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+            <input
+              id="register-promo-code"
+              type="text"
+              value={promoCode}
+              onChange={(e) => onPromoChange(e.target.value)}
+              placeholder="If you have one"
+              aria-label="Pride promo code"
+              autoComplete="off"
+              spellCheck={false}
+              className={`${publicInputClass} font-mono tracking-[0.08em]`}
+              data-testid="register-promo-input"
+            />
+            <p className={helperClass} data-testid="register-pride-note">
+              Optional Pride promo if you have one.
+            </p>
+          </div>
+
           {error ? <p className={publicErrorClass}>{error}</p> : null}
 
-          <p className={helperClass}>
-            Every member is ID verified and selfie matched before going live.
+          <p className={helperClass} data-testid="register-gift-note">
+            Sign up before 1 October 2026 and you get 30 days of Premium free. A Pride promo
+            replaces that gift and does not stack.
           </p>
 
           <button type="submit" disabled={loading} className={publicPrimaryButtonClass}>

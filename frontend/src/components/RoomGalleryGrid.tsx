@@ -3,6 +3,7 @@ import type { RoomParticipant } from '../hooks/useRoomVideo';
 import {
   attachRemoteAudio,
   attachStreamToVideo,
+  detachStreamFromVideo,
   ensureInlinePlayback,
   streamHasRenderableVideo,
   videoElementHasFrames,
@@ -53,10 +54,29 @@ function ParticipantTile({
         audioRef.current.srcObject = null;
       }
     } else {
-      el.srcObject = null;
-      if (audioRef.current) audioRef.current.srcObject = null;
+      detachStreamFromVideo(el);
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+        } catch {
+          /* ignore */
+        }
+        audioRef.current.srcObject = null;
+      }
       setFramesReady(false);
     }
+
+    return () => {
+      detachStreamFromVideo(el);
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+        } catch {
+          /* ignore */
+        }
+        audioRef.current.srcObject = null;
+      }
+    };
   }, [stream, showVideo, participant.isSelf]);
 
   useEffect(() => {
