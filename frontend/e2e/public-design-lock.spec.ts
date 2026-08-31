@@ -153,11 +153,23 @@ test.describe('public design lock — auth pages', () => {
     await expect(page).toHaveURL(/\/register/);
     await assertAuthShell(page);
     await assertCreamInputs(page);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/You're in/i);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Set up your account/i);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Create your account/i);
+    await expect(page.getByText(/You're in/i)).toHaveCount(0);
     await expect(page.getByText(/Your invite code checks out/i)).toHaveCount(0);
     await expect(page.getByText(/use the email your invite was sent to/i)).toHaveCount(0);
+    await expect(page.getByTestId('register-username-input')).toBeVisible();
     await expect(page.getByTestId('register-promo-input')).toBeVisible();
+    await expect(page.getByTestId('register-promo-input')).toHaveAttribute(
+      'placeholder',
+      'If you have one',
+    );
+    await expect(page.getByTestId('register-pride-note')).toHaveText(
+      /Optional Pride promo if you have one\.?/i,
+    );
+    await expect(page.getByText(/PRIDE 3MONTH FREE or PRIDE-XXXX/i)).toHaveCount(0);
+    await expect(page.getByTestId('register-gift-note')).toContainText(
+      /Pride promo replaces that gift and does not stack/i,
+    );
     expect(network.expectNoSideEffects()).toEqual([]);
   });
 });

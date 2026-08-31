@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Register Brand face (username first; no Pride dump; no You’re in) | open | this branch `cursor/register-brand-face-cd79` | Cursor — Register.tsx + e2e only; ComingSoon untouched; gift/invite/Veriff/#150 unchanged; do not mix #97–#99 |
 | P0 Video rooms hangup leaves iPhone camera open (stop tracks + clear glyph) | open | this branch `cursor/fix-rooms-camera-hangup-f98c` | Cursor — useRoomVideo hard teardown on leave/unmount/pagehide; no orphan getUserMedia; do not mix #150/#97–#99 |
 | P0 open signup (no invite gate; 30d waitlist gift; Pride optional) | open | this branch `cursor/open-signup-no-invite-gate-389d` | Cursor — FE ignores VITE_BETA_INVITE_REQUIRED; BE isInviteRequired always false; waitlist gift before 1 Oct UK; Veriff stays opt-in; do not mix #150/#97–#99 |
 | Veriff InContext SDK after signup (`/verify/id`) | PR `#178` `cursor/veriff-sdk-signup` | — | Cursor — `@veriff/incontext-sdk`; session + decision webhook; badge only on approved; native capture at `/verify/id/manual`; rebased onto main (cursor) |
