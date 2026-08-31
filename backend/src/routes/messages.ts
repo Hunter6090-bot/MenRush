@@ -10,6 +10,7 @@ import { resolveMediaPath, verifyMediaAccess } from '../security/media';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
 import { MessageSchema, MediaMessageFormSchema, LocationMessageSchema } from '../types/validation';
 import { getUploadSubdir } from '../lib/uploads-root';
+import { optimizeImageFile } from '../services/image-optimize.service';
 
 const router = Router();
 
@@ -58,10 +59,21 @@ router.get('/:messageId/media', async (req, res) => {
       media.senderId,
       media.mediaType,
     );
-    res.type(media.mimeType);
-    res.setHeader('Cache-Control', 'private, no-store');
+    const absolute = resolveMediaPath(mediaDir, media.storageKey);
+    // Safari needs Accept-Ranges to start playback before the full download
+    // (Pete iPhone ~12s open on chat video that had already arrived).
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader(
+      'Cache-Control',
+      media.isDisappearing ? 'private, no-store' : 'private, max-age=600',
+    );
     res.setHeader('X-MenRush-Media-Clear', mediaClear ? '1' : '0');
-    return res.sendFile(resolveMediaPath(mediaDir, media.storageKey));
+    res.type(media.mimeType);
+    return res.sendFile(absolute, { acceptRanges: true }, (err) => {
+      if (!err || res.headersSent) return;
+      console.error('[media:sendFile]', err.message);
+      res.status(404).json({ error: 'media_unavailable' });
+    });
   } catch (error) {
     if (error instanceof SecurityError) {
       return res.status(error.status).json({ error: error.code });
@@ -79,26 +91,29 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 
     const io = req.app.get('io');
     io.to(`user:${data.receiver_id}`).emit('message', message);
+    // Respond before fan-out so mobile clients aren't blocked on notify/push latency.
+    res.status(201).json(message);
+
     pushNewMessage(data.receiver_id, message.sender_name ?? '', req.userId!, message.message);
 
     const preview =
       message.message.length > 80 ? `${message.message.slice(0, 77)}…` : message.message;
-    try {
-      await notificationService.notify(io, {
+    void notificationService
+      .notify(io, {
         userId: data.receiver_id,
         actorId: req.userId!,
         type: 'message',
         title: `New message from ${message.sender_name ?? 'someone'}`,
         body: preview,
         linkPath: `/messages/${req.userId}`,
-      });
-    } catch (notifyErr) {
-      console.error('[notification:message]', notifyErr);
+      })
+      .catch((notifyErr) => console.error('[notification:message]', notifyErr));
+  } catch (error: unknown) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
     }
-
-    res.status(201).json(message);
-  } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    const message = error instanceof Error ? error.message : 'Could not send message';
+    res.status(400).json({ error: message });
   }
 });
 
@@ -164,21 +179,38 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
   }
 
   try {
+    // Downscale chat photos before DB insert — phones were sending multi‑MB originals
+    // (~15–50s upload). Keep video/audio bytes as-is.
+    let storageKey = req.file.filename;
+    let mimeType = req.file.mimetype;
+    if (kind === 'image') {
+      const optimized = await optimizeImageFile(req.file.path, 'chat');
+      storageKey = optimized.filename;
+      mimeType = optimized.mimeType;
+    }
+
     const message = await messageService.sendMediaMessage(req.userId!, receiver_id, {
       mediaType: kind,
-      storageKey: req.file.filename,
-      mimeType: req.file.mimetype,
+      storageKey,
+      mimeType,
       caption,
       disappearing,
       maxViews: max_views,
       audioDurationMs: duration_ms,
     });
 
+    // Return 201 before push/in-app notify so send timing is not blocked on
+    // notification delivery (open-thread live image delivery stays on #158).
+    res.status(201).json(message);
+
     const io = req.app.get('io');
-    io.to(`user:${receiver_id}`).emit(
-      'message',
-      await messageService.forViewer(message, receiver_id),
-    );
+    void messageService
+      .forViewer(message, receiver_id)
+      .then((forReceiver) => {
+        io.to(`user:${receiver_id}`).emit('message', forReceiver);
+      })
+      .catch(() => undefined);
+
     const pushBody =
       kind === 'image' ? '\u{1F4F7} Photo' : kind === 'video' ? '\u{1F3AC} Video' : '\u{1F3A4} Voice note';
     pushNewMessage(
@@ -188,8 +220,8 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
       pushBody,
     );
 
-    try {
-      await notificationService.notify(io, {
+    void notificationService
+      .notify(io, {
         userId: receiver_id,
         actorId: req.userId!,
         type: kind === 'image' ? 'photo' : 'voice',
@@ -201,16 +233,16 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
               : `${message.sender_name ?? 'Someone'} sent a voice note`,
         body: caption || undefined,
         linkPath: `/messages/${req.userId}`,
+      })
+      .catch((notifyErr) => {
+        console.error('[notification:media]', notifyErr);
       });
-    } catch (notifyErr) {
-      console.error('[notification:media]', notifyErr);
-    }
-
-    res.status(201).json(message);
   } catch (error: any) {
     // Roll back the upload if the DB insert / match check fails.
     try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
-    res.status(400).json({ error: error.message });
+    if (!res.headersSent) {
+      res.status(400).json({ error: error.message });
+    }
   }
 });
 
@@ -263,8 +295,12 @@ router.get('/conversation/:otherId', async (req: AuthRequest, res: Response) => 
   try {
     const messages = await messageService.getConversation(req.userId!, req.params.otherId);
     res.json(messages);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
+    const message = error instanceof Error ? error.message : 'Could not load conversation';
+    res.status(500).json({ error: message });
   }
 });
 

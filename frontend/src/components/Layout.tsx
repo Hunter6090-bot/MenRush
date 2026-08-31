@@ -60,12 +60,33 @@ function LayoutInner({ children }: LayoutProps) {
   const [sidebarExpanded, setSidebarExpanded] = useState(readSidebarExpanded);
   const { state: discoveryShell } = useDiscoveryShell();
 
+  // Badge count only — do not refetch on every mobile tab change (that was a
+  // page-to-page API waterfall on phones). Refresh on mount + focus/visibility.
   useEffect(() => {
-    usersAPI
-      .getMatches()
-      .then((res) => setMatchCount(res.data?.length ?? 0))
-      .catch(() => setMatchCount(0));
-  }, [location.pathname]);
+    let cancelled = false;
+    const refresh = () => {
+      usersAPI
+        .getMatches()
+        .then((res) => {
+          if (!cancelled) setMatchCount(res.data?.length ?? 0);
+        })
+        .catch(() => {
+          if (!cancelled) setMatchCount(0);
+        });
+    };
+    refresh();
+    const onFocus = () => refresh();
+    const onVis = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, []);
 
   useEffect(() => {
     try {

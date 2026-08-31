@@ -3,9 +3,9 @@ import { TEST_PASSWORD, ALICE, BOB } from './test-accounts';
 import { PLAYWRIGHT_BASE_URL as BASE_URL } from './support/base-url';
 
 
-// A valid 1x1 PNG (correct signature, so it passes the backend's content check).
-const PNG_BUFFER = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+// Valid JPEG that sharp/libvips can optimize (tiny PNGs fail vipspng in CI).
+const JPEG_BUFFER = Buffer.from(
+  '/9j/4AAQSkZJRgABAgAAAQABAAD//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgEBAQEBAUFBQUFBQYGBgYGBgYGBgYGBgYHBwcICAgHBwcGBgcHCAgICAkJCQgICAgJCQoKCgwMCwsODg4RERT/xABMAAEBAAAAAAAAAAAAAAAAAAAABAEBAQAAAAAAAAAAAAAAAAAAAAYQAQAAAAAAAAAAAAAAAAAAAAARAQAAAAAAAAAAAAAAAAAAAAD/wAARCABAAEADASIAAhEAAxEA/9oADAMBAAIRAxEAPwCwBDqgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB//2Q==',
   'base64',
 );
 
@@ -33,6 +33,13 @@ test.beforeAll(async () => {
   try {
     alice = await login(api, ALICE.email);
     bob = await login(api, BOB.email);
+    // Media send requires a mutual match — re-assert in case a prior Unmatch e2e cleared it.
+    await api.post(`/api/users/like/${bob.user.id}`, {
+      headers: { Authorization: `Bearer ${alice.token}` },
+    });
+    await api.post(`/api/users/like/${alice.user.id}`, {
+      headers: { Authorization: `Bearer ${bob.token}` },
+    });
   } finally {
     await api.dispose();
   }
@@ -42,6 +49,7 @@ async function authenticate(context: BrowserContext, result: LoginResult) {
   await context.addInitScript(({ token, user }) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem('menrush_install_prompt_dismissed', '1');
   }, result);
 }
 
@@ -72,9 +80,17 @@ async function aliceSendsImage(
       await page.getByRole('button', { name: btn }).click();
     }
   }
+  // Wait out client-side compress ("Preparing…") so Send actually fires the upload.
+  await expect(page.getByTestId('image-composer-send')).toHaveText('Send', { timeout: 20_000 });
+  const sendResponse = page.waitForResponse(
+    (res) => res.url().includes('/api/messages/media') && res.request().method() === 'POST',
+    { timeout: 30_000 },
+  );
   await page.getByTestId('image-composer-send').click();
+  const uploaded = await sendResponse;
+  expect(uploaded.ok(), `media upload failed: ${uploaded.status()}`).toBeTruthy();
   // Composer closes once the upload completes.
-  await expect(page.getByTestId('image-composer')).toHaveCount(0);
+  await expect(page.getByTestId('image-composer')).toHaveCount(0, { timeout: 15_000 });
 }
 
 test('selecting an image shows a preview with view-rule and Send/Cancel controls', async ({

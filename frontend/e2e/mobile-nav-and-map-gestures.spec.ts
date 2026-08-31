@@ -33,6 +33,8 @@ async function authenticate(context: BrowserContext, result: LoginResult) {
   await context.addInitScript(({ token, user }) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
+    // Keep Get-the-App sheet from covering bottom nav / Sign out in mobile e2e.
+    localStorage.setItem('menrush_install_prompt_dismissed', '1');
   }, result);
 }
 
@@ -119,6 +121,28 @@ test('expanded mobile map stays fully within the viewport', async ({ browser }) 
   // The whole panel — not just its top — must be on-screen for gestures to reach it anywhere.
   expect(box!.y).toBeGreaterThanOrEqual(0);
   expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height + 1);
+
+  await ctx.close();
+});
+
+// Phone web must keep Mapbox pinch-zoom armed (same contract as desktop touch).
+test('mobile map canvas advertises pinch-ready touch handlers', async ({ browser }) => {
+  const ctx = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+    geolocation: { latitude: 40.7128, longitude: -74.006 },
+    permissions: ['geolocation'],
+  });
+  await authenticate(ctx, alice);
+  const page = await ctx.newPage();
+  await page.goto('/discover');
+
+  const host = page.getByTestId('discover-map-canvas-host');
+  await expect(host).toBeVisible({ timeout: 20_000 });
+
+  const touchAction = await host.evaluate((el) => getComputedStyle(el).touchAction);
+  expect(touchAction).toMatch(/none/i);
 
   await ctx.close();
 });

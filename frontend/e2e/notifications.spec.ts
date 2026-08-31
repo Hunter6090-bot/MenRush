@@ -33,6 +33,7 @@ async function authenticate(context: BrowserContext, result: LoginResult) {
   await context.addInitScript(({ token, user }) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem('menrush_install_prompt_dismissed', '1');
   }, result);
 }
 
@@ -188,6 +189,7 @@ test('a pending real-time notification never renders as a toast after logging ou
   await bobPage.evaluate(({ token, user }) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem('menrush_install_prompt_dismissed', '1');
   }, bob);
   await bobPage.goto('/discover');
   await bobPage.waitForTimeout(1500); // allow the socket to authenticate

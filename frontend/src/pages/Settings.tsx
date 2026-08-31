@@ -695,6 +695,8 @@ export const Settings = () => {
             {hasPin === false ? (
               <p className="mt-1 text-[12px] leading-relaxed text-[#E0A14A]">
                 Without location you cannot appear near men. We use the pin privately for distance.
+                On iPhone Safari: aA (or …) → Website Settings → Location → Allow. Also check Settings
+                → Privacy & Security → Location Services → Safari Websites.
               </p>
             ) : null}
             {locNotice ? (

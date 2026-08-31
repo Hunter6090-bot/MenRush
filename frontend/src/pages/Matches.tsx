@@ -5,7 +5,7 @@ import { Layout } from '../components/Layout';
 import { IconMatches } from '../components/icons';
 import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
 import { VerifiedBadge } from '../components/VerifiedBadge';
-import { useResolvingPhotoSrc } from '../components/UserAvatar';
+import { useGridPhotoSrc, clearGridPhotoQueue } from '../lib/nearbyPhotoSrc';
 import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 import { PROFILE_TILE_GRID_CLASS } from '../lib/profileTileGrid';
 
@@ -81,7 +81,7 @@ function PersonGridCard({
   /** Dedicated Message control — photo always opens profile. */
   onMessage?: () => void;
 }) {
-  const { src: photo, onError } = useResolvingPhotoSrc(person.photo_url ?? undefined, person.age);
+  const { src: photo, phase } = useGridPhotoSrc(person.photo_url ?? undefined, person.age);
   return (
     <div
       data-testid={testId}
@@ -94,12 +94,14 @@ function PersonGridCard({
         data-testid={testId ? `${testId}-photo` : `match-photo-${person.id}`}
       >
         <div className="relative aspect-[3/3.6] w-full bg-[var(--bg-elevated)]">
-          {photo ? (
+          {photo && phase !== 'loading' ? (
             <img
               src={photo}
               alt={person.name}
               className="h-full w-full object-cover"
-              onError={onError}
+              decoding="async"
+              data-testid="match-grid-photo"
+              data-photo-phase={phase}
             />
           ) : (
             <div className="flex h-full items-center justify-center">
@@ -148,22 +150,29 @@ export const Matches = () => {
   const navigate = useNavigate();
 
   const fetchMatches = useCallback(async () => {
+    // Paint mutual matches as soon as that API returns — do not wait on likes
+    // (iPhone was sitting on a full-page skeleton for 25–30s while photos/likes lagged).
     try {
-      const [matchesRes, likesRes] = await Promise.all([
-        usersAPI.getMatches(),
-        usersAPI.getReceivedLikes().catch(() => ({ data: [] as ReceivedLike[] })),
-      ]);
-      setMatches(matchesRes.data);
-      setReceivedLikes(Array.isArray(likesRes.data) ? likesRes.data : []);
+      const matchesRes = await usersAPI.getMatches();
+      setMatches(matchesRes.data ?? []);
       setError('');
     } catch {
       setError('Could not load matches.');
     } finally {
       setLoading(false);
     }
+
+    try {
+      const likesRes = await usersAPI.getReceivedLikes();
+      setReceivedLikes(Array.isArray(likesRes.data) ? likesRes.data : []);
+    } catch {
+      setReceivedLikes([]);
+    }
   }, []);
 
   useEffect(() => {
+    // Drop Discover's pending multi‑MB photo jobs so Matches tiles get the queue.
+    clearGridPhotoQueue();
     void fetchMatches();
   }, [fetchMatches]);
 

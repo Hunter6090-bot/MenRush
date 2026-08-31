@@ -46,17 +46,17 @@ export const userService = {
   ) {
     await accessControl.requireVerified(userId);
 
-    // Keep DB honest: zombie online=true from crashed tabs skews ops + chat filters.
-    await query(
+    // Do NOT await full-table online cleanup or avatar backfill on this hot path —
+    // phones were waiting ~7s before the Nearby list could paint. Run best-effort
+    // in the background; list query below still filters by fresh last_seen.
+    void query(
       `UPDATE profiles
        SET online = false
        WHERE online = true
          AND (last_seen IS NULL OR last_seen < NOW() - INTERVAL '20 minutes')`,
     ).catch(() => undefined);
-
-    // Density: assign generic avatars so men without photos still appear on the map.
-    await this.ensureDefaultAvatar(userId).catch(() => undefined);
-    await this.backfillMissingAvatarsNear(userId).catch(() => undefined);
+    void this.ensureDefaultAvatar(userId).catch(() => undefined);
+    void this.backfillMissingAvatarsNear(userId).catch(() => undefined);
 
     if (clientLocation) {
       await this.updateLocation(userId, clientLocation.lat, clientLocation.lng);
@@ -327,6 +327,11 @@ export const userService = {
     const row = result.rows[0];
     if (!row) return row;
 
+    // Always expose numeric lat/lng (or null) so Discover / setup can detect a saved pin.
+    // pg may return numeric columns as strings; never invent a city-centre fallback.
+    row.lat = row.lat != null && Number.isFinite(Number(row.lat)) ? Number(row.lat) : null;
+    row.lng = row.lng != null && Number.isFinite(Number(row.lng)) ? Number(row.lng) : null;
+
     // Overlay beta / subscription entitlement so the client does not treat
     // raw users.is_premium=false as "locked" while Premium is free in beta.
     const status = await premiumService.getStatus(userId);
@@ -533,6 +538,22 @@ export const userService = {
     );
 
     return result.rows.length > 0;
+  },
+
+  /**
+   * Unmatch: remove both directions of the like so the mutual match is gone.
+   * Does not delete message history or touch room memberships.
+   */
+  async unmatchUser(userId: string, otherId: string): Promise<{ removed: number }> {
+    await accessControl.assertInteraction(userId, otherId);
+    const result = await query(
+      `DELETE FROM likes
+       WHERE (liker_id = $1 AND liked_id = $2)
+          OR (liker_id = $2 AND liked_id = $1)
+       RETURNING id`,
+      [userId, otherId],
+    );
+    return { removed: result.rows.length };
   },
 
   /** Video calls allowed for mutual matches or anyone you've already messaged. */

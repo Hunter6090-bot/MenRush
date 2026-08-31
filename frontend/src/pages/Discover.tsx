@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { EventDTO, HotSpotDTO, Mood, hotSpotsAPI, profileMetaAPI, pulseAPI, usersAPI } from '../api/client';
 import { useLocationStore, useAuthStore } from '../hooks/store';
 import { NearbyUser } from '../components/ProfileCard';
@@ -26,9 +26,14 @@ import { DiscoveryFilterPills } from '../components/DiscoveryFilterPills';
 import { DiscoveryFilterPanel } from '../components/DiscoveryFilterPanel';
 import { MoreFiltersDrawer } from '../components/MoreFiltersDrawer';
 import { NearbyProfileGrid } from '../components/NearbyProfileGrid';
-import { CommunityFeed } from '../components/CommunityFeed';
+import { DiscoverySurfaceToggle } from '../components/DiscoverySurfaceToggle';
 import { DiscoveryShellPublisher } from '../context/DiscoveryShellContext';
 import type { ProfileSetupSnapshot } from '../lib/profileSetup';
+import { profileFieldBlockers } from '../lib/profileSetup';
+import {
+  LOCATION_DENIED_NOT_INCOMPLETE,
+  SAFARI_LOCATION_HOW_TO,
+} from '../lib/deviceLocation';
 import { resolveDistanceUnitSystem } from '../lib/localeUnits';
 import {
   DEFAULT_DISCOVERY_FILTERS,
@@ -38,8 +43,8 @@ import {
 } from '../lib/discoveryFilters';
 import { EventsRail } from '../components/EventsRail';
 import { isUserPulsing, distanceMeters } from '../lib/discovery';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
+import type mapboxgl from 'mapbox-gl';
+import { loadMapbox, getLoadedMapbox } from '../lib/mapboxLazy';
 import {
   discoveryResultBucket,
   trackEventOnce,
@@ -49,7 +54,6 @@ import {
   RADIUS_CIRCLE_LAYER,
   RADIUS_CIRCLE_SOURCE,
 } from '../lib/mapRadiusCircle';
-import { ROUTE_LABELS } from '../lib/routeLabels';
 import { mapboxStyleForTheme, resolvedThemeNow, THEME_CHANGED_EVENT } from '../lib/mapTheme';
 import { readLayerVisible, writeLayerVisible } from '../lib/discoveryLayers';
 import { useIsDesktopLayout } from '../hooks/useMediaQuery';
@@ -227,7 +231,9 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
       width: 100% !important;
       height: 100% !important;
     }
-    /* Keep pan / pinch / wheel on the map — parent scroll must not steal gestures. */
+    /* Keep pan / pinch / wheel on the map — parent scroll must not steal gestures.
+       Mapbox sets touch-action via .mapboxgl-touch-* classes; force none so phone
+       web never falls back to pan-x/pan-y (which blocks JS pinch). */
     .discover-map-surface,
     .discover-map-surface .mapboxgl-map,
     .discover-map-surface .mapboxgl-canvas-container,
@@ -239,6 +245,10 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
     }
     .discover-map-host {
       z-index: 0;
+    }
+    /* Markers stay tappable but must not own multi-touch (pinch lands on canvas). */
+    .discover-map-surface .mapboxgl-marker {
+      touch-action: none;
     }
     .discover-map-surface .mapboxgl-canvas-container.mapboxgl-interactive,
     .discover-map-surface .mapboxgl-canvas.mapboxgl-interactive {
@@ -294,7 +304,33 @@ const INSECURE_GPS_NOTICE =
   'Live location on your phone needs a secure (HTTPS) link. Open menrush.com (HTTPS), then allow location in your browser.';
 
 const BROWSER_GPS_DENIED_NOTICE =
-  'Location is blocked. Allow it in browser or phone settings, then tap Allow location. Your exact pin is not shown publicly — only approximate distance.';
+  `${LOCATION_DENIED_NOT_INCOMPLETE} Location is blocked. ${SAFARI_LOCATION_HOW_TO}`;
+
+/**
+ * Re-assert Mapbox gesture handlers after layout thrash.
+ * Pinch zoom must stay enabled on phone web; disableRotation keeps pinch as zoom-only
+ * (rotation fighting the gesture feels like "pinch does nothing" on small screens).
+ */
+function assertMapGestures(map: mapboxgl.Map) {
+  map.dragPan.enable();
+  map.scrollZoom.enable();
+  map.touchZoomRotate.enable();
+  map.touchZoomRotate.disableRotation();
+  map.doubleClickZoom.enable();
+  map.boxZoom.enable();
+  map.keyboard.enable();
+  const canvas = map.getCanvas();
+  const container = map.getCanvasContainer();
+  if (canvas) {
+    canvas.style.pointerEvents = 'auto';
+    canvas.style.touchAction = 'none';
+  }
+  if (container) {
+    container.style.pointerEvents = 'auto';
+    container.style.touchAction = 'none';
+    container.classList.add('mapboxgl-touch-zoom-rotate', 'mapboxgl-touch-drag-pan');
+  }
+}
 
 /** Min interval between nearby roster API calls during live GPS. */
 const NEARBY_FETCH_MIN_MS = 20_000;
@@ -339,6 +375,8 @@ export const Discover = () => {
     lat != null && lng != null ? [lat, lng] : null,
   );
   const [mapLoaded, setMapLoaded] = useState(false);
+  /** Defer Mapbox init until Nearby list has painted (or timed out) so list/photos win the first paint. */
+  const [mapInitAllowed, setMapInitAllowed] = useState(false);
   /** Bumped whenever the basemap style is swapped so GL sources/layers (wiped by setStyle) re-add. */
   const [mapStyleVersion, setMapStyleVersion] = useState(0);
   const [locationNotice, setLocationNotice] = useState('');
@@ -466,7 +504,7 @@ export const Discover = () => {
     ) => {
       if (!options?.background) setLoading(true);
       try {
-        await usersAPI.updateLocation(latitude, longitude).catch(() => {});
+        // getNearby already persists lat/lng — skip a redundant updateLocation RTT.
         const apiFilters = buildNearbyApiFilters(filters);
         const res = await usersAPI.getNearby(latitude, longitude, r, apiFilters);
         setUsers(res.data);
@@ -497,10 +535,19 @@ export const Discover = () => {
         setError('Could not load nearby users.');
       } finally {
         setLoading(false);
+        // Allow Mapbox after the list request settles (success or fail).
+        setMapInitAllowed(true);
       }
     },
     [],
   );
+
+  // Safety: if Nearby never runs (no GPS), still allow map after a short idle.
+  useEffect(() => {
+    if (mapInitAllowed) return;
+    const t = window.setTimeout(() => setMapInitAllowed(true), 2500);
+    return () => window.clearTimeout(t);
+  }, [mapInitAllowed]);
 
   /** Drop every "allow location" surface the moment we have a usable pin. */
   const clearLocationPrompts = useCallback((latitude: number, longitude: number) => {
@@ -589,7 +636,7 @@ export const Discover = () => {
     [clearLocationPrompts, fetchNearbyUsers, mapCenter, radius, setLocation, discoveryFilters],
   );
 
-  // Customer-facing "enable location" — high accuracy then low-accuracy fallback.
+  // Customer-facing "enable location" — persist pin even if Nearby fetch fails.
   const handleEnableLocation = useCallback(() => {
     void (async () => {
       setLocationNotice('');
@@ -598,7 +645,19 @@ export const Discover = () => {
       const result = await requestDeviceLocation();
       if (!result.ok) {
         setNeedsLocationGate(true);
-        setLocationNotice(result.message);
+        setLocationNotice(
+          result.error === 'denied'
+            ? BROWSER_GPS_DENIED_NOTICE
+            : result.message,
+        );
+        setLoading(false);
+        return;
+      }
+      try {
+        await usersAPI.updateLocation(result.lat, result.lng);
+      } catch {
+        setNeedsLocationGate(true);
+        setLocationNotice('Got your position but could not save it. Check your connection and try again.');
         setLoading(false);
         return;
       }
@@ -889,22 +948,7 @@ export const Discover = () => {
     const revive = () => {
       try {
         map.resize();
-        map.dragPan.enable();
-        map.scrollZoom.enable();
-        map.touchZoomRotate.enable();
-        map.doubleClickZoom.enable();
-        map.boxZoom.enable();
-        map.keyboard.enable();
-        const canvas = map.getCanvas();
-        const container = map.getCanvasContainer();
-        if (canvas) {
-          canvas.style.pointerEvents = 'auto';
-          canvas.style.touchAction = 'none';
-        }
-        if (container) {
-          container.style.pointerEvents = 'auto';
-          container.style.touchAction = 'none';
-        }
+        assertMapGestures(map);
       } catch {
         /* map mid-teardown */
       }
@@ -1052,113 +1096,114 @@ export const Discover = () => {
     if (mapRef.current) return;
     // Never open Mapbox on a fake city. Wait for last-known or live GPS.
     if (mapCenter == null) return;
+    // Let Nearby list + thumbs paint before Mapbox competes for main-thread / bandwidth.
+    if (!mapInitAllowed) return;
 
     const startCenter = mapCenter;
-    mapboxgl.accessToken = mapboxToken!;
-    userMovedMapRef.current = false;
-    const map = new mapboxgl.Map({
-      container: host,
-      style: mapboxStyleForTheme(resolvedThemeNow()),
-      center: [startCenter[1], startCenter[0]],
-      zoom: 14,
-      attributionControl: false,
-      // Explicit — never inherit a broken/disabled handler state from prior mounts.
-      interactive: true,
-      dragPan: true,
-      dragRotate: false,
-      scrollZoom: true,
-      boxZoom: true,
-      doubleClickZoom: true,
-      touchZoomRotate: true,
-      touchPitch: false,
-      keyboard: true,
-      // One-finger pan + wheel zoom must work; page scroll is handled outside the map.
-      cooperativeGestures: false,
-    });
-    map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
-    map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right');
-    const geolocate = new mapboxgl.GeolocateControl({
-      positionOptions: { enableHighAccuracy: true, maximumAge: 15_000 },
-      trackUserLocation: false,
-      showUserHeading: false,
-    });
-    map.addControl(geolocate, 'bottom-right');
-    geolocate.on('geolocate', () => {
+    let cancelled = false;
+    let map: mapboxgl.Map | null = null;
+    let guardPinch: ((e: TouchEvent) => void) | null = null;
+    let resizeMap: (() => void) | null = null;
+
+    void (async () => {
+      const mapboxgl = await loadMapbox();
+      if (cancelled || !mapContainerRef.current || mapRef.current) return;
+
+      mapboxgl.accessToken = mapboxToken!;
       userMovedMapRef.current = false;
-    });
-    map.on('dragstart', () => {
-      userMovedMapRef.current = true;
-    });
-    map.on('zoomstart', (e: mapboxgl.MapEvent | Event) => {
-      // Only user gestures (wheel / buttons / pinch) — not style load.
-      if (e && typeof e === 'object' && 'originalEvent' in e && (e as { originalEvent?: Event }).originalEvent) {
+      map = new mapboxgl.Map({
+        container: host,
+        style: mapboxStyleForTheme(resolvedThemeNow()),
+        center: [startCenter[1], startCenter[0]],
+        zoom: 14,
+        attributionControl: false,
+        interactive: true,
+        dragPan: true,
+        dragRotate: false,
+        scrollZoom: true,
+        boxZoom: true,
+        doubleClickZoom: true,
+        touchZoomRotate: true,
+        touchPitch: false,
+        keyboard: true,
+        cooperativeGestures: false,
+      });
+      map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
+      map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right');
+      const geolocate = new mapboxgl.GeolocateControl({
+        positionOptions: { enableHighAccuracy: true, maximumAge: 15_000 },
+        trackUserLocation: false,
+        showUserHeading: false,
+      });
+      map.addControl(geolocate, 'bottom-right');
+      geolocate.on('geolocate', () => {
+        userMovedMapRef.current = false;
+      });
+      map.on('dragstart', () => {
         userMovedMapRef.current = true;
-      }
-    });
-    map.on('rotatestart', (e: mapboxgl.MapEvent | Event) => {
-      if (e && typeof e === 'object' && 'originalEvent' in e && (e as { originalEvent?: Event }).originalEvent) {
-        userMovedMapRef.current = true;
-      }
-    });
-    const resizeMap = () => map.resize();
-    map.on('load', () => {
-      // Re-assert handlers in case a prior layout left Mapbox in a dead state.
-      map.dragPan.enable();
-      map.scrollZoom.enable();
-      map.touchZoomRotate.enable();
-      map.doubleClickZoom.enable();
-      map.boxZoom.enable();
-      map.keyboard.enable();
-      const canvas = map.getCanvas();
-      const container = map.getCanvasContainer();
-      if (canvas) {
-        canvas.style.pointerEvents = 'auto';
-        canvas.style.touchAction = 'none';
-      }
-      if (container) {
-        container.style.pointerEvents = 'auto';
-        container.style.touchAction = 'none';
-      }
-      resizeMap();
-      setMapLoaded(true);
-    });
-    window.addEventListener('resize', resizeMap);
-    requestAnimationFrame(resizeMap);
-    window.setTimeout(resizeMap, 100);
-    window.setTimeout(resizeMap, 500);
+      });
+      map.on('zoomstart', (e: mapboxgl.MapEvent | Event) => {
+        if (e && typeof e === 'object' && 'originalEvent' in e && (e as { originalEvent?: Event }).originalEvent) {
+          userMovedMapRef.current = true;
+        }
+      });
+      map.on('rotatestart', (e: mapboxgl.MapEvent | Event) => {
+        if (e && typeof e === 'object' && 'originalEvent' in e && (e as { originalEvent?: Event }).originalEvent) {
+          userMovedMapRef.current = true;
+        }
+      });
+      resizeMap = () => map?.resize();
+      map.on('load', () => {
+        if (!map) return;
+        assertMapGestures(map);
+        resizeMap?.();
+        setMapLoaded(true);
+      });
+      guardPinch = (e: TouchEvent) => {
+        if (e.touches.length >= 2) e.preventDefault();
+      };
+      host.addEventListener('touchmove', guardPinch, { passive: false });
+      window.addEventListener('resize', resizeMap);
+      requestAnimationFrame(resizeMap);
+      window.setTimeout(resizeMap, 100);
+      window.setTimeout(resizeMap, 500);
 
-    const selfEl = document.createElement('div');
-    selfEl.style.width = '48px';
-    selfEl.style.height = '48px';
-    selfDotRef.current = selfEl;
-    const selfRoot = createRoot(selfEl);
-    selfRootRef.current = selfRoot;
-    const selfUser = useAuthStore.getState().user;
-    selfRoot.render(
-      <MapMarker
-        user={{
-          id: selfUser?.id ?? 'self',
-          name: selfUser?.name ?? 'You',
-          photo_url: selfUser?.photo_url,
-          age: selfUser?.age,
-          isPulsing: false,
-        }}
-        size={48}
-      />,
-    );
-    selfEl.style.cursor = 'pointer';
-    selfEl.setAttribute('aria-label', 'Open your profile');
-    selfEl.addEventListener('click', (e) => {
-      e.stopPropagation();
-      navigate('/profile');
-    });
-    selfMarkerRef.current = new mapboxgl.Marker({ element: selfEl })
-      .setLngLat([startCenter[1], startCenter[0]])
-      .addTo(map);
+      const selfEl = document.createElement('div');
+      selfEl.style.width = '48px';
+      selfEl.style.height = '48px';
+      selfDotRef.current = selfEl;
+      const selfRoot = createRoot(selfEl);
+      selfRootRef.current = selfRoot;
+      const selfUser = useAuthStore.getState().user;
+      selfRoot.render(
+        <MapMarker
+          user={{
+            id: selfUser?.id ?? 'self',
+            name: selfUser?.name ?? 'You',
+            photo_url: selfUser?.photo_url,
+            age: selfUser?.age,
+            isPulsing: false,
+          }}
+          size={48}
+        />,
+      );
+      selfEl.style.cursor = 'pointer';
+      selfEl.setAttribute('aria-label', 'Open your profile');
+      selfEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        navigate('/profile');
+      });
+      selfMarkerRef.current = new mapboxgl.Marker({ element: selfEl })
+        .setLngLat([startCenter[1], startCenter[0]])
+        .addTo(map);
 
-    mapRef.current = map;
+      mapRef.current = map;
+    })();
+
     return () => {
-      window.removeEventListener('resize', resizeMap);
+      cancelled = true;
+      if (guardPinch) host.removeEventListener('touchmove', guardPinch);
+      if (resizeMap) window.removeEventListener('resize', resizeMap);
       markersRef.current.forEach(({ marker, root }) => {
         marker.remove();
         setTimeout(() => root.unmount(), 0);
@@ -1169,9 +1214,12 @@ export const Discover = () => {
         setTimeout(() => root.unmount(), 0);
       });
       hotSpotMarkersRef.current.clear();
-      if (map.getLayer(RADIUS_CIRCLE_LAYER)) map.removeLayer(RADIUS_CIRCLE_LAYER);
-      if (map.getSource(RADIUS_CIRCLE_SOURCE)) map.removeSource(RADIUS_CIRCLE_SOURCE);
-      map.remove();
+      const live = mapRef.current;
+      if (live) {
+        if (live.getLayer(RADIUS_CIRCLE_LAYER)) live.removeLayer(RADIUS_CIRCLE_LAYER);
+        if (live.getSource(RADIUS_CIRCLE_SOURCE)) live.removeSource(RADIUS_CIRCLE_SOURCE);
+        live.remove();
+      }
       mapRef.current = null;
       selfMarkerRef.current = null;
       selfDotRef.current = null;
@@ -1183,7 +1231,7 @@ export const Discover = () => {
     // Depend on "has center" not every GPS tick — later moves use easeTo in applyLiveGps.
     // useLayoutEffect + isDesktopLayout: host is in the DOM before we construct Mapbox.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mapCenter coords intentionally excluded
-  }, [mapboxToken, tokenMissing, isDesktopLayout, mapCenter != null]);
+  }, [mapboxToken, tokenMissing, isDesktopLayout, mapCenter != null, mapInitAllowed]);
 
   // Keep the basemap in sync with explicit theme toggles while Discover stays mounted.
   // setStyle wipes GL sources/layers (not DOM markers) — bump mapStyleVersion on style.load
@@ -1262,6 +1310,8 @@ export const Discover = () => {
         isPulsing ? 52 : 44,
       );
 
+      const mapboxgl = getLoadedMapbox();
+      if (!mapboxgl) return;
       const marker = new mapboxgl.Marker({ element })
         .setLngLat(lngLat)
         .addTo(map);
@@ -1339,6 +1389,8 @@ export const Discover = () => {
 
       // Opens the in-map sheet (no navigation away) — see #67 acceptance criteria.
       const { element, root } = createHotSpotPinElement(pinData, () => setSelectedHotSpot(spot), 52);
+      const mapboxgl = getLoadedMapbox();
+      if (!mapboxgl) return;
       const marker = new mapboxgl.Marker({ element, anchor: 'center' })
         .setLngLat(lngLat)
         .addTo(map);
@@ -1450,6 +1502,10 @@ export const Discover = () => {
     else requestOpenPulse();
   }, [pulseUntil, handleStopPulse, requestOpenPulse]);
 
+  // Fields-complete users must not be dumped onto /profile/setup for missing GPS.
+  const showFinishProfileEmptyCta =
+    activationProfile != null && profileFieldBlockers(activationProfile).length > 0;
+
   return (
     <Layout>
       <DiscoveryShellPublisher
@@ -1460,7 +1516,10 @@ export const Discover = () => {
       />
       <h1 className="sr-only">Nearby discovery map</h1>
 
+      {/* Contain Discover in the viewport so body scroll cannot steal phone pinch-zoom. */}
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {!mobileMapExpanded ? (
+      <div className="shrink-0">
       <>
       {activationProfile ? (
         <ActivationBanner
@@ -1646,8 +1705,10 @@ export const Discover = () => {
         </div>
       ) : null}
       </>
+      </div>
       ) : null}
 
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Desktop: only mount when layout matches — never attach Mapbox to a display:none node. */}
       {isDesktopLayout ? (
       <div className="flex h-full min-h-0 flex-col px-6 py-5">
@@ -1677,7 +1738,7 @@ export const Discover = () => {
             </div>
           </details>
         ) : null}
-        {/* Map grows on expand; profile grid stays visible below (NordVPN desktop pattern). */}
+        {/* Map grows on expand; nearby profiles stay below — never Community under the map. */}
         <div
           className="discover-map-surface relative mb-3 min-h-[280px] shrink-0 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[#11100E] shadow-[var(--shadow-md)] transition-[height] duration-300 ease-[var(--ease-out)]"
           style={{ height: desktopMapHeightCss(desktopMapExpanded) }}
@@ -1718,21 +1779,67 @@ export const Discover = () => {
           ) : null}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div
+              data-testid="nearby-counts"
+              className="inline-flex min-h-[36px] items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
+            >
+              <p className="text-[11px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
+                {loading && nearbyCount === 0 ? (
+                  <span className="text-[var(--cream-muted)]">Scanning…</span>
+                ) : nearbyCount === 0 ? (
+                  <button
+                    type="button"
+                    onClick={handleRadiusCycle}
+                    data-testid="expand-radius-chip"
+                    className="text-[var(--copper)]"
+                  >
+                    EXPAND YOUR RADIUS →
+                  </button>
+                ) : (
+                  <>
+                    <span className="font-black text-[var(--copper)]">{nearbyCount}</span> NEARBY
+                    <span className="mx-1.5 text-[var(--cream-muted)]">·</span>
+                    <span className="font-black text-[var(--copper)]">{onlineCount}</span> ONLINE
+                  </>
+                )}
+              </p>
+            </div>
+            <div className="ml-auto">
+              <DiscoverySurfaceToggle active="map" />
+            </div>
+          </div>
           {!needsLocationGate ? (
-            <div data-testid="discover-community-panel">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h3 className="text-[12px] font-extrabold uppercase tracking-[0.14em] text-[#C4832A]">
-                  {ROUTE_LABELS.community}
-                </h3>
-                <p className="text-[11px] text-[var(--cream-muted)]">Short local text · free for all</p>
-              </div>
-              <CommunityFeed compact radiusKm={radius} />
+            <div data-testid="discover-nearby-panel">
+              <NearbyProfileGrid
+                users={displayUsers}
+                loading={loading}
+                onMatch={handleLike}
+                likedUserIds={likedUsers}
+                mutualUserIds={matchedUsers}
+                matchingUserId={matchingUserId}
+                onExpandRadius={handleRadiusCycle}
+                onFinishProfile={
+                  showFinishProfileEmptyCta ? () => navigate('/profile/setup') : undefined
+                }
+                onStartPulse={requestOpenPulse}
+                pulseOn={!!pulseUntil}
+                pulseBlockedReason={pulseBlockedReason}
+                onOpenHotSpots={() => navigate('/hot-spots')}
+                radiusLabel={formatRadiusControlLabel(radius)}
+                beyondRadiusCount={beyondRadiusCount}
+              />
+              <EventsRail
+                lat={lat}
+                lng={lng}
+                onSelect={(ev: EventDTO) => navigate(`/rooms/${ev.id}`)}
+              />
             </div>
           ) : null}
         </div>
       </div>
       ) : (
-      <div className="relative flex h-full min-h-0 flex-col">
+      <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
         {/* Map outside the scroll region so pan/pinch aren't stolen by page scroll. */}
         <div
           className={`discover-map-panel discover-map-surface relative w-full shrink-0 overflow-hidden border-b border-[var(--border-default)] bg-[#11100E] ${
@@ -1894,28 +2001,8 @@ export const Discover = () => {
                 </p>
               </div>
               <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
-              <div
-                className="ml-auto flex items-center overflow-hidden rounded-full border bg-[var(--bg-elevated)]/85 backdrop-blur-sm"
-                style={{ borderColor: 'var(--border-default)' }}
-                role="group"
-                aria-label="Discovery surface"
-              >
-                <span
-                  className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em]"
-                  style={{ background: 'var(--copper)', color: 'var(--bg-primary)' }}
-                  aria-current="page"
-                >
-                  {ROUTE_LABELS.map}
-                </span>
-                <Link
-                  to="/stream"
-                  className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] transition-colors hover:text-[var(--copper)]"
-                  style={{ color: 'var(--cream-soft)' }}
-                  aria-label={`Switch to ${ROUTE_LABELS.community}`}
-                  data-testid="discover-community-toggle"
-                >
-                  {ROUTE_LABELS.community}
-                </Link>
+              <div className="ml-auto">
+                <DiscoverySurfaceToggle active="map" />
               </div>
             </div>
 
@@ -1979,7 +2066,9 @@ export const Discover = () => {
                   mutualUserIds={matchedUsers}
                   matchingUserId={matchingUserId}
                   onExpandRadius={handleRadiusCycle}
-                  onFinishProfile={() => navigate('/profile/setup')}
+                  onFinishProfile={
+                    showFinishProfileEmptyCta ? () => navigate('/profile/setup') : undefined
+                  }
                   onStartPulse={requestOpenPulse}
                   pulseOn={!!pulseUntil}
                   pulseBlockedReason={pulseBlockedReason}
@@ -1998,6 +2087,8 @@ export const Discover = () => {
         </div>
       </div>
       )}
+      </div>
+      </div>
 
       <PulseFab
         isPulsing={!!pulseUntil}
