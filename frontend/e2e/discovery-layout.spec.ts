@@ -73,10 +73,11 @@ test('discover map canvas is not covered by a blocking overlay', async ({ browse
   const page = await ctx.newPage();
   await page.goto('/discover');
 
-  // Expand map if a show-map bar is present.
-  const showMap = page.getByTestId('map-show-bar');
-  if (await showMap.isVisible().catch(() => false)) {
-    await showMap.click();
+  // Expand map via Grid→Map control (Brand: home starts on Grid).
+  const mapToggle = page.getByTestId('nearby-map-grid-toggle');
+  await expect(mapToggle).toBeVisible({ timeout: 15_000 });
+  if ((await mapToggle.innerText()).trim().toLowerCase() === 'map') {
+    await mapToggle.click();
   }
 
   const host = page.getByTestId('discover-map-canvas-host');

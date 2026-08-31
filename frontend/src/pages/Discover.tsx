@@ -19,14 +19,13 @@ import { ProfileDrawer } from '../components/ProfileDrawer';
 import { HotSpotSheet } from '../components/HotSpotSheet';
 import { createMapMarkerElement, MapMarker } from '../components/MapMarker';
 import { createHotSpotPinElement, HotSpotPin } from '../components/HotSpotPin';
-import { profilePathForUser } from '../lib/profileLinks';
 
 import { ActivationBanner } from '../components/ActivationBanner';
 import { DiscoveryFilterPills } from '../components/DiscoveryFilterPills';
 import { DiscoveryFilterPanel } from '../components/DiscoveryFilterPanel';
 import { MoreFiltersDrawer } from '../components/MoreFiltersDrawer';
 import { NearbyProfileGrid } from '../components/NearbyProfileGrid';
-import { DiscoverySurfaceToggle } from '../components/DiscoverySurfaceToggle';
+import { NearbyMapGridToggle, readNearbyView, writeNearbyView, type NearbyView } from '../components/NearbyMapGridToggle';
 import { DiscoveryShellPublisher } from '../context/DiscoveryShellContext';
 import type { ProfileSetupSnapshot } from '../lib/profileSetup';
 import { profileFieldBlockers } from '../lib/profileSetup';
@@ -65,16 +64,6 @@ type MapPanelMode = 'hidden' | 'default' | 'expanded';
 const MAP_PANEL_STORAGE_KEY = 'menrush_nearby_map_panel';
 const DESKTOP_MAP_EXPAND_KEY = 'menrush_desktop_map_expanded';
 const DISCOVER_RADIUS_KEY = 'menrush_default_radius_km';
-
-function readMapPanelMode(): MapPanelMode {
-  try {
-    const raw = localStorage.getItem(MAP_PANEL_STORAGE_KEY);
-    if (raw === 'hidden' || raw === 'default' || raw === 'expanded') return raw;
-  } catch {
-    /* ignore */
-  }
-  return 'default';
-}
 
 function readDesktopMapExpanded(): boolean {
   try {
@@ -359,7 +348,21 @@ export const Discover = () => {
     }
     return DEFAULT_RADIUS_KM;
   });
-  const [mapPanelMode, setMapPanelMode] = useState<MapPanelMode>(() => readMapPanelMode());
+  const [nearbyView, setNearbyView] = useState<NearbyView>(() => readNearbyView());
+  const [mapPanelMode, setMapPanelMode] = useState<MapPanelMode>(() => {
+    // Keep Grid/Map surface and map panel height in sync on first paint.
+    if (readNearbyView() === 'grid') return 'hidden';
+    const saved = (() => {
+      try {
+        const raw = localStorage.getItem(MAP_PANEL_STORAGE_KEY);
+        if (raw === 'hidden' || raw === 'default' || raw === 'expanded') return raw;
+      } catch {
+        /* ignore */
+      }
+      return 'default' as MapPanelMode;
+    })();
+    return saved === 'hidden' ? 'default' : saved;
+  });
   const [desktopMapExpanded, setDesktopMapExpanded] = useState(readDesktopMapExpanded);
   const mapDragRef = useRef<{ startY: number; mode: MapPanelMode } | null>(null);
   const [discoveryFilters, setDiscoveryFilters] = useState<DiscoveryFilterState>(DEFAULT_DISCOVERY_FILTERS);
@@ -895,12 +898,23 @@ export const Discover = () => {
 
   const setMapPanel = useCallback((mode: MapPanelMode) => {
     setMapPanelMode(mode);
+    const view: NearbyView = mode === 'hidden' ? 'grid' : 'map';
+    setNearbyView(view);
+    writeNearbyView(view);
     try {
       localStorage.setItem(MAP_PANEL_STORAGE_KEY, mode);
     } catch {
       /* ignore */
     }
   }, []);
+
+  const setNearbySurface = useCallback(
+    (view: NearbyView) => {
+      if (view === 'grid') setMapPanel('hidden');
+      else setMapPanel(mapPanelMode === 'expanded' ? 'expanded' : 'default');
+    },
+    [mapPanelMode, setMapPanel],
+  );
 
   const toggleDesktopMapExpanded = useCallback(() => {
     setDesktopMapExpanded((prev) => {
@@ -1230,8 +1244,16 @@ export const Discover = () => {
     };
     // Depend on "has center" not every GPS tick — later moves use easeTo in applyLiveGps.
     // useLayoutEffect + isDesktopLayout: host is in the DOM before we construct Mapbox.
+    // Desktop Grid-first: map host only mounts when nearbyView === 'map'.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mapCenter coords intentionally excluded
-  }, [mapboxToken, tokenMissing, isDesktopLayout, mapCenter != null, mapInitAllowed]);
+  }, [
+    mapboxToken,
+    tokenMissing,
+    isDesktopLayout,
+    mapCenter != null,
+    mapInitAllowed,
+    isDesktopLayout ? nearbyView === 'map' : true,
+  ]);
 
   // Keep the basemap in sync with explicit theme toggles while Discover stays mounted.
   // setStyle wipes GL sources/layers (not DOM markers) — bump mapStyleVersion on style.load
@@ -1303,10 +1325,7 @@ export const Discover = () => {
 
       const { element, root } = createMapMarkerElement(
         markerUser,
-        () =>
-          navigate(
-            profilePathForUser(user.id, useAuthStore.getState().user?.id),
-          ),
+        () => setSelectedUser(user),
         isPulsing ? 52 : 44,
       );
 
@@ -1325,7 +1344,7 @@ export const Discover = () => {
       setTimeout(() => root.unmount(), 0);
       markersRef.current.delete(userId);
     });
-  }, [users, mapLoaded, peopleLayerOn, discoveryFilters, navigate]);
+  }, [users, mapLoaded, peopleLayerOn, discoveryFilters]);
 
   // Cruise pins (dim when empty, solid when check-ins present) — hidden entirely
   // when the Cruise layer is off, same visibleIds-empty-set pattern as People above.
@@ -1475,7 +1494,6 @@ export const Discover = () => {
   });
 
   const displayUsers = applyDiscoveryClientFilters(sortedUsers, discoveryFilters);
-  const onlineCount = displayUsers.filter((u) => u.online).length;
   const nearbyCount = displayUsers.length;
 
   // Expanded mobile map must be near-fullscreen — dismissible banners above it push
@@ -1712,13 +1730,18 @@ export const Discover = () => {
       {/* Desktop: only mount when layout matches — never attach Mapbox to a display:none node. */}
       {isDesktopLayout ? (
       <div className="flex h-full min-h-0 flex-col px-6 py-5">
-        {!desktopMapExpanded ? (
-          <div className="mb-3 flex shrink-0 flex-wrap items-center gap-3">
-            <h2 className="flex-1 text-2xl font-extrabold text-[var(--cream)]">Nearby</h2>
-            <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
-          </div>
-        ) : null}
-        {!desktopMapExpanded && !needsLocationGate ? (
+        <div className="mb-3 flex shrink-0 flex-wrap items-center gap-3">
+          <h2 className="flex-1 text-2xl font-extrabold text-[var(--cream)]">
+            {loading && nearbyCount === 0
+              ? 'Nearby'
+              : nearbyCount === 0
+                ? 'Nearby'
+                : `${nearbyCount} ${nearbyCount === 1 ? 'man' : 'men'} nearby`}
+          </h2>
+          <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
+          <NearbyMapGridToggle view={nearbyView} onChange={setNearbySurface} />
+        </div>
+        {nearbyView === 'grid' && !needsLocationGate ? (
           <details className="mb-3 shrink-0 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/70 px-4 py-2.5">
             <summary className="cursor-pointer text-[12px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]">
               Mood & filters
@@ -1738,7 +1761,8 @@ export const Discover = () => {
             </div>
           </details>
         ) : null}
-        {/* Map grows on expand; nearby profiles stay below — never Community under the map. */}
+        {/* Map is the other Nearby view — not the default home. */}
+        {nearbyView === 'map' ? (
         <div
           className="discover-map-surface relative mb-3 min-h-[280px] shrink-0 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[#11100E] shadow-[var(--shadow-md)] transition-[height] duration-300 ease-[var(--ease-out)]"
           style={{ height: desktopMapHeightCss(desktopMapExpanded) }}
@@ -1778,42 +1802,38 @@ export const Discover = () => {
             </p>
           ) : null}
         </div>
+        ) : null}
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <div
-              data-testid="nearby-counts"
-              className="inline-flex min-h-[36px] items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
-            >
-              <p className="text-[11px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
-                {loading && nearbyCount === 0 ? (
-                  <span className="text-[var(--cream-muted)]">Scanning…</span>
-                ) : nearbyCount === 0 ? (
-                  <button
-                    type="button"
-                    onClick={handleRadiusCycle}
-                    data-testid="expand-radius-chip"
-                    className="text-[var(--copper)]"
-                  >
-                    EXPAND YOUR RADIUS →
-                  </button>
-                ) : (
-                  <>
-                    <span className="font-black text-[var(--copper)]">{nearbyCount}</span> NEARBY
-                    <span className="mx-1.5 text-[var(--cream-muted)]">·</span>
-                    <span className="font-black text-[var(--copper)]">{onlineCount}</span> ONLINE
-                  </>
-                )}
-              </p>
-            </div>
-            <div className="ml-auto">
-              <DiscoverySurfaceToggle active="map" />
-            </div>
-          </div>
           {!needsLocationGate ? (
             <div data-testid="discover-nearby-panel">
+              <div
+                data-testid="nearby-counts"
+                className="mb-3 inline-flex min-h-[36px] items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
+              >
+                <p className="text-[11px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
+                  {loading && nearbyCount === 0 ? (
+                    <span className="text-[var(--cream-muted)]">Scanning…</span>
+                  ) : nearbyCount === 0 ? (
+                    <button
+                      type="button"
+                      onClick={handleRadiusCycle}
+                      data-testid="expand-radius-chip"
+                      className="text-[var(--copper)]"
+                    >
+                      Expand your radius →
+                    </button>
+                  ) : (
+                    <>
+                      <span className="font-black text-[var(--copper)]">{nearbyCount}</span>
+                      {nearbyCount === 1 ? ' man nearby' : ' men nearby'}
+                    </>
+                  )}
+                </p>
+              </div>
               <NearbyProfileGrid
                 users={displayUsers}
                 loading={loading}
+                onSelect={setSelectedUser}
                 onMatch={handleLike}
                 likedUserIds={likedUsers}
                 mutualUserIds={matchedUsers}
@@ -1957,21 +1977,6 @@ export const Discover = () => {
         </div>
 
         {/* When map hidden: show bar to pull it back */}
-        {mapPanelMode === 'hidden' ? (
-          <button
-            type="button"
-            data-testid="map-show-bar"
-            onClick={() => setMapPanel('default')}
-            onPointerDown={onMapHandlePointerDown}
-            onPointerUp={onMapHandlePointerUp}
-            className="flex w-full shrink-0 items-center justify-center gap-2 border-b border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-4 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[var(--copper)]"
-          >
-            <span className="h-1 w-8 rounded-full bg-[var(--copper)]/60" aria-hidden />
-            Show map
-            <span className="h-1 w-8 rounded-full bg-[var(--copper)]/60" aria-hidden />
-          </button>
-        ) : null}
-
         <div className="min-h-0 flex-1 overflow-y-auto pb-24">
           <div className="space-y-3 px-4 pt-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -1989,20 +1994,19 @@ export const Discover = () => {
                       data-testid="expand-radius-chip"
                       className="text-[var(--copper)]"
                     >
-                      EXPAND YOUR RADIUS →
+                      Expand radius →
                     </button>
                   ) : (
                     <>
-                      <span className="font-black text-[var(--copper)]">{nearbyCount}</span> NEARBY
-                      <span className="mx-1.5 text-[var(--cream-muted)]">·</span>
-                      <span className="font-black text-[var(--copper)]">{onlineCount}</span> ONLINE
+                      <span className="font-black text-[var(--copper)]">{nearbyCount}</span>
+                      {nearbyCount === 1 ? ' man nearby' : ' men nearby'}
                     </>
                   )}
                 </p>
               </div>
               <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
-              <div className="ml-auto">
-                <DiscoverySurfaceToggle active="map" />
+              <div className="ml-auto flex items-center gap-2">
+                <NearbyMapGridToggle view={nearbyView} onChange={setNearbySurface} />
               </div>
             </div>
 
@@ -2061,6 +2065,7 @@ export const Discover = () => {
                 <NearbyProfileGrid
                   users={displayUsers}
                   loading={loading}
+                  onSelect={setSelectedUser}
                   onMatch={handleLike}
                   likedUserIds={likedUsers}
                   mutualUserIds={matchedUsers}

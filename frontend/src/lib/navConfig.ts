@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import { ROUTE_LABELS } from './routeLabels';
 import {
   IconChat,
+  IconCommunity,
   IconDiscover,
   IconEvents,
   IconHotSpots,
@@ -36,6 +37,23 @@ export function getNavItems(): NavItem[] {
       desktopNav: true,
     },
     {
+      // Own destination — not a mode of Map. Between Nearby and Chat.
+      to: '/stream',
+      label: ROUTE_LABELS.community,
+      Icon: IconCommunity,
+      mobileTab: true,
+      desktopNav: true,
+    },
+    {
+      to: '/conversations',
+      label: ROUTE_LABELS.messages,
+      shortLabel: 'Chat',
+      Icon: IconChat,
+      badgeKey: 'messages',
+      mobileTab: true,
+      desktopNav: true,
+    },
+    {
       to: '/events',
       label: ROUTE_LABELS.events,
       Icon: IconEvents,
@@ -54,15 +72,6 @@ export function getNavItems(): NavItem[] {
       label: ROUTE_LABELS.matches,
       Icon: IconMatches,
       badgeKey: 'matches',
-      mobileTab: true,
-      desktopNav: true,
-    },
-    {
-      to: '/conversations',
-      label: ROUTE_LABELS.messages,
-      shortLabel: 'Chat',
-      Icon: IconChat,
-      badgeKey: 'messages',
       mobileTab: true,
       desktopNav: true,
     },
@@ -121,6 +130,9 @@ export function isNavActive(pathname: string, path: string): boolean {
   }
   if (path === '/hot-spots') {
     return pathname === '/hot-spots' || pathname.startsWith('/hot-spots/');
+  }
+  if (path === '/stream') {
+    return pathname === '/stream' || pathname.startsWith('/stream/');
   }
   return pathname === path || pathname.startsWith(`${path}/`);
 }
