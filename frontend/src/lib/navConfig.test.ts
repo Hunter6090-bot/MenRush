@@ -14,6 +14,9 @@ describe('navConfig — Video rooms first-class chrome', () => {
 
     expect(rooms?.label).toBe(ROUTE_LABELS.rooms);
     expect(rooms?.label).toBe('Video rooms');
+    // Phone tab must show Video rooms — never shorten to Rooms.
+    expect(rooms?.shortLabel).toBeUndefined();
+    expect(rooms?.shortLabel).not.toBe('Rooms');
     expect(rooms?.mobileTab).toBe(true);
     expect(rooms?.desktopNav).toBe(true);
     expect(rooms?.mobileMore).toBeFalsy();
@@ -22,8 +25,9 @@ describe('navConfig — Video rooms first-class chrome', () => {
     expect(mobileOrder.indexOf('/conversations')).toBeLessThan(mobileOrder.indexOf('/rooms'));
     expect(mobileOrder).toEqual([
       '/discover',
-      '/matches',
+      '/stream',
       '/conversations',
+      '/matches',
       '/rooms',
       '/profile',
     ]);

@@ -37,8 +37,29 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
 
   await expect(page.getByRole('heading', { name: /What you get/i })).toBeVisible();
   await expect(page.getByRole('heading', { name: /^Nearby$/i })).toBeVisible();
-  await expect(page.getByRole('heading', { name: /^Rooms$/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Video rooms$/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Rooms$/i })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: /^Matches$/i })).toBeVisible();
+
+  // Period lock on card bodies — no em dash, en dash, or hyphen-as-aside (same as hero overline).
+  await expect(
+    page.getByText(
+      'See who is around you right now. Live proximity, not a stack of stale profiles.',
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Mutual interest opens chat. Direct when it is real. No endless maybe.'),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Group spaces for men who already know the vibe. Less noise. More signal.'),
+  ).toBeVisible();
+
+  // Early waitlist Premium fact stays; invite-only-until-open contradicts Sign up free / UK BETA OPEN.
+  await expect(page.getByText(/30 days of Premium/i)).toBeVisible();
+  await expect(page.getByText(/1 October 2026/i)).toBeVisible();
+  await expect(page.getByText(/UK first/i)).toBeVisible();
+  await expect(page.getByText(/invite-only until/i)).toHaveCount(0);
+  await expect(page.getByText(/Invite-only until then/i)).toHaveCount(0);
 
   for (const pattern of FORBIDDEN_CTA_PATTERNS) {
     await expect(page.getByRole('button', { name: pattern })).toHaveCount(0);
