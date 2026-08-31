@@ -26,6 +26,12 @@ import { parseLocationPayload } from '../lib/locationMessage';
 import { profilePathForUser } from '../lib/profileLinks';
 import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 import { SoftBlurMedia, shouldBlurMedia } from '../components/SoftBlurMedia';
+import {
+  appendUniqueMessage,
+  CHAT_LIVE_REFRESH_EVENT,
+  conversationFingerprint,
+  mergeConversationRows,
+} from '../lib/pushDeepLink';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
 interface Message extends Partial<MessageDTO> {
@@ -138,6 +144,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const [otherUser, setOtherUser] = useState<OtherUser | null>(null);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -177,13 +184,43 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const recordStreamRef = useRef<MediaStream | null>(null);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const loadConversation = useCallback((opts?: { replace?: boolean }) => {
+    if (!otherId) return;
+    messagesAPI
+      .getConversation(otherId)
+      .then((r) => {
+        const rows = Array.isArray(r.data) ? (r.data as Message[]) : [];
+        setMessages((prev) => {
+          const next = opts?.replace ? rows : mergeConversationRows(prev, rows);
+          if (
+            !opts?.replace &&
+            conversationFingerprint(prev) === conversationFingerprint(next)
+          ) {
+            return prev;
+          }
+          return next;
+        });
+      })
+      .catch(() => {
+        if (opts?.replace) setMessages([]);
+      });
+  }, [otherId]);
+
   useEffect(() => {
     if (!otherId) return;
-    messagesAPI.getConversation(otherId).then((r) => setMessages(r.data)).catch(() => {});
-    usersAPI.getProfile(otherId).then((r) => setOtherUser(r.data)).catch(() => {});
+    loadConversation({ replace: true });
+    usersAPI
+      .getProfile(otherId)
+      .then((r) => {
+        const data = r.data as OtherUser | null;
+        if (data && typeof data === 'object' && typeof (data as OtherUser).name === 'string') {
+          setOtherUser(data as OtherUser);
+        }
+      })
+      .catch(() => {});
     meetAPI.getState(otherId).then((r) => setMeetState(r.data)).catch(() => setMeetState(null));
     useUnreadStore.getState().clearUnreadFrom(otherId);
-  }, [otherId]);
+  }, [otherId, loadConversation]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -198,12 +235,54 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     return () => window.clearInterval(id);
   }, [otherId]);
 
+  // Live delivery while sitting in the thread: iPhone PWAs often keep the page
+  // visible but miss the Socket.IO event (suspend / silent disconnect). Remount
+  // fixed it because getConversation ran again — poll so we do not need leave/reenter.
+  useEffect(() => {
+    if (!otherId) return;
+    const OPEN_THREAD_POLL_MS = 2500;
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      loadConversation();
+    };
+    const id = window.setInterval(tick, OPEN_THREAD_POLL_MS);
+    return () => window.clearInterval(id);
+  }, [otherId, loadConversation]);
+
+  // iPhone PWA: also refetch on visibility / reconnect / push hint (faster than poll).
+  useEffect(() => {
+    if (!otherId) return;
+
+    const refreshIfVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      loadConversation();
+    };
+
+    const onLiveRefresh = (event: Event) => {
+      const detail = (event as CustomEvent<{ otherId?: string | null }>).detail;
+      if (detail?.otherId && detail.otherId !== otherId) return;
+      refreshIfVisible();
+    };
+
+    document.addEventListener('visibilitychange', refreshIfVisible);
+    window.addEventListener('pageshow', refreshIfVisible);
+    window.addEventListener(CHAT_LIVE_REFRESH_EVENT, onLiveRefresh as EventListener);
+    socket?.on('connect', refreshIfVisible);
+
+    return () => {
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+      window.removeEventListener('pageshow', refreshIfVisible);
+      window.removeEventListener(CHAT_LIVE_REFRESH_EVENT, onLiveRefresh as EventListener);
+      socket?.off('connect', refreshIfVisible);
+    };
+  }, [otherId, loadConversation, socket]);
+
   useEffect(() => {
     if (!socket || !otherId) return;
 
     const onMessage = (data: Message) => {
       if (data.sender_id === otherId || data.receiver_id === otherId) {
-        setMessages((prev) => [...prev, data]);
+        setMessages((prev) => appendUniqueMessage(prev, data));
       }
     };
     const onTyping = ({ typing }: { typing: boolean }) => setIsOtherTyping(typing);
@@ -502,38 +581,72 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const sendTextMessage = useCallback(
     async (raw: string) => {
       const current = raw.trim();
-      if (!current || !otherId || !user || sending) return;
+      if (!current || !otherId || !user || sendingRef.current) return;
 
       emitTyping(false);
       if (typingTimer.current) clearTimeout(typingTimer.current);
 
       inputValueRef.current = '';
       setInput('');
+      sendingRef.current = true;
       setSending(true);
-      inputRef.current?.focus();
+      setMediaError('');
+      // Keep focus for desktop; on mobile avoid forced refocus which fights the keyboard.
+      if (!window.matchMedia('(pointer: coarse)').matches) {
+        inputRef.current?.focus();
+      }
 
       try {
         const res = await messagesAPI.sendMessage(otherId, current);
         const saved: Message = res.data;
-        setMessages((prev) => [...prev, saved]);
+        setMessages((prev) => (prev.some((m) => m.id === saved.id) ? prev : [...prev, saved]));
         trackEventOnce(
           'first_message_success',
           { kind: 'text', surface: 'direct_message' },
           'first_message_success',
         );
-      } catch {
+      } catch (err: unknown) {
         inputValueRef.current = current;
         setInput(current);
+        const data = (err as { response?: { data?: { error?: string; code?: string } } })?.response
+          ?.data;
+        const code = data?.code;
+        const msg = data?.error;
+        if (code === 'match_required' || /mutual match/i.test(msg || '')) {
+          setMediaError('You need a mutual match before messaging.');
+        } else if (code === 'interaction_blocked' || /blocked/i.test(msg || '')) {
+          setMediaError('You cannot message this person.');
+        } else if (
+          (err as { code?: string })?.code === 'ECONNABORTED' ||
+          /timeout/i.test(String((err as { message?: string })?.message || ''))
+        ) {
+          setMediaError('Send timed out — check your connection and try again.');
+        } else {
+          setMediaError(msg || 'Could not send message. Try again.');
+        }
       } finally {
+        sendingRef.current = false;
         setSending(false);
       }
     },
-    [otherId, user, sending, emitTyping],
+    [otherId, user, emitTyping],
   );
 
   const handleSend = async (e?: React.FormEvent | React.KeyboardEvent) => {
     e?.preventDefault?.();
-    await sendTextMessage(inputValueRef.current ?? input);
+    await sendTextMessage(inputValueRef.current || input);
+  };
+
+  /**
+   * Fire send on pointerdown (touch/pen) so mobile Chrome keyboard dismiss
+   * cannot steal the tap — same failure mode on Android Chrome and iOS.
+   * Mouse left-clicks still use the normal click → submit path.
+   */
+  const handleSendPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    if (e.pointerType === 'mouse') return;
+    e.preventDefault();
+    void handleSend(e as unknown as React.FormEvent);
   };
 
   /** Direct, premium openers — never creepy. 18+ consent-first tone. */
@@ -543,11 +656,24 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     'What are you looking for tonight?',
   ] as const;
 
+  /**
+   * Desktop Enter + Android Gboard quirks: Chrome often reports IME keys as
+   * `Unidentified` / keyCode 229, or routes Return through beforeinput
+   * `insertLineBreak` without a matching Enter keydown.
+   */
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend(e);
+      void handleSend(e);
     }
+  };
+
+  const handleBeforeInput = (e: React.FormEvent<HTMLInputElement>) => {
+    const ne = e.nativeEvent as InputEvent;
+    if (ne.inputType !== 'insertLineBreak' && ne.inputType !== 'insertParagraph') return;
+    e.preventDefault();
+    void handleSend();
   };
 
   const handleWithdrawMedia = async (messageId: string) => {
@@ -1032,7 +1158,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
       {/* ── Input bar ─────────────────────────────────────────────────────── */}
       <div
-        className="flex-shrink-0 border-t border-[var(--border-default)] px-4 py-3 bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl"
+        className="flex-shrink-0 border-t border-[var(--border-default)] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl relative z-[70]"
+        data-testid="chat-composer"
       >
         {mediaError && (
           <div
@@ -1157,8 +1284,12 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
+                onBeforeInput={handleBeforeInput}
                 placeholder="Say something direct."
                 autoComplete="off"
+                enterKeyHint="send"
+                inputMode="text"
+                data-testid="chat-text-input"
                 className="w-full text-sm px-5 py-3 rounded-full focus:outline-none transition-all duration-200"
                 style={{
                   background: 'var(--bg-card)',
@@ -1177,12 +1308,16 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               />
             </div>
 
-            {/* Voice note OR Send — switch based on whether there's text */}
-            {input.trim() ? (
+            {/* Voice note OR Send — keep Send visible while in-flight so a
+                keyboard-dismiss ghost tap cannot land on Mic after input clears
+                (Android Chrome + iOS). */}
+            {input.trim() || sending ? (
               <button
                 type="submit"
-                disabled={!input.trim() || sending}
+                disabled={(!input.trim() && !sending) || sending}
                 aria-label="Send message"
+                data-testid="chat-send-button"
+                onPointerDown={handleSendPointerDown}
                 className="flex-shrink-0 rounded-full px-5 py-2.5 text-sm font-bold mr-cta-gradient transition-all duration-200 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed min-h-[46px]"
               >
                 {sending ? <PulseRing size={16} label="Sending" /> : 'Send'}
@@ -1723,7 +1858,27 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
 
   // Permanent image → inline, always available.
   if (!isDisappearing) {
-    if (!url) return null;
+    if (!url) {
+      // Socket payloads can arrive before a signed URL is usable; never paint
+      // an empty hole — show the caption/fallback until refetch fills media_url.
+      return (
+        <div
+          className="px-4 py-3 text-sm"
+          data-testid="image-pending"
+          style={{
+            background: isMine
+              ? 'linear-gradient(135deg, #C4832A, #A45E18)'
+              : 'var(--bg-card)',
+            color: isMine ? '#FFF5E6' : 'var(--cream)',
+            border: isMine ? 'none' : '1px solid var(--border-default)',
+            borderRadius: radius,
+            minWidth: 160,
+          }}
+        >
+          {msg.message || '📷 Photo'}
+        </div>
+      );
+    }
     const blurred = shouldBlurMedia(msg.media_clear);
     return (
       <div className="flex flex-col items-end gap-1">

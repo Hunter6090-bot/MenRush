@@ -78,26 +78,29 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 
     const io = req.app.get('io');
     io.to(`user:${data.receiver_id}`).emit('message', message);
+    // Respond before fan-out so mobile clients aren't blocked on notify/push latency.
+    res.status(201).json(message);
+
     pushNewMessage(data.receiver_id, message.sender_name ?? '', req.userId!, message.message);
 
     const preview =
       message.message.length > 80 ? `${message.message.slice(0, 77)}…` : message.message;
-    try {
-      await notificationService.notify(io, {
+    void notificationService
+      .notify(io, {
         userId: data.receiver_id,
         actorId: req.userId!,
         type: 'message',
         title: `New message from ${message.sender_name ?? 'someone'}`,
         body: preview,
         linkPath: `/messages/${req.userId}`,
-      });
-    } catch (notifyErr) {
-      console.error('[notification:message]', notifyErr);
+      })
+      .catch((notifyErr) => console.error('[notification:message]', notifyErr));
+  } catch (error: unknown) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
     }
-
-    res.status(201).json(message);
-  } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    const message = error instanceof Error ? error.message : 'Could not send message';
+    res.status(400).json({ error: message });
   }
 });
 
@@ -178,6 +181,9 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
       'message',
       await messageService.forViewer(message, receiver_id),
     );
+    // Respond before fan-out so the sender is not blocked on notify/push.
+    res.status(201).json(message);
+
     const pushBody =
       kind === 'image' ? '\u{1F4F7} Photo' : kind === 'video' ? '\u{1F3AC} Video' : '\u{1F3A4} Voice note';
     pushNewMessage(
@@ -187,8 +193,8 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
       pushBody,
     );
 
-    try {
-      await notificationService.notify(io, {
+    void notificationService
+      .notify(io, {
         userId: receiver_id,
         actorId: req.userId!,
         type: kind === 'image' ? 'photo' : 'voice',
@@ -200,12 +206,8 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
               : `${message.sender_name ?? 'Someone'} sent a voice note`,
         body: caption || undefined,
         linkPath: `/messages/${req.userId}`,
-      });
-    } catch (notifyErr) {
-      console.error('[notification:media]', notifyErr);
-    }
-
-    res.status(201).json(message);
+      })
+      .catch((notifyErr) => console.error('[notification:media]', notifyErr));
   } catch (error: any) {
     // Roll back the upload if the DB insert / match check fails.
     try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
@@ -262,8 +264,12 @@ router.get('/conversation/:otherId', async (req: AuthRequest, res: Response) => 
   try {
     const messages = await messageService.getConversation(req.userId!, req.params.otherId);
     res.json(messages);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
+    const message = error instanceof Error ? error.message : 'Could not load conversation';
+    res.status(500).json({ error: message });
   }
 });
 

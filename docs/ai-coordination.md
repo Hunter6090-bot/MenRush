@@ -47,7 +47,8 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
-| UK beta-open landing hero (LIVE NOW — Sign up free → /register) | PR `cursor/uk-beta-open-landing-hero-77cf` | — | Cursor cloud — hero only; remove Oct date + email waitlist; logo/headline/bg unchanged; do not touch #158/#160/#150/#97–#99 / Social Studio / pride |
+| P0 beta: chat reply/send + blank profile + crash + push-tap + open-thread media + notif tray route | PR `#158` `cursor/p0-chat-profile-beta-0e36` | — | Cursor cloud — merged main (UK beta landing kept); navigate-first tap-to-chat; open-thread poll; SW tag recovery; owner asked deploy; #97–#99 parked; timings #160 |
+| UK beta-open landing hero (LIVE NOW — Sign up free → /register) | PR `#161` on main | — | Cursor cloud — hero only; remove Oct date + email waitlist; logo/headline/bg unchanged; do not touch #158/#160/#150/#97–#99 / Social Studio / pride |
 | Mutual profile: Pass · Open chat · Unmatch (drop duplicate Message) | PR `cursor/mutual-profile-unmatch-fd7a` | — | Cursor cloud — DELETE /users/like/:id removes both like dirs; ProfileView only; do not touch #97–#99 / rooms / public copy |
 | Profile tag pick-one / pick-several UX cue | PR `cursor/profile-tag-pick-cue-4040` | — | Cursor cloud — cue only under each tag subsection; selection rules unchanged; do not touch #97–#99 |
 | Discover Map\|Community parity + phone pinch zoom | PR `cursor/discover-map-community-parity-2402` | — | Cursor cloud — desktop under-map = Nearby (not Community); shared MAP\|COMMUNITY tabs; phone map pinch via touch-action/overflow + disableRotation; do not touch #97–#99 |
