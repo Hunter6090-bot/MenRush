@@ -727,6 +727,17 @@ export interface CommunityPostDTO {
   author_photo_url: string | null;
   distance_km: string;
   distance_label: string;
+  comment_count?: number;
+}
+
+export interface CommunityCommentDTO {
+  id: string;
+  post_id: string;
+  user_id: string;
+  body: string;
+  created_at: string;
+  author_name: string;
+  author_photo_url: string | null;
 }
 
 export const communityAPI = {
@@ -736,6 +747,12 @@ export const communityAPI = {
     }),
   createPost: (body: string) =>
     apiClient.post<{ post: CommunityPostDTO }>('/community/posts', { body }),
+  listComments: (postId: string) =>
+    apiClient.get<{ comments: CommunityCommentDTO[] }>(`/community/posts/${postId}/comments`),
+  createComment: (postId: string, body: string) =>
+    apiClient.post<{ comment: CommunityCommentDTO }>(`/community/posts/${postId}/comments`, {
+      body,
+    }),
 };
 
 export const aiAPI = {

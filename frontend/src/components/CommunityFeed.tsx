@@ -4,6 +4,7 @@ import { communityAPI, type CommunityPostDTO, usersAPI } from '../api/client';
 import { formatDistanceFromKm } from '../lib/localeUnits';
 import { formatRelativeTime } from '../lib/notifications';
 import { ROUTE_LABELS } from '../lib/routeLabels';
+import { CommunityPostComments } from './CommunityPostComments';
 import { PulseRing } from './PulseRing';
 import { SilhouetteAvatar } from './SilhouetteAvatar';
 import { useResolvingPhotoSrc } from './UserAvatar';
@@ -159,7 +160,7 @@ export function CommunityFeed({
           </p>
           <h1 className="text-2xl font-bold text-[var(--cream)]">{ROUTE_LABELS.community}</h1>
           <p className="mt-1 text-sm text-[var(--cream-muted)]">
-            Short updates from men nearby — no video, free for all.
+            Short updates from men nearby — comment on a post. No video, free for all.
           </p>
         </div>
       ) : null}
@@ -279,6 +280,15 @@ export function CommunityFeed({
                   <p className="mt-1.5 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-[var(--cream-soft)]">
                     {post.body}
                   </p>
+                  <CommunityPostComments
+                    postId={post.id}
+                    commentCount={post.comment_count ?? 0}
+                    onCountChange={(count) => {
+                      setPosts((prev) =>
+                        prev.map((p) => (p.id === post.id ? { ...p, comment_count: count } : p)),
+                      );
+                    }}
+                  />
                 </div>
               </div>
             </li>

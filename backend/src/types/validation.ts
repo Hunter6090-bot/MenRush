@@ -125,6 +125,15 @@ export const CommunityCreatePostSchema = z.object({
     .max(280, 'Post must be 280 characters or fewer'),
 });
 
+/** Comment on a Community post — same text-only 280 cap. Free for all. */
+export const CommunityCreateCommentSchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Comment cannot be empty')
+    .max(280, 'Comment must be 280 characters or fewer'),
+});
+
 export const MessageSchema = z.object({
   receiver_id: z.string().uuid(),
   message: z.string().min(1).max(1000),
@@ -250,6 +259,7 @@ export type ProfileInput = z.infer<typeof ProfileSchema>;
 export type DeleteAccountInput = z.infer<typeof DeleteAccountSchema>;
 export type LocationInput = z.infer<typeof LocationSchema>;
 export type CommunityCreatePostInput = z.infer<typeof CommunityCreatePostSchema>;
+export type CommunityCreateCommentInput = z.infer<typeof CommunityCreateCommentSchema>;
 export type MessageInput = z.infer<typeof MessageSchema>;
 export type CreateRoomInput = z.infer<typeof CreateRoomSchema>;
 export type RoomMessageInput = z.infer<typeof RoomMessageSchema>;
