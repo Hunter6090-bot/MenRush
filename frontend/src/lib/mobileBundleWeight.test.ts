@@ -46,4 +46,11 @@ describe('production bundle mobile weight', () => {
     expect(app).not.toMatch(/import \{ Discover \} from '\.\/pages\/Discover'/);
     expect(app).not.toMatch(/from 'mapbox-gl'/);
   });
+
+  it('Discover does not statically import mapbox-gl (list paints before GL chunk)', () => {
+    const discover = readFileSync(resolve(__dirname, '../pages/Discover.tsx'), 'utf8');
+    expect(discover).not.toMatch(/import mapboxgl from 'mapbox-gl'/);
+    expect(discover).toMatch(/loadMapbox/);
+    expect(discover).toMatch(/mapInitAllowed/);
+  });
 });

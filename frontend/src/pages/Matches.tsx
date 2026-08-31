@@ -5,7 +5,7 @@ import { Layout } from '../components/Layout';
 import { IconMatches } from '../components/icons';
 import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
 import { VerifiedBadge } from '../components/VerifiedBadge';
-import { useResolvingPhotoSrc } from '../components/UserAvatar';
+import { useGridPhotoSrc } from '../lib/nearbyPhotoSrc';
 import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 import { PROFILE_TILE_GRID_CLASS } from '../lib/profileTileGrid';
 
@@ -81,9 +81,7 @@ function PersonGridCard({
   /** Dedicated Message control — photo always opens profile. */
   onMessage?: () => void;
 }) {
-  const { src: photo, onError } = useResolvingPhotoSrc(person.photo_url ?? undefined, person.age, {
-    displayWidth: 480,
-  });
+  const { src: photo, phase } = useGridPhotoSrc(person.photo_url ?? undefined, person.age);
   return (
     <div
       data-testid={testId}
@@ -96,12 +94,14 @@ function PersonGridCard({
         data-testid={testId ? `${testId}-photo` : `match-photo-${person.id}`}
       >
         <div className="relative aspect-[3/3.6] w-full bg-[var(--bg-elevated)]">
-          {photo ? (
+          {photo && phase !== 'loading' ? (
             <img
               src={photo}
               alt={person.name}
               className="h-full w-full object-cover"
-              onError={onError}
+              decoding="async"
+              data-testid="match-grid-photo"
+              data-photo-phase={phase}
             />
           ) : (
             <div className="flex h-full items-center justify-center">

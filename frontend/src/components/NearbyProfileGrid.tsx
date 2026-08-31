@@ -1,13 +1,13 @@
 import type { NearbyUser } from './ProfileCard';
 import { SilhouetteAvatar } from './SilhouetteAvatar';
 import { VerifiedBadge } from './VerifiedBadge';
-import { useResolvingPhotoSrc } from './UserAvatar';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { formatActiveStatus, formatDistanceMiles, getTribeTag } from '../lib/discoveryFormat';
 import {
   PROFILE_TILE_GRID_CLASS,
   PROFILE_TILE_SKELETON_CLASS,
 } from '../lib/profileTileGrid';
+import { useGridPhotoSrc } from '../lib/nearbyPhotoSrc';
 import { Link } from 'react-router-dom';
 
 interface NearbyProfileGridProps {
@@ -271,12 +271,12 @@ function GridPhoto({
   photoUrl?: string;
   age?: number;
 }) {
-  // 480px display thumbs — iPhone Nearby was blank/slow on 4032×3024 originals.
-  const { src, onError } = useResolvingPhotoSrc(photoUrl, age, { displayWidth: 480 });
+  // Phone path: display API when live, else fetch+downscale — never leave blank tiles.
+  const { src, phase } = useGridPhotoSrc(photoUrl, age);
 
-  if (!src) {
+  if (phase === 'loading' || !src) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div className="flex h-full items-center justify-center" data-testid="nearby-photo-loading">
         <SilhouetteAvatar size={56} variant="card" />
       </div>
     );
@@ -287,8 +287,9 @@ function GridPhoto({
       src={src}
       alt={name}
       className="h-full w-full object-cover"
-      loading="lazy"
-      onError={onError}
+      decoding="async"
+      data-testid="nearby-profile-photo"
+      data-photo-phase={phase}
     />
   );
 }
