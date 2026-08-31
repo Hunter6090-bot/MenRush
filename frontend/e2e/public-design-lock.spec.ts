@@ -155,6 +155,8 @@ test.describe('public design lock — auth pages', () => {
     await assertCreamInputs(page);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Create your account/i);
     await expect(page.getByText(/You're in/i)).toHaveCount(0);
+    await expect(page.getByText(/^Pick a username and password\.$/)).toBeVisible();
+    await expect(page.getByText(/Optional Pride promo below/i)).toHaveCount(0);
     await expect(page.getByText(/Your invite code checks out/i)).toHaveCount(0);
     await expect(page.getByText(/use the email your invite was sent to/i)).toHaveCount(0);
     await expect(page.getByTestId('register-username-input')).toBeVisible();
