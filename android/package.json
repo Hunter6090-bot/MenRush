@@ -1,0 +1,14 @@
+{
+  "name": "menrush-android-twa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MenRush Trusted Web Activity (Bubblewrap) wrapper for Play Store",
+  "scripts": {
+    "twa:update": "bubblewrap update --skipVersionUpgrade",
+    "twa:build": "bubblewrap build",
+    "twa:build:full": "bash ./scripts/build-twa.sh"
+  },
+  "devDependencies": {
+    "@bubblewrap/cli": "^1.25.0"
+  }
+}

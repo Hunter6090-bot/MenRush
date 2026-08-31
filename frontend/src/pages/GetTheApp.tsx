@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { SiteFooter } from '../components/SiteFooter';
+import { isAndroidChrome, openAndroidPlayInstall } from '../lib/androidTwa';
 import { registerServiceWorker } from '../lib/push';
 
 type Platform = 'ios' | 'android';
@@ -13,10 +14,10 @@ const IOS = [
 ];
 
 const ANDROID = [
-  { t: 'Open Chrome', d: 'Go to menrush.com in Chrome.' },
-  { t: 'Tap the three dots', d: 'Top-right of Chrome.' },
-  { t: 'Install app', d: 'Tap Install app. If you only see Add to Home screen, use that.' },
-  { t: 'Tap Install', d: 'Then open MenRush from your Home Screen.' },
+  { t: 'Open Chrome', d: 'Go to menrush.com in Chrome on your Android phone.' },
+  { t: 'Install from Play', d: 'Tap Install from Play on the banner, or open MenRush in the Play Store (Trusted Web Activity).' },
+  { t: 'Or use Chrome menu', d: 'Chrome ⋮ → Install app / Add to Home screen still works for the PWA.' },
+  { t: 'Open MenRush', d: 'Launch from your Home Screen or the Play app icon. Sign in with your invite.' },
 ];
 
 function detectPlatform(): Platform {
@@ -96,7 +97,11 @@ export function GetTheApp() {
         <img src="/brand/icon-512.png" alt="MenRush" width={96} height={96} className="mx-auto mt-6 h-24 w-24 rounded-full" />
         <p className="mt-5 text-center text-[11px] font-bold uppercase tracking-[0.18em] text-[#C4832A]">Get the app</p>
         <h1 className="mt-3 text-center text-[34px] font-extrabold leading-[1.05] tracking-[-0.03em]">Put MenRush on your phone.</h1>
-        <p className="mt-3 text-center text-[15px] leading-[1.45] text-[#A89070]">Opens like an app. No store. No extra download.</p>
+        <p className="mt-3 text-center text-[15px] leading-[1.45] text-[#A89070]">
+          {platform === 'android'
+            ? 'Android: Play Store TWA or Chrome install. Same MenRush, full-screen.'
+            : 'Opens like an app. No store. No extra download.'}
+        </p>
         <div className="mt-6 grid grid-cols-2 gap-2.5" role="tablist">
           <button type="button" className={tabClass(platform === 'ios')} onClick={() => { setPlatform('ios'); setStep(0); setDone(false); }}>iPhone</button>
           <button type="button" className={tabClass(platform === 'android')} onClick={() => { setPlatform('android'); setStep(0); setDone(false); }}>Android</button>
@@ -126,10 +131,32 @@ export function GetTheApp() {
           <button type="button" className="flex-1 rounded-full border border-[rgba(196,131,42,0.35)] px-4 py-3.5 text-[15px] font-bold text-[#F0E0C0] disabled:opacity-40" disabled={!done && step === 0} onClick={goBack}>Back</button>
           <button type="button" className="flex-1 rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3.5 text-[15px] font-bold text-[#FFF6E6]" onClick={goNext}>{done || step === steps.length - 1 ? 'Done' : 'Next'}</button>
         </div>
-        {platform === 'android' && deferred ? (
-          <button type="button" className="mt-3 w-full rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3.5 text-[15px] font-bold text-[#FFF6E6]" onClick={async () => { await deferred.prompt(); await deferred.userChoice; setDeferred(null); }}>Install MenRush</button>
+        {platform === 'android' ? (
+          <button
+            type="button"
+            data-testid="get-the-app-android-install"
+            className="mt-3 w-full rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3.5 text-[15px] font-bold text-[#FFF6E6]"
+            onClick={async () => {
+              if (deferred) {
+                await deferred.prompt();
+                await deferred.userChoice;
+                setDeferred(null);
+                return;
+              }
+              openAndroidPlayInstall();
+            }}
+          >
+            {deferred ? 'Install MenRush' : isAndroidChrome() ? 'Install from Play' : 'Open Play Store'}
+          </button>
         ) : null}
-        <p className="mt-8 text-center text-[13px] leading-[1.5] text-[#6B5840]">No App Store. No Play Store.<br />18+ only. <Link to="/" className="font-bold text-[#C4832A]">Waitlist</Link></p>
+        <p className="mt-8 text-center text-[13px] leading-[1.5] text-[#6B5840]">
+          {platform === 'android' ? (
+            <>Play Store TWA for Android. iPhone uses Safari Add to Home Screen.<br /></>
+          ) : (
+            <>No App Store. No Play Store.<br /></>
+          )}
+          18+ only. <Link to="/" className="font-bold text-[#C4832A]">Waitlist</Link>
+        </p>
       </main>
       <SiteFooter />
     </div>

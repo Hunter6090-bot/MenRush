@@ -1,0 +1,12 @@
+node_modules/
+.signing.env
+*.apk
+*.aab
+app/build/
+.gradle/
+local.properties
+*.iml
+.idea/
+.DS_Store
+store_icon.png
+app-release-signed.apk.idsig

@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Android TWA (Bubblewrap) + asset links + Android Chrome install banner | PR `cursor/android-twa-bubblewrap-d9b8` | — | Cursor cloud — `com.menrush.app`; signed APK/AAB; `/.well-known/assetlinks.json`; InstallPrompt Play CTA; keep web manifest + prefer_related_applications false; do not touch #97–#99 / Railway / landing / held PRs |
 | Landing header BrandMark top-left (ComingSoon) | PR `cursor/landing-header-brandmark-35ee` | — | Cursor cloud — sm BrandMark → `/` left; Sign in right; hero mark kept; overline LIVE NOW. UK BETA OPEN; do not mix #165/#163/#97–#99 |
 | P0 Go live / Discover bounce (location ≠ incomplete profile) | PR `cursor/fix-go-live-discovery-bounce-d9b8` | — | Cursor cloud — honest live ticks; RequireProfileSetup never redirects for GPS; ActivationBanner Settings not Finish profile; /me lat/lng coerce; Safari how-to; do not touch #97–#99 / #158 / #160 / #162 / held PRs |
 | PWA Get the App: apostrophe leak + desktop banner + Done→/login | PR `cursor/fix-pwa-install-prompt-6d80` | — | Cursor cloud — JSX `\u2019`→real `'`; InstallPrompt phone-only via `isPhoneDevice`; Done→/login; do not touch #97–#99 / #158 / #160 / landing copy |

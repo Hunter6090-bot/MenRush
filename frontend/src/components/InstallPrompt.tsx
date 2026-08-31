@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { isAndroidChrome, openAndroidPlayInstall } from '../lib/androidTwa';
 import { isPhoneDevice } from '../lib/device';
 import { registerServiceWorker } from '../lib/push';
 
@@ -26,6 +27,7 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
   const location = useLocation();
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [hidden, setHidden] = useState(true);
+  const [androidChrome, setAndroidChrome] = useState(false);
 
   // Never cover chat/room composers or Settings Sign out — sheet sits at z-60.
   const blocksChrome =
@@ -57,6 +59,7 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
       return;
     }
 
+    setAndroidChrome(isAndroidChrome());
     setHidden(false);
     void registerServiceWorker();
     const onPrompt = (event: Event) => {
@@ -74,11 +77,20 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
     setHidden(true);
   };
 
-  const install = async () => {
+  const installPwa = async () => {
     if (!deferred) return;
     await deferred.prompt();
     await deferred.userChoice;
     setDeferred(null);
+    dismiss();
+  };
+
+  const installAndroid = () => {
+    if (deferred) {
+      void installPwa();
+      return;
+    }
+    openAndroidPlayInstall();
     dismiss();
   };
 
@@ -87,20 +99,33 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
       ? 'fixed inset-x-0 bottom-0 z-[60] border-t border-[rgba(196,131,42,0.35)] bg-[#140E08] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4'
       : 'mt-4 rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[rgba(20,14,8,0.72)] px-4 py-4';
 
+  const subtitle = isIos()
+    ? 'Safari only. Share, then Add to Home Screen.'
+    : androidChrome
+      ? deferred
+        ? 'Install from Chrome — opens like a native app.'
+        : 'Get the Play Store app (Trusted Web Activity) or add to Home Screen.'
+      : 'Opens like an app. No store. No extra download.';
+
   return (
-    <aside className={wrap} role="dialog" aria-label="Install MenRush">
+    <aside className={wrap} role="dialog" aria-label="Install MenRush" data-testid="install-prompt">
       <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#C4832A]">Get the app</p>
       <p className="mt-1 text-[17px] font-extrabold leading-tight text-[#F0E0C0]">Put MenRush on your Home Screen.</p>
-      <p className="mt-1 text-[13px] leading-snug text-[#A89070]">
-        {isIos()
-          ? 'Safari only. Share, then Add to Home Screen.'
-          : 'Opens like an app. No store. No extra download.'}
-      </p>
+      <p className="mt-1 text-[13px] leading-snug text-[#A89070]">{subtitle}</p>
       <div className="mt-3 flex gap-2.5">
-        {deferred ? (
+        {androidChrome ? (
           <button
             type="button"
-            onClick={() => void install()}
+            onClick={installAndroid}
+            data-testid="install-prompt-android"
+            className="flex-1 rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3 text-[14px] font-bold text-[#FFF6E6]"
+          >
+            {deferred ? 'Install MenRush' : 'Install from Play'}
+          </button>
+        ) : deferred ? (
+          <button
+            type="button"
+            onClick={() => void installPwa()}
             className="flex-1 rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3 text-[14px] font-bold text-[#FFF6E6]"
           >
             Install MenRush
@@ -111,6 +136,14 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
             className="flex-1 rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3 text-center text-[14px] font-bold text-[#FFF6E6]"
           >
             Show me how
+          </Link>
+        )}
+        {!androidChrome || deferred ? null : (
+          <Link
+            to="/get-the-app"
+            className="rounded-full border border-[rgba(196,131,42,0.35)] px-4 py-3 text-[14px] font-bold text-[#F0E0C0]"
+          >
+            How to
           </Link>
         )}
         <button
