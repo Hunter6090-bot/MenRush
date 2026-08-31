@@ -5,6 +5,7 @@ import path from 'path';
 import { createAccessControl, SecurityError } from '../src/security/access';
 import {
   allowedUpload,
+  normalizeUploadMime,
   safeUploadFilename,
   validateFileSignature,
 } from '../src/security/uploads';
@@ -133,18 +134,35 @@ test('uploads use allowlisted MIME types, generated extensions, and magic bytes'
   assert.equal(allowedUpload('image/svg+xml', 'profile'), false);
   assert.equal(allowedUpload('image/jpeg', 'profile'), true);
   assert.equal(allowedUpload('audio/webm', 'message'), true);
+  // MediaRecorder codec parameters must not break the allowlist.
+  assert.equal(normalizeUploadMime('video/webm;codecs=vp8,opus'), 'video/webm');
+  assert.equal(allowedUpload('video/webm;codecs=vp8,opus', 'message'), true);
+  assert.equal(allowedUpload('video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'message'), true);
+  assert.equal(allowedUpload('video/quicktime', 'message'), false);
+  assert.equal(allowedUpload('text/plain', 'message'), false);
 
   const generated = safeUploadFilename('profile', 'user-1', 'image/jpeg');
   assert.match(generated, /^profile-user-1-[a-f0-9-]+\.jpg$/);
   assert.equal(generated.includes('.php'), false);
+  assert.match(
+    safeUploadFilename('message', 'user-1', 'video/mp4;codecs=avc1.42E01E,mp4a.40.2'),
+    /^message-user-1-[a-f0-9-]+\.mp4$/,
+  );
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'menrush-security-'));
   const valid = path.join(dir, 'valid.jpg');
   const spoofed = path.join(dir, 'spoofed.jpg');
+  const webm = path.join(dir, 'note.webm');
+  const mp4 = path.join(dir, 'note.mp4');
   fs.writeFileSync(valid, Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00]));
   fs.writeFileSync(spoofed, Buffer.from('<script>alert(1)</script>'));
+  fs.writeFileSync(webm, Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x00]));
+  // ftyp at offset 4 — minimal ISO BMFF header.
+  fs.writeFileSync(mp4, Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0x00, 0x00, 0x00, 0x00]));
   assert.equal(await validateFileSignature(valid, 'image/jpeg'), true);
   assert.equal(await validateFileSignature(spoofed, 'image/jpeg'), false);
+  assert.equal(await validateFileSignature(webm, 'video/webm;codecs=vp8,opus'), true);
+  assert.equal(await validateFileSignature(mp4, 'video/mp4;codecs=avc1.42E01E,mp4a.40.2'), true);
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -184,7 +202,9 @@ test('source guards preserve location, push, socket, and media privacy boundarie
   assert.match(users, /getNearbyUsers\(\s*userId:\s*string,\s*radiusKm/s);
   assert.match(messages, /router\.get\('\/:messageId\/media'/);
   assert.match(messages, /messageService\.forViewer\(message,\s*receiver_id\)/);
+  assert.match(messages, /X-MenRush-Media-Clear/);
   assert.match(albums, /router\.get\('\/media\/:photoId'/);
+  assert.match(albums, /X-MenRush-Media-Clear/);
 });
 
 async function main() {

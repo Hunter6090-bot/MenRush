@@ -2,62 +2,70 @@ import { useState } from 'react';
 import { usersAPI } from '../api/client';
 
 interface PanicReportButtonProps {
-  peerId?: string;
-  conversationId?: string;
-  roomId?: string;
+  /** User the report is filed against (DM peer, or room owner / other member). */
+  reportedUserId: string;
+  /** Conversation or room thread id for SENTINEL review. */
+  threadId: string;
   onNotice?: (message: string, tone?: 'success' | 'error') => void;
+  className?: string;
 }
 
-/** One-tap panic / report — queues the thread on SENTINEL. Does not change block. */
+/**
+ * Discreet one-tap safety report for chat / room headers.
+ * Free for all users. Reuses POST /users/report/:id — does not change block.
+ * Calm copy only; no public claim of a new safety product.
+ */
 export function PanicReportButton({
-  peerId,
-  conversationId,
-  roomId,
+  reportedUserId,
+  threadId,
   onNotice,
+  className = '',
 }: PanicReportButtonProps) {
-  const [sending, setSending] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [sent, setSent] = useState(false);
 
-  const handleClick = async () => {
-    if (sending) return;
-    setSending(true);
+  const handleReport = async () => {
+    if (submitting || sent || !reportedUserId || !threadId) return;
+    setSubmitting(true);
     try {
-      await usersAPI.reportToSentinel({
-        reason: 'panic',
-        details: 'One-tap panic / report',
-        reported_id: peerId,
-        conversation_id: conversationId ?? peerId,
-        room_id: roomId,
-        source: roomId ? 'room' : 'panic',
-      });
-      onNotice?.('Report sent to SENTINEL. You’re not alone — we will review it.', 'success');
-    } catch {
-      onNotice?.('Could not send the report. Try again.', 'error');
+      await usersAPI.reportUser(reportedUserId, 'other', undefined, threadId);
+      setSent(true);
+      onNotice?.("Report sent. We'll take a look.", 'success');
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+        'Could not send report.';
+      onNotice?.(message, 'error');
     } finally {
-      setSending(false);
+      setSubmitting(false);
     }
   };
 
   return (
     <button
       type="button"
-      onClick={() => void handleClick()}
-      disabled={sending}
-      aria-label="Panic report"
-      title="Report this chat to SENTINEL"
       data-testid="panic-report-button"
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#C4A882] transition-colors hover:bg-[var(--bg-card)] hover:text-[#E0A14A] disabled:opacity-50"
+      onClick={() => void handleReport()}
+      disabled={submitting || sent || !reportedUserId}
+      aria-label={sent ? 'Report sent' : 'Report this conversation'}
+      title={sent ? 'Report sent' : 'Report'}
+      className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[var(--bg-card)] active:scale-95 disabled:opacity-55 disabled:pointer-events-none text-[var(--cream-muted)] hover:text-[var(--cream)] ${className}`}
     >
-      <ShieldIcon className="h-5 w-5" />
+      {sent ? <CheckShieldIcon className="w-5 h-5" /> : <FlagIcon className="w-5 h-5" />}
     </button>
   );
 }
 
-function ShieldIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
-      <path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" strokeLinejoin="round" />
-      <path d="M12 8v5" strokeLinecap="round" />
-      <circle cx="12" cy="16" r="0.7" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
+const FlagIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M5 21V4" />
+    <path d="M5 4h9.5a1 1 0 0 1 .85 1.53L13.4 9l1.95 3.47A1 1 0 0 1 14.5 14H5" />
+  </svg>
+);
+
+const CheckShieldIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" />
+    <path d="M9.5 12.2l1.8 1.8 3.4-3.6" />
+  </svg>
+);

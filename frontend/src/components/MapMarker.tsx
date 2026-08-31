@@ -1,7 +1,6 @@
 import { createRoot, Root } from 'react-dom/client';
 import { PulsingAvatar } from './PulsingAvatar';
-import { SilhouetteAvatar } from './SilhouetteAvatar';
-import { useResolvingPhotoSrc } from './UserAvatar';
+import { useGridPhotoSrc } from '../lib/nearbyPhotoSrc';
 
 export interface MapMarkerUser {
   id: string;
@@ -10,7 +9,6 @@ export interface MapMarkerUser {
   age?: number;
   isPulsing: boolean;
   isVerified?: boolean;
-  discreet_blur?: boolean;
 }
 
 interface MapMarkerProps {
@@ -42,13 +40,7 @@ export function MapMarker({ user, size = 44 }: MapMarkerProps) {
               : '0 3px 10px rgba(196,131,42,0.45)',
           }}
         >
-          <MapPhoto
-            name={user.name}
-            photoUrl={user.photo_url}
-            age={user.age}
-            size={size}
-            blur={!!user.discreet_blur}
-          />
+          <MapPhoto name={user.name} photoUrl={user.photo_url} age={user.age} size={size} />
         </div>
       </PulsingAvatar>
     </div>
@@ -60,16 +52,14 @@ function MapPhoto({
   photoUrl,
   age,
   size,
-  blur,
 }: {
   name: string;
   photoUrl?: string;
   age?: number;
   size: number;
-  blur?: boolean;
 }) {
-  const { src, onError } = useResolvingPhotoSrc(photoUrl, age);
-  if (!src) {
+  const { src, phase } = useGridPhotoSrc(photoUrl, age);
+  if (!src || phase === 'loading') {
     // Always show a pin face — initial letter, never a blank hole on the map.
     const initial = (name?.trim()?.[0] || '?').toUpperCase();
     return (
@@ -82,21 +72,16 @@ function MapPhoto({
       </div>
     );
   }
-  const img = (
+  return (
     <img
       src={src}
       alt={name}
-      className={`w-full h-full object-cover ${blur ? 'blur-md scale-110' : ''}`}
+      className="w-full h-full object-cover"
       draggable={false}
-      onError={onError}
+      decoding="async"
+      data-testid="map-marker-photo"
+      data-photo-phase={phase}
     />
-  );
-  return blur ? (
-    <div className="h-full w-full" data-testid="discreet-media-blur">
-      {img}
-    </div>
-  ) : (
-    img
   );
 }
 

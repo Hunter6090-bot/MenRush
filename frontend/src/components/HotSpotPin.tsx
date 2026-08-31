@@ -1,4 +1,5 @@
 import { createRoot, type Root } from 'react-dom/client';
+import { IconCruise } from './icons';
 
 export type HotSpotPinData = {
   id: string;
@@ -6,6 +7,8 @@ export type HotSpotPinData = {
   category_icon?: string;
   /** Exact live check-in count (anonymous + profile). */
   live_count_exact: number;
+  /** Approximate display count (may be rounded for Free). */
+  live_count?: number | string;
 };
 
 interface HotSpotPinProps {
@@ -14,21 +17,28 @@ interface HotSpotPinProps {
 }
 
 /**
- * Always-visible Hot Spot marker — must read as a cruising venue at a glance.
+ * Always-visible Cruise marker on the Nearby map — cruise-ship icon at a glance.
  * Empty: solid copper pin (slightly quieter, never near-invisible).
- * Occupied: larger glow + pulse + live count badge.
+ * Occupied: larger glow + pulse + venue name + approximate check-in count.
+ * Does not invent venues or occupancy — only renders existing check-in data.
  */
 export function HotSpotPin({ spot, size = 48 }: HotSpotPinProps) {
   const occupied = spot.live_count_exact > 0;
   const pinSize = occupied ? size : Math.round(size * 0.92);
+  const countLabel =
+    spot.live_count != null
+      ? String(spot.live_count)
+      : spot.live_count_exact > 9
+        ? '9+'
+        : String(spot.live_count_exact);
 
   return (
     <div
       className="hotspot-pin"
       title={
         occupied
-          ? `${spot.name} · ${spot.live_count_exact} checked in`
-          : `${spot.name} · Hot Spot`
+          ? `${spot.name} · ${countLabel} checked in`
+          : `${spot.name} · Cruise`
       }
       style={{
         width: pinSize,
@@ -42,6 +52,8 @@ export function HotSpotPin({ spot, size = 48 }: HotSpotPinProps) {
       data-occupied={occupied ? '1' : '0'}
       data-testid={`hotspot-pin-${occupied ? 'solid' : 'dim'}`}
       data-hotspot-id={spot.id}
+      data-hotspot-name={spot.name}
+      data-cruise-pin="1"
     >
       {occupied ? (
         <span
@@ -79,14 +91,15 @@ export function HotSpotPin({ spot, size = 48 }: HotSpotPinProps) {
           boxShadow: occupied
             ? '0 0 20px rgba(196,131,42,0.85), 0 4px 14px rgba(0,0,0,0.55)'
             : '0 0 10px rgba(196,131,42,0.45), 0 3px 10px rgba(0,0,0,0.5)',
-          fontSize: pinSize * 0.4,
-          lineHeight: 1,
           color: '#FFF6E6',
         }}
       >
-        <span aria-hidden style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.45))' }}>
-          {spot.category_icon || '📍'}
-        </span>
+        <IconCruise
+          size={Math.round(pinSize * 0.52)}
+          aria-hidden
+          data-testid="cruise-ship-icon"
+          style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.45))' }}
+        />
       </div>
       {occupied ? (
         <span
@@ -100,8 +113,9 @@ export function HotSpotPin({ spot, size = 48 }: HotSpotPinProps) {
             border: '1.5px solid #C4832A',
             boxShadow: '0 2px 6px rgba(0,0,0,0.45)',
           }}
+          data-testid="hotspot-pin-count"
         >
-          {spot.live_count_exact > 9 ? '9+' : spot.live_count_exact}
+          {countLabel}
         </span>
       ) : (
         <span
@@ -120,6 +134,33 @@ export function HotSpotPin({ spot, size = 48 }: HotSpotPinProps) {
           }}
         />
       )}
+      {occupied ? (
+        <span
+          data-testid="hotspot-pin-name"
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: '100%',
+            transform: 'translateX(-50%)',
+            marginTop: 4,
+            maxWidth: 96,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            padding: '2px 6px',
+            borderRadius: 999,
+            background: 'rgba(26, 14, 3, 0.92)',
+            border: '1px solid rgba(196,131,42,0.55)',
+            color: '#F0E0C0',
+            fontSize: 10,
+            fontWeight: 800,
+            lineHeight: 1.2,
+            pointerEvents: 'none',
+          }}
+        >
+          {spot.name}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -130,11 +171,14 @@ export function createHotSpotPinElement(
   size = 48,
 ): { element: HTMLDivElement; root: Root } {
   const el = document.createElement('div');
-  el.style.width = `${size}px`;
-  el.style.height = `${size + 6}px`;
+  const occupied = spot.live_count_exact > 0;
+  el.style.width = `${Math.max(size, occupied ? 104 : size)}px`;
+  el.style.height = `${size + (occupied ? 28 : 6)}px`;
   el.style.position = 'relative';
   el.style.cursor = 'pointer';
-  el.style.zIndex = spot.live_count_exact > 0 ? '3' : '2';
+  el.style.zIndex = occupied ? '3' : '2';
+  el.style.display = 'flex';
+  el.style.justifyContent = 'center';
   el.addEventListener('click', (e) => {
     e.stopPropagation();
     onTap();

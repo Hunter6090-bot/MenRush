@@ -37,6 +37,7 @@ interface RoomInfo {
   member_count: number;
   user_role?: string | null;
   is_location_based?: boolean;
+  created_by?: string;
 }
 
 interface RoomMember {
@@ -446,6 +447,12 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   const isOwner = room?.user_role === 'owner';
   const isPrivateGroup = room?.is_location_based === false;
 
+  // One-tap room report needs a subject user; prefer owner, else first other member.
+  const roomReportTargetId =
+    members.find((m) => m.role === 'owner' && m.id !== user?.id)?.id ??
+    (room?.created_by && room.created_by !== user?.id ? room.created_by : undefined) ??
+    members.find((m) => m.id !== user?.id)?.id;
+
   const handleAddMember = async (targetId: string, targetName: string) => {
     if (!roomId || addingMemberId) return;
     setAddingMemberId(targetId);
@@ -616,12 +623,16 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           <BubbleIcon className="w-5 h-5" />
         </button>
 
+        {roomId && roomReportTargetId ? (
+          <PanicReportButton
+            reportedUserId={roomReportTargetId}
+            threadId={`room:${roomId}`}
+            onNotice={(msg) => setSettingsNotice(msg)}
+            className="w-9 h-9"
+          />
+        ) : null}
+
         {/* Settings */}
-        <PanicReportButton
-          roomId={roomId}
-          conversationId={roomId}
-          onNotice={(msg) => setSettingsNotice(msg)}
-        />
         <button
           onClick={() => setSettingsOpen((v) => !v)}
           aria-label="Room settings"
@@ -633,6 +644,20 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           <GearIcon className="w-5 h-5" />
         </button>
       </header>
+
+      {settingsNotice && !settingsOpen && (
+        <div
+          className="flex-shrink-0 px-4 py-2 text-center text-xs font-medium border-b"
+          style={{
+            background: 'rgba(143,199,115,0.12)',
+            borderColor: 'var(--border-default)',
+            color: '#8FC773',
+          }}
+          data-testid="room-safety-notice"
+        >
+          {settingsNotice}
+        </div>
+      )}
 
       {/* ── Settings sheet ────────────────────────────────────────────────── */}
       {settingsOpen && (

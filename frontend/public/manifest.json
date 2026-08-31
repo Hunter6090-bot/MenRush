@@ -1,14 +1,19 @@
 {
+  "id": "/",
   "name": "MenRush",
   "short_name": "MenRush",
-  "description": "Pulse for now. Match for later. Real-time location-based discovery for men.",
+  "description": "See who's near you right now. Pulse for now. Match for later.",
+  "lang": "en-GB",
+  "dir": "ltr",
   "start_url": "/app",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
   "orientation": "portrait",
   "background_color": "#0D0A06",
-  "theme_color": "#C4832A",
+  "theme_color": "#0D0A06",
   "categories": ["social", "lifestyle"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/brand/icon-192.png",
@@ -31,7 +36,8 @@
     {
       "src": "/brand/icon-48.png",
       "sizes": "48x48",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }

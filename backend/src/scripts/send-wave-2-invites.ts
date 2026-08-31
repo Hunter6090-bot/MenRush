@@ -38,6 +38,9 @@ function isExcludedWaitlistEmail(row: WaitlistRow): boolean {
   if (source === 'probe' || source === 'production-smoke' || source === 'production-live-proof') {
     return true;
   }
+  // Pride signups have their own dedicated invite flow (issued from /pride) and
+  // must stay out of the general wave invites. They are not part of this list.
+  if (source === 'pride') return true;
   if (/\+waitlist/i.test(email)) return true;
   if (email.endsWith('@menrush.com')) return true;
 

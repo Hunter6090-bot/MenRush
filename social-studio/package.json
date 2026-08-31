@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "studio": "node src/server.js"
+    "studio": "node src/server.js",
+    "test:owner-photo": "node scripts/test-owner-photo-https.mjs"
   },
   "engines": {
     "node": ">=18"

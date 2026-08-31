@@ -1,34 +1,48 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PanicReportButton } from './PanicReportButton';
-import { usersAPI } from '../api/client';
+
+const reportUser = vi.fn();
 
 vi.mock('../api/client', () => ({
   usersAPI: {
-    reportToSentinel: vi.fn().mockResolvedValue({ data: { queue: 'SENTINEL' } }),
+    reportUser: (...args: unknown[]) => reportUser(...args),
   },
 }));
 
 describe('PanicReportButton', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    reportUser.mockResolvedValue({ data: { reported: true, id: 'r1' } });
   });
 
-  it('one-tap posts the thread to the SENTINEL queue', async () => {
+  it('one-tap posts to report endpoint with thread_id', async () => {
     const user = userEvent.setup();
     const onNotice = vi.fn();
-    render(<PanicReportButton peerId="peer-1" conversationId="peer-1" onNotice={onNotice} />);
+    render(
+      <PanicReportButton
+        reportedUserId="peer-1"
+        threadId="dm:aaa_bbb"
+        onNotice={onNotice}
+      />,
+    );
 
     await user.click(screen.getByTestId('panic-report-button'));
-    expect(usersAPI.reportToSentinel).toHaveBeenCalledWith({
-      reason: 'panic',
-      details: 'One-tap panic / report',
-      reported_id: 'peer-1',
-      conversation_id: 'peer-1',
-      room_id: undefined,
-      source: 'panic',
+
+    await waitFor(() => {
+      expect(reportUser).toHaveBeenCalledWith('peer-1', 'other', undefined, 'dm:aaa_bbb');
     });
-    expect(onNotice).toHaveBeenCalled();
+    expect(onNotice).toHaveBeenCalledWith("Report sent. We'll take a look.", 'success');
+    expect(screen.getByLabelText('Report sent')).toBeInTheDocument();
+  });
+
+  it('does not invent a second report while already sent', async () => {
+    const user = userEvent.setup();
+    render(<PanicReportButton reportedUserId="peer-1" threadId="room:room-9" />);
+    await user.click(screen.getByTestId('panic-report-button'));
+    await waitFor(() => expect(reportUser).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByTestId('panic-report-button'));
+    expect(reportUser).toHaveBeenCalledTimes(1);
   });
 });

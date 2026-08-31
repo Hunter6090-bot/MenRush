@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { roomsAPI } from '../api/client';
 import { CreateGroupModal } from '../components/CreateGroupModal';
 import { useSocket } from '../hooks/useSocket';
+import { ROUTE_LABELS } from '../lib/routeLabels';
 
 export interface RoomRow {
   id: string;
@@ -177,7 +178,7 @@ export const RoomList: React.FC<RoomListProps> = ({
                 <RoomsIcon className="h-5 w-5 text-white" />
               </div>
               <h1 className="flex-1 text-xl font-bold tracking-wide" style={{ color: 'var(--cream)' }}>
-                Chat Rooms
+                {ROUTE_LABELS.rooms}
               </h1>
             </>
           ) : (
@@ -185,7 +186,7 @@ export const RoomList: React.FC<RoomListProps> = ({
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)]">
                 Groups
               </p>
-              <p className="text-sm font-semibold text-[var(--cream)]">Rooms</p>
+              <p className="text-sm font-semibold text-[var(--cream)]">{ROUTE_LABELS.rooms}</p>
             </div>
           )}
           <button

@@ -40,6 +40,7 @@ router.get('/nearby', async (req: AuthRequest, res: Response) => {
   }
 });
 
+/** Free venue check-in → temporary Hot Spot pin (4h TTL). Not a Premium action. */
 router.post('/:id/check-in', checkInLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const body = EventCheckInSchema.parse(req.body ?? {});
@@ -49,7 +50,7 @@ router.post('/:id/check-in', checkInLimiter, async (req: AuthRequest, res: Respo
     res.json({ ok: true, spot });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Check-in failed';
-    const status = message === 'Event has no venue location' ? 400 : 400;
+    const status = message === 'Event not found' ? 404 : 400;
     res.status(status).json({ error: message });
   }
 });

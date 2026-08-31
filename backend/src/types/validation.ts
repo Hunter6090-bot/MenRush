@@ -116,6 +116,15 @@ export const LocationSchema = z.object({
   lng: z.number().min(-180).max(180),
 });
 
+/** Community Space — short local text only (≤280). No media. */
+export const CommunityCreatePostSchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Post cannot be empty')
+    .max(280, 'Post must be 280 characters or fewer'),
+});
+
 export const MessageSchema = z.object({
   receiver_id: z.string().uuid(),
   message: z.string().min(1).max(1000),
@@ -209,32 +218,11 @@ export const GhostSchema = z.object({
   is_ghost: z.boolean(),
 });
 
-export const CommunityPostSchema = z.object({
-  body: z.string().trim().min(1, 'Write something').max(280, 'Keep it to 280 characters'),
-  lat: z.number().min(-90).max(90).optional(),
-  lng: z.number().min(-180).max(180).optional(),
-});
-
-export const SentinelReportSchema = z.object({
-  reason: z.enum([
-    'spam',
-    'harassment',
-    'fake_profile',
-    'inappropriate_content',
-    'underage',
-    'panic',
-    'other',
-  ]),
-  details: z.string().max(1000).optional(),
-  reported_id: z.string().uuid().optional(),
-  conversation_id: z.string().max(80).optional(),
-  room_id: z.string().uuid().optional(),
-  source: z.enum(['profile', 'chat', 'room', 'panic']).optional(),
-});
-
 export const LiveLocationSharingSchema = z.object({
   enabled: z.boolean(),
 });
+
+export const PHOTO_VISIBILITIES = ['public', 'view_once', 'private'] as const;
 
 export const CreateAlbumSchema = z.object({
   name: z.string().trim().min(1, 'Album name is required').max(80),
@@ -250,6 +238,8 @@ export const GrantAlbumSchema = z.object({
   viewer_id: z.string().uuid('Invalid viewer id'),
 });
 
+export const PhotoVisibilitySchema = z.enum(PHOTO_VISIBILITIES);
+
 export type RegisterInput = z.infer<typeof RegisterSchema>;
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type ForgotPasswordInput = z.infer<typeof ForgotPasswordSchema>;
@@ -259,6 +249,7 @@ export type ChangeEmailInput = z.infer<typeof ChangeEmailSchema>;
 export type ProfileInput = z.infer<typeof ProfileSchema>;
 export type DeleteAccountInput = z.infer<typeof DeleteAccountSchema>;
 export type LocationInput = z.infer<typeof LocationSchema>;
+export type CommunityCreatePostInput = z.infer<typeof CommunityCreatePostSchema>;
 export type MessageInput = z.infer<typeof MessageSchema>;
 export type CreateRoomInput = z.infer<typeof CreateRoomSchema>;
 export type RoomMessageInput = z.infer<typeof RoomMessageSchema>;
@@ -267,11 +258,10 @@ export type ContactFormInput = z.infer<typeof ContactFormSchema>;
 export type Mood = (typeof MOOD_VALUES)[number];
 export type MoodInput = z.infer<typeof MoodSchema>;
 export type GhostInput = z.infer<typeof GhostSchema>;
-export type CommunityPostInput = z.infer<typeof CommunityPostSchema>;
-export type SentinelReportInput = z.infer<typeof SentinelReportSchema>;
 export type CreateAlbumInput = z.infer<typeof CreateAlbumSchema>;
 export type AddAlbumPhotoInput = z.infer<typeof AddAlbumPhotoSchema>;
 export type GrantAlbumInput = z.infer<typeof GrantAlbumSchema>;
+export type PhotoVisibility = z.infer<typeof PhotoVisibilitySchema>;
 export type MediaKind = (typeof MEDIA_KINDS)[number];
 export type MessageMediaKind = (typeof MESSAGE_MEDIA_KINDS)[number];
 export type LocationMessageInput = z.infer<typeof LocationMessageSchema>;

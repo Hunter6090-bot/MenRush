@@ -7,7 +7,6 @@ import { SilhouetteAvatar } from './SilhouetteAvatar';
 import { IconMatches } from './icons';
 import { usersAPI } from '../api/client';
 import { VerifiedBadge } from './VerifiedBadge';
-import { DiscreetMedia } from './DiscreetMedia';
 import { MoodBadge } from './MoodPicker';
 import { getDistanceLabel, isUserPulsing } from '../lib/discovery';
 
@@ -35,7 +34,6 @@ export interface NearbyUser {
   pulse_expires_at?: string | null;
   /** Active mood (auto-expires after 6h server-side; null when unset/expired). */
   mood?: import('../api/client').Mood | null;
-  discreet_blur?: boolean;
 }
 
 interface ProfileCardProps {
@@ -132,14 +130,12 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           data-testid={`profile-card-photo-${user.id}`}
         >
           {fullPhotoUrl ? (
-            <DiscreetMedia blur={!!user.discreet_blur} className="h-full w-full">
-              <img
-                src={fullPhotoUrl}
-                alt={user.name}
-                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                onError={onPhotoError}
-              />
-            </DiscreetMedia>
+            <img
+              src={fullPhotoUrl}
+              alt={user.name}
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              onError={onPhotoError}
+            />
           ) : (
             <div className="flex h-full w-full items-center justify-center">
               <SilhouetteAvatar size={120} variant="card" />

@@ -1,6 +1,4 @@
 import { query } from '../db';
-import { discreetBlurForViewer } from '../lib/discreet';
-import { premiumService } from './premium.service';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
@@ -8,6 +6,7 @@ import { accessControl, SecurityError } from '../security/access';
 import { isExhaustedMedia, resolveMediaPath, signedMediaUrl } from '../security/media';
 import type { MediaKind, MessageMediaKind } from '../types/validation';
 import { MISSED_CALL_MESSAGE, MISSED_CALL_PREVIEW } from '../constants/missedCall';
+import { computeMediaClear, isDiscreetMediaBlurEnabled, viewerSeesClearMedia } from './discreet-media';
 
 /**
  * Disappearing images use a view-count model (see migration 010):
@@ -39,6 +38,8 @@ interface ConversationRow {
   remaining_views?: number | null;
   expired: boolean;
   withdrawn_at?: string | null;
+  /** Verified backend flag — false when Discreet blur applies for this viewer. */
+  media_clear?: boolean;
 }
 
 const mediaDir = path.resolve(__dirname, '../../uploads/messages');
@@ -92,14 +93,14 @@ function scrubExpired<T extends ConversationRow>(row: T): T {
 function presentMessage<T extends ConversationRow>(
   row: T,
   viewerId: string,
-  viewerIsPremium = false,
-): T & { discreet_blur: boolean; viewer_is_premium: boolean } {
+  viewerIsPremium: boolean,
+): T {
   const scrubbed = scrubExpired(row);
-  const isVisual = scrubbed.media_type === 'image' || scrubbed.media_type === 'video';
-  const discreet_blur = discreetBlurForViewer({
+  const media_clear = computeMediaClear({
+    enabled: isDiscreetMediaBlurEnabled(),
     viewerIsPremium,
-    isOwn: scrubbed.sender_id === viewerId,
-    hasVisualMedia: Boolean(isVisual && scrubbed.media_url),
+    isOwnMedia: scrubbed.sender_id === viewerId,
+    mediaType: scrubbed.media_type,
   });
   if (scrubbed.media_url) {
     const mediaPath = scrubbed.media_url.split('?', 1)[0];
@@ -108,17 +109,25 @@ function presentMessage<T extends ConversationRow>(
       media_url: signedMediaUrl(mediaPath, viewerId),
       media_storage_key: undefined,
       media_mime_type: undefined,
-      discreet_blur,
-      viewer_is_premium: viewerIsPremium,
+      media_clear,
     };
   }
   return {
     ...scrubbed,
     media_storage_key: undefined,
     media_mime_type: undefined,
-    discreet_blur,
-    viewer_is_premium: viewerIsPremium,
+    media_clear,
   };
+}
+
+async function resolveViewerPremium(viewerId: string): Promise<boolean> {
+  if (!isDiscreetMediaBlurEnabled()) return true;
+  return viewerSeesClearMedia(viewerId);
+}
+
+async function presentForViewer<T extends ConversationRow>(row: T, viewerId: string): Promise<T> {
+  const viewerIsPremium = await resolveViewerPremium(viewerId);
+  return presentMessage(row, viewerId, viewerIsPremium);
 }
 
 async function attachSenderName<T extends { sender_id: string }>(
@@ -130,8 +139,8 @@ async function attachSenderName<T extends { sender_id: string }>(
 }
 
 export const messageService = {
-  forViewer<T extends ConversationRow>(message: T, viewerId: string, viewerIsPremium = false) {
-    return presentMessage(message, viewerId, viewerIsPremium);
+  async forViewer<T extends ConversationRow>(message: T, viewerId: string): Promise<T> {
+    return presentForViewer(message, viewerId);
   },
 
   async sendMessage(senderId: string, receiverId: string, message: string) {
@@ -147,7 +156,7 @@ export const messageService = {
       [id, senderId, receiverId, sanitized]
     );
 
-    return attachSenderName(presentMessage(result.rows[0] as ConversationRow, senderId));
+    return attachSenderName(await presentForViewer(result.rows[0] as ConversationRow, senderId));
   },
 
   /** Call log row when a video call rings out without being answered. */
@@ -185,7 +194,7 @@ export const messageService = {
       [id, senderId, receiverId, payload],
     );
 
-    return attachSenderName(presentMessage(result.rows[0] as ConversationRow, senderId));
+    return attachSenderName(await presentForViewer(result.rows[0] as ConversationRow, senderId));
   },
 
   async sendMediaMessage(
@@ -245,7 +254,7 @@ export const messageService = {
       ]
     );
 
-    return attachSenderName(presentMessage(result.rows[0] as ConversationRow, senderId));
+    return attachSenderName(await presentForViewer(result.rows[0] as ConversationRow, senderId));
   },
 
   /**
@@ -284,7 +293,7 @@ export const messageService = {
     if (result.rows.length === 0) {
       throw new Error('message_not_found_or_not_recipient');
     }
-    return presentMessage(result.rows[0] as ConversationRow, viewerId);
+    return presentForViewer(result.rows[0] as ConversationRow, viewerId);
   },
 
   /** Sender withdraws media from the chat — scrubs for both parties. */
@@ -329,8 +338,8 @@ export const messageService = {
     );
 
     const updated = result.rows[0] as ConversationRow;
-    const forSender = presentMessage(updated, senderId);
-    const forReceiver = presentMessage(updated, row.receiver_id as string);
+    const forSender = await presentForViewer(updated, senderId);
+    const forReceiver = await presentForViewer(updated, row.receiver_id as string);
     return { forSender, forReceiver, receiverId: row.receiver_id as string };
   },
 
@@ -352,7 +361,7 @@ export const messageService = {
       [userId, otherId],
     );
 
-    const viewerIsPremium = await premiumService.isPremium(userId);
+    const viewerIsPremium = await resolveViewerPremium(userId);
     return result.rows
       .reverse()
       .map((r) => presentMessage(r as ConversationRow, userId, viewerIsPremium));
@@ -425,28 +434,54 @@ export const messageService = {
   },
 
   async getMedia(viewerId: string, messageId: string) {
+    // Signed access token already binds viewerId. Re-running assertInteraction
+    // (multi-join match/block/verify) on every byte made iPhone chat video open
+    // ~12s — membership + block check here is enough for media bytes.
     const result = await query(
-      `SELECT id, sender_id, receiver_id, media_storage_key, media_mime_type,
+      `SELECT id, sender_id, receiver_id, media_type, media_storage_key, media_mime_type,
               is_disappearing, max_views, view_count, withdrawn_at
-       FROM messages
-       WHERE id = $1 AND media_storage_key IS NOT NULL`,
-      [messageId],
+       FROM messages m
+       WHERE m.id = $1
+         AND m.media_storage_key IS NOT NULL
+         AND (m.sender_id = $2 OR m.receiver_id = $2)
+         AND NOT EXISTS (
+           SELECT 1 FROM blocks b
+           WHERE (b.blocker_id = m.sender_id AND b.blocked_id = m.receiver_id)
+              OR (b.blocker_id = m.receiver_id AND b.blocked_id = m.sender_id)
+         )`,
+      [messageId, viewerId],
     );
     const row = result.rows[0];
-    if (!row || (row.sender_id !== viewerId && row.receiver_id !== viewerId)) {
+    if (!row) {
       throw new SecurityError('media_unavailable', 404, 'Media unavailable');
     }
     if (row.withdrawn_at) {
       throw new SecurityError('media_withdrawn', 410, 'Media withdrawn');
     }
-    const otherId = row.sender_id === viewerId ? row.receiver_id : row.sender_id;
-    await accessControl.assertInteraction(viewerId, otherId, { requireMatch: true });
     if (isExhaustedMedia(row.is_disappearing, row.max_views, row.view_count)) {
       throw new SecurityError('media_expired', 410, 'Media expired');
     }
     return {
       storageKey: row.media_storage_key as string,
       mimeType: row.media_mime_type as string,
+      senderId: row.sender_id as string,
+      mediaType: (row.media_type as string | null) ?? null,
+      isDisappearing: Boolean(row.is_disappearing),
     };
+  },
+
+  /** Server-side clear/blur decision for a media delivery (verified Premium when flag on). */
+  async viewerMediaClear(
+    viewerId: string,
+    ownerOrSenderId: string,
+    mediaType: string | null,
+  ): Promise<boolean> {
+    const viewerIsPremium = await resolveViewerPremium(viewerId);
+    return computeMediaClear({
+      enabled: isDiscreetMediaBlurEnabled(),
+      viewerIsPremium,
+      isOwnMedia: viewerId === ownerOrSenderId,
+      mediaType,
+    });
   },
 };

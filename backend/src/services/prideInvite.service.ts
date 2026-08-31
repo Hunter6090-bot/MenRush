@@ -85,17 +85,17 @@ export function buildPrideFlaggedInviteEmail(params: {
             </table>
             <h2 style="margin:0 0 12px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#C4832A;font-weight:700;">The bargain</h2>
             <ul style="margin:0 0 28px;padding-left:20px;color:#7a6a5a;font-size:14px;line-height:1.8;">
-              <li>One code = beta access <strong style="color:#8a7a6a;">and</strong> 3 months Premium</li>
-              <li>If you book before launch, Premium starts at launch. On-time open 1&nbsp;October&nbsp;2026. Ends 1&nbsp;January&nbsp;2027. If launch slips, 3 months from the actual open date. Nothing usable before launch.</li>
-              <li>One Pride grant per person</li>
-              <li>Replaces the 30-day waitlist Premium gift (Terms 7.2). It does not add to that gift</li>
+              <li>One code unlocks two things: beta access, plus 3 months of Premium</li>
+              <li>Entering your code now <strong style="color:#8a7a6a;">reserves</strong> your 3 months. It does not start the clock. Premium switches on at launch (on track for 1&nbsp;October&nbsp;2026) and runs for 3 months from that date. If launch slips, your 3 months start from the actual open.</li>
+              <li>One code per person/email</li>
+              <li>This replaces the 30-day waitlist Premium gift (Terms 7.2). You get one or the other, not both</li>
             </ul>
             <p style="margin:0 0 24px;font-size:13px;color:#5a4a3a;line-height:1.6;">
               If this email is late or you do not receive a code, reply to this message or use Support on menrush.com.
               You can resend from /pride to this same email.
             </p>
             <p style="margin:0;font-size:11px;color:#3a2a1a;line-height:1.6;border-top:1px solid #1a1210;padding-top:20px;">
-              New Pride codes were issued only 21–31&nbsp;August&nbsp;2026 from /pride.
+              New Pride codes were issued only 21-31&nbsp;August&nbsp;2026 from /pride.
               18+ only. Bronze Apps UK Limited (trading as MenRush).
             </p>
           </td>
@@ -121,14 +121,14 @@ Entering it now BOOKS your Pride Premium grant. You do NOT enter it again on 1 O
 One person gets one Pride grant.
 
 The bargain:
-- One code = beta access and 3 months Premium
-- If you book before launch, Premium starts at launch. On-time open 1 October 2026. Ends 1 January 2027. If launch slips, 3 months from the actual open date. Nothing usable before launch.
-- One Pride grant per person
-- Replaces the 30-day waitlist Premium gift (Terms 7.2). It does not add to that gift
+- One code unlocks two things: beta access, plus 3 months of Premium
+- Entering your code now reserves your 3 months. It does not start the clock. Premium switches on at launch (on track for 1 October 2026) and runs for 3 months from that date. If launch slips, your 3 months start from the actual open.
+- One code per person/email
+- This replaces the 30-day waitlist Premium gift (Terms 7.2). You get one or the other, not both
 
 If this email is late or missing, reply or use Support. You can resend from /pride to this same email.
 
-New Pride codes issued only 21–31 August 2026 from /pride. 18+.
+New Pride codes issued only 21-31 August 2026 from /pride. 18+.
 Bronze Apps UK Limited (trading as MenRush).`;
 
   return { subject, html, text };

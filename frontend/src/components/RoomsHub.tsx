@@ -3,7 +3,9 @@ import { Layout } from './Layout';
 import { RoomList } from './RoomList';
 import { RoomChat } from '../pages/RoomChat';
 import { IconRooms } from './icons';
+import { ROUTE_LABELS } from '../lib/routeLabels';
 
+/** Desktop Video rooms workspace — sibling of Chat, not nested in messages. */
 export const RoomsHub = () => {
   const { roomId } = useParams<{ roomId?: string }>();
 
@@ -24,7 +26,7 @@ export const RoomsHub = () => {
               </div>
               <h2 className="text-lg font-bold text-[var(--cream)]">Open a room</h2>
               <p className="mt-2 max-w-sm text-sm text-[var(--cream-muted)]">
-                Select a group from the list to join the conversation, or create a new Premium group.
+                Select a group from {ROUTE_LABELS.rooms} to join, or create a new Premium group.
               </p>
             </div>
           )}
