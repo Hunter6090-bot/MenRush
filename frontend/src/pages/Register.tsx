@@ -190,7 +190,11 @@ export const Register = () => {
         ...(trimmedPromo ? { promo_code: trimmedPromo } : {}),
       });
       setAuth(res.data.user, res.data.token);
-      navigate(FEATURES.requireIdVerification ? '/verify/id' : '/profile/setup');
+      navigate(
+        FEATURES.veriffAfterSignup || FEATURES.requireIdVerification
+          ? '/verify/id'
+          : '/profile/setup',
+      );
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed. Please try again.');
     } finally {
