@@ -94,7 +94,8 @@ test.describe('desktop design migration @ 1440px', () => {
     await expect(page.getByRole('tab', { name: 'Messages' })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Video rooms', exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Messages', exact: true })).toBeVisible();
-    await expect(page.getByText('Messages').first()).toBeVisible();
+    // Hub chrome (not the lg:hidden mobile title).
+    await expect(page.locator('aside').getByText('Messages', { exact: true })).toBeVisible();
 
     const bobThread = page.getByText('Bob').first();
     if (await bobThread.isVisible().catch(() => false)) {
