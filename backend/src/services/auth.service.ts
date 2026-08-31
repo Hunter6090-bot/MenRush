@@ -17,7 +17,7 @@ import {
   transactionalParagraph,
 } from './transactional-email.template';
 import { v4 as uuidv4 } from 'uuid';
-import { inviteCodeService, isInviteRequired } from './invite-code.service';
+import { inviteCodeService } from './invite-code.service';
 import {
   isSharedPrideCode,
   personalPrideExpiredMessage,
@@ -26,6 +26,7 @@ import {
 } from './promo.service';
 import { assertPrideInviteEmailMatch } from './prideInvite.service';
 import { ageFromDateOfBirth } from '../lib/age';
+import { premiumService } from './premium.service';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable is required');
@@ -171,10 +172,8 @@ export const authService = {
       }
     }
 
-    if (isInviteRequired()) {
-      if (!inviteCode) {
-        throw new Error('A beta invite code is required to create an account.');
-      }
+    // Invite is optional (product lock 31 Aug 2026). When provided it must be valid.
+    if (inviteCode) {
       const check = await inviteCodeService.validate(inviteCode);
       if (!check.valid) {
         throw new Error('This invite code is invalid or has already been used.');
@@ -232,7 +231,7 @@ export const authService = {
 
       const user = result.rows[0];
 
-      if (inviteCode && (isInviteRequired() || prideInviteMonths)) {
+      if (inviteCode) {
         await inviteCodeService.redeemForRegistration(inviteCode, user.id, client);
       }
 
@@ -250,9 +249,14 @@ export const authService = {
         await promoService.redeemSharedPride(promoCode!, data.email, user.id, client);
       } else if (usingPersonalPride) {
         await promoService.redeemPersonalPride(promoCode!, data.email, user.id, client);
+      } else {
+        // Terms 7.2 waitlist gift: 30 days Premium before 1 Oct 2026 UK.
+        // Pride replaces this gift — do not stack.
+        await premiumService.grantWaitlistGift(user.id, client);
       }
 
-      if (prideInviteMonths || usingSharedPride || usingPersonalPride) {
+      // Refresh entitlements after Pride or waitlist gift.
+      {
         const refreshed = await client.query(
           `SELECT id, email, name, age, date_of_birth, photo_url, is_verified, verification_status,
                   age_assurance_status, authenticity_status,

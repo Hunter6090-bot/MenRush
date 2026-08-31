@@ -31,8 +31,13 @@ export function generateInviteCodeValue(): { code: string; codeNormalized: strin
   };
 }
 
+/**
+ * Product lock 31 Aug 2026 (Brand / Zoul): open signup.
+ * `BETA_INVITE_REQUIRED` on Railway must not gate registration — invites stay
+ * optional and still redeem when provided.
+ */
 export function isInviteRequired(): boolean {
-  return process.env.BETA_INVITE_REQUIRED === 'true';
+  return false;
 }
 
 type InviteRow = {

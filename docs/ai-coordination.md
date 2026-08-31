@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| P0 open signup (no invite gate; 30d waitlist gift; Pride optional) | open | this branch `cursor/open-signup-no-invite-gate-389d` | Cursor — FE ignores VITE_BETA_INVITE_REQUIRED; BE isInviteRequired always false; waitlist gift before 1 Oct UK; Veriff stays opt-in; do not mix #150/#97–#99 |
 | Veriff InContext SDK after signup (`/verify/id`) | PR `#178` `cursor/veriff-sdk-signup` | — | Cursor — `@veriff/incontext-sdk`; session + decision webhook; badge only on approved; native capture at `/verify/id/manual`; rebased onto main (cursor) |
 | **FLAGGED — Community nav (needs Product)** | open | — | Five-features brief: Discover `MAP\|COMMUNITY` + desktop list-under-map = Community feed. **Shipped #165:** Nearby is Grid↔Map only; Community is own nav at `/stream`. Code kept #165. Do not restore the toggle without an explicit Product call. |
 | Merge `origin/main` into five-features (same-intent → main) | this branch `cursor/five-features-community-discreet-1e25` | — | Cursor cloud — took shipped main for Community API, Discreet (`DISCREET_MEDIA_BLUR` off), Safety `thread_id`, More filters, Nightlife 040. Dropped HEAD 039 combined, DiscreetMedia, always-on blur, `/users/sentinel`. Community placement left flagged (row above). |

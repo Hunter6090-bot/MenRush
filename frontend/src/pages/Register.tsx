@@ -9,7 +9,6 @@ import {
 } from '../components/PublicAuthShell';
 import { PulseRing } from '../components/PulseRing';
 import {
-  BETA_INVITE_REQUIRED,
   readStoredInviteCode,
   storeInviteCode,
 } from '../lib/betaInvite';
@@ -111,12 +110,6 @@ export const Register = () => {
     clearStoredPridePromoCode();
   }, [promoFromQuery]);
 
-  useEffect(() => {
-    if (BETA_INVITE_REQUIRED && !inviteCode) {
-      navigate('/beta', { replace: true });
-    }
-  }, [inviteCode, navigate]);
-
   const onPromoChange = (value: string) => {
     setError('');
     setPromoCode(value);
@@ -169,10 +162,6 @@ export const Register = () => {
       setError('Please confirm the ID verification consent.');
       return;
     }
-    if (BETA_INVITE_REQUIRED && !inviteCode) {
-      setError('A beta invite code is required.');
-      return;
-    }
 
     setLoading(true);
     try {
@@ -186,7 +175,7 @@ export const Register = () => {
         age: age ?? 0,
         date_of_birth: form.dob,
         password: form.password,
-        ...(BETA_INVITE_REQUIRED ? { invite_code: inviteCode } : {}),
+        ...(inviteCode ? { invite_code: inviteCode } : {}),
         ...(trimmedPromo ? { promo_code: trimmedPromo } : {}),
       });
       setAuth(res.data.user, res.data.token);
@@ -214,11 +203,11 @@ export const Register = () => {
       <PublicAuthHero
         title="You're in."
         accent="Set up your account."
-        copy="Your invite code checks out. Pick a username and password to join the beta."
+        copy="Pick a username and password. Optional Pride promo below if you have one."
       />
 
       <div className={`${publicPanelClass} max-h-[min(70dvh,720px)] overflow-y-auto lg:max-h-none lg:overflow-visible`}>
-        {BETA_INVITE_REQUIRED && inviteCode ? (
+        {inviteCode ? (
           <div className={publicInviteChipClass}>
             <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-[#E0A14A]">
               Invite code
@@ -308,7 +297,7 @@ export const Register = () => {
               required
               className={publicInputClass}
             />
-            <p className={helperClass}>Use the email your invite was sent to.</p>
+            <p className={helperClass}>We&apos;ll use this to sign you in.</p>
           </div>
 
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -322,7 +311,7 @@ export const Register = () => {
                 required
                 className={publicInputClass}
               />
-              <p className={helperClass}>Must match the date on your government ID.</p>
+              <p className={helperClass}>You must be 18 or older.</p>
             </div>
             <div className="flex flex-col gap-2.5">
               <label className={publicLabelClass}>Password</label>
@@ -398,7 +387,8 @@ export const Register = () => {
           {error ? <p className={publicErrorClass}>{error}</p> : null}
 
           <p className={helperClass}>
-            Every member is ID verified and selfie matched before going live.
+            Sign up before 1 October 2026 and you get 30 days of Premium free. A Pride promo
+            replaces that gift — it does not stack.
           </p>
 
           <button type="submit" disabled={loading} className={publicPrimaryButtonClass}>

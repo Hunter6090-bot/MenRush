@@ -4,8 +4,7 @@ import { guardAgainstSideEffects } from './support/network-guard';
 test.describe('Register Pride promo field', () => {
   test('promo box accepts public code and personal codes', async ({ page }) => {
     const network = await guardAgainstSideEffects(page);
-    // Invite required in Playwright webServer — pass a placeholder invite to reach the form.
-    await page.goto('/register?invite=MR-BETA-TEST1&promo=PRIDE%203MONTH%20FREE');
+    await page.goto('/register?promo=PRIDE%203MONTH%20FREE');
 
     const promo = page.getByTestId('register-promo-input');
     await expect(promo).toBeVisible();
