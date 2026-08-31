@@ -43,10 +43,9 @@ async function isMobileViewport(page: Page) {
   return !!size && size.width < MOBILE_BREAKPOINT;
 }
 
-// Mobile bottom nav only ships 4 primary tabs (Nearby, Matches, Chat, Profile);
-// Events and Settings remain reachable via a "More" sheet (P0 nav parity fix).
-// Cruise (formerly Hot Spots) is intentionally NOT a tab (#67) — it's a layer on
-// the Nearby map; see nearby-people-hotspots-layers.spec.ts.
+// Mobile bottom nav: Nearby, Matches, Chat, Rooms (Video rooms), Profile + More.
+// Video rooms is first-class chrome — not nested under Chat. Events and Settings
+// remain in the More sheet. Cruise (formerly Hot Spots) stays a Nearby map layer (#67).
 test('mobile More menu restores Events and Settings without losing primary tabs', async ({
   page,
 }) => {
@@ -59,9 +58,11 @@ test('mobile More menu restores Events and Settings without losing primary tabs'
   // href, not accessible name, since unread/match badges prepend a count to
   // the link's text (e.g. "1 Matches").
   const primaryNav = page.getByRole('navigation', { name: 'Primary' });
-  for (const href of ['/discover', '/matches', '/conversations', '/profile']) {
+  for (const href of ['/discover', '/matches', '/conversations', '/rooms', '/profile']) {
     await expect(primaryNav.locator(`a[href="${href}"]`)).toBeVisible();
   }
+  await expect(primaryNav.locator('a[href="/conversations"]')).toContainText(/Chat/i);
+  await expect(primaryNav.locator('a[href="/rooms"]')).toContainText(/Rooms/i);
 
   const moreTab = page.getByTestId('mobile-more-tab');
   await expect(moreTab).toBeVisible();
@@ -72,6 +73,8 @@ test('mobile More menu restores Events and Settings without losing primary tabs'
   await expect(menu).toBeVisible();
   await expect(menu.getByRole('link', { name: 'Events' })).toBeVisible();
   await expect(menu.getByRole('link', { name: 'Settings' })).toBeVisible();
+  // Video rooms is primary chrome — not buried in More.
+  await expect(menu.getByRole('link', { name: /Video rooms|Rooms/i })).toHaveCount(0);
   await expect(menu.getByRole('link', { name: 'Hot Spots' })).toHaveCount(0);
   await expect(menu.getByRole('link', { name: 'Cruise' })).toHaveCount(0);
 
@@ -89,7 +92,7 @@ test('desktop sidebar still exposes every discovery destination directly', async
   await authenticate(page.context(), alice);
   await page.goto('/discover');
 
-  for (const label of ['Nearby', 'Events', 'Matches', 'Messages', 'Profile', 'Settings']) {
+  for (const label of ['Nearby', 'Events', 'Matches', 'Messages', 'Video rooms', 'Profile', 'Settings']) {
     await expect(page.getByRole('link', { name: label, exact: true })).toBeVisible();
   }
   await expect(page.getByRole('link', { name: 'Hot Spots', exact: true })).toHaveCount(0);

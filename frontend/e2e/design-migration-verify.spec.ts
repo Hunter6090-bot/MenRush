@@ -89,8 +89,13 @@ test.describe('desktop design migration @ 1440px', () => {
     const page = await ctx.newPage();
     await page.goto('/conversations');
 
-    await expect(page.getByRole('tab', { name: 'Messages' })).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Rooms' })).toBeVisible();
+    // Chat stays Chat — no nested Rooms tab inside messages.
+    await expect(page.getByRole('tab', { name: 'Rooms' })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: 'Messages' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Video rooms', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Messages', exact: true })).toBeVisible();
+    // Hub chrome (not the lg:hidden mobile title).
+    await expect(page.locator('aside').getByText('Messages', { exact: true })).toBeVisible();
 
     const bobThread = page.getByText('Bob').first();
     if (await bobThread.isVisible().catch(() => false)) {
@@ -105,6 +110,23 @@ test.describe('desktop design migration @ 1440px', () => {
     await page.getByPlaceholder('Say something direct.').fill(probe);
     await page.getByRole('button', { name: 'Send message' }).click();
     await expect(page.getByText(probe)).toBeVisible({ timeout: 10_000 });
+
+    await assertNoHorizontalOverflow(page);
+    await ctx.close();
+  });
+
+  test('Video rooms is a first-class desktop workspace', async ({ browser }) => {
+    const ctx = await browser.newContext({ viewport: { ...desktopViewport } });
+    await authenticate(ctx, alice);
+    const page = await ctx.newPage();
+    await page.goto('/rooms');
+
+    await expect(page.getByRole('link', { name: 'Video rooms', exact: true })).toBeVisible();
+    // Room list chrome (not the lg:hidden mobile title).
+    await expect(page.locator('aside').getByText('Video rooms', { exact: true })).toBeVisible();
+    // Not nested inside Chat / Messages tabs.
+    await expect(page.getByRole('tab', { name: 'Messages' })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: 'Rooms' })).toHaveCount(0);
 
     await assertNoHorizontalOverflow(page);
     await ctx.close();

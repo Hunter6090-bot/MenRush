@@ -3,6 +3,7 @@ export const MOBILE_TAB_ROOTS = new Set([
   '/discover',
   '/matches',
   '/conversations',
+  '/rooms',
   '/profile',
 ]);
 
