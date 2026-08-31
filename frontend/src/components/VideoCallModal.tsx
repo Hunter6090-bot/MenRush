@@ -362,8 +362,11 @@ export function VideoCallModal() {
 
   if (callSetupError) {
     const offline = /offline/i.test(callSetupError);
+    const noAnswer = /pick up|didn’t pick|didn't pick/i.test(callSetupError);
     const insecure = /HTTPS|secure|camera and microphone/i.test(callSetupError);
-    const hint = offline
+    const hint = noAnswer
+      ? 'Their phone should have rung. If it didn’t, they need MenRush installed and notifications turned on.'
+      : offline
       ? 'Ask them to open menrush.com, stay on the chat screen, then try again. A push alone cannot answer the call.'
       : insecure
         ? 'Open MenRush from its secure HTTPS address, then allow camera and microphone access.'
