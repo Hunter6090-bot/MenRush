@@ -28,7 +28,7 @@ const TINY_JPEG =
   '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCwAA8A/9k=';
 
 const ARTIFACTS = '/opt/cursor/artifacts';
-const TILE_JPEG = fs.readFileSync('/tmp/my-photos-tile.jpg');
+const TILE_JPEG = fs.readFileSync(path.join(__dirname, 'fixtures/my-photos-tile.jpg'));
 
 function libraryPayload(viewers: Array<{ id: string; name: string; photo_url: string | null }>) {
   const now = new Date().toISOString();
