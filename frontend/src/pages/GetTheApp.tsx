@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { SiteFooter } from '../components/SiteFooter';
-import { registerServiceWorker } from '../lib/push';
+import {
+  clearDeferredInstallPrompt,
+  useDeferredInstallPrompt,
+} from '../lib/installPromptStore';
 
 type Platform = 'ios' | 'android';
 
@@ -36,10 +39,12 @@ function isIosSafari(): boolean {
 
 export function GetTheApp() {
   const navigate = useNavigate();
+  const deferred = useDeferredInstallPrompt();
   const [platform, setPlatform] = useState<Platform>('ios');
   const [step, setStep] = useState(0);
   const [done, setDone] = useState(false);
-  const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
+  // After native prompt() succeeds, keep the one-tap UI — do not snap back to the 4-step how-to.
+  const [androidInstalled, setAndroidInstalled] = useState(false);
   const standalone =
     typeof window !== 'undefined' &&
     (window.matchMedia('(display-mode: standalone)').matches ||
@@ -47,18 +52,13 @@ export function GetTheApp() {
 
   useEffect(() => {
     setPlatform(detectPlatform());
-    void registerServiceWorker();
-    const onPrompt = (event: Event) => {
-      event.preventDefault();
-      setDeferred(event as BeforeInstallPromptEvent);
-    };
-    window.addEventListener('beforeinstallprompt', onPrompt);
-    return () => window.removeEventListener('beforeinstallprompt', onPrompt);
   }, []);
 
   const steps = platform === 'ios' ? IOS : ANDROID;
   const current = steps[step];
   const showSafariNote = platform === 'ios' && !isIosSafari() && !standalone;
+  // Android Chrome with a captured prompt: one-tap Install — no four-step how-to.
+  const androidCanInstall = platform === 'android' && Boolean(deferred) && !standalone && !androidInstalled;
 
   const tabClass = (active: boolean) =>
     active
@@ -87,6 +87,17 @@ export function GetTheApp() {
     setDone(true);
   };
 
+  const installNative = async () => {
+    if (!deferred) return;
+    await deferred.prompt();
+    const { outcome } = await deferred.userChoice;
+    clearDeferredInstallPrompt();
+    if (outcome === 'accepted') {
+      setAndroidInstalled(true);
+      setDone(true);
+    }
+  };
+
   return (
     <div className="flex min-h-dvh flex-col bg-[#0D0A06] text-[#F0E0C0]">
       <main className="mx-auto w-full max-w-[440px] flex-1 px-5 pb-12 pt-8">
@@ -107,36 +118,59 @@ export function GetTheApp() {
         {standalone ? (
           <p className="mt-4 rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[rgba(196,131,42,0.08)] px-3.5 py-3 text-[13px] leading-[1.45]">This already looks installed. If you opened it from the Home Screen, you're done.</p>
         ) : null}
-        <div className="mt-4 h-1 overflow-hidden rounded-full bg-[rgba(196,131,42,0.18)]" aria-hidden>
-          <div className="h-full bg-gradient-to-r from-[#C4832A] to-[#E0A14A]" style={{ width: `${progress}%` }} />
-        </div>
-        {!done ? (
-          <section className="mt-4 rounded-[22px] border border-[rgba(196,131,42,0.35)] bg-[rgba(20,14,8,0.72)] px-4 py-5">
-            <p className="text-[12px] font-extrabold uppercase tracking-[0.12em] text-[#C4832A]">Step {step + 1} of {steps.length}</p>
-            <h2 className="mt-2 text-[24px] font-extrabold leading-[1.15]">{current.t}</h2>
-            <p className="mt-2 text-[15px] leading-[1.5] text-[#A89070]">{current.d}</p>
-          </section>
-        ) : (
-          <section className="mt-4 text-center">
+
+        {androidCanInstall ? (
+          <div className="mt-6">
+            <button
+              type="button"
+              className="w-full rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3.5 text-[15px] font-bold text-[#FFF6E6]"
+              onClick={() => void installNative()}
+            >
+              Install MenRush
+            </button>
+            <p className="mt-3 text-center text-[13px] leading-[1.45] text-[#A89070]">
+              One tap. Chrome puts MenRush on your Home Screen.
+            </p>
+          </div>
+        ) : androidInstalled ? (
+          <section className="mt-6 text-center">
             <h2 className="text-[24px] font-extrabold">It's on your Home Screen.</h2>
             <p className="mt-2 text-[15px] text-[#A89070]">Open the MenRush icon. Sign in if you already have an invite.</p>
+            <button
+              type="button"
+              className="mt-4 w-full rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3.5 text-[15px] font-bold text-[#FFF6E6]"
+              onClick={() => navigate('/login')}
+            >
+              Done
+            </button>
           </section>
+        ) : (
+          <>
+            <div className="mt-4 h-1 overflow-hidden rounded-full bg-[rgba(196,131,42,0.18)]" aria-hidden>
+              <div className="h-full bg-gradient-to-r from-[#C4832A] to-[#E0A14A]" style={{ width: `${progress}%` }} />
+            </div>
+            {!done ? (
+              <section className="mt-4 rounded-[22px] border border-[rgba(196,131,42,0.35)] bg-[rgba(20,14,8,0.72)] px-4 py-5">
+                <p className="text-[12px] font-extrabold uppercase tracking-[0.12em] text-[#C4832A]">Step {step + 1} of {steps.length}</p>
+                <h2 className="mt-2 text-[24px] font-extrabold leading-[1.15]">{current.t}</h2>
+                <p className="mt-2 text-[15px] leading-[1.5] text-[#A89070]">{current.d}</p>
+              </section>
+            ) : (
+              <section className="mt-4 text-center">
+                <h2 className="text-[24px] font-extrabold">It's on your Home Screen.</h2>
+                <p className="mt-2 text-[15px] text-[#A89070]">Open the MenRush icon. Sign in if you already have an invite.</p>
+              </section>
+            )}
+            <div className="mt-4 flex gap-2.5">
+              <button type="button" className="flex-1 rounded-full border border-[rgba(196,131,42,0.35)] px-4 py-3.5 text-[15px] font-bold text-[#F0E0C0] disabled:opacity-40" disabled={!done && step === 0} onClick={goBack}>Back</button>
+              <button type="button" className="flex-1 rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3.5 text-[15px] font-bold text-[#FFF6E6]" onClick={goNext}>{done || step === steps.length - 1 ? 'Done' : 'Next'}</button>
+            </div>
+          </>
         )}
-        <div className="mt-4 flex gap-2.5">
-          <button type="button" className="flex-1 rounded-full border border-[rgba(196,131,42,0.35)] px-4 py-3.5 text-[15px] font-bold text-[#F0E0C0] disabled:opacity-40" disabled={!done && step === 0} onClick={goBack}>Back</button>
-          <button type="button" className="flex-1 rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3.5 text-[15px] font-bold text-[#FFF6E6]" onClick={goNext}>{done || step === steps.length - 1 ? 'Done' : 'Next'}</button>
-        </div>
-        {platform === 'android' && deferred ? (
-          <button type="button" className="mt-3 w-full rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3.5 text-[15px] font-bold text-[#FFF6E6]" onClick={async () => { await deferred.prompt(); await deferred.userChoice; setDeferred(null); }}>Install MenRush</button>
-        ) : null}
+
         <p className="mt-8 text-center text-[13px] leading-[1.5] text-[#6B5840]">No App Store. No Play Store.<br />18+ only. <Link to="/" className="font-bold text-[#C4832A]">Waitlist</Link></p>
       </main>
       <SiteFooter />
     </div>
   );
-}
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }

@@ -5,9 +5,13 @@ import './styles/globals.css';
 import App from './App';
 import { initializeErrorReporting, Sentry } from './observability/sentry';
 import { initThemeFromStorage } from './lib/theme';
+import { startInstallPromptCapture } from './lib/installPromptStore';
 
 // Restore appearance before first paint of React tree (index.html also pre-applies).
 initThemeFromStorage();
+
+// Capture beforeinstallprompt as early as possible so navigation does not drop it.
+startInstallPromptCapture();
 
 // Sentry stays eager (tree-shaken ~87KB chunk). Statsig boots on idle so phones
 // do not pay for analytics on first paint of every route.
