@@ -38,7 +38,7 @@ type TemplateSeed = {
 export const TEMPLATES: TemplateSeed[] = [
   {
     slug: 'oct1-launch-signal',
-    name: 'Oct1 — Launch signal',
+    name: 'Oct1. Launch signal',
     category: 'launch-signal',
     platforms: ['x', 'instagram', 'bluesky', 'tiktok'],
     bodyTemplate: `{{hook}}
@@ -53,7 +53,7 @@ export const TEMPLATES: TemplateSeed[] = [
       {
         key: 'cta_line',
         label: 'CTA line',
-        default: 'Opens 1 October — UK first.',
+        default: 'Opens 1 October (UK first).',
       },
       { key: 'link', label: 'Link', default: CTA },
     ],
@@ -61,7 +61,7 @@ export const TEMPLATES: TemplateSeed[] = [
   },
   {
     slug: 'oct1-nearby-rooms',
-    name: 'Oct1 — Nearby / rooms energy',
+    name: 'Oct1. Nearby / rooms energy',
     category: 'nearby-rooms',
     platforms: ['x', 'instagram', 'bluesky', 'tiktok', 'reddit'],
     bodyTemplate: `{{hook}}
@@ -80,7 +80,7 @@ export const TEMPLATES: TemplateSeed[] = [
         key: 'body',
         label: 'Supporting lines',
         default:
-          'Map-first energy. Intentional rooms coming with the product — no fake catalog.',
+          'Map-first energy. Intentional rooms coming with the product. no fake catalog.',
       },
       {
         key: 'cta_line',
@@ -93,7 +93,7 @@ export const TEMPLATES: TemplateSeed[] = [
   },
   {
     slug: 'oct1-early-premium',
-    name: 'Oct1 — Early Premium reward',
+    name: 'Oct1. Early Premium reward',
     category: 'early-premium',
     platforms: ['x', 'instagram', 'bluesky', 'tiktok'],
     bodyTemplate: `{{hook}}
@@ -124,7 +124,7 @@ export const TEMPLATES: TemplateSeed[] = [
   },
   {
     slug: 'oct1-founder-build',
-    name: 'Oct1 — Founder / build in public',
+    name: 'Oct1. Founder / build in public',
     category: 'founder-build',
     platforms: ['x', 'instagram', 'bluesky', 'tiktok', 'reddit'],
     bodyTemplate: `{{hook}}
@@ -142,7 +142,7 @@ export const TEMPLATES: TemplateSeed[] = [
       {
         key: 'body',
         label: 'Supporting lines',
-        default: 'Real product. Real pressure. Real launch clock — 1 October.',
+        default: 'Real product. Real pressure. Real launch clock. 1 October.',
       },
       {
         key: 'cta_line',
@@ -155,7 +155,7 @@ export const TEMPLATES: TemplateSeed[] = [
   },
   {
     slug: 'oct1-trust-discretion',
-    name: 'Oct1 — Trust / discretion',
+    name: 'Oct1. Trust / discretion',
     category: 'trust-discretion',
     platforms: ['x', 'instagram', 'bluesky', 'tiktok', 'reddit'],
     bodyTemplate: `{{hook}}
@@ -201,9 +201,43 @@ type PostSeed = {
   kind: 'full' | 'outline';
 };
 
-/** UK wall-clock → timestamptz (BST UTC+1 for Aug–early Oct 2026). */
+/** UK wall-clock → timestamptz (BST UTC+1 for Aug-early Oct 2026). */
 export function ukWallToUtcIso(date: string, timeUk: string): string {
   return `${date}T${timeUk}:00+01:00`;
+}
+
+const PLATFORM_TAGS: Partial<Record<SocialPlatform, string[]>> = {
+  x: ['#GayMen', '#GayUK'],
+  instagram: ['#GayMen', '#LGBTQ', '#GayLondon', '#GayUK', '#GayDating'],
+  bluesky: ['#GayMen', '#LGBTQ', '#GayUK'],
+};
+
+const FORBIDDEN_TAGS = ['#MenRush', '#Waitlist', '#NewApp'];
+
+/** House rules: no em/en dashes; platform hashtags. */
+export function polishSocialCopy(body: string, platform: SocialPlatform): string {
+  let s = String(body || '');
+  // Strip em dash (U+2014) and en dash (U+2013) asides only.
+  s = s.replace(/\s*\u2014\s*UK first/gi, ' (UK first)');
+  s = s.replace(/\s*\u2013\s*UK first/gi, ' (UK first)');
+  s = s.replace(/\s*\u2014\s*opens 1 October/gi, '. Opens 1 October');
+  s = s.replace(/\s*\u2013\s*opens 1 October/gi, '. Opens 1 October');
+  s = s.replace(/Waitlist\s*[\u2014\u2013]\s*/gi, 'Waitlist: ');
+  s = s.replace(/menrush\.com\s*[\u2014\u2013]\s*/gi, 'menrush.com. ');
+  s = s.replace(/MenRush\s*[\u2014\u2013]\s*/gi, 'MenRush. ');
+  s = s.replace(/clock\s*[\u2014\u2013]\s*/gi, 'clock. ');
+  s = s.replace(/\s*[\u2014\u2013]\s*/g, '. ');
+  for (const bad of FORBIDDEN_TAGS) {
+    s = s.replace(new RegExp(bad.replace('#', '\\#'), 'gi'), '');
+  }
+  s = s.replace(/\.\s*\./g, '.').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+
+  const tags = PLATFORM_TAGS[platform];
+  if (tags?.length) {
+    const missing = tags.filter((t) => !new RegExp(t.replace('#', '\\#'), 'i').test(s));
+    if (missing.length) s = `${s}\n\n${missing.join(' ')}`;
+  }
+  return s;
 }
 
 function dayPosts(
@@ -228,7 +262,7 @@ function dayPosts(
       templateSlug: tpl,
       date,
       timeUk: '08:30',
-      body: copy.xAm,
+      body: polishSocialCopy(copy.xAm, 'x'),
       week,
       kind,
     },
@@ -238,7 +272,7 @@ function dayPosts(
       templateSlug: tpl,
       date,
       timeUk: '19:30',
-      body: copy.xPm,
+      body: polishSocialCopy(copy.xPm, 'x'),
       week,
       kind,
     },
@@ -248,7 +282,7 @@ function dayPosts(
       templateSlug: tpl,
       date,
       timeUk: '19:30',
-      body: copy.ig,
+      body: polishSocialCopy(copy.ig, 'instagram'),
       week,
       kind,
     },
@@ -258,7 +292,7 @@ function dayPosts(
       templateSlug: tpl,
       date,
       timeUk: '13:00',
-      body: copy.bluesky,
+      body: polishSocialCopy(copy.bluesky, 'bluesky'),
       week,
       kind,
     },
@@ -268,7 +302,7 @@ function dayPosts(
       templateSlug: tpl,
       date,
       timeUk: '19:00',
-      body: copy.tiktok,
+      body: polishSocialCopy(copy.tiktok, 'tiktok'),
       week,
       kind,
     },
@@ -280,7 +314,7 @@ function dayPosts(
       templateSlug: tpl,
       date,
       timeUk: '15:00',
-      body: copy.reddit,
+      body: polishSocialCopy(copy.reddit, 'reddit'),
       week,
       kind,
     });
@@ -288,16 +322,16 @@ function dayPosts(
   return posts;
 }
 
-/** Weeks 1–2: full draft copy (18–31 Aug 2026). */
+/** Weeks 1-2: full draft copy (21 Aug-3 Sep 2026). Day 1 = 21 Aug opening signal. */
 export function buildWeek1And2Posts(): PostSeed[] {
   const out: PostSeed[] = [];
 
   out.push(
-    ...dayPosts('2026-08-18', 1, 'full', {
+    ...dayPosts('2026-08-21', 1, 'full', {
       templateSlug: 'oct1-launch-signal',
       xAm: `Men are tired of apps that feel crowded, slow, and built for everyone except them.
 
-MenRush opens 1 October — UK first.
+MenRush opens 1 October. UK first.
 
 Built for fast chemistry, local signal, and less noise.
 
@@ -315,7 +349,7 @@ ${CTA}`,
 
 No endless noise. No pretending. No waiting around for a maybe.
 
-MenRush — 1 October. UK first.
+MenRush. 1 October. UK first.
 
 Join the waitlist at menrush.com`,
       bluesky: `MenRush is being built for men who want less noise and more right-now signal.
@@ -325,7 +359,7 @@ ${CTA}`,
       tiktok: `POV: dating apps forgot what men actually want.
 
 Beat: call out endless swiping, then introduce MenRush as speed, proximity, and intent.
-CTA: waitlist at menrush.com — opens 1 October.`,
+CTA: waitlist at menrush.com. Opens 1 October.`,
       reddit: `Title: What would make a dating app feel faster and less exhausting for men?
 
 Body:
@@ -340,7 +374,7 @@ If anyone wants to follow the build, the waitlist is at ${CTA}`,
   );
 
   out.push(
-    ...dayPosts('2026-08-19', 1, 'full', {
+    ...dayPosts('2026-08-22', 1, 'full', {
       templateSlug: 'oct1-launch-signal',
       xAm: `Most apps optimize for time spent.
 
@@ -363,7 +397,7 @@ More signal.
 More intent.
 More right-now energy.
 
-menrush.com — 1 October`,
+menrush.com. 1 October`,
       bluesky: `Most apps optimize for time spent.
 
 MenRush is being built for momentum.
@@ -377,7 +411,7 @@ CTA: join early at menrush.com`,
   );
 
   out.push(
-    ...dayPosts('2026-08-20', 1, 'full', {
+    ...dayPosts('2026-08-23', 1, 'full', {
       templateSlug: 'oct1-early-premium',
       xAm: `If you are early, we remember it.
 
@@ -408,11 +442,11 @@ CTA: menrush.com`,
   );
 
   out.push(
-    ...dayPosts('2026-08-21', 1, 'full', {
+    ...dayPosts('2026-08-24', 1, 'full', {
       templateSlug: 'oct1-founder-build',
       xAm: `Built in public.
 
-Real product. Real pressure. Real launch clock — 1 October.
+Real product. Real pressure. Real launch clock. 1 October.
 
 If you want in early:
 ${CTA}`,
@@ -444,7 +478,7 @@ A lot of apps feel crowded, slow, and built to keep you scrolling.
 
 We are trying something tighter with MenRush: more local context, faster chemistry, and less friction.
 
-Still early — we open 1 October (UK first). I would genuinely like to know what would make an app like that worth trying for you.
+Still early. we open 1 October (UK first). I would genuinely like to know what would make an app like that worth trying for you.
 
 Waitlist:
 ${CTA}`,
@@ -452,7 +486,7 @@ ${CTA}`,
   );
 
   out.push(
-    ...dayPosts('2026-08-22', 1, 'full', {
+    ...dayPosts('2026-08-25', 1, 'full', {
       templateSlug: 'oct1-launch-signal',
       xAm: `You do not need more matches that go nowhere.
 
@@ -487,7 +521,7 @@ CTA: join early at menrush.com`,
   );
 
   out.push(
-    ...dayPosts('2026-08-23', 1, 'full', {
+    ...dayPosts('2026-08-26', 1, 'full', {
       templateSlug: 'oct1-launch-signal',
       xAm: `MenRush is being designed around one question:
 
@@ -525,7 +559,7 @@ If an app is built around nearby availability, what would you need to trust it? 
   );
 
   out.push(
-    ...dayPosts('2026-08-24', 1, 'full', {
+    ...dayPosts('2026-08-27', 1, 'full', {
       templateSlug: 'oct1-launch-signal',
       xAm: `Launches do not happen because products exist.
 
@@ -541,7 +575,7 @@ ${CTA}`,
 
 Waitlist open now.
 
-menrush.com — opens 1 October`,
+menrush.com. opens 1 October`,
       bluesky: `No audience, no launch.
 
 MenRush is coming for men who want less friction, more signal, and a room that actually moves.
@@ -554,9 +588,9 @@ CTA: menrush.com`,
     }),
   );
 
-  // Week 2 — nearby / rooms energy
+  // Week 2. nearby / rooms energy
   out.push(
-    ...dayPosts('2026-08-25', 2, 'full', {
+    ...dayPosts('2026-08-28', 2, 'full', {
       templateSlug: 'oct1-nearby-rooms',
       xAm: `See who is near you right now.
 
@@ -564,11 +598,11 @@ That is the product truth MenRush is built around.
 
 Map-first. Local. Immediate.
 
-Waitlist — opens 1 October:
+Waitlist. opens 1 October:
 ${CTA}`,
       xPm: `Not another endless grid.
 
-A clearer read on who is actually around — when it matters.
+A clearer read on who is actually around. when it matters.
 
 ${CTA}`,
       ig: `Map-first energy.
@@ -580,7 +614,7 @@ Who is worth your attention right now.
 menrush.com`,
       bluesky: `Proximity without the noise.
 
-MenRush opens 1 October — UK first.
+MenRush opens 1 October. UK first.
 ${CTA}`,
       tiktok: `Hook: Stop swiping strangers across the country. Start with who is near you.
 
@@ -595,13 +629,13 @@ Waitlist if you want to follow: ${CTA}`,
   );
 
   out.push(
-    ...dayPosts('2026-08-26', 2, 'full', {
+    ...dayPosts('2026-08-29', 2, 'full', {
       templateSlug: 'oct1-nearby-rooms',
       xAm: `Tired of chatting for weeks and never meeting?
 
 See who is actually near you.
 
-MenRush — 1 October.
+MenRush. 1 October.
 ${CTA}`,
       xPm: `Less chat-for-weeks.
 More local signal.
@@ -623,9 +657,9 @@ Beat: nearby presence vs endless texting. CTA waitlist.`,
   );
 
   out.push(
-    ...dayPosts('2026-08-27', 2, 'full', {
+    ...dayPosts('2026-08-30', 2, 'full', {
       templateSlug: 'oct1-nearby-rooms',
-      xAm: `Rooms are coming with the product — intentional spaces, not a fake catalog today.
+      xAm: `Rooms are coming with the product. intentional spaces, not a fake catalog today.
 
 MenRush opens 1 October.
 ${CTA}`,
@@ -638,7 +672,7 @@ ${CTA}`,
       ig: `Nearby energy.
 Intentional rooms at launch.
 
-We will say when they are open — not before.
+We will say when they are open. not before.
 
 menrush.com`,
       bluesky: `Rooms ship with the product. No fake live catalog.
@@ -647,22 +681,22 @@ Opens 1 October.
 ${CTA}`,
       tiktok: `Hook: We are not pretending rooms are live.
 
-Beat: honest build — nearby + rooms at launch. CTA waitlist.`,
+Beat: honest build. nearby + rooms at launch. CTA waitlist.`,
       reddit: `Comment angle: In a thread about group chats / rooms on dating apps.
 
 Copy:
-We are shipping rooms with MenRush at launch (1 Oct, UK first) — not claiming a live catalog now. Curious what makes a room feel useful vs noisy for you.`,
+We are shipping rooms with MenRush at launch (1 Oct, UK first). not claiming a live catalog now. Curious what makes a room feel useful vs noisy for you.`,
     }),
   );
 
   out.push(
-    ...dayPosts('2026-08-28', 2, 'full', {
+    ...dayPosts('2026-08-31', 2, 'full', {
       templateSlug: 'oct1-nearby-rooms',
       xAm: `Friday energy should feel local.
 
 Who is around. Who is free. Who is worth the message.
 
-MenRush — 1 October.
+MenRush. 1 October.
 ${CTA}`,
       xPm: `Night proximity without the spam.
 
@@ -683,11 +717,11 @@ Beat: map / presence vibe. CTA waitlist.`,
   );
 
   out.push(
-    ...dayPosts('2026-08-29', 2, 'full', {
+    ...dayPosts('2026-09-01', 2, 'full', {
       templateSlug: 'oct1-trust-discretion',
       xAm: `Discreet does not mean invisible.
 
-It means you control how you show up — and still find who is nearby.
+It means you control how you show up. and still find who is nearby.
 
 ${CTA}`,
       xPm: `Adult. Premium. Direct.
@@ -696,7 +730,7 @@ MenRush is built for men who want presence without the circus.
 ${CTA}`,
       ig: `Discretion with presence.
 
-See who is near you — on your terms.
+See who is near you. on your terms.
 
 menrush.com`,
       bluesky: `Discretion with presence. That is the balance.
@@ -715,11 +749,11 @@ ${CTA}`,
   );
 
   out.push(
-    ...dayPosts('2026-08-30', 2, 'full', {
+    ...dayPosts('2026-09-02', 2, 'full', {
       templateSlug: 'oct1-nearby-rooms',
       xAm: `Soft ask:
 
-If MenRush opened tomorrow, what nearby feature would you use first — map, filters, or rooms?
+If MenRush opened tomorrow, what nearby feature would you use first. map, filters, or rooms?
 
 Tell us. Then get on the list:
 ${CTA}`,
@@ -731,19 +765,19 @@ ${CTA}`,
 
 Map. Filters. Rooms.
 
-Tell us — then join early.
+Tell us. then join early.
 menrush.com`,
       bluesky: `What nearby feature would you use first?
 
 ${CTA}`,
-      tiktok: `Hook: Map, filters, or rooms — what do you open first?
+      tiktok: `Hook: Map, filters, or rooms. what do you open first?
 
 Beat: poll-style, genuine ask. CTA waitlist.`,
     }),
   );
 
   out.push(
-    ...dayPosts('2026-08-31', 2, 'full', {
+    ...dayPosts('2026-09-03', 2, 'full', {
       templateSlug: 'oct1-early-premium',
       xAm: `Bridge to September:
 
@@ -772,7 +806,7 @@ Beat: Premium thank-you + 1 Oct date. CTA waitlist.`,
   return out;
 }
 
-/** Weeks 3–launch: outline stubs (expand before approval). */
+/** Weeks 3-launch: outline stubs (expand before approval). */
 export function buildOutlinePosts(): PostSeed[] {
   const weeks: Array<{
     week: number;
@@ -785,62 +819,59 @@ export function buildOutlinePosts(): PostSeed[] {
       week: 3,
       templateSlug: 'oct1-early-premium',
       dates: [
-        '2026-09-01',
-        '2026-09-02',
-        '2026-09-03',
         '2026-09-04',
         '2026-09-05',
         '2026-09-06',
         '2026-09-07',
+        '2026-09-08',
+        '2026-09-09',
+        '2026-09-10',
       ],
-      theme: 'Early Premium — 30 days free for waitlist at launch. Thank-you tone, no fake scarcity.',
-      redditDates: ['2026-09-02', '2026-09-05'],
+      theme: 'Early Premium. 30 days free for waitlist at launch. Thank-you tone, no fake scarcity.',
+      redditDates: ['2026-09-05', '2026-09-08'],
     },
     {
       week: 4,
       templateSlug: 'oct1-founder-build',
       dates: [
-        '2026-09-08',
-        '2026-09-09',
-        '2026-09-10',
         '2026-09-11',
         '2026-09-12',
         '2026-09-13',
         '2026-09-14',
+        '2026-09-15',
+        '2026-09-16',
+        '2026-09-17',
       ],
-      theme: 'Founder / build in public. Real notes only — no invented metrics. Product questions welcome.',
-      redditDates: ['2026-09-10', '2026-09-13'],
+      theme: 'Founder / build in public. Real notes only. no invented metrics. Product questions welcome.',
+      redditDates: ['2026-09-13', '2026-09-16'],
     },
     {
       week: 5,
       templateSlug: 'oct1-trust-discretion',
       dates: [
-        '2026-09-15',
-        '2026-09-16',
-        '2026-09-17',
         '2026-09-18',
         '2026-09-19',
         '2026-09-20',
         '2026-09-21',
+        '2026-09-22',
+        '2026-09-23',
+        '2026-09-24',
       ],
       theme:
         'Trust / discretion. Free verification badge for all. Adult & discreet. Do not overclaim location privacy.',
-      redditDates: ['2026-09-16', '2026-09-19'],
+      redditDates: ['2026-09-19', '2026-09-22'],
     },
     {
       week: 6,
       templateSlug: 'oct1-launch-signal',
       dates: [
-        '2026-09-22',
-        '2026-09-23',
-        '2026-09-24',
         '2026-09-25',
         '2026-09-26',
         '2026-09-27',
         '2026-09-28',
       ],
-      theme: 'Countdown to 1 October. Clear date. UK first. Keep cadence — do not spam.',
-      redditDates: ['2026-09-24', '2026-09-27'],
+      theme: 'Countdown to 1 October. Clear date. UK first. Keep cadence. Do not spam.',
+      redditDates: ['2026-09-27'],
     },
     {
       week: 7,

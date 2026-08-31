@@ -9,6 +9,7 @@ import {
   PublicAuthShell,
 } from '../components/PublicAuthShell';
 import { PulseRing } from '../components/PulseRing';
+import { InstallPrompt } from '../components/InstallPrompt';
 import {
   publicErrorClass,
   publicInputClass,
@@ -90,7 +91,6 @@ export const Login = () => {
         ...(deviceTrustToken ? { deviceTrustToken } : {}),
       });
       if (res.data.requires2fa) {
-        // Stale or revoked trust token — drop it so we don't keep sending it.
         if (deviceTrustToken) clearDeviceTrustToken();
         setPendingToken(res.data.pendingToken);
         setPendingUser(res.data.user);
@@ -245,6 +245,7 @@ export const Login = () => {
           </div>
         </form>
       </div>
+      <InstallPrompt variant="card" />
     </PublicAuthShell>
   );
 };

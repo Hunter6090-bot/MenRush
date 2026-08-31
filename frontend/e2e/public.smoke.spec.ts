@@ -31,19 +31,16 @@ test.describe('public routes', () => {
   }
 });
 
-test('waitlist rejects invalid input without making a request', async ({ page }) => {
+test('landing hero Sign up free goes to account register', async ({ page }) => {
   const network = await guardAgainstSideEffects(page);
 
   await page.goto('/');
-  // Prefer accessible name (aria-label="Email for waitlist"); id is the design-lock anchor.
-  const emailInput = page.getByRole('textbox', { name: 'Email for waitlist' });
-  await expect(emailInput).toBeVisible();
-  await expect(page.locator('#waitlist-email')).toBeVisible();
-  await emailInput.fill('not-an-email');
-  await page.getByRole('button', { name: /^Join waitlist$/i }).click();
-
-  await expect(page.getByText('Please enter a valid email address.')).toBeVisible();
-  await expect(emailInput).toHaveValue('not-an-email');
+  const signUpLink = page.getByRole('link', { name: /^Sign up free$/i });
+  await expect(signUpLink).toBeVisible();
+  await expect(signUpLink).toHaveAttribute('href', '/register');
+  await expect(page.getByRole('textbox', { name: 'Email for waitlist' })).toHaveCount(0);
+  await expect(page.getByText(/OPENS 1 OCTOBER 2026/i)).toHaveCount(0);
+  await expect(page.getByText(/leave your email/i)).toHaveCount(0);
   expect(network.expectNoSideEffects()).toEqual([]);
 });
 

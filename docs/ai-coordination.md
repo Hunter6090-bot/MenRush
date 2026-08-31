@@ -47,6 +47,17 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Landing header BrandMark top-left (ComingSoon) | PR `cursor/landing-header-brandmark-35ee` | — | Cursor cloud — sm BrandMark → `/` left; Sign in right; hero mark kept; overline LIVE NOW. UK BETA OPEN; do not mix #165/#163/#97–#99 |
+| P0 Go live / Discover bounce (location ≠ incomplete profile) | PR `cursor/fix-go-live-discovery-bounce-d9b8` | — | Cursor cloud — honest live ticks; RequireProfileSetup never redirects for GPS; ActivationBanner Settings not Finish profile; /me lat/lng coerce; Safari how-to; do not touch #97–#99 / #158 / #160 / #162 / held PRs |
+| PWA Get the App: apostrophe leak + desktop banner + Done→/login | PR `cursor/fix-pwa-install-prompt-6d80` | — | Cursor cloud — JSX `\u2019`→real `'`; InstallPrompt phone-only via `isPhoneDevice`; Done→/login; do not touch #97–#99 / #158 / #160 / landing copy |
+| P0 mobile web page weight (phones slow; desktop OK) | PR `#160` `cursor/mobile-web-page-weight-b5a8` | Matches progressive paint + Chat 3–4s control e2e | Cursor cloud — Nearby/Matches iPhone; Chat list floor; `/api/media/display`; no host move; #97–#99 parked |
+| P0 beta: chat reply/send + blank profile + crash + push-tap + open-thread media + notif tray route | PR `#158` `cursor/p0-chat-profile-beta-0e36` | — | Cursor cloud — merged main (UK beta landing kept); navigate-first tap-to-chat; open-thread poll; SW tag recovery; owner asked deploy; #97–#99 parked; timings #160 |
+| UK beta-open landing hero (LIVE NOW — Sign up free → /register) | PR `#161` on main | — | Cursor cloud — hero only; remove Oct date + email waitlist; logo/headline/bg unchanged; do not touch #158/#160/#150/#97–#99 / Social Studio / pride |
+| Mutual profile: Pass · Open chat · Unmatch (drop duplicate Message) | PR `cursor/mutual-profile-unmatch-fd7a` | — | Cursor cloud — DELETE /users/like/:id removes both like dirs; ProfileView only; do not touch #97–#99 / rooms / public copy |
+| Profile tag pick-one / pick-several UX cue | PR `cursor/profile-tag-pick-cue-4040` | — | Cursor cloud — cue only under each tag subsection; selection rules unchanged; do not touch #97–#99 |
+| Discover Map\|Community parity + phone pinch zoom | PR `cursor/discover-map-community-parity-2402` | — | Cursor cloud — desktop under-map = Nearby (not Community); shared MAP\|COMMUNITY tabs; phone map pinch via touch-action/overflow + disableRotation; do not touch #97–#99 |
+| Pride exclude drip + wave-2; invite email copy (30-day gift, no em dashes) | PR `cursor/pride-exclude-drip-wave2-a4e8` | — | Cursor cloud — source=pride out of drip/wave-2; Pride email bargain reword; do not touch /pride face or #97–#99 |
+| Video note send MIME (MediaRecorder codecs→text/plain reject) | PR on main | — | Cursor cloud — client strips base MIME; API names mime reject; desktop webm + iPhone mp4 |
 | Community Space (replace Live Profile List) | PR `#134` on main | — | Cursor cloud — item 1/5; text posts ≤280; MAP\|COMMUNITY toggle; desktop list = feed |
 | Discreet Mode media blur (item 2/5; Ghost untouched) | PR `#136` on main | — | Cursor cloud — `media_clear` + CSS blur; `DISCREET_MEDIA_BLUR` opt-in (default off); no public copy |
 | Safety & Trust (Identity Checked badge + panic report) | PR `#137` on main | — | Cursor cloud — badge prominence + one-tap report w/ thread_id → SENTINEL |
@@ -63,7 +74,9 @@ style(icons): heritage set (claude)
 | Pride sole public offer (`/pride`; closed `/brightonpride` → redirect) | PR `#118` (folds #119) | claim + quiet public redeem | Cursor cloud — /pride Claim CTA; printed public redeem at register; Brighton grandfather |
 | Kill homepage fade + rooms skeleton blink | PR `cursor/kill-fidgety-motion-283d` | — | Cursor cloud — remove `mr-launch-fade`; RoomList refresh in place |
 | Oct 1 2026 social calendar seed (`oct1-2026`) | PR `#112` `cursor/social-oct1-2026-calendar-5921` | — | Cursor cloud — docs + idempotent seed; draft only; do not auto-publish; merged |
+| Social Studio visual workspace (logo default + Week 1 = 21–27 Aug) | PR `#117` `cursor/social-studio-visual-workspace-84c2` | — | Cursor cloud — default logo preview; Day 1 = 21 Aug opening copy; no Pride / #97–#99 |
 | Local Social Studio (Connections + week Approve) | PR `cursor/social-studio-local-0674` | — | Cursor cloud — `social-studio/`; keys in `.data/` only; no Railway outbound social; do not touch #97–#99 |
+| Social Studio visual workspace + owner photo → public https | PR `cursor/social-studio-owner-photo-https-266f` | — | Cursor cloud — auto-host owner uploads for Graph; never logo as post image; skip if no owner photo; do not touch #97–#99 |
 | UK launch homepage (ComingSoon 1 Oct 2026) | PR `#111` `cursor/uk-launch-homepage-527c` | — | Cursor cloud — dated UK launch page; waitlist/invite/sign-in kept |
 | Discover Sign out confirm + START PULSE sheet wiring + radius label sync | PR `cursor/fix-discover-signout-pulse-55cd` | — | Cursor cloud — do not redo; confirm before logout; Pulse never silent no-op |
 | Dead pressables (Events Tickets, RoomChat attach/emoji, search label) | PR `#104` `cursor/fix-dead-pressables-8f37` | — | Cursor cloud — draft; do not merge yet |

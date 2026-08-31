@@ -1,18 +1,29 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './styles/menrush-tokens.css';
-import 'leaflet/dist/leaflet.css';
 import './styles/globals.css';
 import App from './App';
-import { initializeAnalytics } from './observability/analytics';
 import { initializeErrorReporting, Sentry } from './observability/sentry';
 import { initThemeFromStorage } from './lib/theme';
 
 // Restore appearance before first paint of React tree (index.html also pre-applies).
 initThemeFromStorage();
 
+// Sentry stays eager (tree-shaken ~87KB chunk). Statsig boots on idle so phones
+// do not pay for analytics on first paint of every route.
 initializeErrorReporting();
-initializeAnalytics();
+const bootAnalytics = () => {
+  void import('./observability/analytics')
+    .then((m) => m.initializeAnalytics())
+    .catch(() => undefined);
+};
+const ric = (
+  window as Window & {
+    requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+  }
+).requestIdleCallback;
+if (typeof ric === 'function') ric(bootAnalytics, { timeout: 3500 });
+else window.setTimeout(bootAnalytics, 1);
 
 const errorFallback = (
   <div style={{ background: '#0D0A06', color: '#C4832A', padding: '2rem', fontFamily: 'monospace', minHeight: '100vh' }}>

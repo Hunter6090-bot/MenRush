@@ -16,14 +16,26 @@ import {
   type PhotoChoice,
 } from '../lib/genericAvatar';
 import { normalizeProfileImageFile } from '../lib/imageUpload';
-import { PROFILE_LOOKING_FOR_TAGS, PROFILE_TAG_GROUPS, toggleProfileInterest } from '../lib/profileTags';
+import {
+  PROFILE_LOOKING_FOR_TAGS,
+  PROFILE_TAG_GROUPS,
+  profileTagSelectHint,
+  toggleProfileInterest,
+} from '../lib/profileTags';
 import { PROFILE_INTERESTS_MAX } from '../lib/profileDetails';
 import {
   clearProfileSetupSkip,
+  isDiscoverLocationReady,
+  isProfileSetupStepDone,
   PROFILE_SETUP_STEPS,
   skipProfileSetup,
+  type ProfileSetupSnapshot,
 } from '../lib/profileSetup';
 import { consumePostAuthRedirect } from '../lib/profileLinks';
+import {
+  LOCATION_DENIED_NOT_INCOMPLETE,
+  SAFARI_LOCATION_HOW_TO,
+} from '../lib/deviceLocation';
 import {
   publicBackButtonClass,
   publicDarkSelectClass,
@@ -69,9 +81,21 @@ export const ProfileSetup: React.FC = () => {
   const [headline, setHeadline] = useState('');
   const [lookingFor, setLookingFor] = useState('');
   const [interests, setInterests] = useState<string[]>([]);
+  const [savedLat, setSavedLat] = useState<number | null>(null);
+  const [savedLng, setSavedLng] = useState<number | null>(null);
   const [locating, setLocating] = useState(false);
+  const [locationDenied, setLocationDenied] = useState(false);
 
   const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const checklistSnapshot: ProfileSetupSnapshot = {
+    photo_url: photoUrl || null,
+    bio,
+    looking_for: lookingFor,
+    interests,
+    lat: savedLat,
+    lng: savedLng,
+  };
 
   const stepIndex = STEP_ORDER.indexOf(step);
   const progressSteps = STEP_ORDER.length - 1;
@@ -100,6 +124,9 @@ export const ProfileSetup: React.FC = () => {
         const nextBio = d.bio ?? '';
         const nextLooking = d.looking_for ?? '';
         const nextInterests: string[] = d.interests ?? [];
+        const nextLat = d.lat != null ? Number(d.lat) : NaN;
+        const nextLng = d.lng != null ? Number(d.lng) : NaN;
+        const hasSavedPin = Number.isFinite(nextLat) && Number.isFinite(nextLng);
         setPhotoUrl(nextPhoto);
         setUserAge(d.age ?? user?.age);
         if (nextPhoto) {
@@ -109,6 +136,24 @@ export const ProfileSetup: React.FC = () => {
         setHeadline(d.headline ?? '');
         setLookingFor(nextLooking);
         setInterests(nextInterests);
+        if (hasSavedPin) {
+          setSavedLat(nextLat);
+          setSavedLng(nextLng);
+          setLocation(nextLat, nextLng);
+        }
+
+        const fieldsDone =
+          Boolean(nextPhoto) &&
+          nextBio.trim().length >= 20 &&
+          Boolean(nextLooking.trim()) &&
+          nextInterests.length >= 3;
+
+        // Already live with a saved pin — do not trap on this wizard.
+        if (fieldsDone && hasSavedPin) {
+          clearProfileSetupSkip();
+          navigate(consumePostAuthRedirect('/discover'), { replace: true });
+          return;
+        }
 
         // Resume at first incomplete step — skip welcome when avatar already set.
         if (!nextPhoto) setStep('photo');
@@ -157,7 +202,7 @@ export const ProfileSetup: React.FC = () => {
         return {
           title: 'Go',
           accent: 'live.',
-          copy: 'Location is on by default — you agreed at signup. Allow GPS so nearby guys can find you.',
+          copy: 'Your profile is ready. Allow GPS so Nearby can find men around you — or open Discover and enable location there.',
         };
     }
   }, [step]);
@@ -305,18 +350,35 @@ export const ProfileSetup: React.FC = () => {
     if (step === 'live') {
       setSaving(true);
       setError(null);
+      setLocationDenied(false);
       try {
+        // Already have a saved pin — leave setup; do not re-trap.
+        if (isDiscoverLocationReady({ lat: savedLat, lng: savedLng })) {
+          clearProfileSetupSkip();
+          navigate(consumePostAuthRedirect('/discover'));
+          return;
+        }
+
         setLocating(true);
         const { requestDeviceLocation } = await import('../lib/deviceLocation');
         const result = await requestDeviceLocation();
         if (!result.ok) {
-          setError(
-            `${result.message} Location is required to go live on Nearby — MenRush is proximity-first (18+).`,
-          );
+          if (result.error === 'denied') {
+            setLocationDenied(true);
+            setError(
+              `${LOCATION_DENIED_NOT_INCOMPLETE} ${result.message}`,
+            );
+          } else {
+            setError(
+              `${result.message} You can open Discover without location and allow GPS there.`,
+            );
+          }
           return;
         }
         try {
           await usersAPI.updateLocation(result.lat, result.lng);
+          setSavedLat(result.lat);
+          setSavedLng(result.lng);
           setLocation(result.lat, result.lng);
         } catch {
           setError('Got your position but could not save it. Check your connection and try again.');
@@ -528,7 +590,14 @@ export const ProfileSetup: React.FC = () => {
         ) : null}
 
         {step === 'looking' ? (
-          <div className="flex flex-wrap gap-2">
+          <div>
+            <p
+              className="mb-2 text-[10px] font-medium text-[var(--cream-muted)]/50"
+              data-testid="tag-select-hint-Looking for"
+            >
+              {profileTagSelectHint(true)}
+            </p>
+            <div className="flex flex-wrap gap-2">
             {PROFILE_LOOKING_FOR_TAGS.map((tag) => {
               const active = lookingFor === tag;
               return (
@@ -546,6 +615,7 @@ export const ProfileSetup: React.FC = () => {
                 </button>
               );
             })}
+            </div>
           </div>
         ) : null}
 
@@ -556,8 +626,14 @@ export const ProfileSetup: React.FC = () => {
             </p>
             {tagGroups.map((group) => (
               <div key={group.label}>
-                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-[var(--cream-muted)]/70">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--cream-muted)]/70">
                   {group.label}
+                </p>
+                <p
+                  className="mt-0.5 mb-2 text-[10px] font-medium text-[var(--cream-muted)]/50"
+                  data-testid={`tag-select-hint-${group.label}`}
+                >
+                  {profileTagSelectHint(group.singleSelect)}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {group.tags.map((tag) => {
@@ -588,15 +664,31 @@ export const ProfileSetup: React.FC = () => {
         ) : null}
 
         {step === 'live' ? (
-          <div className={publicInfoBoxClass}>
-            {PROFILE_SETUP_STEPS.map((item) => (
-              <SetupChecklistItem key={item.id} n="✓" text={item.label} done />
-            ))}
+          <div className={publicInfoBoxClass} data-testid="setup-live-checklist">
+            {PROFILE_SETUP_STEPS.map((item) => {
+              const done = isProfileSetupStepDone(item.id, checklistSnapshot);
+              return (
+                <SetupChecklistItem
+                  key={item.id}
+                  n={done ? '✓' : String(PROFILE_SETUP_STEPS.findIndex((s) => s.id === item.id) + 1)}
+                  text={item.label}
+                  done={done}
+                />
+              );
+            })}
             <p className="pt-2 text-[13px] leading-relaxed text-[var(--cream-muted)]">
-              We need your location to show men near you. Others see approximate distance only — not
-              your exact public pin. Exact live pin with matches is optional later. Shared only while
-              you use the app.
+              Your profile fields are ready. Location unlocks Nearby — others see approximate
+              distance only, not your exact public pin. Exact live pin with matches is optional
+              later. Shared only while you use the app.
             </p>
+            {locationDenied ? (
+              <p
+                className="pt-2 text-[12px] leading-relaxed text-[#E0A14A]"
+                data-testid="setup-safari-location-howto"
+              >
+                {SAFARI_LOCATION_HOW_TO}
+              </p>
+            ) : null}
           </div>
         ) : null}
 

@@ -51,7 +51,8 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
   }
 
   if (err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(400).json({ error: 'File size too large (max 5MB)' });
+    // Limits differ by route (profile 5MB, messages 40MB, etc.) — don't hardcode a size.
+    return res.status(400).json({ error: 'File size too large' });
   }
 
   if (err instanceof SecurityError) {
@@ -62,7 +63,7 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
     return res.status(402).json({ error: err.code, feature: err.feature });
   }
 
-  if (err.message === 'Unsupported upload type') {
+  if (typeof err.message === 'string' && err.message.startsWith('Unsupported upload type')) {
     return res.status(400).json({ error: err.message });
   }
 
