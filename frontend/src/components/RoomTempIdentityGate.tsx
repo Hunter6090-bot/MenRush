@@ -598,7 +598,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
       </div>
       <div className="mt-2 flex items-center justify-between gap-2">
         <p className="text-[11px] text-[#A89070]">
-          Photo optional. Skip it and you enter with initials.
+          Temporary photo required — never your profile face.
         </p>
         {photoUrl || photoPreview ? (
           <button
