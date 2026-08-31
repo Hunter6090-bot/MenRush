@@ -3,7 +3,7 @@ import { query } from '../db';
 import { defaultGenericAvatarUrl } from '../lib/genericAvatar';
 import { accessControl } from '../security/access';
 import { ProfileInput } from '../types/validation';
-import { ageFromDateOfBirth } from '../lib/age';
+import { ageFromDateOfBirth, AGE_FILTER_MIN } from '../lib/age';
 import { premiumService } from './premium.service';
 
 /**
@@ -108,6 +108,7 @@ export const userService = {
         AND p.is_ghost = false
         AND p.lat IS NOT NULL
         AND p.lng IS NOT NULL
+        AND u.age >= ${AGE_FILTER_MIN}
         AND NOT EXISTS (
           SELECT 1 FROM blocks b
           WHERE (b.blocker_id = $3 AND b.blocked_id = u.id)
@@ -127,11 +128,11 @@ export const userService = {
         OR (p.available_until IS NOT NULL AND p.available_until > NOW())
       )`;
     }
-    if (filters?.minAge) {
-      values.push(filters.minAge);
+    if (filters?.minAge != null) {
+      values.push(Math.max(filters.minAge, AGE_FILTER_MIN));
       queryStr += ` AND u.age >= $${values.length}`;
     }
-    if (filters?.maxAge) {
+    if (filters?.maxAge != null) {
       values.push(filters.maxAge);
       queryStr += ` AND u.age <= $${values.length}`;
     }
