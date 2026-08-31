@@ -434,22 +434,30 @@ export const messageService = {
   },
 
   async getMedia(viewerId: string, messageId: string) {
+    // Signed access token already binds viewerId. Re-running assertInteraction
+    // (multi-join match/block/verify) on every byte made iPhone chat video open
+    // ~12s — membership + block check here is enough for media bytes.
     const result = await query(
       `SELECT id, sender_id, receiver_id, media_type, media_storage_key, media_mime_type,
               is_disappearing, max_views, view_count, withdrawn_at
-       FROM messages
-       WHERE id = $1 AND media_storage_key IS NOT NULL`,
-      [messageId],
+       FROM messages m
+       WHERE m.id = $1
+         AND m.media_storage_key IS NOT NULL
+         AND (m.sender_id = $2 OR m.receiver_id = $2)
+         AND NOT EXISTS (
+           SELECT 1 FROM blocks b
+           WHERE (b.blocker_id = m.sender_id AND b.blocked_id = m.receiver_id)
+              OR (b.blocker_id = m.receiver_id AND b.blocked_id = m.sender_id)
+         )`,
+      [messageId, viewerId],
     );
     const row = result.rows[0];
-    if (!row || (row.sender_id !== viewerId && row.receiver_id !== viewerId)) {
+    if (!row) {
       throw new SecurityError('media_unavailable', 404, 'Media unavailable');
     }
     if (row.withdrawn_at) {
       throw new SecurityError('media_withdrawn', 410, 'Media withdrawn');
     }
-    const otherId = row.sender_id === viewerId ? row.receiver_id : row.sender_id;
-    await accessControl.assertInteraction(viewerId, otherId, { requireMatch: true });
     if (isExhaustedMedia(row.is_disappearing, row.max_views, row.view_count)) {
       throw new SecurityError('media_expired', 410, 'Media expired');
     }
@@ -458,6 +466,7 @@ export const messageService = {
       mimeType: row.media_mime_type as string,
       senderId: row.sender_id as string,
       mediaType: (row.media_type as string | null) ?? null,
+      isDisappearing: Boolean(row.is_disappearing),
     };
   },
 

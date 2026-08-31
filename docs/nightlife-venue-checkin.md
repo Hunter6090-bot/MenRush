@@ -1,8 +1,8 @@
 # Nightlife venue check-in
 
-UK-first Events ↔ Hot Spots bridge. Users check in at a venue from **Events** or
-the Discover map Hot Spot sheet. A temporary pin appears on the map using the
-existing Hot Spots data shape.
+UK-first Events ↔ Cruise bridge. Users check in at a venue from **Events** or
+the Discover map Cruise sheet. A temporary pin appears on the map using the
+existing Hot Spots data shape (API/route keep `/hot-spots` for compatibility).
 
 ## Behaviour
 
@@ -11,13 +11,14 @@ existing Hot Spots data shape.
 | TTL | **4 hours** (`ACTIVE_CHECKIN_TTL_HOURS` in `backend/src/services/hot-spots.service.ts`) |
 | Check-in | Free for all verified users |
 | Promote Your Event | Premium only (`/premium` redirect when not Premium) |
-| Pin content | Venue name + approximate check-in count (`live_count` rounded for Free) |
+| Pin content | Venue name + approximate check-in count (`live_count` rounded for Free); cruise-ship icon on Nearby |
+| Face | Product name is **Cruise** (map layer + `/hot-spots` page heading) |
 | Shape | Reuses `HotSpotDTO` with `checkin_ttl_hours` + `has_active_checkins` |
 
 ## API
 
 - `POST /api/events/:id/check-in` `{ anonymous?: boolean }` → `{ ok, spot }`
-- Existing `POST /api/hot-spots/:id/check-in` unchanged (map sheet / Hot Spots page)
+- Existing `POST /api/hot-spots/:id/check-in` unchanged (map sheet / Cruise page)
 
 Event check-in finds an existing Hot Spot within ~80 m of the venue, or creates a
 user-generated nightlife pin linked via `hot_spots.event_id`.
@@ -32,3 +33,4 @@ user-generated nightlife pin linked via `hot_spots.event_id`.
 - In-app copy refers to temporary map pins / check-ins, not a public live product.
 - Rooms remain closed to the public before 1 October 2026 — this feature does not
   invent live rooms or a US launch.
+- Do not invent venues, cities, or occupancy counts beyond real check-in data.

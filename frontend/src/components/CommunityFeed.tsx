@@ -11,11 +11,9 @@ import { useResolvingPhotoSrc } from './UserAvatar';
 const MAX_CHARS = 280;
 
 type CommunityFeedProps = {
-  /** When true, show the MAP | COMMUNITY toggle with Community selected. */
-  showSurfaceToggle?: boolean;
   /** Optional fixed radius (km). Defaults to 10. */
   radiusKm?: number;
-  /** Compact layout for the Discover desktop panel under the map. */
+  /** Compact layout (fewer composer rows). */
   compact?: boolean;
   className?: string;
 };
@@ -51,7 +49,6 @@ function distanceDisplay(post: CommunityPostDTO): string {
  * Free for all; no video, rooms, or premium lock.
  */
 export function CommunityFeed({
-  showSurfaceToggle = false,
   radiusKm = 10,
   compact = false,
   className = '',
@@ -155,43 +152,15 @@ export function CommunityFeed({
 
   return (
     <div className={`space-y-4 ${className}`} data-testid="community-feed">
-      {showSurfaceToggle ? (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            {!compact ? (
-              <>
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#C4832A]">
-                  Local text
-                </p>
-                <h1 className="text-2xl font-bold text-[var(--cream)]">{ROUTE_LABELS.community}</h1>
-                <p className="mt-1 text-sm text-[var(--cream-muted)]">
-                  Short updates from men nearby — no video, free for all.
-                </p>
-              </>
-            ) : null}
-          </div>
-          <div
-            className="flex items-center overflow-hidden rounded-full border bg-[var(--bg-elevated)]/85 backdrop-blur-sm"
-            style={{ borderColor: 'var(--border-default)' }}
-            role="group"
-            aria-label="Discovery surface"
-          >
-            <Link
-              to="/discover"
-              className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] transition-colors hover:text-[var(--copper)]"
-              style={{ color: 'var(--cream-soft)' }}
-              aria-label={`Switch to ${ROUTE_LABELS.map}`}
-            >
-              {ROUTE_LABELS.map}
-            </Link>
-            <span
-              className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.14em]"
-              style={{ background: 'var(--copper)', color: 'var(--bg-primary)' }}
-              aria-current="page"
-            >
-              {ROUTE_LABELS.community}
-            </span>
-          </div>
+      {!compact ? (
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#C4832A]">
+            Local text
+          </p>
+          <h1 className="text-2xl font-bold text-[var(--cream)]">{ROUTE_LABELS.community}</h1>
+          <p className="mt-1 text-sm text-[var(--cream-muted)]">
+            Short updates from men nearby — no video, free for all.
+          </p>
         </div>
       ) : null}
 

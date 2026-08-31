@@ -42,6 +42,12 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ className = '' }) => {
         <span className="hidden text-[#3D2B0E] sm:inline" aria-hidden>
           ·
         </span>
+        <Link to="/get-the-app" className="transition-colors hover:text-[#c8861c]">
+          Get the app
+        </Link>
+        <span className="hidden text-[#3D2B0E] sm:inline" aria-hidden>
+          ·
+        </span>
         <Link to="/privacy" className="transition-colors hover:text-[#c8861c]">
           Privacy
         </Link>

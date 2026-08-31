@@ -453,6 +453,8 @@ export function useWebRTC() {
         setCallSetupError(
           'They are offline. Ask them to open menrush.com, stay on the app, then try again.',
         );
+      } else if (error === 'no_answer') {
+        setCallSetupError('They didn’t pick up. Try again in a moment.');
       } else if (
         error === 'call_not_allowed' ||
         error === 'target_not_authorized' ||

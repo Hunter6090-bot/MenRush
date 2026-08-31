@@ -233,8 +233,8 @@ export function ProfileDrawer({
         <div
           className="relative w-full shrink-0"
           style={{
-            height: snap === "half" && !dragging ? 180 : 280,
-            maxHeight: "38%",
+            height: isDesktop ? 360 : snap === "half" && !dragging ? 180 : 280,
+            maxHeight: isDesktop ? "46%" : "38%",
             background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
             transition: dragging ? "none" : "height 220ms ease",
           }}
@@ -384,7 +384,8 @@ export function ProfileDrawer({
                   void onLike();
                 }
               }}
-              className={`flex-1 py-3 rounded-[var(--radius-md)] font-black text-sm tracking-wide active:scale-[0.98] transition-all ${
+              data-testid={mutual ? "drawer-open-chat" : "drawer-match"}
+              className={`flex-1 py-3.5 rounded-[var(--radius-md)] font-black text-sm uppercase tracking-wide active:scale-[0.98] transition-all ${
                 mutual || !liked
                   ? "bg-[var(--copper)] text-[var(--nn-on-copper)] hover:bg-[var(--copper-light,#E0A14A)]"
                   : "border border-[var(--copper)] bg-transparent text-[var(--copper)]"

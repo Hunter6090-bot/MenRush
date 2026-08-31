@@ -422,6 +422,7 @@ async function countUncappedDueCandidates(): Promise<number> {
          ON s.subscriber_id = w.id AND s.template_key = steps.key
       WHERE w.status = 'active'
         AND w.unsubscribe_token IS NOT NULL
+        AND (w.source IS DISTINCT FROM 'pride')
         AND s.id IS NULL
         AND NOW() >= w.created_at + (steps.day_offset || ' days')::interval`,
     params,
@@ -470,6 +471,7 @@ export async function findDueSends(limit = 50): Promise<DueSend[]> {
          ) prior ON TRUE
         WHERE w.status = 'active'
           AND w.unsubscribe_token IS NOT NULL
+          AND (w.source IS DISTINCT FROM 'pride')
           AND s.id IS NULL
           AND NOW() >= w.created_at + (steps.day_offset || ' days')::interval
           AND (

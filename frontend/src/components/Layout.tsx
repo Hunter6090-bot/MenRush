@@ -15,6 +15,7 @@ import { DiscoveryShellProvider, useDiscoveryShell } from '../context/DiscoveryS
 import { LocationPresenceStrip } from './LocationPresenceStrip';
 import { ProfileDepthStrip } from './ProfileDepthStrip';
 import { ThemeToggle } from './ThemeToggle';
+import { PushAlertBanner } from './PushAlertBanner';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -59,12 +60,33 @@ function LayoutInner({ children }: LayoutProps) {
   const [sidebarExpanded, setSidebarExpanded] = useState(readSidebarExpanded);
   const { state: discoveryShell } = useDiscoveryShell();
 
+  // Badge count only — do not refetch on every mobile tab change (that was a
+  // page-to-page API waterfall on phones). Refresh on mount + focus/visibility.
   useEffect(() => {
-    usersAPI
-      .getMatches()
-      .then((res) => setMatchCount(res.data?.length ?? 0))
-      .catch(() => setMatchCount(0));
-  }, [location.pathname]);
+    let cancelled = false;
+    const refresh = () => {
+      usersAPI
+        .getMatches()
+        .then((res) => {
+          if (!cancelled) setMatchCount(res.data?.length ?? 0);
+        })
+        .catch(() => {
+          if (!cancelled) setMatchCount(0);
+        });
+    };
+    refresh();
+    const onFocus = () => refresh();
+    const onVis = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -128,12 +150,8 @@ function LayoutInner({ children }: LayoutProps) {
               sidebarExpanded ? 'gap-2.5 px-1' : 'justify-center'
             }`}
           >
+            {/* Two-men mark only — medallion already carries the word; no type wordmark. */}
             <BrandMark size="sm" className="shadow-[0_0_0_2px_rgba(196,131,42,0.4)] rounded-full" />
-            {sidebarExpanded ? (
-              <span className="font-display text-sm font-black tracking-[0.14em] text-nn-text">
-                MENRUSH
-              </span>
-            ) : null}
           </Link>
           <button
             type="button"
@@ -230,9 +248,6 @@ function LayoutInner({ children }: LayoutProps) {
                   className="inline-flex items-center justify-center gap-2"
                 >
                   <BrandMark size="sm" className="shadow-[0_0_0_2px_rgba(196,131,42,0.35)] rounded-full" />
-                  <span className="font-display text-xs font-black tracking-[0.16em] text-[var(--cream)]">
-                    MENRUSH
-                  </span>
                 </Link>
               ) : (
                 <p className="truncate text-sm font-bold tracking-wide text-[var(--cream)]">{pageTitle}</p>
@@ -316,6 +331,7 @@ function LayoutInner({ children }: LayoutProps) {
         <main className="flex-1 min-h-0 max-lg:pt-[var(--mobile-header-height)] max-lg:pb-[var(--mobile-tab-bar-height)] lg:pb-0">
           <LocationPresenceStrip />
           <ProfileDepthStrip />
+          <PushAlertBanner />
           <div className="page-enter h-full min-h-0">{children}</div>
         </main>
 
@@ -323,22 +339,30 @@ function LayoutInner({ children }: LayoutProps) {
           className="lg:hidden fixed bottom-0 left-0 right-0 z-50 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] pt-2"
           aria-label="Primary"
         >
-          <div className="flex items-stretch rounded-[1.35rem] border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-elevated)_95%,transparent)] shadow-[var(--shadow-lg)] backdrop-blur-xl">
+          <div
+            className={`flex items-stretch rounded-[1.35rem] border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-elevated)_95%,transparent)] shadow-[var(--shadow-lg)] backdrop-blur-xl ${
+              mobileTabs.length >= 5 ? 'px-0.5' : ''
+            }`}
+          >
             {mobileTabs.map((item) => {
               const active = isNavActive(location.pathname, item.to);
               const badge = badgeFor(item, unreadCount, notificationUnread, matchCount);
+              const compact = mobileTabs.length >= 5;
               return (
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={`relative flex flex-1 flex-col items-center justify-center gap-1 py-2.5 transition-all duration-200 first:rounded-l-[1.25rem] last:rounded-r-[1.25rem] ${
+                  data-testid={`mobile-nav-${item.to.replace(/\//g, '') || 'home'}`}
+                  className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 transition-all duration-200 first:rounded-l-[1.25rem] last:rounded-r-[1.25rem] ${
+                    compact ? 'py-2' : 'gap-1 py-2.5'
+                  } ${
                     active
                       ? 'text-[var(--copper)] bg-[var(--copper)]/10'
                       : 'text-[var(--cream-muted)] active:scale-95'
                   }`}
                 >
                   <span className="relative inline-flex">
-                    <item.Icon size={22} className={active ? 'scale-110' : ''} />
+                    <item.Icon size={compact ? 20 : 22} className={active ? 'scale-110' : ''} />
                     <NotificationDot
                       count={badge}
                       visible={badge > 0}
@@ -350,7 +374,11 @@ function LayoutInner({ children }: LayoutProps) {
                       className="-top-2 -right-2.5 min-w-[16px] h-[16px] text-[9px] bg-[var(--copper)] border-[var(--bg-elevated)]"
                     />
                   </span>
-                  <span className="text-[9px] font-bold leading-none tracking-wide">
+                  <span
+                    className={`font-bold leading-none tracking-wide ${
+                      compact ? 'text-[8px]' : 'text-[9px]'
+                    }`}
+                  >
                     {item.shortLabel ?? item.label}
                   </span>
                 </Link>
@@ -364,14 +392,25 @@ function LayoutInner({ children }: LayoutProps) {
                 aria-haspopup="true"
                 aria-expanded={moreMenuOpen}
                 data-testid="mobile-more-tab"
-                className={`relative flex flex-1 flex-col items-center justify-center gap-1 py-2.5 transition-all duration-200 first:rounded-l-[1.25rem] last:rounded-r-[1.25rem] ${
+                className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 transition-all duration-200 first:rounded-l-[1.25rem] last:rounded-r-[1.25rem] ${
+                  mobileTabs.length >= 5 ? 'py-2' : 'gap-1 py-2.5'
+                } ${
                   isMoreActive || moreMenuOpen
                     ? 'text-[var(--copper)] bg-[var(--copper)]/10'
                     : 'text-[var(--cream-muted)] active:scale-95'
                 }`}
               >
-                <IconMore size={22} className={isMoreActive || moreMenuOpen ? 'scale-110' : ''} />
-                <span className="text-[9px] font-bold leading-none tracking-wide">More</span>
+                <IconMore
+                  size={mobileTabs.length >= 5 ? 20 : 22}
+                  className={isMoreActive || moreMenuOpen ? 'scale-110' : ''}
+                />
+                <span
+                  className={`font-bold leading-none tracking-wide ${
+                    mobileTabs.length >= 5 ? 'text-[8px]' : 'text-[9px]'
+                  }`}
+                >
+                  More
+                </span>
               </button>
             ) : null}
           </div>

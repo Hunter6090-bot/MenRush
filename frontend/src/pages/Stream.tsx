@@ -3,15 +3,15 @@ import { Layout } from '../components/Layout';
 import { CommunityFeed } from '../components/CommunityFeed';
 
 /**
- * Community Space — short local text feed.
- * Replaces the former Live Profile List at /stream.
- * Rooms remain the video space; this surface is text-only and free for all.
+ * Community Space — short local text feed at /stream.
+ * Own nav destination (not a mode of Map). Text-only, free for all.
+ * Rooms remain the video space.
  */
 export const Stream = () => {
   return (
     <Layout>
       <div className="mx-auto max-w-2xl px-4 py-6">
-        <CommunityFeed showSurfaceToggle />
+        <CommunityFeed />
       </div>
     </Layout>
   );

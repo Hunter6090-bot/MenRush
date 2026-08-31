@@ -12,6 +12,8 @@ import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../
 import { LocationSchema, ProfileSchema } from '../types/validation';
 import { getUploadSubdir } from '../lib/uploads-root';
 import { finalizeLocalUpload } from '../services/media-storage.service';
+import { optimizeImageFile } from '../services/image-optimize.service';
+import { normalizeDiscoveryAgeRange, parseDiscoveryAgeBound } from '../lib/age';
 
 const router = Router();
 const uploadsDir = getUploadSubdir('profiles');
@@ -34,7 +36,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  limits: { fileSize: 12 * 1024 * 1024 }, // camera originals before server resize
   fileFilter: uploadFileFilter('profile'),
 });
 
@@ -53,7 +55,7 @@ const coverStorage = multer.diskStorage({
 
 const uploadCover = multer({
   storage: coverStorage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 12 * 1024 * 1024 },
   fileFilter: uploadFileFilter('cover'),
 });
 
@@ -69,7 +71,8 @@ router.post('/photo', verifiedMiddleware, upload.single('photo'), async (req: Au
       return res.status(400).json({ error: 'File content does not match its type' });
     }
 
-    const stored = await finalizeLocalUpload('profiles', req.file.filename, req.file.path);
+    const optimized = await optimizeImageFile(req.file.path, 'profile');
+    const stored = await finalizeLocalUpload('profiles', optimized.filename, optimized.path);
     const user = await userService.updateProfile(req.userId!, { photo_url: stored.publicUrl });
     
     res.json(user);
@@ -88,7 +91,8 @@ router.post('/cover', verifiedMiddleware, uploadCover.single('cover'), async (re
       return res.status(400).json({ error: 'File content does not match its type' });
     }
 
-    const stored = await finalizeLocalUpload('profiles', req.file.filename, req.file.path);
+    const optimized = await optimizeImageFile(req.file.path, 'cover');
+    const stored = await finalizeLocalUpload('profiles', optimized.filename, optimized.path);
     const user = await userService.updateProfile(req.userId!, { cover_url: stored.publicUrl });
 
     res.json(user);
@@ -128,9 +132,13 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
       return res.status(400).json({ error: 'Invalid radius' });
     }
 
+    const ageBounds = normalizeDiscoveryAgeRange(
+      parseDiscoveryAgeBound(minAge),
+      parseDiscoveryAgeBound(maxAge),
+    );
     const filters = {
-      minAge: minAge ? parseInt(minAge as string) : undefined,
-      maxAge: maxAge ? parseInt(maxAge as string) : undefined,
+      minAge: ageBounds.minAge,
+      maxAge: ageBounds.maxAge,
       interests: (interests as string)?.split(',').filter(Boolean),
       onlyPulse: onlyPulse === 'true' || onlyPulse === '1',
       lookingFor: typeof lookingFor === 'string' ? lookingFor : undefined,
@@ -247,6 +255,19 @@ router.post('/like/:id', verifiedMiddleware, async (req: AuthRequest, res: Respo
       return res.status(error.status).json({ error: error.message, code: error.code });
     }
     res.status(400).json({ error: error.message || 'Could not send match' });
+  }
+});
+
+/** Unmatch — delete both like directions. Does not touch rooms or messages. */
+router.delete('/like/:id', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await userService.unmatchUser(req.userId!, req.params.id);
+    res.json({ unmatched: true, removed: result.removed });
+  } catch (error: any) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
+    res.status(400).json({ error: error.message || 'Could not unmatch' });
   }
 });
 

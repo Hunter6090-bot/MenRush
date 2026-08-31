@@ -5,6 +5,7 @@ import {
   enablePushNotifications,
   disablePushNotifications,
   isPushConfigured,
+  iosNeedsHomeScreenForPush,
 } from '../lib/push';
 
 /**
@@ -16,9 +17,11 @@ export const NotificationSettings: React.FC = () => {
   const [support, setSupport] = useState<PushSupport>(getPushSupport());
   const [busy, setBusy] = useState(false);
   const [serverConfigured, setServerConfigured] = useState(true);
+  const [iosInstall, setIosInstall] = useState(false);
 
   useEffect(() => {
     setSupport(getPushSupport());
+    setIosInstall(iosNeedsHomeScreenForPush());
     void isPushConfigured().then(setServerConfigured);
   }, []);
 
@@ -43,13 +46,15 @@ export const NotificationSettings: React.FC = () => {
   const description =
     !serverConfigured
       ? 'Push alerts are not configured on this server yet.'
-      : support === 'unsupported'
-        ? 'Your browser doesn’t support push notifications.'
-        : support === 'denied'
-          ? 'Blocked in your browser settings. Re-enable notifications for this site to turn them on.'
-          : enabled
-            ? 'Get alerts for new messages when MenRush is closed.'
-            : 'Turn on alerts for new messages when MenRush is closed.';
+      : iosInstall
+        ? 'On iPhone: Share → Add to Home Screen, open MenRush from that icon, then turn alerts on. Safari tabs cannot ring when the app is closed.'
+        : support === 'unsupported'
+          ? 'Your browser doesn’t support push notifications.'
+          : support === 'denied'
+            ? 'Blocked in your browser settings. Re-enable notifications for this site to turn them on.'
+            : enabled
+              ? 'Your phone will ping for new messages and incoming calls even if MenRush is closed.'
+              : 'Turn on alerts so messages and calls still ring when MenRush is closed.';
 
   return (
     <div
@@ -65,7 +70,7 @@ export const NotificationSettings: React.FC = () => {
       <button
         type="button"
         onClick={toggle}
-        disabled={busy || !serverConfigured || support === 'unsupported' || support === 'denied'}
+        disabled={busy || !serverConfigured || support === 'unsupported' || support === 'denied' || iosInstall}
         aria-pressed={enabled}
         aria-label="Toggle push notifications"
         data-testid="notification-settings-toggle"
