@@ -41,9 +41,10 @@ export const ToastNotifications = () => {
   };
 
   const handleToastClick = (toast: Notification) => {
-    void persistRead(toast.id);
+    const dest = notificationDestination(toast);
+    navigate(dest);
     dismissToast(toast.id);
-    navigate(notificationDestination(toast));
+    void persistRead(toast.id);
   };
 
   if (pendingToasts.length === 0) return null;

@@ -59,11 +59,12 @@ export function AlbumViewerSheet({
     albumsAPI
       .listPhotos(album.id)
       .then((res) => {
-        setPhotos(res.data.photos);
-        setLocked(res.data.locked);
-        setUnlocked(res.data.unlocked);
+        setPhotos(Array.isArray(res.data?.photos) ? res.data.photos : []);
+        setLocked(Boolean(res.data?.locked));
+        setUnlocked(Boolean(res.data?.unlocked));
       })
       .catch(() => {
+        setPhotos([]);
         onNotice?.('Could not load album photos.', 'error');
       })
       .finally(() => setLoading(false));

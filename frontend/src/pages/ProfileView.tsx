@@ -55,6 +55,26 @@ function profileErrorMessage(err: unknown): string {
   return data?.error || 'Could not load profile.';
 }
 
+/** Coerce API interests to string[] — null/object payloads previously crashed .map. */
+export function normalizeInterests(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((tag): tag is string => typeof tag === 'string' && tag.length > 0);
+}
+
+function normalizeProfilePayload(raw: unknown): ViewableUser | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const data = raw as Record<string, unknown>;
+  if (typeof data.id !== 'string' || typeof data.name !== 'string' || !data.name.trim()) {
+    return null;
+  }
+  return {
+    ...(data as unknown as ViewableUser),
+    id: data.id,
+    name: data.name,
+    interests: normalizeInterests(data.interests),
+  };
+}
+
 export const ProfileView = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -71,7 +91,12 @@ export const ProfileView = () => {
   );
 
   useEffect(() => {
-    if (!id) return;
+    if (!id) {
+      setUser(null);
+      setError('Profile not found.');
+      setLoading(false);
+      return;
+    }
     if (authUserId && id === authUserId) {
       navigate('/profile', { replace: true });
       return;
@@ -81,13 +106,19 @@ export const ProfileView = () => {
     usersAPI
       .getProfile(id)
       .then((r) => {
-        const data = r.data as ViewableUser;
+        const data = normalizeProfilePayload(r.data);
+        if (!data) {
+          setUser(null);
+          setError('Could not load profile.');
+          return;
+        }
         setUser(data);
         setLiked(Boolean(data.is_liked || data.is_match));
         setMutual(Boolean(data.is_match));
         setError(null);
       })
       .catch((err) => {
+        setUser(null);
         setError(profileErrorMessage(err));
       })
       .finally(() => setLoading(false));
@@ -216,7 +247,7 @@ export const ProfileView = () => {
           </div>
         ) : null}
 
-        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl overflow-hidden shadow-card">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl overflow-hidden shadow-card" data-testid="profile-view-body">
           {user.cover_url ? (
             <CoverBanner
               coverUrl={user.cover_url}
@@ -298,8 +329,8 @@ export const ProfileView = () => {
               </p>
             )}
             {user.interests && user.interests.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-3">
-                {user.interests.map((tag) => (
+              <div className="flex flex-wrap gap-1.5 mt-3" data-testid="profile-view-interests">
+                {normalizeInterests(user.interests).map((tag) => (
                   <span
                     key={tag}
                     className="px-2.5 py-1 rounded-full bg-[rgba(196,131,42,0.10)] text-[var(--copper)] text-xs font-medium border border-[rgba(196,131,42,0.25)]"
