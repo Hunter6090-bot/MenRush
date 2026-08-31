@@ -1,0 +1,21 @@
+{
+  "name": "@menrush/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MenRush React Native shell helpers. Veriff ID + selfie launches via sessionUrl from the API.",
+  "main": "src/veriff.ts",
+  "types": "src/veriff.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@veriff/react-native-sdk": "13.2.0"
+  },
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}
