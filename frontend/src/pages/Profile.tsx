@@ -24,7 +24,6 @@ import {
   toggleProfileInterest,
 } from '../lib/profileTags';
 import { clearProfileSetupSkip, isProfileSetupComplete } from '../lib/profileSetup';
-import { isGenericAvatarUrl } from '../lib/genericAvatar';
 import { isBetaPremiumFree } from '../lib/betaInvite';
 import { IconSettings } from '../components/icons';
 import { ageFromDateOfBirth, formatHeight, formatWeight } from '../lib/age';
@@ -661,25 +660,6 @@ export const Profile = () => {
                   {uploadingCover ? '…' : coverUrl ? 'Cover' : '+ Cover'}
                 </button>
               </div>
-              {isGenericAvatarUrl(photoUrl) ? (
-                <div
-                  className="rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-3 py-3"
-                  data-testid="photo-upgrade-nudge"
-                >
-                  <p className="text-[12px] font-extrabold text-[var(--cream)]">Upgrade from a shared avatar</p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-[var(--cream-muted)]">
-                    Real photos get more matches. Upload a clear face or upper-body shot —
-                  </p>
-                  <button
-                    type="button"
-                    disabled={uploading}
-                    onClick={() => photoInputRef.current?.click()}
-                    className="mt-2 rounded-full bg-[#C4832A] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#1A0E03] hover:bg-[#E0A14A] disabled:opacity-60"
-                  >
-                    {uploading ? 'Uploading…' : 'Add real photo'}
-                  </button>
-                </div>
-              ) : null}
             </div>
 
             <div className="space-y-4">
@@ -843,25 +823,6 @@ export const Profile = () => {
                   }`
                 : 'Age hidden on your public profile'}
             </p>
-            {isGenericAvatarUrl(photoUrl) ? (
-              <div
-                className="mt-3 rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-3 py-3 lg:hidden"
-                data-testid="photo-upgrade-nudge-mobile"
-              >
-                <p className="text-[12px] font-extrabold text-[var(--cream)]">Upgrade from a shared avatar</p>
-                <p className="mt-1 text-[11px] leading-relaxed text-[var(--cream-muted)]">
-                  Real photos get more matches. Clear face or upper body.
-                </p>
-                <button
-                  type="button"
-                  disabled={uploading}
-                  onClick={() => photoInputRef.current?.click()}
-                  className="mt-2 rounded-full bg-[#C4832A] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#1A0E03] disabled:opacity-60"
-                >
-                  {uploading ? 'Uploading…' : 'Add real photo'}
-                </button>
-              </div>
-            ) : null}
           </div>
         </div>
 
