@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| P0 mobile web page weight (phones slow; desktop OK) | PR `#160` `cursor/mobile-web-page-weight-b5a8` | Matches progressive paint + Chat 3–4s control e2e | Cursor cloud — Nearby/Matches iPhone; Chat list floor; `/api/media/display`; no host move; #97–#99 parked |
 | P0 beta: chat reply/send + blank profile + crash + push-tap + open-thread media + notif tray route | PR `#158` `cursor/p0-chat-profile-beta-0e36` | — | Cursor cloud — merged main (UK beta landing kept); navigate-first tap-to-chat; open-thread poll; SW tag recovery; owner asked deploy; #97–#99 parked; timings #160 |
 | UK beta-open landing hero (LIVE NOW — Sign up free → /register) | PR `#161` on main | — | Cursor cloud — hero only; remove Oct date + email waitlist; logo/headline/bg unchanged; do not touch #158/#160/#150/#97–#99 / Social Studio / pride |
 | Mutual profile: Pass · Open chat · Unmatch (drop duplicate Message) | PR `cursor/mutual-profile-unmatch-fd7a` | — | Cursor cloud — DELETE /users/like/:id removes both like dirs; ProfileView only; do not touch #97–#99 / rooms / public copy |

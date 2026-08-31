@@ -3,11 +3,13 @@
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
-// Fetch handler required for installability. Do not claim navigations —
-// a rejected fetch() here blanked SPA routes (profile/chat) on flaky networks.
-self.addEventListener('fetch', (event) => {
-  if (event.request.mode === 'navigate') return;
-  event.respondWith(fetch(event.request));
+// Keep a fetch listener for installability heuristics, but NEVER call
+// respondWith. Proxying every request through the SW added multi-second lag
+// on mobile Safari/Chrome (phones parse a heavy SPA; SW double-hop made every
+// API + Mapbox + asset fetch worse). Browser handles network natively.
+// (#158 notificationclick / tag recovery lives below — do not remove.)
+self.addEventListener('fetch', () => {
+  /* no-op — do not intercept */
 });
 
 function resolveNotificationHref(raw, fallbackPath) {

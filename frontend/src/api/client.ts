@@ -397,6 +397,8 @@ export const messagesAPI = {
     fd.append('media', upload, filename);
     return apiClient.post<MessageDTO>('/messages/media', fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      // Android→iPhone multi‑MB uploads were timing out / retrying (~50s then ~20s).
+      timeout: 180_000,
     });
   },
   markViewed: (messageId: string) =>

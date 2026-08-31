@@ -29,6 +29,7 @@ import adminRoutes from './routes/admin.routes';
 import campaignRoutes from './routes/campaigns';
 import socialRoutes from './routes/social';
 import communityRoutes from './routes/community';
+import mediaDisplayRoutes from './routes/media-display';
 import { startPulseExpiryCron } from './services/pulse.service';
 import { startRoomTempIdentityPurgeCron } from './services/room.service';
 import {
@@ -114,6 +115,7 @@ app.set('io', io);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/media', mediaDisplayRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/pulse', pulseRoutes);

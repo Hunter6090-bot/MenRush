@@ -26,6 +26,7 @@ import { parseLocationPayload } from '../lib/locationMessage';
 import { profilePathForUser } from '../lib/profileLinks';
 import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 import { SoftBlurMedia, shouldBlurMedia } from '../components/SoftBlurMedia';
+import { compressChatImageFile } from '../lib/imageUpload';
 import {
   appendUniqueMessage,
   CHAT_LIVE_REFRESH_EVENT,
@@ -155,6 +156,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   // Image composer: hold the selected file for preview + view-rule choice
   // before sending (instead of sending immediately on pick).
   const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [pendingPreparing, setPendingPreparing] = useState(false);
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
   const [viewRule, setViewRule] = useState<ViewRule>('once');
   const [customViews, setCustomViews] = useState(3);
@@ -404,12 +406,66 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     const normalized = normalizeImageFile(file);
     if (!normalized || !otherId) return;
     setMediaError('');
+    setViewRule('once');
     setPendingPreviewUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return URL.createObjectURL(normalized);
     });
     setPendingImage(normalized);
-    setViewRule('once');
+    // Compress while the user picks view-once / send — Android originals
+    // were multi‑MB and dominated the ~50s Al→Pete send.
+    setPendingPreparing(true);
+    void compressChatImageFile(normalized)
+      .then((compressed) => {
+        setPendingImage(compressed);
+        setPendingPreviewUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return URL.createObjectURL(compressed);
+        });
+      })
+      .catch(() => undefined)
+      .finally(() => setPendingPreparing(false));
+  };
+
+  const clearPendingImage = useCallback(() => {
+    setPendingImage(null);
+    setPendingPreparing(false);
+    setPendingPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  }, []);
+
+  const handleSendPendingImage = async () => {
+    if (!pendingImage || !otherId || uploadingMedia) return;
+    const { disappearing, maxViews } = ruleToSendOptions(viewRule, customViews);
+    setMediaError('');
+    setUploadingMedia(true);
+    try {
+      // Re-run compress if staging still preparing, or as a cheap no-op when small.
+      const file = await compressChatImageFile(pendingImage);
+      const res = await messagesAPI.sendMedia(otherId, file, {
+        kind: 'image',
+        disappearing,
+        maxViews,
+      });
+      setMessages((prev) => [...prev, res.data]);
+      clearPendingImage();
+      trackEventOnce(
+        'first_message_success',
+        { kind: 'image', surface: 'direct_message' },
+        'first_message_success',
+      );
+    } catch (err: any) {
+      const code = err?.response?.data?.error;
+      setMediaError(
+        code === 'match_required' || code === 'A mutual match is required'
+          ? 'You need a mutual match before sending photos.'
+          : code || 'Failed to send photo',
+      );
+    } finally {
+      setUploadingMedia(false);
+    }
   };
 
   // ── Media: gallery attach + camera chooser (Picture | Video) ─────────────
@@ -455,45 +511,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     e.target.value = '';
     if (!file) return;
     stageImageFile(file);
-  };
-
-  const clearPendingImage = useCallback(() => {
-    setPendingImage(null);
-    setPendingPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
-  }, []);
-
-  const handleSendPendingImage = async () => {
-    if (!pendingImage || !otherId || uploadingMedia) return;
-    const file = pendingImage;
-    const { disappearing, maxViews } = ruleToSendOptions(viewRule, customViews);
-    setMediaError('');
-    setUploadingMedia(true);
-    try {
-      const res = await messagesAPI.sendMedia(otherId, file, {
-        kind: 'image',
-        disappearing,
-        maxViews,
-      });
-      setMessages((prev) => [...prev, res.data]);
-      clearPendingImage();
-      trackEventOnce(
-        'first_message_success',
-        { kind: 'image', surface: 'direct_message' },
-        'first_message_success',
-      );
-    } catch (err: any) {
-      const code = err?.response?.data?.error;
-      setMediaError(
-        code === 'match_required' || code === 'A mutual match is required'
-          ? 'You need a mutual match before sending photos.'
-          : code || 'Failed to send photo',
-      );
-    } finally {
-      setUploadingMedia(false);
-    }
   };
 
   // ── Media: voice notes (tap to start, tap again to stop) ──────────────
@@ -1191,6 +1208,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             rule={viewRule}
             customViews={customViews}
             uploading={uploadingMedia}
+            preparing={pendingPreparing}
             onRuleChange={setViewRule}
             onCustomViewsChange={setCustomViews}
             onCancel={clearPendingImage}
@@ -1656,6 +1674,7 @@ interface ImageComposerProps {
   rule: ViewRule;
   customViews: number;
   uploading: boolean;
+  preparing?: boolean;
   onRuleChange: (rule: ViewRule) => void;
   onCustomViewsChange: (n: number) => void;
   onCancel: () => void;
@@ -1667,11 +1686,13 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
   rule,
   customViews,
   uploading,
+  preparing = false,
   onRuleChange,
   onCustomViewsChange,
   onCancel,
   onSend,
 }) => {
+  const busy = uploading || preparing;
   const rules: ViewRule[] = ['permanent', 'once', 'twice', 'custom'];
   const ruleSummary =
     rule === 'permanent'
@@ -1756,7 +1777,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
         <button
           type="button"
           onClick={onCancel}
-          disabled={uploading}
+          disabled={busy}
           data-testid="image-composer-cancel"
           className="text-xs px-4 py-2 rounded-full disabled:opacity-40"
           style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', color: 'var(--cream-muted)' }}
@@ -1766,7 +1787,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
         <button
           type="button"
           onClick={onSend}
-          disabled={uploading}
+          disabled={busy}
           data-testid="image-composer-send"
           className="text-xs font-semibold px-5 py-2 rounded-full disabled:opacity-50 active:scale-95"
           style={{
@@ -1775,7 +1796,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
             boxShadow: '0 2px 12px rgba(196,131,42,0.4)',
           }}
         >
-          {uploading ? 'Sending…' : 'Send'}
+          {preparing ? 'Preparing…' : uploading ? 'Sending…' : 'Send'}
         </button>
       </div>
     </div>
@@ -2345,6 +2366,8 @@ interface VideoBubbleProps {
 
 const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWithdraw, withdrawing }) => {
   const url = getPhotoUrl(msg.media_url || undefined);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [armed, setArmed] = useState(false);
   const withdrawn = isWithdrawnMedia(msg);
   const radius = showTail
     ? isMine
@@ -2369,10 +2392,23 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
     );
   }
 
+  const blurred = shouldBlurMedia(msg.media_clear);
+
+  const armAndPlay = () => {
+    if (blurred || !url) return;
+    setArmed(true);
+    // Defer play until src is attached with preload metadata (range-friendly).
+    requestAnimationFrame(() => {
+      const el = videoRef.current;
+      if (!el) return;
+      void el.play().catch(() => undefined);
+    });
+  };
+
   return (
     <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
       <div
-        className="overflow-hidden"
+        className="relative overflow-hidden"
         style={{
           borderRadius: radius,
           border: isMine ? 'none' : '1px solid var(--border-default)',
@@ -2381,14 +2417,36 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
         }}
       >
         {url ? (
-          <SoftBlurMedia blurred={shouldBlurMedia(msg.media_clear)} data-testid="video-bubble">
-            <video
-              src={url}
-              controls={!shouldBlurMedia(msg.media_clear)}
-              playsInline
-              preload="metadata"
-              className="block w-full max-h-[320px] bg-black"
-            />
+          <SoftBlurMedia blurred={blurred} data-testid="video-bubble">
+            {armed ? (
+              <video
+                ref={videoRef}
+                src={url}
+                controls={!blurred}
+                playsInline
+                // metadata + Accept-Ranges lets Safari paint/play before full file.
+                preload="metadata"
+                className="block w-full max-h-[320px] bg-black"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={armAndPlay}
+                data-testid="video-bubble-open"
+                className="flex h-[180px] w-full min-w-[200px] flex-col items-center justify-center gap-2 bg-black/90 text-[#F0E0C0]"
+                aria-label="Open video"
+              >
+                <span
+                  className="flex h-12 w-12 items-center justify-center rounded-full bg-[#C4832A] text-lg font-extrabold text-[#1A0E03]"
+                  aria-hidden
+                >
+                  ▶
+                </span>
+                <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--cream-muted)]">
+                  Tap to open
+                </span>
+              </button>
+            )}
           </SoftBlurMedia>
         ) : (
           <div className="px-4 py-6 text-xs text-[var(--cream-muted)]">Video unavailable</div>

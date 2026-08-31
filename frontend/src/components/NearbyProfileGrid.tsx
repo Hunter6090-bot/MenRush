@@ -1,14 +1,15 @@
 import type { NearbyUser } from './ProfileCard';
 import { SilhouetteAvatar } from './SilhouetteAvatar';
 import { VerifiedBadge } from './VerifiedBadge';
-import { useResolvingPhotoSrc } from './UserAvatar';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { formatActiveStatus, formatDistanceMiles, getTribeTag } from '../lib/discoveryFormat';
 import {
   PROFILE_TILE_GRID_CLASS,
   PROFILE_TILE_SKELETON_CLASS,
 } from '../lib/profileTileGrid';
+import { useGridPhotoSrc, clearGridPhotoQueue } from '../lib/nearbyPhotoSrc';
 import { Link } from 'react-router-dom';
+import { useEffect } from 'react';
 
 interface NearbyProfileGridProps {
   users: NearbyUser[];
@@ -57,6 +58,10 @@ export function NearbyProfileGrid({
   radiusLabel,
   beyondRadiusCount = 0,
 }: NearbyProfileGridProps) {
+  useEffect(() => {
+    clearGridPhotoQueue();
+  }, []);
+
   if (loading && users.length === 0) {
     return (
       <div
@@ -271,11 +276,12 @@ function GridPhoto({
   photoUrl?: string;
   age?: number;
 }) {
-  const { src, onError } = useResolvingPhotoSrc(photoUrl, age);
+  // Phone path: display API when live, else fetch+downscale — never leave blank tiles.
+  const { src, phase } = useGridPhotoSrc(photoUrl, age);
 
-  if (!src) {
+  if (phase === 'loading' || !src) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div className="flex h-full items-center justify-center" data-testid="nearby-photo-loading">
         <SilhouetteAvatar size={56} variant="card" />
       </div>
     );
@@ -286,8 +292,9 @@ function GridPhoto({
       src={src}
       alt={name}
       className="h-full w-full object-cover"
-      loading="lazy"
-      onError={onError}
+      decoding="async"
+      data-testid="nearby-profile-photo"
+      data-photo-phase={phase}
     />
   );
 }
