@@ -7,6 +7,7 @@ const LANDING_PATHS = ['/', '/coming-soon'] as const;
 const FORBIDDEN_CTA_PATTERNS = [
   /^JOIN THE WAITLIST$/i,
   /^GET EARLY ACCESS$/i,
+  /^Join waitlist$/i,
 ];
 
 async function assertComingSoonDesignLock(page: import('@playwright/test').Page) {
@@ -21,9 +22,9 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   await expect(heroHeading).toBeVisible();
   await expect(heroHeading).toHaveClass(/mr-coming-soon-heading/);
 
-  await expect(page.getByText(/OPENS 1 OCTOBER 2026/i)).toBeVisible();
-  await expect(page.getByText(/opens across the UK/i)).toBeVisible();
-  await expect(page.getByText(/UK first/i)).toBeVisible();
+  await expect(page.getByText(/LIVE NOW — UK BETA OPEN/i)).toBeVisible();
+  await expect(page.getByText(/OPENS 1 OCTOBER 2026/i)).toHaveCount(0);
+  await expect(page.getByText(/leave your email/i)).toHaveCount(0);
   await expect(page.getByText(/LONDON · MANCHESTER · BIRMINGHAM · BRIGHTON/i)).toHaveCount(0);
 
   await expect(page.getByRole('heading', { name: /What you get/i })).toBeVisible();
@@ -37,10 +38,12 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   }
 
   await expect(page.locator('#waitlist')).toBeVisible();
-  // Accessibility name is the contract; #waitlist-email is the stable design-lock id.
-  await expect(page.getByRole('textbox', { name: 'Email for waitlist' })).toBeVisible();
-  await expect(page.locator('#waitlist-email')).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Join waitlist$/i })).toHaveCount(1);
+  await expect(page.getByRole('textbox', { name: 'Email for waitlist' })).toHaveCount(0);
+  await expect(page.locator('#waitlist-email')).toHaveCount(0);
+
+  const signUpLink = page.getByRole('link', { name: /^Sign up free$/i });
+  await expect(signUpLink).toHaveCount(1);
+  await expect(signUpLink).toHaveAttribute('href', '/register');
 
   const inviteLink = page.getByRole('link', { name: /Enter your code/i });
   await expect(inviteLink).toBeVisible();
@@ -72,7 +75,7 @@ async function assertCreamInputs(page: import('@playwright/test').Page) {
 
 test.describe('public design lock — landing', () => {
   for (const path of LANDING_PATHS) {
-    test(`${path} keeps UK launch landing invariants`, async ({ page }) => {
+    test(`${path} keeps UK beta-open landing invariants`, async ({ page }) => {
       const network = await guardAgainstSideEffects(page);
       await page.goto(path);
       await assertComingSoonDesignLock(page);
