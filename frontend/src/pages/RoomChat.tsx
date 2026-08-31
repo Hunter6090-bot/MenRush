@@ -10,11 +10,10 @@ import { MobileBackButton } from '../components/MobileBackButton';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 import { PanicReportButton } from '../components/PanicReportButton';
-import { profilePathForUser } from '../lib/profileLinks';
-import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 import { getPhotoUrl } from '../components/UserAvatar';
 import { parseRoomImageMessage } from '../lib/roomMediaMessage';
 import { RoomTempIdentityGate } from '../components/RoomTempIdentityGate';
+import { liveOccupancy } from '../lib/roomPresence';
 
 const ROOM_EMOJI_PICKER = [
   '😀', '😂', '🔥', '❤️', '👍', '👀', '😈', '🥵', '💪', '🎉', '😏', '🙌',
@@ -25,6 +24,7 @@ interface RoomMessage {
   room_id: string;
   sender_id: string;
   sender_name: string;
+  sender_photo_url?: string | null;
   message: string;
   created_at?: string;
   reply_to?: string;
@@ -128,6 +128,9 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [identityReady, setIdentityReady] = useState(false);
+  const [roomIdentity, setRoomIdentity] = useState<{ name: string; photo_url: string | null } | null>(
+    null,
+  );
   const [loadingRoom, setLoadingRoom] = useState(true);
   const [joinError, setJoinError] = useState<string | null>(null);
 
@@ -138,7 +141,6 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     cameraOn,
     micMuted,
     mediaError: videoError,
-    loadMembers,
     applyPresenceSync,
     upsertParticipant,
     markOffline,
@@ -160,6 +162,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     setLoadingRoom(true);
     setJoinError(null);
     setIdentityReady(false);
+    setRoomIdentity(null);
 
     (async () => {
       try {
@@ -198,15 +201,23 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     };
   }, [roomId]);
 
-  // Load messages + members only after identity confirmed.
+  // Load chat after identity confirmed. Video tiles come from live presence only —
+  // never seed the gallery from the member roster (that leaked main profiles as ghosts).
   useEffect(() => {
     if (!roomId || !identityReady) return;
     roomsAPI.getMessages(roomId).then((r) => setMessages(r.data)).catch(() => {});
-    roomsAPI
-      .getMembers(roomId)
-      .then((r) => loadMembers(r.data.map((m) => ({ id: m.id, name: m.name, photo_url: m.photo_url }))))
-      .catch(() => {});
-  }, [roomId, identityReady, loadMembers]);
+  }, [roomId, identityReady]);
+
+  useEffect(() => {
+    if (!identityReady || !user?.id || !roomIdentity) return;
+    upsertParticipant({
+      user_id: user.id,
+      name: roomIdentity.name,
+      photo_url: roomIdentity.photo_url,
+      isLive: true,
+      isSelf: true,
+    });
+  }, [identityReady, user?.id, roomIdentity, upsertParticipant]);
 
   useEffect(() => {
     if (!roomId || !settingsOpen) return;
@@ -243,14 +254,14 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       .catch(() => setAddCandidates([]));
   }, [addPanelOpen, members, user?.id]);
 
-  // ── Socket: join/leave ───────────────────────────────────────────────────
+  // ── Socket: join/leave (only after temp identity is set — never broadcast main profile)
   useEffect(() => {
-    if (!socket || !roomId) return;
+    if (!socket || !roomId || !identityReady) return;
     socket.emit('room:join', { roomId });
     return () => {
       socket.emit('room:leave', { roomId });
     };
-  }, [socket, roomId]);
+  }, [socket, roomId, identityReady]);
 
   // ── Socket: events ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -443,7 +454,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     return `${names[0]} and ${names.length - 1} others are typing...`;
   })();
 
-  const liveCount = participants.filter((p) => p.isLive).length;
+  const liveCount = liveOccupancy(participants);
   const isOwner = room?.user_role === 'owner';
   const isPrivateGroup = room?.is_location_based === false;
 
@@ -541,6 +552,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
               save_name: saveName,
               save_photo: savePhoto,
             });
+            setRoomIdentity({ name: displayName, photo_url: gatePhotoUrl ?? null });
             setIdentityReady(true);
           }}
           onCancel={() => navigate('/rooms')}
@@ -587,9 +599,9 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           <p className="font-semibold text-sm leading-tight truncate text-[var(--cream)]">
             {room?.name ?? 'Room'}
           </p>
-          <p className="text-[10px] mt-0.5 text-[var(--cream-muted)]">
+          <p className="text-[10px] mt-0.5 text-[var(--cream-muted)]" data-testid="room-occupancy">
             <GroupIcon className="w-3 h-3 inline mr-0.5" />
-            {liveCount > 0 ? `${liveCount} live` : `${room?.member_count ?? '—'} members`}
+            {liveCount} live
           </p>
         </div>
 
@@ -703,10 +715,8 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
               <div className="space-y-1">
                 {members.map((member) => (
                   <div key={member.id} className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => navigate(profilePathForUser(member.id, user?.id))}
-                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    <div
+                      className="flex min-w-0 flex-1 items-center gap-2"
                       data-testid={`room-member-${member.id}`}
                     >
                       <span className="flex-1 text-sm truncate" style={{ color: 'var(--cream)' }}>
@@ -722,7 +732,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                           </span>
                         ) : null}
                       </span>
-                    </button>
+                    </div>
                     {member.id !== user?.id && (
                       <ChatSafetyMenu
                         peerId={member.id}
@@ -876,23 +886,27 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                 {!isMine && (
                   <div className="w-8 flex-shrink-0 mr-2 flex items-end mb-1">
                     {showTail && (
-                      <ProfilePhotoLink
-                        userId={msg.sender_id}
-                        name={msg.sender_name}
+                      <div
+                        className="w-8 h-8 overflow-hidden rounded-full flex items-center justify-center text-xs font-bold"
+                        style={{
+                          background: `${color}22`,
+                          border: `1px solid ${color}44`,
+                          color,
+                          flexShrink: 0,
+                        }}
                         data-testid={`room-msg-avatar-${msg.sender_id}`}
+                        aria-hidden
                       >
-                        <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                          style={{
-                            background: `${color}22`,
-                            border: `1px solid ${color}44`,
-                            color,
-                            flexShrink: 0,
-                          }}
-                        >
-                          {initials(msg.sender_name)}
-                        </div>
-                      </ProfilePhotoLink>
+                        {msg.sender_photo_url && getPhotoUrl(msg.sender_photo_url) ? (
+                          <img
+                            src={getPhotoUrl(msg.sender_photo_url)}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          initials(msg.sender_name)
+                        )}
+                      </div>
                     )}
                   </div>
                 )}

@@ -9,6 +9,12 @@ import {
   getIceServers,
   waitForSocket,
 } from '../lib/webrtcCall';
+import {
+  dropRoomParticipant,
+  mergePresenceJoin,
+  replacePresenceRoster,
+  ROOM_DROP_TIMEOUT_MS,
+} from '../lib/roomPresence';
 
 export interface RoomParticipant {
   user_id: string;
@@ -85,6 +91,9 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
   const earlyIceRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const pendingOffersRef = useRef<Map<string, RTCSessionDescriptionInit>>(new Map());
   const iceServersRef = useRef<RTCIceServer[] | null>(null);
+  const dropTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const scheduleDropRef = useRef<(peerId: string) => void>(() => {});
+  const cancelDropTimerRef = useRef<(peerId: string) => void>(() => {});
   const roomIdRef = useRef(roomId);
   const userIdRef = useRef(userId);
   const socketRef = useRef<Socket | null>(socket);
@@ -131,6 +140,10 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
   );
 
   const closeAllPeers = useCallback(() => {
+    for (const timer of dropTimersRef.current.values()) {
+      clearTimeout(timer);
+    }
+    dropTimersRef.current.clear();
     for (const peerId of Array.from(peersRef.current.keys())) {
       closePeer(peerId);
     }
@@ -212,11 +225,19 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
         };
 
         pc.onconnectionstatechange = () => {
-          if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-            // Keep slot for a soft reconnect attempt via re-offer from the impolite side.
+          if (pc.connectionState === 'connected') {
+            cancelDropTimerRef.current(peerId);
+            return;
+          }
+          if (
+            pc.connectionState === 'disconnected' ||
+            pc.connectionState === 'failed' ||
+            pc.connectionState === 'closed'
+          ) {
             if (pc.connectionState === 'closed') {
               closePeer(peerId);
             }
+            scheduleDropRef.current(peerId);
           }
         };
       }
@@ -250,25 +271,43 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     [closePeer, publishRemoteStream],
   );
 
-  const upsertParticipant = useCallback((entry: RoomParticipant) => {
-    setParticipants((prev) => {
-      const idx = prev.findIndex((p) => p.user_id === entry.user_id);
-      if (idx === -1) return [...prev, { ...entry, isLive: true }];
-      const next = [...prev];
-      next[idx] = { ...next[idx], ...entry, isLive: true };
-      return next;
-    });
+  const cancelDropTimer = useCallback((peerId: string) => {
+    const timer = dropTimersRef.current.get(peerId);
+    if (!timer) return;
+    clearTimeout(timer);
+    dropTimersRef.current.delete(peerId);
   }, []);
 
-  const markOffline = useCallback(
+  const removeParticipant = useCallback(
     (offlineUserId: string) => {
-      setParticipants((prev) =>
-        prev.map((p) => (p.user_id === offlineUserId ? { ...p, isLive: false } : p)),
-      );
+      cancelDropTimer(offlineUserId);
+      setParticipants((prev) => dropRoomParticipant(prev, offlineUserId));
+      setPinnedId((current) => (current === offlineUserId ? null : current));
       closePeer(offlineUserId);
     },
-    [closePeer],
+    [cancelDropTimer, closePeer],
   );
+
+  const scheduleDrop = useCallback(
+    (peerId: string) => {
+      if (dropTimersRef.current.has(peerId)) return;
+      const timer = setTimeout(() => {
+        dropTimersRef.current.delete(peerId);
+        removeParticipant(peerId);
+      }, ROOM_DROP_TIMEOUT_MS);
+      dropTimersRef.current.set(peerId, timer);
+    },
+    [removeParticipant],
+  );
+
+  const upsertParticipant = useCallback((entry: RoomParticipant) => {
+    cancelDropTimer(entry.user_id);
+    setParticipants((prev) => mergePresenceJoin(prev, entry));
+  }, [cancelDropTimer]);
+
+  const markOffline = removeParticipant;
+  scheduleDropRef.current = scheduleDrop;
+  cancelDropTimerRef.current = cancelDropTimer;
 
   const replaceLocalTracksOnPeers = useCallback(async (stream: MediaStream) => {
     for (const [, slot] of peersRef.current) {
@@ -409,45 +448,30 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     );
   }, [userId]);
 
-  const loadMembers = useCallback(
-    (members: Array<{ id: string; name: string; photo_url?: string }>) => {
-      setParticipants((prev) => {
-        const liveMap = new Map(prev.map((p) => [p.user_id, p]));
-        return members.map((m) => {
-          const existing = liveMap.get(m.id);
-          return {
-            user_id: m.id,
-            name: m.name,
-            photo_url: m.photo_url,
-            isLive: existing?.isLive ?? false,
-            isMuted: existing?.isMuted ?? false,
-            isSelf: m.id === userId,
-          };
-        });
-      });
-    },
-    [userId],
-  );
-
   const applyPresenceSync = useCallback(
     (list: Array<{ user_id: string; name: string; photo_url?: string | null }>) => {
+      const incomingIds = new Set(list.map((entry) => entry.user_id));
+      for (const peerId of Array.from(peersRef.current.keys())) {
+        if (!incomingIds.has(peerId)) {
+          cancelDropTimer(peerId);
+          closePeer(peerId);
+        }
+      }
+      for (const entry of list) {
+        cancelDropTimer(entry.user_id);
+      }
       setParticipants((prev) => {
-        const byId = new Map(prev.map((p) => [p.user_id, p]));
-        list.forEach((entry) => {
-          byId.set(entry.user_id, {
-            ...(byId.get(entry.user_id) ?? {
-              user_id: entry.user_id,
-              name: entry.name,
-              photo_url: entry.photo_url,
-            }),
+        const self = prev.find((p) => p.isSelf || p.user_id === userId);
+        return replacePresenceRoster<RoomParticipant>(
+          list.map((entry) => ({
             user_id: entry.user_id,
             name: entry.name,
             photo_url: entry.photo_url,
             isLive: true,
             isSelf: entry.user_id === userId,
-          });
-        });
-        return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+          })),
+          self,
+        );
       });
 
       // Mesh: open a PC toward every other live peer once we have local media.
@@ -459,7 +483,7 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
         }
       }
     },
-    [userId, ensurePeer],
+    [userId, ensurePeer, cancelDropTimer, closePeer],
   );
 
   // Socket: WebRTC mesh signaling + remote media state
@@ -644,7 +668,6 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     mediaError,
     upsertParticipant,
     markOffline,
-    loadMembers,
     applyPresenceSync,
     getStreamFor,
     toggleCamera,

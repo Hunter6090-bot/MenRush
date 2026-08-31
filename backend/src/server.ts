@@ -619,13 +619,13 @@ io.on('connection', (socket: Socket) => {
     const userId = socketToUser.get(socket.id);
     const roomId = resolveRoomId(data);
     if (!userId || !roomId || typeof data.typing !== 'boolean') return;
-    const name = (await userService.getDisplayName(userId)) ?? 'Member';
+    const presence = await roomService.resolveRoomPresence(userId, roomId);
     socket.to(`room:${roomId}`).emit('room:typing', {
       roomId,
       room_id: roomId,
       userId,
       user_id: userId,
-      user_name: name,
+      user_name: presence.name,
       typing: data.typing,
     });
   });
@@ -725,6 +725,34 @@ io.on('connection', (socket: Socket) => {
     },
   );
 
+  // Socket.IO empties socket.rooms on `disconnect`. Emit leave here so dropped
+  // connections clear tiles immediately (same event as an explicit room:leave).
+  socket.on('disconnecting', () => {
+    const userId = socketToUser.get(socket.id);
+    if (!userId) return;
+    for (const roomName of socket.rooms) {
+      if (!roomName.startsWith('room:')) continue;
+      const roomId = roomName.slice('room:'.length);
+      void io.in(roomName).fetchSockets().then((peers: Array<{ id: string }>) => {
+        const stillHere = peers.some(
+          (peer) => peer.id !== socket.id && socketToUser.get(peer.id) === userId,
+        );
+        if (stillHere) return;
+        socket.to(roomName).emit('room:presence', {
+          room_id: roomId,
+          type: 'leave',
+          user_id: userId,
+        });
+      }).catch(() => {
+        socket.to(roomName).emit('room:presence', {
+          room_id: roomId,
+          type: 'leave',
+          user_id: userId,
+        });
+      });
+    }
+  });
+
   socket.on('disconnect', () => {
     const userId = socketToUser.get(socket.id);
     if (userId) {
@@ -733,17 +761,6 @@ io.on('connection', (socket: Socket) => {
       // Only mark offline when no other tab/device remains authenticated.
       if (fullyOffline) {
         userService.setOnlineStatus(userId, false);
-      }
-      // Notify any group rooms this socket was in.
-      for (const roomName of socket.rooms) {
-        if (roomName.startsWith('room:')) {
-          const roomId = roomName.slice('room:'.length);
-          socket.to(roomName).emit('room:presence', {
-            room_id: roomId,
-            type: 'leave',
-            user_id: userId,
-          });
-        }
       }
     }
     console.log('User disconnected:', socket.id);

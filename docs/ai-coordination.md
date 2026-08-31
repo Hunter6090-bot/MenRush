@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Video rooms: temp identity only + drop ghost tiles | this branch `cursor/veriff-sdk-signup` | — | Cursor — never fall back to main profile; leave drops tile+occupancy instantly; 4s drop timeout; #150 stays held |
 | Veriff InContext SDK after signup (`/verify/id`) | PR `#178` `cursor/veriff-sdk-signup` | — | Cursor — `@veriff/incontext-sdk`; session + decision webhook; badge only on approved; native capture at `/verify/id/manual`; rebased onto main (cursor) |
 | **FLAGGED — Community nav (needs Product)** | open | — | Five-features brief: Discover `MAP\|COMMUNITY` + desktop list-under-map = Community feed. **Shipped #165:** Nearby is Grid↔Map only; Community is own nav at `/stream`. Code kept #165. Do not restore the toggle without an explicit Product call. |
 | Merge `origin/main` into five-features (same-intent → main) | this branch `cursor/five-features-community-discreet-1e25` | — | Cursor cloud — took shipped main for Community API, Discreet (`DISCREET_MEDIA_BLUR` off), Safety `thread_id`, More filters, Nightlife 040. Dropped HEAD 039 combined, DiscreetMedia, always-on blur, `/users/sentinel`. Community placement left flagged (row above). |

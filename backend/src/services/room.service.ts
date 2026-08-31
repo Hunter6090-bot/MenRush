@@ -6,6 +6,23 @@ import { accessControl } from '../security/access';
 /** Soft TTL for saved room temp identities (strategy 3). Unsaved wipe on leave. */
 export const ROOM_TEMP_IDENTITY_TTL_DAYS = 30;
 const ROOM_TEMP_IDENTITY_PURGE_MS = 6 * 60 * 60 * 1000;
+export const ROOM_ANON_NAME = 'Member';
+
+/**
+ * Room-scoped display name SQL. Never falls back to users.name.
+ * `ttlParam` is a bound placeholder such as `$2` or `$3`.
+ */
+export function roomTempNameExpr(tiAlias: string, ttlParam: string): string {
+  return `COALESCE(NULLIF(BTRIM(CASE WHEN ${tiAlias}.last_used_at > NOW() - (${ttlParam} || ' days')::interval THEN ${tiAlias}.display_name ELSE NULL END), ''), '${ROOM_ANON_NAME}')`;
+}
+
+/**
+ * Room-scoped photo SQL. Never falls back to users.photo_url.
+ */
+export function roomTempPhotoExpr(tiAlias: string, ttlParam: string): string {
+  return `CASE WHEN ${tiAlias}.last_used_at > NOW() - (${ttlParam} || ' days')::interval THEN ${tiAlias}.photo_url ELSE NULL END`;
+}
+
 interface CreateRoomData {
   name: string;
   description?: string;
@@ -337,24 +354,10 @@ export const roomService = {
 
     const msg = result.rows[0] as any;
 
-    // Temp identity is room-scoped only — never mutates users.name / photo_url.
+    // Temp identity is room-scoped only — never mutates or reads users.name / photo_url.
     const senderRes = await query(
-      `SELECT COALESCE(
-                CASE
-                  WHEN ti.last_used_at > NOW() - ($3 || ' days')::interval
-                  THEN ti.display_name
-                  ELSE NULL
-                END,
-                u.name
-              ) AS sender_name,
-              COALESCE(
-                CASE
-                  WHEN ti.last_used_at > NOW() - ($3 || ' days')::interval
-                  THEN ti.photo_url
-                  ELSE NULL
-                END,
-                u.photo_url
-              ) AS sender_photo_url
+      `SELECT ${roomTempNameExpr('ti', '$3')} AS sender_name,
+              ${roomTempPhotoExpr('ti', '$3')} AS sender_photo_url
          FROM users u
          LEFT JOIN room_temp_identities ti
            ON ti.user_id = u.id AND ti.room_id = $2
@@ -407,22 +410,8 @@ export const roomService = {
 
     const result = await query(
       `SELECT rm.id, rm.room_id, rm.sender_id, rm.message, rm.reply_to, rm.created_at,
-              COALESCE(
-                CASE
-                  WHEN ti.last_used_at > NOW() - (${ttlParam} || ' days')::interval
-                  THEN ti.display_name
-                  ELSE NULL
-                END,
-                u.name
-              ) AS sender_name,
-              COALESCE(
-                CASE
-                  WHEN ti.last_used_at > NOW() - (${ttlParam} || ' days')::interval
-                  THEN ti.photo_url
-                  ELSE NULL
-                END,
-                u.photo_url
-              ) AS sender_photo_url
+              ${roomTempNameExpr('ti', ttlParam)} AS sender_name,
+              ${roomTempPhotoExpr('ti', ttlParam)} AS sender_photo_url
        FROM room_messages rm
        JOIN users u ON u.id = rm.sender_id
        LEFT JOIN room_temp_identities ti
@@ -466,26 +455,11 @@ export const roomService = {
       throw new Error('You are not a member of this room');
     }
 
-    // Roster shows temp display name/photo inside the room; verification badge
-    // still reflects the real account (host can see adult assurance, not real name).
+    // Roster shows temp display name/photo only — never the main account profile.
     const result = await query(
       `SELECT u.id,
-              COALESCE(
-                CASE
-                  WHEN ti.last_used_at > NOW() - ($2 || ' days')::interval
-                  THEN ti.display_name
-                  ELSE NULL
-                END,
-                u.name
-              ) AS name,
-              COALESCE(
-                CASE
-                  WHEN ti.last_used_at > NOW() - ($2 || ' days')::interval
-                  THEN ti.photo_url
-                  ELSE NULL
-                END,
-                u.photo_url
-              ) AS photo_url,
+              ${roomTempNameExpr('ti', '$2')} AS name,
+              ${roomTempPhotoExpr('ti', '$2')} AS photo_url,
               rm.role,
               u.is_verified,
               u.authenticity_status,
@@ -496,14 +470,7 @@ export const roomService = {
        LEFT JOIN room_temp_identities ti
          ON ti.user_id = u.id AND ti.room_id = $1
        WHERE rm.room_id = $1
-       ORDER BY COALESCE(
-         CASE
-           WHEN ti.last_used_at > NOW() - ($2 || ' days')::interval
-           THEN ti.display_name
-           ELSE NULL
-         END,
-         u.name
-       ) ASC`,
+       ORDER BY ${roomTempNameExpr('ti', '$2')} ASC`,
       [roomId, String(ROOM_TEMP_IDENTITY_TTL_DAYS)],
     );
     return result.rows;
@@ -613,25 +580,11 @@ export const roomService = {
     return res.rowCount ?? res.rows.length;
   },
 
-  /** Resolve display name/photo for socket presence inside a room. */
+  /** Resolve display name/photo for socket presence inside a room. Never the main profile. */
   async resolveRoomPresence(userId: string, roomId: string) {
     const res = await query(
-      `SELECT COALESCE(
-                CASE
-                  WHEN ti.last_used_at > NOW() - ($3 || ' days')::interval
-                  THEN ti.display_name
-                  ELSE NULL
-                END,
-                u.name
-              ) AS name,
-              COALESCE(
-                CASE
-                  WHEN ti.last_used_at > NOW() - ($3 || ' days')::interval
-                  THEN ti.photo_url
-                  ELSE NULL
-                END,
-                u.photo_url
-              ) AS photo_url,
+      `SELECT ${roomTempNameExpr('ti', '$3')} AS name,
+              ${roomTempPhotoExpr('ti', '$3')} AS photo_url,
               u.is_verified,
               u.authenticity_status,
               (ti.display_name IS NOT NULL AND ti.last_used_at > NOW() - ($3 || ' days')::interval)
@@ -646,7 +599,7 @@ export const roomService = {
       await this.touchTempIdentity(userId, roomId);
     }
     return {
-      name: res.rows[0]?.name ?? 'Member',
+      name: res.rows[0]?.name ?? ROOM_ANON_NAME,
       photo_url: res.rows[0]?.photo_url ?? null,
       is_verified: !!res.rows[0]?.is_verified,
       authenticity_status: res.rows[0]?.authenticity_status ?? null,

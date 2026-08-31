@@ -7,6 +7,7 @@ import {
   streamHasRenderableVideo,
   videoElementHasFrames,
 } from '../lib/callMedia';
+import { liveRoomParticipants } from '../lib/roomPresence';
 
 interface RoomGalleryGridProps {
   participants: RoomParticipant[];
@@ -91,7 +92,8 @@ function ParticipantTile({
         border: pinned ? '2px solid #C4832A' : '1px solid rgba(255,255,255,0.08)',
         boxShadow: pinned ? '0 0 0 1px rgba(196,131,42,0.35)' : undefined,
       }}
-      aria-label={`${participant.name}${participant.isLive ? ', live' : ''}`}
+      data-testid={`room-tile-${participant.user_id}`}
+      aria-label={`${participant.name}, live`}
     >
       {showVideo ? (
         <>
@@ -127,22 +129,14 @@ function ParticipantTile({
           </div>
         ))}
 
-      {!participant.isLive && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/45">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--cream-muted)]">Away</span>
-        </div>
-      )}
-
       <div className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-gradient-to-t from-black/85 via-black/55 to-transparent px-2 pb-2 pt-8">
         {participant.isMuted && (
           <MicOffIcon className="h-3.5 w-3.5 shrink-0 text-[#EF4444]" />
         )}
         <span className="min-w-0 truncate text-[11px] font-semibold text-white">{participant.name}</span>
-        {participant.isLive && (
-          <span className="ml-auto shrink-0 rounded bg-[#C4832A] px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[var(--nn-on-copper)]">
-            Live
-          </span>
-        )}
+        <span className="ml-auto shrink-0 rounded bg-[#C4832A] px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[var(--nn-on-copper)]">
+          Live
+        </span>
       </div>
     </button>
   );
@@ -156,9 +150,7 @@ export function RoomGalleryGrid({
   photoUrl,
   cameraOnForSelf = true,
 }: RoomGalleryGridProps) {
-  const live = participants.filter((p) => p.isLive);
-  const away = participants.filter((p) => !p.isLive);
-  const ordered = [...live, ...away];
+  const ordered = liveRoomParticipants(participants);
   const pinned = pinnedId ? ordered.find((p) => p.user_id === pinnedId) : null;
   const gridItems = pinned ? ordered.filter((p) => p.user_id !== pinnedId) : ordered;
 
@@ -181,7 +173,7 @@ export function RoomGalleryGrid({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-1 p-1">
+    <div className="flex h-full min-h-0 flex-col gap-1 p-1" data-testid="room-gallery">
       {pinned && (
         <div className="shrink-0 px-1">
           <ParticipantTile
