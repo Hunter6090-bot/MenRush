@@ -172,11 +172,15 @@ CREATE TABLE IF NOT EXISTS album_photos (
   storage_key TEXT,
   mime_type  TEXT,
   position   INT NOT NULL DEFAULT 0,
+  -- public | view_once | private — owner discretion; not DISCREET_MEDIA_BLUR.
+  visibility TEXT NOT NULL DEFAULT 'private'
+    CHECK (visibility IN ('public', 'view_once', 'private')),
   created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_album_photos_album ON album_photos(album_id, position);
 CREATE INDEX IF NOT EXISTS idx_album_photos_user ON album_photos(user_id);
+CREATE INDEX IF NOT EXISTS idx_album_photos_user_visibility ON album_photos (user_id, visibility);
 
 CREATE TABLE IF NOT EXISTS album_grants (
   album_id   UUID NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
@@ -186,6 +190,16 @@ CREATE TABLE IF NOT EXISTS album_grants (
 );
 
 CREATE INDEX IF NOT EXISTS idx_album_grants_viewer ON album_grants(viewer_id);
+
+-- View-once opens (viewers). Revoke never deletes photos — only album_grants.
+CREATE TABLE IF NOT EXISTS album_photo_views (
+  photo_id UUID NOT NULL REFERENCES album_photos(id) ON DELETE CASCADE,
+  viewer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  viewed_at TIMESTAMP DEFAULT NOW(),
+  PRIMARY KEY (photo_id, viewer_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_album_photo_views_viewer ON album_photo_views (viewer_id);
 
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'room';
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS starts_at TIMESTAMP;

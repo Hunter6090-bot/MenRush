@@ -1295,10 +1295,10 @@ export const Profile = () => {
             <div>
               <p className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--cream)' }}>
                 <PhotoStackIcon className="w-4 h-4" style={{ color: 'var(--copper)' }} />
-                Private albums
+                My Photos
               </p>
               <p className="text-xs mt-1" style={{ color: 'var(--cream-muted)' }}>
-                6 free photos. Grant per profile. Unlimited on Premium.
+                You decide who sees what — public, view once, or private.
               </p>
             </div>
             <span className="text-[var(--copper)] text-lg" aria-hidden>›</span>
