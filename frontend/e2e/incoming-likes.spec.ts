@@ -127,27 +127,31 @@ test('likeUser success path from profile Match CTA', async ({ browser }) => {
   const page = await ctx.newPage();
   await page.goto(`/profile/${liker.user.id}`);
 
-  const matchBtn = page.getByTestId('profile-view-match');
-  const openChatBtn = page.getByTestId('profile-view-message');
-
   // Already mutual from a prior retry — Open chat replaces Match.
   if (await page.getByTestId('profile-view-unmatch').isVisible().catch(() => false)) {
-    await expect(openChatBtn).toHaveText(/Open chat/i);
+    await expect(page.getByTestId('profile-view-message')).toHaveText(/Open chat/i);
   } else {
+    const matchBtn = page.getByTestId('profile-view-match');
     await expect(matchBtn).toBeVisible({ timeout: 15_000 });
     const label = (await matchBtn.textContent())?.trim() ?? '';
-    if (label === 'Matched' || label === 'Open chat') {
-      expect(['Matched', 'Open chat']).toContain(label);
+    if (label === 'Matched') {
+      expect(label).toBe('Matched');
     } else {
       await expect(matchBtn).toHaveText('Match');
       await matchBtn.click();
-      // Mutual like unmounts Match and shows Open chat; one-way shows Matched.
+      // Flash confirms the likeUser path; mutual UI may unmount Match.
       await expect(
-        page.getByTestId('profile-view-match').or(page.getByTestId('profile-view-message')),
-      ).toHaveText(/Matched|Open chat|Sending/i, { timeout: 10_000 });
-      await expect(page.getByText(/Match sent|matched|already sent|You matched/i).first()).toBeVisible({
-        timeout: 10_000,
-      });
+        page.getByText(/Match sent|You matched|already sent/i).first(),
+      ).toBeVisible({ timeout: 10_000 });
+      const unmatchVisible = await page
+        .getByTestId('profile-view-unmatch')
+        .isVisible()
+        .catch(() => false);
+      if (unmatchVisible) {
+        await expect(page.getByTestId('profile-view-message')).toHaveText(/Open chat/i);
+      } else {
+        await expect(page.getByTestId('profile-view-match')).toHaveText(/Matched/i);
+      }
     }
   }
 

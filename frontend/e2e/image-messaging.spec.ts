@@ -3,9 +3,9 @@ import { TEST_PASSWORD, ALICE, BOB } from './test-accounts';
 import { PLAYWRIGHT_BASE_URL as BASE_URL } from './support/base-url';
 
 
-// A valid 1x1 PNG (correct signature, so it passes the backend's content check).
-const PNG_BUFFER = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+// Valid JPEG that sharp/libvips can optimize (tiny PNGs fail vipspng in CI).
+const JPEG_BUFFER = Buffer.from(
+  '/9j/4AAQSkZJRgABAgAAAQABAAD//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgEBAQEBAUFBQUFBQYGBgYGBgYGBgYGBgYHBwcICAgHBwcGBgcHCAgICAkJCQgICAgJCQoKCgwMCwsODg4RERT/xABMAAEBAAAAAAAAAAAAAAAAAAAABAEBAQAAAAAAAAAAAAAAAAAAAAYQAQAAAAAAAAAAAAAAAAAAAAARAQAAAAAAAAAAAAAAAAAAAAD/wAARCABAAEADASIAAhEAAxEA/9oADAMBAAIRAxEAPwCwBDqgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB//2Q==',
   'base64',
 );
 
@@ -33,6 +33,13 @@ test.beforeAll(async () => {
   try {
     alice = await login(api, ALICE.email);
     bob = await login(api, BOB.email);
+    // Media send requires a mutual match — re-assert in case a prior Unmatch e2e cleared it.
+    await api.post(`/api/users/like/${bob.user.id}`, {
+      headers: { Authorization: `Bearer ${alice.token}` },
+    });
+    await api.post(`/api/users/like/${alice.user.id}`, {
+      headers: { Authorization: `Bearer ${bob.token}` },
+    });
   } finally {
     await api.dispose();
   }
