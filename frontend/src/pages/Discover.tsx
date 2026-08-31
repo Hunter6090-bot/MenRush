@@ -146,7 +146,7 @@ function MapFloatingChrome({
           <span />
         )}
         <div className="pointer-events-auto flex items-center gap-1.5">
-          {/* #67: compact independent People / Hot Spots layer control. */}
+          {/* #67: compact independent People / Cruise (Hot Spots) layer control. */}
           <button
             type="button"
             onClick={onTogglePeopleLayer}
@@ -162,9 +162,9 @@ function MapFloatingChrome({
             type="button"
             onClick={onToggleHotSpotsLayer}
             data-testid="layer-toggle-hotspots"
-            aria-label={hotSpotsLayerOn ? 'Hide Hot Spots' : 'Show Hot Spots'}
+            aria-label={hotSpotsLayerOn ? 'Hide Cruise' : 'Show Cruise'}
             aria-pressed={hotSpotsLayerOn}
-            title={hotSpotsLayerOn ? 'Hide Hot Spots' : 'Show Hot Spots'}
+            title={hotSpotsLayerOn ? 'Hide Cruise' : 'Show Cruise'}
             className={`${mapChromeBtnClass} ${hotSpotsLayerOn ? '' : 'opacity-45'}`}
           >
             <IconHotSpots size={18} />
@@ -427,7 +427,7 @@ export const Discover = () => {
   const selfDotRef = useRef<HTMLDivElement | null>(null);
   const selfRootRef = useRef<Root | null>(null);
   const [hotSpots, setHotSpots] = useState<HotSpotDTO[]>([]);
-  // #67: independent People / Hot Spots layer toggles, session-only persistence.
+  // #67: independent People / Cruise layer toggles, session-only persistence.
   const [peopleLayerOn, setPeopleLayerOnState] = useState(() => readLayerVisible('people', true));
   const [hotSpotsLayerOn, setHotSpotsLayerOnState] = useState(() => readLayerVisible('hotSpots', true));
   const setPeopleLayerOn = useCallback((visible: boolean) => {
@@ -1011,7 +1011,7 @@ export const Discover = () => {
     }
   }, [lat, lng, radius, discoveryFilters, fetchNearbyUsers]);
 
-  // #67: check-in/out from the in-map Hot Spot sheet — same hotSpotsAPI calls as the
+  // #67: check-in/out from the in-map Cruise sheet — same hotSpotsAPI calls as the
   // standalone HotSpots page, refreshing this map's own hotSpots list on success.
   const handleHotSpotCheckIn = useCallback(
     async (spot: HotSpotDTO, anonymous: boolean) => {
@@ -1327,8 +1327,8 @@ export const Discover = () => {
     });
   }, [users, mapLoaded, peopleLayerOn, discoveryFilters, navigate]);
 
-  // Hot Spot pins (dim when empty, solid when check-ins present) — hidden entirely
-  // when the Hot Spots layer is off, same visibleIds-empty-set pattern as People above.
+  // Cruise pins (dim when empty, solid when check-ins present) — hidden entirely
+  // when the Cruise layer is off, same visibleIds-empty-set pattern as People above.
   useEffect(() => {
     if (lat == null || lng == null) {
       setHotSpots([]);

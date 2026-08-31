@@ -67,7 +67,7 @@ async function authenticate(context: BrowserContext, result: LoginResult) {
   }, result);
 }
 
-test('People and Hot Spots layer toggles default on and are independently switchable', async ({
+test('People and Cruise layer toggles default on and are independently switchable', async ({
   browser,
 }) => {
   const ctx = await browser.newContext({ geolocation: FIXTURE_GEO, permissions: ['geolocation'] });
@@ -140,7 +140,7 @@ test('/hot-spots route still loads directly for compatibility (no nav entry, rou
   const page = await ctx.newPage();
   await page.goto('/hot-spots');
 
-  await expect(page.getByRole('heading', { name: 'Hot Spots' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: 'Cruise' })).toBeVisible({ timeout: 20_000 });
   await expect(page).toHaveURL(/\/hot-spots$/);
 
   await ctx.close();

@@ -13,8 +13,8 @@ interface HotSpotSheetProps {
 }
 
 /**
- * In-map Hot Spot details + check-in/out (#67 — "Selecting a Hot Spot on Nearby opens
- * details and check-in controls without navigating away"). Mirrors HotSpots.tsx's card
+ * In-map Cruise details + check-in/out (#67 — selecting a Cruise pin on Nearby opens
+ * details and check-in controls without navigating away). Mirrors HotSpots.tsx's card
  * actions exactly; `/hot-spots` itself is untouched and still works for direct/deep links.
  */
 export function HotSpotSheet({ spot, isPremium, acting, error, onClose, onCheckIn }: HotSpotSheetProps) {

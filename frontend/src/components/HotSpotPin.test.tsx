@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { HotSpotPin } from './HotSpotPin';
 
 describe('HotSpotPin', () => {
-  it('shows venue name and approximate count when occupied', () => {
+  it('shows venue name, approximate count, and cruise-ship icon when occupied', () => {
     render(
       <HotSpotPin
         spot={{
@@ -19,9 +19,10 @@ describe('HotSpotPin', () => {
     expect(screen.getByTestId('hotspot-pin-solid')).toBeInTheDocument();
     expect(screen.getByTestId('hotspot-pin-name')).toHaveTextContent('Heaven');
     expect(screen.getByTestId('hotspot-pin-count')).toHaveTextContent('5+');
+    expect(screen.getByTestId('cruise-ship-icon')).toBeInTheDocument();
   });
 
-  it('hides name label when empty', () => {
+  it('hides name label when empty but still shows cruise-ship icon', () => {
     render(
       <HotSpotPin
         spot={{
@@ -35,5 +36,6 @@ describe('HotSpotPin', () => {
 
     expect(screen.getByTestId('hotspot-pin-dim')).toBeInTheDocument();
     expect(screen.queryByTestId('hotspot-pin-name')).not.toBeInTheDocument();
+    expect(screen.getByTestId('cruise-ship-icon')).toBeInTheDocument();
   });
 });

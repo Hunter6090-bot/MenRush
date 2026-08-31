@@ -45,9 +45,8 @@ async function isMobileViewport(page: Page) {
 
 // Mobile bottom nav only ships 4 primary tabs (Nearby, Matches, Chat, Profile);
 // Events and Settings remain reachable via a "More" sheet (P0 nav parity fix).
-// Hot Spots is intentionally NOT here (#67) — it's a layer on the Nearby map now,
-// not a separate destination; see the layer-control assertions in
-// nearby-people-hotspots-layers.spec.ts.
+// Cruise (formerly Hot Spots) is intentionally NOT a tab (#67) — it's a layer on
+// the Nearby map; see nearby-people-hotspots-layers.spec.ts.
 test('mobile More menu restores Events and Settings without losing primary tabs', async ({
   page,
 }) => {
@@ -74,6 +73,7 @@ test('mobile More menu restores Events and Settings without losing primary tabs'
   await expect(menu.getByRole('link', { name: 'Events' })).toBeVisible();
   await expect(menu.getByRole('link', { name: 'Settings' })).toBeVisible();
   await expect(menu.getByRole('link', { name: 'Hot Spots' })).toHaveCount(0);
+  await expect(menu.getByRole('link', { name: 'Cruise' })).toHaveCount(0);
 
   await menu.getByRole('link', { name: 'Settings' }).click();
   await expect(page).toHaveURL(/\/settings$/);
@@ -81,8 +81,8 @@ test('mobile More menu restores Events and Settings without losing primary tabs'
   await expect(page.getByTestId('mobile-more-menu')).toHaveCount(0);
 });
 
-// Desktop sidebar already had these links — asserts feature parity didn't regress desktop.
-// Hot Spots is intentionally excluded (#67) — see nearby-people-hotspots-layers.spec.ts.
+// Cruise (formerly Hot Spots) is intentionally excluded from nav (#67) —
+// see nearby-people-hotspots-layers.spec.ts.
 test('desktop sidebar still exposes every discovery destination directly', async ({ page }) => {
   test.skip(await isMobileViewport(page), 'Desktop-only assertion — mobile uses the More sheet.');
 
@@ -93,6 +93,7 @@ test('desktop sidebar still exposes every discovery destination directly', async
     await expect(page.getByRole('link', { name: label, exact: true })).toBeVisible();
   }
   await expect(page.getByRole('link', { name: 'Hot Spots', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Cruise', exact: true })).toHaveCount(0);
 });
 
 // Regression guard: dismissible banners above the map used to push the "expanded"
