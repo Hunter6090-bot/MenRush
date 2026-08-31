@@ -69,9 +69,11 @@ export function getNavItems(): NavItem[] {
     {
       to: '/rooms',
       label: ROUTE_LABELS.rooms,
+      shortLabel: 'Rooms',
       Icon: IconRooms,
+      // First-class chrome entry — not nested under Chat / messages.
+      mobileTab: true,
       desktopNav: true,
-      mobileMore: true,
     },
     {
       to: '/profile',
@@ -126,7 +128,7 @@ export function isNavActive(pathname: string, path: string): boolean {
 export function mobilePageTitle(pathname: string): string {
   if (pathname.startsWith('/messages/')) return 'Chat';
   if (pathname.startsWith('/profile/')) return 'Profile';
-  if (pathname.startsWith('/rooms/')) return 'Room';
+  if (pathname.startsWith('/rooms/')) return ROUTE_LABELS.rooms;
 
   const items = getNavItems();
   const match = items.find((item) => isNavActive(pathname, item.to));

@@ -1,102 +1,50 @@
 import type { ReactNode } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { Layout } from './Layout';
 import { ConversationList } from './ConversationList';
-import { RoomList } from './RoomList';
 import { Messages } from '../pages/Messaging';
-import { RoomChat } from '../pages/RoomChat';
-import { IconChat, IconRooms } from './icons';
+import { IconChat } from './icons';
 import { ThemeToggle } from './ThemeToggle';
+import { ROUTE_LABELS } from '../lib/routeLabels';
 
-type HubTab = 'messages' | 'rooms';
-
-function hubTabFromPath(pathname: string): HubTab {
-  return pathname.startsWith('/rooms') ? 'rooms' : 'messages';
-}
-
+/** Desktop Chat inbox only — Video rooms live in RoomsHub, not nested here. */
 export const MessagingHub = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { otherId, roomId } = useParams<{ otherId?: string; roomId?: string }>();
-  const tab = hubTabFromPath(location.pathname);
-
-  const setTab = (next: HubTab) => {
-    if (next === tab) return;
-    navigate(next === 'rooms' ? '/rooms' : '/conversations');
-  };
+  const { otherId } = useParams<{ otherId?: string }>();
 
   return (
     <Layout>
       <div className="flex h-[calc(100dvh-var(--desktop-workspace-header))] min-h-0 overflow-hidden bg-[var(--bg-primary)]">
         <aside className="flex w-[320px] shrink-0 flex-col border-r border-[var(--border-default)] bg-[var(--bg-primary)]">
           <div className="shrink-0 border-b border-[var(--border-default)] px-4 py-4">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)]">
-                Inbox
-              </p>
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)]">
+                  Inbox
+                </p>
+                <p className="text-sm font-semibold text-[var(--cream)]">{ROUTE_LABELS.messages}</p>
+              </div>
               <ThemeToggle variant="header" />
-            </div>
-            <div
-              className="flex rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] p-1"
-              role="tablist"
-              aria-label="Messages and rooms"
-            >
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'messages'}
-                onClick={() => setTab('messages')}
-                className={`flex-1 rounded-full px-3 py-2 text-[12px] font-extrabold uppercase tracking-[0.12em] transition-colors ${
-                  tab === 'messages'
-                    ? 'bg-[rgba(196,131,42,0.12)] text-[#E0A14A]'
-                    : 'text-[var(--cream-muted)] hover:text-[var(--cream)]'
-                }`}
-              >
-                Messages
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'rooms'}
-                onClick={() => setTab('rooms')}
-                className={`flex-1 rounded-full px-3 py-2 text-[12px] font-extrabold uppercase tracking-[0.12em] transition-colors ${
-                  tab === 'rooms'
-                    ? 'bg-[rgba(196,131,42,0.12)] text-[#E0A14A]'
-                    : 'text-[var(--cream-muted)] hover:text-[var(--cream)]'
-                }`}
-              >
-                Rooms
-              </button>
             </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-hidden">
-            {tab === 'messages' ? (
-              <ConversationList activeUserId={otherId} variant="sidebar" showHeader={false} className="h-full" />
-            ) : (
-              <RoomList activeRoomId={roomId} variant="sidebar" showHeader={false} className="h-full" />
-            )}
+            <ConversationList
+              activeUserId={otherId}
+              variant="sidebar"
+              showHeader={false}
+              className="h-full"
+            />
           </div>
         </aside>
 
         <section className="flex min-w-0 flex-1 flex-col bg-[var(--bg-primary)]">
-          {tab === 'messages' ? (
-            otherId ? (
-              <Messages embedded />
-            ) : (
-              <HubEmpty
-                icon={<IconChat size={36} className="text-[var(--copper)]/50" />}
-                title="Select a conversation"
-                body="Pick someone from your inbox to read and reply, or start a chat from Nearby."
-              />
-            )
-          ) : roomId ? (
-            <RoomChat embedded />
+          {otherId ? (
+            <Messages embedded />
           ) : (
             <HubEmpty
-              icon={<IconRooms size={36} className="text-[var(--copper)]/50" />}
-              title="Open a room"
-              body="Select a group from the list to join the conversation, or create a new Premium group."
+              icon={<IconChat size={36} className="text-[var(--copper)]/50" />}
+              title="Select a conversation"
+              body="Pick someone from your inbox to read and reply, or start a chat from Nearby."
             />
           )}
         </section>
