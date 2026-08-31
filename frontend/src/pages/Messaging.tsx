@@ -70,7 +70,7 @@ function seedThreadForOpen(
 ): Message[] {
   if (!peerId) return [];
   const preview = nav?.threadPreview;
-  if (preview?.peerId === peerId && preview.lastMessage) {
+  if (preview && peerId && preview.peerId === peerId && preview.lastMessage) {
     rememberInboxThread(peerId, {
       lastMessage: preview.lastMessage,
       lastMessageTime: preview.lastMessageTime,
@@ -184,7 +184,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const sendingRef = useRef(false);
   const [otherUser, setOtherUser] = useState<OtherUser | null>(() => {
     const preview = navState?.threadPreview;
-    if (preview?.peerId === otherId && preview.name) {
+    if (preview && otherId && preview.peerId === otherId && preview.name) {
       return { name: preview.name, photo_url: preview.photoUrl };
     }
     return null;
@@ -287,12 +287,12 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       setHistoryReady(cached !== undefined);
     }
     const preview = navState?.threadPreview;
-    if (preview?.peerId === otherId && preview.name) {
+    if (preview && otherId && preview.peerId === otherId && preview.name) {
       setOtherUser((prev) =>
         prev?.name
           ? prev
           : {
-              name: preview.name!,
+              name: preview.name,
               photo_url: preview.photoUrl,
             },
       );
