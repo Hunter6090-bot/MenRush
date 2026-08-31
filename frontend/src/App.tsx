@@ -59,6 +59,7 @@ const Pride = lazyNamed(() => import('./pages/Pride'), 'Pride');
 const MessagingRoute = lazyNamed(() => import('./components/MessagingRoute'), 'MessagingRoute');
 const RoomsRoute = lazyNamed(() => import('./components/RoomsRoute'), 'RoomsRoute');
 const Verify = lazyNamed(() => import('./pages/Verify'), 'Verify');
+const VerifyVeriff = lazyNamed(() => import('./pages/VerifyVeriff'), 'VerifyVeriff');
 const VerifyScan = lazyNamed(() => import('./pages/VerifyScan'), 'VerifyScan');
 const VerifyPending = lazyNamed(() => import('./pages/VerifyPending'), 'VerifyPending');
 const VerifyRejected = lazyNamed(() => import('./pages/VerifyRejected'), 'VerifyRejected');
@@ -254,6 +255,14 @@ function AppShell() {
           />
           <Route
             path="/verify/id"
+            element={
+              <ProtectedRoute>
+                {FEATURES.veriffAfterSignup ? <VerifyVeriff /> : <Verify />}
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/verify/id/manual"
             element={
               <ProtectedRoute>
                 <Verify />
