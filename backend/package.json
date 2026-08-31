@@ -29,6 +29,7 @@
     "test:smoke": "node ../scripts/smoke-critical-path.mjs",
     "test:image-optimize": "ts-node scripts/image-optimize-checks.ts",
     "test:nearby-hotpath": "ts-node scripts/nearby-hotpath-checks.ts",
+    "test:chat-video-open": "ts-node scripts/chat-video-open-checks.ts",
     "predeploy": "npm run build && bash ../test-features.sh",
     "audit:safety": "bash ../scripts/audit-safety.sh"
   },

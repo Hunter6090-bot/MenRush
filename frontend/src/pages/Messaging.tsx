@@ -2192,6 +2192,8 @@ interface VideoBubbleProps {
 
 const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWithdraw, withdrawing }) => {
   const url = getPhotoUrl(msg.media_url || undefined);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [armed, setArmed] = useState(false);
   const withdrawn = isWithdrawnMedia(msg);
   const radius = showTail
     ? isMine
@@ -2216,10 +2218,23 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
     );
   }
 
+  const blurred = shouldBlurMedia(msg.media_clear);
+
+  const armAndPlay = () => {
+    if (blurred || !url) return;
+    setArmed(true);
+    // Defer play until src is attached with preload metadata (range-friendly).
+    requestAnimationFrame(() => {
+      const el = videoRef.current;
+      if (!el) return;
+      void el.play().catch(() => undefined);
+    });
+  };
+
   return (
     <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
       <div
-        className="overflow-hidden"
+        className="relative overflow-hidden"
         style={{
           borderRadius: radius,
           border: isMine ? 'none' : '1px solid var(--border-default)',
@@ -2228,14 +2243,36 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
         }}
       >
         {url ? (
-          <SoftBlurMedia blurred={shouldBlurMedia(msg.media_clear)} data-testid="video-bubble">
-            <video
-              src={url}
-              controls={!shouldBlurMedia(msg.media_clear)}
-              playsInline
-              preload="none"
-              className="block w-full max-h-[320px] bg-black"
-            />
+          <SoftBlurMedia blurred={blurred} data-testid="video-bubble">
+            {armed ? (
+              <video
+                ref={videoRef}
+                src={url}
+                controls={!blurred}
+                playsInline
+                // metadata + Accept-Ranges lets Safari paint/play before full file.
+                preload="metadata"
+                className="block w-full max-h-[320px] bg-black"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={armAndPlay}
+                data-testid="video-bubble-open"
+                className="flex h-[180px] w-full min-w-[200px] flex-col items-center justify-center gap-2 bg-black/90 text-[#F0E0C0]"
+                aria-label="Open video"
+              >
+                <span
+                  className="flex h-12 w-12 items-center justify-center rounded-full bg-[#C4832A] text-lg font-extrabold text-[#1A0E03]"
+                  aria-hidden
+                >
+                  ▶
+                </span>
+                <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--cream-muted)]">
+                  Tap to open
+                </span>
+              </button>
+            )}
           </SoftBlurMedia>
         ) : (
           <div className="px-4 py-6 text-xs text-[var(--cream-muted)]">Video unavailable</div>

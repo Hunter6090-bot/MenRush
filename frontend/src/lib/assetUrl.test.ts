@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   canUseDisplayThumb,
+  resolveAssetUrl,
   resolveDisplayThumbCandidates,
   resolveUploadUrlCandidates,
 } from './assetUrl';
@@ -32,5 +33,10 @@ describe('assetUrl display thumbs + same-origin prefer', () => {
     vi.stubGlobal('window', { location: { origin: 'https://menrush.com' } });
     const c = resolveUploadUrlCandidates('/uploads/profiles/x.jpg');
     expect(c[0]).toBe('https://menrush.com/uploads/profiles/x.jpg');
+  });
+
+  it('resolveAssetUrl keeps signed /api media same-origin (chat video open)', () => {
+    const path = '/api/messages/abc/media?access=token';
+    expect(resolveAssetUrl(path)).toBe(path);
   });
 });

@@ -58,10 +58,21 @@ router.get('/:messageId/media', async (req, res) => {
       media.senderId,
       media.mediaType,
     );
-    res.type(media.mimeType);
-    res.setHeader('Cache-Control', 'private, no-store');
+    const absolute = resolveMediaPath(mediaDir, media.storageKey);
+    // Safari needs Accept-Ranges to start playback before the full download
+    // (Pete iPhone ~12s open on chat video that had already arrived).
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader(
+      'Cache-Control',
+      media.isDisappearing ? 'private, no-store' : 'private, max-age=600',
+    );
     res.setHeader('X-MenRush-Media-Clear', mediaClear ? '1' : '0');
-    return res.sendFile(resolveMediaPath(mediaDir, media.storageKey));
+    res.type(media.mimeType);
+    return res.sendFile(absolute, { acceptRanges: true }, (err) => {
+      if (!err || res.headersSent) return;
+      console.error('[media:sendFile]', err.message);
+      res.status(404).json({ error: 'media_unavailable' });
+    });
   } catch (error) {
     if (error instanceof SecurityError) {
       return res.status(error.status).json({ error: error.code });

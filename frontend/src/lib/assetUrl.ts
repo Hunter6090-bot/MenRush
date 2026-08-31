@@ -61,6 +61,13 @@ export function resolveAssetUrl(url?: string | null): string | undefined {
     return origin ? `${origin}${trimmed}` : trimmed;
   }
 
+  // Signed chat media (`/api/messages/.../media?access=`) — keep same-origin so
+  // Vercel rewrite + Safari byte-range play on one host (absolute Railway URLs
+  // made iPhone video open ~12s after the message already arrived).
+  if (trimmed.startsWith('/api/')) {
+    return trimmed;
+  }
+
   const base = getUploadAssetBaseUrl();
   return `${base}${trimmed.startsWith('/') ? trimmed : `/${trimmed}`}`;
 }
