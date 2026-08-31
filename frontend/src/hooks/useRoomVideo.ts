@@ -249,19 +249,25 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
   const upsertParticipant = useCallback((entry: RoomParticipant) => {
     setParticipants((prev) => {
       const idx = prev.findIndex((p) => p.user_id === entry.user_id);
-      if (idx === -1) return [...prev, { ...entry, isLive: true }];
+      if (idx === -1) {
+        return [...prev, { ...entry, isLive: entry.isLive ?? true }];
+      }
       const next = [...prev];
-      next[idx] = { ...next[idx], ...entry, isLive: true };
+      next[idx] = {
+        ...next[idx],
+        ...entry,
+        isLive: entry.isLive ?? true,
+      };
       return next;
     });
   }, []);
 
-  const markOffline = useCallback(
-    (offlineUserId: string) => {
-      setParticipants((prev) =>
-        prev.map((p) => (p.user_id === offlineUserId ? { ...p, isLive: false } : p)),
-      );
-      closePeer(offlineUserId);
+  /** Leave / disconnect: drop the tile entirely (not AWAY). AWAY is camera-off only. */
+  const removeParticipant = useCallback(
+    (goneUserId: string) => {
+      setParticipants((prev) => prev.filter((p) => p.user_id !== goneUserId));
+      setPinnedId((prev) => (prev === goneUserId ? null : prev));
+      closePeer(goneUserId);
     },
     [closePeer],
   );
@@ -308,6 +314,12 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
       setLocalStream(stream);
       setCameraOn(true);
       setMicMuted(false);
+      const myId = userIdRef.current;
+      if (myId) {
+        setParticipants((prev) =>
+          prev.map((p) => (p.user_id === myId ? { ...p, isLive: true } : p)),
+        );
+      }
       await replaceLocalTracksOnPeers(stream);
 
       if (session !== mediaSessionRef.current) {
@@ -386,11 +398,11 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     }
   }, [enabled, roomId, replaceLocalTracksOnPeers, emitMediaState, ensurePeer, flushPendingIce]);
 
-  // Once local media is live, mesh to every other live participant.
+  // Once local media is live, mesh to every other present participant (camera on or off).
   useEffect(() => {
     if (!localStream || !userId) return;
     for (const p of participants) {
-      if (p.isLive && p.user_id !== userId) {
+      if (p.user_id !== userId) {
         void ensurePeer(p.user_id);
       }
     }
@@ -425,9 +437,16 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     const track = localStream.getVideoTracks()[0];
     if (!track) return;
     track.enabled = !track.enabled;
-    setCameraOn(track.enabled);
-    emitMediaState(micMuted, track.enabled);
-  }, [localStream, startCamera, micMuted, emitMediaState]);
+    const on = track.enabled;
+    setCameraOn(on);
+    // AWAY = still in room with camera off (not left).
+    if (userId) {
+      setParticipants((prev) =>
+        prev.map((p) => (p.user_id === userId ? { ...p, isLive: on } : p)),
+      );
+    }
+    emitMediaState(micMuted, on);
+  }, [localStream, startCamera, micMuted, emitMediaState, userId]);
 
   const toggleMic = useCallback(() => {
     if (!localStream) return;
@@ -483,48 +502,40 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     );
   }, [userId]);
 
-  const loadMembers = useCallback(
-    (members: Array<{ id: string; name: string; photo_url?: string }>) => {
-      setParticipants((prev) => {
-        const liveMap = new Map(prev.map((p) => [p.user_id, p]));
-        return members.map((m) => {
-          const existing = liveMap.get(m.id);
-          return {
-            user_id: m.id,
-            name: m.name,
-            photo_url: m.photo_url,
-            isLive: existing?.isLive ?? false,
-            isMuted: existing?.isMuted ?? false,
-            isSelf: m.id === userId,
-          };
-        });
-      });
-    },
-    [userId],
-  );
-
+  /**
+   * Replace grid with socket-present people only.
+   * Do not seed from DB membership — that left AWAY tiles for everyone who ever joined.
+   */
   const applyPresenceSync = useCallback(
     (list: Array<{ user_id: string; name: string; photo_url?: string | null }>) => {
+      const presentIds = new Set(list.map((e) => e.user_id));
+
       setParticipants((prev) => {
-        const byId = new Map(prev.map((p) => [p.user_id, p]));
-        list.forEach((entry) => {
-          byId.set(entry.user_id, {
-            ...(byId.get(entry.user_id) ?? {
-              user_id: entry.user_id,
-              name: entry.name,
-              photo_url: entry.photo_url,
-            }),
+        const prevById = new Map(prev.map((p) => [p.user_id, p]));
+        const next: RoomParticipant[] = [];
+        for (const entry of list) {
+          const existing = prevById.get(entry.user_id);
+          next.push({
             user_id: entry.user_id,
             name: entry.name,
-            photo_url: entry.photo_url,
-            isLive: true,
+            photo_url: entry.photo_url ?? existing?.photo_url,
+            // Keep camera-off AWAY if we already know; new joiners default live until media-state.
+            isLive: existing?.isLive ?? true,
+            isMuted: existing?.isMuted ?? false,
             isSelf: entry.user_id === userId,
           });
-        });
-        return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+        }
+        return next.sort((a, b) => a.name.localeCompare(b.name));
       });
 
-      // Mesh: open a PC toward every other live peer once we have local media.
+      // Drop mesh peers who are no longer in the room.
+      for (const peerId of Array.from(peersRef.current.keys())) {
+        if (!presentIds.has(peerId)) {
+          closePeer(peerId);
+        }
+      }
+
+      // Mesh: open a PC toward every other present peer once we have local media.
       if (streamRef.current && userId) {
         for (const entry of list) {
           if (entry.user_id !== userId) {
@@ -533,7 +544,7 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
         }
       }
     },
-    [userId, ensurePeer],
+    [userId, ensurePeer, closePeer],
   );
 
   // Socket: WebRTC mesh signaling + remote media state
@@ -665,7 +676,8 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
             ? {
                 ...p,
                 isMuted: typeof muted === 'boolean' ? muted : p.isMuted,
-                isLive: camera_on === false ? p.isLive : p.isLive,
+                // Camera off while still present → AWAY; leave removes the tile instead.
+                isLive: typeof camera_on === 'boolean' ? camera_on : p.isLive,
               }
             : p,
         ),
@@ -717,8 +729,7 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     micMuted,
     mediaError,
     upsertParticipant,
-    markOffline,
-    loadMembers,
+    removeParticipant,
     applyPresenceSync,
     getStreamFor,
     toggleCamera,
