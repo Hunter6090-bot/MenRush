@@ -11,9 +11,17 @@ const FORBIDDEN_CTA_PATTERNS = [
 ];
 
 async function assertComingSoonDesignLock(page: import('@playwright/test').Page) {
+  const header = page.locator('header').first();
+  const headerBrandLink = header.getByRole('link', { name: /^MenRush$/i });
+  await expect(headerBrandLink).toHaveCount(1);
+  await expect(headerBrandLink).toHaveAttribute('href', '/');
+  await expect(headerBrandLink.getByTestId('brand-mark')).toBeVisible();
+  await expect(headerBrandLink.locator('img[src*="menrush-logo-192"]')).toBeVisible();
+
   const signInLink = page.getByRole('link', { name: /^Sign in$/i });
   await expect(signInLink).toHaveCount(1);
   await expect(signInLink).toHaveAttribute('href', '/login');
+  await expect(header.getByRole('link', { name: /^Sign in$/i })).toBeVisible();
 
   const heroHeading = page.getByRole('heading', {
     level: 1,
@@ -49,7 +57,10 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   await expect(inviteLink).toBeVisible();
   await expect(inviteLink).toHaveAttribute('href', '/beta');
 
-  await assertBrandMark(page);
+  // Hero keeps the large medallion; header uses compact sm (192).
+  await expect(page.getByTestId('brand-mark')).toHaveCount(2);
+  await expect(page.locator('main img[src*="menrush-logo-512"]')).toBeVisible();
+  await expect(page.locator('img[src*="medallion-480"]')).toHaveCount(0);
 }
 
 async function assertAuthShell(page: import('@playwright/test').Page) {
