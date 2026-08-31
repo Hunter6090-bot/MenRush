@@ -178,6 +178,7 @@ export function RoomGalleryGrid({
 }: RoomGalleryGridProps) {
   const live = participants.filter((p) => p.isLive);
   const away = participants.filter((p) => !p.isLive);
+  // Occupancy lock: AWAY = camera-off while still in room (not left). Left people are removed.
   const ordered = [...live, ...away];
   const pinned = pinnedId ? ordered.find((p) => p.user_id === pinnedId) : null;
   const gridItems = pinned ? ordered.filter((p) => p.user_id !== pinnedId) : ordered;

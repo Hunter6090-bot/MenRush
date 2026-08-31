@@ -6,7 +6,7 @@ import { SelfieCaptureModal } from './SelfieCaptureModal';
 
 export interface RoomTempIdentityPayload {
   displayName: string;
-  photoUrl?: string;
+  photoUrl: string;
   saveName: boolean;
   savePhoto: boolean;
 }
@@ -123,7 +123,7 @@ export function resolveTempPhotoSrc(url?: string | null): string | undefined {
 
 /**
  * Gate before entering a group video room.
- * Temporary name (required) + optional photo; never writes the main profile.
+ * Temporary name + photo (both required); never writes the main profile.
  * Layout: mobile bottom sheet; ≥1280px two-column centred dialog (1a).
  */
 export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
@@ -229,7 +229,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
         ? `Use ${NAME_MAX} characters or fewer.`
         : null;
 
-  const canEnter = !nameInvalid && !uploading && !submitting;
+  const canEnter = !nameInvalid && Boolean(photoUrl) && !uploading && !submitting;
   const showChips = loaded && !hadSavedIdentity;
   const subtitleActive =
     typeof activeCount === 'number' && activeCount > 0
@@ -313,6 +313,10 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   const handleEnter = async () => {
     setNameTouched(true);
     if (nameInvalid) return;
+    if (!photoUrl) {
+      setFormError('Add a temporary photo before entering.');
+      return;
+    }
     setFormError(null);
     setSubmitting(true);
     try {

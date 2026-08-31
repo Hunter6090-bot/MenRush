@@ -574,9 +574,14 @@ io.on('connection', (socket: Socket) => {
       const member = await roomService.isMember(userId, roomId);
       if (!member) return;
 
-      socket.join(`room:${roomId}`);
-
+      // Block presence until temp name+photo are set — never broadcast real profile.
       const presence = await roomService.resolveRoomPresence(userId, roomId);
+      if (!presence.using_temp_identity) {
+        socket.emit('room:identity-required', { room_id: roomId });
+        return;
+      }
+
+      socket.join(`room:${roomId}`);
 
       socket.to(`room:${roomId}`).emit('room:presence', {
         room_id: roomId,
@@ -598,17 +603,20 @@ io.on('connection', (socket: Socket) => {
         uniqueUserIds.push(peerUserId);
       }
 
-      const rosterDetails = await Promise.all(
-        uniqueUserIds.map(async (peerUserId: string) => {
-          const p = await roomService.resolveRoomPresence(peerUserId, roomId);
-          return {
-            user_id: peerUserId,
-            name: p.name,
-            photo_url: p.photo_url,
-            is_verified: p.is_verified,
-          };
-        }),
-      );
+      const rosterDetails = (
+        await Promise.all(
+          uniqueUserIds.map(async (peerUserId: string) => {
+            const p = await roomService.resolveRoomPresence(peerUserId, roomId);
+            if (!p.using_temp_identity) return null;
+            return {
+              user_id: peerUserId,
+              name: p.name,
+              photo_url: p.photo_url,
+              is_verified: p.is_verified,
+            };
+          }),
+        )
+      ).filter(Boolean);
 
       socket.emit('room:presence-sync', { room_id: roomId, participants: rosterDetails });
     } catch {
@@ -640,6 +648,8 @@ io.on('connection', (socket: Socket) => {
         type: 'leave',
         user_id: userId,
       });
+      // Wipe unsaved temp identity + drop open-join membership (leave no roster trace).
+      void roomService.exitRoomSession(userId, roomId).catch(() => {});
     }
   });
 
@@ -783,13 +793,15 @@ io.on('connection', (socket: Socket) => {
     const userId = socketToUser.get(socket.id);
     const roomId = resolveRoomId(data);
     if (!userId || !roomId || typeof data.typing !== 'boolean') return;
-    const name = (await userService.getDisplayName(userId)) ?? 'Member';
+    // Room typing must use temp identity — never the canonical profile name.
+    const presence = await roomService.resolveRoomPresence(userId, roomId);
+    if (!presence.using_temp_identity) return;
     socket.to(`room:${roomId}`).emit('room:typing', {
       roomId,
       room_id: roomId,
       userId,
       user_id: userId,
-      user_name: name,
+      user_name: presence.name,
       typing: data.typing,
     });
   });
@@ -905,6 +917,8 @@ io.on('connection', (socket: Socket) => {
             type: 'leave',
             user_id: userId,
           });
+          // Wipe unsaved temp identity + drop open-join membership (leave no roster trace).
+          void roomService.exitRoomSession(userId, roomId).catch(() => {});
         }
       })();
     }

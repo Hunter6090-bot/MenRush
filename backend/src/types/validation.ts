@@ -197,7 +197,8 @@ export const AddRoomMemberSchema = z.object({
 /** Temporary identity for a specific room — never written to main profile. */
 export const RoomTempIdentitySchema = z.object({
   display_name: z.string().trim().min(1).max(40),
-  photo_url: z.string().trim().max(500).nullable().optional(),
+  /** Required — join/presence blocked without a temp photo (never fall back to profile). */
+  photo_url: z.string().trim().min(1).max(500),
   save_name: z.boolean().optional(),
   save_photo: z.boolean().optional(),
 });

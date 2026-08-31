@@ -10,8 +10,6 @@ import { MobileBackButton } from '../components/MobileBackButton';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 import { PanicReportButton } from '../components/PanicReportButton';
-import { profilePathForUser } from '../lib/profileLinks';
-import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 import { getPhotoUrl } from '../components/UserAvatar';
 import { parseRoomImageMessage } from '../lib/roomMediaMessage';
 import { RoomTempIdentityGate } from '../components/RoomTempIdentityGate';
@@ -24,6 +22,14 @@ import {
   upsertPresentPerson,
   type PresentPerson,
 } from '../lib/roomPresentRoster';
+
+/** Drop a leaver from any in-room roster — leave leaves no trace. */
+function dropLeaverFromRoster<T extends { id?: string; user_id?: string }>(
+  roster: T[],
+  leaverId: string,
+): T[] {
+  return roster.filter((entry) => (entry.user_id ?? entry.id) !== leaverId);
+}
 
 const ROOM_EMOJI_PICKER = [
   '😀', '😂', '🔥', '❤️', '👍', '👀', '😈', '🥵', '💪', '🎉', '😏', '🙌',
@@ -218,29 +224,31 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
 
     return () => {
       cancelled = true;
-      // Session exit: wipe unsaved temp identity (never touches main profile).
+      // Session exit: wipe unsaved temp identity (server also drops open-join membership).
       void roomsAPI.clearTempIdentity(roomId).catch(() => {});
     };
   }, [roomId]);
 
   // Load messages after identity confirmed. Occupancy comes from socket presence only —
-  // never seed the video grid from DB membership (that left stale AWAY tiles).
+  // never seed the video grid from DB membership (that left stale AWAY tiles / profile flash).
   useEffect(() => {
     if (!roomId || !identityReady) return;
     roomsAPI.getMessages(roomId).then((r) => setMessages(r.data)).catch(() => {});
-    roomsAPI
-      .getMembers(roomId)
-      .then((r) => setMembers(r.data))
-      .catch(() => {});
   }, [roomId, identityReady]);
 
   useEffect(() => {
     if (!roomId || !settingsOpen) return;
-    roomsAPI
-      .getMembers(roomId)
-      .then((r) => setMembers(r.data))
-      .catch(() => setMembers([]));
-  }, [roomId, settingsOpen]);
+    // In-room settings roster = live presence only (leave leaves no trace).
+    setMembers(
+      participants.map((p) => ({
+        id: p.user_id,
+        name: p.name,
+        photo_url: p.photo_url ?? undefined,
+        using_temp_identity: true,
+        role: undefined,
+      })),
+    );
+  }, [roomId, settingsOpen, participants]);
 
   useEffect(() => {
     if (!addPanelOpen) return;
@@ -270,17 +278,20 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   }, [addPanelOpen, members, user?.id]);
 
   // ── Socket: join/leave ───────────────────────────────────────────────────
+  // CRITICAL: join only AFTER temp identity is saved. Early join broadcast
+  // resolveRoomPresence before the gate → real name/photo leak + dropped
+  // WebRTC offers (mesh handlers are disabled until identityReady).
   useEffect(() => {
-    if (!socket || !roomId) return;
+    if (!socket || !roomId || !identityReady) return;
     socket.emit('room:join', { roomId });
     return () => {
       socket.emit('room:leave', { roomId });
     };
-  }, [socket, roomId]);
+  }, [socket, roomId, identityReady]);
 
   // ── Socket: events ───────────────────────────────────────────────────────
   useEffect(() => {
-    if (!socket || !roomId) return;
+    if (!socket || !roomId || !identityReady) return;
 
     const onMessage = (data: RoomMessage) => {
       if (data.room_id !== roomId) return;
@@ -304,6 +315,12 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
         // Occupancy lock (#184): leave drops the tile — never markOffline / AWAY ghost.
         removeParticipant(data.user_id);
         setPresentPeople((prev) => removePresentPerson(prev, data.user_id));
+        setMembers((prev) => dropLeaverFromRoster(prev, data.user_id));
+        setTypingUsers((prev) => {
+          const next = { ...prev };
+          delete next[data.user_id];
+          return next;
+        });
         // Peer left the group → this in-room 1:1 is gone.
         setDmPeer((cur) => {
           if (cur?.id === data.user_id) {
@@ -329,6 +346,29 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           photo_url: data.photo_url,
         }),
       );
+      setMembers((prev) => {
+        if (prev.some((m) => m.id === data.user_id)) {
+          return prev.map((m) =>
+            m.id === data.user_id
+              ? {
+                  ...m,
+                  name: data.name ?? m.name,
+                  photo_url: data.photo_url ?? m.photo_url,
+                  using_temp_identity: true,
+                }
+              : m,
+          );
+        }
+        return [
+          ...prev,
+          {
+            id: data.user_id,
+            name: data.name ?? 'Member',
+            photo_url: data.photo_url ?? undefined,
+            using_temp_identity: true,
+          },
+        ];
+      });
     };
 
     const onPresenceSync = (data: {
@@ -339,6 +379,15 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       applyPresenceSync(data.participants);
       const roster = replacePresentRoster(data.participants);
       setPresentPeople(roster);
+      // Settings roster mirrors present people — leavers are not listed.
+      setMembers(
+        data.participants.map((p) => ({
+          id: p.user_id,
+          name: p.name,
+          photo_url: p.photo_url ?? undefined,
+          using_temp_identity: true,
+        })),
+      );
       // If open DM peer is no longer present, drop the window.
       setDmPeer((cur) => {
         if (!cur) return cur;
@@ -388,7 +437,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       socket.off('room:presence-sync', onPresenceSync);
       socket.off('room:typing', onTyping);
     };
-  }, [socket, roomId, user?.id, upsertParticipant, removeParticipant, applyPresenceSync]);
+  }, [socket, roomId, identityReady, user?.id, upsertParticipant, removeParticipant, applyPresenceSync]);
 
   // ── Socket: ephemeral in-room 1:1 ────────────────────────────────────────
   useEffect(() => {
@@ -755,12 +804,33 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           activeCount={room.member_count}
           roomTheme={room.name}
           onReady={async ({ displayName, photoUrl: gatePhotoUrl, saveName, savePhoto }) => {
+            if (!gatePhotoUrl) {
+              throw new Error('temp_photo_required');
+            }
             await roomsAPI.setTempIdentity(roomId!, {
               display_name: displayName,
-              photo_url: gatePhotoUrl ?? null,
+              photo_url: gatePhotoUrl,
               save_name: saveName,
               save_photo: savePhoto,
             });
+            // First paint uses TEMP identity only — never auth profile photo/name.
+            if (user?.id) {
+              upsertParticipant({
+                user_id: user.id,
+                name: displayName,
+                photo_url: gatePhotoUrl,
+                isLive: true,
+                isSelf: true,
+              });
+              setMembers([
+                {
+                  id: user.id,
+                  name: displayName,
+                  photo_url: gatePhotoUrl,
+                  using_temp_identity: true,
+                },
+              ]);
+            }
             setIdentityReady(true);
           }}
           onCancel={leaveRoomSurface}
@@ -934,10 +1004,9 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
               <div className="space-y-1">
                 {members.map((member) => (
                   <div key={member.id} className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => navigate(profilePathForUser(member.id, user?.id))}
-                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    {/* Temp-identity rows never deep-link to the real profile. */}
+                    <div
+                      className="flex min-w-0 flex-1 items-center gap-2"
                       data-testid={`room-member-${member.id}`}
                     >
                       <span className="flex-1 text-sm truncate" style={{ color: 'var(--cream)' }}>
@@ -953,7 +1022,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                           </span>
                         ) : null}
                       </span>
-                    </button>
+                    </div>
                     {member.id !== user?.id && (
                       <ChatSafetyMenu
                         peerId={member.id}
@@ -1155,23 +1224,20 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                 {!isMine && (
                   <div className="w-8 flex-shrink-0 mr-2 flex items-end mb-1">
                     {showTail && (
-                      <ProfilePhotoLink
-                        userId={msg.sender_id}
-                        name={msg.sender_name}
+                      // Room chat avatars never deep-link to the real profile.
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                        style={{
+                          background: `${color}22`,
+                          border: `1px solid ${color}44`,
+                          color,
+                          flexShrink: 0,
+                        }}
                         data-testid={`room-msg-avatar-${msg.sender_id}`}
+                        aria-hidden
                       >
-                        <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                          style={{
-                            background: `${color}22`,
-                            border: `1px solid ${color}44`,
-                            color,
-                            flexShrink: 0,
-                          }}
-                        >
-                          {initials(msg.sender_name)}
-                        </div>
-                      </ProfilePhotoLink>
+                        {initials(msg.sender_name)}
+                      </div>
                     )}
                   </div>
                 )}

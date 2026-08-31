@@ -208,10 +208,16 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
         };
 
         pc.onconnectionstatechange = () => {
-          if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-            // Keep slot for a soft reconnect attempt via re-offer from the impolite side.
-            if (pc.connectionState === 'closed') {
-              closePeer(peerId);
+          const state = pc.connectionState;
+          if (state === 'closed') {
+            closePeer(peerId);
+            return;
+          }
+          if (state === 'failed') {
+            // Soft reconnect: impolite peer re-offers after tearing down the dead PC.
+            closePeer(peerId);
+            if (streamRef.current && shouldCreateOffer(myId, peerId)) {
+              void ensurePeer(peerId, { initiate: true });
             }
           }
         };
@@ -505,6 +511,7 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
   /**
    * Replace grid with socket-present people only.
    * Do not seed from DB membership — that left AWAY tiles for everyone who ever joined.
+   * isLive = camera on (LIVE badge); camera-off while present = AWAY (still in room).
    */
   const applyPresenceSync = useCallback(
     (list: Array<{ user_id: string; name: string; photo_url?: string | null }>) => {
@@ -682,6 +689,10 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
             : p,
         ),
       );
+      // Peer just published media — mesh if we missed the presence-join offer race.
+      if (streamRef.current) {
+        void ensurePeer(user_id);
+      }
     };
 
     const onPeerJoined = (peerId: string) => {
