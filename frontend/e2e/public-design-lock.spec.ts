@@ -54,10 +54,11 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
     page.getByText('Group spaces for men who already know the vibe. Less noise. More signal.'),
   ).toBeVisible();
 
-  // Early waitlist Premium fact stays; invite-only-until-open contradicts Sign up free / UK BETA OPEN.
+  // Product lock 31 Aug 2026: open signup waitlist gift; Pride replaces it (no stack).
+  // Do not say invite-only until open — hero is Sign up free / UK BETA OPEN.
+  await expect(page.getByText(/Sign up before 1 October 2026/i)).toBeVisible();
   await expect(page.getByText(/30 days of Premium/i)).toBeVisible();
-  await expect(page.getByText(/1 October 2026/i)).toBeVisible();
-  await expect(page.getByText(/UK first/i)).toBeVisible();
+  await expect(page.getByText(/Pride promo replaces that gift and does not stack/i)).toBeVisible();
   await expect(page.getByText(/invite-only until/i)).toHaveCount(0);
   await expect(page.getByText(/Invite-only until then/i)).toHaveCount(0);
 

@@ -20,7 +20,7 @@ Run: `npm run test:e2e -- public-design-lock` (from `frontend/`)
 - Keep `#waitlist` as a stable scroll anchor on the CTA block for older deep links.
 - Header: compact `BrandMark` (`size="sm"`) top-left linked to `/` with `aria-label="MenRush"` (no MENRUSH type beside it); **Sign in** top-right → `/login`. Hero keeps its own centered `BrandMark` (`size="hero"`).
 - Body: **Already have an invite? Enter your code** → `/beta`.
-- Include a short **What you get** section matching shipped product (Nearby / Video rooms / Matches). Card bodies use period lock (no em/en dash or hyphen-as-aside). Do not claim an official themed-room catalog unless it is live on main. Do not say invite-only until open on the landing rest — hero is Sign up free / UK BETA OPEN. Early waitlist still gets 30 days Premium when we open 1 October 2026, UK first.
+- Include a short **What you get** section matching shipped product (Nearby / Video rooms / Matches). Card bodies use period lock (no em/en dash or hyphen-as-aside). Do not claim an official themed-room catalog unless it is live on main. Do not say invite-only until open on the landing rest — hero is Sign up free / UK BETA OPEN. Sign up before 1 October 2026 gets 30 days Premium free; a Pride promo replaces that gift and does not stack.
 - Do **not** invent social network URLs. Footer is `SiteFooter` (Contact, Safety, legal).
 - **No** separate “JOIN THE WAITLIST” / “GET EARLY ACCESS” / “Join waitlist” CTAs on the landing face.
 
