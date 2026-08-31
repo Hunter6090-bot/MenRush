@@ -15,6 +15,7 @@ import { DiscoveryShellProvider, useDiscoveryShell } from '../context/DiscoveryS
 import { LocationPresenceStrip } from './LocationPresenceStrip';
 import { ProfileDepthStrip } from './ProfileDepthStrip';
 import { ThemeToggle } from './ThemeToggle';
+import { BetaFeedbackPrompt } from './BetaFeedbackPrompt';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -283,6 +284,7 @@ function LayoutInner({ children }: LayoutProps) {
                 />
               </Link>
             </div>
+            <BetaFeedbackPrompt />
           </div>
         </header>
 
