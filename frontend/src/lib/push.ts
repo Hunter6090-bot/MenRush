@@ -48,7 +48,13 @@ export async function isPushConfigured(): Promise<boolean> {
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!('serviceWorker' in navigator)) return null;
   try {
-    return await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    const reg = await navigator.serviceWorker.register('/sw.js', {
+      scope: '/',
+      // Avoid serving a stale cached sw.js after preview deploys (iOS especially).
+      updateViaCache: 'none',
+    });
+    void reg.update();
+    return reg;
   } catch {
     return null;
   }

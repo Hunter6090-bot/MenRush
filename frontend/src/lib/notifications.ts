@@ -55,7 +55,9 @@ export function mapSocketNotification(data: {
 }
 
 export function notificationDestination(notification: Notification): string {
-  if (notification.linkPath) return notification.linkPath;
+  const fromLink = normalizeAppPath(notification.linkPath);
+  if (fromLink) return fromLink;
+
   switch (notification.type) {
     case 'message':
     case 'photo':
@@ -70,6 +72,22 @@ export function notificationDestination(notification: Notification): string {
       return '/profile';
     default:
       return '/notifications';
+  }
+}
+
+/** Accept relative paths or absolute same-app URLs from older rows / sockets. */
+export function normalizeAppPath(raw?: string | null): string | null {
+  if (!raw || typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  try {
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      const u = new URL(trimmed);
+      return `${u.pathname}${u.search}${u.hash}` || null;
+    }
+    return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  } catch {
+    return null;
   }
 }
 

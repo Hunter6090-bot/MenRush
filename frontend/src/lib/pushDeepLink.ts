@@ -96,3 +96,33 @@ export function conversationFingerprint(
     )
     .join('\u0002');
 }
+
+/**
+ * Recover `/messages/:id` when iOS drops notification.data but keeps tag
+ * (`msg-<peerId>` from pushNewMessage).
+ */
+export function conversationPathFromPushNotification(input: {
+  url?: string | null;
+  path?: string | null;
+  otherId?: string | null;
+  tag?: string | null;
+}): string {
+  const raw = input.url || input.path || null;
+  if (raw && typeof raw === 'string') {
+    try {
+      const path =
+        raw.startsWith('http://') || raw.startsWith('https://')
+          ? new URL(raw).pathname
+          : raw.startsWith('/')
+            ? raw
+            : `/${raw}`;
+      if (path.startsWith('/messages/')) return path;
+    } catch {
+      /* fall through */
+    }
+  }
+  if (input.otherId) return `/messages/${input.otherId}`;
+  const tag = input.tag ? String(input.tag) : '';
+  if (tag.startsWith('msg-') && tag.length > 4) return `/messages/${tag.slice(4)}`;
+  return '/discover';
+}

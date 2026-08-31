@@ -47,7 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
-| P0 beta: chat reply/send + blank profile + crash + push-tap + open-thread media paint | PR `#158` `cursor/p0-chat-profile-beta-0e36` | — | Cursor cloud — open-thread 2.5s poll (sit-in-chat without remount); iOS notificationclick → openWindow(absolute); SW SPA postMessage; hold merge for Al/Pete phones; Zoul ping; timings stay #160; #97–#99 parked |
+| P0 beta: chat reply/send + blank profile + crash + push-tap + open-thread media + notif tray route | PR `#158` `cursor/p0-chat-profile-beta-0e36` | — | Cursor cloud — in-app tray navigate-before-markRead; SW tag→/messages fallback; open-thread poll; **preview SSO-gated (flag Zoul)**; hold merge; no Al ping; #97–#99 parked; timings #160 |
 | Mutual profile: Pass · Open chat · Unmatch (drop duplicate Message) | PR `cursor/mutual-profile-unmatch-fd7a` | — | Cursor cloud — DELETE /users/like/:id removes both like dirs; ProfileView only; do not touch #97–#99 / rooms / public copy |
 | Profile tag pick-one / pick-several UX cue | PR `cursor/profile-tag-pick-cue-4040` | — | Cursor cloud — cue only under each tag subsection; selection rules unchanged; do not touch #97–#99 |
 | Discover Map\|Community parity + phone pinch zoom | PR `cursor/discover-map-community-parity-2402` | — | Cursor cloud — desktop under-map = Nearby (not Community); shared MAP\|COMMUNITY tabs; phone map pinch via touch-action/overflow + disableRotation; do not touch #97–#99 |

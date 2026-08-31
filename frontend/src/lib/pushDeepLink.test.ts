@@ -5,6 +5,7 @@ import {
   peerIdFromMessagesUrl,
   resolveNotificationHref,
   conversationFingerprint,
+  conversationPathFromPushNotification,
 } from './pushDeepLink';
 
 describe('resolveNotificationHref', () => {
@@ -80,5 +81,25 @@ describe('conversationFingerprint', () => {
       { id: '2', message: '📷 Photo', media_url: '/api/messages/2/media?access=x' },
     ]);
     expect(before).not.toEqual(after);
+  });
+});
+
+describe('conversationPathFromPushNotification', () => {
+  it('recovers the chat path from msg-<peerId> tag when data.url is missing', () => {
+    expect(
+      conversationPathFromPushNotification({
+        url: null,
+        tag: 'msg-peer-99',
+      }),
+    ).toBe('/messages/peer-99');
+  });
+
+  it('prefers explicit url over tag', () => {
+    expect(
+      conversationPathFromPushNotification({
+        url: '/messages/peer-1',
+        tag: 'msg-peer-2',
+      }),
+    ).toBe('/messages/peer-1');
   });
 });

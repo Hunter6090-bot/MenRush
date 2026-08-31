@@ -1,4 +1,5 @@
 // MenRush Service Worker — handles background push notifications.
+// SW_VERSION=2026-08-31-notif-deeplink-v4 — bump to force clients onto new click logic.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
@@ -46,12 +47,27 @@ function pathFromHref(href) {
 function isLikelyIOS() {
   const ua = (self.navigator && self.navigator.userAgent) || '';
   if (/iPad|iPhone|iPod/i.test(ua)) return true;
-  // iPadOS desktop UA
   return Boolean(
     self.navigator &&
       self.navigator.platform === 'MacIntel' &&
       (self.navigator.maxTouchPoints || 0) > 1,
   );
+}
+
+/** Recover /messages/:id when iOS drops notification.data but keeps tag. */
+function hrefFromNotification(notification) {
+  const data = notification && notification.data ? notification.data : {};
+  const fromData = data.url || data.path || null;
+  if (fromData) return resolveNotificationHref(fromData, '/discover');
+
+  const tag = notification && notification.tag ? String(notification.tag) : '';
+  if (tag.startsWith('msg-') && tag.length > 4) {
+    return resolveNotificationHref('/messages/' + tag.slice(4), '/discover');
+  }
+  if (data.otherId) {
+    return resolveNotificationHref('/messages/' + data.otherId, '/discover');
+  }
+  return resolveNotificationHref(null, '/discover');
 }
 
 self.addEventListener('push', (event) => {
@@ -63,22 +79,21 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'MenRush';
   const href = resolveNotificationHref(data.url, '/discover');
   const path = pathFromHref(href);
-  const otherId = peerIdFromMessagesHref(href);
+  const otherId = peerIdFromMessagesHref(href) || null;
+  // tag encodes peer id so notificationclick can recover if data is stripped.
+  const tag = data.tag || (otherId ? 'msg-' + otherId : 'menrush');
   const options = {
     body: data.body || 'New activity on MenRush',
     icon: data.icon || '/brand/icon-192.png',
     badge: '/brand/icon-48.png',
-    tag: data.tag || 'menrush',
+    tag,
     renotify: true,
-    // Absolute href — iOS openWindow + data round-trip need a full URL.
     data: { url: href, path, otherId },
   };
 
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-      // Hint every open client so an already-open 1:1 can refetch when the
-      // WebSocket missed the live event (common after iPhone PWA suspend).
       for (const client of windows) {
         try {
           client.postMessage({
@@ -106,8 +121,7 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const raw = event.notification.data && event.notification.data.url;
-  const href = resolveNotificationHref(raw, '/discover');
+  const href = hrefFromNotification(event.notification);
   const path = pathFromHref(href);
   const ios = isLikelyIOS();
 
@@ -123,8 +137,8 @@ self.addEventListener('notificationclick', (event) => {
         }
       }
 
-      // iPhone Home Screen PWAs: focus()+navigate(relative) often no-ops after
-      // closing the banner. openWindow(absolute) is what actually opens the chat.
+      // iPhone Home Screen PWAs: focus()+navigate() often no-ops after close().
+      // openWindow(absolute) is required to surface the deep link.
       if (ios) {
         const opened = await self.clients.openWindow(href);
         if (opened) return;
