@@ -11,7 +11,11 @@ import {
 const EXEMPT_PATHS = ['/profile/setup', '/profile', '/settings'];
 
 function isExemptPath(pathname: string): boolean {
-  return EXEMPT_PATHS.includes(pathname);
+  if (EXEMPT_PATHS.includes(pathname)) return true;
+  // Viewing someone else's profile must not bounce incomplete accounts to setup
+  // (that looked like a blank/broken profile open from chat).
+  if (/^\/profile\/[^/]+$/.test(pathname)) return true;
+  return false;
 }
 
 export function RequireProfileSetup({ children }: { children: JSX.Element }) {

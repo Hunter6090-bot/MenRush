@@ -367,7 +367,11 @@ export interface SendMediaOptions {
 
 export const messagesAPI = {
   sendMessage: (receiver_id: string, message: string) =>
-    apiClient.post<MessageDTO>('/messages', { receiver_id, message }),
+    apiClient.post<MessageDTO>(
+      '/messages',
+      { receiver_id, message },
+      { timeout: 20_000 },
+    ),
   sendLocation: (receiver_id: string, lat: number, lng: number) =>
     apiClient.post<MessageDTO>('/messages/location', { receiver_id, lat, lng }),
   getConversation: (otherId: string) =>

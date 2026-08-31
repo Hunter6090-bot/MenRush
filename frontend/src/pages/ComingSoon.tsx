@@ -1,14 +1,9 @@
-import { useState, useCallback, useEffect, type FormEvent } from 'react';
+import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { BrandMark } from '../components/BrandMark';
 import { SiteFooter } from '../components/SiteFooter';
-import { trackEvent, trackEventOnce, getAttributionParams } from '../observability/analytics';
+import { trackEventOnce, getAttributionParams } from '../observability/analytics';
 import { publicLinkClass, publicNavLinkPrimary } from '../lib/publicStyles';
-
-const API_BASE_URL = String(import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
-const WAITLIST_API_URL = `${API_BASE_URL}/waitlist`;
-const ZOHO_SUBMIT_URL =
-  'https://forms.zohopublic.com/hellomen1/form/MenRushcom/formperma/ridAzzP0GwTafugVKgaUQttHXDojK1z_jZpTDjtAor4/records';
 
 const COMING_SOON_BG = '/images/menrush/31-london-rooftop-dusk.jpeg';
 const COMING_SOON_GRADIENT =
@@ -31,11 +26,6 @@ const WHAT_YOU_GET = [
 
 export const ComingSoon = () => {
   const { hash } = useLocation();
-  const [email, setEmail] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
     trackEventOnce('landing_viewed', { surface: 'coming_soon', ...getAttributionParams() });
@@ -46,69 +36,6 @@ export const ComingSoon = () => {
       document.getElementById('waitlist')?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [hash]);
-
-  const handleWaitlistSubmit = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      if (submitting || submitted) return;
-
-      const trimmed = email.trim().toLowerCase();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-        trackEvent('waitlist_failed', { stage: 'validation', transport: 'none' });
-        setErrorMsg('Please enter a valid email address.');
-        return;
-      }
-
-      trackEvent('waitlist_attempted', { transport: 'backend' });
-      setSubmitting(true);
-      setErrorMsg(null);
-      setSuccessMsg(null);
-
-      try {
-        const response = await fetch(WAITLIST_API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: trimmed, source: 'menrush.com' }),
-        });
-
-        const data = await response.json().catch(() => null);
-        if (!response.ok) {
-          const message = data?.error || 'Could not join the waitlist right now. Please try again.';
-          throw new Error(message);
-        }
-
-        const alreadySubscribed = Boolean(data?.already_subscribed);
-
-        setSubmitted(true);
-        trackEvent('waitlist_succeeded', {
-          transport: 'backend',
-          already_subscribed: alreadySubscribed,
-          ...getAttributionParams(),
-        });
-        setSuccessMsg(
-          alreadySubscribed
-            ? "You're already in. Check your inbox for your invite if you haven't used it yet."
-            : "You're on the list. Check your email — your invite is on the way.",
-        );
-        setEmail('');
-
-        void fetch(ZOHO_SUBMIT_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-          body: JSON.stringify({ Email: trimmed }),
-        }).catch(() => undefined);
-      } catch (error) {
-        trackEvent('waitlist_failed', { stage: 'request', transport: 'backend' });
-        const message =
-          error instanceof Error ? error.message : 'Could not join the waitlist right now.';
-        setErrorMsg(message);
-      } finally {
-        setSubmitting(false);
-      }
-    },
-    [email, submitted, submitting],
-  );
 
   return (
     <div className="relative flex min-h-dvh flex-col overflow-hidden bg-[#0D0A06] text-[#F0E0C0]">
@@ -126,12 +53,12 @@ export const ComingSoon = () => {
       </header>
 
       <main className="relative z-10 flex flex-1 flex-col">
-        {/* Hero — one composition: brand, date, headline, copy, waitlist */}
+        {/* Hero — brand, live status, headline, copy, signup CTA */}
         <section className="mx-auto flex w-full max-w-[720px] flex-col items-center px-6 pb-14 pt-4 text-center sm:pt-8">
           <BrandMark size="hero" className="mb-8" />
 
           <p className="mr-coming-soon-overline mb-5">
-            OPENS 1 OCTOBER 2026 · UK
+            LIVE NOW — UK BETA OPEN
           </p>
 
           <h1 className="mr-coming-soon-heading max-w-[900px] text-balance">
@@ -143,45 +70,16 @@ export const ComingSoon = () => {
           </h1>
 
           <p className="mt-6 max-w-[540px] text-pretty text-[clamp(15px,2vw,18px)] leading-[1.65] text-[#F0E0C0]/90">
-            See who&apos;s near you right now. No swiping. Less noise. MenRush opens across the UK
-            on 1 October 2026 — leave your email for early access.
+            See who&apos;s near you right now. No swiping. Less noise.
           </p>
 
           <div id="waitlist" className="relative mt-9 w-full max-w-[460px]">
-            {submitted && successMsg ? (
-              <div className="rounded-[14px] border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.12)] px-5 py-[18px] text-[15px] font-bold tracking-[0.06em] text-[#E0A14A]">
-                {successMsg}
-              </div>
-            ) : (
-              <form
-                onSubmit={handleWaitlistSubmit}
-                noValidate
-                className="flex gap-2 rounded-full border border-[#3D2B0E] bg-[#1E1508] p-1.5 pl-[22px] shadow-[0_10px_36px_rgba(0,0,0,0.5)]"
-              >
-                <input
-                  id="waitlist-email"
-                  type="email"
-                  name="Email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Your email — never shown, never shared"
-                  required
-                  autoComplete="email"
-                  inputMode="email"
-                  disabled={submitting}
-                  aria-label="Email for waitlist"
-                  className="min-w-0 flex-1 border-0 bg-transparent py-2.5 text-sm text-[#F0E0C0] placeholder:text-[var(--cream-muted)]/80 focus:outline-none disabled:opacity-50"
-                />
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="shrink-0 rounded-full border-0 bg-[#C4832A] px-[22px] py-3 text-xs font-extrabold tracking-[0.12em] text-[#1A0E03] shadow-[0_0_24px_rgba(196,131,42,0.4)] transition-colors hover:bg-[#E0A14A] disabled:opacity-50"
-                >
-                  {submitting ? 'Sending…' : 'Join waitlist'}
-                </button>
-              </form>
-            )}
-            {errorMsg ? <p className="mt-3 text-sm font-medium text-[#B0432E]">{errorMsg}</p> : null}
+            <Link
+              to="/register"
+              className="inline-flex w-full items-center justify-center rounded-full border-0 bg-[#C4832A] px-[28px] py-3.5 text-xs font-extrabold tracking-[0.12em] text-[#1A0E03] shadow-[0_0_24px_rgba(196,131,42,0.4)] transition-colors hover:bg-[#E0A14A]"
+            >
+              Sign up free
+            </Link>
           </div>
 
           <p className="mt-5 text-sm text-[var(--cream-muted)]">
@@ -228,7 +126,7 @@ export const ComingSoon = () => {
           </p>
           <p className="mt-6">
             <a href="#waitlist" className={publicLinkClass}>
-              Back to email signup
+              Back to signup
             </a>
           </p>
         </section>

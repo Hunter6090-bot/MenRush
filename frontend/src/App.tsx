@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { RequireProfileSetup } from './components/RequireProfileSetup';
 import { useAuthStore } from './hooks/store';
 import { usePushNotifications } from './hooks/usePushNotifications';
+import { usePushDeepLink } from './hooks/usePushDeepLink';
 import { useGlobalMessageNotifications } from './hooks/useGlobalMessageNotifications';
 import { useUnreadSync } from './hooks/useUnreadSync';
 import { useNotificationSync } from './hooks/useNotificationSync';
@@ -207,6 +208,7 @@ function AppShell() {
   }, [token]);
 
   usePushNotifications(!!token);
+  usePushDeepLink(!!token);
   useGlobalMessageNotifications();
   useUnreadSync();
   useNotificationSync();

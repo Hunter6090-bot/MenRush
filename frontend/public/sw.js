@@ -1,4 +1,5 @@
 // MenRush Service Worker — handles background push notifications.
+// SW_VERSION=2026-08-31-notif-deeplink-v4 — bump to force clients onto new click logic.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
@@ -6,9 +7,70 @@ self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 // respondWith. Proxying every request through the SW added multi-second lag
 // on mobile Safari/Chrome (phones parse a heavy SPA; SW double-hop made every
 // API + Mapbox + asset fetch worse). Browser handles network natively.
+// (#158 notificationclick / tag recovery lives below — do not remove.)
 self.addEventListener('fetch', () => {
   /* no-op — do not intercept */
 });
+
+function resolveNotificationHref(raw, fallbackPath) {
+  const origin = self.location.origin;
+  const fallback = new URL(fallbackPath || '/discover', origin).href;
+  if (!raw || typeof raw !== 'string') return fallback;
+  try {
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      const abs = new URL(raw);
+      if (abs.origin !== origin) return fallback;
+      return abs.href;
+    }
+    return new URL(raw.startsWith('/') ? raw : '/' + raw, origin).href;
+  } catch {
+    return fallback;
+  }
+}
+
+function peerIdFromMessagesHref(href) {
+  try {
+    const match = new URL(href).pathname.match(/^\/messages\/([^/?#]+)/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+function pathFromHref(href) {
+  try {
+    const u = new URL(href);
+    return u.pathname + u.search + u.hash;
+  } catch {
+    return '/discover';
+  }
+}
+
+function isLikelyIOS() {
+  const ua = (self.navigator && self.navigator.userAgent) || '';
+  if (/iPad|iPhone|iPod/i.test(ua)) return true;
+  return Boolean(
+    self.navigator &&
+      self.navigator.platform === 'MacIntel' &&
+      (self.navigator.maxTouchPoints || 0) > 1,
+  );
+}
+
+/** Recover /messages/:id when iOS drops notification.data but keeps tag. */
+function hrefFromNotification(notification) {
+  const data = notification && notification.data ? notification.data : {};
+  const fromData = data.url || data.path || null;
+  if (fromData) return resolveNotificationHref(fromData, '/discover');
+
+  const tag = notification && notification.tag ? String(notification.tag) : '';
+  if (tag.startsWith('msg-') && tag.length > 4) {
+    return resolveNotificationHref('/messages/' + tag.slice(4), '/discover');
+  }
+  if (data.otherId) {
+    return resolveNotificationHref('/messages/' + data.otherId, '/discover');
+  }
+  return resolveNotificationHref(null, '/discover');
+}
 
 self.addEventListener('push', (event) => {
   let data = {};
@@ -17,23 +79,39 @@ self.addEventListener('push', (event) => {
   } catch {}
 
   const title = data.title || 'MenRush';
-  const url = data.url || '/discover';
+  const href = resolveNotificationHref(data.url, '/discover');
+  const path = pathFromHref(href);
+  const otherId = peerIdFromMessagesHref(href) || null;
+  // tag encodes peer id so notificationclick can recover if data is stripped.
+  const tag = data.tag || (otherId ? 'msg-' + otherId : 'menrush');
   const options = {
     body: data.body || 'New activity on MenRush',
     icon: data.icon || '/brand/icon-192.png',
     badge: '/brand/icon-48.png',
-    tag: data.tag || 'menrush',
+    tag,
     renotify: true,
-    data: { url },
+    data: { url: href, path, otherId },
   };
 
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const client of windows) {
+        try {
+          client.postMessage({
+            type: 'MENRUSH_CHAT_HINT',
+            url: path,
+            otherId: otherId || undefined,
+          });
+        } catch {
+          /* ignore */
+        }
+      }
+
       const active = windows.find((c) => c.visibilityState === 'visible' && c.focused);
       if (active) {
         try {
-          if (new URL(active.url).pathname === url) return;
+          if (new URL(active.url).pathname === path) return;
         } catch {
           /* compare failed — show the notification */
         }
@@ -45,22 +123,47 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || '/discover';
+  const href = hrefFromNotification(event.notification);
+  const path = pathFromHref(href);
+  const ios = isLikelyIOS();
+
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       for (const client of windows) {
-        if (client.url.includes(self.location.origin)) {
-          await client.focus();
-          if ('navigate' in client) {
-            try {
-              await client.navigate(url);
-            } catch {}
-          }
-          return;
+        if (!client.url || !client.url.startsWith(self.location.origin)) continue;
+        try {
+          client.postMessage({ type: 'MENRUSH_NOTIFICATION_NAVIGATE', url: path });
+        } catch {
+          /* ignore */
         }
       }
-      await self.clients.openWindow(url);
+
+      // iPhone Home Screen PWAs: focus()+navigate() often no-ops after close().
+      // openWindow(absolute) is required to surface the deep link.
+      if (ios) {
+        const opened = await self.clients.openWindow(href);
+        if (opened) return;
+      }
+
+      for (const client of windows) {
+        if (!client.url || !client.url.startsWith(self.location.origin)) continue;
+        try {
+          if (typeof client.focus === 'function') await client.focus();
+        } catch {
+          /* ignore */
+        }
+        if ('navigate' in client && typeof client.navigate === 'function') {
+          try {
+            await client.navigate(href);
+          } catch {
+            /* ignore */
+          }
+        }
+        return;
+      }
+
+      await self.clients.openWindow(href);
     })(),
   );
 });
