@@ -150,12 +150,8 @@ function LayoutInner({ children }: LayoutProps) {
               sidebarExpanded ? 'gap-2.5 px-1' : 'justify-center'
             }`}
           >
+            {/* Two-men mark only — medallion already carries the word; no type wordmark. */}
             <BrandMark size="sm" className="shadow-[0_0_0_2px_rgba(196,131,42,0.4)] rounded-full" />
-            {sidebarExpanded ? (
-              <span className="font-display text-sm font-black tracking-[0.14em] text-nn-text">
-                MENRUSH
-              </span>
-            ) : null}
           </Link>
           <button
             type="button"
@@ -252,9 +248,6 @@ function LayoutInner({ children }: LayoutProps) {
                   className="inline-flex items-center justify-center gap-2"
                 >
                   <BrandMark size="sm" className="shadow-[0_0_0_2px_rgba(196,131,42,0.35)] rounded-full" />
-                  <span className="font-display text-xs font-black tracking-[0.16em] text-[var(--cream)]">
-                    MENRUSH
-                  </span>
                 </Link>
               ) : (
                 <p className="truncate text-sm font-bold tracking-wide text-[var(--cream)]">{pageTitle}</p>
