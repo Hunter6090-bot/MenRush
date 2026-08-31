@@ -29,6 +29,11 @@ import { NearbyProfileGrid } from '../components/NearbyProfileGrid';
 import { DiscoverySurfaceToggle } from '../components/DiscoverySurfaceToggle';
 import { DiscoveryShellPublisher } from '../context/DiscoveryShellContext';
 import type { ProfileSetupSnapshot } from '../lib/profileSetup';
+import { profileFieldBlockers } from '../lib/profileSetup';
+import {
+  LOCATION_DENIED_NOT_INCOMPLETE,
+  SAFARI_LOCATION_HOW_TO,
+} from '../lib/deviceLocation';
 import { resolveDistanceUnitSystem } from '../lib/localeUnits';
 import {
   DEFAULT_DISCOVERY_FILTERS,
@@ -299,7 +304,7 @@ const INSECURE_GPS_NOTICE =
   'Live location on your phone needs a secure (HTTPS) link. Open menrush.com (HTTPS), then allow location in your browser.';
 
 const BROWSER_GPS_DENIED_NOTICE =
-  'Location is blocked. Allow it in browser or phone settings, then tap Allow location. Your exact pin is not shown publicly — only approximate distance.';
+  `${LOCATION_DENIED_NOT_INCOMPLETE} Location is blocked. ${SAFARI_LOCATION_HOW_TO}`;
 
 /**
  * Re-assert Mapbox gesture handlers after layout thrash.
@@ -631,7 +636,7 @@ export const Discover = () => {
     [clearLocationPrompts, fetchNearbyUsers, mapCenter, radius, setLocation, discoveryFilters],
   );
 
-  // Customer-facing "enable location" — high accuracy then low-accuracy fallback.
+  // Customer-facing "enable location" — persist pin even if Nearby fetch fails.
   const handleEnableLocation = useCallback(() => {
     void (async () => {
       setLocationNotice('');
@@ -640,7 +645,19 @@ export const Discover = () => {
       const result = await requestDeviceLocation();
       if (!result.ok) {
         setNeedsLocationGate(true);
-        setLocationNotice(result.message);
+        setLocationNotice(
+          result.error === 'denied'
+            ? BROWSER_GPS_DENIED_NOTICE
+            : result.message,
+        );
+        setLoading(false);
+        return;
+      }
+      try {
+        await usersAPI.updateLocation(result.lat, result.lng);
+      } catch {
+        setNeedsLocationGate(true);
+        setLocationNotice('Got your position but could not save it. Check your connection and try again.');
         setLoading(false);
         return;
       }
@@ -1485,6 +1502,10 @@ export const Discover = () => {
     else requestOpenPulse();
   }, [pulseUntil, handleStopPulse, requestOpenPulse]);
 
+  // Fields-complete users must not be dumped onto /profile/setup for missing GPS.
+  const showFinishProfileEmptyCta =
+    activationProfile != null && profileFieldBlockers(activationProfile).length > 0;
+
   return (
     <Layout>
       <DiscoveryShellPublisher
@@ -1798,7 +1819,9 @@ export const Discover = () => {
                 mutualUserIds={matchedUsers}
                 matchingUserId={matchingUserId}
                 onExpandRadius={handleRadiusCycle}
-                onFinishProfile={() => navigate('/profile/setup')}
+                onFinishProfile={
+                  showFinishProfileEmptyCta ? () => navigate('/profile/setup') : undefined
+                }
                 onStartPulse={requestOpenPulse}
                 pulseOn={!!pulseUntil}
                 pulseBlockedReason={pulseBlockedReason}
@@ -2043,7 +2066,9 @@ export const Discover = () => {
                   mutualUserIds={matchedUsers}
                   matchingUserId={matchingUserId}
                   onExpandRadius={handleRadiusCycle}
-                  onFinishProfile={() => navigate('/profile/setup')}
+                  onFinishProfile={
+                    showFinishProfileEmptyCta ? () => navigate('/profile/setup') : undefined
+                  }
                   onStartPulse={requestOpenPulse}
                   pulseOn={!!pulseUntil}
                   pulseBlockedReason={pulseBlockedReason}
