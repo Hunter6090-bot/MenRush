@@ -52,6 +52,17 @@ export default defineConfig({
       '/socket.io': devProxy('/socket.io', { ws: true }),
     },
   },
+  // Same proxy for `vite preview` so mobile perf probes can hit a live API
+  // without baking a cross-origin Railway URL into the build.
+  preview: {
+    host: true,
+    port: process.env.PORT ? parseInt(process.env.PORT) : 4173,
+    proxy: {
+      '/api': devProxy('/api'),
+      '/uploads': devProxy('/uploads'),
+      '/socket.io': devProxy('/socket.io', { ws: true }),
+    },
+  },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
