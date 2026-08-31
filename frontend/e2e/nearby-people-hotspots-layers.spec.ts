@@ -1,10 +1,10 @@
 import { expect, test, request as apiRequest, type APIRequestContext, type BrowserContext } from '@playwright/test';
 import { ALICE, BOB, HOTSPOT_FILLERS, PREMIUM_TESTER, TEST_HOT_SPOT, TEST_PASSWORD } from './test-accounts';
+import { PLAYWRIGHT_BASE_URL as BASE_URL } from './support/base-url';
 
 // #67: unify Nearby into one map with independent People / Hot Spots layers.
 test.describe.configure({ mode: 'serial' });
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
 // Matches backend/scripts/seed-test-users.ts's TEST_LAT/TEST_LNG — the deterministic
 // e2e fixture Hot Spot (TEST_HOT_SPOT) always exists at this exact coordinate.
 const FIXTURE_GEO = { latitude: TEST_HOT_SPOT.lat, longitude: TEST_HOT_SPOT.lng };
@@ -67,7 +67,7 @@ async function authenticate(context: BrowserContext, result: LoginResult) {
   }, result);
 }
 
-test('People and Hot Spots layer toggles default on and are independently switchable', async ({
+test('People and Cruise layer toggles default on and are independently switchable', async ({
   browser,
 }) => {
   const ctx = await browser.newContext({ geolocation: FIXTURE_GEO, permissions: ['geolocation'] });
@@ -140,7 +140,7 @@ test('/hot-spots route still loads directly for compatibility (no nav entry, rou
   const page = await ctx.newPage();
   await page.goto('/hot-spots');
 
-  await expect(page.getByRole('heading', { name: 'Hot Spots' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: 'Cruise' })).toBeVisible({ timeout: 20_000 });
   await expect(page).toHaveURL(/\/hot-spots$/);
 
   await ctx.close();

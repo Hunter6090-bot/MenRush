@@ -1,14 +1,12 @@
 import { expect, test, request as apiRequest, type BrowserContext } from '@playwright/test';
-import { ALICE, HOTSPOT_FILLERS, TEST_PASSWORD } from './test-accounts';
+import { ALICE, TEST_PASSWORD } from './test-accounts';
+import { PLAYWRIGHT_BASE_URL as BASE_URL } from './support/base-url';
 
 /**
  * Incoming likes must be visible on Matches without a MenRush+ PremiumGate.
  * Liker photos open profile; Match (likeUser) succeeds from profile.
  */
 test.describe.configure({ mode: 'serial' });
-
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
-const LIKER = HOTSPOT_FILLERS[0];
 
 type LoginResult = {
   token: string;
@@ -38,6 +36,7 @@ async function authenticate(context: BrowserContext, result: LoginResult) {
   await context.addInitScript(({ token, user }) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem('menrush_install_prompt_dismissed', '1');
   }, result);
 }
 
@@ -46,17 +45,40 @@ let liker: LoginResult;
 
 test.beforeAll(async () => {
   alice = await login(ALICE.email);
-  liker = await login(LIKER.email);
 
   const api = await apiRequest.newContext({ baseURL: BASE_URL });
   try {
-    // One-way like: Hot Spot Filler → Alice (not mutual with seed Alice↔Bob).
+    // Fresh one-way liker each worker — seeded fillers may already be mutual
+    // after desktop-chromium runs the Match CTA test in this file.
+    const email = `incoming-liker-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
+    const reg = await api.post('/api/auth/register', {
+      data: {
+        email,
+        password: TEST_PASSWORD,
+        name: 'Incoming Liker',
+        age: 29,
+      },
+    });
+    expect(reg.ok()).toBeTruthy();
+    const regBody = await reg.json();
+    liker = {
+      token: regBody.token,
+      user: regBody.user,
+    };
+
+    // Profiles are created lazily on location — received-likes JOIN requires a profile row.
+    const loc = await api.post('/api/users/location', {
+      headers: { Authorization: `Bearer ${liker.token}` },
+      data: { lat: 51.5074, lng: -0.1278 },
+    });
+    expect(loc.ok()).toBeTruthy();
+
     const likeRes = await api.post(`/api/users/like/${alice.user.id}`, {
       headers: { Authorization: `Bearer ${liker.token}` },
     });
     expect(likeRes.ok()).toBeTruthy();
     const body = await likeRes.json();
-    expect(body).toHaveProperty('match');
+    expect(body.match).toBe(false);
   } finally {
     await api.dispose();
   }
@@ -68,11 +90,11 @@ test('incoming likers visible on Matches without PremiumGate', async ({ browser 
   const page = await ctx.newPage();
   await page.goto('/matches');
 
-  await expect(page.getByRole('heading', { name: 'Matches' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Matches', exact: true }).first()).toBeVisible();
   await expect(page.getByTestId('likes-you-section')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('heading', { name: 'Liked you' })).toBeVisible();
   await expect(page.getByTestId(`liker-card-${liker.user.id}`)).toBeVisible();
-  await expect(page.getByText(LIKER.name).first()).toBeVisible();
+  await expect(page.getByText(liker.user.name).first()).toBeVisible();
 
   // No unsolicited MenRush+ lock / PremiumGate for incoming likes.
   await expect(page.getByText('MENRUSH+')).toHaveCount(0);
@@ -94,7 +116,7 @@ test('photo of a liker opens their profile', async ({ browser }) => {
 
   await expect(page).toHaveURL(new RegExp(`/profile/${liker.user.id}`));
   await expect(page.getByTestId('profile-view-match')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(LIKER.name).first()).toBeVisible();
+  await expect(page.getByText(liker.user.name).first()).toBeVisible();
 
   await ctx.close();
 });
@@ -105,20 +127,32 @@ test('likeUser success path from profile Match CTA', async ({ browser }) => {
   const page = await ctx.newPage();
   await page.goto(`/profile/${liker.user.id}`);
 
-  const matchBtn = page.getByTestId('profile-view-match');
-  await expect(matchBtn).toBeVisible({ timeout: 15_000 });
-
-  const label = (await matchBtn.textContent())?.trim() ?? '';
-  if (label === 'Matched' || label === 'Open chat') {
-    // Already liked in a prior run — still assert the control is present and not a silent no-op CTA.
-    expect(['Matched', 'Open chat']).toContain(label);
+  // Already mutual from a prior retry — Open chat replaces Match.
+  if (await page.getByTestId('profile-view-unmatch').isVisible().catch(() => false)) {
+    await expect(page.getByTestId('profile-view-message')).toHaveText(/Open chat/i);
   } else {
-    await expect(matchBtn).toHaveText('Match');
-    await matchBtn.click();
-    await expect(matchBtn).toHaveText(/Matched|Open chat|Sending/i, { timeout: 10_000 });
-    await expect(page.getByText(/Match sent|matched|already sent/i).first()).toBeVisible({
-      timeout: 10_000,
-    });
+    const matchBtn = page.getByTestId('profile-view-match');
+    await expect(matchBtn).toBeVisible({ timeout: 15_000 });
+    const label = (await matchBtn.textContent())?.trim() ?? '';
+    if (label === 'Matched') {
+      expect(label).toBe('Matched');
+    } else {
+      await expect(matchBtn).toHaveText('Match');
+      await matchBtn.click();
+      // Flash confirms the likeUser path; mutual UI may unmount Match.
+      await expect(
+        page.getByText(/Match sent|You matched|already sent/i).first(),
+      ).toBeVisible({ timeout: 10_000 });
+      const unmatchVisible = await page
+        .getByTestId('profile-view-unmatch')
+        .isVisible()
+        .catch(() => false);
+      if (unmatchVisible) {
+        await expect(page.getByTestId('profile-view-message')).toHaveText(/Open chat/i);
+      } else {
+        await expect(page.getByTestId('profile-view-match')).toHaveText(/Matched/i);
+      }
+    }
   }
 
   // API-level success confirmation for the likeUser path.

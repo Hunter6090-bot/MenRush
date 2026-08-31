@@ -2,7 +2,10 @@ import { Link } from 'react-router-dom';
 import {
   activationBlockers,
   isDiscoverLocationReady,
+  isLocationOnlyGap,
+  isProfileSetupComplete,
   needsRealPhotoUpgrade,
+  profileFieldBlockers,
   profileSetupProgress,
   type ProfileSetupSnapshot,
 } from '../lib/profileSetup';
@@ -24,22 +27,30 @@ interface ActivationBannerProps {
 /** Nudge incomplete profiles — premium copper strip, no nag beyond facts. */
 export function ActivationBanner({ profile, onEnableLocation }: ActivationBannerProps) {
   const blockers = activationBlockers(profile);
+  const fieldGaps = profileFieldBlockers(profile);
   const needsLocation = !isDiscoverLocationReady(profile);
-  const photoUpgrade = blockers.length === 0 && !needsLocation && needsRealPhotoUpgrade(profile);
+  const locationOnly = isLocationOnlyGap(profile);
+  const fieldsComplete = isProfileSetupComplete(profile);
+  const photoUpgrade = fieldGaps.length === 0 && !needsLocation && needsRealPhotoUpgrade(profile);
   if (blockers.length === 0 && !needsLocation && !photoUpgrade) return null;
 
   const progress = profileSetupProgress(profile);
   const primary = blockers[0];
   const headline = photoUpgrade
     ? 'Shared avatar — real photos get matched first'
-    : primary === 'avatar'
-      ? 'You are invisible on the map'
-      : primary === 'location' || (needsLocation && blockers.length === 0)
-        ? 'We need your location — others only see distance'
-        : 'Complete your profile — more views, more matches';
+    : locationOnly || (needsLocation && fieldsComplete)
+      ? 'Turn on location for Nearby'
+      : primary === 'avatar'
+        ? 'You are invisible on the map'
+        : primary === 'location'
+          ? 'We need your location — others only see distance'
+          : 'Complete your profile — more views, more matches';
 
   const showLocationCta =
-    !photoUpgrade && (primary === 'location' || needsLocation) && Boolean(onEnableLocation);
+    !photoUpgrade && (locationOnly || primary === 'location' || (needsLocation && fieldsComplete)) && Boolean(onEnableLocation);
+
+  // Missing GPS is not "finish profile" — never dump a fields-complete user onto the wizard.
+  const showFinishProfileCta = !photoUpgrade && !showLocationCta && fieldGaps.length > 0;
 
   return (
     <div
@@ -53,9 +64,11 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
           <p className="mt-1 text-[12px] text-[var(--cream-muted)]">
             {photoUpgrade
               ? 'Upload a clear face or upper-body shot. Men nearby rank real photos higher.'
-              : blockers.length > 0
-                ? blockers.map((b) => BLOCKER_COPY[b]).join(' · ')
-                : 'We need GPS for Nearby. You are not broadcasting an exact public pin — only approximate distance.'}
+              : locationOnly || (needsLocation && fieldsComplete)
+                ? 'Your profile is ready. We need GPS for Nearby — others only see approximate distance, not your exact public pin.'
+                : blockers.length > 0
+                  ? blockers.map((b) => BLOCKER_COPY[b]).join(' · ')
+                  : 'We need GPS for Nearby. You are not broadcasting an exact public pin — only approximate distance.'}
           </p>
           <div className="mt-2 h-1.5 w-full max-w-[200px] overflow-hidden rounded-full bg-[rgba(13,10,6,0.5)]">
             <div
@@ -82,20 +95,22 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
             >
               Allow location
             </button>
-          ) : (
+          ) : showFinishProfileCta ? (
             <Link
               to="/profile/setup"
+              data-testid="activation-finish-profile"
               className="rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
             >
               Finish profile
             </Link>
-          )}
+          ) : null}
           {showLocationCta ? (
             <Link
-              to="/profile/setup"
+              to="/settings"
+              data-testid="activation-location-settings"
               className="rounded-full border border-[rgba(196,131,42,0.5)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
             >
-              Profile
+              Settings
             </Link>
           ) : null}
         </div>

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { albumsAPI, AlbumDTO, AlbumPhotoDTO, usersAPI } from '../api/client';
 import { getPhotoUrl } from './UserAvatar';
-import { DiscreetMedia } from './DiscreetMedia';
+import { SoftBlurMedia, shouldBlurMedia } from './SoftBlurMedia';
 
 type SheetMode = 'owner' | 'viewer';
 
@@ -43,10 +43,9 @@ export function AlbumViewerSheet({
   const [deletingAlbum, setDeletingAlbum] = useState(false);
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [lightboxBlur, setLightboxBlur] = useState(false);
 
   const isPrivateToViewer = mode === 'viewer' && album.is_locked && !album.unlocked;
-  const discreetBlur = photos.some((photo) => (photo as { discreet_blur?: boolean }).discreet_blur)
-    || (album as { discreet_blur?: boolean }).discreet_blur;
 
   useEffect(() => {
     if (isPrivateToViewer) {
@@ -60,11 +59,12 @@ export function AlbumViewerSheet({
     albumsAPI
       .listPhotos(album.id)
       .then((res) => {
-        setPhotos(res.data.photos);
-        setLocked(res.data.locked);
-        setUnlocked(res.data.unlocked);
+        setPhotos(Array.isArray(res.data?.photos) ? res.data.photos : []);
+        setLocked(Boolean(res.data?.locked));
+        setUnlocked(Boolean(res.data?.unlocked));
       })
       .catch(() => {
+        setPhotos([]);
         onNotice?.('Could not load album photos.', 'error');
       })
       .finally(() => setLoading(false));
@@ -211,24 +211,29 @@ export function AlbumViewerSheet({
               <p className="py-10 text-center text-sm text-[var(--cream-muted)]">No photos in this album yet.</p>
             ) : (
               <div className="grid grid-cols-3 gap-2">
-                {photos.map((photo) => (
+                {photos.map((photo) => {
+                  const blurred = shouldBlurMedia(photo.media_clear);
+                  return (
                   <div
                     key={photo.id}
                     className="relative aspect-square overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)]"
                   >
                     <button
                       type="button"
-                      onClick={() => setLightboxUrl(getPhotoUrl(photo.photo_url) ?? null)}
+                      onClick={() => {
+                        setLightboxUrl(getPhotoUrl(photo.photo_url) ?? null);
+                        setLightboxBlur(blurred);
+                      }}
                       className="h-full w-full active:scale-[0.98] transition-transform"
                     >
-                      <DiscreetMedia blur={!!(photo as { discreet_blur?: boolean }).discreet_blur || !!discreetBlur} className="h-full w-full">
+                      <SoftBlurMedia blurred={blurred} className="h-full w-full">
                         <img
                           src={getPhotoUrl(photo.photo_url)}
                           alt=""
                           className="h-full w-full object-cover"
                           loading="lazy"
                         />
-                      </DiscreetMedia>
+                      </SoftBlurMedia>
                     </button>
                     {mode === 'owner' && (
                       <button
@@ -245,7 +250,8 @@ export function AlbumViewerSheet({
                       </button>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -292,9 +298,14 @@ export function AlbumViewerSheet({
       {lightboxUrl && (
         <div
           className="fixed inset-0 z-[140] flex items-center justify-center bg-black/95 p-4"
-          onClick={() => setLightboxUrl(null)}
+          onClick={() => {
+            setLightboxUrl(null);
+            setLightboxBlur(false);
+          }}
         >
-          <img src={lightboxUrl} alt="" className="max-h-full max-w-full object-contain" />
+          <SoftBlurMedia blurred={lightboxBlur}>
+            <img src={lightboxUrl} alt="" className="max-h-full max-w-full object-contain" />
+          </SoftBlurMedia>
         </div>
       )}
     </>
@@ -312,6 +323,7 @@ export function AlbumCard({
 }) {
   const lockedForViewer = album.is_locked && album.unlocked === false;
   const cover = getPhotoUrl(album.cover_url ?? undefined);
+  const coverBlurred = !lockedForViewer && shouldBlurMedia(album.media_clear);
 
   return (
     <div
@@ -342,7 +354,9 @@ export function AlbumCard({
       )}
       <div className="relative mb-3 aspect-[4/3] overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)]">
         {cover && !lockedForViewer ? (
-          <img src={cover} alt="" className="h-full w-full object-cover" />
+          <SoftBlurMedia blurred={coverBlurred} className="h-full w-full">
+            <img src={cover} alt="" className="h-full w-full object-cover" />
+          </SoftBlurMedia>
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--bg-primary)]">
             <LockIcon className="h-10 w-10 text-[#C4832A]/70" />

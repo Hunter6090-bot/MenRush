@@ -11,9 +11,17 @@ import {
 const EXEMPT_PATHS = ['/profile/setup', '/profile', '/settings'];
 
 function isExemptPath(pathname: string): boolean {
-  return EXEMPT_PATHS.includes(pathname);
+  if (EXEMPT_PATHS.includes(pathname)) return true;
+  // Viewing someone else's profile must not bounce incomplete accounts to setup
+  // (that looked like a blank/broken profile open from chat).
+  if (/^\/profile\/[^/]+$/.test(pathname)) return true;
+  return false;
 }
 
+/**
+ * Hard gate for photo/bio/looking/tags only.
+ * Missing GPS is NOT incomplete profile — Discover handles location in-place.
+ */
 export function RequireProfileSetup({ children }: { children: JSX.Element }) {
   const location = useLocation();
   const [ready, setReady] = useState(false);
@@ -32,10 +40,12 @@ export function RequireProfileSetup({ children }: { children: JSX.Element }) {
       .then((res) => {
         if (cancelled) return;
         const profile = res.data as ProfileSetupSnapshot;
-        if (needsProfileSetupRedirect(profile)) {
+        const mustSetup = needsProfileSetupRedirect(profile);
+        // Only clear skip when profile *fields* are incomplete (not for missing GPS).
+        if (mustSetup) {
           clearProfileSetupSkip();
         }
-        setComplete(!needsProfileSetupRedirect(profile));
+        setComplete(!mustSetup);
         setReady(true);
       })
       .catch(() => {

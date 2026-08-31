@@ -7,21 +7,32 @@ const LANDING_PATHS = ['/', '/coming-soon'] as const;
 const FORBIDDEN_CTA_PATTERNS = [
   /^JOIN THE WAITLIST$/i,
   /^GET EARLY ACCESS$/i,
+  /^Join waitlist$/i,
 ];
 
 async function assertComingSoonDesignLock(page: import('@playwright/test').Page) {
+  const header = page.locator('header').first();
+  const headerBrandLink = header.getByRole('link', { name: /^MenRush$/i });
+  await expect(headerBrandLink).toHaveCount(1);
+  await expect(headerBrandLink).toHaveAttribute('href', '/');
+  await expect(headerBrandLink.getByTestId('brand-mark')).toBeVisible();
+  await expect(headerBrandLink.locator('img[src*="menrush-logo-192"]')).toBeVisible();
+
   const signInLink = page.getByRole('link', { name: /^Sign in$/i });
   await expect(signInLink).toHaveCount(1);
   await expect(signInLink).toHaveAttribute('href', '/login');
+  await expect(header.getByRole('link', { name: /^Sign in$/i })).toBeVisible();
 
-  const heroHeading = page.locator('h1.mr-coming-soon-heading');
+  const heroHeading = page.getByRole('heading', {
+    level: 1,
+    name: /Real men\.\s*Verified profiles\.\s*Total discretion\./i,
+  });
   await expect(heroHeading).toBeVisible();
-  await expect(heroHeading).toContainText(/Real men/i);
-  await expect(heroHeading).toContainText(/Verified profiles/i);
+  await expect(heroHeading).toHaveClass(/mr-coming-soon-heading/);
 
-  await expect(page.getByText(/OPENS 1 OCTOBER 2026/i)).toBeVisible();
-  await expect(page.getByText(/opens across the UK/i)).toBeVisible();
-  await expect(page.getByText(/UK first/i)).toBeVisible();
+  await expect(page.getByText(/LIVE NOW\. UK BETA OPEN/i)).toBeVisible();
+  await expect(page.getByText(/OPENS 1 OCTOBER 2026/i)).toHaveCount(0);
+  await expect(page.getByText(/leave your email/i)).toHaveCount(0);
   await expect(page.getByText(/LONDON · MANCHESTER · BIRMINGHAM · BRIGHTON/i)).toHaveCount(0);
 
   await expect(page.getByRole('heading', { name: /What you get/i })).toBeVisible();
@@ -35,14 +46,21 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   }
 
   await expect(page.locator('#waitlist')).toBeVisible();
-  await expect(page.locator('#waitlist-email')).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Join waitlist$/i })).toHaveCount(1);
+  await expect(page.getByRole('textbox', { name: 'Email for waitlist' })).toHaveCount(0);
+  await expect(page.locator('#waitlist-email')).toHaveCount(0);
+
+  const signUpLink = page.getByRole('link', { name: /^Sign up free$/i });
+  await expect(signUpLink).toHaveCount(1);
+  await expect(signUpLink).toHaveAttribute('href', '/register');
 
   const inviteLink = page.getByRole('link', { name: /Enter your code/i });
   await expect(inviteLink).toBeVisible();
   await expect(inviteLink).toHaveAttribute('href', '/beta');
 
-  await assertBrandMark(page);
+  // Hero keeps the large medallion; header uses compact sm (192).
+  await expect(page.getByTestId('brand-mark')).toHaveCount(2);
+  await expect(page.locator('main img[src*="menrush-logo-512"]')).toBeVisible();
+  await expect(page.locator('img[src*="medallion-480"]')).toHaveCount(0);
 }
 
 async function assertAuthShell(page: import('@playwright/test').Page) {
@@ -68,7 +86,7 @@ async function assertCreamInputs(page: import('@playwright/test').Page) {
 
 test.describe('public design lock — landing', () => {
   for (const path of LANDING_PATHS) {
-    test(`${path} keeps UK launch landing invariants`, async ({ page }) => {
+    test(`${path} keeps UK beta-open landing invariants`, async ({ page }) => {
       const network = await guardAgainstSideEffects(page);
       await page.goto(path);
       await assertComingSoonDesignLock(page);

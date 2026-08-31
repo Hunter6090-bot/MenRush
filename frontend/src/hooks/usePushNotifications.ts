@@ -14,11 +14,19 @@ export function usePushNotifications(isLoggedIn: boolean) {
     if (!isLoggedIn) return;
     if (getPushSupport() === 'unsupported') return;
 
-    void (async () => {
+    const warm = async () => {
       await registerServiceWorker();
       if (getPushSupport() === 'granted') {
         await subscribeToPush();
       }
-    })();
+    };
+
+    void warm();
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void warm();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [isLoggedIn]);
 }

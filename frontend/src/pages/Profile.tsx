@@ -17,7 +17,12 @@ import { QRCodeSVG } from 'qrcode.react';
 import { profileUrl as buildProfileUrl } from '../lib/profileLinks';
 import { getPhotoUrl } from '../components/UserAvatar';
 
-import { PROFILE_TAG_GROUPS, PROFILE_LOOKING_FOR_TAGS, toggleProfileInterest } from '../lib/profileTags';
+import {
+  PROFILE_TAG_GROUPS,
+  PROFILE_LOOKING_FOR_TAGS,
+  profileTagSelectHint,
+  toggleProfileInterest,
+} from '../lib/profileTags';
 import { clearProfileSetupSkip, isProfileSetupComplete } from '../lib/profileSetup';
 import { isGenericAvatarUrl } from '../lib/genericAvatar';
 import { isBetaPremiumFree } from '../lib/betaInvite';
@@ -1160,7 +1165,15 @@ export const Profile = () => {
               </label>
               {PROFILE_TAG_GROUPS.map((group) => (
                 <div key={group.label}>
-                  <p className="text-[10px] font-black text-[var(--cream-muted)]/60 uppercase tracking-[.18em] mb-2">{group.label}</p>
+                  <p className="text-[10px] font-black text-[var(--cream-muted)]/60 uppercase tracking-[.18em]">
+                    {group.label}
+                  </p>
+                  <p
+                    className="mt-0.5 mb-2 text-[10px] font-medium text-[var(--cream-muted)]/50"
+                    data-testid={`tag-select-hint-${group.label}`}
+                  >
+                    {profileTagSelectHint(group.singleSelect)}
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     {group.tags.map((tag) => {
                       const active = interests.includes(tag);
@@ -1282,10 +1295,10 @@ export const Profile = () => {
             <div>
               <p className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--cream)' }}>
                 <PhotoStackIcon className="w-4 h-4" style={{ color: 'var(--copper)' }} />
-                Private albums
+                My Photos
               </p>
               <p className="text-xs mt-1" style={{ color: 'var(--cream-muted)' }}>
-                6 free photos. Grant per profile. Unlimited on Premium.
+                You decide who sees what — public, view once, or private.
               </p>
             </div>
             <span className="text-[var(--copper)] text-lg" aria-hidden>›</span>

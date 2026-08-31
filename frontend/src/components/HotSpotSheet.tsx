@@ -13,8 +13,8 @@ interface HotSpotSheetProps {
 }
 
 /**
- * In-map Hot Spot details + check-in/out (#67 — "Selecting a Hot Spot on Nearby opens
- * details and check-in controls without navigating away"). Mirrors HotSpots.tsx's card
+ * In-map Cruise details + check-in/out (#67 — selecting a Cruise pin on Nearby opens
+ * details and check-in controls without navigating away). Mirrors HotSpots.tsx's card
  * actions exactly; `/hot-spots` itself is untouched and still works for direct/deep links.
  */
 export function HotSpotSheet({ spot, isPremium, acting, error, onClose, onCheckIn }: HotSpotSheetProps) {
@@ -60,8 +60,11 @@ export function HotSpotSheet({ spot, isPremium, acting, error, onClose, onCheckI
 
         <div className="mt-3 flex items-center gap-2">
           <span className="inline-flex h-2.5 w-2.5 rounded-full bg-[#3D7A2E]" />
-          <p className="text-[13px] font-bold text-[var(--cream)]">{spot.live_count} live</p>
+          <p className="text-[13px] font-bold text-[var(--cream)]">{spot.live_count} checked in</p>
         </div>
+        <p className="mt-1 text-[11px] text-[var(--cream-muted)]">
+          Check-ins expire after {spot.checkin_ttl_hours ?? 4} hours.
+        </p>
 
         {error ? <p className="mt-3 text-[13px] font-semibold text-[#D96A52]">{error}</p> : null}
 

@@ -1,5 +1,6 @@
 /**
- * Show/hide state for the Nearby map's independent People / Hot Spots layers (#67).
+ * Show/hide state for the Nearby map's independent People / Cruise layers (#67).
+ * Face is Cruise; storage key `hotSpots` kept for session continuity.
  *
  * Explicitly session-only per the issue's approved product decision ("persist layer
  * selection for the current browser session only, not a long-lived preference") —

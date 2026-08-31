@@ -5,7 +5,7 @@ import { Layout } from '../components/Layout';
 import { IconMatches } from '../components/icons';
 import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
 import { VerifiedBadge } from '../components/VerifiedBadge';
-import { useResolvingPhotoSrc } from '../components/UserAvatar';
+import { useGridPhotoSrc, clearGridPhotoQueue } from '../lib/nearbyPhotoSrc';
 import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 import { PROFILE_TILE_GRID_CLASS } from '../lib/profileTileGrid';
 
@@ -81,11 +81,11 @@ function PersonGridCard({
   /** Dedicated Message control — photo always opens profile. */
   onMessage?: () => void;
 }) {
-  const { src: photo, onError } = useResolvingPhotoSrc(person.photo_url ?? undefined, person.age);
+  const { src: photo, phase } = useGridPhotoSrc(person.photo_url ?? undefined, person.age);
   return (
     <div
       data-testid={testId}
-      className="group relative overflow-hidden rounded-2xl border border-[rgba(196,131,42,0.35)] bg-nn-card text-left shadow-card transition-all hover:-translate-y-[3px] hover:border-[rgba(196,131,42,0.4)]"
+      className="group relative overflow-hidden rounded-xl border border-[rgba(196,131,42,0.35)] bg-nn-card text-left shadow-card transition-all hover:-translate-y-[3px] hover:border-[rgba(196,131,42,0.4)] md:rounded-2xl"
     >
       <ProfilePhotoLink
         userId={person.id}
@@ -94,24 +94,26 @@ function PersonGridCard({
         data-testid={testId ? `${testId}-photo` : `match-photo-${person.id}`}
       >
         <div className="relative aspect-[3/3.6] w-full bg-[var(--bg-elevated)]">
-          {photo ? (
+          {photo && phase !== 'loading' ? (
             <img
               src={photo}
               alt={person.name}
               className="h-full w-full object-cover"
-              onError={onError}
+              decoding="async"
+              data-testid="match-grid-photo"
+              data-photo-phase={phase}
             />
           ) : (
             <div className="flex h-full items-center justify-center">
               <SilhouetteAvatar size={56} variant="card" />
             </div>
           )}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent px-3 pb-2.5 pt-10">
-            <div className="flex items-center gap-1.5">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent px-1.5 pb-1.5 pt-8 md:px-3 md:pb-2.5 md:pt-10">
+            <div className="flex items-center gap-0.5 md:gap-1.5">
               <span
-                className={`h-2 w-2 shrink-0 rounded-full ${person.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
+                className={`h-1.5 w-1.5 shrink-0 rounded-full md:h-2 md:w-2 ${person.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
               />
-              <span className="truncate text-[13px] font-bold text-[#FFF6E6] md:text-[12px] lg:text-[13px]">
+              <span className="truncate text-[11px] font-bold leading-tight text-[#FFF6E6] md:text-[12px] lg:text-[13px]">
                 {person.name} {person.age}
               </span>
               {person.is_verified ? (
@@ -120,17 +122,17 @@ function PersonGridCard({
                 <VerifiedBadge size="sm" level="authentic_person" />
               ) : null}
             </div>
-            <p className="mt-0.5 truncate text-xs font-semibold text-[var(--cream)]">{subtitle}</p>
+            <p className="mt-0.5 truncate text-[9px] font-semibold text-[var(--cream)] md:text-xs">{subtitle}</p>
           </div>
         </div>
       </ProfilePhotoLink>
       {onMessage ? (
-        <div className="border-t border-[var(--border-default)] p-1.5">
+        <div className="border-t border-[var(--border-default)] p-1 md:p-1.5">
           <button
             type="button"
             onClick={onMessage}
             data-testid={`match-message-${person.id}`}
-            className="w-full rounded-xl border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] py-2 text-[11px] font-extrabold uppercase tracking-wide text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.28)]"
+            className="w-full rounded-lg border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] py-1.5 text-[10px] font-extrabold uppercase tracking-wide text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.28)] md:rounded-xl md:py-2 md:text-[11px]"
           >
             Message
           </button>
@@ -148,22 +150,29 @@ export const Matches = () => {
   const navigate = useNavigate();
 
   const fetchMatches = useCallback(async () => {
+    // Paint mutual matches as soon as that API returns — do not wait on likes
+    // (iPhone was sitting on a full-page skeleton for 25–30s while photos/likes lagged).
     try {
-      const [matchesRes, likesRes] = await Promise.all([
-        usersAPI.getMatches(),
-        usersAPI.getReceivedLikes().catch(() => ({ data: [] as ReceivedLike[] })),
-      ]);
-      setMatches(matchesRes.data);
-      setReceivedLikes(Array.isArray(likesRes.data) ? likesRes.data : []);
+      const matchesRes = await usersAPI.getMatches();
+      setMatches(matchesRes.data ?? []);
       setError('');
     } catch {
       setError('Could not load matches.');
     } finally {
       setLoading(false);
     }
+
+    try {
+      const likesRes = await usersAPI.getReceivedLikes();
+      setReceivedLikes(Array.isArray(likesRes.data) ? likesRes.data : []);
+    } catch {
+      setReceivedLikes([]);
+    }
   }, []);
 
   useEffect(() => {
+    // Drop Discover's pending multi‑MB photo jobs so Matches tiles get the queue.
+    clearGridPhotoQueue();
     void fetchMatches();
   }, [fetchMatches]);
 
@@ -209,7 +218,7 @@ export const Matches = () => {
             </div>
             <h2 className="text-lg font-bold text-[var(--cream)]">No matches yet</h2>
             <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-[var(--cream-muted)]">
-              Tap Match on Nearby or the live list. When it&apos;s mutual, they land here — ready to
+              Tap Match on Nearby or Community. When it&apos;s mutual, they land here — ready to
               chat. Be direct. Consent first.
             </p>
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
@@ -223,7 +232,7 @@ export const Matches = () => {
                 to="/stream"
                 className="inline-flex rounded-full border border-[rgba(196,131,42,0.5)] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
               >
-                Live list
+                Community
               </Link>
             </div>
           </div>

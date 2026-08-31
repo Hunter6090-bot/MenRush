@@ -1,5 +1,6 @@
 import { expect, test, request as apiRequest, type BrowserContext, type Page } from '@playwright/test';
 import { TEST_PASSWORD, ALICE, BOB } from './test-accounts';
+import { PLAYWRIGHT_BASE_URL as BASE_URL } from './support/base-url';
 
 /**
  * #74 leftover: login / first sync must stay badge-only — unread backfill must
@@ -7,7 +8,6 @@ import { TEST_PASSWORD, ALICE, BOB } from './test-accounts';
  */
 test.describe.configure({ mode: 'serial' });
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
 
 type LoginResult = {
   token: string;
@@ -87,19 +87,23 @@ test('login with unread notifications shows badge only — zero toasts from back
     await bobApi.dispose();
   }
 
-  const ctx = await browser.newContext();
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await authenticate(ctx, bob);
   const page: Page = await ctx.newPage();
   await page.goto('/discover');
 
-  // Badge reflects server unread; toast stack must stay empty through hydration.
+  // Badge lives on the mobile Alerts control (desktop sidebar has no notifications nav item).
   await expect(page.getByTestId('badge-notifications')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByTestId('badge-notifications')).toHaveText(String(unreadBefore), {
+  const expectedBadge = unreadBefore > 99 ? '99+' : String(unreadBefore);
+  await expect(page.getByTestId('badge-notifications')).toHaveText(expectedBadge, {
     timeout: 10_000,
   });
   await page.waitForTimeout(2500);
-  await expect(page.getByTestId('toast-notifications')).toHaveCount(0);
+  // This backfilled message must not appear as a toast (parallel workers may toast other live events).
   await expect(page.getByText(uniqueText, { exact: false })).toHaveCount(0);
+  await expect(
+    page.getByTestId('toast-notifications').filter({ hasText: uniqueText }),
+  ).toHaveCount(0);
 
   // Bell is how they see the list.
   await page.getByRole('link', { name: 'Alerts' }).click();

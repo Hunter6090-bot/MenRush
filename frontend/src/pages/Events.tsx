@@ -10,6 +10,9 @@ import { resolveLocaleTag } from '../lib/localeUnits';
 
 const CATEGORIES = ['All', 'Nightclub', 'Drag', 'Live', 'Bar', 'Pride', 'Fetish'] as const;
 
+/** Matches backend ACTIVE_CHECKIN_TTL_HOURS — venue pins expire after this many hours. */
+const CHECKIN_TTL_HOURS = 4;
+
 function eventCategory(ev: EventDTO): string {
   const name = `${ev.name} ${ev.description ?? ''}`.toLowerCase();
   if (name.includes('drag')) return 'Drag';
@@ -89,7 +92,7 @@ export const Events = () => {
         <p className="mb-5 text-sm text-[var(--cream-muted)]">
           Gay events and venues, by what you&apos;re into.{' '}
           <Link to="/hot-spots" className="font-semibold text-[#C4832A] hover:text-[#E0A14A]">
-            Browse Hot Spots check-ins →
+            Browse Cruise →
           </Link>
         </p>
         {checkInNotice ? (
@@ -141,7 +144,7 @@ export const Events = () => {
                     to="/hot-spots"
                     className="rounded-full border border-[rgba(196,131,42,0.5)] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
                   >
-                    Hot Spots
+                    Cruise
                   </Link>
                 </div>
                 <p className="mt-4 text-[11px] text-[var(--cream-muted)]">Meet in public · Consent first</p>
@@ -159,7 +162,7 @@ export const Events = () => {
               >
                 <p className="text-[15px] font-extrabold text-[var(--cream)]">No events in this filter</p>
                 <p className="mx-auto mt-2 max-w-sm text-[13px] text-[var(--cream-muted)]">
-                  Clear the day filter or category, or check Hot Spots for live venues.
+                  Clear the day filter or category, or check Cruise for venues near you.
                 </p>
                 <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
                   <button
@@ -176,7 +179,7 @@ export const Events = () => {
                     to="/hot-spots"
                     className="rounded-full border border-[rgba(196,131,42,0.5)] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A]"
                   >
-                    Hot Spots
+                    Cruise
                   </Link>
                 </div>
               </div>
@@ -233,7 +236,9 @@ export const Events = () => {
                             void eventsAPI
                               .checkIn(ev.id)
                               .then(() => {
-                                setCheckInNotice(`Checked in at ${ev.venue_name || ev.name}. Pin is live for 4 hours.`);
+                                setCheckInNotice(
+                                  `Checked in at ${ev.venue_name || ev.name}. Pin stays on the map for ${CHECKIN_TTL_HOURS} hours.`,
+                                );
                               })
                               .catch((err: { response?: { data?: { error?: string } } }) => {
                                 setCheckInNotice(err.response?.data?.error || 'Check-in failed.');

@@ -3,11 +3,8 @@ import { query } from '../db';
 import { defaultGenericAvatarUrl } from '../lib/genericAvatar';
 import { accessControl } from '../security/access';
 import { ProfileInput } from '../types/validation';
-import { ageFromDateOfBirth } from '../lib/age';
+import { ageFromDateOfBirth, AGE_FILTER_MIN } from '../lib/age';
 import { premiumService } from './premium.service';
-import { discreetBlurForViewer } from '../lib/discreet';
-import { bucketDistanceKm, bucketDistanceLabel } from '../lib/distanceLabel';
-import { sentinelService, type SentinelSource } from './sentinel.service';
 
 /**
  * Privacy fuzz for map pins: keep people near where they actually are, with a
@@ -49,17 +46,17 @@ export const userService = {
   ) {
     await accessControl.requireVerified(userId);
 
-    // Keep DB honest: zombie online=true from crashed tabs skews ops + chat filters.
-    await query(
+    // Do NOT await full-table online cleanup or avatar backfill on this hot path —
+    // phones were waiting ~7s before the Nearby list could paint. Run best-effort
+    // in the background; list query below still filters by fresh last_seen.
+    void query(
       `UPDATE profiles
        SET online = false
        WHERE online = true
          AND (last_seen IS NULL OR last_seen < NOW() - INTERVAL '20 minutes')`,
     ).catch(() => undefined);
-
-    // Density: assign generic avatars so men without photos still appear on the map.
-    await this.ensureDefaultAvatar(userId).catch(() => undefined);
-    await this.backfillMissingAvatarsNear(userId).catch(() => undefined);
+    void this.ensureDefaultAvatar(userId).catch(() => undefined);
+    void this.backfillMissingAvatarsNear(userId).catch(() => undefined);
 
     if (clientLocation) {
       await this.updateLocation(userId, clientLocation.lat, clientLocation.lng);
@@ -111,6 +108,7 @@ export const userService = {
         AND p.is_ghost = false
         AND p.lat IS NOT NULL
         AND p.lng IS NOT NULL
+        AND u.age >= ${AGE_FILTER_MIN}
         AND NOT EXISTS (
           SELECT 1 FROM blocks b
           WHERE (b.blocker_id = $3 AND b.blocked_id = u.id)
@@ -130,11 +128,11 @@ export const userService = {
         OR (p.available_until IS NOT NULL AND p.available_until > NOW())
       )`;
     }
-    if (filters?.minAge) {
-      values.push(filters.minAge);
+    if (filters?.minAge != null) {
+      values.push(Math.max(filters.minAge, AGE_FILTER_MIN));
       queryStr += ` AND u.age >= $${values.length}`;
     }
-    if (filters?.maxAge) {
+    if (filters?.maxAge != null) {
       values.push(filters.maxAge);
       queryStr += ` AND u.age <= $${values.length}`;
     }
@@ -177,10 +175,25 @@ export const userService = {
 
     const result = await query(queryStr, values);
 
-    const viewerIsPremium = await premiumService.isPremium(userId);
-    const discreetBlur = discreetBlurForViewer({ viewerIsPremium, isOwn: false, hasVisualMedia: true });
-
     return result.rows.map((row) => {
+      const km = row.distance_m / 1000;
+      // Distance labels stay bucketed for list privacy; map pins stay near real coords.
+      let bucketed: number;
+      let label: string;
+      if (km < 0.3) {
+        bucketed = 0.2;
+        label = '< 300 m';
+      } else if (km < 1) {
+        bucketed = Math.round(km * 10) / 10; // 0.1km steps under 1km
+        label = `${Math.round(bucketed * 1000)} m`;
+      } else if (km < 5) {
+        bucketed = Math.round(km * 2) / 2; // 0.5km steps
+        label = `${bucketed.toFixed(1)} km`;
+      } else {
+        bucketed = Math.round(km); // 1km steps above 5km
+        label = `${bucketed} km`;
+      }
+
       const realLat = Number(row.real_lat);
       const realLng = Number(row.real_lng);
       const mapPoint =
@@ -200,10 +213,8 @@ export const userService = {
         ...publicRow,
         lat: mapPoint.lat,
         lng: mapPoint.lng,
-        distance_km: bucketDistanceKm(row.distance_m),
-        distance_label: bucketDistanceLabel(row.distance_m),
-        discreet_blur: discreetBlur,
-        viewer_is_premium: viewerIsPremium,
+        distance_km: bucketed.toFixed(2),
+        distance_label: label,
       };
     });
   },
@@ -317,6 +328,11 @@ export const userService = {
     const row = result.rows[0];
     if (!row) return row;
 
+    // Always expose numeric lat/lng (or null) so Discover / setup can detect a saved pin.
+    // pg may return numeric columns as strings; never invent a city-centre fallback.
+    row.lat = row.lat != null && Number.isFinite(Number(row.lat)) ? Number(row.lat) : null;
+    row.lng = row.lng != null && Number.isFinite(Number(row.lng)) ? Number(row.lng) : null;
+
     // Overlay beta / subscription entitlement so the client does not treat
     // raw users.is_premium=false as "locked" while Premium is free in beta.
     const status = await premiumService.getStatus(userId);
@@ -360,18 +376,7 @@ export const userService = {
        WHERE u.id = $1`,
       [targetId, viewerId],
     );
-    const profile = result.rows[0];
-    if (!profile) return profile;
-    const viewerIsPremium = await premiumService.isPremium(viewerId);
-    return {
-      ...profile,
-      discreet_blur: discreetBlurForViewer({
-        viewerIsPremium,
-        isOwn: viewerId === targetId,
-        hasVisualMedia: true,
-      }),
-      viewer_is_premium: viewerIsPremium,
-    };
+    return result.rows[0];
   },
 
   async getDisplayName(userId: string) {
@@ -536,6 +541,22 @@ export const userService = {
     return result.rows.length > 0;
   },
 
+  /**
+   * Unmatch: remove both directions of the like so the mutual match is gone.
+   * Does not delete message history or touch room memberships.
+   */
+  async unmatchUser(userId: string, otherId: string): Promise<{ removed: number }> {
+    await accessControl.assertInteraction(userId, otherId);
+    const result = await query(
+      `DELETE FROM likes
+       WHERE (liker_id = $1 AND liked_id = $2)
+          OR (liker_id = $2 AND liked_id = $1)
+       RETURNING id`,
+      [userId, otherId],
+    );
+    return { removed: result.rows.length };
+  },
+
   /** Video calls allowed for mutual matches or anyone you've already messaged. */
   async canVideoCall(userId: string, peerId: string): Promise<boolean> {
     if (!peerId || userId === peerId) return false;
@@ -615,54 +636,40 @@ export const userService = {
 
   async reportUser(
     reporterId: string,
-    reportedId: string | null,
+    reportedId: string,
     reason: string,
     details?: string,
-    extras?: {
-      conversationId?: string | null;
-      roomId?: string | null;
-      source?: SentinelSource;
-    },
+    threadId?: string,
   ) {
-    if (reportedId && reporterId === reportedId) {
-      throw new Error('Cannot report yourself.');
+    const detailParts: string[] = [];
+    if (threadId) {
+      // Machine-readable marker for SENTINEL / team inbox — keep calm user copy elsewhere.
+      detailParts.push(`thread_id=${threadId}`);
     }
-    const source = extras?.source ?? 'profile';
+    if (details?.trim()) {
+      detailParts.push(details.trim());
+    }
+    const storedDetails = detailParts.length ? detailParts.join('\n') : null;
+
     const result = await query(
-      `INSERT INTO reports (reporter_id, reported_id, reason, details, conversation_id, room_id, source)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO reports (reporter_id, reported_id, reason, details)
+       VALUES ($1, $2, $3, $4)
        RETURNING id, created_at`,
-      [
-        reporterId,
-        reportedId,
-        reason,
-        details ?? null,
-        extras?.conversationId ?? null,
-        extras?.roomId ?? null,
-        source,
-      ],
+      [reporterId, reportedId, reason, storedDetails],
     );
     const report = result.rows[0] as { id: string; created_at: string };
 
-    const queued = await sentinelService.enqueue({
-      reportId: report.id,
+    // Best-effort notify team — never fail the report submission if mail is down.
+    void this.notifyTeamOfReport(
       reporterId,
       reportedId,
-      conversationId: extras?.conversationId,
-      roomId: extras?.roomId,
-      source,
       reason,
-      details,
-    });
+      storedDetails ?? undefined,
+      report.id,
+      threadId,
+    ).catch((err) => console.error('[reports] notify failed', err));
 
-    // Best-effort notify team — never fail the report submission if mail is down.
-    if (reportedId) {
-      void this.notifyTeamOfReport(reporterId, reportedId, reason, details, report.id).catch(
-        (err) => console.error('[reports] notify failed', err),
-      );
-    }
-
-    return { ...report, sentinel_id: queued.id };
+    return report;
   },
 
   async notifyTeamOfReport(
@@ -671,6 +678,7 @@ export const userService = {
     reason: string,
     details: string | undefined,
     reportId: string,
+    threadId?: string,
   ) {
     const { sendEmail } = await import('./mailer.service');
     const { getReportNotifyEmails } = await import('./team.service');
@@ -697,7 +705,7 @@ export const userService = {
     const recipients = getReportNotifyEmails();
     if (!recipients.length) return;
 
-    const subject = `[MenRush] Report: ${reason} — ${reported?.name ?? reportedId}`;
+    const subject = `[MenRush][SENTINEL] Report: ${reason} — ${reported?.name ?? reportedId}`;
     const bodyHtml =
       transactionalParagraph(
         `<strong style="color:#F0E0C0;">Reason:</strong> ${esc(reason)}`,
@@ -711,6 +719,12 @@ export const userService = {
         `<strong style="color:#F0E0C0;">Reported:</strong> ${esc(reported?.name ?? 'unknown')} (${esc(reported?.email ?? reportedId)})`,
         true,
       ) +
+      (threadId
+        ? transactionalParagraph(
+            `<strong style="color:#F0E0C0;">Thread ID (SENTINEL):</strong> ${esc(threadId)}`,
+            true,
+          )
+        : '') +
       (details
         ? transactionalParagraph(
             `<strong style="color:#F0E0C0;">Details:</strong> ${esc(details)}`,
@@ -735,7 +749,7 @@ export const userService = {
           to,
           subject,
           html,
-          text: `MenRush report ${reportId}: ${reason}. Reporter ${reporter?.email ?? reporterId} → ${reported?.email ?? reportedId}. ${details ?? ''}`.trim(),
+          text: `MenRush report ${reportId}: ${reason}. Thread ${threadId ?? 'n/a'}. Reporter ${reporter?.email ?? reporterId} → ${reported?.email ?? reportedId}. ${details ?? ''}`.trim(),
         });
       } catch (err) {
         console.error('[reports] email to', to, 'failed', err);
