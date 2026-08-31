@@ -597,7 +597,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           </p>
           <p className="text-[10px] mt-0.5 text-[var(--cream-muted)]">
             <GroupIcon className="w-3 h-3 inline mr-0.5" />
-            {presentCount > 0 ? `${presentCount} live` : 'Waiting…'}
+            {presentCount > 0 ? `${presentCount} here` : 'Waiting…'}
           </p>
         </div>
 
