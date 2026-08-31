@@ -30,6 +30,7 @@ Run: `npm run test:e2e -- public-design-lock` (from `frontend/`)
 - Form inputs use cream `publicInputClass` (`bg-[#F5EBD8]`).
 - **Open signup** (Brand / Zoul 31 Aug 2026): `/register` must work with no invite code. Do not bounce to `/beta`. Login “Create an account” → `/register`. `/beta` stays optional for people who already have a MENRUSH code.
 - Do not reintroduce invite-required framing (“invite holders only”, “invite code checks out”, “use the email your invite was sent to”) without product sign-off.
+- **Register face** (Brand signed Sign up free → `/register`; refused the rest until this lock): title **Create your account.** — never “You’re in.” Field order: Username → Email → DOB → Password → consents → optional Pride promo last. Placeholder **If you have one** — never print `PRIDE 3MONTH FREE` or `PRIDE-XXXX-XXXX` on the page. Helper is one short optional line (no public-code / 31 Oct / stacking / MENRUSH-type dump). Gift line uses periods: 30 days Premium before 1 October; Pride replaces and does not stack. BrandMark only — no typed MENRUSH wordmark. Invite chip only when an invite is already present.
 
 ## Before merging changes
 
