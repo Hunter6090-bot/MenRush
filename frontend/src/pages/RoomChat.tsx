@@ -145,8 +145,15 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     getStreamFor,
     toggleCamera,
     toggleMic,
+    stopCamera,
     photoUrl,
   } = useRoomVideo({ roomId, userId: user?.id, enabled: identityReady && !!roomId });
+
+  const leaveRoomSurface = useCallback(() => {
+    // Hard-stop local A/V before navigate so iOS camera indicator clears immediately.
+    stopCamera();
+    navigate('/rooms');
+  }, [navigate, stopCamera]);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -502,14 +509,14 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
         style={{ background: 'var(--bg-primary)' }}
       >
         <header className="flex shrink-0 items-center gap-2 border-b border-[var(--border-default)] px-3 py-3">
-          <MobileBackButton fallback="/rooms" onClick={() => navigate('/rooms')} className="-ml-1" />
+          <MobileBackButton fallback="/rooms" onClick={leaveRoomSurface} className="-ml-1" />
           <p className="flex-1 truncate text-sm font-semibold text-[var(--cream)]">Group</p>
         </header>
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
           <p className="text-sm text-[var(--cream)]">{joinError}</p>
           <button
             type="button"
-            onClick={() => navigate('/rooms')}
+            onClick={leaveRoomSurface}
             className="rounded-xl bg-[var(--copper)] px-4 py-2 text-sm font-bold text-[#1A0E03]"
           >
             Back to rooms
@@ -543,7 +550,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             });
             setIdentityReady(true);
           }}
-          onCancel={() => navigate('/rooms')}
+          onCancel={leaveRoomSurface}
         />
       </div>
     );
@@ -566,7 +573,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       >
         <MobileBackButton
           fallback="/rooms"
-          onClick={() => navigate('/rooms')}
+          onClick={leaveRoomSurface}
           className="-ml-1"
         />
 
@@ -773,12 +780,13 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             <button
               onClick={async () => {
                 if (!roomId) return;
+                stopCamera();
                 try {
                   await roomsAPI.leaveRoom(roomId);
-                  navigate('/rooms');
                 } catch {
-                  // ignore
+                  // ignore — still leave the surface so camera stays off
                 }
+                navigate('/rooms');
               }}
               className="w-full px-4 py-3 text-sm text-left transition-all duration-150 hover:bg-[var(--border-default)]/50"
               style={{ color: '#EF4444' }}
