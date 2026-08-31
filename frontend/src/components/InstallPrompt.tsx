@@ -1,14 +1,12 @@
-import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { isPhoneDevice } from '../lib/device';
-import { registerServiceWorker } from '../lib/push';
+import {
+  clearDeferredInstallPrompt,
+  useDeferredInstallPrompt,
+} from '../lib/installPromptStore';
+import { useEffect, useState } from 'react';
 
 const DISMISS_KEY = 'menrush_install_prompt_dismissed';
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
 
 function isStandalone() {
   return (
@@ -24,7 +22,7 @@ function isIos() {
 
 export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
   const location = useLocation();
-  const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
+  const deferred = useDeferredInstallPrompt();
   const [hidden, setHidden] = useState(true);
 
   // Never cover chat/room composers or Settings Sign out — sheet sits at z-60.
@@ -58,13 +56,6 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
     }
 
     setHidden(false);
-    void registerServiceWorker();
-    const onPrompt = (event: Event) => {
-      event.preventDefault();
-      setDeferred(event as BeforeInstallPromptEvent);
-    };
-    window.addEventListener('beforeinstallprompt', onPrompt);
-    return () => window.removeEventListener('beforeinstallprompt', onPrompt);
   }, [location.pathname, variant, blocksChrome]);
 
   if (hidden || blocksChrome) return null;
@@ -74,11 +65,16 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
     setHidden(true);
   };
 
+  // Android Chrome can one-tap install when we still hold the deferred event.
+  // iPhone / Safari cannot — keep Show me how. Android without a prompt falls
+  // back to the Chrome-menu how-to (in-app browser, criteria not met, etc.).
+  const canNativeInstall = Boolean(deferred) && !isIos();
+
   const install = async () => {
-    if (!deferred) return;
+    if (!deferred || isIos()) return;
     await deferred.prompt();
     await deferred.userChoice;
-    setDeferred(null);
+    clearDeferredInstallPrompt();
     dismiss();
   };
 
@@ -97,13 +93,13 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
           : 'Opens like an app. No store. No extra download.'}
       </p>
       <div className="mt-3 flex gap-2.5">
-        {deferred ? (
+        {canNativeInstall ? (
           <button
             type="button"
             onClick={() => void install()}
             className="flex-1 rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3 text-[14px] font-bold text-[#FFF6E6]"
           >
-            Install MenRush
+            Install app
           </button>
         ) : (
           <Link

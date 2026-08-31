@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Android Chrome one-tap Install (persist beforeinstallprompt) | PR `cursor/android-one-tap-install-b87f` | — | Cursor cloud — module store + early capture; Android Install app / Install MenRush; Safari Show me how; do not mix Grid #165 / Community / My Photos #171 / rooms #150/#169 / Cruise #170 / age #159 / icons / #97–#99 |
 | Nav icons: Settings gear + Rooms camera/people (kill Doric columns) | PR `cursor/nav-settings-rooms-icons-d7d9` | — | Cursor cloud — IconSettings=6-tooth cog; IconRooms=camera+2 people; preview HTML dupes; do not mix #150/#165/#170/#171/#169 |
 | Landing header BrandMark top-left (ComingSoon) | PR `cursor/landing-header-brandmark-35ee` | — | Cursor cloud — sm BrandMark → `/` left; Sign in right; hero mark kept; overline LIVE NOW. UK BETA OPEN; do not mix #165/#163/#97–#99 |
 | P0 Go live / Discover bounce (location ≠ incomplete profile) | PR `cursor/fix-go-live-discovery-bounce-d9b8` | — | Cursor cloud — honest live ticks; RequireProfileSetup never redirects for GPS; ActivationBanner Settings not Finish profile; /me lat/lng coerce; Safari how-to; do not touch #97–#99 / #158 / #160 / #162 / held PRs |
