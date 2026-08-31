@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { isPhoneDevice } from '../lib/device';
 import { registerServiceWorker } from '../lib/push';
 
 const DISMISS_KEY = 'menrush_install_prompt_dismissed';
@@ -34,10 +35,26 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (isStandalone()) return;
-    if (location.pathname === '/get-the-app' || location.pathname === '/install') return;
-    if (blocksComposer) return;
-    if (variant === 'sheet' && localStorage.getItem(DISMISS_KEY) === '1') return;
+    if (!isPhoneDevice()) {
+      setHidden(true);
+      return;
+    }
+    if (isStandalone()) {
+      setHidden(true);
+      return;
+    }
+    if (location.pathname === '/get-the-app' || location.pathname === '/install') {
+      setHidden(true);
+      return;
+    }
+    if (blocksComposer) {
+      setHidden(true);
+      return;
+    }
+    if (variant === 'sheet' && localStorage.getItem(DISMISS_KEY) === '1') {
+      setHidden(true);
+      return;
+    }
 
     setHidden(false);
     void registerServiceWorker();
