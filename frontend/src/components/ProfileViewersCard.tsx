@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
 import { UserAvatar } from './UserAvatar';
+import { profilePathForUser } from '../lib/profileLinks';
+import { useAuthStore } from '../hooks/store';
 
 export interface ProfileViewer {
   id: string;
@@ -41,6 +43,8 @@ export function ProfileViewersCard({
   hiddenCount,
   loading = false,
 }: ProfileViewersCardProps) {
+  const authUserId = useAuthStore((s) => s.user?.id);
+
   return (
     <div
       className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-5 shadow-card"
@@ -77,12 +81,15 @@ export function ProfileViewersCard({
           {viewers.map((viewer) => (
             <li key={viewer.id}>
               <Link
-                to={`/profile/${viewer.id}`}
+                to={profilePathForUser(viewer.id, authUserId)}
                 className="flex items-center gap-3 rounded-xl border border-transparent px-2 py-2 transition-colors hover:border-[var(--border-default)] hover:bg-[var(--border-default)]/35"
+                data-testid={`viewer-row-${viewer.id}`}
               >
                 <UserAvatar
                   name={viewer.name}
                   photoUrl={viewer.photo_url ?? undefined}
+                  userId={viewer.id}
+                  linkToProfile={false}
                   online={viewer.online}
                   size="sm"
                 />
@@ -91,7 +98,9 @@ export function ProfileViewersCard({
                     {viewer.name}
                     <span className="font-normal text-[var(--cream-muted)]"> · {viewer.age}</span>
                   </p>
-                  <p className="text-[11px] text-[var(--cream-muted)]">Viewed {formatViewedAt(viewer.viewed_at)}</p>
+                  <p className="text-[11px] text-[var(--cream-muted)]">
+                    Viewed {formatViewedAt(viewer.viewed_at)}
+                  </p>
                 </div>
               </Link>
             </li>
@@ -102,7 +111,8 @@ export function ProfileViewersCard({
       {hasMore && hiddenCount > 0 && (
         <div className="mt-4 rounded-xl border border-[#C4832A]/25 bg-[#C4832A]/8 px-4 py-3 text-center">
           <p className="text-xs text-[var(--cream)]/85">
-            <span className="font-bold text-[#C4832A]">{hiddenCount} more</span> men viewed your profile.
+            <span className="font-bold text-[#C4832A]">{hiddenCount} more</span> men viewed your
+            profile.
           </p>
           <Link
             to="/premium"

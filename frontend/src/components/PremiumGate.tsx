@@ -1,5 +1,5 @@
 import { formatRadiusFromKm } from '../lib/localeUnits';
-import { BETA_INVITE_REQUIRED } from '../lib/betaInvite';
+import { isBetaPremiumFree } from '../lib/betaInvite';
 
 interface PremiumGateProps {
   headline?: string;
@@ -25,7 +25,7 @@ export function PremiumGate({
   onClose,
   onUnlock,
 }: PremiumGateProps) {
-  const betaIncluded = BETA_INVITE_REQUIRED;
+  const betaIncluded = isBetaPremiumFree();
   const resolvedCta = betaIncluded ? 'Continue — included in beta' : ctaLabel;
 
   return (
@@ -49,9 +49,7 @@ export function PremiumGate({
             }}
           />
           <div className="relative">
-            <p className="nn-overline mb-3">
-              {betaIncluded ? 'MenRush Premium · Included in beta' : 'MenRush Premium'}
-            </p>
+            <p className="nn-overline mb-3">MenRush Premium</p>
             <h2 className="font-display text-[26px] font-bold tracking-wide uppercase text-nn-text">
               {headline}
             </h2>
@@ -78,11 +76,7 @@ export function PremiumGate({
           >
             {resolvedCta}
           </button>
-          <p className="text-center text-[11px] text-nn-faint mt-3">
-            {betaIncluded
-              ? 'Every beta member has full access. No payment is required.'
-              : 'Cancel anytime. No fake timers.'}
-          </p>
+          <p className="text-center text-[11px] text-nn-faint mt-3">Cancel anytime. No fake timers.</p>
         </div>
 
         <button

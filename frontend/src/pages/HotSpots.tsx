@@ -42,7 +42,7 @@ export const HotSpots = () => {
       const res = await hotSpotsAPI.listNearby(lat, lng, 80, category === 'all' ? undefined : category);
       setSpots(res.data.spots);
     } catch {
-      setError('Could not load hot spots.');
+      setError('Could not load Cruise spots.');
       setSpots([]);
     } finally {
       setLoading(false);
@@ -120,7 +120,7 @@ export const HotSpots = () => {
           existing.spot.name !== spot.name ||
           existing.spot.category_icon !== spot.category_icon
         ) {
-          existing.root.render(<HotSpotPin spot={pinData} size={36} />);
+          existing.root.render(<HotSpotPin spot={pinData} size={52} />);
         }
         existing.spot = spot;
         return;
@@ -133,7 +133,7 @@ export const HotSpots = () => {
           const el = document.getElementById(`hotspot-card-${spot.id}`);
           el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         },
-        36,
+        52,
       );
       const marker = new mapboxgl.Marker({ element, anchor: 'center' })
         .setLngLat(lngLat)
@@ -170,7 +170,7 @@ export const HotSpots = () => {
     <Layout>
       <div className="mx-auto max-w-6xl px-6 py-6">
         <div className="mb-4 flex flex-wrap items-baseline gap-3">
-          <h1 className="flex-1 text-2xl font-extrabold text-[var(--cream)]">Hot Spots</h1>
+          <h1 className="flex-1 text-2xl font-extrabold text-[var(--cream)]">Cruise</h1>
           <Link
             to="/safety"
             className="text-[13px] font-semibold text-[#C4832A] hover:text-[#E0A14A]"
@@ -230,7 +230,7 @@ export const HotSpots = () => {
             role="status"
           >
             <p className="text-[16px] font-extrabold text-[var(--cream)]">
-              We need your location for Hot Spots
+              We need your location for Cruise
             </p>
             <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--cream-muted)]">
               Not a public pin on a map — we use GPS privately to rank venues near you. Others do not
@@ -254,7 +254,7 @@ export const HotSpots = () => {
           </div>
         ) : loading ? (
           <div className="flex justify-center py-20">
-            <PulseRing size={36} label="Loading hot spots" />
+            <PulseRing size={36} label="Loading Cruise" />
           </div>
         ) : spots.length === 0 ? (
           <div

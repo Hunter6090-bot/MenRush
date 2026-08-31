@@ -1,41 +1,36 @@
 ---
 description: Invariants for MenRush public landing and auth pages — do not regress without explicit approval.
-globs: frontend/src/pages/ComingSoon.tsx,frontend/src/pages/Login.tsx,frontend/src/pages/Register.tsx,frontend/src/components/PublicMarketingShell.tsx,frontend/src/lib/publicStyles.ts,frontend/src/styles/globals.css
+globs: frontend/src/pages/ComingSoon.tsx,frontend/src/pages/Login.tsx,frontend/src/pages/Register.tsx,frontend/src/components/PublicAuthShell.tsx,frontend/src/lib/publicStyles.ts,frontend/src/styles/globals.css
 alwaysApply: false
 ---
 
 # Public marketing pages — design lock
 
-These invariants protect the pre-launch public experience. **Do not change without explicit product approval.**
+These invariants protect the public launch / auth experience. **Do not change without explicit product approval.**
 
 Enforced by E2E: `frontend/e2e/public-design-lock.spec.ts`  
 Run: `npm run test:e2e -- public-design-lock` (from `frontend/`)
 
-## Shell & styles
+## Landing (`/` and `/coming-soon`) — UK beta open
 
-- `/`, `/coming-soon`, `/login`, and `/register` **MUST** use `PublicMarketingShell` from `frontend/src/components/PublicMarketingShell.tsx`.
-- Shared tokens **MUST** come from `frontend/src/lib/publicStyles.ts` (`publicPanelClass`, `publicInputClass`, `publicNavLinkPrimary`, etc.).
-- Do not reintroduce one-off layout grids or duplicate shell markup on these pages.
+- Implemented in `ComingSoon.tsx` with the **London rooftop** hero (`31-london-rooftop-dusk.jpeg`), bronze medallion via `BrandMark`, and copper/cream tokens.
+- **Must** show live UK beta status: **LIVE NOW. UK BETA OPEN**. Do **not** show **OPENS 1 OCTOBER 2026** (or any open-date) in the hero. Do **not** list launch cities (no London / Manchester / Birmingham / Brighton ticker). Do not invent US cities or claim the US is open.
+- Hero typography uses `mr-coming-soon-heading` + `mr-coming-soon-accent` (keep “Real men / Verified profiles / Total discretion” voice unless product rewrites).
+- Primary CTA: **“Sign up free”** → `/register` (real account signup). No email capture field and no Zoho/waitlist form on the hero.
+- Keep `#waitlist` as a stable scroll anchor on the CTA block for older deep links.
+- Header: compact `BrandMark` (`size="sm"`) top-left linked to `/` with `aria-label="MenRush"` (no MENRUSH type beside it); **Sign in** top-right → `/login`. Hero keeps its own centered `BrandMark` (`size="hero"`).
+- Body: **Already have an invite? Enter your code** → `/beta`.
+- Include a short **What you get** section matching shipped product (Nearby / Video rooms / Matches). Card bodies use period lock (no em/en dash or hyphen-as-aside). Do not claim an official themed-room catalog unless it is live on main. Do not say invite-only until open on the landing rest — hero is Sign up free / UK BETA OPEN. Sign up before 1 October 2026 gets 30 days Premium free; a Pride promo replaces that gift and does not stack.
+- Do **not** invent social network URLs. Footer is `SiteFooter` (Contact, Safety, legal).
+- **No** separate “JOIN THE WAITLIST” / “GET EARLY ACCESS” / “Join waitlist” CTAs on the landing face.
 
-## Hero typography
+## Auth (`/login`, `/register`, `/beta`)
 
-- Hero headings **MUST** use `mr-hero-heading` + `mr-hero-accent` (Inter via `globals.css`).
-- **Do NOT** use `mr-brand-wordmark`, Cinzel, or `--nn-font-display` on public hero `<h1>` elements.
-- Prefer `PublicHeroBlock` for consistent hero structure.
-
-## Landing (`/` and `/coming-soon`)
-
-- **One** header sign-in link only: “Already have an invite? Sign in” → `/login`.
-- **No** duplicate sign-in CTAs in the page body.
-- **No** separate “JOIN THE WAITLIST” or “GET EARLY ACCESS” button rows — waitlist lives in the right panel only (“Join waitlist” submit).
-- Canonical waitlist anchor: **`/coming-soon#waitlist`** (element `id="waitlist"`).
-- **Beta 200** copy in the hero footer note must remain unless product explicitly removes it.
-
-## Login & Register
-
-- Header nav includes **Waitlist** linking to `/coming-soon#waitlist`.
-- Form inputs use cream `publicInputClass` (`bg-[#F7EFE0]`).
-- Keep mobile/desktop layout in sync via `PublicMarketingShell` — no separate mobile-only hero or CTA stacks.
+- Use `PublicAuthShell` + shared tokens from `frontend/src/lib/publicStyles.ts`.
+- Form inputs use cream `publicInputClass` (`bg-[#F5EBD8]`).
+- **Open signup** (Brand / Zoul 31 Aug 2026): `/register` must work with no invite code. Do not bounce to `/beta`. Login “Create an account” → `/register`. `/beta` stays optional for people who already have a MENRUSH code.
+- Do not reintroduce invite-required framing (“invite holders only”, “invite code checks out”, “use the email your invite was sent to”) without product sign-off.
+- **Register face** (Brand signed Sign up free → `/register`; refused the rest until this lock): title **Create your account.** — never “You’re in.” Field order: Username → Email → DOB → Password → consents → optional Pride promo last. Placeholder **If you have one** — never print `PRIDE 3MONTH FREE` or `PRIDE-XXXX-XXXX` on the page. Helper is one short optional line (no public-code / 31 Oct / stacking / MENRUSH-type dump). Gift line uses periods: 30 days Premium before 1 October; Pride replaces and does not stack. BrandMark only — no typed MENRUSH wordmark. Invite chip only when an invite is already present.
 
 ## Before merging changes
 

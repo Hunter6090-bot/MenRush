@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { authAPI, usersAPI } from '../api/client';
+import { usersAPI } from '../api/client';
 import { useAuthStore, useNotificationStore, useUnreadStore } from '../hooks/store';
 import { UserAvatar } from './UserAvatar';
 import { mobileBackFallback, shouldShowMobileBack } from '../lib/mobileBack';
 import { MobileBackButton } from './MobileBackButton';
-import { IconMapExpand, IconMore, IconNotifications, IconPulse } from './icons';
+import { IconMapExpand, IconMore, IconNotifications, IconPulse, IconSignOut } from './icons';
 import { BrandMark } from './BrandMark';
 import { ProfileSearchModal } from './ProfileSearchModal';
 import { NotificationDot } from './NotificationDot';
@@ -15,7 +15,7 @@ import { DiscoveryShellProvider, useDiscoveryShell } from '../context/DiscoveryS
 import { LocationPresenceStrip } from './LocationPresenceStrip';
 import { ProfileDepthStrip } from './ProfileDepthStrip';
 import { ThemeToggle } from './ThemeToggle';
-import { BetaFeedbackPrompt } from './BetaFeedbackPrompt';
+import { PushAlertBanner } from './PushAlertBanner';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -48,23 +48,45 @@ function badgeFor(
 }
 
 function LayoutInner({ children }: LayoutProps) {
-  const { user, refreshToken, logout } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const unreadCount = useUnreadStore((s) => s.count);
   const notificationUnread = useNotificationStore((s) => s.unreadCount);
   const location = useLocation();
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   const [matchCount, setMatchCount] = useState(0);
   const [sidebarExpanded, setSidebarExpanded] = useState(readSidebarExpanded);
   const { state: discoveryShell } = useDiscoveryShell();
 
+  // Badge count only — do not refetch on every mobile tab change (that was a
+  // page-to-page API waterfall on phones). Refresh on mount + focus/visibility.
   useEffect(() => {
-    usersAPI
-      .getMatches()
-      .then((res) => setMatchCount(res.data?.length ?? 0))
-      .catch(() => setMatchCount(0));
-  }, [location.pathname]);
+    let cancelled = false;
+    const refresh = () => {
+      usersAPI
+        .getMatches()
+        .then((res) => {
+          if (!cancelled) setMatchCount(res.data?.length ?? 0);
+        })
+        .catch(() => {
+          if (!cancelled) setMatchCount(0);
+        });
+    };
+    refresh();
+    const onFocus = () => refresh();
+    const onVis = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -88,8 +110,12 @@ function LayoutInner({ children }: LayoutProps) {
     setMoreMenuOpen(false);
   }, [location.pathname]);
 
-  const handleLogout = () => {
-    void authAPI.logout(refreshToken).catch(() => undefined);
+  const requestSignOut = () => {
+    setSignOutConfirmOpen(true);
+  };
+
+  const confirmSignOut = () => {
+    setSignOutConfirmOpen(false);
     logout();
     navigate('/login');
   };
@@ -121,19 +147,11 @@ function LayoutInner({ children }: LayoutProps) {
             aria-label="MenRush home — Nearby"
             title="MenRush"
             className={`flex items-center rounded-xl py-1 transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--copper)] ${
-              sidebarExpanded ? 'gap-2.5 px-1' : 'flex-col justify-center gap-1'
+              sidebarExpanded ? 'gap-2.5 px-1' : 'justify-center'
             }`}
           >
+            {/* Two-men mark only — medallion already carries the word; no type wordmark. */}
             <BrandMark size="sm" className="shadow-[0_0_0_2px_rgba(196,131,42,0.4)] rounded-full" />
-            <span
-              className={`font-display font-black text-nn-text ${
-                sidebarExpanded
-                  ? 'text-sm tracking-[0.14em]'
-                  : 'text-[9px] tracking-[0.1em] leading-none'
-              }`}
-            >
-              MENRUSH
-            </span>
           </Link>
           <button
             type="button"
@@ -169,10 +187,7 @@ function LayoutInner({ children }: LayoutProps) {
                 <span className="relative inline-flex shrink-0">
                   <item.Icon size={22} />
                   {badge > 0 ? (
-                    <span
-                      data-testid={`badge-${item.to.replace(/\//g, '')}`}
-                      className="absolute -right-2 -top-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-nn-copper px-1 text-[10px] font-bold text-nn-on-copper"
-                    >
+                    <span className="absolute -right-2 -top-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-nn-copper px-1 text-[10px] font-bold text-nn-on-copper">
                       {badge > 99 ? '99+' : badge}
                     </span>
                   ) : null}
@@ -188,21 +203,27 @@ function LayoutInner({ children }: LayoutProps) {
           {sidebarExpanded ? (
             <button
               type="button"
-              onClick={handleLogout}
-              className="mt-3 w-full px-1 py-2 text-left text-sm text-nn-faint transition-colors hover:text-nn-danger"
+              onClick={requestSignOut}
+              data-testid="desktop-sign-out"
+              title="Sign out"
+              aria-label="Sign out"
+              className="mt-3 flex w-full items-center gap-2.5 px-1 py-2 text-left text-sm text-nn-faint transition-colors hover:text-nn-danger"
             >
-              Sign out.
+              <IconSignOut size={18} className="shrink-0" />
+              Sign out
             </button>
           ) : (
             <button
               type="button"
-              onClick={handleLogout}
+              onClick={requestSignOut}
+              data-testid="desktop-sign-out"
               title="Sign out"
               aria-label="Sign out"
-              className="mt-3 mx-auto flex h-9 w-9 items-center justify-center rounded-full text-nn-faint transition-colors hover:bg-nn-card hover:text-nn-danger"
+              className="mt-3 mx-auto flex w-11 flex-col items-center justify-center gap-0.5 rounded-xl py-1.5 text-nn-faint transition-colors hover:bg-nn-card hover:text-nn-danger"
             >
-              <span className="text-lg leading-none" aria-hidden>
-                ⎋
+              <IconSignOut size={18} />
+              <span className="text-[9px] font-bold uppercase tracking-wide" aria-hidden>
+                Out
               </span>
             </button>
           )}
@@ -227,9 +248,6 @@ function LayoutInner({ children }: LayoutProps) {
                   className="inline-flex items-center justify-center gap-2"
                 >
                   <BrandMark size="sm" className="shadow-[0_0_0_2px_rgba(196,131,42,0.35)] rounded-full" />
-                  <span className="font-display text-xs font-black tracking-[0.16em] text-[var(--cream)]">
-                    MENRUSH
-                  </span>
                 </Link>
               ) : (
                 <p className="truncate text-sm font-bold tracking-wide text-[var(--cream)]">{pageTitle}</p>
@@ -254,11 +272,11 @@ function LayoutInner({ children }: LayoutProps) {
                 <NotificationDot
                   count={notificationUnread}
                   visible={notificationUnread > 0}
+                  data-testid="badge-notifications"
                   className="-top-0.5 -right-0.5 min-w-[16px] h-4 text-[9px] bg-[var(--copper)] border-[var(--bg-primary)]"
                 />
               </Link>
             </div>
-            <BetaFeedbackPrompt />
           </div>
         </header>
 
@@ -269,13 +287,7 @@ function LayoutInner({ children }: LayoutProps) {
             className="flex max-w-[520px] flex-1 items-center gap-2.5 rounded-full border border-nn-border bg-nn-card px-4 py-2.5 text-left transition-colors hover:border-nn-copper/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--copper)]"
           >
             <SearchIcon className="h-4 w-4 shrink-0 text-nn-muted" />
-            <span className="text-sm text-nn-muted">
-              {location.pathname.startsWith('/events')
-                ? 'Search events'
-                : location.pathname.startsWith('/matches')
-                  ? 'Search matches'
-                  : 'Search by name'}
-            </span>
+            <span className="text-sm text-nn-muted">Search profiles</span>
           </button>
           <div className="flex-1" />
           <ThemeToggle variant="header" className="text-nn-muted hover:text-nn-copper" />
@@ -302,13 +314,16 @@ function LayoutInner({ children }: LayoutProps) {
             ) : null}
             <IconPulse size={20} className="relative z-[1]" />
           </button>
-          <Link to="/profile" className="shrink-0">
+          <Link to="/profile" className="shrink-0" aria-label="Open your profile">
             <UserAvatar
               name={user?.name ?? '?'}
               photoUrl={user?.photo_url}
+              userId={user?.id}
+              linkToProfile={false}
               size="md"
               showStatus={false}
               className="!w-[42px] !h-[42px] ring-2 ring-nn-copper"
+              data-testid="header-own-avatar"
             />
           </Link>
         </div>
@@ -316,6 +331,7 @@ function LayoutInner({ children }: LayoutProps) {
         <main className="flex-1 min-h-0 max-lg:pt-[var(--mobile-header-height)] max-lg:pb-[var(--mobile-tab-bar-height)] lg:pb-0">
           <LocationPresenceStrip />
           <ProfileDepthStrip />
+          <PushAlertBanner />
           <div className="page-enter h-full min-h-0">{children}</div>
         </main>
 
@@ -323,30 +339,46 @@ function LayoutInner({ children }: LayoutProps) {
           className="lg:hidden fixed bottom-0 left-0 right-0 z-50 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] pt-2"
           aria-label="Primary"
         >
-          <div className="flex items-stretch rounded-[1.35rem] border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-elevated)_95%,transparent)] shadow-[var(--shadow-lg)] backdrop-blur-xl">
+          <div
+            className={`flex items-stretch rounded-[1.35rem] border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-elevated)_95%,transparent)] shadow-[var(--shadow-lg)] backdrop-blur-xl ${
+              mobileTabs.length >= 5 ? 'px-0.5' : ''
+            }`}
+          >
             {mobileTabs.map((item) => {
               const active = isNavActive(location.pathname, item.to);
               const badge = badgeFor(item, unreadCount, notificationUnread, matchCount);
+              const compact = mobileTabs.length >= 5;
               return (
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={`relative flex flex-1 flex-col items-center justify-center gap-1 py-2.5 transition-all duration-200 first:rounded-l-[1.25rem] last:rounded-r-[1.25rem] ${
+                  data-testid={`mobile-nav-${item.to.replace(/\//g, '') || 'home'}`}
+                  className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 transition-all duration-200 first:rounded-l-[1.25rem] last:rounded-r-[1.25rem] ${
+                    compact ? 'py-2' : 'gap-1 py-2.5'
+                  } ${
                     active
                       ? 'text-[var(--copper)] bg-[var(--copper)]/10'
                       : 'text-[var(--cream-muted)] active:scale-95'
                   }`}
                 >
                   <span className="relative inline-flex">
-                    <item.Icon size={22} className={active ? 'scale-110' : ''} />
+                    <item.Icon size={compact ? 20 : 22} className={active ? 'scale-110' : ''} />
                     <NotificationDot
                       count={badge}
                       visible={badge > 0}
-                      data-testid={`badge-mobile-${item.to.replace(/\//g, '')}`}
+                      data-testid={
+                        item.to === '/conversations'
+                          ? 'badge-conversations'
+                          : `badge-mobile-${item.to.replace(/\//g, '')}`
+                      }
                       className="-top-2 -right-2.5 min-w-[16px] h-[16px] text-[9px] bg-[var(--copper)] border-[var(--bg-elevated)]"
                     />
                   </span>
-                  <span className="text-[9px] font-bold leading-none tracking-wide">
+                  <span
+                    className={`font-bold leading-none tracking-wide ${
+                      compact ? 'text-[8px]' : 'text-[9px]'
+                    }`}
+                  >
                     {item.shortLabel ?? item.label}
                   </span>
                 </Link>
@@ -360,14 +392,25 @@ function LayoutInner({ children }: LayoutProps) {
                 aria-haspopup="true"
                 aria-expanded={moreMenuOpen}
                 data-testid="mobile-more-tab"
-                className={`relative flex flex-1 flex-col items-center justify-center gap-1 py-2.5 transition-all duration-200 first:rounded-l-[1.25rem] last:rounded-r-[1.25rem] ${
+                className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 transition-all duration-200 first:rounded-l-[1.25rem] last:rounded-r-[1.25rem] ${
+                  mobileTabs.length >= 5 ? 'py-2' : 'gap-1 py-2.5'
+                } ${
                   isMoreActive || moreMenuOpen
                     ? 'text-[var(--copper)] bg-[var(--copper)]/10'
                     : 'text-[var(--cream-muted)] active:scale-95'
                 }`}
               >
-                <IconMore size={22} className={isMoreActive || moreMenuOpen ? 'scale-110' : ''} />
-                <span className="text-[9px] font-bold leading-none tracking-wide">More</span>
+                <IconMore
+                  size={mobileTabs.length >= 5 ? 20 : 22}
+                  className={isMoreActive || moreMenuOpen ? 'scale-110' : ''}
+                />
+                <span
+                  className={`font-bold leading-none tracking-wide ${
+                    mobileTabs.length >= 5 ? 'text-[8px]' : 'text-[9px]'
+                  }`}
+                >
+                  More
+                </span>
               </button>
             ) : null}
           </div>
@@ -381,6 +424,49 @@ function LayoutInner({ children }: LayoutProps) {
       </div>
 
       <ProfileSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
+
+      {signOutConfirmOpen ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4"
+          role="presentation"
+          onClick={() => setSignOutConfirmOpen(false)}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="sign-out-confirm-title"
+            aria-describedby="sign-out-confirm-desc"
+            data-testid="sign-out-confirm"
+            className="w-full max-w-sm rounded-2xl border border-nn-border bg-nn-bg p-5 shadow-[var(--shadow-lg)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="sign-out-confirm-title" className="text-lg font-extrabold text-nn-text">
+              Sign out?
+            </h2>
+            <p id="sign-out-confirm-desc" className="mt-2 text-sm leading-relaxed text-nn-muted">
+              You will need to sign in again to use MenRush on this device.
+            </p>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                data-testid="sign-out-cancel"
+                onClick={() => setSignOutConfirmOpen(false)}
+                className="rounded-full border border-nn-border px-4 py-2 text-sm font-bold text-nn-muted transition-colors hover:text-nn-text"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                data-testid="sign-out-confirm-btn"
+                onClick={confirmSignOut}
+                className="rounded-full bg-[#B0432E] px-4 py-2 text-sm font-extrabold text-white transition-opacity hover:opacity-90"
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
   ResetPasswordInput,
   ChangePasswordInput,
   ChangeEmailInput,
+  DeleteAccountInput,
 } from '../types/validation';
 import { sendTransactionalEmail } from './mailer.service';
 import {
@@ -16,7 +17,16 @@ import {
   transactionalParagraph,
 } from './transactional-email.template';
 import { v4 as uuidv4 } from 'uuid';
-import { inviteCodeService, isInviteRequired } from './invite-code.service';
+import { inviteCodeService } from './invite-code.service';
+import {
+  isSharedPrideCode,
+  personalPrideExpiredMessage,
+  promoService,
+  SHARED_PRIDE_EXPIRED_MESSAGE,
+} from './promo.service';
+import { assertPrideInviteEmailMatch } from './prideInvite.service';
+import { ageFromDateOfBirth } from '../lib/age';
+import { premiumService } from './premium.service';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable is required');
@@ -105,11 +115,65 @@ export const authService = {
     const id = uuidv4();
     const hashedPassword = await bcryptjs.hash(data.password, 10);
     const inviteCode = data.invite_code?.trim();
+    const promoCode = data.promo_code?.trim();
+    const usingSharedPride = !!(promoCode && isSharedPrideCode(promoCode));
+    const usingPersonalPride = !!(promoCode && !isSharedPrideCode(promoCode));
 
-    if (isInviteRequired()) {
-      if (!inviteCode) {
-        throw new Error('A beta invite code is required to create an account.');
+    let prideInviteMonths: number | null = null;
+    if (inviteCode) {
+      prideInviteMonths = await inviteCodeService.getPrideMonths(inviteCode);
+      if (prideInviteMonths) {
+        await assertPrideInviteEmailMatch(inviteCode, data.email);
+        if (usingSharedPride || usingPersonalPride) {
+          throw new Error(
+            'This Pride invite already books Premium. Clear the promo code field — do not stack.',
+          );
+        }
       }
+    }
+
+    if (usingSharedPride) {
+      const prideCheck = await promoService.validateSharedPride(promoCode!, data.email);
+      if (!prideCheck.valid) {
+        if (prideCheck.reason === 'expired') {
+          throw new Error(SHARED_PRIDE_EXPIRED_MESSAGE);
+        }
+        if (prideCheck.reason === 'already_redeemed') {
+          throw new Error('This Pride promo has already been used for this email.');
+        }
+        if (prideCheck.reason === 'other_pride_path') {
+          throw new Error(
+            'This email already has a Pride path. Enter that invite or personal code instead — do not stack with PRIDE 3MONTH FREE.',
+          );
+        }
+        throw new Error('This promo code is not valid.');
+      }
+    } else if (usingPersonalPride) {
+      const personalCheck = await promoService.validate(promoCode!, data.email);
+      if (!personalCheck.valid) {
+        if (personalCheck.reason === 'email_mismatch') {
+          throw new Error('This Pride code is locked to a different email address.');
+        }
+        if (personalCheck.reason === 'expired') {
+          throw new Error(personalPrideExpiredMessage(personalCheck.expiresAt));
+        }
+        if (personalCheck.reason === 'already_redeemed') {
+          throw new Error('This Pride promo code has already been used.');
+        }
+        throw new Error('This promo code is not valid.');
+      }
+      if (
+        (await promoService.emailHasPublicPrideRedeem(data.email)) ||
+        (await promoService.emailHasPrideInviteRedeem(data.email))
+      ) {
+        throw new Error(
+          'This email already has a Pride Premium grant. The code cannot be stacked.',
+        );
+      }
+    }
+
+    // Invite is optional (product lock 31 Aug 2026). When provided it must be valid.
+    if (inviteCode) {
       const check = await inviteCodeService.validate(inviteCode);
       if (!check.valid) {
         throw new Error('This invite code is invalid or has already been used.');
@@ -121,30 +185,44 @@ export const authService = {
     // retained only for local identity-flow fixtures.
     const autoVerify = process.env.DEV_AUTO_VERIFY === 'true';
 
+    let age = data.age;
+    let dateOfBirth: string | null = data.date_of_birth ?? null;
+    if (dateOfBirth) {
+      try {
+        age = ageFromDateOfBirth(dateOfBirth);
+      } catch {
+        throw new Error('Enter a valid date of birth.');
+      }
+    }
+    if (age < 18) {
+      throw new Error('You must be 18 or older to join MenRush.');
+    }
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
       // 18+ enforced by Zod (age min 18). Default shared avatar so new men
       // are not invisible on Discover until they upload a photo.
-      if (data.age < 18) {
+      if (age < 18) {
         throw new Error('You must be 18 or older to join MenRush.');
       }
-      const defaultAvatar = defaultGenericAvatarUrl(data.age);
+      const defaultAvatar = defaultGenericAvatarUrl(age);
 
       const result = await client.query(
         `INSERT INTO users (
-           id, email, password_hash, name, age, photo_url,
+           id, email, password_hash, name, age, date_of_birth, photo_url,
            is_verified, verification_status, age_assurance_status
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'self_attested')
-         RETURNING id, email, name, age, photo_url, is_verified, verification_status,
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'self_attested')
+         RETURNING id, email, name, age, date_of_birth, photo_url, is_verified, verification_status,
                    age_assurance_status, authenticity_status`,
         [
           id,
           data.email,
           hashedPassword,
           data.name,
-          data.age,
+          age,
+          dateOfBirth,
           defaultAvatar,
           autoVerify,
           autoVerify ? 'verified' : 'unverified',
@@ -153,8 +231,45 @@ export const authService = {
 
       const user = result.rows[0];
 
-      if (isInviteRequired() && inviteCode) {
+      if (inviteCode) {
         await inviteCodeService.redeemForRegistration(inviteCode, user.id, client);
+      }
+
+      // Redeem inside the same transaction so a failed Pride grant rolls back
+      // registration and the error is returned to the client (not silent).
+      if (prideInviteMonths) {
+        // Entering the Pride-flagged invite NOW books Premium. No second entry at launch.
+        await promoService.bookPrideInviteGrant(
+          data.email,
+          user.id,
+          prideInviteMonths,
+          client,
+        );
+      } else if (usingSharedPride) {
+        await promoService.redeemSharedPride(promoCode!, data.email, user.id, client);
+      } else if (usingPersonalPride) {
+        await promoService.redeemPersonalPride(promoCode!, data.email, user.id, client);
+      } else {
+        // Terms 7.2 waitlist gift: 30 days Premium before 1 Oct 2026 UK.
+        // Pride replaces this gift — do not stack.
+        await premiumService.grantWaitlistGift(user.id, client);
+      }
+
+      // Refresh entitlements after Pride or waitlist gift.
+      {
+        const refreshed = await client.query(
+          `SELECT id, email, name, age, date_of_birth, photo_url, is_verified, verification_status,
+                  age_assurance_status, authenticity_status,
+                  COALESCE(is_premium, FALSE) AS is_premium,
+                  COALESCE(premium_tier, 'free') AS premium_tier,
+                  premium_until,
+                  premium_starts_at
+           FROM users WHERE id = $1`,
+          [user.id],
+        );
+        if (refreshed.rows[0]) {
+          Object.assign(user, refreshed.rows[0]);
+        }
       }
 
       await client.query('COMMIT');
@@ -547,5 +662,31 @@ export const authService = {
     );
 
     return { ok: true, email: data.new_email };
+  },
+
+  async deleteAccount(userId: string, data: DeleteAccountInput) {
+    const result = await query(`SELECT password_hash, email FROM users WHERE id = $1`, [userId]);
+    if (result.rows.length === 0) {
+      throw new Error('User not found');
+    }
+
+    const valid = await bcryptjs.compare(data.current_password, result.rows[0].password_hash);
+    if (!valid) {
+      throw new Error('Current password is incorrect');
+    }
+
+    if (data.confirmation !== 'DELETE') {
+      throw new Error('Type DELETE to confirm account deletion');
+    }
+
+    try {
+      const { trustedDeviceService } = await import('./trusted-device.service');
+      await trustedDeviceService.revokeAll(userId);
+    } catch {
+      /* best-effort */
+    }
+
+    await query(`DELETE FROM users WHERE id = $1`, [userId]);
+    return { ok: true };
   },
 };

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { syncLocaleCoords } from '../lib/localeUnits';
+import { applyLiveUpsert } from '../lib/notificationToasts';
 
 interface User {
   id: string;
@@ -11,8 +12,9 @@ interface User {
   is_verified?: boolean;
   verification_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
   is_premium?: boolean;
-  beta_premium_included?: boolean;
   premium_tier?: 'free' | 'premium' | 'premium_plus';
+  /** True when open-beta Premium entitlement is active for this user. */
+  beta_premium_included?: boolean;
 }
 
 interface AuthState {
@@ -78,6 +80,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.removeItem('token');
     localStorage.removeItem('refresh_token');
     set({ user: null, token: null, refreshToken: null });
+    // Private notification content (message previews, etc.) must not linger
+    // in memory once logged out — ToastNotifications is unmounted by the
+    // token gate in App.tsx, but the store itself can still be read elsewhere.
+    useNotificationStore.getState().resetNotifications();
   },
 }));
 
@@ -209,8 +215,14 @@ interface NotificationState {
   notifications: Notification[];
   unreadCount: number;
   loadError: string | null;
+  /** True after the first successful (or intentional empty) server pull this session. */
+  serverSynced: boolean;
+  /** Live socket events queued for toast UI — never filled by setFromServer backfill. */
+  pendingToasts: Notification[];
   setFromServer: (notifications: Notification[], unreadCount: number) => void;
+  resetNotifications: () => void;
   upsertNotification: (notification: Notification) => void;
+  dismissToast: (id: string) => void;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   deleteNotification: (id: string) => void;
@@ -223,22 +235,36 @@ export const useNotificationStore = create<NotificationState>((set) => ({
   notifications: [],
   unreadCount: 0,
   loadError: null,
+  serverSynced: false,
+  pendingToasts: [],
+  // Backfill / poll: badge + list only. Never enqueue toasts.
   setFromServer: (notifications, unreadCount) =>
-    set({ notifications, unreadCount, loadError: null }),
+    set({ notifications, unreadCount, loadError: null, serverSynced: true }),
+  resetNotifications: () =>
+    set({
+      notifications: [],
+      unreadCount: 0,
+      loadError: null,
+      serverSynced: false,
+      pendingToasts: [],
+    }),
   upsertNotification: (notification) =>
     set((s) => {
-      const exists = s.notifications.some((n) => n.id === notification.id);
-      const notifications = [
+      const next = applyLiveUpsert(
+        {
+          notifications: s.notifications,
+          unreadCount: s.unreadCount,
+          serverSynced: s.serverSynced,
+          pendingToasts: s.pendingToasts,
+        },
         notification,
-        ...s.notifications.filter((n) => n.id !== notification.id),
-      ].slice(0, 100);
-      let unreadCount = s.unreadCount;
-      if (!exists && !notification.read) unreadCount += 1;
-      if (exists) {
-        unreadCount = notifications.filter((n) => !n.read).length;
-      }
-      return { notifications, unreadCount };
+      );
+      return next;
     }),
+  dismissToast: (id) =>
+    set((s) => ({
+      pendingToasts: s.pendingToasts.filter((t) => t.id !== id),
+    })),
   markAsRead: (id) =>
     set((s) => {
       const target = s.notifications.find((n) => n.id === id);
@@ -246,12 +272,14 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       return {
         notifications: s.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
         unreadCount: Math.max(0, s.unreadCount - 1),
+        pendingToasts: s.pendingToasts.filter((t) => t.id !== id),
       };
     }),
   markAllAsRead: () =>
     set((s) => ({
       notifications: s.notifications.map((n) => ({ ...n, read: true })),
       unreadCount: 0,
+      pendingToasts: [],
     })),
   deleteNotification: (id) =>
     set((s) => {
@@ -260,6 +288,7 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       return {
         notifications: s.notifications.filter((n) => n.id !== id),
         unreadCount: target.read ? s.unreadCount : Math.max(0, s.unreadCount - 1),
+        pendingToasts: s.pendingToasts.filter((t) => t.id !== id),
       };
     }),
   deleteAllRead: () =>

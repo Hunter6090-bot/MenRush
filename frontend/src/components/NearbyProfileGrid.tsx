@@ -1,13 +1,24 @@
 import type { NearbyUser } from './ProfileCard';
 import { SilhouetteAvatar } from './SilhouetteAvatar';
 import { VerifiedBadge } from './VerifiedBadge';
-import { useResolvingPhotoSrc } from './UserAvatar';
+import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { formatActiveStatus, formatDistanceMiles, getTribeTag } from '../lib/discoveryFormat';
+import {
+  PROFILE_TILE_GRID_CLASS,
+  PROFILE_TILE_SKELETON_CLASS,
+} from '../lib/profileTileGrid';
+import { useGridPhotoSrc, clearGridPhotoQueue } from '../lib/nearbyPhotoSrc';
+import { Link } from 'react-router-dom';
+import { useEffect } from 'react';
 
 interface NearbyProfileGridProps {
   users: NearbyUser[];
   loading: boolean;
-  onSelect: (user: NearbyUser) => void;
+  /**
+   * Optional legacy callback. When omitted, photo taps navigate via ProfilePhotoLink
+   * (self → /profile, else → /profile/:id).
+   */
+  onSelect?: (user: NearbyUser) => void;
   /** One-tap match without opening the drawer — primary engagement path. */
   onMatch?: (user: NearbyUser) => void | Promise<void>;
   likedUserIds?: Set<string>;
@@ -21,6 +32,8 @@ interface NearbyProfileGridProps {
   /** Turn on Pulse to become more visible when density is empty. */
   onStartPulse?: () => void;
   pulseOn?: boolean;
+  /** When set, empty-state Pulse CTA stays clickable but explains the block. */
+  pulseBlockedReason?: string | null;
   /** Venue check-ins when the map is quiet. */
   onOpenHotSpots?: () => void;
   radiusLabel?: string;
@@ -40,18 +53,23 @@ export function NearbyProfileGrid({
   onFinishProfile,
   onStartPulse,
   pulseOn,
+  pulseBlockedReason,
   onOpenHotSpots,
   radiusLabel,
   beyondRadiusCount = 0,
 }: NearbyProfileGridProps) {
+  useEffect(() => {
+    clearGridPhotoQueue();
+  }, []);
+
   if (loading && users.length === 0) {
     return (
       <div
-        className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3 lg:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] lg:gap-3.5"
+        className={PROFILE_TILE_GRID_CLASS}
         data-testid="nearby-profile-grid-loading"
       >
         {[...Array(6)].map((_, i) => (
-          <div key={i} className="aspect-square animate-pulse rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]" />
+          <div key={i} className={PROFILE_TILE_SKELETON_CLASS} />
         ))}
       </div>
     );
@@ -100,10 +118,35 @@ export function NearbyProfileGrid({
               type="button"
               onClick={onStartPulse}
               data-testid="empty-start-pulse"
-              className="min-h-[44px] rounded-full border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.15)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.28)]"
+              aria-label={
+                pulseBlockedReason
+                  ? `Start Pulse unavailable: ${pulseBlockedReason}`
+                  : 'Start Pulse'
+              }
+              title={pulseBlockedReason ?? 'Start Pulse'}
+              className={`min-h-[44px] rounded-full border px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide transition-colors ${
+                pulseBlockedReason
+                  ? 'border-[rgba(196,131,42,0.35)] bg-[rgba(196,131,42,0.08)] text-[rgba(196,131,42,0.75)] hover:bg-[rgba(196,131,42,0.16)]'
+                  : 'border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.22)] text-[#E0A14A] hover:bg-[rgba(196,131,42,0.35)]'
+              }`}
             >
               Start Pulse
             </button>
+          ) : null}
+          {onStartPulse && !pulseOn && pulseBlockedReason ? (
+            <p
+              className="basis-full text-[12px] leading-relaxed text-[var(--cream-muted)]"
+              data-testid="empty-pulse-blocked"
+            >
+              {pulseBlockedReason}{' '}
+              <Link
+                to="/premium"
+                className="font-bold text-[#C4832A] underline-offset-2 hover:underline"
+              >
+                MenRush+
+              </Link>{' '}
+              for unlimited pulses.
+            </p>
           ) : null}
           {onOpenHotSpots ? (
             <button
@@ -112,7 +155,7 @@ export function NearbyProfileGrid({
               data-testid="empty-hot-spots"
               className="min-h-[44px] rounded-full border border-[rgba(196,131,42,0.5)] bg-transparent px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
             >
-              Hot Spots
+              Cruise
             </button>
           ) : null}
           {onFinishProfile ? (
@@ -135,11 +178,10 @@ export function NearbyProfileGrid({
     );
   }
 
-  // Keep cards compact as the viewport grows: narrow phones naturally show two,
-  // while wider phones and tablets gain more columns instead of oversized cards.
+  // Phone: 3 cols (Brand lock). Tablet md+: denser auto-fill so iPad is not two giant squares.
   return (
     <div
-      className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3 lg:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] lg:gap-3.5"
+      className={PROFILE_TILE_GRID_CLASS}
       data-testid="nearby-profile-grid"
     >
       {users.map((user) => {
@@ -150,45 +192,31 @@ export function NearbyProfileGrid({
         return (
           <div
             key={user.id}
-            className="group relative overflow-hidden rounded-2xl border border-nn-border bg-nn-card text-left shadow-card transition-all hover:-translate-y-[3px] hover:border-[rgba(196,131,42,0.4)]"
+            className="group relative overflow-hidden rounded-xl border border-nn-border bg-nn-card text-left shadow-card transition-all hover:-translate-y-[3px] hover:border-[rgba(196,131,42,0.4)] md:rounded-2xl"
             data-testid="nearby-grid-card"
           >
-            <button
-              type="button"
-              onClick={() => onSelect(user)}
-              className="block w-full text-left"
-              aria-label={`Open profile for ${user.name}`}
-            >
-              <div className="relative aspect-square w-full bg-[var(--bg-elevated)]">
-                <GridPhoto
-                  name={user.name}
-                  photoUrl={user.photo_url}
-                  age={user.age}
-                />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent px-2.5 pb-2 pt-10">
-                  <div className="flex items-center gap-1">
-                    <span
-                      className={`h-2 w-2 shrink-0 rounded-full ${user.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
-                    />
-                    {/* Fixed light cream on photo gradient — theme tokens invert in light mode */}
-                    <span className="truncate text-[14px] font-bold text-[#FFF6E6]">
-                      {user.name}{user.age != null ? ` ${user.age}` : ''}
-                    </span>
-                    {user.is_verified ? <VerifiedBadge size="sm" /> : null}
-                  </div>
-                  <p className="mt-0.5 truncate text-[11px] font-semibold text-[var(--cream)]">
-                    {meta}
-                  </p>
-                  {user.looking_for ? (
-                    <p className="mt-0.5 truncate text-[10px] font-bold text-[#E0A14A]">
-                      {user.looking_for}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-            </button>
+            {onSelect ? (
+              <button
+                type="button"
+                onClick={() => onSelect(user)}
+                className="block w-full text-left"
+                aria-label={`Open profile for ${user.name}`}
+                data-testid={`nearby-grid-photo-${user.id}`}
+              >
+                <GridCardFace user={user} meta={meta} />
+              </button>
+            ) : (
+              <ProfilePhotoLink
+                userId={user.id}
+                name={user.name}
+                className="block w-full text-left"
+                data-testid={`nearby-grid-photo-${user.id}`}
+              >
+                <GridCardFace user={user} meta={meta} />
+              </ProfilePhotoLink>
+            )}
             {onMatch ? (
-              <div className="border-t border-[var(--border-default)] p-1.5">
+              <div className="border-t border-[var(--border-default)] p-1 md:p-1.5">
                 <button
                   type="button"
                   disabled={matching}
@@ -197,7 +225,7 @@ export function NearbyProfileGrid({
                     e.stopPropagation();
                     void onMatch(user);
                   }}
-                  className={`w-full rounded-xl py-2 text-[11px] font-extrabold uppercase tracking-wide transition-colors disabled:opacity-60 ${
+                  className={`w-full rounded-lg py-1.5 text-[10px] font-extrabold uppercase tracking-wide transition-colors disabled:opacity-60 md:rounded-xl md:py-2 md:text-[11px] ${
                     mutual
                       ? 'border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] text-[#E0A14A]'
                       : liked
@@ -205,13 +233,36 @@ export function NearbyProfileGrid({
                         : 'bg-[#C4832A] text-[#1A0E03] hover:bg-[#E0A14A]'
                   }`}
                 >
-                  {matching ? 'Sending…' : mutual ? 'Open chat' : liked ? 'Match sent' : 'Match'}
+                  {matching ? 'Sending…' : mutual ? 'Open chat' : liked ? 'Matched' : 'Match'}
                 </button>
               </div>
             ) : null}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function GridCardFace({ user, meta }: { user: NearbyUser; meta: string }) {
+  return (
+    <div className="relative aspect-square w-full bg-[var(--bg-elevated)]">
+      <GridPhoto name={user.name} photoUrl={user.photo_url} age={user.age} />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent px-1.5 pb-1.5 pt-8 md:px-2.5 md:pb-2 md:pt-10">
+        <div className="flex items-center gap-0.5 md:gap-1">
+          <span
+            className={`h-1.5 w-1.5 shrink-0 rounded-full md:h-2 md:w-2 ${user.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
+          />
+          <span className="truncate text-[11px] font-bold leading-tight text-[#FFF6E6] md:text-[12px] lg:text-[13px]">
+            {user.name} {user.age}
+          </span>
+          {user.is_verified ? <VerifiedBadge size="sm" /> : null}
+        </div>
+        <p className="mt-0.5 truncate text-[9px] font-semibold text-[var(--cream)] md:text-[11px]">{meta}</p>
+        {user.looking_for ? (
+          <p className="mt-0.5 truncate text-[9px] font-bold text-[#E0A14A] md:text-[10px]">{user.looking_for}</p>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -224,14 +275,14 @@ function GridPhoto({
   name: string;
   photoUrl?: string;
   age?: number;
-  resolved?: string;
 }) {
-  const { src, onError } = useResolvingPhotoSrc(photoUrl, age);
+  // Phone path: display API when live, else fetch+downscale — never leave blank tiles.
+  const { src, phase } = useGridPhotoSrc(photoUrl, age);
 
-  if (!src) {
+  if (phase === 'loading' || !src) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <SilhouetteAvatar size={80} variant="card" />
+      <div className="flex h-full items-center justify-center" data-testid="nearby-photo-loading">
+        <SilhouetteAvatar size={56} variant="card" />
       </div>
     );
   }
@@ -241,8 +292,9 @@ function GridPhoto({
       src={src}
       alt={name}
       className="h-full w-full object-cover"
-      loading="lazy"
-      onError={onError}
+      decoding="async"
+      data-testid="nearby-profile-photo"
+      data-photo-phase={phase}
     />
   );
 }

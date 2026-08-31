@@ -24,6 +24,28 @@ export function profilePath(id: string): string {
   return `/profile/${id}`;
 }
 
+/** Own profile editor; everyone else uses ProfileView at /profile/:id. */
+export const OWN_PROFILE_PATH = '/profile';
+
+export function isOwnProfileId(
+  userId: string | null | undefined,
+  currentUserId: string | null | undefined,
+): boolean {
+  return Boolean(userId && currentUserId && userId === currentUserId);
+}
+
+/**
+ * Product rule: tap a face/photo/avatar → own profile editor for self,
+ * otherwise ProfileView for that user.
+ */
+export function profilePathForUser(
+  userId: string,
+  currentUserId?: string | null,
+): string {
+  if (isOwnProfileId(userId, currentUserId)) return OWN_PROFILE_PATH;
+  return profilePath(userId);
+}
+
 export function profileShareBase(): string {
   const configured = String(import.meta.env.VITE_PUBLIC_APP_URL || '').trim().replace(/\/$/, '');
   if (configured) return configured;

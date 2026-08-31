@@ -1,10 +1,14 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import {
-  AGE_PRESETS,
-  DISCOVERY_FILTER_CATEGORIES,
+  AGE_SELECT_OPTIONS,
+  DEFAULT_DISCOVERY_FILTERS,
   MOOD_FILTER_OPTIONS,
+  PRIMARY_DISCOVERY_FILTER_CATEGORIES,
   STATUS_FILTER_OPTIONS,
   countActiveDiscoveryFilters,
+  hasActiveAgeFilter,
+  withAgeFrom,
+  withAgeTo,
   type DiscoveryFilterState,
 } from '../lib/discoveryFilters';
 
@@ -27,7 +31,7 @@ export function DiscoveryFilterPanel({
   className = '',
 }: DiscoveryFilterPanelProps) {
   const [open, setOpen] = useState(variant === 'inline');
-  const [activeCategory, setActiveCategory] = useState<string>(DISCOVERY_FILTER_CATEGORIES[0].id);
+  const [activeCategory, setActiveCategory] = useState<string>(PRIMARY_DISCOVERY_FILTER_CATEGORIES[0].id);
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const activeCount = countActiveDiscoveryFilters(value);
@@ -62,16 +66,13 @@ export function DiscoveryFilterPanel({
   };
 
   const clearAll = () => {
-    onChange({
-      intent: 'All',
-      interests: [],
-      agePreset: 'any',
-      status: [],
-      mood: undefined,
-    });
+    onChange({ ...DEFAULT_DISCOVERY_FILTERS });
   };
 
-  const category = DISCOVERY_FILTER_CATEGORIES.find((c) => c.id === activeCategory);
+  const category = PRIMARY_DISCOVERY_FILTER_CATEGORIES.find((c) => c.id === activeCategory);
+
+  const ageSelectClass =
+    'min-w-[4.5rem] rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)]/70 px-2.5 py-2 text-sm font-semibold text-[var(--cream)] outline-none focus:border-[var(--copper)]';
 
   return (
     <div ref={rootRef} className={`relative ${className}`} data-testid="discovery-filter-panel">
@@ -120,7 +121,7 @@ export function DiscoveryFilterPanel({
           }
         >
           <div className="flex gap-1 overflow-x-auto border-b border-[var(--border-default)] px-2 py-2">
-            {DISCOVERY_FILTER_CATEGORIES.map((cat) => {
+            {PRIMARY_DISCOVERY_FILTER_CATEGORIES.map((cat) => {
               const selectedInCategory =
                 cat.id === 'looking_for'
                   ? value.intent !== 'All'
@@ -152,7 +153,7 @@ export function DiscoveryFilterPanel({
                   : 'bg-[var(--bg-primary)]/60 text-[var(--cream-muted)] hover:text-[var(--cream)]'
               }`}
             >
-              Age{value.agePreset !== 'any' ? ' · 1' : ''}
+              Age{hasActiveAgeFilter(value) ? ' · 1' : ''}
             </button>
             <button
               type="button"
@@ -180,18 +181,45 @@ export function DiscoveryFilterPanel({
 
           <div className="max-h-[min(40vh,280px)] overflow-y-auto px-3 py-3">
             {activeCategory === 'age' ? (
-              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Age range">
-                {AGE_PRESETS.map((preset) => (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    aria-pressed={value.agePreset === preset.id}
-                    onClick={() => onChange({ ...value, agePreset: preset.id })}
-                    className={pillClass(value.agePreset === preset.id)}
+              <div
+                className="flex flex-wrap items-end gap-3"
+                data-testid="discovery-age-filters"
+                role="group"
+                aria-label="Age range"
+              >
+                <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--cream-muted)]">
+                  From
+                  <select
+                    value={value.ageFrom}
+                    data-testid="age-from"
+                    aria-label="From age"
+                    onChange={(event) => onChange(withAgeFrom(value, Number.parseInt(event.target.value, 10)))}
+                    className={ageSelectClass}
                   >
-                    {preset.label}
-                  </button>
-                ))}
+                    {AGE_SELECT_OPTIONS.map((age) => (
+                      <option key={`from-${age}`} value={age}>
+                        {age}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <span className="pb-2.5 text-xs text-[var(--cream-muted)]">–</span>
+                <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--cream-muted)]">
+                  To
+                  <select
+                    value={value.ageTo}
+                    data-testid="age-to"
+                    aria-label="To age"
+                    onChange={(event) => onChange(withAgeTo(value, Number.parseInt(event.target.value, 10)))}
+                    className={ageSelectClass}
+                  >
+                    {AGE_SELECT_OPTIONS.map((age) => (
+                      <option key={`to-${age}`} value={age}>
+                        {age}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
             ) : null}
 

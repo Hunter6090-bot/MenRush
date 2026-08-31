@@ -3,16 +3,17 @@ import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
-import { albumService, FREE_PHOTO_CAP } from '../services/album.service';
+import { albumService, FREE_PHOTO_CAP, PhotoVisibility } from '../services/album.service';
 import { premiumService } from '../services/premium.service';
 import { SecurityError } from '../security/access';
 import { resolveMediaPath, verifyMediaAccess } from '../security/media';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
-import { CreateAlbumSchema, GrantAlbumSchema } from '../types/validation';
+import { CreateAlbumSchema, GrantAlbumSchema, PhotoVisibilitySchema } from '../types/validation';
+import { getUploadSubdir } from '../lib/uploads-root';
 
 const router = Router();
 
-const uploadsDir = path.resolve(__dirname, '../../uploads/albums');
+const uploadsDir = getUploadSubdir('albums');
 fs.mkdirSync(uploadsDir, { recursive: true });
 
 const upload = multer({
@@ -35,8 +36,10 @@ router.get('/media/:photoId', async (req, res) => {
     const resource = `/api/albums/media/${req.params.photoId}`;
     const grant = verifyMediaAccess(String(req.query.access || ''), resource);
     const media = await albumService.getMedia(grant.viewerId, req.params.photoId);
+    const mediaClear = await albumService.viewerMediaClear(grant.viewerId, media.ownerId);
     res.type(media.mimeType);
     res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-MenRush-Media-Clear', mediaClear ? '1' : '0');
     return res.sendFile(resolveMediaPath(uploadsDir, media.storageKey));
   } catch (error) {
     if (error instanceof SecurityError) {
@@ -48,14 +51,26 @@ router.get('/media/:photoId', async (req, res) => {
 
 router.use(authMiddleware, verifiedMiddleware);
 
-// ── Owner: list my albums ───────────────────────────────────────────────────
+// ── Owner: My Photos library ────────────────────────────────────────────────
 router.get('/mine', async (req: AuthRequest, res: Response) => {
   try {
-    const albums = await albumService.listAlbumsForOwner(req.userId!);
-    const totalPhotos = await albumService.countPhotosForUser(req.userId!);
-    res.json({ albums, photo_total: totalPhotos, free_cap: FREE_PHOTO_CAP });
+    const library = await albumService.getOwnerLibrary(req.userId!);
+    res.json(library);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// View-once open — registered before /:albumId routes.
+router.post('/photos/:photoId/open', async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await albumService.recordPhotoOpen(req.userId!, req.params.photoId);
+    res.json(result);
+  } catch (error: any) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.code });
+    }
+    res.status(404).json({ error: 'Photo not found.' });
   }
 });
 
@@ -92,6 +107,15 @@ router.post('/:albumId/upload', upload.single('photo'), async (req: AuthRequest,
     return res.status(400).json({ error: 'File content does not match its type' });
   }
 
+  const visibilityParsed = PhotoVisibilitySchema.safeParse(
+    typeof req.body?.visibility === 'string' ? req.body.visibility : 'private',
+  );
+  if (!visibilityParsed.success) {
+    try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+    return res.status(400).json({ error: 'Invalid visibility. Use public, view_once, or private.' });
+  }
+  const visibility: PhotoVisibility = visibilityParsed.data;
+
   // Free-tier cap check. If the user is hitting the cap, tell them so they can upgrade.
   // Premium gating is enforced by the frontend until CCBill entitlements are fully wired.
   const total = await albumService.countPhotosForUser(req.userId!);
@@ -104,11 +128,18 @@ router.post('/:albumId/upload', upload.single('photo'), async (req: AuthRequest,
   }
 
   try {
+    // Ensure uploads land on an album the owner controls; default private album when needed.
+    let albumId = req.params.albumId;
+    if (albumId === 'mine' || albumId === 'default') {
+      const album = await albumService.ensurePrivateAlbum(req.userId!);
+      albumId = album.id;
+    }
     const photo = await albumService.addPhoto(
       req.userId!,
-      req.params.albumId,
+      albumId,
       req.file.filename,
       req.file.mimetype,
+      visibility,
     );
     res.json(photo);
   } catch (error: any) {
@@ -170,6 +201,18 @@ router.get('/user/:userId', async (req: AuthRequest, res: Response) => {
 });
 
 // ── Grants ──────────────────────────────────────────────────────────────────
+router.get('/:albumId/grants', async (req: AuthRequest, res: Response) => {
+  try {
+    const viewers = await albumService.listGrantsForOwner(req.userId!, req.params.albumId);
+    res.json({ viewers });
+  } catch (error: any) {
+    if (error.message === 'album_not_owned') {
+      return res.status(404).json({ error: 'Album not found.' });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/:albumId/grant', async (req: AuthRequest, res: Response) => {
   const parsed = GrantAlbumSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
@@ -191,6 +234,30 @@ router.delete('/:albumId/grant/:viewerId', async (req: AuthRequest, res: Respons
   } catch (error: any) {
     if (error.message === 'album_not_owned') {
       return res.status(404).json({ error: 'Album not found.' });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Revoke all access — VIEWERS ONLY.
+ * Deletes grant rows. Photos stay on the owner's album. Discretion unchanged.
+ * Never a media wipe.
+ */
+router.delete('/:albumId/grants', async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await albumService.revokeAllAccess(req.userId!, req.params.albumId);
+    res.json({
+      revoked: true,
+      viewers_removed: result.revoked,
+      photo_count: result.photo_count,
+    });
+  } catch (error: any) {
+    if (error.message === 'album_not_owned') {
+      return res.status(404).json({ error: 'Album not found.' });
+    }
+    if (error.message === 'revoke_must_not_wipe_media') {
+      return res.status(500).json({ error: 'Revoke refused: photos must stay on the album.' });
     }
     res.status(500).json({ error: error.message });
   }

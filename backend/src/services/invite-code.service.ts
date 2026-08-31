@@ -31,8 +31,13 @@ export function generateInviteCodeValue(): { code: string; codeNormalized: strin
   };
 }
 
+/**
+ * Product lock 31 Aug 2026 (Brand / Zoul): open signup.
+ * `BETA_INVITE_REQUIRED` on Railway must not gate registration — invites stay
+ * optional and still redeem when provided.
+ */
 export function isInviteRequired(): boolean {
-  return process.env.BETA_INVITE_REQUIRED === 'true';
+  return false;
 }
 
 type InviteRow = {
@@ -115,6 +120,9 @@ export const inviteCodeService = {
     maxUses?: number;
     expiresInDays?: number;
     note?: string;
+    /** When set, this MENRUSH invite also books Pride Premium on redeem. */
+    prideMonthsFree?: number;
+    issuedEmail?: string;
   }): Promise<Array<{ code: string; code_normalized: string }>> {
     const count = Math.min(Math.max(options.count, 1), 500);
     const maxUses = Math.max(options.maxUses ?? 1, 1);
@@ -122,6 +130,9 @@ export const inviteCodeService = {
       options.expiresInDays && options.expiresInDays > 0
         ? new Date(Date.now() + options.expiresInDays * 24 * 60 * 60 * 1000)
         : null;
+    const prideMonths =
+      options.prideMonthsFree && options.prideMonthsFree > 0 ? options.prideMonthsFree : null;
+    const issuedEmail = options.issuedEmail?.trim().toLowerCase() || null;
 
     const created: Array<{ code: string; code_normalized: string }> = [];
 
@@ -130,9 +141,18 @@ export const inviteCodeService = {
         const { code, codeNormalized } = generateInviteCodeValue();
         try {
           await query(
-            `INSERT INTO beta_invite_codes (code, code_normalized, max_uses, expires_at, note)
-             VALUES ($1, $2, $3, $4, $5)`,
-            [code, codeNormalized, maxUses, expiresAt, options.note ?? null],
+            `INSERT INTO beta_invite_codes
+               (code, code_normalized, max_uses, expires_at, note, pride_months_free, issued_email)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+              code,
+              codeNormalized,
+              maxUses,
+              expiresAt,
+              options.note ?? null,
+              prideMonths,
+              issuedEmail,
+            ],
           );
           created.push({ code, code_normalized: codeNormalized });
           break;
@@ -145,6 +165,20 @@ export const inviteCodeService = {
     }
 
     return created;
+  },
+
+  /**
+   * Returns pride_months_free when this invite books Pride Premium on redeem.
+   */
+  async getPrideMonths(rawCode: string): Promise<number | null> {
+    const normalized = normalizeInviteCode(rawCode);
+    const result = await query(
+      `SELECT pride_months_free FROM beta_invite_codes WHERE code_normalized = $1`,
+      [normalized],
+    );
+    const months = (result.rows[0] as { pride_months_free: number | null } | undefined)
+      ?.pride_months_free;
+    return months && months > 0 ? months : null;
   },
 
   async listCodes(limit = 100): Promise<

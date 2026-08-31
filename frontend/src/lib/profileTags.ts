@@ -10,11 +10,16 @@ export const PROFILE_TAG_GROUPS = DISCOVERY_FILTER_CATEGORIES.map((category) => 
 export const PROFILE_LOOKING_FOR_TAGS =
   DISCOVERY_FILTER_CATEGORIES.find((c) => c.id === 'looking_for')?.tags.filter((t) => t !== 'All') ?? [];
 
+/** Short cue under each tag subsection heading. Periods, not dashes. */
+export function profileTagSelectHint(singleSelect: boolean): string {
+  return singleSelect ? 'Pick one.' : 'Pick several.';
+}
+
 export function toggleProfileInterest(
   interests: string[],
   tag: string,
   group: { tags: readonly string[]; singleSelect?: boolean },
-  maxTags = 10,
+  maxTags = 20,
 ): string[] {
   if (interests.includes(tag)) {
     return interests.filter((t) => t !== tag);

@@ -1,9 +1,9 @@
 import { expect, test, request as apiRequest, type BrowserContext } from '@playwright/test';
 import { TEST_PASSWORD, ALICE, BOB } from './test-accounts';
+import { PLAYWRIGHT_BASE_URL as BASE_URL } from './support/base-url';
 
 test.describe.configure({ mode: 'serial' });
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
 
 type LoginResult = {
   token: string;
@@ -176,16 +176,7 @@ async function setCallTimeout(context: BrowserContext, ms: number) {
 test('the caller sees a full-screen local preview with controls while ringing', async ({
   browser,
 }) => {
-  // Callee must have a live socket or the server rejects with target_offline.
-  const bobContext = await browser.newContext();
-  await authenticate(bobContext, bob);
-  const bobPage = await bobContext.newPage();
-  await bobPage.goto('/discover');
-  await expect(bobPage.getByTestId('discover-map-panel')).toBeVisible({ timeout: 20_000 });
-
-  const aliceContext = await browser.newContext({
-    permissions: ['microphone', 'camera'],
-  });
+  const aliceContext = await browser.newContext();
 
   await authenticate(aliceContext, alice);
   await installFakeMedia(aliceContext);
@@ -198,7 +189,7 @@ test('the caller sees a full-screen local preview with controls while ringing', 
 
   // Full-screen outgoing surface (not the small "Calling Bob" card).
   const surface = alicePage.getByTestId('outgoing-call');
-  await expect(surface).toBeVisible({ timeout: 15_000 });
+  await expect(surface).toBeVisible();
   await expect(surface.locator('video')).toBeAttached();
   await expect(alicePage.getByText('Calling Bob')).not.toBeVisible();
 
@@ -215,16 +206,9 @@ test('the caller sees a full-screen local preview with controls while ringing', 
   await expect(alicePage.getByTestId('call-tone')).toHaveAttribute('data-tone', 'outgoing');
 
   await aliceContext.close();
-  await bobContext.close();
 });
 
 test('an unanswered call ends instead of ringing forever', async ({ browser }) => {
-  const bobContext = await browser.newContext();
-  await authenticate(bobContext, bob);
-  const bobPage = await bobContext.newPage();
-  await bobPage.goto('/discover');
-  await expect(bobPage.getByTestId('discover-map-panel')).toBeVisible({ timeout: 20_000 });
-
   const aliceContext = await browser.newContext();
 
   await authenticate(aliceContext, alice);
@@ -246,7 +230,6 @@ test('an unanswered call ends instead of ringing forever', async ({ browser }) =
   await expect(alicePage.getByTestId('call-tone')).toHaveCount(0);
 
   await aliceContext.close();
-  await bobContext.close();
 });
 
 test('blocked media shows an error and never leaves a fake ringing state', async ({
@@ -288,22 +271,19 @@ test('an unanswered call times out and ends cleanly on both devices', async ({
   const alicePage = await aliceContext.newPage();
   const bobPage = await bobContext.newPage();
   await bobPage.goto('/discover');
-  await expect(bobPage.getByTestId('discover-map-panel')).toBeVisible({ timeout: 20_000 });
-  await bobPage.waitForTimeout(1500);
+  await expect(bobPage.getByRole('heading', { name: 'Nearby discovery map' })).toBeAttached();
   await alicePage.goto(`/messages/${bob.user.id}`);
   await expect(alicePage.getByRole('button', { name: /Open .*profile/i })).toBeVisible();
   await alicePage.getByRole('button', { name: 'Start video call' }).click();
 
-  const incoming = bobPage.getByText(/Incoming call/i);
-
   // Both ends are live: caller ringing, recipient ringing.
-  await expect(alicePage.getByTestId('outgoing-call')).toBeVisible({ timeout: 15_000 });
-  await expect(incoming).toBeVisible({ timeout: 15_000 });
+  await expect(alicePage.getByTestId('outgoing-call')).toBeVisible();
+  await expect(bobPage.getByText(/Incoming call/)).toBeVisible();
 
   // After the caller's timeout, both surfaces (and tones) tear down cleanly.
   await expect(alicePage.getByTestId('outgoing-call')).toBeHidden({ timeout: 8000 });
   await expect(alicePage.getByTestId('call-tone')).toHaveCount(0);
-  await expect(incoming).toBeHidden({ timeout: 8000 });
+  await expect(bobPage.getByText(/Incoming call/)).toBeHidden({ timeout: 8000 });
   await expect(bobPage.getByTestId('call-tone')).toHaveCount(0);
 
   await aliceContext.close();
@@ -311,12 +291,6 @@ test('an unanswered call times out and ends cleanly on both devices', async ({
 });
 
 test('cancelling the call stops the outgoing tone immediately', async ({ browser }) => {
-  const bobContext = await browser.newContext();
-  await authenticate(bobContext, bob);
-  const bobPage = await bobContext.newPage();
-  await bobPage.goto('/discover');
-  await expect(bobPage.getByTestId('discover-map-panel')).toBeVisible({ timeout: 20_000 });
-
   const aliceContext = await browser.newContext();
 
   await authenticate(aliceContext, alice);
@@ -328,7 +302,7 @@ test('cancelling the call stops the outgoing tone immediately', async ({ browser
   await alicePage.getByRole('button', { name: 'Start video call' }).click();
 
   const surface = alicePage.getByTestId('outgoing-call');
-  await expect(surface).toBeVisible({ timeout: 15_000 });
+  await expect(surface).toBeVisible();
   await expect(alicePage.getByTestId('call-tone')).toHaveAttribute('data-tone', 'outgoing');
 
   // Cancelling ends the call and tears down the tone — no lingering ringback.
@@ -337,7 +311,6 @@ test('cancelling the call stops the outgoing tone immediately', async ({ browser
   await expect(alicePage.getByTestId('call-tone')).toHaveCount(0);
 
   await aliceContext.close();
-  await bobContext.close();
 });
 
 test('an incoming call rings while the recipient is on discovery', async ({ browser }) => {
@@ -352,16 +325,14 @@ test('an incoming call rings while the recipient is on discovery', async ({ brow
   const alicePage = await aliceContext.newPage();
   const bobPage = await bobContext.newPage();
   await bobPage.goto('/discover');
-  await expect(bobPage.getByTestId('discover-map-panel')).toBeVisible({ timeout: 20_000 });
-  await bobPage.waitForTimeout(1500);
+  await expect(bobPage.getByRole('heading', { name: 'Nearby discovery map' })).toBeAttached();
   await alicePage.goto(`/messages/${bob.user.id}`);
   await expect(alicePage.getByRole('button', { name: /Open .*profile/i })).toBeVisible();
   await alicePage.getByRole('button', { name: 'Start video call' }).click();
 
-  const incoming = bobPage.getByText(/Incoming call/i);
-  await expect(incoming).toBeVisible({ timeout: 15_000 });
+  await expect(bobPage.getByText(/Incoming call/)).toBeVisible();
   await expect(
-    incoming.locator('..').getByText('Alice', { exact: true }),
+    bobPage.getByText(/Incoming call/).locator('..').getByText('Alice', { exact: true }),
   ).toBeVisible();
 
   // Distinct incoming ringtone is active on the recipient.

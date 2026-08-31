@@ -5,12 +5,42 @@ const normalizedEmail = z
   .email()
   .transform((email) => email.trim().toLowerCase());
 
+const isoDateOnly = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD');
+
+export const RELATIONSHIP_STATUSES = [
+  'Single',
+  'Taken',
+  'Open',
+  'Complicated',
+  'Prefer not to say',
+] as const;
+
+export const HOSTING_STATUSES = [
+  'Hosting',
+  'Travelling',
+  'Public only',
+  'Depends',
+] as const;
+
+export const SEXUAL_HEALTH_STATUSES = [
+  'Negative',
+  'Positive',
+  'Undetectable',
+  'Prefer not to say',
+] as const;
+
 export const RegisterSchema = z.object({
   email: normalizedEmail,
   password: z.string().min(8),
   name: z.string().min(2).max(50),
   age: z.number().min(18).max(120),
+  /** Preferred source of truth for age — persisted and used to recompute age. */
+  date_of_birth: isoDateOnly.optional(),
   invite_code: z.string().min(1).max(64).optional(),
+  /** Optional public promo (e.g. Pride QR). Validated at register. */
+  promo_code: z.string().min(1).max(64).optional(),
 });
 
 export const LoginSchema = z.object({
@@ -55,6 +85,8 @@ export const TwoFactorVerifyLoginSchema = z.object({
 });
 
 export const ProfileSchema = z.object({
+  name: z.string().min(2).max(50).optional(),
+  date_of_birth: isoDateOnly.nullable().optional(),
   bio: z.string().max(500).optional(),
   headline: z.string().max(100).optional(),
   looking_for: z.string().max(100).optional(),
@@ -63,13 +95,43 @@ export const ProfileSchema = z.object({
   cover_position_x: z.number().min(0).max(100).optional(),
   cover_position_y: z.number().min(0).max(100).optional(),
   cover_zoom: z.number().min(1).max(3).optional(),
-  interests: z.array(z.string().max(30)).max(10).optional(),
+  interests: z.array(z.string().max(30)).max(20).optional(),
+  height_cm: z.number().int().min(120).max(250).nullable().optional(),
+  weight_kg: z.number().int().min(35).max(300).nullable().optional(),
+  relationship_status: z.enum(RELATIONSHIP_STATUSES).nullable().optional(),
+  hosting_status: z.enum(HOSTING_STATUSES).nullable().optional(),
+  sexual_health_status: z.enum(SEXUAL_HEALTH_STATUSES).nullable().optional(),
+  on_prep: z.boolean().nullable().optional(),
+  last_tested_at: isoDateOnly.nullable().optional(),
   show_age: z.boolean().optional(),
+});
+
+export const DeleteAccountSchema = z.object({
+  current_password: z.string().min(1, 'Current password is required'),
+  confirmation: z.literal('DELETE'),
 });
 
 export const LocationSchema = z.object({
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
+});
+
+/** Community Space — short local text only (≤280). No media. */
+export const CommunityCreatePostSchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Post cannot be empty')
+    .max(280, 'Post must be 280 characters or fewer'),
+});
+
+/** Comment on a Community post — same text-only 280 cap. Free for all. */
+export const CommunityCreateCommentSchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Comment cannot be empty')
+    .max(280, 'Comment must be 280 characters or fewer'),
 });
 
 export const MessageSchema = z.object({
@@ -132,6 +194,14 @@ export const AddRoomMemberSchema = z.object({
   user_id: z.string().uuid(),
 });
 
+/** Temporary identity for a specific room — never written to main profile. */
+export const RoomTempIdentitySchema = z.object({
+  display_name: z.string().trim().min(1).max(40),
+  photo_url: z.string().trim().max(500).nullable().optional(),
+  save_name: z.boolean().optional(),
+  save_photo: z.boolean().optional(),
+});
+
 export const ContactFormSchema = z.object({
   name: z.string().trim().min(2, 'Name must be at least 2 characters').max(120),
   email: z.string().trim().email('Enter a valid email address'),
@@ -161,6 +231,8 @@ export const LiveLocationSharingSchema = z.object({
   enabled: z.boolean(),
 });
 
+export const PHOTO_VISIBILITIES = ['public', 'view_once', 'private'] as const;
+
 export const CreateAlbumSchema = z.object({
   name: z.string().trim().min(1, 'Album name is required').max(80),
   description: z.string().trim().max(500).optional(),
@@ -175,6 +247,8 @@ export const GrantAlbumSchema = z.object({
   viewer_id: z.string().uuid('Invalid viewer id'),
 });
 
+export const PhotoVisibilitySchema = z.enum(PHOTO_VISIBILITIES);
+
 export type RegisterInput = z.infer<typeof RegisterSchema>;
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type ForgotPasswordInput = z.infer<typeof ForgotPasswordSchema>;
@@ -182,10 +256,14 @@ export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
 export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
 export type ChangeEmailInput = z.infer<typeof ChangeEmailSchema>;
 export type ProfileInput = z.infer<typeof ProfileSchema>;
+export type DeleteAccountInput = z.infer<typeof DeleteAccountSchema>;
 export type LocationInput = z.infer<typeof LocationSchema>;
+export type CommunityCreatePostInput = z.infer<typeof CommunityCreatePostSchema>;
+export type CommunityCreateCommentInput = z.infer<typeof CommunityCreateCommentSchema>;
 export type MessageInput = z.infer<typeof MessageSchema>;
 export type CreateRoomInput = z.infer<typeof CreateRoomSchema>;
 export type RoomMessageInput = z.infer<typeof RoomMessageSchema>;
+export type RoomTempIdentityInput = z.infer<typeof RoomTempIdentitySchema>;
 export type ContactFormInput = z.infer<typeof ContactFormSchema>;
 export type Mood = (typeof MOOD_VALUES)[number];
 export type MoodInput = z.infer<typeof MoodSchema>;
@@ -193,6 +271,7 @@ export type GhostInput = z.infer<typeof GhostSchema>;
 export type CreateAlbumInput = z.infer<typeof CreateAlbumSchema>;
 export type AddAlbumPhotoInput = z.infer<typeof AddAlbumPhotoSchema>;
 export type GrantAlbumInput = z.infer<typeof GrantAlbumSchema>;
+export type PhotoVisibility = z.infer<typeof PhotoVisibilitySchema>;
 export type MediaKind = (typeof MEDIA_KINDS)[number];
 export type MessageMediaKind = (typeof MESSAGE_MEDIA_KINDS)[number];
 export type LocationMessageInput = z.infer<typeof LocationMessageSchema>;

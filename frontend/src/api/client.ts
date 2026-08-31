@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { useAuthStore } from '../hooks/store';
+import { blobForUpload, extensionForMediaMime } from '../lib/mediaMime';
 
 /** Strip whitespace and accidental literal "\\n" from Vercel env paste mistakes. */
 function sanitizeEnvUrl(raw: unknown, fallback = ''): string {
@@ -47,32 +48,10 @@ const AUTH_CHALLENGE_PATHS = [
   '/auth/2fa/verify',
   '/auth/forgot-password',
   '/auth/reset-password',
-  '/auth/refresh',
   '/beta/validate-invite',
 ];
 
 let sessionExpiredHandling = false;
-let refreshPromise: Promise<string> | null = null;
-
-async function refreshAccessToken(): Promise<string> {
-  if (refreshPromise) return refreshPromise;
-  const store = useAuthStore.getState();
-  const refreshToken = store.refreshToken ?? localStorage.getItem('refresh_token');
-  if (!refreshToken) throw new Error('No refresh session');
-
-  refreshPromise = axios
-    .post<{ token: string; refresh_token: string }>(`${API_BASE_URL}/auth/refresh`, {
-      refresh_token: refreshToken,
-    })
-    .then(({ data }) => {
-      store.setTokens(data.token, data.refresh_token);
-      return data.token;
-    })
-    .finally(() => {
-      refreshPromise = null;
-    });
-  return refreshPromise;
-}
 
 /**
  * Stale JWT → endless 401 spam on unread/notifications polls.
@@ -81,23 +60,10 @@ async function refreshAccessToken(): Promise<string> {
  */
 apiClient.interceptors.response.use(
   (response) => response,
-  async (error) => {
+  (error) => {
     const status = error?.response?.status;
     const reqUrl = String(error?.config?.url ?? '');
     const isAuthChallenge = AUTH_CHALLENGE_PATHS.some((p) => reqUrl.includes(p));
-    const original = error?.config as (typeof error.config & { _sessionRetry?: boolean }) | undefined;
-
-    if (status === 401 && !isAuthChallenge && original && !original._sessionRetry) {
-      original._sessionRetry = true;
-      try {
-        const token = await refreshAccessToken();
-        original.headers = original.headers ?? {};
-        original.headers.Authorization = `Bearer ${token}`;
-        return apiClient.request(original);
-      } catch {
-        // The refresh session is genuinely unavailable or expired.
-      }
-    }
 
     if (status === 401 && !isAuthChallenge && !sessionExpiredHandling) {
       const store = useAuthStore.getState();
@@ -149,6 +115,8 @@ export const authAPI = {
   getAccount: () => apiClient.get<{ email: string }>('/auth/account'),
   changeEmail: (data: { current_password: string; new_email: string }) =>
     apiClient.post<{ ok: boolean; email: string; message: string }>('/auth/change-email', data),
+  deleteAccount: (data: { current_password: string; confirmation: 'DELETE' }) =>
+    apiClient.post<{ ok: boolean; message: string }>('/auth/delete-account', data),
 };
 
 export const betaAPI = {
@@ -192,6 +160,8 @@ export const usersAPI = {
   updateLocation: (lat: number, lng: number) =>
     apiClient.post('/users/location', { lat, lng }),
   updateProfile: (data: {
+    name?: string;
+    date_of_birth?: string | null;
     bio?: string;
     headline?: string;
     looking_for?: string;
@@ -201,6 +171,13 @@ export const usersAPI = {
     cover_position_y?: number;
     cover_zoom?: number;
     interests?: string[];
+    height_cm?: number | null;
+    weight_kg?: number | null;
+    relationship_status?: string | null;
+    hosting_status?: string | null;
+    sexual_health_status?: string | null;
+    on_prep?: boolean | null;
+    last_tested_at?: string | null;
     show_age?: boolean;
   }) =>
     apiClient.post('/users/profile', data),
@@ -218,16 +195,10 @@ export const usersAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
-  uploadSecondaryPhoto: (slot: number, file: File) => {
-    const formData = new FormData();
-    formData.append('photo', file);
-    return apiClient.post<{ secondary_photo_urls: Array<string | null> }>(
-      `/users/photo/secondary/${slot}`,
-      formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
-    );
-  },
   likeUser: (id: string) => apiClient.post(`/users/like/${id}`),
+  /** Unmatch — removes both like directions. Does not touch rooms. */
+  unmatchUser: (id: string) =>
+    apiClient.delete<{ unmatched: boolean; removed: number }>(`/users/like/${id}`),
   updateVisibility: (isVisible: boolean) =>
     apiClient.patch('/users/visibility', { is_visible: isVisible }),
   getMatches: () => apiClient.get('/users/matches'),
@@ -237,8 +208,24 @@ export const usersAPI = {
     apiClient.get<{
       count: number;
       is_premium: boolean;
-      preview?: Array<{ id: string; name: string; age?: number | null; photo_url?: string | null }>;
+      preview?: Array<{ id: string; name: string; age: number; photo_url?: string | null }>;
     }>('/users/likes/received/summary'),
+  /** Incoming likes (not yet mutual) — not gated behind MenRush+. */
+  getReceivedLikes: () =>
+    apiClient.get<
+      Array<{
+        id: string;
+        name: string;
+        age: number;
+        bio?: string;
+        photo_url?: string | null;
+        online?: boolean;
+        last_seen?: string;
+        liked_at?: string;
+        is_verified?: boolean;
+        authenticity_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
+      }>
+    >('/users/likes/received'),
   getProfileViews: () =>
     apiClient.get<{
       viewers: Array<{
@@ -269,8 +256,12 @@ export const usersAPI = {
         blocked_at: string;
       }>;
     }>('/users/blocks'),
-  reportUser: (id: string, reason: string, details?: string) =>
-    apiClient.post(`/users/report/${id}`, { reason, details }),
+  reportUser: (id: string, reason: string, details?: string, threadId?: string) =>
+    apiClient.post(`/users/report/${id}`, {
+      reason,
+      details,
+      ...(threadId ? { thread_id: threadId } : {}),
+    }),
   getTeamStatus: () => apiClient.get<{ is_team: boolean }>('/users/me/team'),
   listReports: () =>
     apiClient.get<{
@@ -358,6 +349,11 @@ export interface MessageDTO {
   expired: boolean;
   /** Set when the sender withdraws media from the chat. */
   withdrawn_at?: string | null;
+  /**
+   * Verified backend Premium gate for Discreet media blur.
+   * false → soft-blur photos/videos for this viewer; omit/true → clear.
+   */
+  media_clear?: boolean;
 }
 
 export interface SendMediaOptions {
@@ -373,7 +369,11 @@ export interface SendMediaOptions {
 
 export const messagesAPI = {
   sendMessage: (receiver_id: string, message: string) =>
-    apiClient.post<MessageDTO>('/messages', { receiver_id, message }),
+    apiClient.post<MessageDTO>(
+      '/messages',
+      { receiver_id, message },
+      { timeout: 20_000 },
+    ),
   sendLocation: (receiver_id: string, lat: number, lng: number) =>
     apiClient.post<MessageDTO>('/messages/location', { receiver_id, lat, lng }),
   getConversation: (otherId: string) =>
@@ -389,16 +389,18 @@ export const messagesAPI = {
     if (opts.disappearing === true) fd.append('disappearing', 'true');
     if (opts.maxViews != null) fd.append('max_views', String(Math.round(opts.maxViews)));
     if (opts.durationMs != null) fd.append('duration_ms', String(Math.round(opts.durationMs)));
-    // Blobs from MediaRecorder don't have a filename — give them one so multer is happy.
+    // Strip MediaRecorder codec parameters before multipart — unquoted
+    // `codecs=vp8,opus` makes busboy report text/plain and the API rejects.
+    const upload = blobForUpload(file);
     const filename =
-      file instanceof File
+      file instanceof File && file.name
         ? file.name
-        : `${opts.kind}-${Date.now()}.${
-            opts.kind === 'audio' ? 'webm' : opts.kind === 'video' ? 'webm' : 'jpg'
-          }`;
-    fd.append('media', file, filename);
+        : `${opts.kind}-${Date.now()}.${extensionForMediaMime(upload.type, opts.kind)}`;
+    fd.append('media', upload, filename);
     return apiClient.post<MessageDTO>('/messages/media', fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      // Android→iPhone multi‑MB uploads were timing out / retrying (~50s then ~20s).
+      timeout: 180_000,
     });
   },
   markViewed: (messageId: string) =>
@@ -423,12 +425,25 @@ export const meetAPI = {
 
 export const roomsAPI = {
   createRoom: (data: any) => apiClient.post('/rooms', data),
-  getRooms: () => apiClient.get('/rooms'),
+  getRooms: () =>
+    apiClient.get<{
+      member_rooms: Array<Record<string, unknown>>;
+      nearby_rooms: Array<Record<string, unknown>>;
+      official_rooms: Array<Record<string, unknown>>;
+    }>('/rooms'),
   getRoom: (roomId: string) => apiClient.get(`/rooms/${roomId}`),
   getMembers: (roomId: string) =>
-    apiClient.get<Array<{ id: string; name: string; photo_url?: string; role?: string }>>(
-      `/rooms/${roomId}/members`,
-    ),
+    apiClient.get<
+      Array<{
+        id: string;
+        name: string;
+        photo_url?: string;
+        role?: string;
+        is_verified?: boolean;
+        authenticity_status?: string;
+        using_temp_identity?: boolean;
+      }>
+    >(`/rooms/${roomId}/members`),
   addMember: (roomId: string, userId: string) =>
     apiClient.post(`/rooms/${roomId}/members`, { user_id: userId }),
   joinRoom: (roomId: string) => apiClient.post(`/rooms/${roomId}/join`),
@@ -437,6 +452,45 @@ export const roomsAPI = {
     apiClient.get(`/rooms/${roomId}/messages`, { params: { before } }),
   sendMessage: (roomId: string, message: string, replyTo?: string) =>
     apiClient.post(`/rooms/${roomId}/messages`, { message, reply_to: replyTo }),
+  sendMedia: (roomId: string, file: File | Blob, caption?: string) => {
+    const fd = new FormData();
+    const filename =
+      file instanceof File && file.name
+        ? file.name
+        : `room-media-${Date.now()}.jpg`;
+    fd.append('media', file, filename);
+    if (caption) fd.append('caption', caption);
+    return apiClient.post(`/rooms/${roomId}/messages/media`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  getTempIdentity: (roomId: string) =>
+    apiClient.get<{
+      display_name?: string | null;
+      photo_url?: string | null;
+      save_name?: boolean;
+      save_photo?: boolean;
+    }>(`/rooms/${roomId}/temp-identity`),
+  setTempIdentity: (
+    roomId: string,
+    data: {
+      display_name: string;
+      photo_url?: string | null;
+      save_name?: boolean;
+      save_photo?: boolean;
+    },
+  ) => apiClient.put(`/rooms/${roomId}/temp-identity`, data),
+  uploadTempPhoto: (roomId: string, file: File) => {
+    const fd = new FormData();
+    fd.append('photo', file);
+    return apiClient.post<{ photo_url: string }>(`/rooms/${roomId}/temp-identity/photo`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  clearTempIdentity: (roomId: string) =>
+    apiClient.post<{ cleared: true }>(`/rooms/${roomId}/temp-identity/clear`),
+  deleteTempIdentity: (roomId: string) =>
+    apiClient.delete(`/rooms/${roomId}/temp-identity`),
 };
 
 export type ContactSubmitPayload = {
@@ -486,7 +540,9 @@ export const profileMetaAPI = {
     apiClient.post<{ enabled: boolean }>('/profile-meta/live-location-sharing', { enabled }),
 };
 
-// ── Albums ────────────────────────────────────────────────────────────────
+// ── Albums / My Photos ────────────────────────────────────────────────────
+export type PhotoVisibility = 'public' | 'view_once' | 'private';
+
 export interface AlbumDTO {
   id: string;
   user_id: string;
@@ -499,41 +555,92 @@ export interface AlbumDTO {
   updated_at: string;
   /** Present only when listing someone else's albums via /albums/user/:id. */
   unlocked?: boolean;
+  /** Verified backend Premium gate for cover blur when unlocked. */
+  media_clear?: boolean;
 }
 
 export interface AlbumPhotoDTO {
   id: string;
   photo_url: string;
-  mime_type?: string | null;
   position: number;
   created_at: string;
+  visibility?: PhotoVisibility;
+  /** false soft-blurs — view-once until opened, or Discreet Mode when enabled. */
+  media_clear?: boolean;
+}
+
+export interface LibraryPhotoDTO {
+  id: string;
+  album_id: string;
+  photo_url: string;
+  visibility: PhotoVisibility;
+  position: number;
+  created_at: string;
+  media_clear: boolean;
+}
+
+export interface AlbumViewerDTO {
+  id: string;
+  name: string;
+  photo_url: string | null;
+  granted_at: string;
+}
+
+export interface MyPhotosLibraryDTO {
+  public_photos: LibraryPhotoDTO[];
+  view_once_photos: LibraryPhotoDTO[];
+  private_photos: LibraryPhotoDTO[];
+  private_album: AlbumDTO | null;
+  viewers: AlbumViewerDTO[];
+  photo_total: number;
+  free_cap: number;
+  albums: AlbumDTO[];
 }
 
 export const albumsAPI = {
-  listMine: () =>
-    apiClient.get<{ albums: AlbumDTO[]; photo_total: number; free_cap: number }>('/albums/mine'),
+  listMine: () => apiClient.get<MyPhotosLibraryDTO>('/albums/mine'),
   create: (data: { name: string; description?: string; is_locked?: boolean }) =>
     apiClient.post<AlbumDTO>('/albums', data),
   remove: (albumId: string) => apiClient.delete<{ deleted: true }>(`/albums/${albumId}`),
   removePhoto: (albumId: string, photoId: string) =>
     apiClient.delete<{ deleted: true }>(`/albums/${albumId}/photos/${photoId}`),
   listPhotos: (albumId: string) =>
-    apiClient.get<{ photos: AlbumPhotoDTO[]; unlocked: boolean; locked: boolean }>(
-      `/albums/${albumId}/photos`,
-    ),
-  upload: (albumId: string, file: File) => {
+    apiClient.get<{
+      photos: AlbumPhotoDTO[];
+      unlocked: boolean;
+      locked: boolean;
+      media_clear?: boolean;
+    }>(`/albums/${albumId}/photos`),
+  upload: (albumId: string, file: File, visibility: PhotoVisibility = 'private') => {
     const fd = new FormData();
     fd.append('photo', file);
-    return apiClient.post<{ photo_url: string; mime_type?: string }>(`/albums/${albumId}/upload`, fd, {
+    fd.append('visibility', visibility);
+    return apiClient.post<{
+      id: string;
+      photo_url: string;
+      media_clear: boolean;
+      visibility: PhotoVisibility;
+    }>(`/albums/${albumId}/upload`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  openPhoto: (photoId: string) =>
+    apiClient.post<{ opened: boolean; media_clear: boolean }>(`/albums/photos/${photoId}/open`),
   listForUser: (userId: string) =>
     apiClient.get<{ albums: AlbumDTO[] }>(`/albums/user/${userId}`),
+  listGrants: (albumId: string) =>
+    apiClient.get<{ viewers: AlbumViewerDTO[] }>(`/albums/${albumId}/grants`),
   grant: (albumId: string, viewerId: string) =>
     apiClient.post<{ granted: true }>(`/albums/${albumId}/grant`, { viewer_id: viewerId }),
   revoke: (albumId: string, viewerId: string) =>
     apiClient.delete<{ granted: false }>(`/albums/${albumId}/grant/${viewerId}`),
+  /** Viewers only — never wipes media. Photos stay on the owner's album. */
+  revokeAll: (albumId: string) =>
+    apiClient.delete<{
+      revoked: true;
+      viewers_removed: number;
+      photo_count: number;
+    }>(`/albums/${albumId}/grants`),
 };
 
 // ── Events (After Hours) ──────────────────────────────────────────────────
@@ -558,9 +665,12 @@ export const eventsAPI = {
     apiClient.get<EventDTO[]>('/events/nearby', {
       params: { lat, lng, radius: radiusKm, limit },
     }),
+  /** Free venue check-in — creates/uses a Cruise (Hot Spot) pin that expires after 4 hours. */
+  checkIn: (id: string, anonymous = false) =>
+    apiClient.post<{ ok: boolean; spot: HotSpotDTO }>(`/events/${id}/check-in`, { anonymous }),
 };
 
-// ── Hot Spots (venue check-ins — not user Pulse boost) ───────────────────
+// ── Cruise / Hot Spots (venue check-ins — not user Pulse boost; API path /hot-spots) ──
 export interface HotSpotCategoryDTO {
   id: number;
   slug: string;
@@ -585,6 +695,10 @@ export interface HotSpotDTO {
   live_count_exact: number;
   is_checked_in: boolean;
   my_checkin_anonymous: boolean | null;
+  /** Short-lived check-in window in hours (product default: 4). */
+  checkin_ttl_hours?: number;
+  /** True when at least one non-expired check-in is present. */
+  has_active_checkins?: boolean;
 }
 
 export const hotSpotsAPI = {
@@ -603,6 +717,44 @@ export const hotSpotsAPI = {
       : apiClient.post<{ ok: boolean }>('/hot-spots/check-out'),
   getMyCheckIn: () =>
     apiClient.get<{ check_in: unknown | null }>('/hot-spots/me/check-in'),
+};
+
+/** Community Space — short local text posts (≤280). Free for all. */
+export interface CommunityPostDTO {
+  id: string;
+  user_id: string;
+  body: string;
+  created_at: string;
+  author_name: string;
+  author_photo_url: string | null;
+  distance_km: string;
+  distance_label: string;
+  comment_count?: number;
+}
+
+export interface CommunityCommentDTO {
+  id: string;
+  post_id: string;
+  user_id: string;
+  body: string;
+  created_at: string;
+  author_name: string;
+  author_photo_url: string | null;
+}
+
+export const communityAPI = {
+  listPosts: (lat: number, lng: number, radiusKm?: number) =>
+    apiClient.get<{ posts: CommunityPostDTO[] }>('/community/posts', {
+      params: { lat, lng, radiusKm },
+    }),
+  createPost: (body: string) =>
+    apiClient.post<{ post: CommunityPostDTO }>('/community/posts', { body }),
+  listComments: (postId: string) =>
+    apiClient.get<{ comments: CommunityCommentDTO[] }>(`/community/posts/${postId}/comments`),
+  createComment: (postId: string, body: string) =>
+    apiClient.post<{ comment: CommunityCommentDTO }>(`/community/posts/${postId}/comments`, {
+      body,
+    }),
 };
 
 export const aiAPI = {

@@ -11,7 +11,10 @@ import { PulseRing } from '../components/PulseRing';
 import { getPhotoUrl } from '../components/UserAvatar';
 import { FEATURES } from '../lib/featureFlags';
 import { SelfieCaptureModal } from '../components/SelfieCaptureModal';
+import { CameraCaptureChooser } from '../components/CameraCaptureChooser';
+import { VideoNoteCaptureModal } from '../components/VideoNoteCaptureModal';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
+import { PanicReportButton } from '../components/PanicReportButton';
 import { placeOutgoingCall } from '../lib/callBridge';
 import { mapCallMediaError } from '../lib/callMedia';
 import { MobileBackButton } from '../components/MobileBackButton';
@@ -20,6 +23,16 @@ import { MissedCallIcon } from '../components/MissedCallIcon';
 import { isMissedCallMessage, MISSED_CALL_PREVIEW } from '../lib/missedCall';
 import { openMapsDirections } from '../lib/maps';
 import { parseLocationPayload } from '../lib/locationMessage';
+import { profilePathForUser } from '../lib/profileLinks';
+import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
+import { SoftBlurMedia, shouldBlurMedia } from '../components/SoftBlurMedia';
+import { compressChatImageFile } from '../lib/imageUpload';
+import {
+  appendUniqueMessage,
+  CHAT_LIVE_REFRESH_EVENT,
+  conversationFingerprint,
+  mergeConversationRows,
+} from '../lib/pushDeepLink';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
 interface Message extends Partial<MessageDTO> {
@@ -38,6 +51,7 @@ interface Message extends Partial<MessageDTO> {
   view_count?: number;
   remaining_views?: number | null;
   expired?: boolean;
+  media_clear?: boolean;
 }
 
 /** Sender's chosen viewing rule for an outgoing image. */
@@ -131,6 +145,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const [otherUser, setOtherUser] = useState<OtherUser | null>(null);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -141,14 +156,15 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   // Image composer: hold the selected file for preview + view-rule choice
   // before sending (instead of sending immediately on pick).
   const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [pendingPreparing, setPendingPreparing] = useState(false);
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
   const [viewRule, setViewRule] = useState<ViewRule>('once');
   const [customViews, setCustomViews] = useState(3);
   // Recipient image viewer (transient full-screen view of a disappearing image).
   const [viewerMsg, setViewerMsg] = useState<Message | null>(null);
+  const [cameraChooserOpen, setCameraChooserOpen] = useState(false);
   const [selfieOpen, setSelfieOpen] = useState(false);
-  const [videoRecording, setVideoRecording] = useState(false);
-  const [videoRecordSeconds, setVideoRecordSeconds] = useState(0);
+  const [videoNoteOpen, setVideoNoteOpen] = useState(false);
   const [meetState, setMeetState] = useState<MeetAgreementState | null>(null);
   const [meetSubmitting, setMeetSubmitting] = useState(false);
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
@@ -169,23 +185,44 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const recordStartRef = useRef<number>(0);
   const recordStreamRef = useRef<MediaStream | null>(null);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const videoRecorderRef = useRef<MediaRecorder | null>(null);
-  const videoChunksRef = useRef<BlobPart[]>([]);
-  const videoStreamRef = useRef<MediaStream | null>(null);
-  const videoStartRef = useRef<number>(0);
-  const videoTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const cameraHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cameraHoldActiveRef = useRef(false);
-  const videoShouldSendRef = useRef(true);
-  const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
+
+  const loadConversation = useCallback((opts?: { replace?: boolean }) => {
+    if (!otherId) return;
+    messagesAPI
+      .getConversation(otherId)
+      .then((r) => {
+        const rows = Array.isArray(r.data) ? (r.data as Message[]) : [];
+        setMessages((prev) => {
+          const next = opts?.replace ? rows : mergeConversationRows(prev, rows);
+          if (
+            !opts?.replace &&
+            conversationFingerprint(prev) === conversationFingerprint(next)
+          ) {
+            return prev;
+          }
+          return next;
+        });
+      })
+      .catch(() => {
+        if (opts?.replace) setMessages([]);
+      });
+  }, [otherId]);
 
   useEffect(() => {
     if (!otherId) return;
-    messagesAPI.getConversation(otherId).then((r) => setMessages(r.data)).catch(() => {});
-    usersAPI.getProfile(otherId).then((r) => setOtherUser(r.data)).catch(() => {});
+    loadConversation({ replace: true });
+    usersAPI
+      .getProfile(otherId)
+      .then((r) => {
+        const data = r.data as OtherUser | null;
+        if (data && typeof data === 'object' && typeof (data as OtherUser).name === 'string') {
+          setOtherUser(data as OtherUser);
+        }
+      })
+      .catch(() => {});
     meetAPI.getState(otherId).then((r) => setMeetState(r.data)).catch(() => setMeetState(null));
     useUnreadStore.getState().clearUnreadFrom(otherId);
-  }, [otherId]);
+  }, [otherId, loadConversation]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -200,12 +237,54 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     return () => window.clearInterval(id);
   }, [otherId]);
 
+  // Live delivery while sitting in the thread: iPhone PWAs often keep the page
+  // visible but miss the Socket.IO event (suspend / silent disconnect). Remount
+  // fixed it because getConversation ran again — poll so we do not need leave/reenter.
+  useEffect(() => {
+    if (!otherId) return;
+    const OPEN_THREAD_POLL_MS = 2500;
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      loadConversation();
+    };
+    const id = window.setInterval(tick, OPEN_THREAD_POLL_MS);
+    return () => window.clearInterval(id);
+  }, [otherId, loadConversation]);
+
+  // iPhone PWA: also refetch on visibility / reconnect / push hint (faster than poll).
+  useEffect(() => {
+    if (!otherId) return;
+
+    const refreshIfVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      loadConversation();
+    };
+
+    const onLiveRefresh = (event: Event) => {
+      const detail = (event as CustomEvent<{ otherId?: string | null }>).detail;
+      if (detail?.otherId && detail.otherId !== otherId) return;
+      refreshIfVisible();
+    };
+
+    document.addEventListener('visibilitychange', refreshIfVisible);
+    window.addEventListener('pageshow', refreshIfVisible);
+    window.addEventListener(CHAT_LIVE_REFRESH_EVENT, onLiveRefresh as EventListener);
+    socket?.on('connect', refreshIfVisible);
+
+    return () => {
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+      window.removeEventListener('pageshow', refreshIfVisible);
+      window.removeEventListener(CHAT_LIVE_REFRESH_EVENT, onLiveRefresh as EventListener);
+      socket?.off('connect', refreshIfVisible);
+    };
+  }, [otherId, loadConversation, socket]);
+
   useEffect(() => {
     if (!socket || !otherId) return;
 
     const onMessage = (data: Message) => {
       if (data.sender_id === otherId || data.receiver_id === otherId) {
-        setMessages((prev) => [...prev, data]);
+        setMessages((prev) => appendUniqueMessage(prev, data));
       }
     };
     const onTyping = ({ typing }: { typing: boolean }) => setIsOtherTyping(typing);
@@ -327,143 +406,30 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     const normalized = normalizeImageFile(file);
     if (!normalized || !otherId) return;
     setMediaError('');
+    setViewRule('once');
     setPendingPreviewUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return URL.createObjectURL(normalized);
     });
     setPendingImage(normalized);
-    setViewRule('once');
-  };
-
-  // ── Media: gallery attach + tap selfie / press-hold video ───────────────
-  const handleAttachClick = () => fileInputRef.current?.click();
-  const handleCameraClick = () => setSelfieOpen(true);
-
-  const stopVideoRecording = useCallback((send: boolean) => {
-    const mr = videoRecorderRef.current;
-    if (!mr) return;
-    videoShouldSendRef.current = send;
-    if (!send) {
-      videoChunksRef.current = [];
-    }
-    if (mr.state === 'recording') mr.stop();
-  }, []);
-
-  const startVideoRecording = useCallback(async () => {
-    if (videoRecording || uploadingMedia || recording || !otherId) return;
-    setMediaError('');
-    videoShouldSendRef.current = true;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'user' }, width: { ideal: 720 }, height: { ideal: 1280 } },
-        audio: true,
-      });
-      videoStreamRef.current = stream;
-      if (videoPreviewRef.current) {
-        videoPreviewRef.current.srcObject = stream;
-        void videoPreviewRef.current.play().catch(() => undefined);
-      }
-      const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
-        ? 'video/webm;codecs=vp8,opus'
-        : MediaRecorder.isTypeSupported('video/webm')
-          ? 'video/webm'
-          : '';
-      const mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
-      videoRecorderRef.current = mr;
-      videoChunksRef.current = [];
-      mr.ondataavailable = (ev) => {
-        if (ev.data.size > 0) videoChunksRef.current.push(ev.data);
-      };
-      mr.onstop = async () => {
-        const duration = Date.now() - videoStartRef.current;
-        const shouldSend = videoShouldSendRef.current;
-        const blob = new Blob(videoChunksRef.current, { type: mr.mimeType || 'video/webm' });
-        videoStreamRef.current?.getTracks().forEach((t) => t.stop());
-        videoStreamRef.current = null;
-        if (videoPreviewRef.current) videoPreviewRef.current.srcObject = null;
-        if (videoTimerRef.current) {
-          window.clearInterval(videoTimerRef.current);
-          videoTimerRef.current = null;
-        }
-        setVideoRecording(false);
-        setVideoRecordSeconds(0);
-        videoRecorderRef.current = null;
-        if (!shouldSend || duration < 600 || blob.size < 2000) return;
-        setUploadingMedia(true);
-        try {
-          const res = await messagesAPI.sendMedia(otherId!, blob, {
-            kind: 'video',
-            durationMs: duration,
-          });
-          setMessages((prev) => [...prev, res.data]);
-        } catch (err: any) {
-          setMediaError(err?.response?.data?.error || 'Failed to send video');
-        } finally {
-          setUploadingMedia(false);
-        }
-      };
-      videoStartRef.current = Date.now();
-      mr.start(250);
-      setVideoRecording(true);
-      setVideoRecordSeconds(0);
-      videoTimerRef.current = window.setInterval(
-        () => setVideoRecordSeconds((s) => Math.min(60, s + 1)),
-        1000,
-      );
-      window.setTimeout(() => {
-        if (videoRecorderRef.current && videoRecorderRef.current.state === 'recording') {
-          videoRecorderRef.current.stop();
-        }
-      }, 60_000);
-    } catch {
-      setMediaError('Camera access denied.');
-      setVideoRecording(false);
-    }
-  }, [videoRecording, uploadingMedia, recording, otherId]);
-
-  const onCameraPointerDown = (e: React.PointerEvent) => {
-    if (uploadingMedia || pendingImage || recording || videoRecording) return;
-    e.preventDefault();
-    cameraHoldActiveRef.current = false;
-    cameraHoldTimerRef.current = window.setTimeout(() => {
-      cameraHoldActiveRef.current = true;
-      void startVideoRecording();
-    }, 380);
-  };
-
-  const onCameraPointerUp = () => {
-    if (cameraHoldTimerRef.current) {
-      window.clearTimeout(cameraHoldTimerRef.current);
-      cameraHoldTimerRef.current = null;
-    }
-    if (cameraHoldActiveRef.current || videoRecording) {
-      cameraHoldActiveRef.current = false;
-      stopVideoRecording(true);
-      return;
-    }
-    handleCameraClick();
-  };
-
-  const onCameraPointerCancel = () => {
-    if (cameraHoldTimerRef.current) {
-      window.clearTimeout(cameraHoldTimerRef.current);
-      cameraHoldTimerRef.current = null;
-    }
-    if (videoRecording) {
-      stopVideoRecording(false);
-    }
-    cameraHoldActiveRef.current = false;
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    stageImageFile(file);
+    // Compress while the user picks view-once / send — Android originals
+    // were multi‑MB and dominated the ~50s Al→Pete send.
+    setPendingPreparing(true);
+    void compressChatImageFile(normalized)
+      .then((compressed) => {
+        setPendingImage(compressed);
+        setPendingPreviewUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return URL.createObjectURL(compressed);
+        });
+      })
+      .catch(() => undefined)
+      .finally(() => setPendingPreparing(false));
   };
 
   const clearPendingImage = useCallback(() => {
     setPendingImage(null);
+    setPendingPreparing(false);
     setPendingPreviewUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return null;
@@ -472,11 +438,12 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
   const handleSendPendingImage = async () => {
     if (!pendingImage || !otherId || uploadingMedia) return;
-    const file = pendingImage;
     const { disappearing, maxViews } = ruleToSendOptions(viewRule, customViews);
     setMediaError('');
     setUploadingMedia(true);
     try {
+      // Re-run compress if staging still preparing, or as a cheap no-op when small.
+      const file = await compressChatImageFile(pendingImage);
       const res = await messagesAPI.sendMedia(otherId, file, {
         kind: 'image',
         disappearing,
@@ -501,6 +468,51 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     }
   };
 
+  // ── Media: gallery attach + camera chooser (Picture | Video) ─────────────
+  const handleAttachClick = () => fileInputRef.current?.click();
+
+  const handleCameraClick = () => {
+    if (uploadingMedia || pendingImage || recording) return;
+    setCameraChooserOpen(true);
+  };
+
+  const handleChoosePicture = () => {
+    setCameraChooserOpen(false);
+    setSelfieOpen(true);
+  };
+
+  const handleChooseVideo = () => {
+    setCameraChooserOpen(false);
+    setVideoNoteOpen(true);
+  };
+
+  const handleSendVideoNote = useCallback(
+    async (blob: Blob, durationMs: number) => {
+      if (!otherId || uploadingMedia) return;
+      setUploadingMedia(true);
+      setMediaError('');
+      try {
+        const res = await messagesAPI.sendMedia(otherId, blob, {
+          kind: 'video',
+          durationMs,
+        });
+        setMessages((prev) => [...prev, res.data]);
+      } catch (err: any) {
+        setMediaError(err?.response?.data?.error || 'Failed to send video');
+      } finally {
+        setUploadingMedia(false);
+      }
+    },
+    [otherId, uploadingMedia],
+  );
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    stageImageFile(file);
+  };
+
   // ── Media: voice notes (tap to start, tap again to stop) ──────────────
   const handleStartRecording = useCallback(async () => {
     if (recording || uploadingMedia || !otherId) return;
@@ -516,7 +528,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       };
       mr.onstop = async () => {
         const duration = Date.now() - recordStartRef.current;
-        const blob = new Blob(recordChunksRef.current, { type: mr.mimeType || 'audio/webm' });
+        // Base MIME only — keep multipart Content-Type busboy-safe (see mediaMime.ts).
+        const audioType = (mr.mimeType || 'audio/webm').split(';')[0].trim() || 'audio/webm';
+        const blob = new Blob(recordChunksRef.current, { type: audioType });
         // Tear down the mic stream so the OS indicator goes away immediately.
         recordStreamRef.current?.getTracks().forEach((t) => t.stop());
         recordStreamRef.current = null;
@@ -584,38 +598,72 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const sendTextMessage = useCallback(
     async (raw: string) => {
       const current = raw.trim();
-      if (!current || !otherId || !user || sending) return;
+      if (!current || !otherId || !user || sendingRef.current) return;
 
       emitTyping(false);
       if (typingTimer.current) clearTimeout(typingTimer.current);
 
       inputValueRef.current = '';
       setInput('');
+      sendingRef.current = true;
       setSending(true);
-      inputRef.current?.focus();
+      setMediaError('');
+      // Keep focus for desktop; on mobile avoid forced refocus which fights the keyboard.
+      if (!window.matchMedia('(pointer: coarse)').matches) {
+        inputRef.current?.focus();
+      }
 
       try {
         const res = await messagesAPI.sendMessage(otherId, current);
         const saved: Message = res.data;
-        setMessages((prev) => [...prev, saved]);
+        setMessages((prev) => (prev.some((m) => m.id === saved.id) ? prev : [...prev, saved]));
         trackEventOnce(
           'first_message_success',
           { kind: 'text', surface: 'direct_message' },
           'first_message_success',
         );
-      } catch {
+      } catch (err: unknown) {
         inputValueRef.current = current;
         setInput(current);
+        const data = (err as { response?: { data?: { error?: string; code?: string } } })?.response
+          ?.data;
+        const code = data?.code;
+        const msg = data?.error;
+        if (code === 'match_required' || /mutual match/i.test(msg || '')) {
+          setMediaError('You need a mutual match before messaging.');
+        } else if (code === 'interaction_blocked' || /blocked/i.test(msg || '')) {
+          setMediaError('You cannot message this person.');
+        } else if (
+          (err as { code?: string })?.code === 'ECONNABORTED' ||
+          /timeout/i.test(String((err as { message?: string })?.message || ''))
+        ) {
+          setMediaError('Send timed out — check your connection and try again.');
+        } else {
+          setMediaError(msg || 'Could not send message. Try again.');
+        }
       } finally {
+        sendingRef.current = false;
         setSending(false);
       }
     },
-    [otherId, user, sending, emitTyping],
+    [otherId, user, emitTyping],
   );
 
   const handleSend = async (e?: React.FormEvent | React.KeyboardEvent) => {
     e?.preventDefault?.();
-    await sendTextMessage(inputValueRef.current ?? input);
+    await sendTextMessage(inputValueRef.current || input);
+  };
+
+  /**
+   * Fire send on pointerdown (touch/pen) so mobile Chrome keyboard dismiss
+   * cannot steal the tap — same failure mode on Android Chrome and iOS.
+   * Mouse left-clicks still use the normal click → submit path.
+   */
+  const handleSendPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    if (e.pointerType === 'mouse') return;
+    e.preventDefault();
+    void handleSend(e as unknown as React.FormEvent);
   };
 
   /** Direct, premium openers — never creepy. 18+ consent-first tone. */
@@ -625,11 +673,24 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     'What are you looking for tonight?',
   ] as const;
 
+  /**
+   * Desktop Enter + Android Gboard quirks: Chrome often reports IME keys as
+   * `Unidentified` / keyCode 229, or routes Return through beforeinput
+   * `insertLineBreak` without a matching Enter keydown.
+   */
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend(e);
+      void handleSend(e);
     }
+  };
+
+  const handleBeforeInput = (e: React.FormEvent<HTMLInputElement>) => {
+    const ne = e.nativeEvent as InputEvent;
+    if (ne.inputType !== 'insertLineBreak' && ne.inputType !== 'insertParagraph') return;
+    e.preventDefault();
+    void handleSend();
   };
 
   const handleWithdrawMedia = async (messageId: string) => {
@@ -751,15 +812,18 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         {/* Avatar + name block — centered, tappable to open profile */}
         <button
           type="button"
-          onClick={() => otherId && navigate(`/profile/${otherId}`)}
+          onClick={() => otherId && navigate(profilePathForUser(otherId, user?.id))}
           aria-label={otherUser ? `Open ${otherUser.name}'s profile` : 'Open profile'}
           className="flex-1 flex items-center gap-3 min-w-0 text-left rounded-xl px-1 py-1 -mx-1 hover:bg-[var(--bg-card)] active:scale-[0.99] transition-all"
+          data-testid="chat-header-profile"
         >
           {otherUser ? (
             <>
               <UserAvatar
                 name={otherUser.name}
                 photoUrl={otherUser.photo_url}
+                userId={otherId}
+                linkToProfile={false}
                 online={otherUser.online}
                 size="sm"
               />
@@ -811,15 +875,26 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         )}
 
         {otherId && (
-          <ChatSafetyMenu
-            peerId={otherId}
-            peerName={otherUser?.name ?? 'this user'}
-            onNotice={(msg, tone = 'success') => setSafetyNotice({ msg, tone })}
-            onBlocked={() => {
-              // Land on the unblock list so the action is obvious.
-              window.setTimeout(() => navigate('/settings#blocked'), 600);
-            }}
-          />
+          <>
+            <PanicReportButton
+              reportedUserId={otherId}
+              threadId={
+                user?.id
+                  ? `dm:${[user.id, otherId].sort().join('_')}`
+                  : `dm:${otherId}`
+              }
+              onNotice={(msg, tone = 'success') => setSafetyNotice({ msg, tone })}
+            />
+            <ChatSafetyMenu
+              peerId={otherId}
+              peerName={otherUser?.name ?? 'this user'}
+              onNotice={(msg, tone = 'success') => setSafetyNotice({ msg, tone })}
+              onBlocked={() => {
+                // Land on the unblock list so the action is obvious.
+                window.setTimeout(() => navigate('/settings#blocked'), 600);
+              }}
+            />
+          </>
         )}
       </header>
 
@@ -963,22 +1038,29 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 {/* Received: avatar placeholder for spacing */}
                 {!isMine && (
                   <div className="w-7 flex-shrink-0 mr-2 flex items-end mb-1">
-                    {showTail && (
-                      otherUser?.photo_url ? (
-                        <div
-                          className="w-7 h-7 rounded-full overflow-hidden"
-                          style={{ border: '1px solid var(--border-default)', flexShrink: 0 }}
-                        >
-                          <img
-                            src={otherUser.photo_url}
-                            alt={otherUser.name}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      ) : (
-                        <SilhouetteAvatar size={28} variant="chat" />
-                      )
-                    )}
+                    {showTail && otherId ? (
+                      <ProfilePhotoLink
+                        userId={otherId}
+                        name={otherUser?.name}
+                        className="block"
+                        data-testid={`chat-bubble-avatar-${otherId}`}
+                      >
+                        {otherUser?.photo_url ? (
+                          <div
+                            className="w-7 h-7 rounded-full overflow-hidden"
+                            style={{ border: '1px solid var(--border-default)', flexShrink: 0 }}
+                          >
+                            <img
+                              src={otherUser.photo_url}
+                              alt={otherUser.name}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <SilhouetteAvatar size={28} variant="chat" />
+                        )}
+                      </ProfilePhotoLink>
+                    ) : null}
                   </div>
                 )}
 
@@ -1093,7 +1175,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
       {/* ── Input bar ─────────────────────────────────────────────────────── */}
       <div
-        className="flex-shrink-0 border-t border-[var(--border-default)] px-4 py-3 bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl"
+        className="flex-shrink-0 border-t border-[var(--border-default)] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl relative z-[70]"
+        data-testid="chat-composer"
       >
         {mediaError && (
           <div
@@ -1125,47 +1208,13 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             rule={viewRule}
             customViews={customViews}
             uploading={uploadingMedia}
+            preparing={pendingPreparing}
             onRuleChange={setViewRule}
             onCustomViewsChange={setCustomViews}
             onCancel={clearPendingImage}
             onSend={handleSendPendingImage}
           />
         )}
-
-        {videoRecording ? (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-[var(--copper)]/50 bg-black">
-            <video
-              ref={videoPreviewRef}
-              muted
-              playsInline
-              autoPlay
-              className="h-48 w-full object-cover"
-            />
-            <div className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-elevated)]">
-              <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={{ background: '#E5484D', boxShadow: '0 0 8px #E5484D' }}
-              />
-              <span className="flex-1 text-xs font-semibold text-[var(--cream)]">
-                Recording video… {formatDuration(videoRecordSeconds * 1000)}
-              </span>
-              <button
-                type="button"
-                onClick={() => stopVideoRecording(false)}
-                className="rounded-lg px-2 py-1 text-xs font-bold text-[var(--cream-muted)]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => stopVideoRecording(true)}
-                className="rounded-lg bg-[var(--copper)] px-3 py-1 text-xs font-bold text-[var(--nn-on-copper)]"
-              >
-                Send
-              </button>
-            </div>
-          </div>
-        ) : null}
 
         {recording ? (
           // Recording-only bar — Stop sends, Cancel discards.
@@ -1220,18 +1269,15 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               <LocationPinIcon className="w-4 h-4" />
             </button>
 
-            {/* Camera — tap selfie, press-and-hold video */}
+            {/* Camera — opens Picture | Video chooser, then live camera */}
             <button
               type="button"
-              onPointerDown={onCameraPointerDown}
-              onPointerUp={onCameraPointerUp}
-              onPointerCancel={onCameraPointerCancel}
-              onContextMenu={(e) => e.preventDefault()}
+              onClick={handleCameraClick}
               disabled={uploadingMedia || !!pendingImage || recording}
-              aria-label="Take photo or hold for video"
-              title="Tap for photo · hold for video"
-              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper touch-none select-none"
-              style={{ touchAction: 'none' }}
+              aria-label="Open camera"
+              title="Take a picture or video"
+              data-testid="chat-camera-button"
+              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper"
             >
               <CameraIcon className="w-4 h-4" />
             </button>
@@ -1256,8 +1302,12 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
+                onBeforeInput={handleBeforeInput}
                 placeholder="Say something direct."
                 autoComplete="off"
+                enterKeyHint="send"
+                inputMode="text"
+                data-testid="chat-text-input"
                 className="w-full text-sm px-5 py-3 rounded-full focus:outline-none transition-all duration-200"
                 style={{
                   background: 'var(--bg-card)',
@@ -1276,12 +1326,16 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               />
             </div>
 
-            {/* Voice note OR Send — switch based on whether there's text */}
-            {input.trim() ? (
+            {/* Voice note OR Send — keep Send visible while in-flight so a
+                keyboard-dismiss ghost tap cannot land on Mic after input clears
+                (Android Chrome + iOS). */}
+            {input.trim() || sending ? (
               <button
                 type="submit"
-                disabled={!input.trim() || sending}
+                disabled={(!input.trim() && !sending) || sending}
                 aria-label="Send message"
+                data-testid="chat-send-button"
+                onPointerDown={handleSendPointerDown}
                 className="flex-shrink-0 rounded-full px-5 py-2.5 text-sm font-bold mr-cta-gradient transition-all duration-200 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed min-h-[46px]"
               >
                 {sending ? <PulseRing size={16} label="Sending" /> : 'Send'}
@@ -1293,6 +1347,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 disabled={uploadingMedia}
                 aria-label="Record voice note"
                 title="Record voice note"
+                data-testid="chat-voice-button"
                 className="flex-shrink-0 w-[46px] h-[46px] rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 mr-cta-gradient text-[#FFF6E6] shadow-[0_2px_12px_rgba(196,131,42,0.4)]"
               >
                 <MicIcon className="w-4 h-4" />
@@ -1311,11 +1366,28 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         />
       )}
 
+      <CameraCaptureChooser
+        open={cameraChooserOpen}
+        onClose={() => setCameraChooserOpen(false)}
+        onChoosePicture={handleChoosePicture}
+        onChooseVideo={handleChooseVideo}
+      />
+
       <SelfieCaptureModal
         variant="compact"
         open={selfieOpen}
         onClose={() => setSelfieOpen(false)}
         onCapture={stageImageFile}
+        onError={setMediaError}
+        ariaLabel="Take a picture"
+        captureLabel="Capture"
+        filePrefix="chat-photo"
+      />
+
+      <VideoNoteCaptureModal
+        open={videoNoteOpen}
+        onClose={() => setVideoNoteOpen(false)}
+        onCapture={handleSendVideoNote}
         onError={setMediaError}
       />
 
@@ -1602,6 +1674,7 @@ interface ImageComposerProps {
   rule: ViewRule;
   customViews: number;
   uploading: boolean;
+  preparing?: boolean;
   onRuleChange: (rule: ViewRule) => void;
   onCustomViewsChange: (n: number) => void;
   onCancel: () => void;
@@ -1613,11 +1686,13 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
   rule,
   customViews,
   uploading,
+  preparing = false,
   onRuleChange,
   onCustomViewsChange,
   onCancel,
   onSend,
 }) => {
+  const busy = uploading || preparing;
   const rules: ViewRule[] = ['permanent', 'once', 'twice', 'custom'];
   const ruleSummary =
     rule === 'permanent'
@@ -1702,7 +1777,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
         <button
           type="button"
           onClick={onCancel}
-          disabled={uploading}
+          disabled={busy}
           data-testid="image-composer-cancel"
           className="text-xs px-4 py-2 rounded-full disabled:opacity-40"
           style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)', color: 'var(--cream-muted)' }}
@@ -1712,7 +1787,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
         <button
           type="button"
           onClick={onSend}
-          disabled={uploading}
+          disabled={busy}
           data-testid="image-composer-send"
           className="text-xs font-semibold px-5 py-2 rounded-full disabled:opacity-50 active:scale-95"
           style={{
@@ -1721,7 +1796,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
             boxShadow: '0 2px 12px rgba(196,131,42,0.4)',
           }}
         >
-          {uploading ? 'Sending…' : 'Send'}
+          {preparing ? 'Preparing…' : uploading ? 'Sending…' : 'Send'}
         </button>
       </div>
     </div>
@@ -1804,7 +1879,28 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
 
   // Permanent image → inline, always available.
   if (!isDisappearing) {
-    if (!url) return null;
+    if (!url) {
+      // Socket payloads can arrive before a signed URL is usable; never paint
+      // an empty hole — show the caption/fallback until refetch fills media_url.
+      return (
+        <div
+          className="px-4 py-3 text-sm"
+          data-testid="image-pending"
+          style={{
+            background: isMine
+              ? 'linear-gradient(135deg, #C4832A, #A45E18)'
+              : 'var(--bg-card)',
+            color: isMine ? '#FFF5E6' : 'var(--cream)',
+            border: isMine ? 'none' : '1px solid var(--border-default)',
+            borderRadius: radius,
+            minWidth: 160,
+          }}
+        >
+          {msg.message || '📷 Photo'}
+        </div>
+      );
+    }
+    const blurred = shouldBlurMedia(msg.media_clear);
     return (
       <div className="flex flex-col items-end gap-1">
         <div
@@ -1817,12 +1913,14 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
             boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
           }}
         >
-          <img
-            src={url}
-            alt={msg.message || 'photo'}
-            className="block max-w-[260px] max-h-[340px] object-cover cursor-zoom-in"
-            onClick={() => onOpen(msg)}
-          />
+          <SoftBlurMedia blurred={blurred}>
+            <img
+              src={url}
+              alt={msg.message || 'photo'}
+              className="block max-w-[260px] max-h-[340px] object-cover cursor-zoom-in"
+              onClick={() => onOpen(msg)}
+            />
+          </SoftBlurMedia>
         </div>
         {onWithdraw && (
           <WithdrawMediaButton onClick={onWithdraw} loading={withdrawing} />
@@ -2024,17 +2122,19 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
             </div>
           )}
           {url && (
-            <img
-              key={imgAttempt}
-              src={url}
-              alt={msg.message || 'photo'}
-              data-testid="image-viewer-img"
-              draggable={false}
-              onLoad={handleLoad}
-              onError={handleError}
-              className="max-w-[92vw] max-h-[78vh] object-contain select-none"
-              style={{ opacity: status === 'shown' ? 1 : 0 }}
-            />
+            <SoftBlurMedia blurred={shouldBlurMedia(msg.media_clear)}>
+              <img
+                key={imgAttempt}
+                src={url}
+                alt={msg.message || 'photo'}
+                data-testid="image-viewer-img"
+                draggable={false}
+                onLoad={handleLoad}
+                onError={handleError}
+                className="max-w-[92vw] max-h-[78vh] object-contain select-none"
+                style={{ opacity: status === 'shown' ? 1 : 0 }}
+              />
+            </SoftBlurMedia>
           )}
           {status === 'shown' && !isPermanent && (
             <div
@@ -2266,6 +2366,8 @@ interface VideoBubbleProps {
 
 const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWithdraw, withdrawing }) => {
   const url = getPhotoUrl(msg.media_url || undefined);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [armed, setArmed] = useState(false);
   const withdrawn = isWithdrawnMedia(msg);
   const radius = showTail
     ? isMine
@@ -2290,10 +2392,23 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
     );
   }
 
+  const blurred = shouldBlurMedia(msg.media_clear);
+
+  const armAndPlay = () => {
+    if (blurred || !url) return;
+    setArmed(true);
+    // Defer play until src is attached with preload metadata (range-friendly).
+    requestAnimationFrame(() => {
+      const el = videoRef.current;
+      if (!el) return;
+      void el.play().catch(() => undefined);
+    });
+  };
+
   return (
     <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
       <div
-        className="overflow-hidden"
+        className="relative overflow-hidden"
         style={{
           borderRadius: radius,
           border: isMine ? 'none' : '1px solid var(--border-default)',
@@ -2302,13 +2417,37 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
         }}
       >
         {url ? (
-          <video
-            src={url}
-            controls
-            playsInline
-            preload="metadata"
-            className="block w-full max-h-[320px] bg-black"
-          />
+          <SoftBlurMedia blurred={blurred} data-testid="video-bubble">
+            {armed ? (
+              <video
+                ref={videoRef}
+                src={url}
+                controls={!blurred}
+                playsInline
+                // metadata + Accept-Ranges lets Safari paint/play before full file.
+                preload="metadata"
+                className="block w-full max-h-[320px] bg-black"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={armAndPlay}
+                data-testid="video-bubble-open"
+                className="flex h-[180px] w-full min-w-[200px] flex-col items-center justify-center gap-2 bg-black/90 text-[#F0E0C0]"
+                aria-label="Open video"
+              >
+                <span
+                  className="flex h-12 w-12 items-center justify-center rounded-full bg-[#C4832A] text-lg font-extrabold text-[#1A0E03]"
+                  aria-hidden
+                >
+                  ▶
+                </span>
+                <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--cream-muted)]">
+                  Tap to open
+                </span>
+              </button>
+            )}
+          </SoftBlurMedia>
         ) : (
           <div className="px-4 py-6 text-xs text-[var(--cream-muted)]">Video unavailable</div>
         )}

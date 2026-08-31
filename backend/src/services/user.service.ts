@@ -3,20 +3,27 @@ import { query } from '../db';
 import { defaultGenericAvatarUrl } from '../lib/genericAvatar';
 import { accessControl } from '../security/access';
 import { ProfileInput } from '../types/validation';
+import { ageFromDateOfBirth, AGE_FILTER_MIN } from '../lib/age';
+import { premiumService } from './premium.service';
 
-function stableBearing(seed: string) {
+/**
+ * Privacy fuzz for map pins: keep people near where they actually are, with a
+ * small deterministic offset so exact home/street is not public.
+ *
+ * Previous logic placed people on a RANDOM bearing at bucketed distance from
+ * the viewer — that put pins in the sea and far from known real locations.
+ */
+function privateMapPointAround(realLat: number, realLng: number, seed: string) {
   const hash = crypto.createHash('sha256').update(seed).digest();
-  return hash.readUInt32BE(0) % 360;
-}
-
-function privateMapPoint(originLat: number, originLng: number, distanceKm: number, seed: string) {
-  const bearing = stableBearing(seed) * (Math.PI / 180);
-  const latitudeOffset = (distanceKm / 111) * Math.cos(bearing);
-  const longitudeScale = Math.max(Math.cos(originLat * (Math.PI / 180)), 0.2);
-  const longitudeOffset = (distanceKm / (111 * longitudeScale)) * Math.sin(bearing);
+  // 80–320 m — enough to stop doorstep triangulation, small enough to stay on land.
+  const meters = 80 + (hash.readUInt16BE(0) % 241);
+  const bearing = ((hash.readUInt16BE(2) % 360) * Math.PI) / 180;
+  const dLat = (meters / 1000 / 111) * Math.cos(bearing);
+  const longitudeScale = Math.max(Math.cos((realLat * Math.PI) / 180), 0.2);
+  const dLng = (meters / 1000 / (111 * longitudeScale)) * Math.sin(bearing);
   return {
-    lat: Number((originLat + latitudeOffset).toFixed(6)),
-    lng: Number((originLng + longitudeOffset).toFixed(6)),
+    lat: Number((realLat + dLat).toFixed(6)),
+    lng: Number((realLng + dLng).toFixed(6)),
   };
 }
 
@@ -39,13 +46,17 @@ export const userService = {
   ) {
     await accessControl.requireVerified(userId);
 
-    // Keep DB honest: zombie online=true from crashed tabs skews ops + chat filters.
-    await query(
+    // Do NOT await full-table online cleanup or avatar backfill on this hot path —
+    // phones were waiting ~7s before the Nearby list could paint. Run best-effort
+    // in the background; list query below still filters by fresh last_seen.
+    void query(
       `UPDATE profiles
        SET online = false
        WHERE online = true
          AND (last_seen IS NULL OR last_seen < NOW() - INTERVAL '20 minutes')`,
     ).catch(() => undefined);
+    void this.ensureDefaultAvatar(userId).catch(() => undefined);
+    void this.backfillMissingAvatarsNear(userId).catch(() => undefined);
 
     if (clientLocation) {
       await this.updateLocation(userId, clientLocation.lat, clientLocation.lng);
@@ -68,8 +79,9 @@ export const userService = {
     // been cron-swept yet doesn't masquerade as pulsing in the UI.
     let queryStr = `
       SELECT
-        u.id, u.name, CASE WHEN u.show_age THEN u.age ELSE NULL END AS age,
+        u.id, u.name, CASE WHEN COALESCE(u.show_age, TRUE) THEN u.age ELSE NULL END AS age,
         u.bio, u.headline, u.looking_for, u.photo_url, u.cover_url, u.interests,
+        u.height_cm, u.weight_kg, u.relationship_status, u.hosting_status,
         u.is_verified, u.authenticity_status,
         -- Presence must be fresh: stuck online=true from a crashed tab is not "Active now".
         (p.online = TRUE AND p.last_seen IS NOT NULL AND p.last_seen > NOW() - INTERVAL '20 minutes') AS online,
@@ -83,6 +95,8 @@ export const userService = {
           WHEN p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' THEN p.mood
           ELSE NULL
         END AS mood,
+        p.lat AS real_lat,
+        p.lng AS real_lng,
         ST_Distance(p.location, ST_MakePoint($2, $1)::geography) as distance_m
       FROM users u
       JOIN profiles p ON u.id = p.user_id
@@ -92,6 +106,9 @@ export const userService = {
         AND ST_DWithin(p.location, ST_MakePoint($2, $1)::geography, $4)
         AND p.is_visible = true
         AND p.is_ghost = false
+        AND p.lat IS NOT NULL
+        AND p.lng IS NOT NULL
+        AND u.age >= ${AGE_FILTER_MIN}
         AND NOT EXISTS (
           SELECT 1 FROM blocks b
           WHERE (b.blocker_id = $3 AND b.blocked_id = u.id)
@@ -111,11 +128,11 @@ export const userService = {
         OR (p.available_until IS NOT NULL AND p.available_until > NOW())
       )`;
     }
-    if (filters?.minAge) {
-      values.push(filters.minAge);
+    if (filters?.minAge != null) {
+      values.push(Math.max(filters.minAge, AGE_FILTER_MIN));
       queryStr += ` AND u.age >= $${values.length}`;
     }
-    if (filters?.maxAge) {
+    if (filters?.maxAge != null) {
       values.push(filters.maxAge);
       queryStr += ` AND u.age <= $${values.length}`;
     }
@@ -160,8 +177,7 @@ export const userService = {
 
     return result.rows.map((row) => {
       const km = row.distance_m / 1000;
-      // Distance bucketing and randomized bearings prevent triangulation while
-      // preserving an approximate map/list experience.
+      // Distance labels stay bucketed for list privacy; map pins stay near real coords.
       let bucketed: number;
       let label: string;
       if (km < 0.3) {
@@ -177,14 +193,26 @@ export const userService = {
         bucketed = Math.round(km); // 1km steps above 5km
         label = `${bucketed} km`;
       }
+
+      const realLat = Number(row.real_lat);
+      const realLng = Number(row.real_lng);
+      const mapPoint =
+        Number.isFinite(realLat) && Number.isFinite(realLng)
+          ? privateMapPointAround(
+              realLat,
+              realLng,
+              // Seed without viewer position so pin is stable for everyone viewing this person.
+              `map:${row.id}`,
+            )
+          : { lat: originLat, lng: originLng };
+
+      // Do not leak exact GPS in the API payload — only the fuzzed map pin.
+      const { real_lat: _rl, real_lng: _rg, ...publicRow } = row;
+
       return {
-        ...row,
-        ...privateMapPoint(
-          originLat,
-          originLng,
-          bucketed,
-          `${userId}:${row.id}:${originLat.toFixed(2)}:${originLng.toFixed(2)}:${bucketed}`,
-        ),
+        ...publicRow,
+        lat: mapPoint.lat,
+        lng: mapPoint.lng,
         distance_km: bucketed.toFixed(2),
         distance_label: label,
       };
@@ -198,6 +226,29 @@ export const userService = {
        ON CONFLICT (user_id) DO NOTHING`,
       [userId],
     );
+  },
+
+  /**
+   * Best-effort: fill empty photo_url for users near this viewer so Discover density
+   * does not hide real accounts. Capped for latency.
+   */
+  async backfillMissingAvatarsNear(viewerId: string): Promise<void> {
+    const nearbyMissing = await query(
+      `SELECT u.id
+         FROM users u
+         JOIN profiles p ON p.user_id = u.id
+         JOIN profiles me ON me.user_id = $1
+        WHERE u.id != $1
+          AND (u.photo_url IS NULL OR TRIM(u.photo_url) = '')
+          AND me.location IS NOT NULL
+          AND p.location IS NOT NULL
+          AND ST_DWithin(p.location, me.location, 50000)
+        LIMIT 25`,
+      [viewerId],
+    );
+    for (const row of nearbyMissing.rows as Array<{ id: string }>) {
+      await this.ensureDefaultAvatar(row.id).catch(() => undefined);
+    }
   },
 
   /**
@@ -251,9 +302,12 @@ export const userService = {
     await this.ensureDefaultAvatar(userId);
     const result = await query(
       `SELECT
-        u.id, u.email, u.name, u.age, u.show_age, u.bio, u.headline, u.looking_for,
-        u.photo_url, u.cover_url, u.secondary_photo_urls,
-        u.cover_position_x, u.cover_position_y, u.cover_zoom, u.interests, u.created_at,
+        u.id, u.email, u.name, u.age, u.date_of_birth::text AS date_of_birth, u.show_age,
+        u.bio, u.headline, u.looking_for,
+        u.photo_url, u.cover_url, u.cover_position_x, u.cover_position_y, u.cover_zoom,
+        u.secondary_photo_urls, u.interests, u.created_at,
+        u.height_cm, u.weight_kg, u.relationship_status, u.hosting_status,
+        u.sexual_health_status, u.on_prep, u.last_tested_at::text AS last_tested_at,
         u.is_verified, u.verification_status, u.authenticity_status,
         u.is_premium, u.premium_tier, u.premium_until,
         p.lat, p.lng, p.online, p.last_seen, p.is_visible, p.available_until,
@@ -271,17 +325,38 @@ export const userService = {
        WHERE u.id = $1`,
       [userId]
     );
-    return result.rows[0];
+    const row = result.rows[0];
+    if (!row) return row;
+
+    // Always expose numeric lat/lng (or null) so Discover / setup can detect a saved pin.
+    // pg may return numeric columns as strings; never invent a city-centre fallback.
+    row.lat = row.lat != null && Number.isFinite(Number(row.lat)) ? Number(row.lat) : null;
+    row.lng = row.lng != null && Number.isFinite(Number(row.lng)) ? Number(row.lng) : null;
+
+    // Overlay beta / subscription entitlement so the client does not treat
+    // raw users.is_premium=false as "locked" while Premium is free in beta.
+    const status = await premiumService.getStatus(userId);
+    if (status) {
+      row.is_premium = status.is_premium;
+      row.premium_tier = status.tier;
+      row.premium_until = status.premium_until;
+      row.beta_premium_included = status.beta_premium_included;
+    }
+    return row;
   },
 
   async getPublicProfile(viewerId: string, targetId: string) {
     await accessControl.assertProfileView(viewerId, targetId);
     const result = await query(
       `SELECT
-        u.id, u.name, CASE WHEN u.show_age THEN u.age ELSE NULL END AS age,
+        u.id, u.name,
+        CASE WHEN COALESCE(u.show_age, TRUE) THEN u.age ELSE NULL END AS age,
         u.bio, u.headline, u.looking_for,
         u.photo_url, u.cover_url, u.secondary_photo_urls,
-        u.cover_position_x, u.cover_position_y, u.cover_zoom, u.interests, u.created_at, u.is_verified, u.authenticity_status,
+        u.cover_position_x, u.cover_position_y, u.cover_zoom, u.interests, u.created_at,
+        u.height_cm, u.weight_kg, u.relationship_status, u.hosting_status,
+        u.sexual_health_status, u.on_prep, u.last_tested_at::text AS last_tested_at,
+        u.is_verified, u.authenticity_status,
         p.online, p.last_seen, p.available_until,
         CASE
           WHEN p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' THEN p.mood
@@ -334,6 +409,28 @@ export const userService = {
     const updates: string[] = [];
     const values: unknown[] = [userId];
 
+    if (data.name !== undefined) {
+      updates.push(`name = $${values.length + 1}`);
+      values.push(data.name.trim());
+    }
+    if (data.date_of_birth !== undefined) {
+      if (data.date_of_birth === null) {
+        throw new Error('Date of birth is required once set.');
+      }
+      let nextAge: number;
+      try {
+        nextAge = ageFromDateOfBirth(data.date_of_birth);
+      } catch {
+        throw new Error('Enter a valid date of birth.');
+      }
+      if (nextAge < 18 || nextAge > 120) {
+        throw new Error('You must be 18 or older.');
+      }
+      updates.push(`date_of_birth = $${values.length + 1}`);
+      values.push(data.date_of_birth);
+      updates.push(`age = $${values.length + 1}`);
+      values.push(nextAge);
+    }
     if (data.bio !== undefined) {
       updates.push(`bio = $${values.length + 1}`);
       values.push(data.bio || null);
@@ -370,14 +467,47 @@ export const userService = {
       updates.push(`interests = $${values.length + 1}`);
       values.push(data.interests);
     }
+    if (data.height_cm !== undefined) {
+      updates.push(`height_cm = $${values.length + 1}`);
+      values.push(data.height_cm);
+    }
+    if (data.weight_kg !== undefined) {
+      updates.push(`weight_kg = $${values.length + 1}`);
+      values.push(data.weight_kg);
+    }
+    if (data.relationship_status !== undefined) {
+      updates.push(`relationship_status = $${values.length + 1}`);
+      values.push(data.relationship_status);
+    }
+    if (data.hosting_status !== undefined) {
+      updates.push(`hosting_status = $${values.length + 1}`);
+      values.push(data.hosting_status);
+    }
+    if (data.sexual_health_status !== undefined) {
+      updates.push(`sexual_health_status = $${values.length + 1}`);
+      values.push(data.sexual_health_status);
+    }
+    if (data.on_prep !== undefined) {
+      updates.push(`on_prep = $${values.length + 1}`);
+      values.push(data.on_prep);
+    }
+    if (data.last_tested_at !== undefined) {
+      updates.push(`last_tested_at = $${values.length + 1}`);
+      values.push(data.last_tested_at);
+    }
     if (data.show_age !== undefined) {
       updates.push(`show_age = $${values.length + 1}`);
       values.push(data.show_age);
     }
 
+    const returnCols = `id, name, age, date_of_birth::text AS date_of_birth, show_age, bio, headline, looking_for,
+      photo_url, cover_url, cover_position_x, cover_position_y, cover_zoom, interests,
+      height_cm, weight_kg, relationship_status, hosting_status,
+      sexual_health_status, on_prep, last_tested_at::text AS last_tested_at, secondary_photo_urls`;
+
     if (updates.length === 0) {
       const res = await query(
-        `SELECT id, name, age, show_age, bio, headline, looking_for, photo_url, cover_url, cover_position_x, cover_position_y, cover_zoom, interests FROM users WHERE id = $1`,
+        `SELECT ${returnCols} FROM users WHERE id = $1`,
         [userId]
       );
       return res.rows[0];
@@ -387,30 +517,8 @@ export const userService = {
 
     const result = await query(
       `UPDATE users SET ${updates.join(', ')} WHERE id = $1
-       RETURNING id, name, age, show_age, bio, headline, looking_for, photo_url, cover_url, cover_position_x, cover_position_y, cover_zoom, interests`,
+       RETURNING ${returnCols}`,
       values
-    );
-    return result.rows[0];
-  },
-
-  async setSecondaryPhoto(userId: string, slot: number, photoUrl: string) {
-    if (!Number.isInteger(slot) || slot < 0 || slot > 2) {
-      throw new Error('Invalid photo slot');
-    }
-    const index = slot + 1;
-    const result = await query(
-      `UPDATE users
-          SET secondary_photo_urls = (
-                SELECT array_agg(
-                         CASE WHEN i = $2 THEN $3 ELSE secondary_photo_urls[i] END
-                         ORDER BY i
-                       )
-                  FROM generate_series(1, 3) AS i
-              ),
-              updated_at = NOW()
-        WHERE id = $1
-        RETURNING secondary_photo_urls`,
-      [userId, index, photoUrl],
     );
     return result.rows[0];
   },
@@ -431,6 +539,22 @@ export const userService = {
     );
 
     return result.rows.length > 0;
+  },
+
+  /**
+   * Unmatch: remove both directions of the like so the mutual match is gone.
+   * Does not delete message history or touch room memberships.
+   */
+  async unmatchUser(userId: string, otherId: string): Promise<{ removed: number }> {
+    await accessControl.assertInteraction(userId, otherId);
+    const result = await query(
+      `DELETE FROM likes
+       WHERE (liker_id = $1 AND liked_id = $2)
+          OR (liker_id = $2 AND liked_id = $1)
+       RETURNING id`,
+      [userId, otherId],
+    );
+    return { removed: result.rows.length };
   },
 
   /** Video calls allowed for mutual matches or anyone you've already messaged. */
@@ -510,19 +634,40 @@ export const userService = {
     return result.rows;
   },
 
-  async reportUser(reporterId: string, reportedId: string, reason: string, details?: string) {
+  async reportUser(
+    reporterId: string,
+    reportedId: string,
+    reason: string,
+    details?: string,
+    threadId?: string,
+  ) {
+    const detailParts: string[] = [];
+    if (threadId) {
+      // Machine-readable marker for SENTINEL / team inbox — keep calm user copy elsewhere.
+      detailParts.push(`thread_id=${threadId}`);
+    }
+    if (details?.trim()) {
+      detailParts.push(details.trim());
+    }
+    const storedDetails = detailParts.length ? detailParts.join('\n') : null;
+
     const result = await query(
       `INSERT INTO reports (reporter_id, reported_id, reason, details)
        VALUES ($1, $2, $3, $4)
        RETURNING id, created_at`,
-      [reporterId, reportedId, reason, details ?? null],
+      [reporterId, reportedId, reason, storedDetails],
     );
     const report = result.rows[0] as { id: string; created_at: string };
 
     // Best-effort notify team — never fail the report submission if mail is down.
-    void this.notifyTeamOfReport(reporterId, reportedId, reason, details, report.id).catch(
-      (err) => console.error('[reports] notify failed', err),
-    );
+    void this.notifyTeamOfReport(
+      reporterId,
+      reportedId,
+      reason,
+      storedDetails ?? undefined,
+      report.id,
+      threadId,
+    ).catch((err) => console.error('[reports] notify failed', err));
 
     return report;
   },
@@ -533,6 +678,7 @@ export const userService = {
     reason: string,
     details: string | undefined,
     reportId: string,
+    threadId?: string,
   ) {
     const { sendEmail } = await import('./mailer.service');
     const { getReportNotifyEmails } = await import('./team.service');
@@ -559,7 +705,7 @@ export const userService = {
     const recipients = getReportNotifyEmails();
     if (!recipients.length) return;
 
-    const subject = `[MenRush] Report: ${reason} — ${reported?.name ?? reportedId}`;
+    const subject = `[MenRush][SENTINEL] Report: ${reason} — ${reported?.name ?? reportedId}`;
     const bodyHtml =
       transactionalParagraph(
         `<strong style="color:#F0E0C0;">Reason:</strong> ${esc(reason)}`,
@@ -573,6 +719,12 @@ export const userService = {
         `<strong style="color:#F0E0C0;">Reported:</strong> ${esc(reported?.name ?? 'unknown')} (${esc(reported?.email ?? reportedId)})`,
         true,
       ) +
+      (threadId
+        ? transactionalParagraph(
+            `<strong style="color:#F0E0C0;">Thread ID (SENTINEL):</strong> ${esc(threadId)}`,
+            true,
+          )
+        : '') +
       (details
         ? transactionalParagraph(
             `<strong style="color:#F0E0C0;">Details:</strong> ${esc(details)}`,
@@ -597,7 +749,7 @@ export const userService = {
           to,
           subject,
           html,
-          text: `MenRush report ${reportId}: ${reason}. Reporter ${reporter?.email ?? reporterId} → ${reported?.email ?? reportedId}. ${details ?? ''}`.trim(),
+          text: `MenRush report ${reportId}: ${reason}. Thread ${threadId ?? 'n/a'}. Reporter ${reporter?.email ?? reporterId} → ${reported?.email ?? reportedId}. ${details ?? ''}`.trim(),
         });
       } catch (err) {
         console.error('[reports] email to', to, 'failed', err);
@@ -658,8 +810,7 @@ export const userService = {
     if (term.length < 2) return [];
 
     const result = await query(
-      `SELECT u.id, u.name, CASE WHEN u.show_age THEN u.age ELSE NULL END AS age,
-              u.photo_url, u.bio, u.headline
+      `SELECT u.id, u.name, u.age, u.photo_url, u.bio, u.headline
        FROM users u
        JOIN profiles p ON p.user_id = u.id
        WHERE u.id != $1
@@ -680,8 +831,7 @@ export const userService = {
   async getMatches(userId: string) {
     const result = await query(
       `SELECT
-        u.id, u.name, CASE WHEN u.show_age THEN u.age ELSE NULL END AS age,
-        u.bio, u.photo_url, u.is_verified, u.authenticity_status,
+        u.id, u.name, u.age, u.bio, u.photo_url, u.is_verified, u.authenticity_status,
         p.online, p.last_seen,
         msg.message as last_message,
         msg.created_at as last_message_at,
@@ -722,6 +872,36 @@ export const userService = {
     return result.rows.map((row: { id: string }) => row.id);
   },
 
+  /**
+   * Incoming likes that are not yet mutual. Always returned — not a MenRush+ gate.
+   * Mutual pairs show up under getMatches instead.
+   */
+  async getReceivedLikes(userId: string) {
+    const result = await query(
+      `SELECT
+         u.id, u.name, u.age, u.bio, u.photo_url, u.is_verified, u.authenticity_status,
+         p.online, p.last_seen,
+         l.created_at AS liked_at
+       FROM likes l
+       JOIN users u ON u.id = l.liker_id
+       JOIN profiles p ON p.user_id = u.id
+       WHERE l.liked_id = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM likes l2
+           WHERE l2.liker_id = $1 AND l2.liked_id = l.liker_id
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM blocks b
+           WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+              OR (b.blocker_id = u.id AND b.blocked_id = $1)
+         )
+       ORDER BY l.created_at DESC
+       LIMIT 100`,
+      [userId],
+    );
+    return result.rows;
+  },
+
   async getReceivedLikesSummary(userId: string) {
     const { premiumService } = await import('./premium.service');
     const isPremium = await premiumService.isPremium(userId);
@@ -733,24 +913,35 @@ export const userService = {
          AND NOT EXISTS (
            SELECT 1 FROM likes l2
            WHERE l2.liker_id = $1 AND l2.liked_id = l.liker_id
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM blocks b
+           WHERE (b.blocker_id = $1 AND b.blocked_id = l.liker_id)
+              OR (b.blocker_id = l.liker_id AND b.blocked_id = $1)
          )`,
       [userId],
     );
     const count = countResult.rows[0]?.count ?? 0;
 
-    let preview: Array<{ id: string; name: string; age: number | null; photo_url: string | null }> = [];
-    if (isPremium && count > 0) {
+    // Preview is free for everyone — incoming likes are not a MenRush+ lock.
+    let preview: Array<{ id: string; name: string; age: number; photo_url: string | null }> = [];
+    if (count > 0) {
       const previewResult = await query(
-        `SELECT u.id, u.name, CASE WHEN u.show_age THEN u.age ELSE NULL END AS age, u.photo_url
+        `SELECT u.id, u.name, u.age, u.photo_url
          FROM likes l
          JOIN users u ON u.id = l.liker_id
          WHERE l.liked_id = $1
            AND NOT EXISTS (
              SELECT 1 FROM likes l2
              WHERE l2.liker_id = $1 AND l2.liked_id = l.liker_id
-         )
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM blocks b
+             WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+                OR (b.blocker_id = u.id AND b.blocked_id = $1)
+           )
          ORDER BY l.created_at DESC
-         LIMIT 200`,
+         LIMIT 3`,
         [userId],
       );
       preview = previewResult.rows;

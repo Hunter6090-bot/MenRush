@@ -25,7 +25,8 @@ function resolveMigrationsDir(): string {
 
 const MIGRATIONS_DIR = resolveMigrationsDir();
 
-async function main() {
+/** Idempotent. Safe to call on every boot. Does not close the pool. */
+export async function runPendingMigrations(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version TEXT PRIMARY KEY,
@@ -73,9 +74,16 @@ async function main() {
   else console.log(`Applied ${ran} migration(s).`);
 }
 
-main()
-  .then(() => pool.end())
-  .catch((err) => {
-    console.error(err);
-    pool.end().finally(() => process.exit(1));
-  });
+function isDirectRun(): boolean {
+  const entry = process.argv[1];
+  return Boolean(entry && /migrate\.(js|ts)$/.test(entry));
+}
+
+if (isDirectRun()) {
+  runPendingMigrations()
+    .then(() => pool.end())
+    .catch((err) => {
+      console.error(err);
+      pool.end().finally(() => process.exit(1));
+    });
+}

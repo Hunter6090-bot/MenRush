@@ -1,9 +1,9 @@
 import { expect, test, request as apiRequest, type BrowserContext, type Page } from '@playwright/test';
 import { TEST_PASSWORD, ALICE, BOB } from './test-accounts';
+import { PLAYWRIGHT_BASE_URL as BASE_URL } from './support/base-url';
 
 test.describe.configure({ mode: 'serial' });
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
 
 type LoginResult = {
   token: string;
@@ -33,14 +33,12 @@ async function authenticate(context: BrowserContext, result: LoginResult) {
   await context.addInitScript(({ token, user }) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem('menrush_install_prompt_dismissed', '1');
   }, result);
 }
 
-/** Desktop sidebar uses badge-conversations; mobile tab bar uses badge-mobile-conversations. */
 function conversationsBadge(page: Page) {
-  return page.locator(
-    '[data-testid="badge-conversations"]:visible, [data-testid="badge-mobile-conversations"]:visible',
-  );
+  return page.getByTestId('badge-conversations');
 }
 
 // ── Notification settings (permission gating) ────────────────────────────────
@@ -48,15 +46,6 @@ function conversationsBadge(page: Page) {
 test('notification permission is requested only by a clear user action', async ({ browser }) => {
   const ctx = await browser.newContext();
   await authenticate(ctx, alice);
-
-  // CI smoke has no VAPID keys — stub push as configured so we exercise permission UX.
-  await ctx.route('**/api/push/vapid-public', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ publicKey: 'browser-smoke-vapid-public-key', configured: true }),
-    });
-  });
 
   // Fake a fresh, supported browser with permission still at "default".
   await ctx.addInitScript(() => {
@@ -74,6 +63,17 @@ test('notification permission is requested only by a clear user action', async (
   });
 
   const page = await ctx.newPage();
+  // CI/local often lack VAPID keys — stub so the settings card offers the turn-on path.
+  await page.route('**/api/push/vapid-public', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        publicKey: 'BFakeVapidPublicKeyForE2ETestsOnly0123456789abcdef',
+        configured: true,
+      }),
+    });
+  });
   await page.goto('/notifications');
 
   const card = page.getByTestId('notification-settings');
@@ -103,6 +103,17 @@ test('unsupported browsers show an honest, disabled state', async ({ browser }) 
   });
 
   const page = await ctx.newPage();
+  // Stub VAPID configured so the UI reaches the browser-support branch.
+  await page.route('**/api/push/vapid-public', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        publicKey: 'BFakeVapidPublicKeyForE2ETestsOnly0123456789abcdef',
+        configured: true,
+      }),
+    });
+  });
   await page.goto('/notifications');
 
   await expect(page.getByTestId('notification-settings-status')).toContainText(/doesn’t support|does not support/i);
@@ -114,7 +125,8 @@ test('unsupported browsers show an honest, disabled state', async ({ browser }) 
 // ── Foreground unread badge ──────────────────────────────────────────────────
 
 test('a new message raises the unread badge and opening the chat clears it', async ({ browser }) => {
-  const bobCtx = await browser.newContext();
+  // Badge testid lives on the mobile tab bar (desktop sidebar badges are unlabelled).
+  const bobCtx = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await authenticate(bobCtx, bob);
   const bobPage: Page = await bobCtx.newPage();
 
@@ -141,23 +153,82 @@ test('a new message raises the unread badge and opening the chat clears it', asy
   }
 
   // The Messages tab badge reflects the unread message in real time.
-  await expect(badge).toHaveText(String(beforeCount + 1), { timeout: 10_000 });
+  const afterSend = beforeCount + 1;
+  await expect(badge).toHaveText(String(afterSend), { timeout: 10_000 });
+
+  // Opening the conversations list keeps the badge until the thread is read.
+  await bobPage.goto('/conversations');
+  await expect(badge).toHaveText(String(afterSend));
 
   await bobPage.goto(`/messages/${alice.user.id}`);
   await expect(bobPage.getByRole('button', { name: /Open .*profile/i })).toBeVisible();
   await bobPage.goto('/discover');
-  await bobPage.waitForTimeout(500);
-  if (beforeCount === 0) {
-    await expect(badge).toHaveCount(0, { timeout: 10_000 });
-  } else {
-    await expect(badge).toHaveText(String(beforeCount), { timeout: 10_000 });
+  // Opening Alice's thread clears her unread (may be >1 if prior Alice mail existed).
+  await expect
+    .poll(async () => {
+      if ((await badge.count()) === 0) return 0;
+      return Number((await badge.textContent()) || 0);
+    }, { timeout: 10_000 })
+    .toBeLessThan(afterSend);
+
+  await bobCtx.close();
+});
+
+// ── Privacy: toasts must never leak onto public/logged-out pages ────────────
+
+test('a pending real-time notification never renders as a toast after logging out', async ({ browser }) => {
+  const bobCtx = await browser.newContext();
+  const bobPage = await bobCtx.newPage();
+
+  // Deliberately NOT using the shared `authenticate()` helper here: it uses
+  // `context.addInitScript`, which Playwright re-runs on every subsequent
+  // navigation in the context — that would silently re-inject Bob's token
+  // right as we navigate to the post-logout page, masking the very bug this
+  // test exists to catch. Seed localStorage once via `page.evaluate` instead.
+  await bobPage.goto('/');
+  await bobPage.evaluate(({ token, user }) => {
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem('menrush_install_prompt_dismissed', '1');
+  }, bob);
+  await bobPage.goto('/discover');
+  await bobPage.waitForTimeout(1500); // allow the socket to authenticate
+
+  const aliceApi = await apiRequest.newContext({
+    baseURL: BASE_URL,
+    extraHTTPHeaders: { Authorization: `Bearer ${alice.token}` },
+  });
+  try {
+    const res = await aliceApi.post('/api/messages', {
+      data: { receiver_id: bob.user.id, message: `Toast leak check ${Date.now()}` },
+    });
+    expect(res.ok()).toBeTruthy();
+  } finally {
+    await aliceApi.dispose();
   }
+
+  // Sanity: while genuinely authenticated, the toast does render.
+  await expect(bobPage.getByTestId('toast-notifications')).toBeVisible({ timeout: 10_000 });
+
+  // Log out via the real control (not just clearing storage) so the auth
+  // store's in-memory token actually flips — that's what unmounts
+  // ToastNotifications, regardless of any pending unread items. The Settings
+  // page's "Sign out" is used (rather than the desktop-only sidebar control)
+  // since it's reachable on both desktop and mobile layouts.
+  await bobPage.goto('/settings');
+  await bobPage.getByTestId('settings-sign-out').click();
+  await expect(bobPage).toHaveURL(/\/login/);
+  await bobPage.goto('/');
+
+  await expect(bobPage.getByRole('link', { name: 'Sign in' })).toBeVisible();
+  await expect(bobPage.getByTestId('toast-notifications')).toHaveCount(0);
+  await expect(bobPage.getByText('Toast leak check', { exact: false })).toHaveCount(0);
 
   await bobCtx.close();
 });
 
 test('opening a conversation thread clears that sender from the unread badge', async ({ browser }) => {
-  const bobCtx = await browser.newContext();
+  const bobCtx = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await authenticate(bobCtx, bob);
   const bobPage = await bobCtx.newPage();
 
@@ -181,18 +252,19 @@ test('opening a conversation thread clears that sender from the unread badge', a
     await aliceApi.dispose();
   }
 
-  await expect(badge).toHaveText(String(beforeCount + 1), { timeout: 10_000 });
+  const afterSend = beforeCount + 1;
+  await expect(badge).toHaveText(String(afterSend), { timeout: 10_000 });
 
   // Opening the thread directly (full-screen chat) clears that sender's unread.
   await bobPage.goto(`/messages/${alice.user.id}`);
   await expect(bobPage.getByRole('button', { name: /Open .*profile/i })).toBeVisible();
   await bobPage.goto('/discover');
-  await bobPage.waitForTimeout(500);
-  if (beforeCount === 0) {
-    await expect(badge).toHaveCount(0, { timeout: 10_000 });
-  } else {
-    await expect(badge).toHaveText(String(beforeCount), { timeout: 10_000 });
-  }
+  await expect
+    .poll(async () => {
+      if ((await badge.count()) === 0) return 0;
+      return Number((await badge.textContent()) || 0);
+    }, { timeout: 10_000 })
+    .toBeLessThan(afterSend);
 
   await bobCtx.close();
 });

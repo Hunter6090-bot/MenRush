@@ -10,13 +10,13 @@ import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/a
 import { SecurityError } from '../security/access';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
 import { LocationSchema, ProfileSchema } from '../types/validation';
-import {
-  decideProfilePhotoModeration,
-  faceMatchService,
-} from '../services/verification/face-match.service';
+import { getUploadSubdir } from '../lib/uploads-root';
+import { finalizeLocalUpload } from '../services/media-storage.service';
+import { optimizeImageFile } from '../services/image-optimize.service';
+import { normalizeDiscoveryAgeRange, parseDiscoveryAgeBound } from '../lib/age';
 
 const router = Router();
-const uploadsDir = path.resolve(__dirname, '../../uploads/profiles');
+const uploadsDir = getUploadSubdir('profiles');
 
 fs.mkdirSync(uploadsDir, { recursive: true });
 
@@ -36,7 +36,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  limits: { fileSize: 12 * 1024 * 1024 }, // camera originals before server resize
   fileFilter: uploadFileFilter('profile'),
 });
 
@@ -55,7 +55,7 @@ const coverStorage = multer.diskStorage({
 
 const uploadCover = multer({
   storage: coverStorage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 12 * 1024 * 1024 },
   fileFilter: uploadFileFilter('cover'),
 });
 
@@ -70,19 +70,10 @@ router.post('/photo', verifiedMiddleware, upload.single('photo'), async (req: Au
       fs.unlinkSync(req.file.path);
       return res.status(400).json({ error: 'File content does not match its type' });
     }
-    const moderation = decideProfilePhotoModeration(
-      await faceMatchService.countFaces(req.file.path),
-    );
-    if (!moderation.allowed) {
-      fs.unlinkSync(req.file.path);
-      return res.status(moderation.status).json({
-        error: moderation.message,
-        code: moderation.code,
-      });
-    }
 
-    const photo_url = `/uploads/profiles/${req.file.filename}`;
-    const user = await userService.updateProfile(req.userId!, { photo_url });
+    const optimized = await optimizeImageFile(req.file.path, 'profile');
+    const stored = await finalizeLocalUpload('profiles', optimized.filename, optimized.path);
+    const user = await userService.updateProfile(req.userId!, { photo_url: stored.publicUrl });
     
     res.json(user);
   } catch (error: any) {
@@ -100,54 +91,15 @@ router.post('/cover', verifiedMiddleware, uploadCover.single('cover'), async (re
       return res.status(400).json({ error: 'File content does not match its type' });
     }
 
-    const cover_url = `/uploads/profiles/${req.file.filename}`;
-    const user = await userService.updateProfile(req.userId!, { cover_url });
+    const optimized = await optimizeImageFile(req.file.path, 'cover');
+    const stored = await finalizeLocalUpload('profiles', optimized.filename, optimized.path);
+    const user = await userService.updateProfile(req.userId!, { cover_url: stored.publicUrl });
 
     res.json(user);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }
 });
-
-router.post(
-  '/photo/secondary/:slot',
-  verifiedMiddleware,
-  upload.single('photo'),
-  async (req: AuthRequest, res: Response) => {
-    try {
-      const slot = z.coerce.number().int().min(0).max(2).parse(req.params.slot);
-      if (!req.file) {
-        return res.status(400).json({ error: 'No file uploaded' });
-      }
-      if (!(await validateFileSignature(req.file.path, req.file.mimetype))) {
-        fs.unlinkSync(req.file.path);
-        return res.status(400).json({ error: 'File content does not match its type' });
-      }
-      const moderation = decideProfilePhotoModeration(
-        await faceMatchService.countFaces(req.file.path),
-      );
-      if (!moderation.allowed) {
-        fs.unlinkSync(req.file.path);
-        return res.status(moderation.status).json({
-          error: moderation.message,
-          code: moderation.code,
-        });
-      }
-      const photoUrl = `/uploads/profiles/${req.file.filename}`;
-      const result = await userService.setSecondaryPhoto(req.userId!, slot, photoUrl);
-      res.json(result);
-    } catch (error: any) {
-      if (req.file?.path) {
-        try {
-          fs.unlinkSync(req.file.path);
-        } catch {
-          /* ignore cleanup failure */
-        }
-      }
-      res.status(400).json({ error: error.message });
-    }
-  },
-);
 
 router.get('/me', async (req: AuthRequest, res: Response) => {
   try {
@@ -180,9 +132,13 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
       return res.status(400).json({ error: 'Invalid radius' });
     }
 
+    const ageBounds = normalizeDiscoveryAgeRange(
+      parseDiscoveryAgeBound(minAge),
+      parseDiscoveryAgeBound(maxAge),
+    );
     const filters = {
-      minAge: minAge ? parseInt(minAge as string) : undefined,
-      maxAge: maxAge ? parseInt(maxAge as string) : undefined,
+      minAge: ageBounds.minAge,
+      maxAge: ageBounds.maxAge,
       interests: (interests as string)?.split(',').filter(Boolean),
       onlyPulse: onlyPulse === 'true' || onlyPulse === '1',
       lookingFor: typeof lookingFor === 'string' ? lookingFor : undefined,
@@ -302,6 +258,19 @@ router.post('/like/:id', verifiedMiddleware, async (req: AuthRequest, res: Respo
   }
 });
 
+/** Unmatch — delete both like directions. Does not touch rooms or messages. */
+router.delete('/like/:id', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await userService.unmatchUser(req.userId!, req.params.id);
+    res.json({ unmatched: true, removed: result.removed });
+  } catch (error: any) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
+    res.status(400).json({ error: error.message || 'Could not unmatch' });
+  }
+});
+
 router.get('/matches', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const matches = await userService.getMatches(req.userId!);
@@ -315,6 +284,16 @@ router.get('/likes/received/summary', verifiedMiddleware, async (req: AuthReques
   try {
     const summary = await userService.getReceivedLikesSummary(req.userId!);
     res.json(summary);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/** Incoming likes (not yet mutual) — visible to all members, not MenRush+. */
+router.get('/likes/received', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const likes = await userService.getReceivedLikes(req.userId!);
+    res.json(likes);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -430,6 +409,8 @@ router.get('/blocks', async (req: AuthRequest, res: Response) => {
 const ReportSchema = z.object({
   reason: z.enum(['spam', 'harassment', 'fake_profile', 'inappropriate_content', 'underage', 'other']),
   details: z.string().max(1000).optional(),
+  /** Conversation or room id for SENTINEL review — optional, free for all users. */
+  thread_id: z.string().min(1).max(128).optional(),
 });
 
 router.post('/report/:id', async (req: AuthRequest, res: Response) => {
@@ -446,6 +427,7 @@ router.post('/report/:id', async (req: AuthRequest, res: Response) => {
       req.params.id,
       parsed.data.reason,
       parsed.data.details,
+      parsed.data.thread_id,
     );
     res.json({ reported: true, id: report.id });
   } catch (error: any) {

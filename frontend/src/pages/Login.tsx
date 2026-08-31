@@ -9,6 +9,7 @@ import {
   PublicAuthShell,
 } from '../components/PublicAuthShell';
 import { PulseRing } from '../components/PulseRing';
+import { InstallPrompt } from '../components/InstallPrompt';
 import {
   publicErrorClass,
   publicInputClass,
@@ -17,7 +18,6 @@ import {
   publicPanelClass,
   publicPrimaryButtonClass,
 } from '../lib/publicStyles';
-import { BETA_INVITE_REQUIRED } from '../lib/betaInvite';
 import { FEATURES } from '../lib/featureFlags';
 import { PasswordInput } from '../components/PasswordInput';
 import { loginErrorMessage } from '../lib/authErrors';
@@ -90,7 +90,6 @@ export const Login = () => {
         ...(deviceTrustToken ? { deviceTrustToken } : {}),
       });
       if (res.data.requires2fa) {
-        // Stale or revoked trust token — drop it so we don't keep sending it.
         if (deviceTrustToken) clearDeviceTrustToken();
         setPendingToken(res.data.pendingToken);
         setPendingUser(res.data.user);
@@ -111,7 +110,7 @@ export const Login = () => {
     }
   };
 
-  const registerPath = BETA_INVITE_REQUIRED ? '/beta' : '/register';
+  const registerPath = '/register';
 
   return (
     <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.login}>
@@ -121,7 +120,7 @@ export const Login = () => {
         copy={
           pendingToken
             ? `Two-factor authentication is on for ${pendingUser?.email ?? 'your account'}. Open your authenticator app and enter the current 6-digit code.`
-            : 'For invite holders only. Use the email and password from your invite.'
+            : 'Use your email and password to pick up where you left off.'
         }
       />
 
@@ -234,7 +233,7 @@ export const Login = () => {
 
           <div className="flex flex-col gap-3 text-[15px] text-[var(--cream-muted)]">
             <p className="m-0">
-              Selected for beta?{' '}
+              Need an account?{' '}
               <Link to={registerPath} className={publicLinkClass}>
                 Create an account
               </Link>
@@ -245,6 +244,7 @@ export const Login = () => {
           </div>
         </form>
       </div>
+      <InstallPrompt variant="card" />
     </PublicAuthShell>
   );
 };

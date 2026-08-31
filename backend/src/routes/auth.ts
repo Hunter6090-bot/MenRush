@@ -10,6 +10,7 @@ import {
   ResetPasswordSchema,
   ChangePasswordSchema,
   ChangeEmailSchema,
+  DeleteAccountSchema,
   TwoFactorCodeSchema,
   TwoFactorVerifyLoginSchema,
 } from '../types/validation';
@@ -131,6 +132,18 @@ router.post('/change-email', authMiddleware, authLimiter, async (req: AuthReques
     const msg = error?.message || 'Could not change email';
     const status =
       msg === 'Current password is incorrect' || msg === 'User not found' ? 401 : 400;
+    res.status(status).json({ error: msg });
+  }
+});
+
+router.post('/delete-account', authMiddleware, authLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const data = DeleteAccountSchema.parse(req.body);
+    await authService.deleteAccount(req.userId!, data);
+    res.json({ ok: true, message: 'Account deleted.' });
+  } catch (error: any) {
+    const msg = error?.message || 'Could not delete account';
+    const status = msg === 'Current password is incorrect' ? 401 : 400;
     res.status(status).json({ error: msg });
   }
 });

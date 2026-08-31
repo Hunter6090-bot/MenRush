@@ -3,7 +3,7 @@ import fs from 'fs/promises';
 import type { Request } from 'express';
 import type { FileFilterCallback } from 'multer';
 
-export type UploadContext = 'profile' | 'cover' | 'album' | 'message' | 'verification';
+export type UploadContext = 'profile' | 'cover' | 'album' | 'message' | 'verification' | 'room-temp';
 
 const MIME_EXTENSIONS: Record<string, string> = {
   'image/jpeg': '.jpg',
@@ -23,19 +23,41 @@ const CONTEXT_MIMES: Record<UploadContext, Set<string>> = {
   album: new Set(['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm']),
   message: new Set(Object.keys(MIME_EXTENSIONS)),
   verification: new Set(['image/jpeg', 'image/png', 'image/webp']),
+  'room-temp': new Set(['image/jpeg', 'image/png', 'image/webp']),
 };
 
+/** Strip RFC 2045 parameters (`codecs=…`) before allowlist / extension lookup. */
+export function normalizeUploadMime(mimetype: string | undefined | null): string {
+  if (!mimetype) return '';
+  return mimetype.split(';')[0].trim().toLowerCase();
+}
+
+function unsupportedUploadError(mimetype: string | undefined | null): Error {
+  const got = normalizeUploadMime(mimetype) || 'unknown';
+  // text/plain almost always means the client sent an unquoted codecs= list
+  // (e.g. video/webm;codecs=vp8,opus) and busboy collapsed the Content-Type.
+  if (got === 'text/plain') {
+    return new Error(
+      'Unsupported upload type (got text/plain — send video/webm or video/mp4 without codec parameters)',
+    );
+  }
+  return new Error(`Unsupported upload type (got ${got})`);
+}
+
 export function allowedUpload(mimetype: string, context: UploadContext): boolean {
-  return CONTEXT_MIMES[context].has(mimetype);
+  return CONTEXT_MIMES[context].has(normalizeUploadMime(mimetype));
 }
 
 export function uploadFileFilter(context: UploadContext) {
   return (_req: Request, file: Express.Multer.File, callback: FileFilterCallback) => {
     if (allowedUpload(file.mimetype, context)) {
+      // Persist the normalised base MIME so later signature checks + DB rows
+      // never see codec parameters.
+      file.mimetype = normalizeUploadMime(file.mimetype);
       callback(null, true);
       return;
     }
-    callback(new Error('Unsupported upload type'));
+    callback(unsupportedUploadError(file.mimetype));
   };
 }
 
@@ -44,9 +66,10 @@ export function safeUploadFilename(
   userId: string,
   mimetype: string,
 ): string {
-  const extension = MIME_EXTENSIONS[mimetype];
-  if (!extension || !allowedUpload(mimetype, context)) {
-    throw new Error('Unsupported upload type');
+  const normalized = normalizeUploadMime(mimetype);
+  const extension = MIME_EXTENSIONS[normalized];
+  if (!extension || !allowedUpload(normalized, context)) {
+    throw unsupportedUploadError(mimetype);
   }
   const safeUserId = userId.replace(/[^a-zA-Z0-9-]/g, '');
   return `${context}-${safeUserId}-${crypto.randomUUID()}${extension}`;
@@ -58,8 +81,9 @@ export async function validateFileSignature(filePath: string, mimetype: string):
     const buffer = Buffer.alloc(16);
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
     const bytes = buffer.subarray(0, bytesRead);
+    const normalized = normalizeUploadMime(mimetype);
 
-    switch (mimetype) {
+    switch (normalized) {
       case 'image/jpeg':
         return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
       case 'image/png':

@@ -7,15 +7,25 @@ CREATE TABLE users (
   password_hash VARCHAR(255) NOT NULL,
   name VARCHAR(100) NOT NULL,
   age INT NOT NULL,
+  date_of_birth DATE,
   bio TEXT,
   photo_url TEXT,
   cover_url TEXT,
   cover_position_x REAL NOT NULL DEFAULT 50,
   cover_position_y REAL NOT NULL DEFAULT 50,
   cover_zoom REAL NOT NULL DEFAULT 1,
+  secondary_photo_urls TEXT[] NOT NULL DEFAULT '{}',
   interests TEXT[] DEFAULT '{}',
   headline TEXT,
   looking_for TEXT,
+  height_cm INT,
+  weight_kg INT,
+  relationship_status TEXT,
+  hosting_status TEXT,
+  sexual_health_status TEXT,
+  on_prep BOOLEAN,
+  last_tested_at DATE,
+  show_age BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -81,6 +91,8 @@ CREATE TABLE IF NOT EXISTS rooms (
   avatar_url TEXT,
   created_by UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
   is_location_based BOOLEAN DEFAULT false,
+  is_official BOOLEAN NOT NULL DEFAULT false,
+  official_slug TEXT,
   location GEOGRAPHY(POINT, 4326),
   lat DECIMAL(10, 8),
   lng DECIMAL(11, 8),
@@ -160,11 +172,16 @@ CREATE TABLE IF NOT EXISTS album_photos (
   storage_key TEXT,
   mime_type  TEXT,
   position   INT NOT NULL DEFAULT 0,
+  -- public | view_once | private — owner discretion; not DISCREET_MEDIA_BLUR.
+  -- Existing unlocked-album photos migrate to public; locked → private (see 041).
+  visibility TEXT NOT NULL DEFAULT 'private'
+    CHECK (visibility IN ('public', 'view_once', 'private')),
   created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_album_photos_album ON album_photos(album_id, position);
 CREATE INDEX IF NOT EXISTS idx_album_photos_user ON album_photos(user_id);
+CREATE INDEX IF NOT EXISTS idx_album_photos_user_visibility ON album_photos (user_id, visibility);
 
 CREATE TABLE IF NOT EXISTS album_grants (
   album_id   UUID NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
@@ -174,6 +191,16 @@ CREATE TABLE IF NOT EXISTS album_grants (
 );
 
 CREATE INDEX IF NOT EXISTS idx_album_grants_viewer ON album_grants(viewer_id);
+
+-- View-once opens (viewers). Revoke never deletes photos — only album_grants.
+CREATE TABLE IF NOT EXISTS album_photo_views (
+  photo_id UUID NOT NULL REFERENCES album_photos(id) ON DELETE CASCADE,
+  viewer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  viewed_at TIMESTAMP DEFAULT NOW(),
+  PRIMARY KEY (photo_id, viewer_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_album_photo_views_viewer ON album_photo_views (viewer_id);
 
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'room';
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS starts_at TIMESTAMP;
@@ -266,3 +293,29 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_created
 CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
   ON notifications(user_id)
   WHERE read = FALSE;
+
+-- ─── Veriff identity sessions ─────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS veriff_sessions (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  session_url TEXT,
+  status TEXT NOT NULL DEFAULT 'created'
+    CHECK (status IN (
+      'created',
+      'submitted',
+      'approved',
+      'declined',
+      'resubmission_requested',
+      'expired',
+      'abandoned',
+      'review'
+    )),
+  decision_code TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  decided_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_veriff_sessions_user_id ON veriff_sessions (user_id);
+CREATE INDEX IF NOT EXISTS idx_veriff_sessions_status ON veriff_sessions (status);

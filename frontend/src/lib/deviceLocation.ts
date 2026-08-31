@@ -38,6 +38,16 @@ const ERROR_COPY: Record<DeviceLocationError, string> = {
   save_failed: 'Got your position but could not save it. Check your connection and try again.',
 };
 
+/**
+ * Safari / iOS already denied the prompt — re-prompt will not appear until the user
+ * flips site settings. Profile fields are still complete; this is location, not setup.
+ */
+export const SAFARI_LOCATION_HOW_TO =
+  'On iPhone Safari: tap aA (or …) in the address bar → Website Settings → Location → Allow. Or Settings → Safari → Location. Also check Settings → Privacy & Security → Location Services → Safari Websites → While Using.';
+
+export const LOCATION_DENIED_NOT_INCOMPLETE =
+  'Your profile is ready — this is only location for Nearby, not an incomplete profile.';
+
 function mapGeoError(err: GeolocationPositionError | null | undefined): DeviceLocationError {
   if (!err) return 'unavailable';
   if (err.code === err.PERMISSION_DENIED) return 'denied';

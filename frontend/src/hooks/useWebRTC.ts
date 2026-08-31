@@ -453,6 +453,8 @@ export function useWebRTC() {
         setCallSetupError(
           'They are offline. Ask them to open menrush.com, stay on the app, then try again.',
         );
+      } else if (error === 'no_answer') {
+        setCallSetupError('They didn’t pick up. Try again in a moment.');
       } else if (
         error === 'call_not_allowed' ||
         error === 'target_not_authorized' ||
@@ -520,7 +522,7 @@ export function useWebRTC() {
   }, [callStatus, releaseMedia]);
 
   // Cross-NAT / iOS: ontrack often fires with muted tracks; if they never unmute,
-  // ICE never delivered media — restart once from the caller side.
+  // ICE never delivered media — restart once from the caller side (sooner).
   useEffect(() => {
     if (callStatus !== 'connected') return;
     if (!isCallerRef.current) return;
@@ -533,11 +535,19 @@ export function useWebRTC() {
         !remote ||
         remote.getTracks().length === 0 ||
         ((video?.muted ?? true) && (audio?.muted ?? true));
-      if (mediaStuck && pcRef.current?.connectionState !== 'closed') {
-        console.warn('[webrtc] remote media still muted — attempting ICE restart');
+      const iceBad =
+        pcRef.current?.iceConnectionState === 'checking' ||
+        pcRef.current?.iceConnectionState === 'disconnected' ||
+        pcRef.current?.iceConnectionState === 'failed' ||
+        pcRef.current?.connectionState === 'connecting';
+      if ((mediaStuck || iceBad) && pcRef.current?.connectionState !== 'closed') {
+        console.warn('[webrtc] remote media still muted — attempting ICE restart', {
+          ice: pcRef.current?.iceConnectionState,
+          conn: pcRef.current?.connectionState,
+        });
         void tryIceRestart();
       }
-    }, 6000);
+    }, 3500);
 
     return () => window.clearTimeout(timer);
   }, [callStatus, remoteStream, tryIceRestart]);

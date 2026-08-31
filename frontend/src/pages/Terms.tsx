@@ -384,7 +384,10 @@ export const Terms = () => {
                 <>
                   <Strong>7.2</Strong> Waitlist members who joined before our public launch are
                   entitled to <Strong>30 days of Premium free</Strong>, as stated at the time of
-                  sign-up.
+                  sign-up, unless a valid promotional offer (including a Pride /{' '}
+                  <span className="font-mono tracking-wide">PRIDE</span> promo code) grants a
+                  longer free Premium period instead. Where such a promo applies, it replaces the
+                  30-day waitlist reward — it is not added on top.
                 </>,
               )}
               {para(
@@ -411,6 +414,21 @@ export const Terms = () => {
                   <Strong>7.6</Strong> Subscriptions auto-renew unless cancelled at least 24 hours
                   before the renewal date. You can cancel at any time through your account
                   settings.
+                </>,
+              )}
+              {para(
+                <>
+                  <Strong>7.7</Strong> Pride promotional offer (menrush.com/pride). New Pride
+                  invites are issued 21 to 31 August 2026 only. The printed public code{' '}
+                  <span className="font-mono tracking-wide">PRIDE 3MONTH FREE</span> may be entered
+                  at register by 5 September 2026. A personal code from an earlier email still works
+                  at register by 31 October 2026. Redeeming a valid Pride code grants 3 months of
+                  Premium from launch. One grant per person. No stacking. Pride replaces the 30-day
+                  waitlist Premium gift in clause 7.2. It does not add to that gift. 18+ only.
+                  UK-first. You will not be billed for this offer. MenRush is not a sponsor of
+                  Southampton Pride or Manchester Village Pride. Duration: if booked before launch,
+                  Premium starts at launch. On-time open 1 October 2026 ends 1 January 2027. If
+                  launch slips, 3 months from the actual open date.
                 </>,
               )}
             </section>
