@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Community post comments (text replies on `/stream`) | this branch `cursor/five-features-community-discreet-1e25` | — | Cursor cloud — `community_post_comments` 043; GET/POST `/api/community/posts/:id/comments`; ≤280; free; blocks respected; no media. Do not restore MAP\|COMMUNITY (#165). |
 | **FLAGGED — Community nav (needs Product)** | open | — | Five-features brief: Discover `MAP\|COMMUNITY` + desktop list-under-map = Community feed. **Shipped #165:** Nearby is Grid↔Map only; Community is own nav at `/stream`. Code kept #165. Do not restore the toggle without an explicit Product call. |
 | Merge `origin/main` into five-features (same-intent → main) | this branch `cursor/five-features-community-discreet-1e25` | — | Cursor cloud — took shipped main for Community API, Discreet (`DISCREET_MEDIA_BLUR` off), Safety `thread_id`, More filters, Nightlife 040. Dropped HEAD 039 combined, DiscreetMedia, always-on blur, `/users/sentinel`. Community placement left flagged (row above). |
 | Nearby Grid-first + Community own nav (Brand / Zoul 31 Aug 2026) | PR `#165` draft `cursor/grid-three-up-phone-b1fe` | — | Cursor cloud — Grid↔Map only; kill MAP\|COMMUNITY; Community own icon `/stream` between Nearby+Chat; three-up phone; desktop panel; BrandMark only; do not merge until phone share; do not mix #163/#97–#99/#150 |
