@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { messagesAPI, usersAPI, meetAPI, MediaKind, MessageMediaKind, MessageDTO, MeetAgreementState } from '../api/client';
 import { trackEventOnce } from '../observability/analytics';
 import { useSocket } from '../hooks/useSocket';
@@ -36,10 +36,12 @@ import {
 import {
   appendCachedThreadMessage,
   readCachedThread,
+  rememberInboxThread,
   stripPreviewSeedMessages,
   threadLikelyHasHistory,
   writeCachedThread,
 } from '../lib/conversationHistoryCache';
+import type { ThreadOpenState } from '../components/ConversationItem';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
 interface Message extends Partial<MessageDTO> {
@@ -61,7 +63,20 @@ interface Message extends Partial<MessageDTO> {
   media_clear?: boolean;
 }
 
-function messagesFromCache(peerId: string | undefined): Message[] {
+function seedThreadForOpen(
+  peerId: string | undefined,
+  selfId: string | undefined,
+  nav: ThreadOpenState | null,
+): Message[] {
+  if (!peerId) return [];
+  const preview = nav?.threadPreview;
+  if (preview?.peerId === peerId && preview.lastMessage) {
+    rememberInboxThread(peerId, {
+      lastMessage: preview.lastMessage,
+      lastMessageTime: preview.lastMessageTime,
+      selfId,
+    });
+  }
   const cached = readCachedThread(peerId);
   return cached ? (cached as Message[]) : [];
 }
@@ -154,15 +169,26 @@ function canWithdrawMedia(msg: Message, userId?: string): boolean {
 
 export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const { otherId } = useParams<{ otherId: string }>();
-  // Seed from session cache / inbox preview so existing threads never flash empty.
-  const [messages, setMessages] = useState<Message[]>(() => messagesFromCache(otherId));
+  const location = useLocation();
+  const navState = (location.state as ThreadOpenState | null) || null;
+  const user = useAuthStore((s) => s.user);
+  // Seed from nav preview / session cache so existing threads never flash empty.
+  const [messages, setMessages] = useState<Message[]>(() =>
+    seedThreadForOpen(otherId, user?.id, navState),
+  );
   const [historyReady, setHistoryReady] = useState(
     () => readCachedThread(otherId) !== undefined,
   );
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
-  const [otherUser, setOtherUser] = useState<OtherUser | null>(null);
+  const [otherUser, setOtherUser] = useState<OtherUser | null>(() => {
+    const preview = navState?.threadPreview;
+    if (preview?.peerId === otherId && preview.name) {
+      return { name: preview.name, photo_url: preview.photoUrl };
+    }
+    return null;
+  });
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -188,7 +214,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   // Ticks once a second so disappearing countdowns and burned states update.
   const [, setBurnTick] = useState(0);
   const socket = useSocket();
-  const user = useAuthStore((s) => s.user);
   const { setCalling, setCallSetupError, resetCall } = useCallStore();
   const navigate = useNavigate();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -249,15 +274,34 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       });
   }, [otherId]);
 
+  useLayoutEffect(() => {
+    if (!otherId) return;
+    // Paint before browser paint: nav preview + session cache (survives lazy remount).
+    const seeded = seedThreadForOpen(otherId, user?.id, navState);
+    if (seeded.length > 0) {
+      setMessages(seeded);
+      setHistoryReady(true);
+    } else {
+      const cached = readCachedThread(otherId);
+      setMessages(cached ? (cached as Message[]) : []);
+      setHistoryReady(cached !== undefined);
+    }
+    const preview = navState?.threadPreview;
+    if (preview?.peerId === otherId && preview.name) {
+      setOtherUser((prev) =>
+        prev?.name
+          ? prev
+          : {
+              name: preview.name!,
+              photo_url: preview.photoUrl,
+            },
+      );
+    }
+  }, [otherId, user?.id, navState]);
+
   useEffect(() => {
     if (!otherId) return;
-    // Swap peer immediately: paint cache/preview (or loading), never leave prior peer
-    // or a false empty-state on screen while the next fetch is in flight.
-    const cached = readCachedThread(otherId);
-    setMessages(cached ? (cached as Message[]) : []);
-    setHistoryReady(cached !== undefined);
-    setOtherUser(null);
-    setMeetState(null);
+    // Keep any seeded preview while fetching; do not blank the thread.
     setIsOtherTyping(false);
     loadConversation({ replace: true });
     usersAPI
@@ -274,8 +318,15 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   }, [otherId, loadConversation]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isOtherTyping]);
+    // Avoid scrolling away a single inbox-preview seed before real history arrives.
+    if (
+      messages.length > 0 &&
+      messages.every((m) => typeof m.id === 'string' && m.id.startsWith('preview:'))
+    ) {
+      return;
+    }
+    bottomRef.current?.scrollIntoView({ behavior: historyReady ? 'smooth' : 'auto' });
+  }, [messages, isOtherTyping, historyReady]);
 
   useEffect(() => {
     if (!otherId) return;

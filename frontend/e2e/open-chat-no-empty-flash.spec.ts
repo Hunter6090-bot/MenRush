@@ -1,7 +1,7 @@
 /**
  * Opening an existing 1:1 must not flash the empty/new-chat icebreakers while
  * history is still fetching. Slow the conversation API and assert loading (or
- * preview) instead of "No messages yet".
+ * inbox preview) instead of "No messages yet".
  */
 import { expect, test, request as apiRequest, type BrowserContext } from '@playwright/test';
 import { TEST_PASSWORD, ALICE, BOB } from './test-accounts';
@@ -45,6 +45,7 @@ test.describe('open existing chat — no empty flash', () => {
   }) => {
     const alice = await login(ALICE.email);
     const bob = await login(BOB.email);
+    const seedText = `history seed ${Date.now()}`;
 
     const api = await apiRequest.newContext({ baseURL: BASE_URL });
     try {
@@ -54,11 +55,11 @@ test.describe('open existing chat — no empty flash', () => {
       await api.post('/api/users/like/' + alice.user.id, {
         headers: { Authorization: `Bearer ${bob.token}` },
       });
-      await api.post(
-        '/api/messages',
-        { receiver_id: bob.user.id, message: `history seed ${Date.now()}` },
-        { headers: { Authorization: `Bearer ${alice.token}` } },
-      );
+      const sent = await api.post('/api/messages', {
+        data: { receiver_id: bob.user.id, message: seedText },
+        headers: { Authorization: `Bearer ${alice.token}` },
+      });
+      expect(sent.ok()).toBeTruthy();
     } finally {
       await api.dispose();
     }
@@ -73,9 +74,10 @@ test.describe('open existing chat — no empty flash', () => {
 
     // Warm inbox so rememberInboxThread seeds the session cache / known-non-empty.
     await page.goto('/conversations');
-    await expect(page.getByTestId(`conversation-open-chat-${bob.user.id}`)).toBeVisible({
-      timeout: 20000,
-    });
+    const openChat = page.getByTestId(`conversation-open-chat-${bob.user.id}`);
+    await expect(openChat).toBeVisible({ timeout: 20000 });
+    // Inbox row must show our seed so the open-thread preview can paint it.
+    await expect(openChat).toContainText(seedText, { timeout: 10000 });
 
     let releaseConversation: (() => void) | null = null;
     const conversationGate = new Promise<void>((resolve) => {
@@ -87,19 +89,17 @@ test.describe('open existing chat — no empty flash', () => {
       await route.continue();
     });
 
-    await page.getByTestId(`conversation-open-chat-${bob.user.id}`).click();
+    await openChat.click();
     await expect(page.getByTestId('chat-composer')).toBeVisible({ timeout: 15000 });
 
     // While history is held: never show empty/new-chat icebreakers.
     await expect(page.getByTestId('chat-icebreakers')).toHaveCount(0);
-    // Either inbox preview text or loading skeleton must be present — not blank empty-state.
-    const previewOrLoading = page
-      .getByTestId('chat-history-loading')
-      .or(page.getByText(/history seed/));
-    await expect(previewOrLoading.first()).toBeVisible({ timeout: 5000 });
+    // Inbox preview must paint immediately (nav state / session cache) — not after full fetch.
+    await expect(page.getByText(seedText)).toBeVisible({ timeout: 500 });
+    await expect(page.getByTestId('chat-icebreakers')).toHaveCount(0);
 
     releaseConversation?.();
-    await expect(page.getByText(/history seed/)).toBeVisible({ timeout: 20000 });
+    await expect(page.getByText(seedText)).toBeVisible({ timeout: 20000 });
     await expect(page.getByTestId('chat-icebreakers')).toHaveCount(0);
 
     await ctx.close();

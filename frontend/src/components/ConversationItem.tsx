@@ -5,6 +5,18 @@ import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { MissedCallIcon } from './MissedCallIcon';
 import { ChatSafetyMenu } from './ChatSafetyMenu';
 import { MISSED_CALL_PREVIEW } from '../lib/missedCall';
+import { useAuthStore } from '../hooks/store';
+import { rememberInboxThread } from '../lib/conversationHistoryCache';
+
+export type ThreadOpenState = {
+  threadPreview?: {
+    peerId: string;
+    lastMessage?: string;
+    lastMessageTime?: string;
+    name?: string;
+    photoUrl?: string;
+  };
+};
 
 interface ConversationItemProps {
   userId: string;
@@ -32,8 +44,28 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   variant = 'default',
 }) => {
   const navigate = useNavigate();
+  const selfId = useAuthStore((s) => s.user?.id);
   const isMissedCall = lastMessage === MISSED_CALL_PREVIEW;
   const isSidebar = variant === 'sidebar';
+
+  const openThread = () => {
+    // Seed cache synchronously on tap so Messages first paint has last-known text.
+    rememberInboxThread(userId, {
+      lastMessage,
+      lastMessageTime,
+      selfId,
+    });
+    const state: ThreadOpenState = {
+      threadPreview: {
+        peerId: userId,
+        lastMessage,
+        lastMessageTime,
+        name,
+        photoUrl,
+      },
+    };
+    navigate(`/messages/${userId}`, { state });
+  };
 
   return (
     <div className="flex items-center gap-1">
@@ -64,7 +96,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
 
         <button
           type="button"
-          onClick={() => navigate(`/messages/${userId}`)}
+          onClick={openThread}
           data-testid={`conversation-open-chat-${userId}`}
           className="flex min-w-0 flex-1 items-center gap-3 text-left"
           aria-label={`Open chat with ${name}`}
