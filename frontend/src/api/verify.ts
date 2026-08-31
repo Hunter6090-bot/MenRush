@@ -145,4 +145,7 @@ export const verifyAPI = {
     return apiClient.post<VerifySubmitResult>('/verify/submit', form);
   },
   status: () => apiClient.get<VerifyStatus>('/verify/status'),
+  veriffConfigured: () => apiClient.get<{ configured: boolean }>('/verify/veriff/configured'),
+  createVeriffSession: () =>
+    apiClient.post<{ sessionId: string; sessionUrl: string }>('/verify/veriff/session'),
 };
