@@ -10,6 +10,7 @@ import { resolveMediaPath, verifyMediaAccess } from '../security/media';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
 import { MessageSchema, MediaMessageFormSchema, LocationMessageSchema } from '../types/validation';
 import { getUploadSubdir } from '../lib/uploads-root';
+import { optimizeImageFile } from '../services/image-optimize.service';
 
 const router = Router();
 
@@ -163,21 +164,38 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
   }
 
   try {
+    // Downscale chat photos before DB insert — phones were sending multi‑MB originals
+    // (~15–50s upload). Keep video/audio bytes as-is.
+    let storageKey = req.file.filename;
+    let mimeType = req.file.mimetype;
+    if (kind === 'image') {
+      const optimized = await optimizeImageFile(req.file.path, 'chat');
+      storageKey = optimized.filename;
+      mimeType = optimized.mimeType;
+    }
+
     const message = await messageService.sendMediaMessage(req.userId!, receiver_id, {
       mediaType: kind,
-      storageKey: req.file.filename,
-      mimeType: req.file.mimetype,
+      storageKey,
+      mimeType,
       caption,
       disappearing,
       maxViews: max_views,
       audioDurationMs: duration_ms,
     });
 
+    // Return 201 before push/in-app notify so send timing is not blocked on
+    // notification delivery (open-thread live image delivery stays on #158).
+    res.status(201).json(message);
+
     const io = req.app.get('io');
-    io.to(`user:${receiver_id}`).emit(
-      'message',
-      await messageService.forViewer(message, receiver_id),
-    );
+    void messageService
+      .forViewer(message, receiver_id)
+      .then((forReceiver) => {
+        io.to(`user:${receiver_id}`).emit('message', forReceiver);
+      })
+      .catch(() => undefined);
+
     const pushBody =
       kind === 'image' ? '\u{1F4F7} Photo' : kind === 'video' ? '\u{1F3AC} Video' : '\u{1F3A4} Voice note';
     pushNewMessage(
@@ -187,8 +205,8 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
       pushBody,
     );
 
-    try {
-      await notificationService.notify(io, {
+    void notificationService
+      .notify(io, {
         userId: receiver_id,
         actorId: req.userId!,
         type: kind === 'image' ? 'photo' : 'voice',
@@ -200,16 +218,16 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
               : `${message.sender_name ?? 'Someone'} sent a voice note`,
         body: caption || undefined,
         linkPath: `/messages/${req.userId}`,
+      })
+      .catch((notifyErr) => {
+        console.error('[notification:media]', notifyErr);
       });
-    } catch (notifyErr) {
-      console.error('[notification:media]', notifyErr);
-    }
-
-    res.status(201).json(message);
   } catch (error: any) {
     // Roll back the upload if the DB insert / match check fails.
     try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
-    res.status(400).json({ error: error.message });
+    if (!res.headersSent) {
+      res.status(400).json({ error: error.message });
+    }
   }
 });
 

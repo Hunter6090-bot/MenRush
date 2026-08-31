@@ -271,7 +271,8 @@ function GridPhoto({
   photoUrl?: string;
   age?: number;
 }) {
-  const { src, onError } = useResolvingPhotoSrc(photoUrl, age);
+  // 480px display thumbs — iPhone Nearby was blank/slow on 4032×3024 originals.
+  const { src, onError } = useResolvingPhotoSrc(photoUrl, age, { displayWidth: 480 });
 
   if (!src) {
     return (

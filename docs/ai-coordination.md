@@ -47,7 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
-| P0 mobile web page weight (phones slow; desktop OK) | PR `cursor/mobile-web-page-weight-b5a8` | — | Cursor cloud — route code-split + mapbox chunk + SW no-proxy + Layout match fetch; iPhone+Android evidence; separate from #158; no host move; do not touch #97–#99 / public copy |
+| P0 mobile web page weight (phones slow; desktop OK) | PR `#160` `cursor/mobile-web-page-weight-b5a8` | Nearby hot-path + display thumbs + chat photo compress/send + video preload none | Cursor cloud — keep photo send timings on #160; open-thread image + push-tap → #158; Chat list 3–4s floor; no host move; #97–#99 parked |
 | Mutual profile: Pass · Open chat · Unmatch (drop duplicate Message) | PR `cursor/mutual-profile-unmatch-fd7a` | — | Cursor cloud — DELETE /users/like/:id removes both like dirs; ProfileView only; do not touch #97–#99 / rooms / public copy |
 | Profile tag pick-one / pick-several UX cue | PR `cursor/profile-tag-pick-cue-4040` | — | Cursor cloud — cue only under each tag subsection; selection rules unchanged; do not touch #97–#99 |
 | Discover Map\|Community parity + phone pinch zoom | PR `cursor/discover-map-community-parity-2402` | — | Cursor cloud — desktop under-map = Nearby (not Community); shared MAP\|COMMUNITY tabs; phone map pinch via touch-action/overflow + disableRotation; do not touch #97–#99 |

@@ -59,7 +59,7 @@ function MapPhoto({
   age?: number;
   size: number;
 }) {
-  const { src, onError } = useResolvingPhotoSrc(photoUrl, age);
+  const { src, onError } = useResolvingPhotoSrc(photoUrl, age, { displayWidth: 160 });
   if (!src) {
     // Always show a pin face — initial letter, never a blank hole on the map.
     const initial = (name?.trim()?.[0] || '?').toUpperCase();

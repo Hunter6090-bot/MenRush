@@ -78,3 +78,50 @@ export function normalizeProfileImageFile(file: File): { file: File | null; erro
   const ext = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg';
   return { file: new File([file], file.name || `photo.${ext}`, { type }) };
 }
+
+/**
+ * Client-side compress for chat photo send — cuts Pete↔Al ~15–50s uploads when
+ * the camera original is multi‑MB. Falls back to the original file on failure.
+ */
+export async function compressChatImageFile(
+  file: File,
+  maxEdge = 1280,
+  quality = 0.76,
+): Promise<File> {
+  const normalized = normalizeProfileImageFile(file);
+  if (!normalized.file) return file;
+  const input = normalized.file;
+
+  // Already small enough — skip canvas work.
+  if (input.size <= 350_000) return input;
+
+  try {
+    const bitmap = await createImageBitmap(input);
+    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      bitmap.close();
+      return input;
+    }
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close();
+
+    const blob: Blob | null = await new Promise((resolve) =>
+      canvas.toBlob((b) => resolve(b), 'image/jpeg', quality),
+    );
+    if (!blob || blob.size >= input.size) return input;
+
+    const basename = input.name.replace(/\.[^.]+$/, '') || 'chat-photo';
+    return new File([blob], `${basename}.jpg`, {
+      type: 'image/jpeg',
+      lastModified: Date.now(),
+    });
+  } catch {
+    return input;
+  }
+}

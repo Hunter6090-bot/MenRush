@@ -66,7 +66,8 @@ export function resolveAssetUrl(url?: string | null): string | undefined {
 }
 
 /**
- * Candidate URLs for an upload path — primary then same-origin / API alternate.
+ * Candidate URLs for an upload path — same-origin rewrite first on Vercel
+ * (avoids failed Railway walks on iPhone), then API origin / fallbacks.
  * Image components should walk these on onError before falling back to generic SVG.
  */
 export function resolveUploadUrlCandidates(url?: string | null): string[] {
@@ -93,14 +94,59 @@ export function resolveUploadUrlCandidates(url?: string | null): string[] {
     if (!candidates.includes(full)) candidates.push(full);
   };
 
+  // Prefer same-origin (Vercel /uploads rewrite) before absolute Railway —
+  // iPhone was walking dead Railway URLs and leaving Nearby tiles blank.
+  if (typeof window !== 'undefined') push(window.location.origin);
   push(getUploadAssetBaseUrl());
   push(getApiOrigin());
-  if (typeof window !== 'undefined') push(window.location.origin);
   if (import.meta.env.DEV) push('http://localhost:3000');
   // Last-resort: same host as frontend/vercel.json rewrite (files live on Railway).
   push('https://backend-production-d587.up.railway.app');
 
   return candidates;
+}
+
+const DISPLAY_THUMB_PREFIXES = ['/uploads/profiles/', '/uploads/messages/', '/uploads/albums/', '/uploads/room-temp/'];
+
+/** True when GET /api/media/display can resize this path. */
+export function canUseDisplayThumb(url?: string | null): boolean {
+  if (!url) return false;
+  const trimmed = String(url).trim();
+  if (!trimmed.startsWith('/uploads/')) return false;
+  return DISPLAY_THUMB_PREFIXES.some((p) => trimmed.startsWith(p));
+}
+
+/**
+ * Downscaled JPEG candidates via `/api/media/display` (for Nearby / Matches grids).
+ * Falls back to full upload candidates so a missing thumb never blanks the tile.
+ */
+export function resolveDisplayThumbCandidates(
+  url?: string | null,
+  width = 480,
+): string[] {
+  if (!url) return [];
+  const trimmed = String(url).trim();
+  if (!canUseDisplayThumb(trimmed)) {
+    return resolveUploadUrlCandidates(trimmed);
+  }
+
+  const w = Math.min(Math.max(Math.round(width) || 480, 64), 1280);
+  const srcParam = encodeURIComponent(trimmed);
+  const displayPath = `/api/media/display?src=${srcParam}&w=${w}`;
+  const thumbs: string[] = [];
+  const push = (origin: string | undefined) => {
+    if (!origin) return;
+    const full = `${origin.replace(/\/$/, '')}${displayPath}`;
+    if (!thumbs.includes(full)) thumbs.push(full);
+  };
+
+  if (typeof window !== 'undefined') push(window.location.origin);
+  push(getApiOrigin());
+  push(getUploadAssetBaseUrl());
+  if (import.meta.env.DEV) push('http://localhost:3000');
+  push('https://backend-production-d587.up.railway.app');
+
+  return [...thumbs, ...resolveUploadUrlCandidates(trimmed)];
 }
 
 /** True when the path looks like a local upload that may be missing on disk. */

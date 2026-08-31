@@ -370,6 +370,8 @@ export const Discover = () => {
     lat != null && lng != null ? [lat, lng] : null,
   );
   const [mapLoaded, setMapLoaded] = useState(false);
+  /** Defer Mapbox init until Nearby list has painted (or timed out) so list/photos win the first paint. */
+  const [mapInitAllowed, setMapInitAllowed] = useState(false);
   /** Bumped whenever the basemap style is swapped so GL sources/layers (wiped by setStyle) re-add. */
   const [mapStyleVersion, setMapStyleVersion] = useState(0);
   const [locationNotice, setLocationNotice] = useState('');
@@ -497,7 +499,7 @@ export const Discover = () => {
     ) => {
       if (!options?.background) setLoading(true);
       try {
-        await usersAPI.updateLocation(latitude, longitude).catch(() => {});
+        // getNearby already persists lat/lng — skip a redundant updateLocation RTT.
         const apiFilters = buildNearbyApiFilters(filters);
         const res = await usersAPI.getNearby(latitude, longitude, r, apiFilters);
         setUsers(res.data);
@@ -528,10 +530,19 @@ export const Discover = () => {
         setError('Could not load nearby users.');
       } finally {
         setLoading(false);
+        // Allow Mapbox after the list request settles (success or fail).
+        setMapInitAllowed(true);
       }
     },
     [],
   );
+
+  // Safety: if Nearby never runs (no GPS), still allow map after a short idle.
+  useEffect(() => {
+    if (mapInitAllowed) return;
+    const t = window.setTimeout(() => setMapInitAllowed(true), 2500);
+    return () => window.clearTimeout(t);
+  }, [mapInitAllowed]);
 
   /** Drop every "allow location" surface the moment we have a usable pin. */
   const clearLocationPrompts = useCallback((latitude: number, longitude: number) => {
@@ -1068,6 +1079,8 @@ export const Discover = () => {
     if (mapRef.current) return;
     // Never open Mapbox on a fake city. Wait for last-known or live GPS.
     if (mapCenter == null) return;
+    // Let Nearby list + thumbs paint before Mapbox competes for main-thread / bandwidth.
+    if (!mapInitAllowed) return;
 
     const startCenter = mapCenter;
     mapboxgl.accessToken = mapboxToken!;
@@ -1191,7 +1204,7 @@ export const Discover = () => {
     // Depend on "has center" not every GPS tick — later moves use easeTo in applyLiveGps.
     // useLayoutEffect + isDesktopLayout: host is in the DOM before we construct Mapbox.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mapCenter coords intentionally excluded
-  }, [mapboxToken, tokenMissing, isDesktopLayout, mapCenter != null]);
+  }, [mapboxToken, tokenMissing, isDesktopLayout, mapCenter != null, mapInitAllowed]);
 
   // Keep the basemap in sync with explicit theme toggles while Discover stays mounted.
   // setStyle wipes GL sources/layers (not DOM markers) — bump mapStyleVersion on style.load

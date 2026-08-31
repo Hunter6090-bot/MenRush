@@ -26,6 +26,7 @@ import { parseLocationPayload } from '../lib/locationMessage';
 import { profilePathForUser } from '../lib/profileLinks';
 import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 import { SoftBlurMedia, shouldBlurMedia } from '../components/SoftBlurMedia';
+import { compressChatImageFile } from '../lib/imageUpload';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
 interface Message extends Partial<MessageDTO> {
@@ -388,11 +389,12 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
   const handleSendPendingImage = async () => {
     if (!pendingImage || !otherId || uploadingMedia) return;
-    const file = pendingImage;
     const { disappearing, maxViews } = ruleToSendOptions(viewRule, customViews);
     setMediaError('');
     setUploadingMedia(true);
     try {
+      // Compress before upload — owner timings: Pete→Al ~15s / Al→Pete ~50s on originals.
+      const file = await compressChatImageFile(pendingImage);
       const res = await messagesAPI.sendMedia(otherId, file, {
         kind: 'image',
         disappearing,
@@ -2231,7 +2233,7 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
               src={url}
               controls={!shouldBlurMedia(msg.media_clear)}
               playsInline
-              preload="metadata"
+              preload="none"
               className="block w-full max-h-[320px] bg-black"
             />
           </SoftBlurMedia>

@@ -81,7 +81,9 @@ function PersonGridCard({
   /** Dedicated Message control — photo always opens profile. */
   onMessage?: () => void;
 }) {
-  const { src: photo, onError } = useResolvingPhotoSrc(person.photo_url ?? undefined, person.age);
+  const { src: photo, onError } = useResolvingPhotoSrc(person.photo_url ?? undefined, person.age, {
+    displayWidth: 480,
+  });
   return (
     <div
       data-testid={testId}
