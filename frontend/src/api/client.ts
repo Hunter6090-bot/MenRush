@@ -663,12 +663,12 @@ export const eventsAPI = {
     apiClient.get<EventDTO[]>('/events/nearby', {
       params: { lat, lng, radius: radiusKm, limit },
     }),
-  /** Free venue check-in — creates/uses a Hot Spot pin that expires after 4 hours. */
+  /** Free venue check-in — creates/uses a Cruise (Hot Spot) pin that expires after 4 hours. */
   checkIn: (id: string, anonymous = false) =>
     apiClient.post<{ ok: boolean; spot: HotSpotDTO }>(`/events/${id}/check-in`, { anonymous }),
 };
 
-// ── Hot Spots (venue check-ins — not user Pulse boost) ───────────────────
+// ── Cruise / Hot Spots (venue check-ins — not user Pulse boost; API path /hot-spots) ──
 export interface HotSpotCategoryDTO {
   id: number;
   slug: string;

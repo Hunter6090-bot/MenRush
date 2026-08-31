@@ -11,6 +11,7 @@ export const ROUTE_LABELS = {
   profile: 'Profile',
   rooms: 'Rooms',
   events: 'Events',
-  hotSpots: 'Hot Spots',
+  /** User-facing name is Cruise; `/hot-spots` route + API stay for compatibility. */
+  hotSpots: 'Cruise',
   settings: 'Settings',
 } as const;
