@@ -18,6 +18,7 @@
     "notify:id-verification-paused": "ts-node src/scripts/send-id-verification-paused.ts",
     "verification:purge-sensitive": "ts-node src/scripts/purge-verification-files.ts",
     "test:security": "ts-node scripts/security-checks.ts",
+    "test:veriff": "ts-node --transpile-only scripts/veriff-checks.ts",
     "test:video-note-mime": "ts-node scripts/video-note-mime-checks.ts",
     "test:discovery-age-filter": "ts-node scripts/discovery-age-filter-checks.ts",
     "test:discreet-media-blur": "ts-node scripts/discreet-media-blur-checks.ts",
