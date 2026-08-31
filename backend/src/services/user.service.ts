@@ -46,17 +46,17 @@ export const userService = {
   ) {
     await accessControl.requireVerified(userId);
 
-    // Keep DB honest: zombie online=true from crashed tabs skews ops + chat filters.
-    await query(
+    // Do NOT await full-table online cleanup or avatar backfill on this hot path —
+    // phones were waiting ~7s before the Nearby list could paint. Run best-effort
+    // in the background; list query below still filters by fresh last_seen.
+    void query(
       `UPDATE profiles
        SET online = false
        WHERE online = true
          AND (last_seen IS NULL OR last_seen < NOW() - INTERVAL '20 minutes')`,
     ).catch(() => undefined);
-
-    // Density: assign generic avatars so men without photos still appear on the map.
-    await this.ensureDefaultAvatar(userId).catch(() => undefined);
-    await this.backfillMissingAvatarsNear(userId).catch(() => undefined);
+    void this.ensureDefaultAvatar(userId).catch(() => undefined);
+    void this.backfillMissingAvatarsNear(userId).catch(() => undefined);
 
     if (clientLocation) {
       await this.updateLocation(userId, clientLocation.lat, clientLocation.lng);

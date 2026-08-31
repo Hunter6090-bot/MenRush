@@ -1,7 +1,6 @@
 import { createRoot, Root } from 'react-dom/client';
 import { PulsingAvatar } from './PulsingAvatar';
-import { SilhouetteAvatar } from './SilhouetteAvatar';
-import { useResolvingPhotoSrc } from './UserAvatar';
+import { useGridPhotoSrc } from '../lib/nearbyPhotoSrc';
 
 export interface MapMarkerUser {
   id: string;
@@ -59,8 +58,8 @@ function MapPhoto({
   age?: number;
   size: number;
 }) {
-  const { src, onError } = useResolvingPhotoSrc(photoUrl, age);
-  if (!src) {
+  const { src, phase } = useGridPhotoSrc(photoUrl, age);
+  if (!src || phase === 'loading') {
     // Always show a pin face — initial letter, never a blank hole on the map.
     const initial = (name?.trim()?.[0] || '?').toUpperCase();
     return (
@@ -79,7 +78,9 @@ function MapPhoto({
       alt={name}
       className="w-full h-full object-cover"
       draggable={false}
-      onError={onError}
+      decoding="async"
+      data-testid="map-marker-photo"
+      data-photo-phase={phase}
     />
   );
 }

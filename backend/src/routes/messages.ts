@@ -10,6 +10,7 @@ import { resolveMediaPath, verifyMediaAccess } from '../security/media';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
 import { MessageSchema, MediaMessageFormSchema, LocationMessageSchema } from '../types/validation';
 import { getUploadSubdir } from '../lib/uploads-root';
+import { optimizeImageFile } from '../services/image-optimize.service';
 
 const router = Router();
 
@@ -57,10 +58,21 @@ router.get('/:messageId/media', async (req, res) => {
       media.senderId,
       media.mediaType,
     );
-    res.type(media.mimeType);
-    res.setHeader('Cache-Control', 'private, no-store');
+    const absolute = resolveMediaPath(mediaDir, media.storageKey);
+    // Safari needs Accept-Ranges to start playback before the full download
+    // (Pete iPhone ~12s open on chat video that had already arrived).
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader(
+      'Cache-Control',
+      media.isDisappearing ? 'private, no-store' : 'private, max-age=600',
+    );
     res.setHeader('X-MenRush-Media-Clear', mediaClear ? '1' : '0');
-    return res.sendFile(resolveMediaPath(mediaDir, media.storageKey));
+    res.type(media.mimeType);
+    return res.sendFile(absolute, { acceptRanges: true }, (err) => {
+      if (!err || res.headersSent) return;
+      console.error('[media:sendFile]', err.message);
+      res.status(404).json({ error: 'media_unavailable' });
+    });
   } catch (error) {
     if (error instanceof SecurityError) {
       return res.status(error.status).json({ error: error.code });
@@ -166,23 +178,37 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
   }
 
   try {
+    // Downscale chat photos before DB insert — phones were sending multi‑MB originals
+    // (~15–50s upload). Keep video/audio bytes as-is.
+    let storageKey = req.file.filename;
+    let mimeType = req.file.mimetype;
+    if (kind === 'image') {
+      const optimized = await optimizeImageFile(req.file.path, 'chat');
+      storageKey = optimized.filename;
+      mimeType = optimized.mimeType;
+    }
+
     const message = await messageService.sendMediaMessage(req.userId!, receiver_id, {
       mediaType: kind,
-      storageKey: req.file.filename,
-      mimeType: req.file.mimetype,
+      storageKey,
+      mimeType,
       caption,
       disappearing,
       maxViews: max_views,
       audioDurationMs: duration_ms,
     });
 
-    const io = req.app.get('io');
-    io.to(`user:${receiver_id}`).emit(
-      'message',
-      await messageService.forViewer(message, receiver_id),
-    );
-    // Respond before fan-out so the sender is not blocked on notify/push.
+    // Return 201 before push/in-app notify so send timing is not blocked on
+    // notification delivery (open-thread live image delivery stays on #158).
     res.status(201).json(message);
+
+    const io = req.app.get('io');
+    void messageService
+      .forViewer(message, receiver_id)
+      .then((forReceiver) => {
+        io.to(`user:${receiver_id}`).emit('message', forReceiver);
+      })
+      .catch(() => undefined);
 
     const pushBody =
       kind === 'image' ? '\u{1F4F7} Photo' : kind === 'video' ? '\u{1F3AC} Video' : '\u{1F3A4} Voice note';
@@ -207,11 +233,15 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
         body: caption || undefined,
         linkPath: `/messages/${req.userId}`,
       })
-      .catch((notifyErr) => console.error('[notification:media]', notifyErr));
+      .catch((notifyErr) => {
+        console.error('[notification:media]', notifyErr);
+      });
   } catch (error: any) {
     // Roll back the upload if the DB insert / match check fails.
     try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
-    res.status(400).json({ error: error.message });
+    if (!res.headersSent) {
+      res.status(400).json({ error: error.message });
+    }
   }
 });
 

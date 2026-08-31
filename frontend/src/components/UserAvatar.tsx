@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   fallbackAvatarForAge,
   resolveAssetUrl,
+  resolveDisplayThumbCandidates,
   resolveUploadUrlCandidates,
 } from '../lib/assetUrl';
 import { profilePathForUser } from '../lib/profileLinks';
@@ -39,6 +40,11 @@ const sizes: Record<Size, { outer: string; text: string; dot: string; dotPos: st
 
 export const getPhotoUrl = (url?: string) => resolveAssetUrl(url);
 
+export type ResolvingPhotoOptions = {
+  /** Prefer `/api/media/display` thumbs (Nearby / Matches grids — iPhone decode). */
+  displayWidth?: number;
+};
+
 /**
  * Walk upload URL candidates (API host ↔ same-origin rewrite) before generic fallback.
  * Keeps real /uploads photos visible when Vercel rewrite and VITE_API_URL disagree.
@@ -46,16 +52,21 @@ export const getPhotoUrl = (url?: string) => resolveAssetUrl(url);
 export function useResolvingPhotoSrc(
   photoUrl?: string | null,
   age?: number,
+  options?: ResolvingPhotoOptions,
 ): { src: string | undefined; onError: () => void } {
   const [candidateIdx, setCandidateIdx] = useState(0);
   const [phase, setPhase] = useState<'candidates' | 'generic' | 'empty'>('candidates');
+  const displayWidth = options?.displayWidth;
 
-  const candidates = resolveUploadUrlCandidates(photoUrl);
+  const candidates =
+    displayWidth != null
+      ? resolveDisplayThumbCandidates(photoUrl, displayWidth)
+      : resolveUploadUrlCandidates(photoUrl);
 
   useEffect(() => {
     setCandidateIdx(0);
     setPhase('candidates');
-  }, [photoUrl]);
+  }, [photoUrl, displayWidth]);
 
   let src: string | undefined;
   if (phase === 'empty') src = undefined;

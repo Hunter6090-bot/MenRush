@@ -176,10 +176,18 @@ export function VideoNoteCaptureModal({
     const mime = pickVideoRecorderMime();
     let mr: MediaRecorder;
     try {
-      mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      // Cap bitrate so Android→iPhone open is not a multi‑MB wait (~12s report).
+      const recorderOpts: MediaRecorderOptions = mime
+        ? { mimeType: mime, videoBitsPerSecond: 1_200_000 }
+        : { videoBitsPerSecond: 1_200_000 };
+      mr = new MediaRecorder(stream, recorderOpts);
     } catch {
-      onErrorRef.current('Video recording is not supported on this device.');
-      return;
+      try {
+        mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      } catch {
+        onErrorRef.current('Video recording is not supported on this device.');
+        return;
+      }
     }
 
     recorderRef.current = mr;
