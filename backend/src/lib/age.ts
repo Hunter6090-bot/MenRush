@@ -42,3 +42,30 @@ export function formatIsoDateOnly(d: Date): string {
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
+
+/** Discovery age filter floor — everyone on the app is 18+. */
+export const AGE_FILTER_MIN = 18;
+export const AGE_FILTER_MAX = 99;
+
+export function clampDiscoveryAge(value: number): number {
+  return Math.min(AGE_FILTER_MAX, Math.max(AGE_FILTER_MIN, Math.trunc(value)));
+}
+
+/** Parse nearby query age bounds; invalid/empty → undefined; always clamped 18–99. */
+export function parseDiscoveryAgeBound(raw: unknown): number | undefined {
+  if (raw == null || raw === '') return undefined;
+  const n = typeof raw === 'number' ? raw : Number.parseInt(String(raw), 10);
+  if (!Number.isFinite(n)) return undefined;
+  return clampDiscoveryAge(n);
+}
+
+/** Normalize min/max so min ≤ max when both present. */
+export function normalizeDiscoveryAgeRange(
+  minAge?: number,
+  maxAge?: number,
+): { minAge?: number; maxAge?: number } {
+  if (minAge != null && maxAge != null && minAge > maxAge) {
+    return { minAge: maxAge, maxAge: minAge };
+  }
+  return { minAge, maxAge };
+}
