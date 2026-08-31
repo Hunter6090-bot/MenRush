@@ -22,7 +22,7 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   await expect(heroHeading).toBeVisible();
   await expect(heroHeading).toHaveClass(/mr-coming-soon-heading/);
 
-  await expect(page.getByText(/LIVE NOW — UK BETA OPEN/i)).toBeVisible();
+  await expect(page.getByText(/LIVE NOW\. UK BETA OPEN/i)).toBeVisible();
   await expect(page.getByText(/OPENS 1 OCTOBER 2026/i)).toHaveCount(0);
   await expect(page.getByText(/leave your email/i)).toHaveCount(0);
   await expect(page.getByText(/LONDON · MANCHESTER · BIRMINGHAM · BRIGHTON/i)).toHaveCount(0);
