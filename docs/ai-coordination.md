@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Nav icons: Settings gear + Rooms camera/people (kill Doric columns) | PR `cursor/nav-settings-rooms-icons-d7d9` | — | Cursor cloud — IconSettings=6-tooth cog; IconRooms=camera+2 people; preview HTML dupes; do not mix #150/#165/#170/#171/#169 |
 | Landing header BrandMark top-left (ComingSoon) | PR `cursor/landing-header-brandmark-35ee` | — | Cursor cloud — sm BrandMark → `/` left; Sign in right; hero mark kept; overline LIVE NOW. UK BETA OPEN; do not mix #165/#163/#97–#99 |
 | P0 Go live / Discover bounce (location ≠ incomplete profile) | PR `cursor/fix-go-live-discovery-bounce-d9b8` | — | Cursor cloud — honest live ticks; RequireProfileSetup never redirects for GPS; ActivationBanner Settings not Finish profile; /me lat/lng coerce; Safari how-to; do not touch #97–#99 / #158 / #160 / #162 / held PRs |
 | PWA Get the App: apostrophe leak + desktop banner + Done→/login | PR `cursor/fix-pwa-install-prompt-6d80` | — | Cursor cloud — JSX `\u2019`→real `'`; InstallPrompt phone-only via `isPhoneDevice`; Done→/login; do not touch #97–#99 / #158 / #160 / landing copy |
