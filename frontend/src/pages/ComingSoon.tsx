@@ -37,6 +37,7 @@ export const ComingSoon = () => {
     }
   }, [hash]);
 
+
   return (
     <div className="relative flex min-h-dvh max-w-full flex-col overflow-x-clip overflow-hidden bg-[#0D0A06] text-[#F0E0C0]">
       <div

@@ -722,6 +722,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     (room?.created_by && room.created_by !== user?.id ? room.created_by : undefined) ??
     members.find((m) => m.id !== user?.id)?.id;
 
+
   const handleAddMember = async (targetId: string, targetName: string) => {
     if (!roomId || addingMemberId) return;
     setAddingMemberId(targetId);
@@ -923,6 +924,15 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
         >
           <GroupIcon className="w-5 h-5" />
         </button>
+
+        {roomId && roomReportTargetId ? (
+          <PanicReportButton
+            reportedUserId={roomReportTargetId}
+            threadId={`room:${roomId}`}
+            onNotice={(msg) => setSettingsNotice(msg)}
+            className="w-9 h-9"
+          />
+        ) : null}
 
         {roomId && roomReportTargetId ? (
           <PanicReportButton
@@ -1236,7 +1246,17 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                         data-testid={`room-msg-avatar-${msg.sender_id}`}
                         aria-hidden
                       >
-                        {initials(msg.sender_name)}
+                        <div
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                          style={{
+                            background: `${color}22`,
+                            border: `1px solid ${color}44`,
+                            color,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {initials(msg.sender_name)}
+                        </div>
                       </div>
                     )}
                   </div>

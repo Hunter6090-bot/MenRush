@@ -11,10 +11,22 @@ import { applyLiveUpsert } from '../lib/notificationToasts';
 
 type User = StoredAuthUser;
 
+const REFRESH_TOKEN_KEY = 'refresh_token';
+
+function readStoredRefreshToken(): string | null {
+  try {
+    return localStorage.getItem(REFRESH_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
 interface AuthState {
   user: User | null;
   token: string | null;
-  setAuth: (user: User, token: string) => void;
+  refreshToken: string | null;
+  setAuth: (user: User, token: string, refreshToken?: string) => void;
+  setTokens: (token: string, refreshToken: string) => void;
   /** Re-read localStorage/cookie into the store (PWA cold start / pageshow). */
   rehydrateAuth: () => boolean;
   setVerified: (status: NonNullable<User['verification_status']>, isVerified: boolean) => void;
@@ -28,16 +40,53 @@ const boot = readAuthSnapshot();
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: boot.user,
   token: boot.token,
-  setAuth: (user, token) => {
+  refreshToken: readStoredRefreshToken(),
+  setAuth: (user, token, refreshToken) => {
     persistAuthSession(user, token);
-    set({ user, token });
+    if (refreshToken) {
+      try {
+        localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+      } catch {
+        /* private mode / quota */
+      }
+    }
+    set((state) => ({
+      user,
+      token,
+      refreshToken: refreshToken ?? state.refreshToken,
+    }));
+  },
+  setTokens: (token, refreshToken) => {
+    const user = get().user;
+    if (user) {
+      persistAuthSession(user, token);
+    } else {
+      try {
+        localStorage.setItem('token', token);
+      } catch {
+        /* ignore */
+      }
+    }
+    try {
+      localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    } catch {
+      /* ignore */
+    }
+    set({ token, refreshToken });
   },
   rehydrateAuth: () => {
     const snap = readAuthSnapshot();
     if (!snap.token) return false;
+    const refreshToken = readStoredRefreshToken();
     const current = get();
-    if (current.token === snap.token && current.user?.id === snap.user?.id) return true;
-    set({ user: snap.user, token: snap.token });
+    if (
+      current.token === snap.token
+      && current.user?.id === snap.user?.id
+      && current.refreshToken === refreshToken
+    ) {
+      return true;
+    }
+    set({ user: snap.user, token: snap.token, refreshToken });
     return true;
   },
   setVerified: (status, isVerified) =>
@@ -63,7 +112,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }),
   logout: () => {
     clearAuthSession();
-    set({ user: null, token: null });
+    try {
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+    } catch {
+      /* ignore */
+    }
+    set({ user: null, token: null, refreshToken: null });
     // Private notification content (message previews, etc.) must not linger
     // in memory once logged out — ToastNotifications is unmounted by the
     // token gate in App.tsx, but the store itself can still be read elsewhere.

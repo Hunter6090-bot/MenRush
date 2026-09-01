@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg';
 import pool, { query } from '../db';
 import { ccbillService, CCBillTier } from './ccbill.service';
+import { isInviteRequired } from './invite-code.service';
 
 type Queryable = PoolClient | typeof pool;
 
@@ -142,7 +143,9 @@ export const premiumService = {
   },
 
   isBetaPremiumFree(): boolean {
-    return process.env.BETA_PREMIUM_FREE === 'true';
+    // MenRush is currently in beta, so Premium is included unless an operator
+    // explicitly ends the beta entitlement with BETA_PREMIUM_FREE=false.
+    return process.env.BETA_PREMIUM_FREE !== 'false' || isInviteRequired();
   },
 
   /**
@@ -169,6 +172,7 @@ export const premiumService = {
     );
     return { premiumUntil };
   },
+
 
   async isPremium(userId: string): Promise<boolean> {
     if (this.isBetaPremiumFree()) return true;

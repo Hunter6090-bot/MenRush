@@ -388,7 +388,7 @@ function VerificationSelfieCapture({
                 onClick={handleConfirm}
                 className="flex-1 rounded-xl bg-[#C4832A] py-3 text-sm font-bold text-[#0D0A06]"
               >
-                Confirm selfie
+                {instruction ? 'Confirm this prompt' : 'Confirm selfie'}
               </button>
             </>
           ) : (

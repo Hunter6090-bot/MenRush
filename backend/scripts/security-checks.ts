@@ -9,6 +9,7 @@ import {
   safeUploadFilename,
   validateFileSignature,
 } from '../src/security/uploads';
+import { decideProfilePhotoModeration } from '../src/services/verification/face-match.service';
 import {
   isExpiredMedia,
   resolveMediaPath,
@@ -164,6 +165,25 @@ test('uploads use allowlisted MIME types, generated extensions, and magic bytes'
   assert.equal(await validateFileSignature(webm, 'video/webm;codecs=vp8,opus'), true);
   assert.equal(await validateFileSignature(mp4, 'video/mp4;codecs=avc1.42E01E,mp4a.40.2'), true);
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('profile photo moderation allows exactly one detected face', () => {
+  assert.deepEqual(
+    decideProfilePhotoModeration({ count: 1, engineAvailable: true }),
+    { allowed: true },
+  );
+  assert.equal(
+    decideProfilePhotoModeration({ count: 0, engineAvailable: true }).allowed,
+    false,
+  );
+  assert.equal(
+    decideProfilePhotoModeration({ count: 2, engineAvailable: true }).allowed,
+    false,
+  );
+  assert.equal(
+    decideProfilePhotoModeration({ count: 1, engineAvailable: false }).allowed,
+    false,
+  );
 });
 
 test('protected media paths cannot traverse storage and expired media is denied', () => {

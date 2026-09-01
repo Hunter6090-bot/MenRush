@@ -9,6 +9,7 @@
 
 const TOKEN_KEY = 'token';
 const USER_KEY = 'user';
+const REFRESH_TOKEN_KEY = 'refresh_token';
 const COOKIE_NAME = 'mr_token';
 /** Match backend JWT TTL (7 days). */
 const COOKIE_MAX_AGE_SEC = 7 * 24 * 60 * 60;
@@ -130,6 +131,7 @@ export function clearAuthSession(): void {
   try {
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
   } catch {
     /* ignore */
   }

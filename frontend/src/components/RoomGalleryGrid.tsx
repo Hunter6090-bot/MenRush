@@ -174,7 +174,7 @@ export function RoomGalleryGrid({
   onPin,
   getStreamFor,
   photoUrl,
-  cameraOnForSelf = true,
+  cameraOnForSelf = false,
 }: RoomGalleryGridProps) {
   const live = participants.filter((p) => p.isLive);
   const away = participants.filter((p) => !p.isLive);

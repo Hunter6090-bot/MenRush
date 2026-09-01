@@ -180,18 +180,15 @@ export const Register = () => {
         ...(inviteCode ? { invite_code: inviteCode } : {}),
         ...(trimmedPromo ? { promo_code: trimmedPromo } : {}),
       });
-      setAuth(res.data.user, res.data.token);
-      navigate(
-        FEATURES.veriffAfterSignup || FEATURES.requireIdVerification
-          ? '/verify/id'
-          : '/profile/setup',
-      );
+      setAuth(res.data.user, res.data.token, res.data.refresh_token);
+      navigate(FEATURES.requireIdVerification ? '/verify/id' : '/profile/setup');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
+
 
   const segColor = (idx: number): string => {
     if (pwScore <= idx) return '#3D2B0E';

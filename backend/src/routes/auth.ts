@@ -17,8 +17,19 @@ import {
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 import { query } from '../db';
 import { z } from 'zod';
+import { authSessionService } from '../services/auth-session.service';
 
 const router = Router();
+
+async function withBrowserSession<T extends { user?: { id?: string }; token?: string }>(
+  result: T,
+  userAgent?: string,
+): Promise<T & { refresh_token?: string }> {
+  const userId = result.user?.id;
+  if (!result.token || !userId) return result;
+  const refreshToken = await authSessionService.create(userId, userAgent);
+  return { ...result, refresh_token: refreshToken };
+}
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -41,7 +52,7 @@ router.post('/register', authLimiter, async (req: AuthRequest, res: Response) =>
   try {
     const data = RegisterSchema.parse(req.body);
     const result = await authService.register(data);
-    res.status(201).json(result);
+    res.status(201).json(await withBrowserSession(result, req.get('user-agent') || undefined));
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }
@@ -51,7 +62,7 @@ router.post('/login', authLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = LoginSchema.parse(req.body);
     const result = await authService.login(data);
-    res.json(result);
+    res.json(await withBrowserSession(result, req.get('user-agent') || undefined));
   } catch (error: any) {
     res.status(401).json({ error: error.message });
   }
@@ -144,10 +155,35 @@ router.post('/2fa/verify', authLimiter, async (req: AuthRequest, res: Response) 
       trustThisDevice: !!data.trustThisDevice,
       userAgent: req.get('user-agent') || undefined,
     });
-    res.json(result);
+    res.json(await withBrowserSession(result, req.get('user-agent') || undefined));
   } catch (error: any) {
     res.status(401).json({ error: error.message });
   }
+});
+
+router.post('/refresh', authLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const { refresh_token: refreshToken } = z
+      .object({ refresh_token: z.string().min(32).max(512) })
+      .parse(req.body);
+    const rotated = await authSessionService.rotate(refreshToken);
+    if (!rotated) {
+      return res.status(401).json({ error: 'Session expired' });
+    }
+    res.json({
+      token: authService.issueAccessToken(rotated.userId),
+      refresh_token: rotated.refreshToken,
+    });
+  } catch {
+    res.status(401).json({ error: 'Session expired' });
+  }
+});
+
+router.post('/logout', async (req: AuthRequest, res: Response) => {
+  const refreshToken =
+    typeof req.body?.refresh_token === 'string' ? req.body.refresh_token : undefined;
+  await authSessionService.revoke(refreshToken);
+  res.json({ ok: true });
 });
 
 router.get('/2fa/trusted-devices', authMiddleware, async (req: AuthRequest, res: Response) => {

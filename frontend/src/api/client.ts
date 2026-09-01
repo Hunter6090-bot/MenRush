@@ -83,6 +83,8 @@ export const authAPI = {
   register: (data: unknown) => apiClient.post('/auth/register', data),
   login: (data: { email: string; password: string; deviceTrustToken?: string }) =>
     apiClient.post('/auth/login', data),
+  logout: (refreshToken?: string | null) =>
+    apiClient.post('/auth/logout', { refresh_token: refreshToken ?? undefined }),
   verifyTwoFactorLogin: (data: {
     pendingToken: string;
     code: string;

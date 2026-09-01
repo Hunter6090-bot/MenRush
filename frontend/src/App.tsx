@@ -9,6 +9,7 @@ import { useGlobalMessageNotifications } from './hooks/useGlobalMessageNotificat
 import { useUnreadSync } from './hooks/useUnreadSync';
 import { useNotificationSync } from './hooks/useNotificationSync';
 import { useAuthProfileSync } from './hooks/useAuthProfileSync';
+import { usePremiumSync } from './hooks/usePremiumSync';
 import { useLiveLocationPublisher } from './hooks/useLiveLocationPublisher';
 import { readThemePreference, applyTheme } from './lib/theme';
 import { FEATURES } from './lib/featureFlags';
@@ -231,6 +232,7 @@ function AppShell() {
   useUnreadSync();
   useNotificationSync();
   useAuthProfileSync();
+  usePremiumSync(!!token);
   useLiveLocationPublisher();
 
   const showDevRoomGate =
