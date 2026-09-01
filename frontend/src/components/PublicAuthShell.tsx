@@ -37,7 +37,7 @@ export function PublicAuthShell({
   showFooter = false,
 }: PublicAuthShellProps) {
   return (
-    <div className="relative flex min-h-dvh flex-col overflow-hidden bg-[#0D0A06] text-[#F0E0C0]">
+    <div className="relative flex min-h-dvh max-w-full flex-col overflow-x-clip overflow-hidden bg-[#0D0A06] text-[#F0E0C0]">
       {backgroundImage ? (
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"

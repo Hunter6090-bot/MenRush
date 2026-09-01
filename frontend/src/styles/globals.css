@@ -9,8 +9,19 @@
   padding: 0;
 }
 
+/*
+ * Phone-fit lock: layout width must equal the device width on first paint
+ * (Safari tab + Home Screen PWA). Nested horizontal scrollers (filters,
+ * Events rail) must not widen the document — iOS otherwise invites
+ * pinch-to-shrink. Keep pinch available for maps/video (do not set
+ * user-scalable=no here). overflow-x: clip where supported; hidden fallback.
+ */
 html {
   -webkit-text-size-adjust: 100%;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {
@@ -20,6 +31,29 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100dvh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-x: clip;
+  position: relative;
+}
+
+#root {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-x: clip;
+}
+
+/* Closed <details> must not leave wide children in the layout tree (iOS). */
+details:not([open]) > *:not(summary) {
+  display: none !important;
+}
+
+img,
+video {
+  max-width: 100%;
 }
 
 input:-webkit-autofill,

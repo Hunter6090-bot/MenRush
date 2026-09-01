@@ -20,7 +20,7 @@ interface TribePillRowProps {
 }
 
 export const TribePillRow: React.FC<TribePillRowProps> = ({ selected, onToggle, onClear }) => (
-  <div className="flex items-center gap-2 overflow-x-auto px-3 pb-1">
+  <div className="flex min-w-0 max-w-full items-center gap-2 overflow-x-auto overscroll-x-contain px-3 pb-1 [-webkit-overflow-scrolling:touch]">
     {TRIBE_TAGS.map((tag) => {
       const active = selected.includes(tag);
       return (
