@@ -857,7 +857,10 @@ export const Settings = () => {
 
           <section className="mr-card p-4">
             <p className="text-[15px] font-bold text-[var(--cream)]">Push notifications</p>
-            <p className="mt-1 text-[13px] text-[var(--cream-muted)]">Control alerts for messages and matches.</p>
+            <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
+              Control alerts for messages, matches, and incoming calls. Keep this on so calls ring when
+              the app is closed.
+            </p>
             <div className="mt-4">
               <NotificationSettings />
             </div>

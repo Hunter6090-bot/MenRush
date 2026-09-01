@@ -4,14 +4,20 @@ import {
   getPushSupport,
   iosNeedsHomeScreenForPush,
   isPushConfigured,
+  isStandalonePwa,
 } from '../lib/push';
 
-const DISMISS_KEY = 'menrush_push_banner_dismissed';
+const SNOOZE_KEY = 'menrush_push_banner_snooze_until';
+/** "Later" hides the banner briefly — never permanently while permission is still default. */
+const SNOOZE_MS = 12 * 60 * 60 * 1000;
 
 /**
  * Logged-in nudge so people actually get rings when the app is closed.
  * Never auto-prompts — iOS Safari would ignore it, and e2e forbids a silent
  * Notification.requestPermission on page load.
+ *
+ * Must stay visible in the installed PWA until alerts are granted or blocked.
+ * A permanent dismiss while permission is still `default` hid call rings.
  */
 export function PushAlertBanner() {
   const [visible, setVisible] = useState(false);
@@ -19,11 +25,6 @@ export function PushAlertBanner() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    try {
-      if (localStorage.getItem(DISMISS_KEY) === '1') return;
-    } catch {
-      /* ignore */
-    }
     void (async () => {
       const configured = await isPushConfigured();
       if (!configured) return;
@@ -32,7 +33,17 @@ export function PushAlertBanner() {
         setVisible(true);
         return;
       }
-      if (getPushSupport() === 'default') setVisible(true);
+      const support = getPushSupport();
+      if (support !== 'default') return;
+      try {
+        localStorage.removeItem('menrush_push_banner_dismissed');
+        const until = Number(localStorage.getItem(SNOOZE_KEY) || 0);
+        // Installed PWA: never hide for long — call rings depend on permission.
+        if (until > Date.now() && !isStandalonePwa()) return;
+      } catch {
+        /* ignore */
+      }
+      setVisible(true);
     })();
   }, []);
 
@@ -40,7 +51,9 @@ export function PushAlertBanner() {
 
   const dismiss = () => {
     try {
-      localStorage.setItem(DISMISS_KEY, '1');
+      localStorage.setItem(SNOOZE_KEY, String(Date.now() + SNOOZE_MS));
+      // Clear legacy permanent dismiss so older installs recover.
+      localStorage.removeItem('menrush_push_banner_dismissed');
     } catch {
       /* ignore */
     }
@@ -70,7 +83,7 @@ export function PushAlertBanner() {
       <p className="mt-0.5 text-xs leading-relaxed text-[var(--cream-muted)]">
         {iosInstall
           ? 'On iPhone: Share → Add to Home Screen, open MenRush from the icon, then allow notifications. That’s how messages and calls ring when the app is closed.'
-          : 'Allow notifications so a message or incoming call still rings when MenRush is closed.'}
+          : 'Allow notifications so a message or incoming call still rings when MenRush is closed or in the background.'}
       </p>
       <div className="mt-2 flex items-center justify-end gap-2">
         <button
