@@ -68,12 +68,16 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   }
 
   await expect(page.locator('#waitlist')).toBeVisible();
+  await expect(page.locator('a[href="#waitlist"]')).toHaveCount(0);
   await expect(page.getByRole('textbox', { name: 'Email for waitlist' })).toHaveCount(0);
   await expect(page.locator('#waitlist-email')).toHaveCount(0);
 
   const signUpLink = page.getByRole('link', { name: /^Sign up free$/i });
   await expect(signUpLink).toHaveCount(1);
   await expect(signUpLink).toHaveAttribute('href', '/register');
+
+  const backToSignup = page.getByRole('link', { name: /^Back to signup$/i });
+  await expect(backToSignup).toHaveAttribute('href', '/register');
 
   const inviteLink = page.getByRole('link', { name: /Enter your code/i });
   await expect(inviteLink).toBeVisible();

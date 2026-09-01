@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Landing dead `#waitlist` back-to-signup leftover | this branch `cursor/drop-dead-waitlist-href-b09e` | — | Cursor cloud — Back to signup → `/register`; keep id=#waitlist for deep links; no waitlist form restore; do not mix rooms/#97–#99 |
 | Official room temp-identity privacy + leave-no-trace (supersedes #150) | PR `#183` `cursor/room-temp-identity-leave-no-trace-139c` | — | Cursor cloud — rebased onto main+#184+#185+#186; never COALESCE to profile; temp name+photo before room:join; occupancy lock kept; sits on side list; do not fold extra 1:1; do not touch #97–#99 |
 | In-room 1:1 from present side list (Al/Zoul lock) | merged `#185` on main | — | Cursor — side list = socket-present; ephemeral in-room 1:1; leave uses removeParticipant (no markOffline); Chat stays Chat; #97–#99 parked |
 | Community post comments (text replies on `/stream`) | this branch `cursor/five-features-community-discreet-1e25` PR `#186` | — | Cursor cloud — comments only. `community_post_comments` **044**; GET/POST `/api/community/posts/:id/comments`; ≤280; free; blocks respected. **Nav out of scope** — no MAP\|COMMUNITY toggle; Discover stays #165. |

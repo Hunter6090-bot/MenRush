@@ -17,7 +17,7 @@ Run: `npm run test:e2e -- public-design-lock` (from `frontend/`)
 - **Must** show live UK beta status: **LIVE NOW. UK BETA OPEN**. Do **not** show **OPENS 1 OCTOBER 2026** (or any open-date) in the hero. Do **not** list launch cities (no London / Manchester / Birmingham / Brighton ticker). Do not invent US cities or claim the US is open.
 - Hero typography uses `mr-coming-soon-heading` + `mr-coming-soon-accent` (keep “Real men / Verified profiles / Total discretion” voice unless product rewrites).
 - Primary CTA: **“Sign up free”** → `/register` (real account signup). No email capture field and no Zoho/waitlist form on the hero.
-- Keep `#waitlist` as a stable scroll anchor on the CTA block for older deep links.
+- Keep `#waitlist` as a stable scroll anchor on the CTA block for older deep links. Do **not** use `href="#waitlist"` for any control — secondary “Back to signup” (if present) → `/register`.
 - Header: compact `BrandMark` (`size="sm"`) top-left linked to `/` with `aria-label="MenRush"` (no MENRUSH type beside it); **Sign in** top-right → `/login`. Hero keeps its own centered `BrandMark` (`size="hero"`).
 - Body: **Already have an invite? Enter your code** → `/beta`.
 - Include a short **What you get** section matching shipped product (Nearby / Video rooms / Matches). Card bodies use period lock (no em/en dash or hyphen-as-aside). Do not claim an official themed-room catalog unless it is live on main. Do not say invite-only until open on the landing rest — hero is Sign up free / UK BETA OPEN. Sign up before 1 October 2026 gets 30 days Premium free; a Pride promo replaces that gift and does not stack.
