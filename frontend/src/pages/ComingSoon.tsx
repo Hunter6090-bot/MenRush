@@ -129,9 +129,9 @@ export const ComingSoon = () => {
             replaces that gift and does not stack.
           </p>
           <p className="mt-6">
-            <a href="#waitlist" className={publicLinkClass}>
+            <Link to="/register" className={publicLinkClass}>
               Back to signup
-            </a>
+            </Link>
           </p>
         </section>
       </main>
