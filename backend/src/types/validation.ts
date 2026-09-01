@@ -41,6 +41,8 @@ export const RegisterSchema = z.object({
   invite_code: z.string().min(1).max(64).optional(),
   /** Optional public promo (e.g. Pride QR). Validated at register. */
   promo_code: z.string().min(1).max(64).optional(),
+  /** Optional friend referral — not an invite gate; fail closed if invalid. */
+  referral_code: z.string().min(1).max(32).optional(),
 });
 
 export const LoginSchema = z.object({

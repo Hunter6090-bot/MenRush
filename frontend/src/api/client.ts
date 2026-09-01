@@ -124,6 +124,27 @@ export const betaAPI = {
 
 export const usersAPI = {
   getMe: () => apiClient.get('/users/me'),
+  getReferrals: () =>
+    apiClient.get<{
+      referral_code: string;
+      verified_count: number;
+      pending_count: number;
+      credited_count: number;
+      unlock_every: number;
+      progress_to_unlock: number;
+      unlocks_earned: number;
+      pending_payout_total: number;
+      referrals: Array<{
+        referred_user_id: string;
+        name: string | null;
+        status: 'pending' | 'verified' | 'credited';
+        payout_amount: number;
+        payout_status: 'none' | 'pending' | 'paid';
+        created_at: string;
+        verified_at: string | null;
+        credited_at: string | null;
+      }>;
+    }>('/users/me/referrals'),
   getNearby: (
     lat: number,
     lng: number,

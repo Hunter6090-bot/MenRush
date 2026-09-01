@@ -27,6 +27,7 @@ import { clearProfileSetupSkip, isProfileSetupComplete } from '../lib/profileSet
 import { isGenericAvatarUrl } from '../lib/genericAvatar';
 import { isBetaPremiumFree } from '../lib/betaInvite';
 import { IconSettings } from '../components/icons';
+import { ReferralCard } from '../components/ReferralCard';
 import { ageFromDateOfBirth, formatHeight, formatWeight } from '../lib/age';
 import {
   HOSTING_STATUS_OPTIONS,
@@ -1231,6 +1232,8 @@ export const Profile = () => {
           hiddenCount={profileViewsHidden}
           loading={profileViewsLoading}
         />
+
+        <ReferralCard />
 
         {/* ── Location card ── */}
         <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 flex items-center justify-between shadow-card">

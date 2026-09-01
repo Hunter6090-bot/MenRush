@@ -27,6 +27,7 @@ import {
 import { assertPrideInviteEmailMatch } from './prideInvite.service';
 import { ageFromDateOfBirth } from '../lib/age';
 import { premiumService } from './premium.service';
+import { referralService } from './referral.service';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable is required');
@@ -116,8 +117,15 @@ export const authService = {
     const hashedPassword = await bcryptjs.hash(data.password, 10);
     const inviteCode = data.invite_code?.trim();
     const promoCode = data.promo_code?.trim();
+    const referralCodeRaw = data.referral_code?.trim();
     const usingSharedPride = !!(promoCode && isSharedPrideCode(promoCode));
     const usingPersonalPride = !!(promoCode && !isSharedPrideCode(promoCode));
+
+    // Resolve referral before INSERT — invalid codes fail closed (no user row).
+    let resolvedReferrer: { referrerId: string; code: string } | null = null;
+    if (referralCodeRaw) {
+      resolvedReferrer = await referralService.resolveReferrerForSignup(referralCodeRaw);
+    }
 
     let prideInviteMonths: number | null = null;
     if (inviteCode) {
@@ -209,13 +217,29 @@ export const authService = {
       }
       const defaultAvatar = defaultGenericAvatarUrl(age);
 
+      // Allocate a unique referral code before INSERT (user row does not exist yet).
+      let newReferralCode = referralService.generateReferralCode();
+      for (let i = 0; i < 8; i++) {
+        const clash = await client.query(
+          `SELECT 1 FROM users WHERE referral_code = $1 LIMIT 1`,
+          [newReferralCode],
+        );
+        if (clash.rows.length === 0) break;
+        newReferralCode = referralService.generateReferralCode();
+      }
+
+      // Self-referral guard if somehow the resolved referrer matched (impossible pre-insert).
+      if (resolvedReferrer && resolvedReferrer.referrerId === id) {
+        throw new Error('You cannot use your own referral code.');
+      }
+
       const result = await client.query(
         `INSERT INTO users (
            id, email, password_hash, name, age, date_of_birth, photo_url,
-           is_verified, verification_status, age_assurance_status
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'self_attested')
+           is_verified, verification_status, age_assurance_status, referral_code
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'self_attested', $10)
          RETURNING id, email, name, age, date_of_birth, photo_url, is_verified, verification_status,
-                   age_assurance_status, authenticity_status`,
+                   age_assurance_status, authenticity_status, referral_code`,
         [
           id,
           data.email,
@@ -226,10 +250,15 @@ export const authService = {
           defaultAvatar,
           autoVerify,
           autoVerify ? 'verified' : 'unverified',
+          newReferralCode,
         ],
       );
 
       const user = result.rows[0];
+
+      if (resolvedReferrer) {
+        await referralService.attachAtSignup(resolvedReferrer.referrerId, user.id, client);
+      }
 
       if (inviteCode) {
         await inviteCodeService.redeemForRegistration(inviteCode, user.id, client);
@@ -273,6 +302,15 @@ export const authService = {
       }
 
       await client.query('COMMIT');
+
+      // DEV_AUTO_VERIFY fixtures still count as account-verified for referral unlock.
+      if (autoVerify && resolvedReferrer) {
+        try {
+          await referralService.onUserVerified(user.id);
+        } catch (err) {
+          console.error('[auth] referral verify-on-register hook failed', err);
+        }
+      }
 
       const token = signToken(user.id);
       return { user, token };

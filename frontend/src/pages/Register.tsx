@@ -74,6 +74,8 @@ export const Register = () => {
     if (fromQuery) return fromQuery.trim().toUpperCase().replace(/\s+/g, ' ');
     return fromStore || '';
   });
+  const referralFromQuery = searchParams.get('ref')?.trim() || '';
+  const [referralCode, setReferralCode] = useState(() => referralFromQuery.toUpperCase());
   const [form, setForm] = useState<FormState>({
     displayName: '',
     email: '',
@@ -168,6 +170,7 @@ export const Register = () => {
     setLoading(true);
     try {
       const trimmedPromo = promoCode.trim();
+      const trimmedReferral = referralCode.trim();
       if (trimmedPromo) {
         clearStoredPridePromoCode();
       }
@@ -179,6 +182,7 @@ export const Register = () => {
         password: form.password,
         ...(inviteCode ? { invite_code: inviteCode } : {}),
         ...(trimmedPromo ? { promo_code: trimmedPromo } : {}),
+        ...(trimmedReferral ? { referral_code: trimmedReferral } : {}),
       });
       setAuth(res.data.user, res.data.token);
       navigate(
@@ -375,6 +379,30 @@ export const Register = () => {
             />
             <p className={helperClass} data-testid="register-pride-note">
               Optional Pride promo if you have one.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2.5">
+            <label className={publicLabelClass} htmlFor="register-referral-code">
+              Referral code (optional)
+            </label>
+            <input
+              id="register-referral-code"
+              type="text"
+              value={referralCode}
+              onChange={(e) => {
+                setError('');
+                setReferralCode(e.target.value.toUpperCase());
+              }}
+              placeholder="If a friend shared one"
+              aria-label="Referral code"
+              autoComplete="off"
+              spellCheck={false}
+              className={`${publicInputClass} font-mono tracking-[0.08em]`}
+              data-testid="register-referral-input"
+            />
+            <p className={helperClass} data-testid="register-referral-note">
+              Optional. Not required to sign up.
             </p>
           </div>
 
