@@ -550,7 +550,7 @@ export const Profile = () => {
             </div>
 
             <div className="px-6 pb-6">
-              <div className="-mt-12 flex items-end gap-5">
+              <div className="-mt-20 flex items-end gap-5">
                 <button
                   type="button"
                   aria-label="Upload profile photo"
@@ -564,12 +564,13 @@ export const Profile = () => {
                     name={profile.name}
                     photoUrl={profile.photo_url}
                     online={profile.online}
-                    size="xl"
+                    size="2xl"
                     showStatus={false}
-                    className="ring-4 ring-[var(--bg-card)] transition-opacity group-hover:opacity-90"
+                    framed={false}
+                    className="transition-opacity group-hover:opacity-90"
                   />
                   <span className="absolute inset-0 rounded-full bg-black/0 transition-colors group-hover:bg-black/20" />
-                  <span className="absolute bottom-1 right-1 flex h-9 w-9 items-center justify-center rounded-full border-2 border-[var(--bg-card)] bg-[#C4832A] text-[var(--nn-on-copper)] shadow-lg transition-transform group-hover:scale-105">
+                  <span className="absolute bottom-1 right-1 flex h-9 w-9 items-center justify-center rounded-full bg-[#C4832A] text-[var(--nn-on-copper)] shadow-lg transition-transform group-hover:scale-105">
                     {uploading ? (
                       <Spinner className="h-4 w-4 text-[var(--nn-on-copper)]" />
                     ) : (
@@ -615,52 +616,47 @@ export const Profile = () => {
 
           <div className="grid grid-cols-[280px_1fr] gap-8">
             <div className="space-y-3">
-              <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]">
-                {getPhotoUrl(photoUrl) ? (
-                  <img
-                    src={getPhotoUrl(photoUrl)!}
-                    alt={profile.name}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center">
-                    <UserAvatar name={profile.name} photoUrl={profile.photo_url} size="xl" showStatus={false} />
+              {/* Cover-only strip + change buttons */}
+              {coverUrl ? (
+                <div className="relative aspect-[16/9] w-full overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]">
+                  <img src={getPhotoUrl(coverUrl)!} alt="Cover" className="h-full w-full object-cover" />
+                  <div className="absolute inset-x-0 bottom-0 flex gap-2 bg-gradient-to-t from-black/60 to-transparent p-3">
+                    <button
+                      type="button"
+                      onClick={() => setCoverEditorOpen(true)}
+                      className="flex-1 rounded-lg bg-black/40 px-2 py-1.5 text-[11px] font-semibold text-white backdrop-blur-sm hover:bg-black/60"
+                    >
+                      Adjust cover
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => coverInputRef.current?.click()}
+                      disabled={uploadingCover}
+                      className="flex-1 rounded-lg bg-black/40 px-2 py-1.5 text-[11px] font-semibold text-white backdrop-blur-sm hover:bg-black/60 disabled:opacity-60"
+                    >
+                      {uploadingCover ? 'Uploading…' : 'Change cover'}
+                    </button>
                   </div>
-                )}
-                <button
-                  type="button"
-                  aria-label="Change profile photo"
-                  onClick={() => photoInputRef.current?.click()}
-                  disabled={uploading}
-                  className="absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-full border-2 border-[var(--bg-card)] bg-[#C4832A] text-[var(--nn-on-copper)] shadow-lg transition-transform hover:scale-105 disabled:opacity-60"
-                >
-                  {uploading ? (
-                    <Spinner className="h-4 w-4 text-[var(--nn-on-copper)]" />
-                  ) : (
-                    <CameraIcon className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {[photoUrl, coverUrl].filter(Boolean).slice(0, 3).map((src, i) => (
-                  <div
-                    key={`${src}-${i}`}
-                    className="aspect-square overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]"
-                  >
-                    {getPhotoUrl(src) ? (
-                      <img src={getPhotoUrl(src)!} alt="" className="h-full w-full object-cover" />
-                    ) : null}
-                  </div>
-                ))}
+                </div>
+              ) : (
                 <button
                   type="button"
                   onClick={() => coverInputRef.current?.click()}
                   disabled={uploadingCover}
-                  className="flex aspect-square items-center justify-center rounded-xl border border-dashed border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.08)] text-[11px] font-bold text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.14)] disabled:opacity-60"
+                  className="flex aspect-[16/9] w-full items-center justify-center rounded-2xl border border-dashed border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.08)] text-[11px] font-bold text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.14)] disabled:opacity-60"
                 >
-                  {uploadingCover ? '…' : coverUrl ? 'Cover' : '+ Cover'}
+                  {uploadingCover ? <><Spinner className="h-3.5 w-3.5 mr-1.5" />Uploading…</> : '+ Add cover photo'}
                 </button>
-              </div>
+              )}
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={uploading}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#C4832A]/30 bg-[#C4832A]/10 px-4 py-2.5 text-xs font-semibold text-[#C4832A] hover:bg-[#C4832A]/20 disabled:opacity-60"
+              >
+                {uploading ? <Spinner className="h-4 w-4" /> : <CameraIcon className="h-4 w-4" />}
+                {uploading ? 'Uploading…' : 'Change profile photo'}
+              </button>
               {isGenericAvatarUrl(photoUrl) ? (
                 <div
                   className="rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-3 py-3"
@@ -809,10 +805,11 @@ export const Profile = () => {
                     online={profile.online}
                     size="xl"
                     showStatus={false}
-                    className="ring-4 ring-[var(--bg-card)] transition-opacity group-hover:opacity-90 group-active:opacity-80"
+                    framed={false}
+                    className="transition-opacity group-hover:opacity-90 group-active:opacity-80"
                   />
                   <span className="absolute inset-0 rounded-full bg-black/0 transition-colors group-hover:bg-black/20 group-active:bg-black/30" />
-                  <span className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-[var(--bg-card)] bg-[#C4832A] text-[var(--nn-on-copper)] shadow-lg transition-transform group-hover:scale-105 group-active:scale-95">
+                  <span className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-[#C4832A] text-[var(--nn-on-copper)] shadow-lg transition-transform group-hover:scale-105 group-active:scale-95">
                     {uploading ? (
                       <Spinner className="w-4 h-4 text-[var(--nn-on-copper)]" />
                     ) : (

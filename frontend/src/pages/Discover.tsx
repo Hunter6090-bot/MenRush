@@ -6,6 +6,7 @@ import { useLocationStore, useAuthStore } from '../hooks/store';
 import { NearbyUser } from '../components/ProfileCard';
 import { Layout } from '../components/Layout';
 import { PulseFab } from '../components/PulseFab';
+import { DiscoverChatDock, readDockOpen } from '../components/DiscoverChatDock';
 import { MoodPicker } from '../components/MoodPicker';
 import {
   DEFAULT_RADIUS_KM,
@@ -184,7 +185,7 @@ function MapFloatingChrome({
           ) : null}
         </div>
       </div>
-      <div className={`${mapStatusCardClass} ${statusBottomClass}`}>
+      <div className={`${mapStatusCardClass} ${statusBottomClass}`} data-testid="nearby-counts">
         <span className="inline-flex h-2.5 w-2.5 rounded-full bg-[#3D7A2E]" />
         <div className="min-w-0">
           <p className="text-[13px] font-bold leading-tight text-[#1A1208]">{nearbyCount} nearby</p>
@@ -364,6 +365,7 @@ export const Discover = () => {
     return saved === 'hidden' ? 'default' : saved;
   });
   const [desktopMapExpanded, setDesktopMapExpanded] = useState(readDesktopMapExpanded);
+  const [chatDockOpen, setChatDockOpen] = useState(readDockOpen);
   const mapDragRef = useRef<{ startY: number; mode: MapPanelMode } | null>(null);
   const [discoveryFilters, setDiscoveryFilters] = useState<DiscoveryFilterState>(DEFAULT_DISCOVERY_FILTERS);
   const [pulseUntil, setPulseUntil] = useState<Date | null>(null);
@@ -1788,6 +1790,7 @@ export const Discover = () => {
             onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
             onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
           />
+          <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
           {!needsLocationGate && !tokenMissing ? (
             <p
               className="pointer-events-none absolute bottom-2 left-1/2 z-[4] max-w-[90%] -translate-x-1/2 rounded-full px-3 py-1 text-center text-[10px] font-medium leading-snug"
@@ -1930,6 +1933,9 @@ export const Discover = () => {
               onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
               onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
             />
+          ) : null}
+          {mapPanelMode !== 'hidden' ? (
+            <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
           ) : null}
 
           {mapPanelMode !== 'hidden' && !needsLocationGate && !tokenMissing ? (

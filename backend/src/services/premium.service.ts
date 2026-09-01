@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg';
 import pool, { query } from '../db';
 import { ccbillService, CCBillTier } from './ccbill.service';
+import { isInviteRequired } from './invite-code.service';
 
 type Queryable = PoolClient | typeof pool;
 
@@ -142,7 +143,9 @@ export const premiumService = {
   },
 
   isBetaPremiumFree(): boolean {
-    return process.env.BETA_PREMIUM_FREE === 'true';
+    // Open beta: Premium is included unless an operator ends it with BETA_PREMIUM_FREE=false.
+    // Keep invite-gated betas unlocked even if that flag is false.
+    return process.env.BETA_PREMIUM_FREE !== 'false' || isInviteRequired();
   },
 
   /**

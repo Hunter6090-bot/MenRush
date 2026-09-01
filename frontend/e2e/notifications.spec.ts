@@ -80,7 +80,16 @@ test('notification permission is requested only by a clear user action', async (
   await expect(card).toBeVisible();
   // Loading the page must NOT trigger a permission prompt.
   expect(await page.evaluate(() => (window as any).__permRequests)).toBe(0);
-  await expect(page.getByTestId('notification-settings-status')).toContainText(/turn on alerts/i);
+  const status = page.getByTestId('notification-settings-status');
+  await expect(status).toBeVisible();
+  const statusText = (await status.textContent()) ?? '';
+  if (/not configured/i.test(statusText)) {
+    // CI / local without VAPID — honest disabled state, no permission prompt.
+    await expect(page.getByTestId('notification-settings-toggle')).toBeDisabled();
+    await ctx.close();
+    return;
+  }
+  await expect(status).toContainText(/turn on alerts/i);
 
   // The toggle is the explicit user action that requests permission.
   await page.getByTestId('notification-settings-toggle').click();

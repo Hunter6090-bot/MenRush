@@ -9,7 +9,7 @@ import {
 import { profilePathForUser } from '../lib/profileLinks';
 import { useAuthStore } from '../hooks/store';
 
-type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 
 interface UserAvatarProps {
   name: string;
@@ -19,6 +19,8 @@ interface UserAvatarProps {
   size?: Size;
   showStatus?: boolean;
   className?: string;
+  /** When false, renders without the copper border ring. Default: true */
+  framed?: boolean;
   /**
    * When set, the avatar links to that user's profile (/profile for self,
    * /profile/:id otherwise). New surfaces inherit the product rule by passing userId.
@@ -36,6 +38,7 @@ const sizes: Record<Size, { outer: string; text: string; dot: string; dotPos: st
   md: { outer: 'w-11 h-11', text: 'text-base', dot: 'w-3 h-3', dotPos: 'bottom-0.5 right-0.5' },
   lg: { outer: 'w-16 h-16', text: 'text-xl', dot: 'w-3.5 h-3.5', dotPos: 'bottom-0.5 right-0.5' },
   xl: { outer: 'w-24 h-24', text: 'text-3xl', dot: 'w-4 h-4', dotPos: 'bottom-1 right-1' },
+  '2xl': { outer: 'w-40 h-40', text: 'text-5xl', dot: 'w-5 h-5', dotPos: 'bottom-2 right-2' },
 };
 
 export const getPhotoUrl = (url?: string) => resolveAssetUrl(url);
@@ -109,6 +112,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   size = 'md',
   showStatus = true,
   className = '',
+  framed = true,
   userId,
   linkToProfile,
   onClick,
@@ -122,7 +126,9 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
 
   const face = (
     <div
-      className={`${s.outer} rounded-full overflow-hidden bg-gradient-to-br from-[#C4832A]/30 to-[#C4832A]/10 border border-[var(--border-default)] flex items-center justify-center font-semibold text-[var(--cream)]`}
+      className={`${s.outer} rounded-full overflow-hidden bg-gradient-to-br from-[#C4832A]/30 to-[#C4832A]/10 flex items-center justify-center font-semibold text-[var(--cream)]${
+        framed ? ' border border-[var(--border-default)]' : ''
+      }`}
     >
       {src ? (
         <img

@@ -241,17 +241,14 @@ export function ProfileDrawer({
         >
           {cover ? (
             <img src={cover} alt="" className="w-full h-full object-cover" onError={onCoverError} />
-          ) : photo ? (
-            <img
-              src={photo}
-              alt={user.name}
-              className="w-full h-full object-cover"
-              onError={onPhotoError}
-            />
           ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <SilhouetteAvatar size={180} variant="card" />
-            </div>
+            <div
+              className="w-full h-full"
+              style={{
+                background:
+                  'linear-gradient(135deg, rgba(196,131,42,0.35) 0%, rgba(164,94,24,0.2) 50%, rgba(13,10,6,0.9) 100%)',
+              }}
+            />
           )}
           <div
             className="absolute inset-0 pointer-events-none"
@@ -272,25 +269,24 @@ export function ProfileDrawer({
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4">
-          <div className="flex items-end justify-between gap-3 -mt-12 mb-4">
+          <div className="flex items-end justify-between gap-3 -mt-14 mb-4">
             <ProfilePhotoLink
               userId={user.id}
               name={user.name}
               className="inline-flex"
               data-testid={`drawer-avatar-${user.id}`}
             >
-              <PulsingAvatar isPulsing={isPulsing} size={64} intensity="subtle">
+              <PulsingAvatar isPulsing={isPulsing} size={isDesktop ? 112 : 80} intensity="subtle">
                 <div
-                  className="w-full h-full rounded-full overflow-hidden border-2 flex items-center justify-center"
+                  className="w-full h-full rounded-full overflow-hidden flex items-center justify-center"
                   style={{
                     background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
-                    borderColor: "var(--copper)",
                   }}
                 >
                   {photo ? (
                     <img src={photo} alt="" className="w-full h-full object-cover" onError={onPhotoError} />
                   ) : (
-                    <SilhouetteAvatar size={56} variant="card" />
+                    <SilhouetteAvatar size={isDesktop ? 100 : 68} variant="card" />
                   )}
                 </div>
               </PulsingAvatar>

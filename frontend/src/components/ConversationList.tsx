@@ -22,6 +22,7 @@ interface ConversationListProps {
   variant?: 'mobile' | 'sidebar';
   showHeader?: boolean;
   className?: string;
+  onSelectUser?: (userId: string) => void;
 }
 
 export const ConversationList: React.FC<ConversationListProps> = ({
@@ -29,6 +30,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   variant = 'mobile',
   showHeader = true,
   className = '',
+  onSelectUser,
 }) => {
   const [convs, setConvs] = useState<ConversationRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -174,6 +176,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                 onBlocked={fetchConversations}
                 isActive={activeUserId === c.other_user_id}
                 variant={isSidebar ? 'sidebar' : 'default'}
+                onSelect={onSelectUser}
               />
             ))}
           </div>
