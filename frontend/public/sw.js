@@ -1,5 +1,5 @@
 // MenRush Service Worker — background push for messages and incoming calls, with deep-link recovery.
-// SW_VERSION=2026-08-31-notif-deeplink-v4 — bump to force clients onto new click logic.
+// SW_VERSION=2026-09-01-call-ring-always-v5 — bump to force clients onto new click/call logic.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
@@ -66,10 +66,25 @@ function hrefFromNotification(notification) {
   if (tag.startsWith('msg-') && tag.length > 4) {
     return resolveNotificationHref('/messages/' + tag.slice(4), '/discover');
   }
+  if (tag.startsWith('call-') && tag.length > 5) {
+    return resolveNotificationHref('/messages/' + tag.slice(5), '/discover');
+  }
   if (data.otherId) {
     return resolveNotificationHref('/messages/' + data.otherId, '/discover');
   }
   return resolveNotificationHref(null, '/discover');
+}
+
+/**
+ * Mirror of frontend/src/lib/swPushPolicy.ts — keep in sync.
+ * Incoming calls ALWAYS show a notification. A frozen/background PWA can still
+ * look "visible" while the socket is dead; suppressing the ring drops the call.
+ */
+function shouldShowPushNotification(kind, hasFocusedVisibleClient, clientPath, notifPath) {
+  if (kind === 'call') return true;
+  if (!hasFocusedVisibleClient) return true;
+  if (clientPath && notifPath && clientPath === notifPath) return false;
+  return true;
 }
 
 self.addEventListener('push', (event) => {
@@ -113,6 +128,7 @@ self.addEventListener('push', (event) => {
             type: 'MENRUSH_CHAT_HINT',
             url: path,
             otherId: otherId || undefined,
+            kind,
           });
         } catch {
           /* ignore */
@@ -120,15 +136,21 @@ self.addEventListener('push', (event) => {
       }
 
       const active = windows.find((c) => c.visibilityState === 'visible' && c.focused);
+      let clientPath = null;
       if (active) {
-        // In-app socket already rings the call UI / shows the thread.
-        if (isCall) return;
         try {
-          if (new URL(active.url).pathname === path) return;
+          clientPath = pathFromHref(active.url);
         } catch {
-          /* compare failed — show the notification */
+          clientPath = null;
         }
       }
+      const show = shouldShowPushNotification(
+        kind,
+        Boolean(active),
+        clientPath,
+        path,
+      );
+      if (!show) return;
       await self.registration.showNotification(title, options);
     })(),
   );

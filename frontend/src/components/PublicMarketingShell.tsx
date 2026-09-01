@@ -17,6 +17,7 @@ type PublicMarketingShellProps = {
 /**
  * Shared layout for /, /login, /register — same grid, typography shell, and
  * mobile/desktop structure so public pages stay in sync.
+ * RandomBackground re-picks per pathname even if this shell stays mounted.
  */
 export function PublicMarketingShell({
   header,

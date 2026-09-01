@@ -47,3 +47,29 @@ export const MENRUSH_BACKGROUND_IMAGES = [
   "/images/menrush/46-pool-bears-rooftop.jpeg",
   "/images/menrush/47-rooftop-berlin-night.jpeg",
 ] as const;
+
+export type MenrushBackgroundImage = (typeof MENRUSH_BACKGROUND_IMAGES)[number];
+
+/** Last image shown on a RandomBackground page visit — avoid immediate repeats. */
+let lastPageBackground: MenrushBackgroundImage | null = null;
+
+export function resetPageBackgroundPickForTests(): void {
+  lastPageBackground = null;
+}
+
+/**
+ * Pick one photo for a page visit. Prefer not repeating the previous page's
+ * image when the pool has more than one. Call once per pathname / remount /
+ * full refresh — never on a timer.
+ */
+export function pickPageBackground(): MenrushBackgroundImage {
+  const pool = MENRUSH_BACKGROUND_IMAGES;
+  const candidates =
+    lastPageBackground && pool.length > 1
+      ? pool.filter((src) => src !== lastPageBackground)
+      : pool;
+  const next =
+    candidates[Math.floor(Math.random() * candidates.length)] ?? pool[0];
+  lastPageBackground = next;
+  return next;
+}

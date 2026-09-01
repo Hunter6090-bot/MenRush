@@ -126,7 +126,7 @@ function LayoutInner({ children }: LayoutProps) {
 
   return (
     <div
-      className="min-h-dvh bg-[var(--bg-primary)] lg:grid lg:grid-cols-[var(--desktop-sidebar-width)_minmax(0,1fr)]"
+      className="min-h-dvh min-w-0 max-w-full overflow-x-clip bg-[var(--bg-primary)] lg:grid lg:grid-cols-[var(--desktop-sidebar-width)_minmax(0,1fr)]"
       style={{ ['--desktop-sidebar-width' as string]: sidebarWidth }}
       data-sidebar={sidebarExpanded ? 'expanded' : 'collapsed'}
     >
@@ -230,9 +230,9 @@ function LayoutInner({ children }: LayoutProps) {
         </div>
       </aside>
 
-      <div className="flex min-h-dvh min-w-0 flex-col lg:col-start-2">
-        <header className="lg:hidden fixed top-0 left-0 right-0 z-50 border-b border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-primary)_92%,transparent)] backdrop-blur-xl pt-[env(safe-area-inset-top,0px)]">
-          <div className="flex h-[3.25rem] items-center gap-2 px-3">
+      <div className="flex min-h-dvh min-w-0 max-w-full flex-col overflow-x-clip lg:col-start-2">
+        <header className="lg:hidden fixed top-0 left-0 right-0 z-50 max-w-full border-b border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-primary)_92%,transparent)] backdrop-blur-xl pt-[env(safe-area-inset-top,0px)]">
+          <div className="flex h-[3.25rem] min-w-0 items-center gap-1 px-2 sm:gap-2 sm:px-3">
             <div className="w-10 shrink-0">
               {showMobileBack ? (
                 <MobileBackButton fallback={mobileBackTarget} className="-ml-1" />
@@ -253,7 +253,7 @@ function LayoutInner({ children }: LayoutProps) {
                 <p className="truncate text-sm font-bold tracking-wide text-[var(--cream)]">{pageTitle}</p>
               )}
             </div>
-            <div className="flex min-w-[7.75rem] shrink-0 items-center justify-end gap-0.5">
+            <div className="flex shrink-0 items-center justify-end gap-0.5">
               <ThemeToggle variant="header" />
               <button
                 type="button"
@@ -336,11 +336,11 @@ function LayoutInner({ children }: LayoutProps) {
         </main>
 
         <nav
-          className="lg:hidden fixed bottom-0 left-0 right-0 z-50 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] pt-2"
+          className="lg:hidden fixed bottom-0 left-0 right-0 z-50 max-w-full overflow-x-clip px-3 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] pt-2"
           aria-label="Primary"
         >
           <div
-            className={`flex items-stretch rounded-[1.35rem] border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-elevated)_95%,transparent)] shadow-[var(--shadow-lg)] backdrop-blur-xl ${
+            className={`flex min-w-0 max-w-full items-stretch overflow-x-clip rounded-[1.35rem] border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-elevated)_95%,transparent)] shadow-[var(--shadow-lg)] backdrop-blur-xl ${
               mobileTabs.length >= 5 ? 'px-0.5' : ''
             }`}
           >

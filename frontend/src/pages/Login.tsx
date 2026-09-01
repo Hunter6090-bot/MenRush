@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
 import { consumePostAuthRedirect, safeNextPath, savePostAuthRedirect } from '../lib/profileLinks';
 import {
-  AUTH_BACKGROUNDS,
   PublicAuthHero,
   PublicAuthShell,
 } from '../components/PublicAuthShell';
@@ -58,7 +57,15 @@ export const Login = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const setAuth = useAuthStore((s) => s.setAuth);
+  const token = useAuthStore((s) => s.token);
   const nextPath = safeNextPath(searchParams.get('next'));
+
+  // Installed PWA / Home Screen often re-opens on /login (iOS last-URL or
+  // Get-the-App Done). If a session already exists, skip the form — otherwise
+  // it feels like "asked to sign in every time" even while still signed in.
+  if (token) {
+    return <Navigate to={nextPath || '/app'} replace />;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,7 +120,7 @@ export const Login = () => {
   const registerPath = '/register';
 
   return (
-    <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.login}>
+    <PublicAuthShell>
       <PublicAuthHero
         title={pendingToken ? 'Enter your' : "Sign in and see who's"}
         accent={pendingToken ? 'authenticator code.' : 'near you right now.'}

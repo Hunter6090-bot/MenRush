@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { betaAPI } from '../api/client';
 import {
-  AUTH_BACKGROUNDS,
   PublicAuthHero,
   PublicAuthShell,
 } from '../components/PublicAuthShell';
@@ -89,7 +88,7 @@ export const BetaAccess = () => {
   };
 
   return (
-    <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.beta} showFooter>
+    <PublicAuthShell showFooter>
       <PublicAuthHero
         title="Beta access is"
         accent="invite-only."

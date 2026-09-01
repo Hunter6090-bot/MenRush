@@ -5,11 +5,13 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { BrandMark } from './BrandMark';
+import { RandomBackground } from './RandomBackground';
 import { SiteFooter } from './SiteFooter';
 
 const AUTH_GRADIENT =
   'linear-gradient(180deg, rgba(13,10,6,.6) 0%, rgba(13,10,6,.85) 60%, rgba(13,10,6,.97) 100%)';
 
+/** Fixed photos for verify / profile-setup flows (not the public random pool). */
 export const AUTH_BACKGROUNDS = {
   beta: '/images/menrush/21-pride-parade-flags.jpeg',
   login: '/images/menrush/09-cigar-daddy-bar.jpeg',
@@ -19,7 +21,8 @@ export const AUTH_BACKGROUNDS = {
 } as const;
 
 type PublicAuthShellProps = {
-  backgroundImage: string;
+  /** When set, use a fixed photo. When omitted, RandomBackground picks per pathname. */
+  backgroundImage?: string;
   backgroundOpacity?: number;
   homeTo?: string;
   children: ReactNode;
@@ -34,12 +37,16 @@ export function PublicAuthShell({
   showFooter = false,
 }: PublicAuthShellProps) {
   return (
-    <div className="relative flex min-h-dvh flex-col overflow-hidden bg-[#0D0A06] text-[#F0E0C0]">
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: `url(${backgroundImage})`, opacity: backgroundOpacity }}
-        aria-hidden
-      />
+    <div className="relative flex min-h-dvh max-w-full flex-col overflow-x-clip overflow-hidden bg-[#0D0A06] text-[#F0E0C0]">
+      {backgroundImage ? (
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: `url(${backgroundImage})`, opacity: backgroundOpacity }}
+          aria-hidden
+        />
+      ) : (
+        <RandomBackground opacity={backgroundOpacity} />
+      )}
       <div className="absolute inset-0" style={{ background: AUTH_GRADIENT }} aria-hidden />
 
       <div className="relative mx-auto flex w-full max-w-[560px] flex-1 flex-col px-6 pb-[72px] pt-8">

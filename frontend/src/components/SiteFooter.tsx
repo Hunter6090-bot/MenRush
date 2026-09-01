@@ -11,7 +11,7 @@ type SiteFooterProps = {
 export const SiteFooter: React.FC<SiteFooterProps> = ({ className = '' }) => {
   return (
     <footer
-      className={`border-t border-[#3D2B0E]/35 bg-[#0a0805] py-5 px-4 sm:py-6 ${className}`.trim()}
+      className={`max-w-full overflow-x-clip border-t border-[#3D2B0E]/35 bg-[#0a0805] py-5 px-4 sm:py-6 ${className}`.trim()}
       role="contentinfo"
     >
       <nav

@@ -53,8 +53,8 @@ export const NotificationSettings: React.FC = () => {
           : support === 'denied'
             ? 'Blocked in your browser settings. Re-enable notifications for this site to turn them on.'
             : enabled
-              ? 'Your phone will ping for new messages and incoming calls even if MenRush is closed.'
-              : 'Turn on alerts so messages and calls still ring when MenRush is closed.';
+              ? 'Your phone will ping for new messages and incoming calls even if MenRush is closed or in the background.'
+              : 'Turn on alerts so messages and calls still ring when MenRush is closed or in the background.';
 
   return (
     <div

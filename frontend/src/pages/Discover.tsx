@@ -1859,7 +1859,7 @@ export const Discover = () => {
         </div>
       </div>
       ) : (
-      <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="relative flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-hidden">
         {/* Map outside the scroll region so pan/pinch aren't stolen by page scroll. */}
         <div
           className={`discover-map-panel discover-map-surface relative w-full shrink-0 overflow-hidden border-b border-[var(--border-default)] bg-[#11100E] ${
@@ -1977,12 +1977,12 @@ export const Discover = () => {
         </div>
 
         {/* When map hidden: show bar to pull it back */}
-        <div className="min-h-0 flex-1 overflow-y-auto pb-24">
-          <div className="space-y-3 px-4 pt-3">
-            <div className="flex flex-wrap items-center gap-2">
+        <div className="min-h-0 min-w-0 max-w-full flex-1 overflow-x-clip overflow-y-auto pb-24">
+          <div className="min-w-0 space-y-3 px-4 pt-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <div
                 data-testid="nearby-counts"
-                className="inline-flex min-h-[36px] items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
+                className="inline-flex min-h-[36px] max-w-full items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
               >
                 <p className="text-[11px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
                   {loading && nearbyCount === 0 ? (
