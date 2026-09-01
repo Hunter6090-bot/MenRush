@@ -91,7 +91,7 @@ describe('GetTheApp walkthrough', () => {
     expect(heading.textContent).not.toContain('u2019');
   });
 
-  it('navigates to /login when Done is pressed on the last step', async () => {
+  it('navigates to /app when Done is pressed on the last step', async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter>
@@ -106,7 +106,7 @@ describe('GetTheApp walkthrough', () => {
     expect(navigate).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: 'Done' }));
-    expect(navigate).toHaveBeenCalledWith('/login');
+    expect(navigate).toHaveBeenCalledWith('/app');
   });
 
   it('iPhone tab keeps Safari steps and never shows a native Install button', async () => {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
 import { consumePostAuthRedirect, safeNextPath, savePostAuthRedirect } from '../lib/profileLinks';
@@ -58,7 +58,15 @@ export const Login = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const setAuth = useAuthStore((s) => s.setAuth);
+  const token = useAuthStore((s) => s.token);
   const nextPath = safeNextPath(searchParams.get('next'));
+
+  // Installed PWA / Home Screen often re-opens on /login (iOS last-URL or
+  // Get-the-App Done). If a session already exists, skip the form — otherwise
+  // it feels like "asked to sign in every time" even while still signed in.
+  if (token) {
+    return <Navigate to={nextPath || '/app'} replace />;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

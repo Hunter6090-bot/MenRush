@@ -1,74 +1,68 @@
 import { create } from 'zustand';
+import {
+  clearAuthSession,
+  persistAuthSession,
+  persistAuthUser,
+  readAuthSnapshot,
+  type StoredAuthUser,
+} from '../lib/authSession';
 import { syncLocaleCoords } from '../lib/localeUnits';
 import { applyLiveUpsert } from '../lib/notificationToasts';
 
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  age?: number;
-  bio?: string;
-  photo_url?: string;
-  is_verified?: boolean;
-  verification_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
-  is_premium?: boolean;
-  premium_tier?: 'free' | 'premium' | 'premium_plus';
-  /** True when open-beta Premium entitlement is active for this user. */
-  beta_premium_included?: boolean;
-}
+type User = StoredAuthUser;
 
 interface AuthState {
   user: User | null;
   token: string | null;
   setAuth: (user: User, token: string) => void;
+  /** Re-read localStorage/cookie into the store (PWA cold start / pageshow). */
+  rehydrateAuth: () => boolean;
   setVerified: (status: NonNullable<User['verification_status']>, isVerified: boolean) => void;
   setPremium: (tier: NonNullable<User['premium_tier']>, isPremium: boolean) => void;
   patchUser: (updates: Partial<User>) => void;
   logout: () => void;
 }
 
-function readStoredUser(): User | null {
-  try {
-    const raw = localStorage.getItem('user');
-    return raw ? (JSON.parse(raw) as User) : null;
-  } catch {
-    localStorage.removeItem('user');
-    return null;
-  }
-}
+const boot = readAuthSnapshot();
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: readStoredUser(),
-  token: localStorage.getItem('token'),
+export const useAuthStore = create<AuthState>((set, get) => ({
+  user: boot.user,
+  token: boot.token,
   setAuth: (user, token) => {
-    localStorage.setItem('user', JSON.stringify(user));
-    localStorage.setItem('token', token);
+    persistAuthSession(user, token);
     set({ user, token });
+  },
+  rehydrateAuth: () => {
+    const snap = readAuthSnapshot();
+    if (!snap.token) return false;
+    const current = get();
+    if (current.token === snap.token && current.user?.id === snap.user?.id) return true;
+    set({ user: snap.user, token: snap.token });
+    return true;
   },
   setVerified: (status, isVerified) =>
     set((s) => {
       if (!s.user) return s;
       const next = { ...s.user, verification_status: status, is_verified: isVerified };
-      localStorage.setItem('user', JSON.stringify(next));
+      persistAuthUser(next);
       return { user: next };
     }),
   setPremium: (tier, isPremium) =>
     set((s) => {
       if (!s.user) return s;
       const next = { ...s.user, premium_tier: tier, is_premium: isPremium };
-      localStorage.setItem('user', JSON.stringify(next));
+      persistAuthUser(next);
       return { user: next };
     }),
   patchUser: (updates) =>
     set((s) => {
       if (!s.user) return s;
       const next = { ...s.user, ...updates };
-      localStorage.setItem('user', JSON.stringify(next));
+      persistAuthUser(next);
       return { user: next };
     }),
   logout: () => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
+    clearAuthSession();
     set({ user: null, token: null });
     // Private notification content (message previews, etc.) must not linger
     // in memory once logged out — ToastNotifications is unmounted by the

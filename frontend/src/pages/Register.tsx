@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
 import {
@@ -88,6 +88,7 @@ export const Register = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
+  const token = useAuthStore((s) => s.token);
 
   useEffect(() => {
     if (inviteFromQuery) {
@@ -107,6 +108,10 @@ export const Register = () => {
     setPromoCode(promoFromQuery.trim().toUpperCase());
     clearStoredPridePromoCode();
   }, [promoFromQuery]);
+
+  if (token) {
+    return <Navigate to="/app" replace />;
+  }
 
   const onPromoChange = (value: string) => {
     setError('');
