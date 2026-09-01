@@ -47,8 +47,10 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Official room temp-identity privacy + leave-no-trace (supersedes #150) | PR `#183` `cursor/room-temp-identity-leave-no-trace-139c` | — | Cursor cloud — rebased onto main+#184+#185+#186; never COALESCE to profile; temp name+photo before room:join; occupancy lock kept; sits on side list; do not fold extra 1:1; do not touch #97–#99 |
+| In-room 1:1 from present side list (Al/Zoul lock) | merged `#185` on main | — | Cursor — side list = socket-present; ephemeral in-room 1:1; leave uses removeParticipant (no markOffline); Chat stays Chat; #97–#99 parked |
 | Community post comments (text replies on `/stream`) | this branch `cursor/five-features-community-discreet-1e25` PR `#186` | — | Cursor cloud — comments only. `community_post_comments` **044**; GET/POST `/api/community/posts/:id/comments`; ≤280; free; blocks respected. **Nav out of scope** — no MAP\|COMMUNITY toggle; Discover stays #165. |
-| P0 Video room occupancy (leave removes tile; no stale AWAY) | open | this branch `cursor/fix-video-room-occupancy-2b72` PR `#184` | Cursor — occupancy = present people; header `{n} here` (not live); LIVE badge = camera-on; AWAY = camera-off while present; do not mix #150/#183/#97–#99 |
+| P0 Video room occupancy (leave removes tile; no stale AWAY) | merged `#184` on main | — | Cursor — occupancy = present people; header `{n} here`; LIVE badge = camera-on; AWAY = camera-off while present; do not mix #150/#183/#97–#99 |
 | Register Brand face (username first; no Pride dump; no You’re in) | open | this branch `cursor/register-brand-face-cd79` | Cursor — Register.tsx + e2e only; ComingSoon untouched; gift/invite/Veriff/#150 unchanged; do not mix #97–#99 |
 | P0 Video rooms hangup leaves iPhone camera open (stop tracks + clear glyph) | open | this branch `cursor/fix-rooms-camera-hangup-f98c` | Cursor — useRoomVideo hard teardown on leave/unmount/pagehide; no orphan getUserMedia; do not mix #150/#97–#99 |
 | P0 open signup (no invite gate; 30d waitlist gift; Pride optional) | open | this branch `cursor/open-signup-no-invite-gate-389d` | Cursor — FE ignores VITE_BETA_INVITE_REQUIRED; BE isInviteRequired always false; waitlist gift before 1 Oct UK; Veriff stays opt-in; do not mix #150/#97–#99 |

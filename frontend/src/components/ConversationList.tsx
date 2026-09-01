@@ -81,12 +81,30 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             <button
               type="button"
               onClick={() => setGroupOpen(true)}
+              aria-label="Create group"
+              data-testid="messages-create-group"
               className="flex items-center gap-1.5 rounded-xl border border-[#C4832A]/35 bg-[#C4832A]/15 px-3 py-2 text-xs font-semibold text-[var(--cream)] transition-all hover:bg-[#C4832A]/25 active:scale-95"
             >
               <GroupPlusIcon className="h-4 w-4" />
               {isSidebar ? 'Group' : 'New group'}
             </button>
           )}
+        </div>
+      )}
+
+      {/* Hub hides list header — keep create-group reachable on Messages tab. */}
+      {!showHeader && FEATURES.chatRooms && (
+        <div className={`shrink-0 ${isSidebar ? 'px-3 pt-3' : 'mb-3'}`}>
+          <button
+            type="button"
+            onClick={() => setGroupOpen(true)}
+            aria-label="Create group"
+            data-testid="messages-create-group"
+            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-[#C4832A]/35 bg-[#C4832A]/15 px-3 py-2.5 text-xs font-semibold text-[var(--cream)] transition-all hover:bg-[#C4832A]/25 active:scale-95"
+          >
+            <GroupPlusIcon className="h-4 w-4" />
+            New group
+          </button>
         </div>
       )}
 

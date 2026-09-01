@@ -7,7 +7,7 @@ import {
   PublicAuthShell,
 } from '../components/PublicAuthShell';
 import { PulseRing } from '../components/PulseRing';
-import { BETA_INVITE_REQUIRED, storeInviteCode } from '../lib/betaInvite';
+import { storeInviteCode, BETA_INVITE_REQUIRED } from '../lib/betaInvite';
 import {
   publicCodeInputClass,
   publicErrorClass,
@@ -43,7 +43,7 @@ export const BetaAccess = () => {
     } catch {
       /* ignore */
     }
-  }, [navigate]);
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -79,7 +79,7 @@ export const BetaAccess = () => {
       } else {
         setError(
           apiError ||
-            'That invite code is invalid, expired, or already used. Check the email or join the waitlist.',
+            'That invite code is invalid, expired, or already used. Check the email or sign up free.',
         );
       }
     } finally {
@@ -110,7 +110,7 @@ export const BetaAccess = () => {
                 setCode(e.target.value.toUpperCase());
                 setError('');
               }}
-              placeholder="E.g. MR-BETA-XXXX"
+              placeholder="E.g. MENRUSH-XXXX-XXXX"
               autoComplete="off"
               spellCheck={false}
               required

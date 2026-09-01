@@ -10,11 +10,26 @@ import { MobileBackButton } from '../components/MobileBackButton';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 import { PanicReportButton } from '../components/PanicReportButton';
-import { profilePathForUser } from '../lib/profileLinks';
-import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 import { getPhotoUrl } from '../components/UserAvatar';
 import { parseRoomImageMessage } from '../lib/roomMediaMessage';
 import { RoomTempIdentityGate } from '../components/RoomTempIdentityGate';
+import { RoomPresentPeopleList } from '../components/RoomPresentPeopleList';
+import { RoomInRoomDm, type InRoomDmMessage } from '../components/RoomInRoomDm';
+import {
+  presentOthers,
+  removePresentPerson,
+  replacePresentRoster,
+  upsertPresentPerson,
+  type PresentPerson,
+} from '../lib/roomPresentRoster';
+
+/** Drop a leaver from any in-room roster — leave leaves no trace. */
+function dropLeaverFromRoster<T extends { id?: string; user_id?: string }>(
+  roster: T[],
+  leaverId: string,
+): T[] {
+  return roster.filter((entry) => (entry.user_id ?? entry.id) !== leaverId);
+}
 
 const ROOM_EMOJI_PICKER = [
   '😀', '😂', '🔥', '❤️', '👍', '👀', '😈', '🥵', '💪', '🎉', '😏', '🙌',
@@ -130,6 +145,16 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   const [identityReady, setIdentityReady] = useState(false);
   const [loadingRoom, setLoadingRoom] = useState(true);
   const [joinError, setJoinError] = useState<string | null>(null);
+  /** Present occupancy for side list — socket presence only, not DB membership. */
+  const [presentPeople, setPresentPeople] = useState<PresentPerson[]>([]);
+  const [peopleOpen, setPeopleOpen] = useState(true);
+  const [dmPeer, setDmPeer] = useState<{
+    id: string;
+    name: string;
+    photo_url?: string | null;
+  } | null>(null);
+  const [dmMessages, setDmMessages] = useState<InRoomDmMessage[]>([]);
+  const [dmNotice, setDmNotice] = useState<string | null>(null);
 
   const {
     participants,
@@ -199,29 +224,31 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
 
     return () => {
       cancelled = true;
-      // Session exit: wipe unsaved temp identity (never touches main profile).
+      // Session exit: wipe unsaved temp identity (server also drops open-join membership).
       void roomsAPI.clearTempIdentity(roomId).catch(() => {});
     };
   }, [roomId]);
 
   // Load messages after identity confirmed. Occupancy comes from socket presence only —
-  // never seed the video grid from DB membership (that left stale AWAY tiles).
+  // never seed the video grid from DB membership (that left stale AWAY tiles / profile flash).
   useEffect(() => {
     if (!roomId || !identityReady) return;
     roomsAPI.getMessages(roomId).then((r) => setMessages(r.data)).catch(() => {});
-    roomsAPI
-      .getMembers(roomId)
-      .then((r) => setMembers(r.data))
-      .catch(() => {});
   }, [roomId, identityReady]);
 
   useEffect(() => {
     if (!roomId || !settingsOpen) return;
-    roomsAPI
-      .getMembers(roomId)
-      .then((r) => setMembers(r.data))
-      .catch(() => setMembers([]));
-  }, [roomId, settingsOpen]);
+    // In-room settings roster = live presence only (leave leaves no trace).
+    setMembers(
+      participants.map((p) => ({
+        id: p.user_id,
+        name: p.name,
+        photo_url: p.photo_url ?? undefined,
+        using_temp_identity: true,
+        role: undefined,
+      })),
+    );
+  }, [roomId, settingsOpen, participants]);
 
   useEffect(() => {
     if (!addPanelOpen) return;
@@ -251,17 +278,20 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   }, [addPanelOpen, members, user?.id]);
 
   // ── Socket: join/leave ───────────────────────────────────────────────────
+  // CRITICAL: join only AFTER temp identity is saved. Early join broadcast
+  // resolveRoomPresence before the gate → real name/photo leak + dropped
+  // WebRTC offers (mesh handlers are disabled until identityReady).
   useEffect(() => {
-    if (!socket || !roomId) return;
+    if (!socket || !roomId || !identityReady) return;
     socket.emit('room:join', { roomId });
     return () => {
       socket.emit('room:leave', { roomId });
     };
-  }, [socket, roomId]);
+  }, [socket, roomId, identityReady]);
 
   // ── Socket: events ───────────────────────────────────────────────────────
   useEffect(() => {
-    if (!socket || !roomId) return;
+    if (!socket || !roomId || !identityReady) return;
 
     const onMessage = (data: RoomMessage) => {
       if (data.room_id !== roomId) return;
@@ -282,7 +312,24 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     }) => {
       if (data.room_id !== roomId) return;
       if (data.type === 'leave') {
+        // Occupancy lock (#184): leave drops the tile — never markOffline / AWAY ghost.
         removeParticipant(data.user_id);
+        setPresentPeople((prev) => removePresentPerson(prev, data.user_id));
+        setMembers((prev) => dropLeaverFromRoster(prev, data.user_id));
+        setTypingUsers((prev) => {
+          const next = { ...prev };
+          delete next[data.user_id];
+          return next;
+        });
+        // Peer left the group → this in-room 1:1 is gone.
+        setDmPeer((cur) => {
+          if (cur?.id === data.user_id) {
+            setDmMessages([]);
+            setDmNotice(null);
+            return null;
+          }
+          return cur;
+        });
         return;
       }
       upsertParticipant({
@@ -292,6 +339,36 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
         isLive: true,
         isSelf: data.user_id === user?.id,
       });
+      setPresentPeople((prev) =>
+        upsertPresentPerson(prev, {
+          user_id: data.user_id,
+          name: data.name,
+          photo_url: data.photo_url,
+        }),
+      );
+      setMembers((prev) => {
+        if (prev.some((m) => m.id === data.user_id)) {
+          return prev.map((m) =>
+            m.id === data.user_id
+              ? {
+                  ...m,
+                  name: data.name ?? m.name,
+                  photo_url: data.photo_url ?? m.photo_url,
+                  using_temp_identity: true,
+                }
+              : m,
+          );
+        }
+        return [
+          ...prev,
+          {
+            id: data.user_id,
+            name: data.name ?? 'Member',
+            photo_url: data.photo_url ?? undefined,
+            using_temp_identity: true,
+          },
+        ];
+      });
     };
 
     const onPresenceSync = (data: {
@@ -300,6 +377,25 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     }) => {
       if (data.room_id !== roomId) return;
       applyPresenceSync(data.participants);
+      const roster = replacePresentRoster(data.participants);
+      setPresentPeople(roster);
+      // Settings roster mirrors present people — leavers are not listed.
+      setMembers(
+        data.participants.map((p) => ({
+          id: p.user_id,
+          name: p.name,
+          photo_url: p.photo_url ?? undefined,
+          using_temp_identity: true,
+        })),
+      );
+      // If open DM peer is no longer present, drop the window.
+      setDmPeer((cur) => {
+        if (!cur) return cur;
+        if (roster.some((p) => p.user_id === cur.id)) return cur;
+        setDmMessages([]);
+        setDmNotice(null);
+        return null;
+      });
     };
 
     const onTyping = ({
@@ -341,7 +437,115 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       socket.off('room:presence-sync', onPresenceSync);
       socket.off('room:typing', onTyping);
     };
-  }, [socket, roomId, user?.id, upsertParticipant, removeParticipant, applyPresenceSync]);
+  }, [socket, roomId, identityReady, user?.id, upsertParticipant, removeParticipant, applyPresenceSync]);
+
+  // ── Socket: ephemeral in-room 1:1 ────────────────────────────────────────
+  useEffect(() => {
+    if (!socket || !roomId) return;
+
+    const onDmOpened = (data: {
+      room_id: string;
+      peer_id: string;
+      peer_name: string;
+      peer_photo_url?: string | null;
+    }) => {
+      if (data.room_id !== roomId) return;
+      setDmPeer({
+        id: data.peer_id,
+        name: data.peer_name,
+        photo_url: data.peer_photo_url,
+      });
+      setDmMessages([]);
+      setDmNotice(null);
+      setPeopleOpen(true);
+    };
+
+    const onDmMessage = (data: {
+      room_id: string;
+      id: string;
+      sender_id: string;
+      sender_name: string;
+      message: string;
+      created_at: string;
+      to?: string;
+    }) => {
+      if (data.room_id !== roomId) return;
+      const otherId = data.sender_id === user?.id ? data.to : data.sender_id;
+      if (!otherId) return;
+      setDmPeer((cur) => {
+        if (cur?.id === otherId) return cur;
+        // Auto-open window when peer messages us.
+        return {
+          id: otherId,
+          name: data.sender_id === user?.id ? cur?.name ?? 'Member' : data.sender_name,
+          photo_url: cur?.photo_url,
+        };
+      });
+      setDmMessages((prev) => {
+        if (prev.some((m) => m.id === data.id)) return prev;
+        return [
+          ...prev,
+          {
+            id: data.id,
+            sender_id: data.sender_id,
+            sender_name: data.sender_name,
+            message: data.message,
+            created_at: data.created_at,
+          },
+        ];
+      });
+    };
+
+    const onDmEnded = (data: {
+      room_id: string;
+      peer_id: string;
+      reason?: 'leave' | 'close';
+    }) => {
+      if (data.room_id !== roomId) return;
+      setDmPeer((cur) => {
+        if (!cur || cur.id !== data.peer_id) return cur;
+        setDmNotice(
+          data.reason === 'leave'
+            ? 'They left the room — this 1:1 is gone.'
+            : 'This 1:1 was closed.',
+        );
+        window.setTimeout(() => {
+          setDmPeer((still) => (still?.id === data.peer_id ? null : still));
+          setDmMessages([]);
+          setDmNotice(null);
+        }, 900);
+        return cur;
+      });
+    };
+
+    const onDmError = (data: { room_id?: string; error?: string }) => {
+      if (data.room_id && data.room_id !== roomId) return;
+      if (data.error === 'peer_not_present') {
+        setDmNotice('They are not in the room right now.');
+      } else if (data.error === 'dm_not_open') {
+        setDmNotice('Open a 1:1 from the side list first.');
+      }
+    };
+
+    socket.on('room:dm-opened', onDmOpened);
+    socket.on('room:dm-message', onDmMessage);
+    socket.on('room:dm-ended', onDmEnded);
+    socket.on('room:dm-error', onDmError);
+    return () => {
+      socket.off('room:dm-opened', onDmOpened);
+      socket.off('room:dm-message', onDmMessage);
+      socket.off('room:dm-ended', onDmEnded);
+      socket.off('room:dm-error', onDmError);
+    };
+  }, [socket, roomId, user?.id]);
+
+  // Reset present roster + DM when leaving this room surface.
+  useEffect(() => {
+    setPresentPeople([]);
+    setDmPeer(null);
+    setDmMessages([]);
+    setDmNotice(null);
+  }, [roomId]);
 
   // ── Scroll to bottom ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -454,12 +658,70 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   const presentCount = participants.length;
   const isOwner = room?.user_role === 'owner';
   const isPrivateGroup = room?.is_location_based === false;
+  const sidePeople = presentOthers(presentPeople, user?.id);
+
+  const openInRoomDm = useCallback(
+    (person: PresentPerson) => {
+      if (!socket || !roomId || !user?.id || person.user_id === user.id) return;
+      setDmPeer({
+        id: person.user_id,
+        name: person.name,
+        photo_url: person.photo_url,
+      });
+      setDmMessages([]);
+      setDmNotice(null);
+      socket.emit('room:dm-open', { roomId, to: person.user_id });
+    },
+    [socket, roomId, user?.id],
+  );
+
+  const sendInRoomDm = useCallback(
+    (text: string) => {
+      if (!socket || !roomId || !dmPeer || !user?.id) return;
+      const clientId =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `dm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      // Optimistic local append; server echoes to both.
+      setDmMessages((prev) => [
+        ...prev,
+        {
+          id: clientId,
+          sender_id: user.id,
+          sender_name: 'You',
+          message: text,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+      socket.emit('room:dm-message', {
+        roomId,
+        to: dmPeer.id,
+        message: text,
+        client_id: clientId,
+      });
+    },
+    [socket, roomId, dmPeer, user?.id],
+  );
+
+  const closeInRoomDm = useCallback(() => {
+    if (!socket || !roomId || !dmPeer) {
+      setDmPeer(null);
+      setDmMessages([]);
+      setDmNotice(null);
+      return;
+    }
+    socket.emit('room:dm-close', { roomId, to: dmPeer.id });
+    setDmPeer(null);
+    setDmMessages([]);
+    setDmNotice(null);
+  }, [socket, roomId, dmPeer]);
 
   // One-tap room report needs a subject user; prefer owner, else first other member.
   const roomReportTargetId =
     members.find((m) => m.role === 'owner' && m.id !== user?.id)?.id ??
     (room?.created_by && room.created_by !== user?.id ? room.created_by : undefined) ??
     members.find((m) => m.id !== user?.id)?.id;
+
 
   const handleAddMember = async (targetId: string, targetName: string) => {
     if (!roomId || addingMemberId) return;
@@ -543,12 +805,33 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           activeCount={room.member_count}
           roomTheme={room.name}
           onReady={async ({ displayName, photoUrl: gatePhotoUrl, saveName, savePhoto }) => {
+            if (!gatePhotoUrl) {
+              throw new Error('temp_photo_required');
+            }
             await roomsAPI.setTempIdentity(roomId!, {
               display_name: displayName,
-              photo_url: gatePhotoUrl ?? null,
+              photo_url: gatePhotoUrl,
               save_name: saveName,
               save_photo: savePhoto,
             });
+            // First paint uses TEMP identity only — never auth profile photo/name.
+            if (user?.id) {
+              upsertParticipant({
+                user_id: user.id,
+                name: displayName,
+                photo_url: gatePhotoUrl,
+                isLive: true,
+                isSelf: true,
+              });
+              setMembers([
+                {
+                  id: user.id,
+                  name: displayName,
+                  photo_url: gatePhotoUrl,
+                  using_temp_identity: true,
+                },
+              ]);
+            }
             setIdentityReady(true);
           }}
           onCancel={leaveRoomSurface}
@@ -630,6 +913,26 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
         >
           <BubbleIcon className="w-5 h-5" />
         </button>
+        <button
+          type="button"
+          onClick={() => setPeopleOpen((v) => !v)}
+          aria-label={peopleOpen ? 'Hide people in room' : 'Show people in room'}
+          aria-pressed={peopleOpen}
+          data-testid="room-people-toggle"
+          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[var(--border-default)]/50 active:scale-95"
+          style={{ color: peopleOpen ? '#C4832A' : '#A89070' }}
+        >
+          <GroupIcon className="w-5 h-5" />
+        </button>
+
+        {roomId && roomReportTargetId ? (
+          <PanicReportButton
+            reportedUserId={roomReportTargetId}
+            threadId={`room:${roomId}`}
+            onNotice={(msg) => setSettingsNotice(msg)}
+            className="w-9 h-9"
+          />
+        ) : null}
 
         {roomId && roomReportTargetId ? (
           <PanicReportButton
@@ -711,10 +1014,9 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
               <div className="space-y-1">
                 {members.map((member) => (
                   <div key={member.id} className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => navigate(profilePathForUser(member.id, user?.id))}
-                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    {/* Temp-identity rows never deep-link to the real profile. */}
+                    <div
+                      className="flex min-w-0 flex-1 items-center gap-2"
                       data-testid={`room-member-${member.id}`}
                     >
                       <span className="flex-1 text-sm truncate" style={{ color: 'var(--cream)' }}>
@@ -730,7 +1032,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                           </span>
                         ) : null}
                       </span>
-                    </button>
+                    </div>
                     {member.id !== user?.id && (
                       <ChatSafetyMenu
                         peerId={member.id}
@@ -807,16 +1109,63 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
         </div>
       )}
 
-      {/* ── Video gallery (primary surface) ─────────────────────────────── */}
-      <div className="min-h-0 flex-1">
-        <RoomGalleryGrid
-          participants={galleryParticipants}
-          pinnedId={pinnedId}
-          onPin={setPinnedId}
-          getStreamFor={getStreamFor}
-          photoUrl={photoUrl}
-          cameraOnForSelf={cameraOn}
-        />
+      {/* ── Video gallery + present people side list ──────────────────── */}
+      <div className="relative flex min-h-0 flex-1">
+        <div className="min-h-0 min-w-0 flex-1">
+          <RoomGalleryGrid
+            participants={galleryParticipants}
+            pinnedId={pinnedId}
+            onPin={setPinnedId}
+            getStreamFor={getStreamFor}
+            photoUrl={photoUrl}
+            cameraOnForSelf={cameraOn}
+          />
+        </div>
+
+        {peopleOpen ? (
+          <RoomPresentPeopleList
+            people={sidePeople}
+            activePeerId={dmPeer?.id}
+            onSelect={openInRoomDm}
+            className="hidden w-52 flex-shrink-0 sm:flex"
+          />
+        ) : null}
+
+        {/* Phone: slide-over present list */}
+        {peopleOpen ? (
+          <div
+            className="absolute inset-y-0 right-0 z-30 flex w-[min(16rem,78%)] sm:hidden"
+            data-testid="room-present-people-mobile"
+          >
+            <RoomPresentPeopleList
+              people={sidePeople}
+              activePeerId={dmPeer?.id}
+              onSelect={(person) => {
+                openInRoomDm(person);
+              }}
+              className="w-full shadow-[-8px_0_24px_rgba(0,0,0,0.35)]"
+            />
+          </div>
+        ) : null}
+
+        {/* In-room 1:1 window — overlays inside the group, not a new destination */}
+        {dmPeer && user?.id ? (
+          <div
+            className="absolute bottom-3 left-3 right-3 z-40 max-h-[55%] sm:left-auto sm:right-[13.5rem] sm:w-[22rem]"
+            style={{ maxHeight: peopleOpen ? '55%' : '60%' }}
+          >
+            <RoomInRoomDm
+              peerId={dmPeer.id}
+              peerName={dmPeer.name}
+              peerPhotoUrl={dmPeer.photo_url}
+              selfId={user.id}
+              messages={dmMessages}
+              onSend={sendInRoomDm}
+              onClose={closeInRoomDm}
+              notice={dmNotice}
+            />
+          </div>
+        ) : null}
       </div>
 
       {/* ── Chat drawer ───────────────────────────────────────────────── */}
@@ -885,10 +1234,17 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                 {!isMine && (
                   <div className="w-8 flex-shrink-0 mr-2 flex items-end mb-1">
                     {showTail && (
-                      <ProfilePhotoLink
-                        userId={msg.sender_id}
-                        name={msg.sender_name}
+                      // Room chat avatars never deep-link to the real profile.
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                        style={{
+                          background: `${color}22`,
+                          border: `1px solid ${color}44`,
+                          color,
+                          flexShrink: 0,
+                        }}
                         data-testid={`room-msg-avatar-${msg.sender_id}`}
+                        aria-hidden
                       >
                         <div
                           className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
@@ -901,7 +1257,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                         >
                           {initials(msg.sender_name)}
                         </div>
-                      </ProfilePhotoLink>
+                      </div>
                     )}
                   </div>
                 )}

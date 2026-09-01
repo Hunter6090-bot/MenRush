@@ -173,6 +173,7 @@ export const premiumService = {
     return { premiumUntil };
   },
 
+
   async isPremium(userId: string): Promise<boolean> {
     if (this.isBetaPremiumFree()) return true;
     const status = await this.getStatus(userId);

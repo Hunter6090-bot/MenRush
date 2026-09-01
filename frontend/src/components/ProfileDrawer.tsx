@@ -381,7 +381,7 @@ export function ProfileDrawer({
                 if (mutual) onMessage();
                 else if (liked) {
                   onSafetyNotice?.(
-                    "Match sent — chat and calling unlock when he matches back · consent first.",
+                    "Match sent — chat unlocks when he matches back · consent first.",
                     "success",
                   );
                 } else {
@@ -395,7 +395,7 @@ export function ProfileDrawer({
                   : "border border-[var(--copper)] bg-transparent text-[var(--copper)]"
               }`}
             >
-              {mutual ? "Open chat" : liked ? "Match sent" : "Match"}
+              {mutual ? "Open chat" : liked ? "Matched" : "Match"}
             </button>
             {onPulseBack && isPulsing && (
               <button
@@ -410,7 +410,7 @@ export function ProfileDrawer({
             )}
           </div>
           <p className="text-center text-[11px] font-semibold tracking-wide text-[var(--cream-soft)]">
-            Match is mutual interest · Chat and calls unlock when both men match
+            Match is mutual interest · Chat with consent
           </p>
         </div>
       </div>

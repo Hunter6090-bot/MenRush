@@ -44,6 +44,7 @@ import { errorHandler } from './middleware/auth';
 import { authService } from './services/auth.service';
 import { userService } from './services/user.service';
 import { roomService } from './services/room.service';
+import { peerOfSession, roomDmSessions } from './services/room-dm.service';
 import { sendPushToUser } from './services/push.service';
 import { notificationService } from './services/notification.service';
 import { messageService } from './services/message.service';
@@ -540,6 +541,31 @@ io.on('connection', (socket: Socket) => {
   const resolveRoomId = (data: { roomId?: string; room_id?: string }) =>
     data?.roomId || data?.room_id;
 
+  /** True if this user currently has a socket in the Socket.IO room. */
+  const userInSocketRoom = async (userId: string, roomId: string) => {
+    const peers = await io.in(`room:${roomId}`).fetchSockets();
+    return peers.some((peer: { id: string }) => socketToUser.get(peer.id) === userId);
+  };
+
+  /** End every in-room 1:1 for this user in this room and notify peers. */
+  const endRoomDmsForUser = (roomId: string, userId: string, reason: 'leave' | 'close') => {
+    const ended = roomDmSessions.endAllForUserInRoom(roomId, userId);
+    for (const session of ended) {
+      const peerId = peerOfSession(session, userId);
+      if (!peerId) continue;
+      io.to(`user:${peerId}`).emit('room:dm-ended', {
+        room_id: roomId,
+        peer_id: userId,
+        reason,
+      });
+      io.to(`user:${userId}`).emit('room:dm-ended', {
+        room_id: roomId,
+        peer_id: peerId,
+        reason,
+      });
+    }
+  };
+
   socket.on('room:join', async (data: { roomId?: string; room_id?: string }) => {
     const roomId = resolveRoomId(data);
     const userId = socketToUser.get(socket.id);
@@ -548,9 +574,14 @@ io.on('connection', (socket: Socket) => {
       const member = await roomService.isMember(userId, roomId);
       if (!member) return;
 
-      socket.join(`room:${roomId}`);
-
+      // Block presence until temp name+photo are set — never broadcast real profile.
       const presence = await roomService.resolveRoomPresence(userId, roomId);
+      if (!presence.using_temp_identity) {
+        socket.emit('room:identity-required', { room_id: roomId });
+        return;
+      }
+
+      socket.join(`room:${roomId}`);
 
       socket.to(`room:${roomId}`).emit('room:presence', {
         room_id: roomId,
@@ -572,17 +603,20 @@ io.on('connection', (socket: Socket) => {
         uniqueUserIds.push(peerUserId);
       }
 
-      const rosterDetails = await Promise.all(
-        uniqueUserIds.map(async (peerUserId: string) => {
-          const p = await roomService.resolveRoomPresence(peerUserId, roomId);
-          return {
-            user_id: peerUserId,
-            name: p.name,
-            photo_url: p.photo_url,
-            is_verified: p.is_verified,
-          };
-        }),
-      );
+      const rosterDetails = (
+        await Promise.all(
+          uniqueUserIds.map(async (peerUserId: string) => {
+            const p = await roomService.resolveRoomPresence(peerUserId, roomId);
+            if (!p.using_temp_identity) return null;
+            return {
+              user_id: peerUserId,
+              name: p.name,
+              photo_url: p.photo_url,
+              is_verified: p.is_verified,
+            };
+          }),
+        )
+      ).filter(Boolean);
 
       socket.emit('room:presence-sync', { room_id: roomId, participants: rosterDetails });
     } catch {
@@ -605,16 +639,142 @@ io.on('connection', (socket: Socket) => {
     if (!roomId) return;
     socket.leave(`room:${roomId}`);
     if (!userId) return;
-    // Only broadcast leave when no remaining socket of this user is in the room.
+    // Only broadcast leave / end in-room 1:1s when no remaining socket of this user is in the room.
     const stillHere = await userStillInRoom(userId, roomId);
     if (!stillHere) {
+      endRoomDmsForUser(roomId, userId, 'leave');
       socket.to(`room:${roomId}`).emit('room:presence', {
         room_id: roomId,
         type: 'leave',
         user_id: userId,
       });
+      // Wipe unsaved temp identity + drop open-join membership (leave no roster trace).
+      void roomService.exitRoomSession(userId, roomId).catch(() => {});
     }
   });
+
+  // ── Ephemeral in-room 1:1 (side list) — room identity only; no DB; dies on leave ──
+  socket.on(
+    'room:dm-open',
+    async (data: { roomId?: string; room_id?: string; to?: string }) => {
+      const actorId = socketToUser.get(socket.id);
+      const roomId = resolveRoomId(data);
+      const targetId = data?.to;
+      if (!actorId || !roomId || typeof targetId !== 'string' || !UUID_PATTERN.test(targetId)) {
+        return;
+      }
+      if (actorId === targetId) return;
+      try {
+        const [actorOk, targetOk, actorPresent, targetPresent] = await Promise.all([
+          roomService.isMember(actorId, roomId),
+          roomService.isMember(targetId, roomId),
+          userInSocketRoom(actorId, roomId),
+          userInSocketRoom(targetId, roomId),
+        ]);
+        if (!actorOk || !targetOk || !actorPresent || !targetPresent) {
+          socket.emit('room:dm-error', { room_id: roomId, error: 'peer_not_present' });
+          return;
+        }
+        const session = roomDmSessions.open(roomId, actorId, targetId);
+        const [actorPresence, targetPresence] = await Promise.all([
+          roomService.resolveRoomPresence(actorId, roomId),
+          roomService.resolveRoomPresence(targetId, roomId),
+        ]);
+        const payload = {
+          room_id: roomId,
+          peer_id: targetId,
+          peer_name: targetPresence.name,
+          peer_photo_url: targetPresence.photo_url,
+          self_name: actorPresence.name,
+          self_photo_url: actorPresence.photo_url,
+        };
+        socket.emit('room:dm-opened', payload);
+        io.to(`user:${targetId}`).emit('room:dm-opened', {
+          room_id: roomId,
+          peer_id: actorId,
+          peer_name: actorPresence.name,
+          peer_photo_url: actorPresence.photo_url,
+          self_name: targetPresence.name,
+          self_photo_url: targetPresence.photo_url,
+        });
+        void session;
+      } catch {
+        /* ignore */
+      }
+    },
+  );
+
+  socket.on(
+    'room:dm-message',
+    async (data: {
+      roomId?: string;
+      room_id?: string;
+      to?: string;
+      message?: string;
+      client_id?: string;
+    }) => {
+      const actorId = socketToUser.get(socket.id);
+      const roomId = resolveRoomId(data);
+      const targetId = data?.to;
+      const text = typeof data?.message === 'string' ? data.message.trim() : '';
+      if (!actorId || !roomId || typeof targetId !== 'string' || !UUID_PATTERN.test(targetId)) {
+        return;
+      }
+      if (!text || text.length > 2000) return;
+      if (actorId === targetId) return;
+      try {
+        const session = roomDmSessions.get(roomId, actorId, targetId);
+        if (!session) {
+          socket.emit('room:dm-error', { room_id: roomId, error: 'dm_not_open' });
+          return;
+        }
+        const [actorPresent, targetPresent] = await Promise.all([
+          userInSocketRoom(actorId, roomId),
+          userInSocketRoom(targetId, roomId),
+        ]);
+        if (!actorPresent || !targetPresent) {
+          endRoomDmsForUser(roomId, !actorPresent ? actorId : targetId, 'leave');
+          return;
+        }
+        const presence = await roomService.resolveRoomPresence(actorId, roomId);
+        const payload = {
+          room_id: roomId,
+          id: data.client_id || `dm-${Date.now()}`,
+          sender_id: actorId,
+          sender_name: presence.name,
+          sender_photo_url: presence.photo_url,
+          message: text,
+          created_at: new Date().toISOString(),
+        };
+        socket.emit('room:dm-message', { ...payload, to: targetId });
+        io.to(`user:${targetId}`).emit('room:dm-message', { ...payload, to: targetId });
+      } catch {
+        /* ignore */
+      }
+    },
+  );
+
+  socket.on(
+    'room:dm-close',
+    async (data: { roomId?: string; room_id?: string; to?: string }) => {
+      const actorId = socketToUser.get(socket.id);
+      const roomId = resolveRoomId(data);
+      const targetId = data?.to;
+      if (!actorId || !roomId || typeof targetId !== 'string' || !UUID_PATTERN.test(targetId)) {
+        return;
+      }
+      const closed = roomDmSessions.close(roomId, actorId, targetId);
+      if (!closed) return;
+      const payload = { room_id: roomId, peer_id: targetId, reason: 'close' as const };
+      socket.emit('room:dm-ended', { room_id: roomId, peer_id: targetId, reason: 'close' });
+      io.to(`user:${targetId}`).emit('room:dm-ended', {
+        room_id: roomId,
+        peer_id: actorId,
+        reason: 'close',
+      });
+      void payload;
+    },
+  );
 
   socket.on('room:message', async (data: { roomId: string; message: string; replyTo?: string }) => {
     const userId = socketToUser.get(socket.id);
@@ -633,13 +793,15 @@ io.on('connection', (socket: Socket) => {
     const userId = socketToUser.get(socket.id);
     const roomId = resolveRoomId(data);
     if (!userId || !roomId || typeof data.typing !== 'boolean') return;
-    const name = (await userService.getDisplayName(userId)) ?? 'Member';
+    // Room typing must use temp identity — never the canonical profile name.
+    const presence = await roomService.resolveRoomPresence(userId, roomId);
+    if (!presence.using_temp_identity) return;
     socket.to(`room:${roomId}`).emit('room:typing', {
       roomId,
       room_id: roomId,
       userId,
       user_id: userId,
-      user_name: name,
+      user_name: presence.name,
       typing: data.typing,
     });
   });
@@ -749,11 +911,14 @@ io.on('connection', (socket: Socket) => {
       void (async () => {
         const stillHere = await userStillInRoom(userId, roomId, socket.id);
         if (!stillHere) {
+          endRoomDmsForUser(roomId, userId, 'leave');
           socket.to(roomName).emit('room:presence', {
             room_id: roomId,
             type: 'leave',
             user_id: userId,
           });
+          // Wipe unsaved temp identity + drop open-join membership (leave no roster trace).
+          void roomService.exitRoomSession(userId, roomId).catch(() => {});
         }
       })();
     }
