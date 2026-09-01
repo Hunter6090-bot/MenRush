@@ -75,8 +75,12 @@ export function DiscoveryFilterPanel({
     'min-w-[4.5rem] rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)]/70 px-2.5 py-2 text-sm font-semibold text-[var(--cream)] outline-none focus:border-[var(--copper)]';
 
   return (
-    <div ref={rootRef} className={`relative ${className}`} data-testid="discovery-filter-panel">
-      <div className="flex flex-wrap items-center gap-2">
+    <div
+      ref={rootRef}
+      className={`relative min-w-0 max-w-full ${className}`}
+      data-testid="discovery-filter-panel"
+    >
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         {variant === 'compact' ? (
           <button
             type="button"
@@ -120,7 +124,7 @@ export function DiscoveryFilterPanel({
               : 'mt-3 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)]'
           }
         >
-          <div className="flex gap-1 overflow-x-auto border-b border-[var(--border-default)] px-2 py-2">
+          <div className="flex max-w-full gap-1 overflow-x-auto overscroll-x-contain border-b border-[var(--border-default)] px-2 py-2 [-webkit-overflow-scrolling:touch]">
             {PRIMARY_DISCOVERY_FILTER_CATEGORIES.map((cat) => {
               const selectedInCategory =
                 cat.id === 'looking_for'

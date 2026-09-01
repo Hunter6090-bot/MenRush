@@ -38,7 +38,7 @@ export const ComingSoon = () => {
   }, [hash]);
 
   return (
-    <div className="relative flex min-h-dvh flex-col overflow-hidden bg-[#0D0A06] text-[#F0E0C0]">
+    <div className="relative flex min-h-dvh max-w-full flex-col overflow-x-clip overflow-hidden bg-[#0D0A06] text-[#F0E0C0]">
       <div
         className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.38]"
         style={{ backgroundImage: `url(${COMING_SOON_BG})` }}
