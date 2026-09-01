@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { useAuthStore } from '../hooks/store';
+import { readStoredToken } from '../lib/authSession';
 import { blobForUpload, extensionForMediaMime } from '../lib/mediaMime';
 
 /** Strip whitespace and accidental literal "\\n" from Vercel env paste mistakes. */
@@ -31,7 +32,7 @@ function isPlausibleToken(token: unknown): token is string {
 
 apiClient.interceptors.request.use((config) => {
   // Prefer live store token so logout immediately stops Authorization headers.
-  const raw = useAuthStore.getState().token ?? localStorage.getItem('token');
+  const raw = useAuthStore.getState().token ?? readStoredToken();
   if (isPlausibleToken(raw)) {
     config.headers.Authorization = `Bearer ${raw}`;
   } else if (raw) {
@@ -67,7 +68,7 @@ apiClient.interceptors.response.use(
 
     if (status === 401 && !isAuthChallenge && !sessionExpiredHandling) {
       const store = useAuthStore.getState();
-      const hadSession = Boolean(store.token || localStorage.getItem('token'));
+      const hadSession = Boolean(store.token || readStoredToken());
       if (hadSession) {
         sessionExpiredHandling = true;
         store.logout();

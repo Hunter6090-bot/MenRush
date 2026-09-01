@@ -16,6 +16,7 @@ import { ToastNotifications } from './components/ToastNotifications';
 import { InstallPrompt } from './components/InstallPrompt';
 import { savePostAuthRedirect } from './lib/profileLinks';
 import { prefetchAppRouteChunks } from './lib/routeChunks';
+import { readStoredToken } from './lib/authSession';
 
 /**
  * Named-export pages → lazy defaults. Keeps Mapbox / heavy screens out of the
@@ -184,18 +185,30 @@ function AppEntry() {
 function AppShell() {
   const token = useAuthStore((s) => s.token);
   const logout = useAuthStore((s) => s.logout);
+  const rehydrateAuth = useAuthStore((s) => s.rehydrateAuth);
 
+  // PWA / WebView cold starts sometimes leave Zustand empty while storage still
+  // has a session (or the first localStorage read raced). Rehydrate — never wipe.
   useEffect(() => {
-    const lsToken = localStorage.getItem('token');
-    if (token && !lsToken) {
-      logout();
-      return;
-    }
-    if (!token && lsToken) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-    }
-  }, [token, logout]);
+    const sync = () => {
+      const restored = rehydrateAuth();
+      if (restored) return;
+      const storeToken = useAuthStore.getState().token;
+      if (storeToken && !readStoredToken()) {
+        // Intentional logout elsewhere cleared storage; drop the in-memory session.
+        logout();
+      }
+    };
+    sync();
+    window.addEventListener('pageshow', sync);
+    window.addEventListener('focus', sync);
+    document.addEventListener('visibilitychange', sync);
+    return () => {
+      window.removeEventListener('pageshow', sync);
+      window.removeEventListener('focus', sync);
+      document.removeEventListener('visibilitychange', sync);
+    };
+  }, [token, logout, rehydrateAuth]);
 
   useEffect(() => {
     applyTheme(readThemePreference());

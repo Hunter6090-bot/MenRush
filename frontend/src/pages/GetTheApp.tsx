@@ -77,7 +77,9 @@ export function GetTheApp() {
 
   const goNext = () => {
     if (done) {
-      navigate('/login');
+      // Prefer /app so an existing session lands in Discover; /login redirects
+      // when already signed in, but Home Screen cold starts should use AppEntry.
+      navigate('/app');
       return;
     }
     if (step < steps.length - 1) {
@@ -135,11 +137,11 @@ export function GetTheApp() {
         ) : androidInstalled ? (
           <section className="mt-6 text-center">
             <h2 className="text-[24px] font-extrabold">It's on your Home Screen.</h2>
-            <p className="mt-2 text-[15px] text-[#A89070]">Open the MenRush icon. Sign in if you already have an invite.</p>
+            <p className="mt-2 text-[15px] text-[#A89070]">Open the MenRush icon. You stay signed in after the first login.</p>
             <button
               type="button"
               className="mt-4 w-full rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3.5 text-[15px] font-bold text-[#FFF6E6]"
-              onClick={() => navigate('/login')}
+              onClick={() => navigate('/app')}
             >
               Done
             </button>
@@ -158,7 +160,7 @@ export function GetTheApp() {
             ) : (
               <section className="mt-4 text-center">
                 <h2 className="text-[24px] font-extrabold">It's on your Home Screen.</h2>
-                <p className="mt-2 text-[15px] text-[#A89070]">Open the MenRush icon. Sign in if you already have an invite.</p>
+                <p className="mt-2 text-[15px] text-[#A89070]">Open the MenRush icon. You stay signed in after the first login.</p>
               </section>
             )}
             <div className="mt-4 flex gap-2.5">
