@@ -3,7 +3,6 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
 import {
-  AUTH_BACKGROUNDS,
   PublicAuthHero,
   PublicAuthShell,
 } from '../components/PublicAuthShell';
@@ -202,7 +201,7 @@ export const Register = () => {
   };
 
   return (
-    <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.register}>
+    <PublicAuthShell>
       <PublicAuthHero
         title="Create your"
         accent="account."

@@ -4,7 +4,6 @@ import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
 import { consumePostAuthRedirect, safeNextPath, savePostAuthRedirect } from '../lib/profileLinks';
 import {
-  AUTH_BACKGROUNDS,
   PublicAuthHero,
   PublicAuthShell,
 } from '../components/PublicAuthShell';
@@ -121,7 +120,7 @@ export const Login = () => {
   const registerPath = '/register';
 
   return (
-    <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.login}>
+    <PublicAuthShell>
       <PublicAuthHero
         title={pendingToken ? 'Enter your' : "Sign in and see who's"}
         accent={pendingToken ? 'authenticator code.' : 'near you right now.'}
