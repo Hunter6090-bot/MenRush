@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Public/auth RandomBackground per pathname (no timer) | this branch `cursor/random-bg-per-page-bcc5` PR `#189` | — | Cursor cloud — Zoul lock: stay put on page; re-roll on nav + refresh; avoid last image; login/register/beta via PublicAuthShell; ComingSoon London rooftop untouched; do not mix media/#97–#99/#188 |
 | P0 PWA stay signed in + call ring when backgrounded | this branch `cursor/pwa-session-and-call-ring-429e` | — | Cursor cloud — verify: Login redirected even with session; AppShell wiped LS when store empty; SW suppressed call push when "visible"; banner permanent dismiss hid alerts. Fixes: rehydrate+cookie mirror; /login→/app if session; SW always show call; banner snooze not permanent in PWA. Do not weaken 2FA; #97–#99 parked; iOS closed-PWA push needs 16.4+ installed + permission. |
 | Landing dead `#waitlist` back-to-signup leftover | this branch `cursor/drop-dead-waitlist-href-b09e` | — | Cursor cloud — Back to signup → `/register`; keep id=#waitlist for deep links; no waitlist form restore; do not mix rooms/#97–#99 |
 | Official room temp-identity privacy + leave-no-trace (supersedes #150) | PR `#183` `cursor/room-temp-identity-leave-no-trace-139c` | — | Cursor cloud — rebased onto main+#184+#185+#186; never COALESCE to profile; temp name+photo before room:join; occupancy lock kept; sits on side list; do not fold extra 1:1; do not touch #97–#99 |
