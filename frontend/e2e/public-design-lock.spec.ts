@@ -37,9 +37,13 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
 
   await expect(page.getByRole('heading', { name: /What you get/i })).toBeVisible();
   await expect(page.getByRole('heading', { name: /^Nearby$/i })).toBeVisible();
-  await expect(page.getByRole('heading', { name: /^Video rooms$/i })).toBeVisible();
-  await expect(page.getByRole('heading', { name: /^Rooms$/i })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: /^Matches$/i })).toBeVisible();
+  // Brand live-face kill: no Video rooms card on What you get (LIVE NOW + rooms read as open).
+  await expect(page.getByRole('heading', { name: /^Video rooms$/i })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: /^Rooms$/i })).toHaveCount(0);
+  await expect(
+    page.getByText('Group spaces for men who already know the vibe. Less noise. More signal.'),
+  ).toHaveCount(0);
 
   // Period lock on card bodies — no em dash, en dash, or hyphen-as-aside (same as hero overline).
   await expect(
@@ -49,9 +53,6 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   ).toBeVisible();
   await expect(
     page.getByText('Mutual interest opens chat. Direct when it is real. No endless maybe.'),
-  ).toBeVisible();
-  await expect(
-    page.getByText('Group spaces for men who already know the vibe. Less noise. More signal.'),
   ).toBeVisible();
 
   // Product lock 31 Aug 2026: open signup waitlist gift; Pride replaces it (no stack).
