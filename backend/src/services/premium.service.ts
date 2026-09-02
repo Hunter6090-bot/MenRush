@@ -1,8 +1,12 @@
 import type { PoolClient } from 'pg';
 import pool, { query } from '../db';
 import { ccbillService, CCBillTier } from './ccbill.service';
+import { isAlwaysPremiumName } from '../lib/always-premium';
 
 type Queryable = PoolClient | typeof pool;
+
+/** Fallback when webhook body omits billed amount — matches locked CCBill price. */
+export const PREMIUM_PAID_PRICE = 6.99;
 
 /**
  * Waitlist gift cutoff: UK launch midnight 1 Oct 2026 (BST = UTC+1).
@@ -170,6 +174,68 @@ export const premiumService = {
     return { premiumUntil };
   },
 
+  /**
+   * Entitlement grant from 3 verified referrals → 1 month Premium.
+   * Never strips always-Premium accounts (BOA90, Bigbear25, HantsBear).
+   * Extends finite windows; leaves open-ended (null until) alone.
+   */
+  async grantReferralMonth(
+    userId: string,
+    months = 1,
+    now = new Date(),
+  ): Promise<{ premiumUntil: Date | null; skippedLifetime: boolean }> {
+    const row = await query(
+      `SELECT name, is_premium, premium_until, premium_starts_at
+         FROM users WHERE id = $1`,
+      [userId],
+    );
+    const user = row.rows[0];
+    if (!user) return { premiumUntil: null, skippedLifetime: false };
+
+    const always = isAlwaysPremiumName(user.name);
+    const currentUntil = user.premium_until ? new Date(user.premium_until) : null;
+
+    // Open-ended Premium (typical for always-Premium owners): keep forever.
+    if (always && Boolean(user.is_premium) && !currentUntil) {
+      return { premiumUntil: null, skippedLifetime: true };
+    }
+
+    const base =
+      currentUntil && currentUntil.getTime() > now.getTime() ? currentUntil : now;
+    const premiumUntil = new Date(base.getTime() + months * 30 * 24 * 60 * 60 * 1000);
+
+    await query(
+      `UPDATE users
+       SET is_premium = TRUE,
+           premium_tier = 'premium',
+           premium_starts_at = COALESCE(premium_starts_at, $2),
+           premium_until = $3,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [userId, now, premiumUntil],
+    );
+    return { premiumUntil, skippedLifetime: false };
+  },
+
+  /** Parse billed amount from a CCBill-like webhook body; fallback to list price. */
+  extractPaymentAmount(raw: Record<string, string>): number {
+    const keys = [
+      'billedAmount',
+      'BilledAmount',
+      'accountingAmount',
+      'initialPrice',
+      'recurringPrice',
+      'amount',
+    ];
+    for (const key of keys) {
+      const v = raw[key];
+      if (v == null) continue;
+      const n = Number(String(v).replace(/[^0-9.]/g, ''));
+      if (Number.isFinite(n) && n > 0) return Math.round(n * 100) / 100;
+    }
+    return PREMIUM_PAID_PRICE;
+  },
+
   async isPremium(userId: string): Promise<boolean> {
     if (this.isBetaPremiumFree()) return true;
     const status = await this.getStatus(userId);
@@ -253,6 +319,18 @@ export const premiumService = {
     );
 
     await syncUserEntitlements(event.userId, tier, true, periodEnd);
+
+    // Referral commission — record only; never send money / call payout rails.
+    try {
+      const { referralService } = await import('./referral.service');
+      await referralService.onPaidUpgrade(
+        event.userId,
+        this.extractPaymentAmount(event.raw),
+      );
+    } catch (err) {
+      console.error('[premium] referral paid-upgrade hook failed', err);
+    }
+
     return { ok: true, userId: event.userId, tier, periodEnd };
   },
 
@@ -282,11 +360,34 @@ export const premiumService = {
     );
 
     await syncUserEntitlements(event.userId, tier, true, periodEnd);
+
+    try {
+      const { referralService } = await import('./referral.service');
+      await referralService.onPaidUpgrade(
+        event.userId,
+        this.extractPaymentAmount(event.raw),
+      );
+    } catch (err) {
+      console.error('[premium] referral renew hook failed', err);
+    }
+
     return { ok: true, userId: event.userId, tier, periodEnd };
   },
 
   async deactivateFromWebhook(event: ReturnType<typeof ccbillService.parseWebhook>) {
     if (!event.userId) return { ok: false, reason: 'missing_user_id' };
+
+    // Never strip always-Premium owner accounts.
+    const nameRow = await query(`SELECT name FROM users WHERE id = $1`, [event.userId]);
+    if (isAlwaysPremiumName(nameRow.rows[0]?.name)) {
+      await query(
+        `UPDATE subscriptions
+         SET status = 'expired', updated_at = NOW()
+         WHERE user_id = $1 AND status = 'active'`,
+        [event.userId],
+      );
+      return { ok: true, userId: event.userId, preserved: true };
+    }
 
     await query(
       `UPDATE subscriptions

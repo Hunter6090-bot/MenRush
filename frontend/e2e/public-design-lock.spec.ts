@@ -61,6 +61,9 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   await expect(page.getByText(/Pride promo replaces that gift and does not stack/i)).toBeVisible();
   await expect(page.getByText(/invite-only until/i)).toHaveCount(0);
   await expect(page.getByText(/Invite-only until then/i)).toHaveCount(0);
+  // Brand: referrals live on register/profile only — never on the landing face.
+  await expect(page.getByText(/referral/i)).toHaveCount(0);
+  await expect(page.getByTestId('register-referral-input')).toHaveCount(0);
 
   for (const pattern of FORBIDDEN_CTA_PATTERNS) {
     await expect(page.getByRole('button', { name: pattern })).toHaveCount(0);
@@ -172,6 +175,18 @@ test.describe('public design lock — auth pages', () => {
     await expect(page.getByTestId('register-pride-note')).toHaveText(
       /Optional Pride promo if you have one\.?/i,
     );
+    await expect(page.getByTestId('register-referral-input')).toBeVisible();
+    await expect(page.getByTestId('register-referral-input')).toHaveAttribute(
+      'placeholder',
+      'If a friend shared one',
+    );
+    await expect(page.getByTestId('register-referral-note')).toHaveText(
+      /Optional\. Not required to sign up\.?/i,
+    );
+    // Referral sits after Pride — not a gate.
+    const prideBox = await page.getByTestId('register-promo-input').boundingBox();
+    const refBox = await page.getByTestId('register-referral-input').boundingBox();
+    expect(prideBox && refBox && refBox.y > prideBox.y).toBeTruthy();
     await expect(page.getByText(/PRIDE 3MONTH FREE or PRIDE-XXXX/i)).toHaveCount(0);
     await expect(page.getByTestId('register-gift-note')).toContainText(
       /Pride promo replaces that gift and does not stack/i,

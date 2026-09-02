@@ -313,6 +313,30 @@ const VerifyUserBodySchema = z.object({
   verified: z.boolean().default(true),
 });
 
+router.get('/referrals', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const { query } = await import('../db');
+    const limit = Math.min(parseInt(String(req.query.limit || '100'), 10) || 100, 500);
+    const result = await query(
+      `SELECT r.id, r.referrer_id, ru.name AS referrer_name, ru.referral_code,
+              r.referred_user_id, du.name AS referred_name,
+              r.status, r.payout_amount, r.payout_status, r.payment_amount,
+              r.created_at, r.verified_at, r.credited_at
+         FROM referrals r
+         JOIN users ru ON ru.id = r.referrer_id
+         JOIN users du ON du.id = r.referred_user_id
+        ORDER BY r.created_at DESC
+        LIMIT $1`,
+      [limit],
+    );
+    return res.json({ referrals: result.rows });
+  } catch (err) {
+    console.error('[admin] referrals list error:', err);
+    return res.status(500).json({ error: 'referrals_list_failed' });
+  }
+});
+
 router.post('/users/verify', async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   const parsed = VerifyUserBodySchema.safeParse(req.body ?? {});
@@ -334,6 +358,14 @@ router.post('/users/verify', async (req: Request, res: Response) => {
       [email, verified, verified ? 'verified' : 'unverified'],
     );
     if (!result.rows[0]) return res.status(404).json({ error: 'user_not_found' });
+    if (verified) {
+      try {
+        const { referralService } = await import('../services/referral.service');
+        await referralService.onUserVerified(result.rows[0].id);
+      } catch (err) {
+        console.error('[admin] referral onUserVerified failed', err);
+      }
+    }
     return res.json({ ok: true, user: result.rows[0] });
   } catch (err) {
     console.error('[admin] users/verify error:', err);

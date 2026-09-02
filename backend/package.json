@@ -25,6 +25,7 @@
     "test:my-photos": "ts-node scripts/my-photos-checks.ts",
     "test:pride-one-path": "ts-node scripts/pride-one-path-checks.ts",
     "test:open-signup": "ts-node scripts/open-signup-checks.ts",
+    "test:referrals": "ts-node scripts/referral-checks.ts",
     "test:room-inroom-dm": "ts-node --transpile-only scripts/room-inroom-dm-checks.ts",
     "test:official-rooms": "ts-node scripts/official-rooms-checks.ts",
     "test:community-comments": "ts-node scripts/community-comments-checks.ts",

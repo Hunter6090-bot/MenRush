@@ -220,6 +220,13 @@ export const verificationService = {
       [userId, submissionId ?? null],
     );
 
+    try {
+      const { referralService } = await import('../referral.service');
+      await referralService.onUserVerified(userId);
+    } catch (err) {
+      console.error('[verification] referral onUserVerified failed', err);
+    }
+
     if (submissionId) {
       await query(
         `UPDATE verification_submissions

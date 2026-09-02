@@ -208,6 +208,12 @@ export const veriffService = {
           WHERE id = $1`,
         [userId, sessionId],
       );
+      try {
+        const { referralService } = await import('./referral.service');
+        await referralService.onUserVerified(userId);
+      } catch (err) {
+        console.error('[veriff] referral onUserVerified failed', err);
+      }
       return { handled: true, userId, decision: 'approved' };
     }
 

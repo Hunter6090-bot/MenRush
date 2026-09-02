@@ -114,6 +114,16 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
   }
 });
 
+router.get('/me/referrals', async (req: AuthRequest, res: Response) => {
+  try {
+    const { referralService } = await import('../services/referral.service');
+    const summary = await referralService.getSummary(req.userId!);
+    res.json(summary);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 router.get('/search', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const q = typeof req.query.q === 'string' ? req.query.q : '';
