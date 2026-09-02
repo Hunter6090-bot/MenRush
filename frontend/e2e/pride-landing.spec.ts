@@ -28,6 +28,7 @@ test.describe('Pride promotion landing', () => {
     await expect(page.getByTestId('pride-invite-form')).toHaveCount(0);
     await expect(page.getByTestId('pride-claim-cta')).toBeVisible();
     await expect(page.getByTestId('pride-claim-cta')).toHaveText(/Claim Pride code/i);
+    await expect(page.getByText(/Resend my Pride code/i)).toHaveCount(0);
 
     // Grant disclaimer next to the form / CTA (must not imply submit = Premium)
     const bargain = page.getByTestId('pride-invite-bargain');
@@ -55,6 +56,7 @@ test.describe('Pride promotion landing', () => {
     await expect(page.getByTestId('pride-invite-adult')).toBeVisible();
     await expect(page.getByTestId('pride-invite-email')).toBeVisible();
     await expect(page.getByTestId('pride-invite-submit')).toContainText(/Email my Pride code/i);
+    await expect(page.getByText(/Resend my Pride code/i)).toHaveCount(0);
     await expect(page.getByText(/I confirm I am 18 or over/i)).toBeVisible();
     await expect(page.getByTestId('pride-invite-bargain')).toBeVisible();
 

@@ -15,10 +15,6 @@ const WHAT_YOU_GET = [
     body: 'See who is around you right now. Live proximity, not a stack of stale profiles.',
   },
   {
-    title: 'Video rooms',
-    body: 'Group spaces for men who already know the vibe. Less noise. More signal.',
-  },
-  {
     title: 'Matches',
     body: 'Mutual interest opens chat. Direct when it is real. No endless maybe.',
   },
@@ -109,7 +105,7 @@ export const ComingSoon = () => {
           >
             What you get
           </h2>
-          <ul className="mt-10 grid gap-8 sm:grid-cols-3 sm:gap-6">
+          <ul className="mt-10 grid gap-8 sm:grid-cols-2 sm:gap-6">
             {WHAT_YOU_GET.map((item) => (
               <li key={item.title} className="text-center sm:text-left">
                 <h3 className="text-[17px] font-extrabold uppercase tracking-[0.1em] text-[#F0E0C0]">
