@@ -146,6 +146,12 @@ test.describe('public design lock — auth pages', () => {
     await assertAuthShell(page);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Have an invite/i);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Enter your code/i);
+    // Period lock on /beta hero — no em dash, en dash, or hyphen-as-aside.
+    await expect(
+      page.getByText(
+        'Optional. If you have a MENRUSH invite from email, enter it here. Otherwise sign up free. No code needed.',
+      ),
+    ).toBeVisible();
     await expect(page.locator('#beta-invite-code')).toBeVisible();
     await expect(page.getByRole('button', { name: /^Continue$/i })).toHaveCount(1);
     await expect(page.getByRole('link', { name: /Sign up free/i })).toHaveAttribute(
