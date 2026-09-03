@@ -44,7 +44,7 @@ export function VerificationCentre() {
               <div>
                 <h2 className="font-bold text-[var(--cream)]">Adult confirmed</h2>
                 <p className="mt-1 text-sm leading-5 text-[var(--cream-muted)]">
-                  The mandatory 18+ assurance baseline. Date-of-birth entry alone is not presented as a completed legal age check.
+                  18+ check. Not required while the gate is off. Date of birth alone is not a completed legal age check.
                 </p>
               </div>
               <StatusPill label={adult ? 'Confirmed' : state?.age_assurance_status === 'self_attested' ? 'DOB supplied' : 'Pending'} complete={adult} />
