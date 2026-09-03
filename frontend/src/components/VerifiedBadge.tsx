@@ -1,23 +1,22 @@
 interface VerifiedBadgeProps {
   size?: 'sm' | 'lg';
   className?: string;
-  level?: 'authentic_person' | 'identity_checked';
 }
 
-/** Precise trust claim — free for all users and separate from Premium. */
-export function VerifiedBadge({ size = 'sm', className = '', level = 'identity_checked' }: VerifiedBadgeProps) {
-  // Slightly larger/heavier than the original pill so Identity Checked reads on
-  // dense profile cards without inventing a new verification system.
+/** Single optional Veriff mark — free for all users and separate from Premium. */
+export function VerifiedBadge({ size = 'sm', className = '' }: VerifiedBadgeProps) {
+  // Slightly larger/heavier than a plain pill so the mark reads on dense profile cards.
+  // Brand owns the badge word; until Brand names it, keep this existing Verified mark only.
   const pad = size === 'lg' ? 'px-3.5 py-1.5 text-[13px]' : 'px-2.5 py-1 text-[11.5px]';
   const iconSize = size === 'lg' ? 14 : 12;
 
   return (
     <span
-      data-testid={level === 'identity_checked' ? 'identity-checked-badge' : 'authentic-person-badge'}
+      data-testid="identity-checked-badge"
       className={`inline-flex items-center gap-1 rounded-full bg-nn-copper/18 text-nn-copper border border-nn-copper/65 font-bold tracking-wide shadow-[0_0_0_1px_rgba(196,131,42,0.12)] ${pad} ${className}`}
     >
       <CheckIcon size={iconSize} />
-      {level === 'identity_checked' ? 'Identity checked' : 'Authentic person'}
+      Identity checked
     </span>
   );
 }

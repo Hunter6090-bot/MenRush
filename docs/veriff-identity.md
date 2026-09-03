@@ -27,6 +27,7 @@ Portal: set Webhook decisions URL to `https://<API_HOST>/api/verify/veriff/webho
 
 ## Notes
 
-- Does not replace Adult confirmed or Authentic person tiers
+- One optional Veriff path only — Identity checked badge when approved. No Authentic-person live challenge; no Adult Trust Centre badge.
 - Client SDK completion never grants the badge — webhook only
-- Parked PR #97 (adult-assurance enforcement) is untouched
+- Parked PR #97 (adult-assurance / signup gate) stays parked; FEATURES.requireIdVerification stays false
+- Unverified is the default; signup stays open without ID or selfie

@@ -68,10 +68,6 @@ const VerificationCentre = lazyNamed(
   () => import('./pages/VerificationCentre'),
   'VerificationCentre',
 );
-const AuthenticityVerify = lazyNamed(
-  () => import('./pages/AuthenticityVerify'),
-  'AuthenticityVerify',
-);
 const Premium = lazyNamed(() => import('./pages/Premium'), 'Premium');
 const Events = lazyNamed(() => import('./pages/Events'), 'Events');
 const HotSpots = lazyNamed(() => import('./pages/HotSpots'), 'HotSpots');
@@ -286,14 +282,8 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/verify/authentic"
-            element={
-              <ProtectedRoute>
-                <AuthenticityVerify />
-              </ProtectedRoute>
-            }
-          />
+          {/* Authentic-person live challenge removed — Veriff covers ID + liveness. */}
+          <Route path="/verify/authentic" element={<Navigate to="/verify" replace />} />
           <Route path="/verify/scan/:sessionId" element={<VerifyScan />} />
           <Route
             path="/verify/pending"

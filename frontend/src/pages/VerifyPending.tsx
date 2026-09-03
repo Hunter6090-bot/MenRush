@@ -23,7 +23,6 @@ export const VerifyPending: React.FC = () => {
   const navigate = useNavigate();
   const setVerified = useAuthStore((s) => s.setVerified);
   const [tick, setTick] = useState(0);
-  const [authenticityConfirmed, setAuthenticityConfirmed] = useState(false);
   const stoppedRef = useRef(false);
 
   useEffect(() => {
@@ -33,8 +32,7 @@ export const VerifyPending: React.FC = () => {
       try {
         const res = await verifyAPI.status();
         if (cancelled) return;
-        const { status, is_verified, authenticity_status } = res.data;
-        setAuthenticityConfirmed(authenticity_status === 'verified');
+        const { status, is_verified } = res.data;
         if (is_verified || status === 'verified') {
           trackEventOnce('verification_transition', { state: 'verified' }, 'verification_verified');
           stoppedRef.current = true;
@@ -92,14 +90,8 @@ export const VerifyPending: React.FC = () => {
         </div>
 
         <p className={publicMutedCopyClass}>
-          We'll update your profile the moment review finishes. Last checked {tick * 5}s ago.
+          We'll update your profile the moment Veriff finishes. Last checked {tick * 5}s ago.
         </p>
-
-        {authenticityConfirmed ? (
-          <p className="rounded-xl border border-[#22C55E]/40 bg-[#22C55E]/10 p-3 text-sm font-semibold text-[#86EFAC]">
-            Your Authentic person badge is already active. This ID review is a separate, stronger trust tier.
-          </p>
-        ) : null}
 
         <button
           type="button"
