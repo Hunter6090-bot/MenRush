@@ -23,6 +23,7 @@
     "test:discovery-age-filter": "ts-node scripts/discovery-age-filter-checks.ts",
     "test:discreet-media-blur": "ts-node scripts/discreet-media-blur-checks.ts",
     "test:my-photos": "ts-node scripts/my-photos-checks.ts",
+    "test:chat-attach-my-photos": "ts-node scripts/chat-attach-my-photos-checks.ts",
     "test:pride-one-path": "ts-node scripts/pride-one-path-checks.ts",
     "test:open-signup": "ts-node scripts/open-signup-checks.ts",
     "test:referrals": "ts-node scripts/referral-checks.ts",
