@@ -41,8 +41,14 @@ describe('VerificationCentre', () => {
 
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Verified');
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Optional Veriff check');
+    expect(
+      screen.getByText(
+        'Government ID matched to a live selfie. Pass or fail from Veriff only. No team review queue.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByTestId('trust-start-veriff')).toHaveAttribute('href', '/verify/id');
     expect(screen.getByText(/Optional\. Not required to use the app/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Pass or fail from Veriff only —/)).toBeNull();
     expect(screen.queryByText('Authentic person')).toBeNull();
     expect(screen.queryByText('Start live challenge')).toBeNull();
     expect(screen.queryByText('Adult confirmed')).toBeNull();
