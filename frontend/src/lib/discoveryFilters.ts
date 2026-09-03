@@ -264,7 +264,7 @@ export function applyDiscoveryClientFilters(users: NearbyUser[], state: Discover
     result = result.filter((u) => !!u.photo_url);
   }
   if (state.status.includes('verified')) {
-    // One badge only — Veriff is_verified / identity_checked. No Authentic-person honor mark.
+    // One badge only — Veriff is_verified → Verified. No Authentic-person honor mark.
     result = result.filter((u) => u.is_verified);
   }
 

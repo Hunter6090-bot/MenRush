@@ -28,7 +28,7 @@ describe('VerificationCentre', () => {
     } as any);
   });
 
-  it('shows one optional Veriff card and no Authentic person or Adult badge cards', async () => {
+  it('shows one optional Veriff card that awards Verified — no Authentic person or Adult', async () => {
     render(
       <MemoryRouter>
         <VerificationCentre />
@@ -39,11 +39,15 @@ describe('VerificationCentre', () => {
       expect(screen.getByTestId('trust-veriff-card')).toBeInTheDocument();
     });
 
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Verified');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Optional Veriff check');
     expect(screen.getByTestId('trust-start-veriff')).toHaveAttribute('href', '/verify/id');
+    expect(screen.getByText(/Optional\. Not required to use the app/i)).toBeInTheDocument();
     expect(screen.queryByText('Authentic person')).toBeNull();
     expect(screen.queryByText('Start live challenge')).toBeNull();
     expect(screen.queryByText('Adult confirmed')).toBeNull();
-    expect(screen.getByText(/Optional\. Not required to use the app/i)).toBeInTheDocument();
+    expect(screen.queryByText('Identity checked')).toBeNull();
+    expect(screen.queryByText(/strongest trust/i)).toBeNull();
   });
 
   it('shows the single Verified mark when Veriff has passed', async () => {
@@ -66,7 +70,7 @@ describe('VerificationCentre', () => {
     await waitFor(() => {
       expect(screen.getByTestId('trust-verified-mark')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('identity-checked-badge')).toHaveTextContent('Identity checked');
-    expect(screen.queryByTestId('authentic-person-badge')).toBeNull();
+    expect(screen.getByTestId('verified-badge')).toHaveTextContent('Verified');
+    expect(screen.queryByText('Identity checked')).toBeNull();
   });
 });

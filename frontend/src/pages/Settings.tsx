@@ -886,7 +886,7 @@ export const Settings = () => {
             <div className="flex-1">
               <p className="text-[15px] font-bold text-[var(--cream)]">Trust centre</p>
               <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
-                Optional Veriff identity check. Not required to use the app.
+                Optional Veriff check for Verified. Not required to use the app.
               </p>
             </div>
             <span className="text-[13px] font-extrabold tracking-wide text-[#E0A14A]">OPEN</span>

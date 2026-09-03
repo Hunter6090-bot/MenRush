@@ -220,7 +220,7 @@ export const veriffService = {
     if (mappedStatus === 'declined') {
       const reason =
         (verification?.reason && String(verification.reason).slice(0, 280)) ||
-        'Identity check was not approved. You can try again.';
+        'Verification was not approved. You can try again.';
       await query(
         `UPDATE users
             SET is_verified = FALSE,

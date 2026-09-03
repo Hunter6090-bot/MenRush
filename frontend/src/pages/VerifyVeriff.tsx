@@ -130,7 +130,7 @@ export const VerifyVeriff: React.FC = () => {
       <PublicAuthHero
         title="Confirm"
         accent="it’s you"
-        copy="Scan a government ID and take a live selfie. Your Identity checked badge appears only after approval."
+        copy="Scan a government ID and take a live selfie. Optional — not required to use the app. Verified appears only after Veriff approves."
       />
 
       <div className={`${publicPanelClass} mt-6 space-y-4 p-5`}>

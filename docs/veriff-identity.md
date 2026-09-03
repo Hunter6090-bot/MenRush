@@ -1,6 +1,6 @@
 # Veriff identity verification
 
-Optional **Identity checked** path: government ID scan + live selfie via Veriff.
+Optional **Verified** path: government ID scan + live selfie via Veriff. Brand badge word is Verified.
 
 ## Flow
 
@@ -10,7 +10,7 @@ Optional **Identity checked** path: government ID scan + live selfie via Veriff.
 4. **Web** opens `@veriff/incontext-sdk` (`createVeriffFrame`) with that `sessionUrl` — ID + selfie stay on MenRush
 5. Veriff posts a **decision webhook** to `POST /api/verify/veriff/webhook`
 6. Webhook verifies `X-AUTH-CLIENT` + `X-HMAC-SIGNATURE` (HMAC-SHA256 of raw body with `VERIFF_SHARED_SECRET`)
-7. **`is_verified` / Identity checked badge only when `verification.status === 'approved'`**
+7. **`is_verified` / Verified badge only when `verification.status === 'approved'`**
 
 Native capture remains at `/verify/id/manual`.
 
@@ -27,7 +27,7 @@ Portal: set Webhook decisions URL to `https://<API_HOST>/api/verify/veriff/webho
 
 ## Notes
 
-- One optional Veriff path only — Identity checked badge when approved. No Authentic-person live challenge; no Adult Trust Centre badge.
+- One optional Veriff path only — Verified badge when approved. No Authentic-person live challenge; no Adult Trust Centre badge; no “Identity checked” product label.
 - Client SDK completion never grants the badge — webhook only
 - Parked PR #97 (adult-assurance / signup gate) stays parked; FEATURES.requireIdVerification stays false
 - Unverified is the default; signup stays open without ID or selfie

@@ -72,9 +72,9 @@ export const VerifyPending: React.FC = () => {
   return (
     <PublicAuthShell backgroundImage={AUTH_BACKGROUNDS.verify} homeTo="/discover">
       <PublicAuthHero
-        title="Identity check"
-        accent="submitted."
-        copy="Government-ID checking is optional. You can continue using MenRush while the private review finishes."
+        title="Verified"
+        accent="in review."
+        copy="Optional. Not required to use the app. You can continue using MenRush while Veriff finishes."
       />
 
       <div className={publicPanelClass}>
