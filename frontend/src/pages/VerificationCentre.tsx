@@ -44,7 +44,7 @@ export function VerificationCentre() {
               <div>
                 <h2 className="font-bold text-[var(--cream)]">Optional Veriff check</h2>
                 <p className="mt-1 text-sm leading-5 text-[var(--cream-muted)]">
-                  Government ID matched to a live selfie. Pass or fail from Veriff only — no team review queue.
+                  Government ID matched to a live selfie. Pass or fail from Veriff only. No team review queue.
                 </p>
               </div>
               <StatusPill
