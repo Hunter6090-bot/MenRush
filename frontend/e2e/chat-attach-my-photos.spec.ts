@@ -6,6 +6,9 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
 
 const OWNER = {
   token: 'e2echatattachpayload.e2echatattachsignature0',
@@ -26,7 +29,7 @@ const VIEW_ONCE_ID = '44444444-4444-4444-4444-444444444444';
 const PRIVATE_ID = '55555555-5555-5555-5555-555555555555';
 
 const ARTIFACTS = '/opt/cursor/artifacts';
-const TILE_JPEG = fs.readFileSync(path.join(__dirname, 'fixtures/my-photos-tile.jpg'));
+const TILE_JPEG = fs.readFileSync(path.join(here, 'fixtures/my-photos-tile.jpg'));
 
 function libraryPayload() {
   const now = new Date().toISOString();
@@ -189,6 +192,30 @@ async function mockApis(
         });
       }
 
+      if (method === 'GET' && (p.endsWith('/users/me') || p.includes('/users/me?'))) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ...OWNER.user,
+            photo_url: '/api/albums/media/public.jpg',
+            bio: 'Nearby for real — clear face, clear intent, no waiting around.',
+            looking_for: 'Chat and meet',
+            interests: ['Chat', 'Fitness', 'Nightlife'],
+            lat: 51.5,
+            lng: -0.12,
+          }),
+        });
+      }
+
+      if (method === 'GET' && p.includes('/notifications')) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ notifications: [], unread_count: 0 }),
+        });
+      }
+
       // Track any album mutation attempts — attach must never hit these.
       if (
         (method === 'DELETE' || method === 'PUT' || method === 'PATCH') &&
@@ -216,7 +243,7 @@ async function mockApis(
         });
       }
 
-      if (method === 'GET' && p.includes('/users/')) {
+      if (method === 'GET' && p.includes(`/users/${PEER_ID}`)) {
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
