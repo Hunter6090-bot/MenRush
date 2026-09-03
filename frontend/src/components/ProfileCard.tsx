@@ -181,7 +181,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         <div className="flex items-center gap-2 mb-1">
           <h3 className="font-bold text-[var(--cream)] text-base">{user.name}</h3>
           <span className="text-[var(--cream-muted)] text-sm">{user.age}</span>
-          {user.is_verified ? <VerifiedBadge /> : user.authenticity_status === 'verified' ? <VerifiedBadge level="authentic_person" /> : null}
+          {user.is_verified ? <VerifiedBadge /> : null}
         </div>
 
         {user.headline && (

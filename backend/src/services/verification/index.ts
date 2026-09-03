@@ -49,7 +49,6 @@ export const verificationService = {
               authenticity_status, authenticity_verified_at,
               CASE
                 WHEN is_verified THEN 'identity_checked'
-                WHEN authenticity_status = 'verified' THEN 'authentic_person'
                 WHEN age_assurance_status = 'confirmed' THEN 'adult_confirmed'
                 ELSE 'unconfirmed'
               END AS trust_level

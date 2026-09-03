@@ -584,9 +584,6 @@ export const Profile = () => {
                     <h2 className="text-2xl font-extrabold text-[var(--cream)]">{displayName || profile.name}</h2>
                     {(profile as ProfileData & { is_verified?: boolean }).is_verified ? (
                       <VerifiedBadge />
-                    ) : (profile as ProfileData & { authenticity_status?: string }).authenticity_status ===
-                      'verified' ? (
-                      <VerifiedBadge level="authentic_person" />
                     ) : null}
                     <StatusBadge online={!!profile.online} lastSeen={profile.last_seen} />
                   </div>

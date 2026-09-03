@@ -59,7 +59,7 @@ router.post(
 
 /**
  * POST /api/verify/veriff/webhook
- * Decision webhook — Identity checked badge only when status === approved.
+ * Decision webhook — Verified badge only when status === approved.
  * Must receive the raw body for HMAC (mounted before express.json in server.ts).
  */
 router.post(

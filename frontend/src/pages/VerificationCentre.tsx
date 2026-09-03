@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { verifyAPI, type VerifyStatus } from '../api/verify';
+import { VerifiedBadge } from '../components/VerifiedBadge';
 
 function StatusPill({ label, complete }: { label: string; complete: boolean }) {
   return (
@@ -23,71 +24,61 @@ export function VerificationCentre() {
     verifyAPI.status().then((res) => setState(res.data)).catch(() => setError('Could not load verification status.'));
   }, []);
 
-  const authentic = state?.authenticity_status === 'verified' || state?.is_verified;
-  const identity = Boolean(state?.is_verified);
-  const adult = state?.age_assurance_status === 'confirmed';
+  const verified = Boolean(state?.is_verified);
 
   return (
     <Layout>
-      <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6">
+      <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6" data-testid="trust-centre">
         <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[var(--copper)]">Trust centre</p>
-        <h1 className="mt-2 font-display text-3xl font-black text-[var(--cream)]">Verification, without giving up discretion</h1>
+        <h1 className="mt-2 font-display text-3xl font-black text-[var(--cream)]">Verified</h1>
         <p className="mt-3 text-sm leading-6 text-[var(--cream-muted)]">
-          Your membership plan and trust status are separate. Optional checks never reveal your legal name or documents to other members.
+          Optional. Not required to use the app. One private Veriff check awards Verified.
+          Unverified is the default. 18+ stays on the signup date-of-birth line.
         </p>
 
         {error ? <p className="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">{error}</p> : null}
 
         <div className="mt-6 space-y-3">
-          <section className="mr-card p-5">
+          <section className="mr-card p-5" data-testid="trust-veriff-card">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="font-bold text-[var(--cream)]">Adult confirmed</h2>
+                <h2 className="font-bold text-[var(--cream)]">Optional Veriff check</h2>
                 <p className="mt-1 text-sm leading-5 text-[var(--cream-muted)]">
-                  18+ check. Not required while the gate is off. Date of birth alone is not a completed legal age check.
+                  Government ID matched to a live selfie. Pass or fail from Veriff only — no team review queue.
                 </p>
               </div>
-              <StatusPill label={adult ? 'Confirmed' : state?.age_assurance_status === 'self_attested' ? 'DOB supplied' : 'Pending'} complete={adult} />
+              <StatusPill
+                label={verified ? 'Verified' : state?.status === 'pending' ? 'In review' : 'Optional'}
+                complete={verified}
+              />
             </div>
-          </section>
-
-          <section className="mr-card p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="font-bold text-[var(--cream)]">Authentic person</h2>
-                <p className="mt-1 text-sm leading-5 text-[var(--cream-muted)]">
-                  Optional live randomised camera challenge. No government ID is needed.
-                </p>
+            {verified ? (
+              <div className="mt-4" data-testid="trust-verified-mark">
+                <VerifiedBadge />
               </div>
-              <StatusPill label={authentic ? 'Confirmed' : state?.authenticity_status === 'pending' ? 'In review' : 'Optional'} complete={Boolean(authentic)} />
-            </div>
-            {!authentic && state?.authenticity_status !== 'pending' ? (
-              <Link to="/verify/authentic" className="mt-4 inline-flex rounded-xl bg-[var(--copper)] px-4 py-2.5 text-sm font-bold text-[var(--nn-on-copper)]">
-                Start live challenge
+            ) : null}
+            {!verified && state?.status !== 'pending' ? (
+              <Link
+                to="/verify/id"
+                className="mt-4 inline-flex rounded-xl bg-[var(--copper)] px-4 py-2.5 text-sm font-bold text-[var(--nn-on-copper)]"
+                data-testid="trust-start-veriff"
+              >
+                Start Veriff
               </Link>
             ) : null}
-          </section>
-
-          <section className="mr-card p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="font-bold text-[var(--cream)]">Identity checked</h2>
-                <p className="mt-1 text-sm leading-5 text-[var(--cream-muted)]">
-                  Optional government ID privately matched to a live selfie. This earns the strongest trust badge.
-                </p>
-              </div>
-              <StatusPill label={identity ? 'Confirmed' : state?.status === 'pending' ? 'In review' : 'Optional'} complete={identity} />
-            </div>
-            {!identity && state?.status !== 'pending' ? (
-              <Link to="/verify/id" className="mt-4 inline-flex rounded-xl border border-[var(--copper)]/60 px-4 py-2.5 text-sm font-bold text-[var(--copper)]">
-                Check my identity
+            {!verified && state?.status === 'pending' ? (
+              <Link
+                to="/verify/pending"
+                className="mt-4 inline-flex rounded-xl border border-[var(--copper)]/60 px-4 py-2.5 text-sm font-bold text-[var(--copper)]"
+              >
+                View status
               </Link>
             ) : null}
           </section>
         </div>
 
         <p className="mt-5 text-xs leading-5 text-[var(--cream-muted)]">
-          Selfies and ID images are sensitive review material and are removed after review, with a 72-hour maximum retention target.
+          Selfies and ID images stay with Veriff&apos;s process. MenRush never shows your legal name or documents to other members.
         </p>
       </main>
     </Layout>

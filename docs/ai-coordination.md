@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Trust Centre squash: one optional Veriff + Verified badge; drop Authentic person + Adult | this branch `cursor/trust-centre-one-veriff-badge-54f6` PR `#196` | — | Cursor cloud — Brand signed badge word Verified; Legal signed Adult off Trust Centre; no Identity checked label; FEATURES.requireIdVerification false; #97 parked; do not merge; do not ping Al |
 | Public copy: Claim Pride code; drop Video rooms from What you get | this branch `cursor/claim-pride-drop-video-rooms-8b66` PR `#193` | — | Cursor cloud — rebased onto main+#192; Brand live-face kills; no PRIDE 3MONTH FREE on /pride; Claim not Resend; Nearby+Matches only (no Video rooms card / no coming-1-Oct rooms copy); #97–#99 parked; do not ping Al |
 | Referral system (codes + verified unlock + pending payout) | merged `#192` on main (`bbabba7`) | — | Cursor — Zoul order; optional register field; count after is_verified; 3→1mo Premium; 20% pending on paid upgrade; no CCBill/Veriff/#97–#99; always-Premium BOA90/Bigbear25/HantsBear preserved |
 | P0 phone-fit every phone without pinch-to-shrink | this branch `cursor/fix-mobile-phone-fit-eb66` PR `#191` | — | Cursor cloud — verified live public+auth scrollWidth≈clientWidth in Chromium; harden overflow-x clip on html/body/#root + phone chrome; closed details hide; filter/EventsRail contain; e2e 390+Android landing+Discover; no user-scalable=no; do not mix #97–#99 |
