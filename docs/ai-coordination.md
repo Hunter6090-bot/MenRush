@@ -47,7 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
-| Trust Centre Veriff body: em dash → period | this branch `cursor/trust-veriff-period-not-emdash-8d03` | — | Cursor cloud — Brand-signed punctuation only after #196; `Pass or fail from Veriff only. No team review queue.`; gate off; #97 parked; do not merge; do not ping Al |
+| Trust Centre Veriff body: em dash → period | this branch `cursor/trust-veriff-period-not-emdash-8d03` PR `#197` | — | Cursor cloud — Brand-signed punctuation only after #196; `Pass or fail from Veriff only. No team review queue.`; gate off; #97 parked; do not merge; do not ping Al |
 | Trust Centre squash: one optional Veriff + Verified badge; drop Authentic person + Adult | merged `#196` on main (`c4d6fb0`) | — | Cursor — Brand signed badge word Verified; Legal signed Adult off Trust Centre; no Identity checked label; FEATURES.requireIdVerification false; #97 parked |
 | Public copy: Claim Pride code; drop Video rooms from What you get | this branch `cursor/claim-pride-drop-video-rooms-8b66` PR `#193` | — | Cursor cloud — rebased onto main+#192; Brand live-face kills; no PRIDE 3MONTH FREE on /pride; Claim not Resend; Nearby+Matches only (no Video rooms card / no coming-1-Oct rooms copy); #97–#99 parked; do not ping Al |
 | Referral system (codes + verified unlock + pending payout) | merged `#192` on main (`bbabba7`) | — | Cursor — Zoul order; optional register field; count after is_verified; 3→1mo Premium; 20% pending on paid upgrade; no CCBill/Veriff/#97–#99; always-Premium BOA90/Bigbear25/HantsBear preserved |
