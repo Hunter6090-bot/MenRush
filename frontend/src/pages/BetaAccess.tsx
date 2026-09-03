@@ -88,7 +88,7 @@ export const BetaAccess = () => {
       <PublicAuthHero
         title="Have an invite?"
         accent="Enter your code."
-        copy="Optional. If you have a MENRUSH invite from email, enter it here. Otherwise sign up free — no code needed."
+        copy="Optional. If you have a MENRUSH invite from email, enter it here. Otherwise sign up free. No code needed."
       />
 
       <div className={publicPanelClass}>
