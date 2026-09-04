@@ -175,6 +175,26 @@ export const MediaMessageFormSchema = z.object({
   duration_ms: z.coerce.number().int().min(0).max(180_000).optional(),
 });
 
+/**
+ * Send an existing My Photos library photo into a 1:1 chat.
+ * Copies bytes into message storage — never deletes, moves, or changes
+ * album visibility / album_photos rows.
+ */
+export const AlbumMediaMessageSchema = z.object({
+  receiver_id: z.string().uuid(),
+  photo_id: z.string().uuid(),
+  caption: z.string().max(500).optional(),
+  disappearing: z
+    .preprocess((val) => {
+      if (val === undefined || val === null || val === '') return undefined;
+      if (typeof val === 'boolean') return val;
+      if (val === 'true' || val === '1') return true;
+      if (val === 'false' || val === '0') return false;
+      return val;
+    }, z.boolean().optional()),
+  max_views: z.coerce.number().int().min(1).max(99).optional(),
+});
+
 export const CreateRoomSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
@@ -282,3 +302,4 @@ export type MediaKind = (typeof MEDIA_KINDS)[number];
 export type MessageMediaKind = (typeof MESSAGE_MEDIA_KINDS)[number];
 export type LocationMessageInput = z.infer<typeof LocationMessageSchema>;
 export type MediaMessageFormInput = z.infer<typeof MediaMessageFormSchema>;
+export type AlbumMediaMessageInput = z.infer<typeof AlbumMediaMessageSchema>;

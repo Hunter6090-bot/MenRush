@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { messagesAPI, usersAPI, meetAPI, MediaKind, MessageMediaKind, MessageDTO, MeetAgreementState } from '../api/client';
+import { messagesAPI, usersAPI, meetAPI, MediaKind, MessageMediaKind, MessageDTO, MeetAgreementState, LibraryPhotoDTO } from '../api/client';
 import { trackEventOnce } from '../observability/analytics';
 import { useSocket } from '../hooks/useSocket';
 import { useAuthStore, useCallStore, useUnreadStore } from '../hooks/store';
@@ -13,6 +13,7 @@ import { FEATURES } from '../lib/featureFlags';
 import { SelfieCaptureModal } from '../components/SelfieCaptureModal';
 import { CameraCaptureChooser } from '../components/CameraCaptureChooser';
 import { VideoNoteCaptureModal } from '../components/VideoNoteCaptureModal';
+import { ChatAttachLibrarySheet } from '../components/ChatAttachLibrarySheet';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 import { PanicReportButton } from '../components/PanicReportButton';
 import { placeOutgoingCall } from '../lib/callBridge';
@@ -156,6 +157,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   // Image composer: hold the selected file for preview + view-rule choice
   // before sending (instead of sending immediately on pick).
   const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [pendingLibraryPhotos, setPendingLibraryPhotos] = useState<LibraryPhotoDTO[] | null>(null);
   const [pendingPreparing, setPendingPreparing] = useState(false);
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
   const [viewRule, setViewRule] = useState<ViewRule>('once');
@@ -163,6 +165,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   // Recipient image viewer (transient full-screen view of a disappearing image).
   const [viewerMsg, setViewerMsg] = useState<Message | null>(null);
   const [cameraChooserOpen, setCameraChooserOpen] = useState(false);
+  const [attachLibraryOpen, setAttachLibraryOpen] = useState(false);
   const [selfieOpen, setSelfieOpen] = useState(false);
   const [videoNoteOpen, setVideoNoteOpen] = useState(false);
   const [meetState, setMeetState] = useState<MeetAgreementState | null>(null);
@@ -407,8 +410,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     if (!normalized || !otherId) return;
     setMediaError('');
     setViewRule('once');
+    setPendingLibraryPhotos(null);
     setPendingPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
+      if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
       return URL.createObjectURL(normalized);
     });
     setPendingImage(normalized);
@@ -419,7 +423,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       .then((compressed) => {
         setPendingImage(compressed);
         setPendingPreviewUrl((prev) => {
-          if (prev) URL.revokeObjectURL(prev);
+          if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
           return URL.createObjectURL(compressed);
         });
       })
@@ -427,21 +431,54 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       .finally(() => setPendingPreparing(false));
   };
 
-  const clearPendingImage = useCallback(() => {
+  const stageLibraryPhotos = (photos: LibraryPhotoDTO[]) => {
+    if (!photos.length || !otherId) return;
+    setMediaError('');
+    setViewRule('once');
     setPendingImage(null);
     setPendingPreparing(false);
     setPendingPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
+      if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setPendingLibraryPhotos(photos);
+  };
+
+  const clearPendingImage = useCallback(() => {
+    setPendingImage(null);
+    setPendingLibraryPhotos(null);
+    setPendingPreparing(false);
+    setPendingPreviewUrl((prev) => {
+      if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
       return null;
     });
   }, []);
 
   const handleSendPendingImage = async () => {
-    if (!pendingImage || !otherId || uploadingMedia) return;
+    if (!otherId || uploadingMedia) return;
     const { disappearing, maxViews } = ruleToSendOptions(viewRule, customViews);
     setMediaError('');
     setUploadingMedia(true);
     try {
+      if (pendingLibraryPhotos && pendingLibraryPhotos.length > 0) {
+        // Send selected library photos — album rows / visibility stay untouched.
+        for (const photo of pendingLibraryPhotos) {
+          const res = await messagesAPI.sendFromAlbum(otherId, photo.id, {
+            disappearing,
+            maxViews,
+          });
+          setMessages((prev) => [...prev, res.data]);
+        }
+        clearPendingImage();
+        trackEventOnce(
+          'first_message_success',
+          { kind: 'image', surface: 'direct_message', source: 'my_photos' },
+          'first_message_success',
+        );
+        return;
+      }
+
+      if (!pendingImage) return;
       // Re-run compress if staging still preparing, or as a cheap no-op when small.
       const file = await compressChatImageFile(pendingImage);
       const res = await messagesAPI.sendMedia(otherId, file, {
@@ -468,11 +505,14 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     }
   };
 
-  // ── Media: gallery attach + camera chooser (Picture | Video) ─────────────
-  const handleAttachClick = () => fileInputRef.current?.click();
+  // ── Media: My Photos attach + device gallery secondary + camera chooser ──
+  const handleAttachClick = () => {
+    if (uploadingMedia || pendingImage || pendingLibraryPhotos || recording) return;
+    setAttachLibraryOpen(true);
+  };
 
   const handleCameraClick = () => {
-    if (uploadingMedia || pendingImage || recording) return;
+    if (uploadingMedia || pendingImage || pendingLibraryPhotos || recording) return;
     setCameraChooserOpen(true);
   };
 
@@ -1202,19 +1242,25 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         />
 
         {/* Image composer — preview + view-rule choice before sending */}
-        {pendingImage && pendingPreviewUrl && (
+        {(pendingImage && pendingPreviewUrl) ||
+        (pendingLibraryPhotos && pendingLibraryPhotos.length > 0) ? (
           <ImageComposer
-            previewUrl={pendingPreviewUrl}
+            previewUrl={
+              pendingPreviewUrl ||
+              getPhotoUrl(pendingLibraryPhotos![0].photo_url) ||
+              pendingLibraryPhotos![0].photo_url
+            }
             rule={viewRule}
             customViews={customViews}
             uploading={uploadingMedia}
             preparing={pendingPreparing}
+            photoCount={pendingLibraryPhotos?.length ?? 1}
             onRuleChange={setViewRule}
             onCustomViewsChange={setCustomViews}
             onCancel={clearPendingImage}
             onSend={handleSendPendingImage}
           />
-        )}
+        ) : null}
 
         {recording ? (
           // Recording-only bar — Stop sends, Cancel discards.
@@ -1261,7 +1307,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             <button
               type="button"
               onClick={handleShareLocation}
-              disabled={uploadingMedia || sharingLocation || !!pendingImage}
+              disabled={uploadingMedia || sharingLocation || !!pendingImage || !!pendingLibraryPhotos}
               aria-label="Send current location"
               title="Send current location"
               className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper"
@@ -1273,7 +1319,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             <button
               type="button"
               onClick={handleCameraClick}
-              disabled={uploadingMedia || !!pendingImage || recording}
+              disabled={uploadingMedia || !!pendingImage || !!pendingLibraryPhotos || recording}
               aria-label="Open camera"
               title="Take a picture or video"
               data-testid="chat-camera-button"
@@ -1282,13 +1328,14 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               <CameraIcon className="w-4 h-4" />
             </button>
 
-            {/* Gallery / attachments */}
+            {/* My Photos attach (device gallery secondary inside sheet) */}
             <button
               type="button"
               onClick={handleAttachClick}
-              disabled={uploadingMedia || !!pendingImage}
-              aria-label="Attach from gallery"
-              title="Attach from gallery"
+              disabled={uploadingMedia || !!pendingImage || !!pendingLibraryPhotos}
+              aria-label="Attach from My Photos"
+              title="Attach from My Photos"
+              data-testid="chat-attach-button"
               className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper"
             >
               <AttachIcon className="w-4 h-4" />
@@ -1371,6 +1418,19 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         onClose={() => setCameraChooserOpen(false)}
         onChoosePicture={handleChoosePicture}
         onChooseVideo={handleChooseVideo}
+      />
+
+      <ChatAttachLibrarySheet
+        open={attachLibraryOpen}
+        onClose={() => setAttachLibraryOpen(false)}
+        onConfirm={(photos) => {
+          setAttachLibraryOpen(false);
+          stageLibraryPhotos(photos);
+        }}
+        onDeviceGallery={() => {
+          setAttachLibraryOpen(false);
+          fileInputRef.current?.click();
+        }}
       />
 
       <SelfieCaptureModal
@@ -1675,6 +1735,7 @@ interface ImageComposerProps {
   customViews: number;
   uploading: boolean;
   preparing?: boolean;
+  photoCount?: number;
   onRuleChange: (rule: ViewRule) => void;
   onCustomViewsChange: (n: number) => void;
   onCancel: () => void;
@@ -1687,6 +1748,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
   customViews,
   uploading,
   preparing = false,
+  photoCount = 1,
   onRuleChange,
   onCustomViewsChange,
   onCancel,
@@ -1719,7 +1781,8 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
         />
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold mb-2" style={{ color: 'var(--cream)' }}>
-            Photo · <span data-testid="image-composer-rule">{VIEW_RULE_LABELS[rule]}</span>
+            {photoCount > 1 ? `${photoCount} photos` : 'Photo'} ·{' '}
+            <span data-testid="image-composer-rule">{VIEW_RULE_LABELS[rule]}</span>
           </p>
           <div className="flex flex-wrap gap-1.5">
             {rules.map((r) => {

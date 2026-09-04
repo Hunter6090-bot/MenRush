@@ -423,6 +423,26 @@ export const messagesAPI = {
       timeout: 180_000,
     });
   },
+  /**
+   * Attach an existing My Photos library photo into a 1:1 thread.
+   * Server copies bytes — does not delete, move, or change album visibility.
+   */
+  sendFromAlbum: (
+    receiver_id: string,
+    photo_id: string,
+    opts: { disappearing?: boolean; maxViews?: number; caption?: string } = {},
+  ) =>
+    apiClient.post<MessageDTO>(
+      '/messages/media/from-album',
+      {
+        receiver_id,
+        photo_id,
+        caption: opts.caption,
+        disappearing: opts.disappearing,
+        max_views: opts.maxViews,
+      },
+      { timeout: 60_000 },
+    ),
   markViewed: (messageId: string) =>
     apiClient.post<MessageDTO>(`/messages/${messageId}/view`),
   withdrawMedia: (messageId: string) =>
