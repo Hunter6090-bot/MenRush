@@ -145,6 +145,8 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   const [identityReady, setIdentityReady] = useState(false);
   const [loadingRoom, setLoadingRoom] = useState(true);
   const [joinError, setJoinError] = useState<string | null>(null);
+  /** Optional temp disguise sheet — never blocks join. */
+  const [tempDisguiseOpen, setTempDisguiseOpen] = useState(false);
   /** Present occupancy for side list — socket presence only, not DB membership. */
   const [presentPeople, setPresentPeople] = useState<PresentPerson[]>([]);
   const [peopleOpen, setPeopleOpen] = useState(true);
@@ -184,13 +186,14 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load room; ensure membership; always gate on temp identity before video.
+  // Load room; ensure membership; enter with profile identity (temp is optional).
   useEffect(() => {
     if (!roomId) return;
     let cancelled = false;
     setLoadingRoom(true);
     setJoinError(null);
     setIdentityReady(false);
+    setTempDisguiseOpen(false);
 
     (async () => {
       try {
@@ -213,6 +216,28 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             return;
           }
         }
+
+        // Same identity you already have — no temp name/photo/upload gate.
+        const profileName = user?.name?.trim() || 'Member';
+        const profilePhoto = user?.photo_url ?? null;
+        if (user?.id) {
+          upsertParticipant({
+            user_id: user.id,
+            name: profileName,
+            photo_url: profilePhoto,
+            isLive: true,
+            isSelf: true,
+          });
+          setMembers([
+            {
+              id: user.id,
+              name: profileName,
+              photo_url: profilePhoto ?? undefined,
+              using_temp_identity: false,
+            },
+          ]);
+        }
+        setIdentityReady(true);
         setLoadingRoom(false);
       } catch {
         if (!cancelled) {
@@ -224,13 +249,15 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
 
     return () => {
       cancelled = true;
-      // Session exit: wipe unsaved temp identity (server also drops open-join membership).
+      // Session exit: wipe unsaved temp disguise (server also drops open-join membership).
       void roomsAPI.clearTempIdentity(roomId).catch(() => {});
     };
+    // user id/name/photo are read once per room entry — intentional.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
 
-  // Load messages after identity confirmed. Occupancy comes from socket presence only —
-  // never seed the video grid from DB membership (that left stale AWAY tiles / profile flash).
+  // Load messages after join. Occupancy comes from socket presence only —
+  // never seed the video grid from DB membership (that left stale AWAY tiles).
   useEffect(() => {
     if (!roomId || !identityReady) return;
     roomsAPI.getMessages(roomId).then((r) => setMessages(r.data)).catch(() => {});
@@ -239,15 +266,17 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   useEffect(() => {
     if (!roomId || !settingsOpen) return;
     // In-room settings roster = live presence only (leave leaves no trace).
-    setMembers(
-      participants.map((p) => ({
+    setMembers((prev) => {
+      const prevById = new Map(prev.map((m) => [m.id, m]));
+      return participants.map((p) => ({
         id: p.user_id,
         name: p.name,
         photo_url: p.photo_url ?? undefined,
-        using_temp_identity: true,
-        role: undefined,
-      })),
-    );
+        using_temp_identity: prevById.get(p.user_id)?.using_temp_identity ?? false,
+        role: prevById.get(p.user_id)?.role,
+        is_verified: prevById.get(p.user_id)?.is_verified,
+      }));
+    });
   }, [roomId, settingsOpen, participants]);
 
   useEffect(() => {
@@ -278,9 +307,8 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   }, [addPanelOpen, members, user?.id]);
 
   // ── Socket: join/leave ───────────────────────────────────────────────────
-  // CRITICAL: join only AFTER temp identity is saved. Early join broadcast
-  // resolveRoomPresence before the gate → real name/photo leak + dropped
-  // WebRTC offers (mesh handlers are disabled until identityReady).
+  // Join as soon as room membership + profile identity are ready.
+  // Optional temp disguise can be applied later without blocking entry.
   useEffect(() => {
     if (!socket || !roomId || !identityReady) return;
     socket.emit('room:join', { roomId });
@@ -309,6 +337,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       user_id: string;
       name?: string;
       photo_url?: string | null;
+      using_temp_identity?: boolean;
     }) => {
       if (data.room_id !== roomId) return;
       if (data.type === 'leave') {
@@ -332,6 +361,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
         });
         return;
       }
+      const usingTemp = !!data.using_temp_identity;
       upsertParticipant({
         user_id: data.user_id,
         name: data.name ?? 'Member',
@@ -344,6 +374,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           user_id: data.user_id,
           name: data.name,
           photo_url: data.photo_url,
+          using_temp_identity: usingTemp,
         }),
       );
       setMembers((prev) => {
@@ -354,7 +385,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                   ...m,
                   name: data.name ?? m.name,
                   photo_url: data.photo_url ?? m.photo_url,
-                  using_temp_identity: true,
+                  using_temp_identity: usingTemp,
                 }
               : m,
           );
@@ -365,7 +396,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             id: data.user_id,
             name: data.name ?? 'Member',
             photo_url: data.photo_url ?? undefined,
-            using_temp_identity: true,
+            using_temp_identity: usingTemp,
           },
         ];
       });
@@ -373,7 +404,12 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
 
     const onPresenceSync = (data: {
       room_id: string;
-      participants: Array<{ user_id: string; name: string; photo_url?: string | null }>;
+      participants: Array<{
+        user_id: string;
+        name: string;
+        photo_url?: string | null;
+        using_temp_identity?: boolean;
+      }>;
     }) => {
       if (data.room_id !== roomId) return;
       applyPresenceSync(data.participants);
@@ -385,7 +421,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           id: p.user_id,
           name: p.name,
           photo_url: p.photo_url ?? undefined,
-          using_temp_identity: true,
+          using_temp_identity: !!p.using_temp_identity,
         })),
       );
       // If open DM peer is no longer present, drop the window.
@@ -722,6 +758,102 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     (room?.created_by && room.created_by !== user?.id ? room.created_by : undefined) ??
     members.find((m) => m.id !== user?.id)?.id;
 
+  const selfUsingTemp = Boolean(
+    members.find((m) => m.id === user?.id)?.using_temp_identity,
+  );
+
+  /** Optional disguise only — join already succeeded with profile identity. */
+  const applyTempDisguise = useCallback(
+    async (payload: {
+      displayName: string;
+      photoUrl: string;
+      saveName: boolean;
+      savePhoto: boolean;
+    }) => {
+      if (!roomId || !user?.id || !payload.photoUrl) {
+        throw new Error('temp_photo_required');
+      }
+      await roomsAPI.setTempIdentity(roomId, {
+        display_name: payload.displayName,
+        photo_url: payload.photoUrl,
+        save_name: payload.saveName,
+        save_photo: payload.savePhoto,
+      });
+      upsertParticipant({
+        user_id: user.id,
+        name: payload.displayName,
+        photo_url: payload.photoUrl,
+        isLive: true,
+        isSelf: true,
+      });
+      setMembers((prev) => {
+        const row = {
+          id: user.id,
+          name: payload.displayName,
+          photo_url: payload.photoUrl,
+          using_temp_identity: true,
+        };
+        if (prev.some((m) => m.id === user.id)) {
+          return prev.map((m) => (m.id === user.id ? { ...m, ...row } : m));
+        }
+        return [...prev, row];
+      });
+      setPresentPeople((prev) =>
+        upsertPresentPerson(prev, {
+          user_id: user.id,
+          name: payload.displayName,
+          photo_url: payload.photoUrl,
+          using_temp_identity: true,
+        }),
+      );
+      // Re-announce so peers refresh the tile to the disguise.
+      socket?.emit('room:join', { roomId });
+      setTempDisguiseOpen(false);
+      setSettingsNotice('Temporary name is on for this room only.');
+    },
+    [roomId, user?.id, upsertParticipant, socket],
+  );
+
+  const clearTempDisguise = useCallback(async () => {
+    if (!roomId || !user?.id) return;
+    try {
+      await roomsAPI.deleteTempIdentity(roomId);
+    } catch {
+      /* still restore profile face locally */
+    }
+    const profileName = user.name?.trim() || 'Member';
+    const profilePhoto = user.photo_url ?? null;
+    upsertParticipant({
+      user_id: user.id,
+      name: profileName,
+      photo_url: profilePhoto,
+      isLive: true,
+      isSelf: true,
+    });
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.id === user.id
+          ? {
+              ...m,
+              name: profileName,
+              photo_url: profilePhoto ?? undefined,
+              using_temp_identity: false,
+            }
+          : m,
+      ),
+    );
+    setPresentPeople((prev) =>
+      upsertPresentPerson(prev, {
+        user_id: user.id,
+        name: profileName,
+        photo_url: profilePhoto,
+        using_temp_identity: false,
+      }),
+    );
+    socket?.emit('room:join', { roomId });
+    setSettingsNotice('Back to your profile name in this room.');
+  }, [roomId, user, upsertParticipant, socket]);
+
   const handleAddMember = async (targetId: string, targetName: string) => {
     if (!roomId || addingMemberId) return;
     setAddingMemberId(targetId);
@@ -789,6 +921,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   }
 
   if (!identityReady && room) {
+    // Brief wait while profile identity seeds — never show a forced temp gate.
     return (
       <div
         className={embedded ? 'flex h-full min-h-0 flex-col' : 'fixed inset-0 flex flex-col'}
@@ -796,45 +929,11 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           background: 'var(--bg-primary)',
           paddingTop: embedded ? undefined : 'env(safe-area-inset-top, 0px)',
         }}
+        data-testid="room-joining"
       >
-        <RoomTempIdentityGate
-          roomId={roomId!}
-          roomName={room.name}
-          roomDescription={room.description}
-          activeCount={room.member_count}
-          roomTheme={room.name}
-          onReady={async ({ displayName, photoUrl: gatePhotoUrl, saveName, savePhoto }) => {
-            if (!gatePhotoUrl) {
-              throw new Error('temp_photo_required');
-            }
-            await roomsAPI.setTempIdentity(roomId!, {
-              display_name: displayName,
-              photo_url: gatePhotoUrl,
-              save_name: saveName,
-              save_photo: savePhoto,
-            });
-            // First paint uses TEMP identity only — never auth profile photo/name.
-            if (user?.id) {
-              upsertParticipant({
-                user_id: user.id,
-                name: displayName,
-                photo_url: gatePhotoUrl,
-                isLive: true,
-                isSelf: true,
-              });
-              setMembers([
-                {
-                  id: user.id,
-                  name: displayName,
-                  photo_url: gatePhotoUrl,
-                  using_temp_identity: true,
-                },
-              ]);
-            }
-            setIdentityReady(true);
-          }}
-          onCancel={leaveRoomSurface}
-        />
+        <div className="flex flex-1 items-center justify-center text-sm" style={{ color: '#A89070' }}>
+          Joining…
+        </div>
       </div>
     );
   }
@@ -999,18 +1098,58 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
 
             <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border-default)' }}>
               <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: '#6B5035' }}>
+                How you appear
+              </p>
+              <p className="mb-2 text-xs" style={{ color: '#A89070' }}>
+                {selfUsingTemp
+                  ? 'Temporary name is on for this room only.'
+                  : 'You are using your profile name and photo.'}
+              </p>
+              {selfUsingTemp ? (
+                <button
+                  type="button"
+                  data-testid="room-clear-temp-disguise"
+                  onClick={() => void clearTempDisguise()}
+                  className="w-full rounded-xl border px-3 py-2.5 text-left text-sm transition-colors hover:bg-[var(--border-default)]/40"
+                  style={{ borderColor: 'var(--border-default)', color: 'var(--cream)' }}
+                >
+                  Use my profile identity
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  data-testid="room-open-temp-disguise"
+                  onClick={() => {
+                    setSettingsOpen(false);
+                    setTempDisguiseOpen(true);
+                  }}
+                  className="w-full rounded-xl border px-3 py-2.5 text-left text-sm transition-colors hover:bg-[var(--border-default)]/40"
+                  style={{ borderColor: 'var(--border-default)', color: 'var(--cream)' }}
+                >
+                  Optional: temporary name for this room
+                </button>
+              )}
+            </div>
+
+            <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border-default)' }}>
+              <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: '#6B5035' }}>
                 Members
               </p>
               <div className="space-y-1">
                 {members.map((member) => (
                   <div key={member.id} className="flex items-center gap-2">
-                    {/* Temp-identity rows never deep-link to the real profile. */}
+                    {/* Temp disguise rows never deep-link to the real profile. */}
                     <div
                       className="flex min-w-0 flex-1 items-center gap-2"
                       data-testid={`room-member-${member.id}`}
                     >
                       <span className="flex-1 text-sm truncate" style={{ color: 'var(--cream)' }}>
                         {member.name}
+                        {member.using_temp_identity ? (
+                          <span className="ml-1 text-[10px]" style={{ color: '#A89070' }}>
+                            · temp
+                          </span>
+                        ) : null}
                         {member.is_verified ? (
                           <span className="ml-1 text-[10px]" style={{ color: '#8FC773' }} title="Adult assurance">
                             · verified
@@ -1450,6 +1589,31 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
         </form>
       </div>
       </div>
+
+      {tempDisguiseOpen && roomId && room ? (
+        <div
+          className="absolute inset-0 z-40 flex flex-col"
+          style={{ background: 'var(--bg-primary)' }}
+          data-testid="room-temp-disguise-overlay"
+        >
+          <RoomTempIdentityGate
+            roomId={roomId}
+            roomName={room.name}
+            roomDescription={room.description}
+            activeCount={room.member_count}
+            roomTheme={room.name}
+            onReady={async ({ displayName, photoUrl: gatePhotoUrl, saveName, savePhoto }) => {
+              await applyTempDisguise({
+                displayName,
+                photoUrl: gatePhotoUrl,
+                saveName,
+                savePhoto,
+              });
+            }}
+            onCancel={() => setTempDisguiseOpen(false)}
+          />
+        </div>
+      ) : null}
     </div>
   );
 };

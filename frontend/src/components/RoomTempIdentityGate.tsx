@@ -122,8 +122,9 @@ export function resolveTempPhotoSrc(url?: string | null): string | undefined {
 }
 
 /**
- * Gate before entering a group video room.
- * Temporary name + photo (both required); never writes the main profile.
+ * Optional temporary disguise before/while in a group video room.
+ * Not required to enter — RoomChat joins with profile identity by default.
+ * When chosen: temporary name + photo (both required); never writes the main profile.
  * Layout: mobile bottom sheet; ≥1280px two-column centred dialog (1a).
  */
 export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
@@ -367,7 +368,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   const anonymityLine = (
     <p className="flex items-center justify-center gap-1.5 text-[11px] leading-snug text-[#A89070]">
       <LockIcon className="h-3.5 w-3.5 shrink-0 opacity-80" />
-      <span>Your profile, photos and distance stay hidden.</span>
+      <span>This temporary name stays in this room only.</span>
     </p>
   );
 
@@ -598,7 +599,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
       </div>
       <div className="mt-2 flex items-center justify-between gap-2">
         <p className="text-[11px] text-[#A89070]">
-          Temporary photo required — never your profile face.
+          Optional temporary photo — never written to your profile.
         </p>
         {photoUrl || photoPreview ? (
           <button

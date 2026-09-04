@@ -236,15 +236,14 @@ test.describe('dead pressables', () => {
     // Force mobile layout so RoomsRoute mounts RoomChat directly (not MessagingHub).
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/rooms/room-1');
-    await expect(page.getByText('Test Room')).toBeVisible({ timeout: 15_000 });
 
-    // Temp-identity gate must be completed before chat chrome mounts.
-    const gate = page.getByTestId('room-temp-identity-gate');
-    if (await gate.isVisible().catch(() => false)) {
-      await page.getByRole('button', { name: 'Anon Guest' }).click();
-      await page.getByRole('button', { name: /Enter group/i }).click();
-      await expect(gate).toHaveCount(0, { timeout: 10_000 });
-    }
+    // Profile identity join — no forced temp name/photo gate.
+    await expect(page.getByTestId('room-temp-identity-gate')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Room settings' })).toBeVisible({
+      timeout: 15_000,
+    });
+    // Self tile uses profile name (Alice), not a temp alias.
+    await expect(page.getByRole('button', { name: /Alice/i }).first()).toBeVisible();
 
     await page.getByRole('button', { name: /Show chat|Hide chat/i }).click();
     await expect(page.getByPlaceholder('Message the room…')).toBeVisible();
