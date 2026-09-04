@@ -5,8 +5,9 @@ import {
   RoomTempIdentityGate,
   buildNameSuggestions,
   resolveTempPhotoSrc,
-  type RoomTempIdentityPayload,
+  type RoomIdentityGateResult,
 } from './RoomTempIdentityGate';
+import { roomLetterAvatar } from '../lib/roomLetterAvatar';
 
 vi.mock('../api/client', () => ({
   roomsAPI: {
@@ -58,7 +59,9 @@ type GateProps = {
   roomRules?: string | null;
   activeCount?: number | null;
   roomTheme?: string | null;
-  onReady: (identity: RoomTempIdentityPayload) => void | Promise<void>;
+  profileName?: string | null;
+  profilePhotoUrl?: string | null;
+  onReady: (identity: RoomIdentityGateResult) => void | Promise<void>;
   onCancel?: () => void;
 };
 
@@ -70,6 +73,8 @@ function renderGate(overrides: Partial<GateProps> = {}) {
       roomId="room-1"
       roomName="Bears & Cubs"
       roomTheme="Bears & Cubs"
+      profileName="Profile Bear"
+      profilePhotoUrl="/uploads/profiles/bear.jpg"
       onReady={onReady}
       onCancel={onCancel}
       {...overrides}
@@ -93,6 +98,14 @@ describe('buildNameSuggestions', () => {
       'Just Visiting',
       'Discreet',
     ]);
+  });
+});
+
+describe('roomLetterAvatar', () => {
+  it('returns the first character uppercased', () => {
+    expect(roomLetterAvatar('Anon Bear')).toBe('A');
+    expect(roomLetterAvatar('gear')).toBe('G');
+    expect(roomLetterAvatar('')).toBe('?');
   });
 });
 
@@ -124,7 +137,17 @@ describe('RoomTempIdentityGate', () => {
     });
   });
 
-  it('disables CTA when name is under 2 characters; photo is optional', async () => {
+  it('offers keep-using-real-profile as a one-tap choice', async () => {
+    const user = userEvent.setup();
+    const { onReady } = renderGate();
+    await waitFor(() => expect(mockedGet).toHaveBeenCalled());
+
+    expect(screen.getByTestId('room-use-real-profile')).toBeInTheDocument();
+    await user.click(screen.getByTestId('room-use-real-profile'));
+    await waitFor(() => expect(onReady).toHaveBeenCalledWith({ mode: 'profile' }));
+  });
+
+  it('disables temp CTA when name is under 2 characters; photo is optional', async () => {
     const user = userEvent.setup();
     renderGate();
     await waitFor(() => expect(mockedGet).toHaveBeenCalled());
@@ -136,7 +159,6 @@ describe('RoomTempIdentityGate', () => {
     expect(enter).toBeDisabled();
 
     await user.type(screen.getByTestId('room-temp-name'), 'B');
-    // Name OK — photo optional, so CTA enables.
     expect(enter).not.toBeDisabled();
   });
 
@@ -154,7 +176,7 @@ describe('RoomTempIdentityGate', () => {
     expect(alert).toHaveStyle({ color: '#B0432E' });
   });
 
-  it('allows enter with name only — no temporary photo required', async () => {
+  it('allows temp enter with name only — no temporary photo required', async () => {
     const user = userEvent.setup();
     const { onReady } = renderGate();
     await waitFor(() => expect(mockedGet).toHaveBeenCalled());
@@ -165,6 +187,7 @@ describe('RoomTempIdentityGate', () => {
     await user.click(screen.getByTestId('room-temp-enter'));
     await waitFor(() => expect(onReady).toHaveBeenCalled());
     expect(onReady).toHaveBeenCalledWith({
+      mode: 'temp',
       displayName: 'Gear Bear',
       photoUrl: '',
       saveName: false,
@@ -193,6 +216,7 @@ describe('RoomTempIdentityGate', () => {
     await user.click(screen.getByTestId('room-temp-enter'));
     await waitFor(() => expect(onReady).toHaveBeenCalled());
     expect(onReady).toHaveBeenCalledWith({
+      mode: 'temp',
       displayName: 'Gear Bear',
       photoUrl: '/uploads/room-temp/test.jpg',
       saveName: true,
@@ -207,7 +231,6 @@ describe('RoomTempIdentityGate', () => {
 
     await user.click(screen.getByRole('button', { name: 'Anon Bear' }));
     expect(screen.getByTestId('room-temp-name')).toHaveValue('Anon Bear');
-    // Name alone is enough — photo optional.
     expect(screen.getByTestId('room-temp-enter')).not.toBeDisabled();
   });
 
@@ -220,13 +243,13 @@ describe('RoomTempIdentityGate', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it('shows anonymity promise and house rules accordion', async () => {
+  it('shows temp promise and house rules accordion', async () => {
     const user = userEvent.setup();
     renderGate();
     await waitFor(() => expect(mockedGet).toHaveBeenCalled());
 
     expect(
-      screen.getByText('Your profile, photos and distance stay hidden.'),
+      screen.getByText('Temporary name stays in this room only. Photo optional.'),
     ).toBeInTheDocument();
 
     expect(screen.queryByTestId('room-temp-house-rules')).not.toBeInTheDocument();
@@ -277,6 +300,7 @@ describe('RoomTempIdentityGate', () => {
     await waitFor(() => expect(onReady).toHaveBeenCalled());
     expect(onReady).toHaveBeenCalledWith(
       expect.objectContaining({
+        mode: 'temp',
         displayName: 'Anon Bear',
         photoUrl: '/uploads/room-temp/test.jpg',
       }),

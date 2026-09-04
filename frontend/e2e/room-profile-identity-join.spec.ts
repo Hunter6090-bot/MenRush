@@ -1,6 +1,6 @@
 /**
- * Room join requires temporary identity gate before video/roster.
- * Stubbed API — proves RoomChat shows the gate first and does not join with profile face/name.
+ * Room join gate: choose real profile OR temp name (photo optional).
+ * Stubbed API — proves gate appears with both choices; neither path blocks on missing temp photo.
  */
 import { test, expect, type Page } from '@playwright/test';
 
@@ -88,7 +88,7 @@ async function stubRoomJoin(page: Page) {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          display_name: body.display_name ?? 'Anon Guest',
+          display_name: body.display_name ?? 'Anon Bear',
           photo_url: body.photo_url ?? null,
         }),
       });
@@ -124,10 +124,10 @@ async function stubRoomJoin(page: Page) {
         body: JSON.stringify([
           {
             id: FAKE_USER.id,
-            name: 'Anon Guest',
-            photo_url: null,
+            name: FAKE_USER.name,
+            photo_url: FAKE_USER.photo_url,
             role: 'member',
-            using_temp_identity: true,
+            using_temp_identity: false,
           },
         ]),
       });
@@ -139,7 +139,7 @@ async function stubRoomJoin(page: Page) {
         body: JSON.stringify({
           id: 'room-profile-1',
           name: 'London Bears',
-          description: 'Temp-identity gated room',
+          description: 'Dual-choice identity gate',
           member_count: 1,
           user_role: 'member',
           is_location_based: true,
@@ -155,27 +155,51 @@ async function stubRoomJoin(page: Page) {
   return () => calls;
 }
 
-test.describe('room temp identity gate join', () => {
-  test('cold enter shows gate; cannot see profile name until gate completes', async ({ page }) => {
+test.describe('room identity gate join', () => {
+  test('cold enter shows gate with profile and temp choices', async ({ page }) => {
+    await stubRoomJoin(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/rooms/room-profile-1');
+
+    await expect(page.getByTestId('room-temp-identity-gate')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('room-use-real-profile')).toBeVisible();
+    await expect(page.getByText(/Use a temporary name/i).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Room settings' })).toHaveCount(0);
+  });
+
+  test('real profile path enters with profile name', async ({ page }) => {
     const getCalls = await stubRoomJoin(page);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/rooms/room-profile-1');
 
     await expect(page.getByTestId('room-temp-identity-gate')).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole('button', { name: 'Room settings' })).toHaveCount(0);
-    // Real profile must not appear before gate.
-    await expect(page.getByRole('button', { name: /Profile Bear/i })).toHaveCount(0);
+    await page.getByTestId('room-use-real-profile').click();
 
-    await page.getByRole('button', { name: 'Anon Guest' }).click();
+    await expect(page.getByTestId('room-temp-identity-gate')).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.getByRole('button', { name: 'Room settings' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Profile Bear/i }).first()).toBeVisible();
+
+    const calls = getCalls();
+    expect(calls.some((c) => c.startsWith('DELETE ') && c.includes('/temp-identity'))).toBe(true);
+  });
+
+  test('temp name without photo enters — no hard stop', async ({ page }) => {
+    const getCalls = await stubRoomJoin(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/rooms/room-profile-1');
+
+    await expect(page.getByTestId('room-temp-identity-gate')).toBeVisible({ timeout: 15_000 });
+    await page.getByRole('button', { name: 'Anon Bear' }).click();
     await page.getByTestId('room-temp-enter').click();
 
     await expect(page.getByTestId('room-temp-identity-gate')).toHaveCount(0, { timeout: 10_000 });
     await expect(page.getByRole('button', { name: 'Room settings' })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Anon Guest/i }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /Anon Bear/i }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: /Profile Bear/i })).toHaveCount(0);
 
     const calls = getCalls();
     expect(calls.some((c) => c.startsWith('PUT ') && c.includes('/temp-identity'))).toBe(true);
+    expect(calls.some((c) => c.includes('/temp-identity/photo'))).toBe(false);
   });
 
   test('Not now leaves without joining video chrome', async ({ page }) => {
@@ -185,7 +209,6 @@ test.describe('room temp identity gate join', () => {
 
     await expect(page.getByTestId('room-temp-identity-gate')).toBeVisible({ timeout: 15_000 });
     await page.getByTestId('room-temp-not-now').click();
-    // Cancel navigates away from the room — gate / settings gone.
     await expect(page.getByTestId('room-temp-identity-gate')).toHaveCount(0, { timeout: 10_000 });
     await expect(page.getByRole('button', { name: 'Room settings' })).toHaveCount(0);
   });

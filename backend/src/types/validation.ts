@@ -218,11 +218,12 @@ export const AddRoomMemberSchema = z.object({
 
 /**
  * Temporary identity for a specific room — never written to main profile.
- * Gate-required before join: display_name required; photo optional.
+ * Gate offers profile OR temp; when temp is chosen, display_name is required
+ * and photo is optional (letter avatar when omitted).
  */
 export const RoomTempIdentitySchema = z.object({
   display_name: z.string().trim().min(1).max(40),
-  /** Optional temp photo — never falls back to profile face. */
+  /** Optional temp photo — never falls back to profile face on the temp path. */
   photo_url: z
     .string()
     .trim()

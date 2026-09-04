@@ -1,5 +1,6 @@
 import React from 'react';
 import type { PresentPerson } from '../lib/roomPresentRoster';
+import { roomLetterAvatar } from '../lib/roomLetterAvatar';
 import { getPhotoUrl } from './UserAvatar';
 
 type Props = {
@@ -66,7 +67,7 @@ export const RoomPresentPeopleList: React.FC<Props> = ({
                     {src ? (
                       <img src={src} alt="" className="h-full w-full object-cover" />
                     ) : (
-                      initials(person.name)
+                      roomLetterAvatar(person.name)
                     )}
                   </span>
                   <span className="min-w-0 flex-1">
@@ -87,11 +88,3 @@ export const RoomPresentPeopleList: React.FC<Props> = ({
   );
 };
 
-function initials(name: string): string {
-  return name
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-}
