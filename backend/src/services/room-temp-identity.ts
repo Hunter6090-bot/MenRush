@@ -1,7 +1,6 @@
 /**
- * Room-scoped display identity.
- * Default: member's profile name + photo (same identity they already have).
- * Optional: temp name/photo disguise for this room only — never mutates the main profile.
+ * Room-scoped display identity — never emit canonical profile name/photo.
+ * Gate requires a temporary display name before join; photo is optional.
  * Kept free of DB imports so unit tests can run without Postgres.
  */
 
@@ -9,72 +8,60 @@
 export const ROOM_TEMP_IDENTITY_TTL_DAYS = 30;
 
 /**
- * Fallback display name when the account has no usable profile name.
- * Used only after profile fallback — not a forced anon gate.
+ * Anonymous fallback when a room member has no active temp identity.
+ * NEVER substitute users.name / users.photo_url inside a room — that is a privacy leak.
  */
 export const ROOM_ANON_DISPLAY_NAME = 'Member';
 
 /**
  * SQL fragments for room-scoped display identity.
  * `ttlParam` is a query placeholder for TTL days (e.g. `$2` or `$3`).
- * Active temp = non-null display_name AND non-null photo_url within soft TTL.
- * When temp is inactive, fall back to the member's profile name/photo.
- * Assumes users aliased as `u` (or `userAlias`) and temp as `ti` (or `tiAlias`).
+ * Active temp = non-null display_name within soft TTL (photo optional).
+ * Null / missing photo must NOT COALESCE to the canonical profile photo.
  */
-export function roomTempNameSql(ttlParam: string, tiAlias = 'ti', userAlias = 'u'): string {
+export function roomTempNameSql(ttlParam: string, tiAlias = 'ti'): string {
   return `CASE
     WHEN ${tiAlias}.display_name IS NOT NULL
-     AND ${tiAlias}.photo_url IS NOT NULL
      AND ${tiAlias}.last_used_at > NOW() - (${ttlParam} || ' days')::interval
     THEN ${tiAlias}.display_name
-    ELSE COALESCE(NULLIF(TRIM(${userAlias}.name), ''), '${ROOM_ANON_DISPLAY_NAME}')
+    ELSE '${ROOM_ANON_DISPLAY_NAME}'
   END`;
 }
 
-export function roomTempPhotoSql(ttlParam: string, tiAlias = 'ti', userAlias = 'u'): string {
+export function roomTempPhotoSql(ttlParam: string, tiAlias = 'ti'): string {
   return `CASE
     WHEN ${tiAlias}.display_name IS NOT NULL
      AND ${tiAlias}.photo_url IS NOT NULL
      AND ${tiAlias}.last_used_at > NOW() - (${ttlParam} || ' days')::interval
     THEN ${tiAlias}.photo_url
-    ELSE NULLIF(TRIM(${userAlias}.photo_url), '')
+    ELSE NULL
   END`;
 }
 
 export function roomUsingTempIdentitySql(ttlParam: string, tiAlias = 'ti'): string {
   return `(${tiAlias}.display_name IS NOT NULL
-    AND ${tiAlias}.photo_url IS NOT NULL
     AND ${tiAlias}.last_used_at > NOW() - (${ttlParam} || ' days')::interval)`;
 }
 
 /**
- * Resolve what peers see in-room.
- * Active temp disguise wins; otherwise use the member's profile identity.
- * Incomplete temp (name without photo) does not activate disguise — profile is used.
+ * Pure helper for tests / post-query guards — never returns a canonical profile field.
+ * Active temp = name present (photo optional). Incomplete / missing → anon placeholder.
  */
 export function sanitizeRoomPresence(input: {
   tempName?: string | null;
   tempPhoto?: string | null;
   tempActive?: boolean;
+  /** Forbidden — if passed, must be ignored. */
   profileName?: string | null;
   profilePhoto?: string | null;
 }): { name: string; photo_url: string | null; using_temp_identity: boolean } {
   const nameOk = Boolean(input.tempName?.trim());
   const photoOk = Boolean(input.tempPhoto?.trim());
-  const active = Boolean(input.tempActive && nameOk && photoOk);
-  if (active) {
-    return {
-      name: String(input.tempName).trim(),
-      photo_url: String(input.tempPhoto).trim(),
-      using_temp_identity: true,
-    };
-  }
-  const profileName = input.profileName?.trim();
-  const profilePhoto = input.profilePhoto?.trim();
+  const active = Boolean(input.tempActive && nameOk);
   return {
-    name: profileName || ROOM_ANON_DISPLAY_NAME,
-    photo_url: profilePhoto || null,
-    using_temp_identity: false,
+    name: active ? String(input.tempName).trim() : ROOM_ANON_DISPLAY_NAME,
+    photo_url: active && photoOk ? String(input.tempPhoto).trim() : null,
+    using_temp_identity: active,
   };
 }
 

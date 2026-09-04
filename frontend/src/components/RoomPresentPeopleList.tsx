@@ -12,8 +12,7 @@ type Props = {
 
 /**
  * Side list of who is in the room NOW (present occupancy).
- * Shows display identity (profile by default, or optional temp disguise).
- * Tap opens in-room 1:1 — temp rows do not deep-link to main profile.
+ * Shows room temp identity only — never navigates to main profile.
  */
 export const RoomPresentPeopleList: React.FC<Props> = ({
   people,

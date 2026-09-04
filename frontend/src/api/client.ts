@@ -515,7 +515,7 @@ export const roomsAPI = {
     roomId: string,
     data: {
       display_name: string;
-      photo_url: string;
+      photo_url?: string;
       save_name?: boolean;
       save_photo?: boolean;
     },

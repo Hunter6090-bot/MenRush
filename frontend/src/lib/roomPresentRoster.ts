@@ -8,7 +8,7 @@ export type PresentPerson = {
   user_id: string;
   name: string;
   photo_url?: string | null;
-  /** True when showing an optional room-only disguise (no profile deep-link). */
+  /** True when showing room-only temp identity (no profile deep-link). */
   using_temp_identity?: boolean;
 };
 

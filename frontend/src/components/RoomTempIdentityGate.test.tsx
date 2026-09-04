@@ -124,7 +124,7 @@ describe('RoomTempIdentityGate', () => {
     });
   });
 
-  it('disables CTA when name is under 2 characters or photo missing', async () => {
+  it('disables CTA when name is under 2 characters; photo is optional', async () => {
     const user = userEvent.setup();
     renderGate();
     await waitFor(() => expect(mockedGet).toHaveBeenCalled());
@@ -136,14 +136,8 @@ describe('RoomTempIdentityGate', () => {
     expect(enter).toBeDisabled();
 
     await user.type(screen.getByTestId('room-temp-name'), 'B');
-    // Name OK but photo still required.
-    expect(enter).toBeDisabled();
-
-    const gallery = screen.getByTestId('room-temp-gallery-input') as HTMLInputElement;
-    const file = new File([new Uint8Array([1, 2, 3])], 'temp.jpg', { type: 'image/jpeg' });
-    await user.upload(gallery, file);
-    await waitFor(() => expect(mockedUpload).toHaveBeenCalled());
-    await waitFor(() => expect(enter).not.toBeDisabled());
+    // Name OK — photo optional, so CTA enables.
+    expect(enter).not.toBeDisabled();
   });
 
   it('shows inline danger error after blur when name is too short', async () => {
@@ -160,16 +154,22 @@ describe('RoomTempIdentityGate', () => {
     expect(alert).toHaveStyle({ color: '#B0432E' });
   });
 
-  it('blocks enter until a temporary photo is set', async () => {
+  it('allows enter with name only — no temporary photo required', async () => {
     const user = userEvent.setup();
     const { onReady } = renderGate();
     await waitFor(() => expect(mockedGet).toHaveBeenCalled());
 
     await user.type(screen.getByTestId('room-temp-name'), 'Gear Bear');
-    expect(screen.getByTestId('room-temp-enter')).toBeDisabled();
+    expect(screen.getByTestId('room-temp-enter')).not.toBeDisabled();
 
     await user.click(screen.getByTestId('room-temp-enter'));
-    expect(onReady).not.toHaveBeenCalled();
+    await waitFor(() => expect(onReady).toHaveBeenCalled());
+    expect(onReady).toHaveBeenCalledWith({
+      displayName: 'Gear Bear',
+      photoUrl: '',
+      saveName: false,
+      savePhoto: false,
+    });
   });
 
   it('single save toggle sets both saveName and savePhoto on enter', async () => {
@@ -207,8 +207,8 @@ describe('RoomTempIdentityGate', () => {
 
     await user.click(screen.getByRole('button', { name: 'Anon Bear' }));
     expect(screen.getByTestId('room-temp-name')).toHaveValue('Anon Bear');
-    // Photo still required — enter stays disabled.
-    expect(screen.getByTestId('room-temp-enter')).toBeDisabled();
+    // Name alone is enough — photo optional.
+    expect(screen.getByTestId('room-temp-enter')).not.toBeDisabled();
   });
 
   it('Not now calls onCancel', async () => {
@@ -220,13 +220,13 @@ describe('RoomTempIdentityGate', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it('shows temporary-name promise and house rules accordion', async () => {
+  it('shows anonymity promise and house rules accordion', async () => {
     const user = userEvent.setup();
     renderGate();
     await waitFor(() => expect(mockedGet).toHaveBeenCalled());
 
     expect(
-      screen.getByText('This temporary name stays in this room only.'),
+      screen.getByText('Your profile, photos and distance stay hidden.'),
     ).toBeInTheDocument();
 
     expect(screen.queryByTestId('room-temp-house-rules')).not.toBeInTheDocument();

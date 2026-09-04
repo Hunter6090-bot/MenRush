@@ -580,8 +580,12 @@ io.on('connection', (socket: Socket) => {
       const member = await roomService.isMember(userId, roomId);
       if (!member) return;
 
-      // Join with profile identity by default; optional temp disguise if active.
+      // Block presence until temp display name is set — never broadcast real profile.
       const presence = await roomService.resolveRoomPresence(userId, roomId);
+      if (!presence.using_temp_identity) {
+        socket.emit('room:identity-required', { room_id: roomId });
+        return;
+      }
 
       socket.join(`room:${roomId}`);
 
@@ -592,7 +596,7 @@ io.on('connection', (socket: Socket) => {
         name: presence.name,
         photo_url: presence.photo_url,
         is_verified: presence.is_verified,
-        using_temp_identity: presence.using_temp_identity,
+        using_temp_identity: true,
       });
 
       const peers = await io.in(`room:${roomId}`).fetchSockets();
@@ -610,12 +614,13 @@ io.on('connection', (socket: Socket) => {
         await Promise.all(
           uniqueUserIds.map(async (peerUserId: string) => {
             const p = await roomService.resolveRoomPresence(peerUserId, roomId);
+            if (!p.using_temp_identity) return null;
             return {
               user_id: peerUserId,
               name: p.name,
               photo_url: p.photo_url,
               is_verified: p.is_verified,
-              using_temp_identity: p.using_temp_identity,
+              using_temp_identity: true,
             };
           }),
         )
@@ -796,8 +801,9 @@ io.on('connection', (socket: Socket) => {
     const userId = socketToUser.get(socket.id);
     const roomId = resolveRoomId(data);
     if (!userId || !roomId || typeof data.typing !== 'boolean') return;
-    // Typing shows the same display identity as presence (profile or optional temp).
+    // Room typing must use temp identity — never the canonical profile name.
     const presence = await roomService.resolveRoomPresence(userId, roomId);
+    if (!presence.using_temp_identity) return;
     socket.to(`room:${roomId}`).emit('room:typing', {
       roomId,
       room_id: roomId,

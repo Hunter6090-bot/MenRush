@@ -1,7 +1,8 @@
 /**
- * Room display-identity unit tests (no DB).
- * Default = profile identity. Optional temp disguise overrides.
- * Leave drops the person from roster with no ghost.
+ * Room temp-identity privacy unit tests (no DB).
+ * Guarantees canonical profile fields never leak into room presence payloads,
+ * gate-ready identity is name-required / photo-optional, and leave drops the
+ * person from roster with no ghost.
  */
 import assert from 'assert';
 import {
@@ -21,7 +22,7 @@ function test(name: string, fn: () => void) {
   }
 }
 
-test('active temp identity keeps temp name and photo (disguise)', () => {
+test('active temp identity keeps temp name and photo', () => {
   const out = sanitizeRoomPresence({
     tempName: 'Pig Quiet',
     tempPhoto: '/uploads/room-temp/pig.png',
@@ -34,7 +35,7 @@ test('active temp identity keeps temp name and photo (disguise)', () => {
   assert.equal(out.using_temp_identity, true);
 });
 
-test('incomplete temp (null photo) falls back to profile identity', () => {
+test('active temp with null photo does NOT fall back to profile photo', () => {
   const out = sanitizeRoomPresence({
     tempName: 'Pig Quiet',
     tempPhoto: null,
@@ -42,12 +43,12 @@ test('incomplete temp (null photo) falls back to profile identity', () => {
     profileName: 'Al Real',
     profilePhoto: '/uploads/profiles/real.jpg',
   });
-  assert.equal(out.name, 'Al Real');
-  assert.equal(out.photo_url, '/uploads/profiles/real.jpg');
-  assert.equal(out.using_temp_identity, false);
+  assert.equal(out.name, 'Pig Quiet');
+  assert.equal(out.photo_url, null);
+  assert.equal(out.using_temp_identity, true);
 });
 
-test('name-only temp is incomplete — profile identity used', () => {
+test('name-only temp is gate-complete — no profile flash', () => {
   const out = sanitizeRoomPresence({
     tempName: 'Pig Quiet',
     tempPhoto: '   ',
@@ -55,12 +56,12 @@ test('name-only temp is incomplete — profile identity used', () => {
     profileName: 'Al Real',
     profilePhoto: '/uploads/profiles/real.jpg',
   });
-  assert.equal(out.name, 'Al Real');
-  assert.equal(out.photo_url, '/uploads/profiles/real.jpg');
-  assert.equal(out.using_temp_identity, false);
+  assert.equal(out.name, 'Pig Quiet');
+  assert.equal(out.photo_url, null);
+  assert.equal(out.using_temp_identity, true);
 });
 
-test('no temp uses profile name and photo', () => {
+test('inactive / missing temp never returns profile name or photo', () => {
   const out = sanitizeRoomPresence({
     tempName: null,
     tempPhoto: null,
@@ -68,32 +69,22 @@ test('no temp uses profile name and photo', () => {
     profileName: 'Al Real',
     profilePhoto: '/uploads/profiles/real.jpg',
   });
-  assert.equal(out.name, 'Al Real');
-  assert.equal(out.photo_url, '/uploads/profiles/real.jpg');
-  assert.equal(out.using_temp_identity, false);
-});
-
-test('join without temp still works when profile photo is missing', () => {
-  const out = sanitizeRoomPresence({
-    profileName: 'Name Only',
-    profilePhoto: null,
-  });
-  assert.equal(out.name, 'Name Only');
-  assert.equal(out.photo_url, null);
-  assert.equal(out.using_temp_identity, false);
-});
-
-test('blank profile name falls back to Member placeholder', () => {
-  const out = sanitizeRoomPresence({
-    profileName: '   ',
-    profilePhoto: null,
-  });
   assert.equal(out.name, ROOM_ANON_DISPLAY_NAME);
   assert.equal(out.photo_url, null);
   assert.equal(out.using_temp_identity, false);
 });
 
-test('blank temp name is treated as inactive — profile used', () => {
+test('profile fields are ignored even when only those are supplied', () => {
+  const out = sanitizeRoomPresence({
+    profileName: 'Should Never Appear',
+    profilePhoto: '/uploads/profiles/leak.jpg',
+  });
+  assert.equal(out.name, ROOM_ANON_DISPLAY_NAME);
+  assert.equal(out.photo_url, null);
+  assert.notEqual(out.name, 'Should Never Appear');
+});
+
+test('blank temp name is treated as inactive — join blocked', () => {
   const out = sanitizeRoomPresence({
     tempName: '   ',
     tempPhoto: '/uploads/room-temp/x.png',
@@ -101,8 +92,8 @@ test('blank temp name is treated as inactive — profile used', () => {
     profileName: 'Al Real',
     profilePhoto: '/uploads/profiles/real.jpg',
   });
-  assert.equal(out.name, 'Al Real');
-  assert.equal(out.photo_url, '/uploads/profiles/real.jpg');
+  assert.equal(out.name, ROOM_ANON_DISPLAY_NAME);
+  assert.equal(out.photo_url, null);
   assert.equal(out.using_temp_identity, false);
 });
 

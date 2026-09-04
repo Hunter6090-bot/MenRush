@@ -217,13 +217,18 @@ export const AddRoomMemberSchema = z.object({
 });
 
 /**
- * Optional temporary disguise for a specific room — never written to main profile.
- * Join no longer requires this; when chosen, both name and photo complete the disguise.
+ * Temporary identity for a specific room — never written to main profile.
+ * Gate-required before join: display_name required; photo optional.
  */
 export const RoomTempIdentitySchema = z.object({
   display_name: z.string().trim().min(1).max(40),
-  /** Required when setting a temp disguise (optional path only). */
-  photo_url: z.string().trim().min(1).max(500),
+  /** Optional temp photo — never falls back to profile face. */
+  photo_url: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
   save_name: z.boolean().optional(),
   save_photo: z.boolean().optional(),
 });

@@ -237,13 +237,15 @@ test.describe('dead pressables', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/rooms/room-1');
 
-    // Profile identity join — no forced temp name/photo gate.
-    await expect(page.getByTestId('room-temp-identity-gate')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Room settings' })).toBeVisible({
-      timeout: 15_000,
-    });
-    // Self tile uses profile name (Alice), not a temp alias.
-    await expect(page.getByRole('button', { name: /Alice/i }).first()).toBeVisible();
+    // Temp-identity gate must be completed before chat chrome mounts.
+    await expect(page.getByTestId('room-temp-identity-gate')).toBeVisible({ timeout: 15_000 });
+    await page.getByRole('button', { name: 'Anon Guest' }).click();
+    await page.getByRole('button', { name: /Enter group/i }).click();
+    await expect(page.getByTestId('room-temp-identity-gate')).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.getByRole('button', { name: 'Room settings' })).toBeVisible();
+    // Self tile uses temp name, not profile "Alice".
+    await expect(page.getByRole('button', { name: /Anon Guest/i }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Alice$/i })).toHaveCount(0);
 
     await page.getByRole('button', { name: /Show chat|Hide chat/i }).click();
     await expect(page.getByPlaceholder('Message the room…')).toBeVisible();

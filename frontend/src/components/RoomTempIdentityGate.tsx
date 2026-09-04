@@ -6,6 +6,7 @@ import { SelfieCaptureModal } from './SelfieCaptureModal';
 
 export interface RoomTempIdentityPayload {
   displayName: string;
+  /** Optional temp photo URL — empty when the user skips a photo. */
   photoUrl: string;
   saveName: boolean;
   savePhoto: boolean;
@@ -122,9 +123,9 @@ export function resolveTempPhotoSrc(url?: string | null): string | undefined {
 }
 
 /**
- * Optional temporary disguise before/while in a group video room.
- * Not required to enter — RoomChat joins with profile identity by default.
- * When chosen: temporary name + photo (both required); never writes the main profile.
+ * Gate before entering a group video room.
+ * Temporary display name required; photo optional — never writes the main profile.
+ * Real profile name/photo must not appear until the user completes this gate.
  * Layout: mobile bottom sheet; ≥1280px two-column centred dialog (1a).
  */
 export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
@@ -230,7 +231,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
         ? `Use ${NAME_MAX} characters or fewer.`
         : null;
 
-  const canEnter = !nameInvalid && Boolean(photoUrl) && !uploading && !submitting;
+  const canEnter = !nameInvalid && !uploading && !submitting;
   const showChips = loaded && !hadSavedIdentity;
   const subtitleActive =
     typeof activeCount === 'number' && activeCount > 0
@@ -314,16 +315,12 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   const handleEnter = async () => {
     setNameTouched(true);
     if (nameInvalid) return;
-    if (!photoUrl) {
-      setFormError('Add a temporary photo before entering.');
-      return;
-    }
     setFormError(null);
     setSubmitting(true);
     try {
       await onReady({
         displayName: trimmed,
-        photoUrl,
+        photoUrl: photoUrl || '',
         saveName: saveForNext,
         savePhoto: saveForNext,
       });
@@ -368,7 +365,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   const anonymityLine = (
     <p className="flex items-center justify-center gap-1.5 text-[11px] leading-snug text-[#A89070]">
       <LockIcon className="h-3.5 w-3.5 shrink-0 opacity-80" />
-      <span>This temporary name stays in this room only.</span>
+      <span>Your profile, photos and distance stay hidden.</span>
     </p>
   );
 
@@ -599,7 +596,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
       </div>
       <div className="mt-2 flex items-center justify-between gap-2">
         <p className="text-[11px] text-[#A89070]">
-          Optional temporary photo — never written to your profile.
+          Optional temporary photo — never your profile face.
         </p>
         {photoUrl || photoPreview ? (
           <button
