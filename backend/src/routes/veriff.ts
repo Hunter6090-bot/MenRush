@@ -110,4 +110,71 @@ router.get('/configured', authMiddleware, (_req: AuthRequest, res: Response) => 
   res.json({ configured: veriffService.isConfigured() });
 });
 
+/**
+ * POST|GET /api/verify/veriff/repoll
+ * Missed-webhook recovery — cron or ops. Auth: X-Veriff-Repoll-Token: $VERIFF_REPOLL_TOKEN
+ * Optional filters: ?sessionId= ?userId=  Cap: ?limit=  Age: ?minAgeHours=
+ */
+function requireRepollAuth(req: Request, res: Response): boolean {
+  const expected = (process.env.VERIFF_REPOLL_TOKEN || '').trim();
+  if (!expected) {
+    res.status(503).json({ error: 'veriff_repoll_disabled' });
+    return false;
+  }
+  const provided = String(req.headers['x-veriff-repoll-token'] || '').trim();
+  if (!provided || provided !== expected) {
+    res.status(401).json({ error: 'unauthorized' });
+    return false;
+  }
+  return true;
+}
+
+async function handleRepoll(req: Request, res: Response) {
+  if (!requireRepollAuth(req, res)) return;
+
+  if (!veriffService.isConfigured()) {
+    return res.status(503).json({ error: 'veriff_not_configured' });
+  }
+
+  const sessionId = String(req.query.sessionId || '').trim() || undefined;
+  const userId = String(req.query.userId || '').trim() || undefined;
+  const limitRaw = parseInt(String(req.query.limit || ''), 10);
+  const ageRaw = parseFloat(String(req.query.minAgeHours || ''));
+
+  try {
+    const result = await veriffService.repollStaleSessions({
+      sessionId,
+      userId,
+      limit: Number.isFinite(limitRaw) ? limitRaw : undefined,
+      minAgeHours: Number.isFinite(ageRaw) ? ageRaw : undefined,
+    });
+
+    // Mirror webhook: notify clients when a final decision was applied.
+    const io = req.app.get('io');
+    if (io) {
+      for (const row of result.results) {
+        if (row.action === 'applied' && row.userId && row.decision) {
+          io.to(`user:${row.userId}`).emit('verify:decision', {
+            provider: 'veriff',
+            decision: row.decision,
+            is_verified: row.decision === 'approved',
+            source: 'repoll',
+          });
+        }
+      }
+    }
+
+    return res.json(result);
+  } catch (err: any) {
+    if (err instanceof VeriffConfigError || err?.code === 'veriff_not_configured') {
+      return res.status(503).json({ error: 'veriff_not_configured' });
+    }
+    console.error('[veriff] re-poll endpoint error:', err);
+    return res.status(500).json({ error: 'veriff_repoll_failed' });
+  }
+}
+
+router.post('/repoll', handleRepoll);
+router.get('/repoll', handleRepoll);
+
 export default router;
