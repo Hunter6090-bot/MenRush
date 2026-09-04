@@ -377,11 +377,113 @@ async function main() {
     console.log('ok — re-poll / applyDecision idempotent for already-approved');
 
     assert.ok(fetchCalls >= 3, 'expected mocked Veriff GET calls');
+
+    // ── Alias POST /api/verify/webhook (same HMAC handler, before JWT) ─────
+    const express = (await import('express')).default;
+    const http = await import('http');
+    const {
+      handleVeriffDecisionWebhook,
+      veriffWebhookRawParser,
+      default: veriffRoutes,
+    } = await import('../src/routes/veriff');
+
+    const aliasApp = express();
+    aliasApp.use('/api/verify/veriff', veriffRoutes);
+    aliasApp.post('/api/verify/webhook', veriffWebhookRawParser, handleVeriffDecisionWebhook);
+    aliasApp.use(express.json());
+    // Simulate /api/verify JWT wall — must NOT run for /webhook alias
+    aliasApp.use('/api/verify', (_req, res) => {
+      res.status(401).json({ error: 'No token provided' });
+    });
+
+    const server = http.createServer(aliasApp);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as { port: number };
+    const base = `http://127.0.0.1:${port}`;
+
+    try {
+      const unsigned = await fetch(`${base}/api/verify/webhook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ verification: { id: sessApproved, status: 'approved' } }),
+      });
+      const unsignedBody = (await unsigned.json()) as { error?: string };
+      assert.strictEqual(unsigned.status, 401);
+      assert.strictEqual(
+        unsignedBody.error,
+        'invalid_signature',
+        'alias must return Veriff HMAC 401, not JWT No token provided',
+      );
+      console.log('ok — alias unsigned POST → invalid_signature (not JWT auth)');
+
+      const userAlias = '10000000-0000-4000-8000-000000000099';
+      const sessAlias = '20000000-0000-4000-8000-000000000099';
+      mem.users.set(userAlias, {
+        id: userAlias,
+        is_verified: false,
+        verification_status: 'pending',
+        verification_provider: 'veriff',
+        verification_session_id: sessAlias,
+        rejection_reason: null,
+      });
+      mem.sessions.set(sessAlias, {
+        id: sessAlias,
+        user_id: userAlias,
+        status: 'created',
+        session_url: null,
+        decision_code: null,
+        created_at: new Date(Date.now() - 3600_000),
+        decided_at: null,
+      });
+
+      const approvedPayload = Buffer.from(
+        JSON.stringify({
+          status: 'success',
+          verification: { id: sessAlias, status: 'approved', vendorData: userAlias },
+        }),
+        'utf8',
+      );
+      const approvedSig = crypto
+        .createHmac('sha256', process.env.VERIFF_SHARED_SECRET!)
+        .update(approvedPayload)
+        .digest('hex');
+
+      const signed = await fetch(`${base}/api/verify/webhook`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-AUTH-CLIENT': process.env.VERIFF_API_KEY!,
+          'X-HMAC-SIGNATURE': approvedSig,
+        },
+        body: approvedPayload,
+      });
+      const signedBody = (await signed.json()) as { status?: string; error?: string };
+      assert.strictEqual(signed.status, 200, `signed alias failed: ${JSON.stringify(signedBody)}`);
+      assert.strictEqual(signedBody.status, 'ok');
+      assert.strictEqual(mem.users.get(userAlias)!.is_verified, true);
+      assert.strictEqual(mem.sessions.get(sessAlias)!.status, 'approved');
+      console.log('ok — alias signed approved applies Verified badge');
+
+      // Primary path still works
+      const primaryUnsigned = await fetch(`${base}/api/verify/veriff/webhook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const primaryBody = (await primaryUnsigned.json()) as { error?: string };
+      assert.strictEqual(primaryUnsigned.status, 401);
+      assert.strictEqual(primaryBody.error, 'invalid_signature');
+      console.log('ok — primary /veriff/webhook unchanged (HMAC 401 on unsigned)');
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((err) => (err ? reject(err) : resolve())),
+      );
+    }
   } finally {
     __resetVeriffDepsForTests();
   }
 
-  console.log('Veriff checks passed (HMAC + badge contract + re-poll).');
+  console.log('Veriff checks passed (HMAC + badge contract + re-poll + webhook alias).');
 }
 
 main().catch((err) => {

@@ -8,9 +8,11 @@ Optional **Verified** path: government ID scan + live selfie via Veriff. Brand b
 2. App calls `POST /api/verify/veriff/session` with the user JWT
 3. Backend creates a Veriff session with `VERIFF_API_KEY`, stores the session id, sets `verification_status=pending`, returns `{ sessionId, sessionUrl }`
 4. **Web** opens `@veriff/incontext-sdk` (`createVeriffFrame`) with that `sessionUrl` — ID + selfie stay on MenRush
-5. Veriff posts a **decision webhook** to `POST /api/verify/veriff/webhook` (**primary** path)
+5. Veriff posts a **decision webhook** to `POST /api/verify/veriff/webhook` (**primary** portal URL)
 6. Webhook verifies `X-AUTH-CLIENT` + `X-HMAC-SIGNATURE` (HMAC-SHA256 of raw body with `VERIFF_SHARED_SECRET`)
 7. **`is_verified` / Verified badge only when `verification.status === 'approved'`**
+
+**Alias (belt-and-suspenders):** `POST /api/verify/webhook` uses the **same** raw-body HMAC handler → `applyDecision`. Mounted before JWT auth on `/api/verify`, so a misconfigured Station URL cannot 401 with `No token provided`. Prefer the primary path in the Veriff portal.
 
 Native capture remains at `/verify/id/manual`.
 
@@ -82,11 +84,12 @@ Logs are prefixed `[veriff] re-poll ...`.
 | `VERIFF_REPOLL_DELAY_MS` | Backend | Default `250` — pause between Veriff GETs |
 | `VITE_FEATURE_VERIFF` | Frontend | Default on |
 
-Portal: set Webhook decisions URL to `https://<API_HOST>/api/verify/veriff/webhook`.
+Portal: set Webhook decisions URL to `https://<API_HOST>/api/verify/veriff/webhook` (primary).
+Both `/api/verify/veriff/webhook` and `/api/verify/webhook` accept signed decision POSTs.
 
 ## Notes
 
-- Webhook is primary; re-poll is backup for missed delivery (e.g. BOA90-style stuck `created`)
+- Webhook is primary (`/api/verify/veriff/webhook`); `/api/verify/webhook` is an alias for misconfigured Station URLs; re-poll is backup for missed delivery (e.g. BOA90-style stuck `created`)
 - One optional Veriff path only — Verified badge when approved. No Authentic-person live challenge; no Adult Trust Centre badge; no “Identity checked” product label.
 - Client SDK completion never grants the badge — webhook or re-poll `applyDecision` only
 - Parked PR #97 (adult-assurance / signup gate) stays parked; FEATURES.requireIdVerification stays false

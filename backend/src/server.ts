@@ -13,7 +13,10 @@ import roomRoutes from './routes/rooms';
 import pushRoutes from './routes/push';
 import pulseRoutes from './routes/pulse';
 import verifyRoutes from './routes/verify';
-import veriffRoutes from './routes/veriff';
+import veriffRoutes, {
+  handleVeriffDecisionWebhook,
+  veriffWebhookRawParser,
+} from './routes/veriff';
 import premiumRoutes from './routes/premium';
 import premiumWebhookRoutes from './routes/premium-webhook';
 import contactRoutes from './routes/contact';
@@ -84,6 +87,9 @@ app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use('/api/premium/webhook', premiumWebhookRoutes);
 // Veriff decision webhook needs the raw body for HMAC (before express.json).
 app.use('/api/verify/veriff', veriffRoutes);
+// Alias: Station sometimes posts to /api/verify/webhook — must not hit JWT auth on /api/verify.
+// Primary portal URL remains /api/verify/veriff/webhook.
+app.post('/api/verify/webhook', veriffWebhookRawParser, handleVeriffDecisionWebhook);
 app.use(express.json());
 app.use('/api/verify', verifyRoutes);
 // Profile / message / album media. fallthrough:true so missing files hit a clean 404
