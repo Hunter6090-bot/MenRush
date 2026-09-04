@@ -11,6 +11,9 @@ const FAKE_USER = {
   name: 'Profile Bear',
   email: 'bear@example.com',
   photo_url: '/uploads/profiles/bear.jpg',
+  bio: 'Looking for real men nearby tonight and always.',
+  looking_for: 'Right now',
+  interests: ['Gym', 'Bars', 'Chat'],
   is_verified: false,
   is_premium: true,
   premium_tier: 'premium',
@@ -154,13 +157,13 @@ test.describe('room profile identity join', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/rooms/room-profile-1');
 
-    await expect(page.getByText('London Bears')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId('room-temp-identity-gate')).toHaveCount(0);
     await expect(page.getByTestId('room-temp-disguise-overlay')).toHaveCount(0);
-
-    await expect(page.getByRole('button', { name: /Show chat|Hide chat/i })).toBeVisible({
-      timeout: 10_000,
+    await expect(page.getByRole('button', { name: 'Room settings' })).toBeVisible({
+      timeout: 15_000,
     });
+    // Self tile shows profile name — not a temp alias / Member placeholder.
+    await expect(page.getByRole('button', { name: /Profile Bear/i }).first()).toBeVisible();
 
     const calls = getCalls();
     expect(calls.some((c) => c.startsWith('PUT ') && c.includes('/temp-identity'))).toBe(false);
@@ -174,7 +177,9 @@ test.describe('room profile identity join', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/rooms/room-profile-1');
 
-    await expect(page.getByText('London Bears')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: 'Room settings' })).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.getByTestId('room-temp-identity-gate')).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Room settings' }).click();
@@ -184,6 +189,8 @@ test.describe('room profile identity join', () => {
     await expect(page.getByTestId('room-temp-identity-gate')).toBeVisible();
     await page.getByTestId('room-temp-not-now').click();
     await expect(page.getByTestId('room-temp-identity-gate')).toHaveCount(0);
-    await expect(page.getByText('London Bears')).toBeVisible();
+    // Still in the room after canceling optional disguise.
+    await expect(page.getByRole('button', { name: 'Room settings' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Profile Bear/i }).first()).toBeVisible();
   });
 });
