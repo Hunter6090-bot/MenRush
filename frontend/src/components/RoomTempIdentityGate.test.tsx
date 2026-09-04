@@ -220,13 +220,13 @@ describe('RoomTempIdentityGate', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it('shows anonymity promise and house rules accordion', async () => {
+  it('shows temporary-name promise and house rules accordion', async () => {
     const user = userEvent.setup();
     renderGate();
     await waitFor(() => expect(mockedGet).toHaveBeenCalled());
 
     expect(
-      screen.getByText('Your profile, photos and distance stay hidden.'),
+      screen.getByText('This temporary name stays in this room only.'),
     ).toBeInTheDocument();
 
     expect(screen.queryByTestId('room-temp-house-rules')).not.toBeInTheDocument();

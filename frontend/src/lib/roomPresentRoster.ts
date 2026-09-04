@@ -8,10 +8,17 @@ export type PresentPerson = {
   user_id: string;
   name: string;
   photo_url?: string | null;
+  /** True when showing an optional room-only disguise (no profile deep-link). */
+  using_temp_identity?: boolean;
 };
 
 export function replacePresentRoster(
-  list: Array<{ user_id: string; name: string; photo_url?: string | null }>,
+  list: Array<{
+    user_id: string;
+    name: string;
+    photo_url?: string | null;
+    using_temp_identity?: boolean;
+  }>,
 ): PresentPerson[] {
   const byId = new Map<string, PresentPerson>();
   for (const entry of list) {
@@ -20,6 +27,7 @@ export function replacePresentRoster(
       user_id: entry.user_id,
       name: entry.name || 'Member',
       photo_url: entry.photo_url ?? null,
+      using_temp_identity: !!entry.using_temp_identity,
     });
   }
   return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
@@ -27,13 +35,19 @@ export function replacePresentRoster(
 
 export function upsertPresentPerson(
   prev: PresentPerson[],
-  entry: { user_id: string; name?: string; photo_url?: string | null },
+  entry: {
+    user_id: string;
+    name?: string;
+    photo_url?: string | null;
+    using_temp_identity?: boolean;
+  },
 ): PresentPerson[] {
   const next = prev.filter((p) => p.user_id !== entry.user_id);
   next.push({
     user_id: entry.user_id,
     name: entry.name || 'Member',
     photo_url: entry.photo_url ?? null,
+    using_temp_identity: !!entry.using_temp_identity,
   });
   return next.sort((a, b) => a.name.localeCompare(b.name));
 }

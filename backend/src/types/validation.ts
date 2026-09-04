@@ -196,10 +196,13 @@ export const AddRoomMemberSchema = z.object({
   user_id: z.string().uuid(),
 });
 
-/** Temporary identity for a specific room — never written to main profile. */
+/**
+ * Optional temporary disguise for a specific room — never written to main profile.
+ * Join no longer requires this; when chosen, both name and photo complete the disguise.
+ */
 export const RoomTempIdentitySchema = z.object({
   display_name: z.string().trim().min(1).max(40),
-  /** Required — join/presence blocked without a temp photo (never fall back to profile). */
+  /** Required when setting a temp disguise (optional path only). */
   photo_url: z.string().trim().min(1).max(500),
   save_name: z.boolean().optional(),
   save_photo: z.boolean().optional(),

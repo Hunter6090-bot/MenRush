@@ -352,8 +352,7 @@ export const roomService = {
 
     const msg = result.rows[0] as any;
 
-    // Temp identity is room-scoped only — never mutates users.name / photo_url.
-    // Never fall back to canonical profile name/photo (privacy).
+    // Display: optional temp disguise, else profile identity. Never mutates users.*.
     const senderRes = await query(
       `SELECT ${roomTempNameSql('$3')} AS sender_name,
               ${roomTempPhotoSql('$3')} AS sender_photo_url
@@ -454,9 +453,8 @@ export const roomService = {
       throw new Error('You are not a member of this room');
     }
 
-    // Roster shows temp display name/photo inside the room; verification badge
-    // still reflects the real account (host can see adult assurance, not real name).
-    // CRITICAL: never COALESCE to u.name / u.photo_url — null temp photo must stay null.
+    // Roster: optional temp disguise, else profile name/photo. Verification badge
+    // still reflects the real account.
     const result = await query(
       `SELECT u.id,
               ${roomTempNameSql('$2')} AS name,
@@ -580,11 +578,16 @@ export const roomService = {
     return res.rowCount ?? res.rows.length;
   },
 
-  /** Resolve display name/photo for socket presence inside a room. */
+  /**
+   * Resolve display name/photo for socket presence inside a room.
+   * Default = profile identity. Optional active temp disguise overrides.
+   */
   async resolveRoomPresence(userId: string, roomId: string) {
     const res = await query(
-      `SELECT ${roomTempNameSql('$3')} AS name,
-              ${roomTempPhotoSql('$3')} AS photo_url,
+      `SELECT ti.display_name AS temp_name,
+              ti.photo_url AS temp_photo,
+              u.name AS profile_name,
+              u.photo_url AS profile_photo,
               u.is_verified,
               u.authenticity_status,
               ${roomUsingTempIdentitySql('$3')} AS using_temp_identity
@@ -597,11 +600,12 @@ export const roomService = {
     if (res.rows[0]?.using_temp_identity) {
       await this.touchTempIdentity(userId, roomId);
     }
-    // Defense in depth: never emit canonical profile fields even if SQL drifts.
     const safe = sanitizeRoomPresence({
-      tempName: res.rows[0]?.name,
-      tempPhoto: res.rows[0]?.photo_url,
+      tempName: res.rows[0]?.temp_name,
+      tempPhoto: res.rows[0]?.temp_photo,
       tempActive: !!res.rows[0]?.using_temp_identity,
+      profileName: res.rows[0]?.profile_name,
+      profilePhoto: res.rows[0]?.profile_photo,
     });
     return {
       name: safe.name,
