@@ -58,56 +58,129 @@ router.post(
 );
 
 /**
+ * Shared Veriff decision webhook handler (raw body + HMAC → applyDecision).
+ * Used by POST /api/verify/veriff/webhook (primary) and POST /api/verify/webhook (alias).
+ */
+export const veriffWebhookRawParser = express.raw({ type: '*/*', limit: '1mb' });
+
+export async function handleVeriffDecisionWebhook(req: Request, res: Response): Promise<void> {
+  try {
+    const raw = Buffer.isBuffer(req.body)
+      ? req.body
+      : Buffer.from(typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? {}), 'utf8');
+
+    const signature = String(req.header('x-hmac-signature') || '');
+    const authClient = String(req.header('x-auth-client') || '');
+
+    if (!verifyVeriffWebhookSignature(raw, signature, authClient)) {
+      res.status(401).json({ error: 'invalid_signature' });
+      return;
+    }
+
+    let payload: any;
+    try {
+      payload = JSON.parse(raw.toString('utf8'));
+    } catch {
+      res.status(400).json({ error: 'invalid_json' });
+      return;
+    }
+
+    const result = await veriffService.applyDecision(payload);
+
+    if (result.handled && result.userId) {
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`user:${result.userId}`).emit('verify:decision', {
+          provider: 'veriff',
+          decision: result.decision,
+          is_verified: result.decision === 'approved',
+        });
+      }
+    }
+
+    res.status(200).json({ status: 'ok' });
+  } catch (err) {
+    console.error('[veriff] webhook error:', err);
+    res.status(500).json({ error: 'webhook_failed' });
+  }
+}
+
+/**
  * POST /api/verify/veriff/webhook
  * Decision webhook — Verified badge only when status === approved.
  * Must receive the raw body for HMAC (mounted before express.json in server.ts).
  */
-router.post(
-  '/webhook',
-  express.raw({ type: '*/*', limit: '1mb' }),
-  async (req: Request, res: Response) => {
-    try {
-      const raw = Buffer.isBuffer(req.body)
-        ? req.body
-        : Buffer.from(typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? {}), 'utf8');
-
-      const signature = String(req.header('x-hmac-signature') || '');
-      const authClient = String(req.header('x-auth-client') || '');
-
-      if (!verifyVeriffWebhookSignature(raw, signature, authClient)) {
-        return res.status(401).json({ error: 'invalid_signature' });
-      }
-
-      let payload: any;
-      try {
-        payload = JSON.parse(raw.toString('utf8'));
-      } catch {
-        return res.status(400).json({ error: 'invalid_json' });
-      }
-
-      const result = await veriffService.applyDecision(payload);
-
-      if (result.handled && result.userId) {
-        const io = req.app.get('io');
-        if (io) {
-          io.to(`user:${result.userId}`).emit('verify:decision', {
-            provider: 'veriff',
-            decision: result.decision,
-            is_verified: result.decision === 'approved',
-          });
-        }
-      }
-
-      res.status(200).json({ status: 'ok' });
-    } catch (err) {
-      console.error('[veriff] webhook error:', err);
-      res.status(500).json({ error: 'webhook_failed' });
-    }
-  },
-);
+router.post('/webhook', veriffWebhookRawParser, handleVeriffDecisionWebhook);
 
 router.get('/configured', authMiddleware, (_req: AuthRequest, res: Response) => {
   res.json({ configured: veriffService.isConfigured() });
 });
+
+/**
+ * POST|GET /api/verify/veriff/repoll
+ * Missed-webhook recovery — cron or ops. Auth: X-Veriff-Repoll-Token: $VERIFF_REPOLL_TOKEN
+ * Optional filters: ?sessionId= ?userId=  Cap: ?limit=  Age: ?minAgeHours=
+ */
+function requireRepollAuth(req: Request, res: Response): boolean {
+  const expected = (process.env.VERIFF_REPOLL_TOKEN || '').trim();
+  if (!expected) {
+    res.status(503).json({ error: 'veriff_repoll_disabled' });
+    return false;
+  }
+  const provided = String(req.headers['x-veriff-repoll-token'] || '').trim();
+  if (!provided || provided !== expected) {
+    res.status(401).json({ error: 'unauthorized' });
+    return false;
+  }
+  return true;
+}
+
+async function handleRepoll(req: Request, res: Response) {
+  if (!requireRepollAuth(req, res)) return;
+
+  if (!veriffService.isConfigured()) {
+    return res.status(503).json({ error: 'veriff_not_configured' });
+  }
+
+  const sessionId = String(req.query.sessionId || '').trim() || undefined;
+  const userId = String(req.query.userId || '').trim() || undefined;
+  const limitRaw = parseInt(String(req.query.limit || ''), 10);
+  const ageRaw = parseFloat(String(req.query.minAgeHours || ''));
+
+  try {
+    const result = await veriffService.repollStaleSessions({
+      sessionId,
+      userId,
+      limit: Number.isFinite(limitRaw) ? limitRaw : undefined,
+      minAgeHours: Number.isFinite(ageRaw) ? ageRaw : undefined,
+    });
+
+    // Mirror webhook: notify clients when a final decision was applied.
+    const io = req.app.get('io');
+    if (io) {
+      for (const row of result.results) {
+        if (row.action === 'applied' && row.userId && row.decision) {
+          io.to(`user:${row.userId}`).emit('verify:decision', {
+            provider: 'veriff',
+            decision: row.decision,
+            is_verified: row.decision === 'approved',
+            source: 'repoll',
+          });
+        }
+      }
+    }
+
+    return res.json(result);
+  } catch (err: any) {
+    if (err instanceof VeriffConfigError || err?.code === 'veriff_not_configured') {
+      return res.status(503).json({ error: 'veriff_not_configured' });
+    }
+    console.error('[veriff] re-poll endpoint error:', err);
+    return res.status(500).json({ error: 'veriff_repoll_failed' });
+  }
+}
+
+router.post('/repoll', handleRepoll);
+router.get('/repoll', handleRepoll);
 
 export default router;
