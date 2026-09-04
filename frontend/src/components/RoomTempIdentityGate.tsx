@@ -1,15 +1,24 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { roomsAPI } from '../api/client';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { roomLetterAvatar } from '../lib/roomLetterAvatar';
 import { getPhotoUrl } from './UserAvatar';
 import { SelfieCaptureModal } from './SelfieCaptureModal';
 
-export interface RoomTempIdentityPayload {
-  displayName: string;
-  photoUrl: string;
-  saveName: boolean;
-  savePhoto: boolean;
-}
+/** Gate result: explicit profile path, or temp name (+ optional photo). */
+export type RoomIdentityGateResult =
+  | { mode: 'profile' }
+  | {
+      mode: 'temp';
+      displayName: string;
+      /** Empty when the user skips a temp photo — tiles use a letter avatar. */
+      photoUrl: string;
+      saveName: boolean;
+      savePhoto: boolean;
+    };
+
+/** @deprecated Use RoomIdentityGateResult — kept for older imports. */
+export type RoomTempIdentityPayload = Extract<RoomIdentityGateResult, { mode: 'temp' }>;
 
 interface RoomTempIdentityGateProps {
   roomId: string;
@@ -24,7 +33,10 @@ interface RoomTempIdentityGateProps {
    * When omitted, chips use a short safe generic list — never invents user age/location.
    */
   roomTheme?: string | null;
-  onReady: (identity: RoomTempIdentityPayload) => void | Promise<void>;
+  /** Real profile identity for the "keep using my real profile" choice. */
+  profileName?: string | null;
+  profilePhotoUrl?: string | null;
+  onReady: (identity: RoomIdentityGateResult) => void | Promise<void>;
   onCancel?: () => void;
 }
 
@@ -53,18 +65,6 @@ function roomInitials(name: string): string {
     .filter((w) => /[A-Za-z0-9]/.test(w))
     .map((w) => w.replace(/[^A-Za-z0-9]/g, '')[0])
     .filter(Boolean)
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-}
-
-function nameInitials(name: string): string {
-  const trimmed = name.trim();
-  if (!trimmed) return '?';
-  return trimmed
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w[0])
     .join('')
     .toUpperCase()
     .slice(0, 2);
@@ -122,9 +122,9 @@ export function resolveTempPhotoSrc(url?: string | null): string | undefined {
 }
 
 /**
- * Optional temporary disguise before/while in a group video room.
- * Not required to enter — RoomChat joins with profile identity by default.
- * When chosen: temporary name + photo (both required); never writes the main profile.
+ * Gate before entering a group video room.
+ * Clear choice: keep real profile, OR use a temporary name (photo optional).
+ * Missing temp photo → letter avatar from the temp name — never blocks join.
  * Layout: mobile bottom sheet; ≥1280px two-column centred dialog (1a).
  */
 export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
@@ -134,6 +134,8 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   roomRules,
   activeCount,
   roomTheme,
+  profileName,
+  profilePhotoUrl,
   onReady,
   onCancel,
 }) => {
@@ -230,7 +232,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
         ? `Use ${NAME_MAX} characters or fewer.`
         : null;
 
-  const canEnter = !nameInvalid && Boolean(photoUrl) && !uploading && !submitting;
+  const canEnter = !nameInvalid && !uploading && !submitting;
   const showChips = loaded && !hadSavedIdentity;
   const subtitleActive =
     typeof activeCount === 'number' && activeCount > 0
@@ -314,16 +316,13 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   const handleEnter = async () => {
     setNameTouched(true);
     if (nameInvalid) return;
-    if (!photoUrl) {
-      setFormError('Add a temporary photo before entering.');
-      return;
-    }
     setFormError(null);
     setSubmitting(true);
     try {
       await onReady({
+        mode: 'temp',
         displayName: trimmed,
-        photoUrl,
+        photoUrl: photoUrl || '',
         saveName: saveForNext,
         savePhoto: saveForNext,
       });
@@ -333,6 +332,22 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
       setSubmitting(false);
     }
   };
+
+  const handleUseProfile = async () => {
+    setFormError(null);
+    setSubmitting(true);
+    try {
+      await onReady({ mode: 'profile' });
+    } catch {
+      setFormError('Could not enter the group. Try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const resolvedProfileName = (profileName || '').trim() || 'Your profile';
+  const resolvedProfilePhoto = resolveTempPhotoSrc(profilePhotoUrl);
+  const profileCtaLabel = `Keep using ${resolvedProfileName}`;
 
   const ctaLabel = hadSavedIdentity && trimmed.length >= NAME_MIN
     ? `Enter as ${trimmed}`
@@ -360,7 +375,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
       );
     }
     if (trimmed) {
-      return <span className="text-lg font-bold text-[#C4832A]">{nameInitials(trimmed)}</span>;
+      return <span className="text-2xl font-bold text-[#C4832A]">{roomLetterAvatar(trimmed)}</span>;
     }
     return <span className="text-2xl font-semibold text-[#A89070]">?</span>;
   };
@@ -368,8 +383,51 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   const anonymityLine = (
     <p className="flex items-center justify-center gap-1.5 text-[11px] leading-snug text-[#A89070]">
       <LockIcon className="h-3.5 w-3.5 shrink-0 opacity-80" />
-      <span>This temporary name stays in this room only.</span>
+      <span>Temporary name stays in this room only. Photo optional.</span>
     </p>
+  );
+
+  const profileChoice = (
+    <div data-testid="room-identity-profile-choice">
+      <button
+        type="button"
+        data-testid="room-use-real-profile"
+        disabled={submitting || uploading}
+        onClick={() => void handleUseProfile()}
+        className="flex w-full items-center gap-3 rounded-xl border border-[rgba(196,131,42,0.4)] px-3 py-3 text-left transition-colors hover:bg-[rgba(196,131,42,0.1)] disabled:opacity-50"
+        style={{ background: 'rgba(196,131,42,0.06)' }}
+      >
+        <span
+          className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full text-base font-bold"
+          style={{
+            background: 'var(--bg-primary)',
+            border: '1px solid rgba(196,131,42,0.35)',
+            color: '#C4832A',
+          }}
+          aria-hidden
+        >
+          {resolvedProfilePhoto ? (
+            <img src={resolvedProfilePhoto} alt="" className="h-full w-full object-cover" />
+          ) : (
+            roomLetterAvatar(resolvedProfileName)
+          )}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[14px] font-bold text-[var(--cream)]">{profileCtaLabel}</span>
+          <span className="mt-0.5 block text-[11px] text-[#A89070]">
+            Enter with your real name and photo
+          </span>
+        </span>
+      </button>
+      <div className="my-4 flex items-center gap-3" aria-hidden>
+        <span className="h-px flex-1 bg-[var(--border-default)]" />
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#A89070]">or</span>
+        <span className="h-px flex-1 bg-[var(--border-default)]" />
+      </div>
+      <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[#C4832A]">
+        Use a temporary name
+      </p>
+    </div>
   );
 
   const overflowMenu = (
@@ -462,7 +520,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
               {trimmed || 'Pick a name'}
             </p>
             <p className="mt-0.5 text-[12px] leading-snug text-[#A89070]">
-              Nobody in this room sees your profile.
+              Optional photo — without one, peers see your letter avatar.
             </p>
           </>
         )}
@@ -599,7 +657,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
       </div>
       <div className="mt-2 flex items-center justify-between gap-2">
         <p className="text-[11px] text-[#A89070]">
-          Optional temporary photo — never written to your profile.
+          Optional temporary photo — never your profile face.
         </p>
         {photoUrl || photoPreview ? (
           <button
@@ -727,9 +785,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   /* ── Mobile form body (scrollable) ─────────────────────────────────────── */
   const mobileFormBody = (
     <div className="flex flex-col gap-4 px-5 pb-4 pt-2">
-      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#C4832A]">
-        You&apos;ll appear as
-      </p>
+      {profileChoice}
       {identityPreview}
       {nameField}
       {suggestionChips}
@@ -786,9 +842,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
     <div className="flex h-full flex-col">
       <div className="relative flex-1 space-y-4 overflow-y-auto p-7">
         <div className="absolute right-4 top-4">{overflowMenu}</div>
-        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#C4832A]">
-          You&apos;ll appear as
-        </p>
+        {profileChoice}
         {identityPreview}
         {nameField}
         {suggestionChips}

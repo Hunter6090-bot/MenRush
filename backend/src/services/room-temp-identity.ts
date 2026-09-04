@@ -1,7 +1,8 @@
 /**
- * Room-scoped display identity.
- * Default: member's profile name + photo (same identity they already have).
- * Optional: temp name/photo disguise for this room only — never mutates the main profile.
+ * Room-scoped display identity for video rooms.
+ * Default (no active temp): member's profile name + photo.
+ * Active temp: temp display name required; temp photo optional (null → letter avatar).
+ * When temp is active without a photo, NEVER fall back to the profile photo.
  * Kept free of DB imports so unit tests can run without Postgres.
  */
 
@@ -9,48 +10,48 @@
 export const ROOM_TEMP_IDENTITY_TTL_DAYS = 30;
 
 /**
- * Fallback display name when the account has no usable profile name.
- * Used only after profile fallback — not a forced anon gate.
+ * Fallback display name when the account has no usable profile name
+ * and no active temp identity.
  */
 export const ROOM_ANON_DISPLAY_NAME = 'Member';
 
 /**
  * SQL fragments for room-scoped display identity.
  * `ttlParam` is a query placeholder for TTL days (e.g. `$2` or `$3`).
- * Active temp = non-null display_name AND non-null photo_url within soft TTL.
- * When temp is inactive, fall back to the member's profile name/photo.
+ * Active temp = non-null display_name within soft TTL (photo optional).
  * Assumes users aliased as `u` (or `userAlias`) and temp as `ti` (or `tiAlias`).
  */
 export function roomTempNameSql(ttlParam: string, tiAlias = 'ti', userAlias = 'u'): string {
   return `CASE
     WHEN ${tiAlias}.display_name IS NOT NULL
-     AND ${tiAlias}.photo_url IS NOT NULL
      AND ${tiAlias}.last_used_at > NOW() - (${ttlParam} || ' days')::interval
     THEN ${tiAlias}.display_name
     ELSE COALESCE(NULLIF(TRIM(${userAlias}.name), ''), '${ROOM_ANON_DISPLAY_NAME}')
   END`;
 }
 
+/**
+ * Temp photo when active + set; otherwise profile photo.
+ * Active temp with NULL photo stays NULL — never COALESCE to profile face.
+ */
 export function roomTempPhotoSql(ttlParam: string, tiAlias = 'ti', userAlias = 'u'): string {
   return `CASE
     WHEN ${tiAlias}.display_name IS NOT NULL
-     AND ${tiAlias}.photo_url IS NOT NULL
      AND ${tiAlias}.last_used_at > NOW() - (${ttlParam} || ' days')::interval
-    THEN ${tiAlias}.photo_url
+    THEN NULLIF(TRIM(${tiAlias}.photo_url), '')
     ELSE NULLIF(TRIM(${userAlias}.photo_url), '')
   END`;
 }
 
 export function roomUsingTempIdentitySql(ttlParam: string, tiAlias = 'ti'): string {
   return `(${tiAlias}.display_name IS NOT NULL
-    AND ${tiAlias}.photo_url IS NOT NULL
     AND ${tiAlias}.last_used_at > NOW() - (${ttlParam} || ' days')::interval)`;
 }
 
 /**
  * Resolve what peers see in-room.
- * Active temp disguise wins; otherwise use the member's profile identity.
- * Incomplete temp (name without photo) does not activate disguise — profile is used.
+ * Active temp (name present) wins — photo optional, never profile face on temp path.
+ * No temp → profile identity.
  */
 export function sanitizeRoomPresence(input: {
   tempName?: string | null;
@@ -61,11 +62,11 @@ export function sanitizeRoomPresence(input: {
 }): { name: string; photo_url: string | null; using_temp_identity: boolean } {
   const nameOk = Boolean(input.tempName?.trim());
   const photoOk = Boolean(input.tempPhoto?.trim());
-  const active = Boolean(input.tempActive && nameOk && photoOk);
+  const active = Boolean(input.tempActive && nameOk);
   if (active) {
     return {
       name: String(input.tempName).trim(),
-      photo_url: String(input.tempPhoto).trim(),
+      photo_url: photoOk ? String(input.tempPhoto).trim() : null,
       using_temp_identity: true,
     };
   }

@@ -580,7 +580,7 @@ io.on('connection', (socket: Socket) => {
       const member = await roomService.isMember(userId, roomId);
       if (!member) return;
 
-      // Join with profile identity by default; optional temp disguise if active.
+      // Join with chosen identity: profile by default, or active temp disguise.
       const presence = await roomService.resolveRoomPresence(userId, roomId);
 
       socket.join(`room:${roomId}`);
@@ -796,7 +796,7 @@ io.on('connection', (socket: Socket) => {
     const userId = socketToUser.get(socket.id);
     const roomId = resolveRoomId(data);
     if (!userId || !roomId || typeof data.typing !== 'boolean') return;
-    // Typing shows the same display identity as presence (profile or optional temp).
+    // Typing shows the same display identity as presence (profile or temp).
     const presence = await roomService.resolveRoomPresence(userId, roomId);
     socket.to(`room:${roomId}`).emit('room:typing', {
       roomId,

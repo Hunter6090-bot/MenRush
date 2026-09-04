@@ -1,6 +1,6 @@
 /**
  * Room display-identity unit tests (no DB).
- * Default = profile identity. Optional temp disguise overrides.
+ * Profile path allowed when no temp. Temp name-only never leaks profile photo.
  * Leave drops the person from roster with no ghost.
  */
 import assert from 'assert';
@@ -21,7 +21,7 @@ function test(name: string, fn: () => void) {
   }
 }
 
-test('active temp identity keeps temp name and photo (disguise)', () => {
+test('active temp identity keeps temp name and photo', () => {
   const out = sanitizeRoomPresence({
     tempName: 'Pig Quiet',
     tempPhoto: '/uploads/room-temp/pig.png',
@@ -34,7 +34,7 @@ test('active temp identity keeps temp name and photo (disguise)', () => {
   assert.equal(out.using_temp_identity, true);
 });
 
-test('incomplete temp (null photo) falls back to profile identity', () => {
+test('temp name without photo does NOT fall back to profile photo', () => {
   const out = sanitizeRoomPresence({
     tempName: 'Pig Quiet',
     tempPhoto: null,
@@ -42,12 +42,12 @@ test('incomplete temp (null photo) falls back to profile identity', () => {
     profileName: 'Al Real',
     profilePhoto: '/uploads/profiles/real.jpg',
   });
-  assert.equal(out.name, 'Al Real');
-  assert.equal(out.photo_url, '/uploads/profiles/real.jpg');
-  assert.equal(out.using_temp_identity, false);
+  assert.equal(out.name, 'Pig Quiet');
+  assert.equal(out.photo_url, null);
+  assert.equal(out.using_temp_identity, true);
 });
 
-test('name-only temp is incomplete — profile identity used', () => {
+test('blank temp photo is treated as no photo — letter avatar path', () => {
   const out = sanitizeRoomPresence({
     tempName: 'Pig Quiet',
     tempPhoto: '   ',
@@ -55,9 +55,9 @@ test('name-only temp is incomplete — profile identity used', () => {
     profileName: 'Al Real',
     profilePhoto: '/uploads/profiles/real.jpg',
   });
-  assert.equal(out.name, 'Al Real');
-  assert.equal(out.photo_url, '/uploads/profiles/real.jpg');
-  assert.equal(out.using_temp_identity, false);
+  assert.equal(out.name, 'Pig Quiet');
+  assert.equal(out.photo_url, null);
+  assert.equal(out.using_temp_identity, true);
 });
 
 test('no temp uses profile name and photo', () => {
@@ -73,7 +73,7 @@ test('no temp uses profile name and photo', () => {
   assert.equal(out.using_temp_identity, false);
 });
 
-test('join without temp still works when profile photo is missing', () => {
+test('join with profile still works when profile photo is missing', () => {
   const out = sanitizeRoomPresence({
     profileName: 'Name Only',
     profilePhoto: null,

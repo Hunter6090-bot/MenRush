@@ -352,7 +352,8 @@ export const roomService = {
 
     const msg = result.rows[0] as any;
 
-    // Display: optional temp disguise, else profile identity. Never mutates users.*.
+    // Display: active temp disguise, else profile identity. Never mutates users.*.
+    // Temp path without photo stays null photo (letter avatar) — never profile face.
     const senderRes = await query(
       `SELECT ${roomTempNameSql('$3')} AS sender_name,
               ${roomTempPhotoSql('$3')} AS sender_photo_url
@@ -453,8 +454,8 @@ export const roomService = {
       throw new Error('You are not a member of this room');
     }
 
-    // Roster: optional temp disguise, else profile name/photo. Verification badge
-    // still reflects the real account.
+    // Roster: active temp (photo optional), else profile name/photo. Verification badge
+    // still reflects the real account. Temp-without-photo must stay null (letter avatar).
     const result = await query(
       `SELECT u.id,
               ${roomTempNameSql('$2')} AS name,
@@ -491,11 +492,12 @@ export const roomService = {
     roomId: string,
     data: {
       display_name: string;
-      photo_url: string;
+      photo_url?: string | null;
       save_name?: boolean;
       save_photo?: boolean;
     },
   ) {
+    const photoUrl = data.photo_url?.trim() ? data.photo_url.trim() : null;
     await query(
       `INSERT INTO room_temp_identities
          (user_id, room_id, display_name, photo_url, save_name, save_photo, last_used_at, updated_at)
@@ -511,7 +513,7 @@ export const roomService = {
         userId,
         roomId,
         data.display_name,
-        data.photo_url,
+        photoUrl,
         data.save_name ?? false,
         data.save_photo ?? false,
       ],
@@ -578,10 +580,7 @@ export const roomService = {
     return res.rowCount ?? res.rows.length;
   },
 
-  /**
-   * Resolve display name/photo for socket presence inside a room.
-   * Default = profile identity. Optional active temp disguise overrides.
-   */
+  /** Resolve display name/photo for socket presence inside a room. */
   async resolveRoomPresence(userId: string, roomId: string) {
     const res = await query(
       `SELECT ti.display_name AS temp_name,
