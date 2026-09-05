@@ -847,17 +847,18 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
   return (
     <div
+      data-testid="messaging-root"
       className={
         embedded
-          ? 'flex h-full min-h-0 flex-col'
-          : 'fixed inset-0 flex flex-col'
+          ? 'flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-x-clip'
+          : 'fixed inset-0 flex min-w-0 max-w-full flex-col overflow-x-clip'
       }
       style={{ background: 'var(--bg-primary)' }}
     >
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <header
-        className={`flex-shrink-0 flex items-center gap-1.5 border-b border-[var(--border-default)] px-2 sm:px-4 bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl ${
+        className={`flex-shrink-0 flex min-w-0 max-w-full items-center gap-1 border-b border-[var(--border-default)] px-1.5 sm:gap-1.5 sm:px-4 bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl overflow-x-clip ${
           embedded ? '' : 'pt-[env(safe-area-inset-top,0px)]'
         }`}
         style={{
@@ -870,7 +871,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         <MobileBackButton
           fallback="/conversations"
           onClick={() => navigate('/conversations')}
-          className="-ml-1"
+          showLabel={false}
+          className="-ml-0.5"
         />
 
         {/* Avatar + name block — centered, tappable to open profile */}
@@ -920,7 +922,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             <button
               onClick={() => void handleStartVideoCall()}
               aria-label="Start video call"
-              className="flex-shrink-0 w-[42px] h-[42px] rounded-xl flex items-center justify-center transition-all duration-150 active:scale-95 mr-cta-gradient"
+              className="mr-cta-gradient flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl transition-all duration-150 active:scale-95 sm:h-[42px] sm:w-[42px]"
               style={{
                 boxShadow: '0 2px 12px rgba(196,131,42,0.35)',
               }}
@@ -933,7 +935,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                   '0 2px 12px rgba(196,131,42,0.35)';
               }}
             >
-              <VideoIcon className="w-4 h-4 text-white" />
+              <VideoIcon className="h-4 w-4 text-white" />
             </button>
           </>
         )}
@@ -989,9 +991,10 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       {/* ── Messages area ─────────────────────────────────────────────────── */}
       <div
         ref={messagesScrollRef}
-        className="flex-1 overflow-y-auto px-4 py-4"
+        className="min-h-0 min-w-0 max-w-full flex-1 overflow-x-clip overflow-y-auto px-3 py-4 sm:px-4"
         style={{ scrollbarWidth: 'thin' }}
         data-testid="chat-messages-scroll"
+        data-messaging-thread="1"
       >
         {messages.length === 0 && !sending && (
           <div
@@ -1095,15 +1098,15 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 </div>
               )}
 
-              {/* Message row */}
+              {/* Message row — min-w-0 so long/media bubbles cannot widen the phone viewport */}
               <div
-                className={`flex ${isMine ? 'justify-end' : 'justify-start'} ${
+                className={`flex min-w-0 max-w-full ${isMine ? 'justify-end' : 'justify-start'} ${
                   isGrouped ? 'mt-0.5' : 'mt-3'
                 }`}
               >
                 {/* Received: avatar placeholder for spacing */}
                 {!isMine && (
-                  <div className="w-7 flex-shrink-0 mr-2 flex items-end mb-1">
+                  <div className="mr-2 mb-1 flex w-7 flex-shrink-0 items-end">
                     {showTail && otherId ? (
                       <ProfilePhotoLink
                         userId={otherId}
@@ -1113,13 +1116,13 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                       >
                         {otherUser?.photo_url ? (
                           <div
-                            className="w-7 h-7 rounded-full overflow-hidden"
+                            className="h-7 w-7 overflow-hidden rounded-full"
                             style={{ border: '1px solid var(--border-default)', flexShrink: 0 }}
                           >
                             <img
                               src={otherUser.photo_url}
                               alt={otherUser.name}
-                              className="w-full h-full object-cover"
+                              className="h-full w-full object-cover"
                             />
                           </div>
                         ) : (
@@ -1131,7 +1134,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 )}
 
                 <div
-                  className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} max-w-[62%]`}
+                  className={`flex min-w-0 max-w-[min(78%,20rem)] flex-col overflow-hidden ${
+                    isMine ? 'items-end' : 'items-start'
+                  }`}
                 >
                   {msg.media_type === 'image' ? (
                     <ImageBubble
@@ -1179,7 +1184,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                     />
                   ) : (
                     <div
-                      className="relative px-4 py-2.5 text-sm leading-relaxed"
+                      className="relative max-w-full break-words px-4 py-2.5 text-sm leading-relaxed [overflow-wrap:anywhere]"
                       style={
                         isMine
                           ? {
@@ -1241,7 +1246,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
       {/* ── Input bar ─────────────────────────────────────────────────────── */}
       <div
-        className="flex-shrink-0 border-t border-[var(--border-default)] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl relative z-[70]"
+        className="relative z-[70] min-w-0 max-w-full flex-shrink-0 overflow-x-clip border-t border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] px-2 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] backdrop-blur-xl sm:px-4"
         data-testid="chat-composer"
       >
         {mediaError && (
@@ -1329,16 +1334,16 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             </button>
           </div>
         ) : (
-          <form onSubmit={handleSend} className="flex items-center gap-2">
+          <form onSubmit={handleSend} className="flex min-w-0 max-w-full items-center gap-1.5 sm:gap-2">
             <button
               type="button"
               onClick={handleShareLocation}
               disabled={uploadingMedia || sharingLocation || !!pendingImage || !!pendingLibraryPhotos}
               aria-label="Send current location"
               title="Send current location"
-              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper"
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
             >
-              <LocationPinIcon className="w-4 h-4" />
+              <LocationPinIcon className="h-4 w-4" />
             </button>
 
             {/* Camera — opens Picture | Video chooser, then live camera */}
@@ -1349,9 +1354,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               aria-label="Open camera"
               title="Take a picture or video"
               data-testid="chat-camera-button"
-              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper"
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
             >
-              <CameraIcon className="w-4 h-4" />
+              <CameraIcon className="h-4 w-4" />
             </button>
 
             {/* My Photos attach (device gallery secondary inside sheet) */}
@@ -1362,13 +1367,13 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               aria-label="Attach from My Photos"
               title="Attach from My Photos"
               data-testid="chat-attach-button"
-              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper"
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
             >
-              <AttachIcon className="w-4 h-4" />
+              <AttachIcon className="h-4 w-4" />
             </button>
 
-            {/* Text input */}
-            <div className="relative flex-1">
+            {/* Text input — min-w-0 so flex siblings cannot shove past the phone edge */}
+            <div className="relative min-w-0 flex-1">
               <input
                 ref={inputRef}
                 type="text"
@@ -1381,7 +1386,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 enterKeyHint="send"
                 inputMode="text"
                 data-testid="chat-text-input"
-                className="w-full text-sm px-5 py-3 rounded-full focus:outline-none transition-all duration-200"
+                className="w-full min-w-0 rounded-full px-3 py-2.5 text-sm transition-all duration-200 focus:outline-none sm:px-5 sm:py-3"
                 style={{
                   background: 'var(--bg-card)',
                   border: '1px solid var(--border-default)',
@@ -1409,7 +1414,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 aria-label="Send message"
                 data-testid="chat-send-button"
                 onPointerDown={handleSendPointerDown}
-                className="flex-shrink-0 rounded-full px-5 py-2.5 text-sm font-bold mr-cta-gradient transition-all duration-200 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed min-h-[46px]"
+                className="mr-cta-gradient min-h-[40px] flex-shrink-0 rounded-full px-3 py-2 text-sm font-bold transition-all duration-200 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 sm:min-h-[46px] sm:px-5 sm:py-2.5"
               >
                 {sending ? <PulseRing size={16} label="Sending" /> : 'Send'}
               </button>
@@ -1421,9 +1426,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 aria-label="Record voice note"
                 title="Record voice note"
                 data-testid="chat-voice-button"
-                className="flex-shrink-0 w-[46px] h-[46px] rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 mr-cta-gradient text-[#FFF6E6] shadow-[0_2px_12px_rgba(196,131,42,0.4)]"
+                className="mr-cta-gradient flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-[#FFF6E6] shadow-[0_2px_12px_rgba(196,131,42,0.4)] active:scale-95 disabled:opacity-40 sm:h-[46px] sm:w-[46px]"
               >
-                <MicIcon className="w-4 h-4" />
+                <MicIcon className="h-4 w-4" />
               </button>
             )}
           </form>
@@ -1509,10 +1514,10 @@ const LocationBubble: React.FC<LocationBubbleProps> = ({ msg, isMine, showTail, 
       };
 
   return (
-    <div className="relative px-4 py-3 text-sm leading-relaxed max-w-[240px]" style={bubbleStyle}>
-      <div className="flex items-start gap-2">
-        <LocationPinIcon className="w-5 h-5 shrink-0 mt-0.5" />
-        <div>
+    <div className="relative max-w-full px-4 py-3 text-sm leading-relaxed break-words [overflow-wrap:anywhere]" style={bubbleStyle}>
+      <div className="flex min-w-0 items-start gap-2">
+        <LocationPinIcon className="mt-0.5 h-5 w-5 shrink-0" />
+        <div className="min-w-0">
           <p className="font-semibold">{label}</p>
           {coords ? (
             <p className="mt-1 text-[11px] opacity-80">
@@ -1574,18 +1579,18 @@ const MeetConsentBar: React.FC<MeetConsentBarProps> = ({
 
   return (
     <div
-      className="flex-shrink-0 px-4 py-3 border-b"
+      className="flex-shrink-0 max-w-full overflow-x-clip border-b px-3 py-3 sm:px-4"
       style={{ borderColor: 'var(--border-default)', background: 'color-mix(in srgb, var(--bg-card) 95%, transparent)' }}
       data-testid="meet-consent-bar"
     >
-      <p className="text-xs font-semibold" style={{ color: 'var(--cream)' }}>
+      <p className="text-xs font-semibold break-words" style={{ color: 'var(--cream)' }}>
         Ready to meet?
       </p>
-      <p className="text-[11px] mt-1 leading-relaxed" style={{ color: 'var(--cream-muted)' }}>
+      <p className="mt-1 text-[11px] leading-relaxed break-words [overflow-wrap:anywhere]" style={{ color: 'var(--cream-muted)' }}>
         Confirm only when you&apos;re happy to arrange a meet-up with {peerName}. Both of you must
         agree before this shows as mutual.
       </p>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+      <div className="mt-2 flex min-w-0 max-w-full flex-wrap items-center gap-2">
         {state.my_confirmed ? (
           <>
             <span className="text-[11px] font-medium" style={{ color: '#C4832A' }}>
@@ -1793,24 +1798,24 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
 
   return (
     <div
-      className="mb-3 p-3 rounded-2xl"
+      className="mb-3 max-w-full overflow-x-clip rounded-2xl p-3"
       data-testid="image-composer"
       style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
     >
-      <div className="flex gap-3">
+      <div className="flex min-w-0 gap-3">
         <img
           src={previewUrl}
           alt="Selected photo preview"
           data-testid="image-composer-preview"
-          className="w-20 h-20 rounded-xl object-cover flex-shrink-0"
+          className="h-20 w-20 flex-shrink-0 rounded-xl object-cover"
           style={{ border: '1px solid var(--border-default)' }}
         />
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold mb-2" style={{ color: 'var(--cream)' }}>
+        <div className="min-w-0 flex-1">
+          <p className="mb-2 text-xs font-semibold" style={{ color: 'var(--cream)' }}>
             {photoCount > 1 ? `${photoCount} photos` : 'Photo'} ·{' '}
             <span data-testid="image-composer-rule">{VIEW_RULE_LABELS[rule]}</span>
           </p>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex max-w-full flex-wrap gap-1.5">
             {rules.map((r) => {
               const active = r === rule;
               return (
@@ -1820,7 +1825,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
                   onClick={() => onRuleChange(r)}
                   data-testid={`rule-${r}`}
                   aria-pressed={active}
-                  className="text-[11px] px-2.5 py-1 rounded-full transition-all active:scale-95"
+                  className="rounded-full px-2.5 py-1 text-[11px] transition-all active:scale-95"
                   style={{
                     background: active ? 'rgba(196,131,42,0.22)' : 'var(--bg-primary)',
                     border: `1px solid ${active ? '#C4832A' : 'var(--border-default)'}`,
@@ -1923,19 +1928,18 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
 
   if (isWithdrawnMedia(msg)) {
     return (
-      <div className="flex flex-col items-end gap-1">
+      <div className="flex max-w-full flex-col items-end gap-1">
         <div
-          className="px-4 py-3 flex items-center gap-2 text-xs"
+          className="flex max-w-full items-center gap-2 px-4 py-3 text-xs break-words [overflow-wrap:anywhere]"
           data-testid="media-withdrawn"
           style={{
             background: 'var(--bg-card)',
             border: '1px solid var(--border-default)',
             color: 'var(--cream-muted)',
             borderRadius: radius,
-            minWidth: 200,
           }}
         >
-          <FlameIcon className="w-4 h-4" />
+          <FlameIcon className="h-4 w-4 shrink-0" />
           <span>{msg.message || 'Photo withdrawn'}</span>
         </div>
       </div>
@@ -1950,17 +1954,16 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
   if (isDisappearing && isExhausted) {
     return (
       <div
-        className="px-4 py-3 flex items-center gap-2 text-xs"
+        className="flex max-w-full items-center gap-2 px-4 py-3 text-xs"
         data-testid="image-unavailable"
         style={{
           background: 'var(--bg-card)',
           border: '1px solid var(--border-default)',
           color: 'var(--cream-muted)',
           borderRadius: radius,
-          minWidth: 200,
         }}
       >
-        <FlameIcon className="w-4 h-4" />
+        <FlameIcon className="h-4 w-4 shrink-0" />
         <span>Photo no longer available</span>
       </div>
     );
@@ -1973,7 +1976,7 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
       // an empty hole — show the caption/fallback until refetch fills media_url.
       return (
         <div
-          className="px-4 py-3 text-sm"
+          className="max-w-full px-4 py-3 text-sm break-words [overflow-wrap:anywhere]"
           data-testid="image-pending"
           style={{
             background: isMine
@@ -1982,7 +1985,6 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
             color: isMine ? '#FFF5E6' : 'var(--cream)',
             border: isMine ? 'none' : '1px solid var(--border-default)',
             borderRadius: radius,
-            minWidth: 160,
           }}
         >
           {msg.message || '📷 Photo'}
@@ -1991,10 +1993,10 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
     }
     const blurred = shouldBlurMedia(msg.media_clear);
     return (
-      <div className="flex flex-col items-end gap-1">
+      <div className="flex w-full max-w-full flex-col items-end gap-1">
         <button
           type="button"
-          className="relative overflow-hidden cursor-zoom-in text-left"
+          className="relative w-full max-w-full overflow-hidden cursor-zoom-in text-left"
           data-testid="image-permanent"
           aria-label="Open photo"
           onClick={() => onOpen(msg)}
@@ -2010,7 +2012,7 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
             <img
               src={url}
               alt={msg.message || 'photo'}
-              className="block max-w-[260px] max-h-[340px] object-cover pointer-events-none"
+              className="block h-auto w-full max-h-[340px] object-cover pointer-events-none"
               draggable={false}
             />
           </SoftBlurMedia>
@@ -2033,20 +2035,19 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
         ? 'Viewed'
         : `Opened · ${remainingLabel}`;
     return (
-      <div className="flex flex-col items-end gap-1">
+      <div className="flex max-w-full flex-col items-end gap-1">
         <div
-          className="px-4 py-3 flex items-center gap-3 text-xs"
+          className="flex max-w-full items-center gap-3 px-4 py-3 text-xs"
           data-testid="image-sent-status"
           style={{
             background: 'linear-gradient(135deg, #C4832A, #A45E18)',
             color: '#FFF5E6',
             borderRadius: radius,
-            minWidth: 200,
             boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
           }}
         >
-          <FlameIcon className="w-4 h-4" />
-          <div className="flex flex-col">
+          <FlameIcon className="h-4 w-4 shrink-0" />
+          <div className="flex min-w-0 flex-col">
             <span className="font-semibold">Photo · {remainingViewsLabel(null, msg.max_views)}</span>
             <span style={{ color: 'rgba(255,245,230,0.8)' }}>{status}</span>
           </div>
@@ -2065,10 +2066,8 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
       type="button"
       onClick={() => onOpen(msg)}
       data-testid="image-locked"
-      className="relative overflow-hidden flex items-center justify-center active:scale-[0.98] transition-transform"
+      className="relative aspect-square w-full max-w-[220px] overflow-hidden flex items-center justify-center active:scale-[0.98] transition-transform"
       style={{
-        width: 220,
-        height: 220,
         background: 'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-primary) 100%)',
         border: '1px solid var(--border-default)',
         borderRadius: radius,
@@ -2077,10 +2076,10 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
     >
       <div className="flex flex-col items-center gap-2 px-4 text-center">
         <div
-          className="w-12 h-12 rounded-full flex items-center justify-center"
+          className="flex h-12 w-12 items-center justify-center rounded-full"
           style={{ background: 'rgba(196,131,42,0.15)', border: '1px solid rgba(196,131,42,0.4)' }}
         >
-          <FlameIcon className="w-5 h-5" style={{ color: '#C4832A' }} />
+          <FlameIcon className="h-5 w-5" style={{ color: '#C4832A' }} />
         </div>
         <p className="text-xs font-semibold" style={{ color: 'var(--cream)' }}>
           Tap to view
@@ -2478,33 +2477,32 @@ const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail, onWith
   const progressPct = duration > 0 ? Math.min(100, (position / duration) * 100) : 0;
 
   return (
-    <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
+    <div className={`flex max-w-full flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
       <div
-        className="flex items-center gap-3 px-3 py-2.5"
+        className="flex w-full min-w-0 max-w-full items-center gap-3 px-3 py-2.5"
         style={{
           background: isMine ? 'linear-gradient(135deg, #C4832A, #A45E18)' : 'var(--bg-elevated)',
           border: isMine ? 'none' : '1px solid var(--border-default)',
           color: isMine ? '#FFF5E6' : 'var(--cream)',
           borderRadius: radius,
           boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
-          minWidth: 200,
         }}
       >
         <button
           type="button"
           onClick={() => void togglePlay()}
           aria-label={playing ? 'Pause voice note' : 'Play voice note'}
-          className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center active:scale-95"
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full active:scale-95"
           style={{
             background: isMine ? 'rgba(13,10,6,0.35)' : 'rgba(196,131,42,0.18)',
             color: isMine ? '#FFF5E6' : 'var(--copper)',
           }}
         >
-          {playing ? <PauseIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4 ml-0.5" />}
+          {playing ? <PauseIcon className="h-4 w-4" /> : <PlayIcon className="ml-0.5 h-4 w-4" />}
         </button>
-        <div className="flex-1 flex flex-col gap-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div
-            className="h-1.5 rounded-full overflow-hidden"
+            className="h-1.5 overflow-hidden rounded-full"
             style={{ background: isMine ? 'rgba(13,10,6,0.35)' : 'rgba(196,131,42,0.18)' }}
           >
             <div
@@ -2586,13 +2584,12 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
   };
 
   return (
-    <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
+    <div className={`flex max-w-full flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
       <div
-        className="relative overflow-hidden"
+        className="relative w-full max-w-full overflow-hidden"
         style={{
           borderRadius: radius,
           border: isMine ? 'none' : '1px solid var(--border-default)',
-          maxWidth: 260,
           background: 'var(--bg-elevated)',
         }}
       >
@@ -2606,14 +2603,14 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
                 playsInline
                 // metadata + Accept-Ranges lets Safari paint/play before full file.
                 preload="metadata"
-                className="block w-full max-h-[320px] bg-black"
+                className="block h-auto max-h-[320px] w-full bg-black"
               />
             ) : (
               <button
                 type="button"
                 onClick={armAndPlay}
                 data-testid="video-bubble-open"
-                className="flex h-[180px] w-full min-w-[200px] flex-col items-center justify-center gap-2 bg-black/90 text-[#F0E0C0]"
+                className="flex h-[180px] w-full flex-col items-center justify-center gap-2 bg-black/90 text-[#F0E0C0]"
                 aria-label="Open video"
               >
                 <span
