@@ -98,7 +98,7 @@ export function ChatAttachLibrarySheet({
         aria-modal="true"
         aria-label="Attach from My Photos"
         data-testid="chat-attach-library-sheet"
-        className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-[var(--border-default)] bg-[var(--bg-elevated)] sm:rounded-3xl"
+        className="flex max-h-[88vh] w-full max-w-lg min-w-0 flex-col overflow-hidden overflow-x-clip rounded-t-3xl border border-[var(--border-default)] bg-[var(--bg-elevated)] sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 pt-5 pb-2">
