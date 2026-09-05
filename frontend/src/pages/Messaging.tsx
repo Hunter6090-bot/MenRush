@@ -1992,25 +1992,29 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
     const blurred = shouldBlurMedia(msg.media_clear);
     return (
       <div className="flex flex-col items-end gap-1">
-        <div
-          className="relative overflow-hidden"
+        <button
+          type="button"
+          className="relative overflow-hidden cursor-zoom-in text-left"
           data-testid="image-permanent"
+          aria-label="Open photo"
+          onClick={() => onOpen(msg)}
           style={{
             background: 'var(--bg-card)',
             border: isMine ? 'none' : '1px solid var(--border-default)',
             borderRadius: radius,
             boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
+            padding: 0,
           }}
         >
           <SoftBlurMedia blurred={blurred}>
             <img
               src={url}
               alt={msg.message || 'photo'}
-              className="block max-w-[260px] max-h-[340px] object-cover cursor-zoom-in"
-              onClick={() => onOpen(msg)}
+              className="block max-w-[260px] max-h-[340px] object-cover pointer-events-none"
+              draggable={false}
             />
           </SoftBlurMedia>
-        </div>
+        </button>
         {onWithdraw && (
           <WithdrawMediaButton onClick={onWithdraw} loading={withdrawing} />
         )}
@@ -2116,15 +2120,33 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
   const consumedRef = useRef(false);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const releaseOverlayRef = useRef<((opts?: { popEntry?: boolean }) => void) | null>(null);
   const baseUrl = getPhotoUrl(msg.media_url || undefined);
   const url =
     baseUrl && imgAttempt > 0
       ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}_retry=${imgAttempt}`
       : baseUrl;
 
+  const closeViewer = useCallback((fromUi: boolean) => {
+    releaseOverlayRef.current?.({ popEntry: fromUi });
+    releaseOverlayRef.current = null;
+    onCloseRef.current();
+  }, []);
+
   // Trap browser / Android Back so it closes the viewer instead of leaving chat.
+  // Strict Mode remount-safe: cleanup does not history.back().
   useEffect(() => {
-    return armOverlayBack(CHAT_IMAGE_OVERLAY_ID, () => onCloseRef.current());
+    const release = armOverlayBack(CHAT_IMAGE_OVERLAY_ID, () => {
+      releaseOverlayRef.current = null;
+      onCloseRef.current();
+    });
+    releaseOverlayRef.current = release;
+    return () => {
+      release();
+      if (releaseOverlayRef.current === release) {
+        releaseOverlayRef.current = null;
+      }
+    };
   }, []);
 
   // Escape always closes and returns to the thread.
@@ -2132,12 +2154,12 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        onCloseRef.current();
+        closeViewer(true);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [closeViewer]);
 
   // Disappearing images auto-close after the viewing window. Permanent images
   // stay open until the user closes them.
@@ -2147,12 +2169,12 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
     const tick = window.setInterval(() => {
       setSecondsLeft((s) => Math.max(0, s - 1));
     }, 1000);
-    const closer = window.setTimeout(() => onCloseRef.current(), VIEW_WINDOW_MS);
+    const closer = window.setTimeout(() => closeViewer(true), VIEW_WINDOW_MS);
     return () => {
       window.clearInterval(tick);
       window.clearTimeout(closer);
     };
-  }, [status, isPermanent]);
+  }, [status, isPermanent, closeViewer]);
 
   const handleLoad = async () => {
     if (consumedRef.current) {
@@ -2209,7 +2231,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
       >
         <button
           type="button"
-          onClick={onClose}
+          onClick={() => closeViewer(true)}
           aria-label="Back to chat"
           data-testid="image-viewer-back"
           className="inline-flex min-h-[44px] min-w-[44px] items-center gap-0.5 rounded-xl px-2 text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.15)] active:scale-[0.98]"
@@ -2219,7 +2241,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
         </button>
         <button
           type="button"
-          onClick={onClose}
+          onClick={() => closeViewer(true)}
           aria-label="Close photo"
           data-testid="image-viewer-close"
           className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-xl px-3 text-[var(--cream)] transition-colors hover:bg-[rgba(196,131,42,0.15)] active:scale-[0.98]"
@@ -2234,7 +2256,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
         className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))]"
         // Tap empty chrome (not the photo) to close — same thread stays mounted.
         onClick={(e) => {
-          if (e.target === e.currentTarget) onClose();
+          if (e.target === e.currentTarget) closeViewer(true);
         }}
       >
         {status === 'error' ? (

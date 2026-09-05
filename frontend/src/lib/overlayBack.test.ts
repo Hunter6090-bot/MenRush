@@ -8,7 +8,6 @@ import {
 
 describe('overlayBack', () => {
   afterEach(() => {
-    // Reset to a clean history entry so tests don't leak trap flags.
     window.history.replaceState({}, '', window.location.href);
   });
 
@@ -31,13 +30,12 @@ describe('overlayBack', () => {
     window.dispatchEvent(new PopStateEvent('popstate'));
     expect(onBack).toHaveBeenCalledTimes(1);
 
-    // Second pop should be ignored after release-from-pop.
     window.dispatchEvent(new PopStateEvent('popstate'));
     expect(onBack).toHaveBeenCalledTimes(1);
     release();
   });
 
-  it('release without popstate clears the trap via history.back', () => {
+  it('release without popEntry does not history.back (Strict Mode safe)', () => {
     window.history.replaceState({ idx: 1 }, '', window.location.href);
     const onBack = vi.fn();
     const release = armOverlayBack('chat-image', onBack);
@@ -45,8 +43,32 @@ describe('overlayBack', () => {
 
     const backSpy = vi.spyOn(window.history, 'back');
     release();
+    expect(backSpy).not.toHaveBeenCalled();
+    expect(onBack).not.toHaveBeenCalled();
+    // Trap entry remains so a Strict Mode remount can re-attach.
+    expect(historyHasOverlayBack('chat-image')).toBe(true);
+    backSpy.mockRestore();
+  });
+
+  it('release({ popEntry: true }) clears the trap via history.back', () => {
+    window.history.replaceState({ idx: 1 }, '', window.location.href);
+    const onBack = vi.fn();
+    const release = armOverlayBack('chat-image', onBack);
+    const backSpy = vi.spyOn(window.history, 'back');
+    release({ popEntry: true });
     expect(backSpy).toHaveBeenCalledTimes(1);
     expect(onBack).not.toHaveBeenCalled();
     backSpy.mockRestore();
+  });
+
+  it('remount reuses existing trap entry without a second push', () => {
+    const pushSpy = vi.spyOn(window.history, 'pushState');
+    const release1 = armOverlayBack('chat-image', () => undefined);
+    expect(pushSpy).toHaveBeenCalledTimes(1);
+    release1(); // Strict Mode cleanup — keep entry
+    const release2 = armOverlayBack('chat-image', () => undefined);
+    expect(pushSpy).toHaveBeenCalledTimes(1);
+    release2({ popEntry: true });
+    pushSpy.mockRestore();
   });
 });

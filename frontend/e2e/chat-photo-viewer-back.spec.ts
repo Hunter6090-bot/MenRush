@@ -61,6 +61,30 @@ async function mockChatWithPhoto(page: Page) {
         });
       }
 
+      if (method === 'GET' && (p.endsWith('/users/me') || p.includes('/users/me?'))) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ...OWNER.user,
+            photo_url: MEDIA_PATH,
+            bio: 'Nearby for real — clear face, clear intent, no waiting around.',
+            looking_for: 'Chat and meet',
+            interests: ['Chat', 'Fitness', 'Nightlife'],
+            lat: 51.5,
+            lng: -0.12,
+          }),
+        });
+      }
+
+      if (method === 'GET' && p.includes('/notifications')) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ notifications: [], unread_count: 0 }),
+        });
+      }
+
       if (method === 'GET' && p.includes(`/messages/conversation/${PEER_ID}`)) {
         return route.fulfill({
           status: 200,
@@ -104,7 +128,7 @@ async function mockChatWithPhoto(page: Page) {
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify(p.endsWith('/unread') ? { count: 0 } : []),
+          body: JSON.stringify(p.endsWith('/unread') ? { total: 0, bySender: {} } : []),
         });
       }
 
@@ -157,7 +181,7 @@ test.describe('chat photo viewer — back + standard frame', () => {
     const threadUrl = page.url();
     expect(threadUrl).toContain(`/messages/${PEER_ID}`);
 
-    await page.getByTestId('image-permanent').first().locator('img').click();
+    await page.getByTestId('image-permanent').first().click();
     await expect(page.getByTestId('image-viewer')).toBeVisible();
     await expect(page.getByTestId('image-viewer-back')).toBeVisible();
     await expect(page.getByTestId('image-viewer-close')).toBeVisible();
@@ -193,7 +217,7 @@ test.describe('chat photo viewer — back + standard frame', () => {
     });
 
     // Re-open and Close also returns to the same thread
-    await page.getByTestId('image-permanent').first().locator('img').click();
+    await page.getByTestId('image-permanent').first().click();
     await expect(page.getByTestId('image-viewer')).toBeVisible();
     await page.getByTestId('image-viewer-close').click();
     await expect(page.getByTestId('image-viewer')).toHaveCount(0);

@@ -173,7 +173,7 @@ test('opening a permanent photo then Back returns to the same 1:1 thread', async
   await expect(bobPage.getByTestId('image-permanent').first()).toBeVisible();
   const threadUrl = bobPage.url();
 
-  await bobPage.getByTestId('image-permanent').first().locator('img').click();
+  await bobPage.getByTestId('image-permanent').first().click();
   await expect(bobPage.getByTestId('image-viewer')).toBeVisible();
   await expect(bobPage.getByTestId('image-viewer-frame')).toBeVisible();
   await expect(bobPage.getByTestId('image-viewer-back')).toBeVisible();
