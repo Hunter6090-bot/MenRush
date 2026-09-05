@@ -359,13 +359,13 @@ test.describe('chat photo viewer — back + standard frame', () => {
         background: s.backgroundColor,
       };
     });
-    expect(trustStyles.fontSizePx).toBeGreaterThanOrEqual(14);
+    expect(trustStyles.fontSizePx).toBeGreaterThanOrEqual(15);
     // Must not be the old low-contrast copper (#6B5035)
     expect(trustStyles.color.replace(/\s/g, '')).not.toMatch(/rgb\(107,\s*80,\s*53\)/);
 
     fs.mkdirSync(ARTIFACTS, { recursive: true });
     await page.screenshot({
-      path: path.join(ARTIFACTS, 'chat_photo_viewer_caption_permanent.png'),
+      path: path.join(ARTIFACTS, 'chat_viewer_caption_permanent_legible.png'),
       fullPage: false,
     });
 
@@ -418,7 +418,7 @@ test.describe('chat photo viewer — back + standard frame', () => {
       const s = getComputedStyle(el);
       return { fontSizePx: parseFloat(s.fontSize), color: s.color };
     });
-    expect(statusStyles.fontSizePx).toBeGreaterThanOrEqual(14);
+    expect(statusStyles.fontSizePx).toBeGreaterThanOrEqual(15);
 
     const trust = page.getByTestId('image-viewer-trust');
     await expect(trust).toHaveText(/Screenshots can’t be fully blocked on the web\. View with trust\./);
@@ -427,12 +427,12 @@ test.describe('chat photo viewer — back + standard frame', () => {
       const s = getComputedStyle(el);
       return { fontSizePx: parseFloat(s.fontSize), color: s.color };
     });
-    expect(trustStyles.fontSizePx).toBeGreaterThanOrEqual(14);
+    expect(trustStyles.fontSizePx).toBeGreaterThanOrEqual(15);
     expect(trustStyles.color.replace(/\s/g, '')).not.toMatch(/rgb\(107,\s*80,\s*53\)/);
 
     fs.mkdirSync(ARTIFACTS, { recursive: true });
     await page.screenshot({
-      path: path.join(ARTIFACTS, 'chat_photo_viewer_caption_view_once.png'),
+      path: path.join(ARTIFACTS, 'chat_viewer_caption_view_once_legible.png'),
       fullPage: false,
     });
 
