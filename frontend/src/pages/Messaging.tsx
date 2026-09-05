@@ -2314,23 +2314,37 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
                 </SoftBlurMedia>
               </div>
             )}
-            {status === 'shown' && !isPermanent && (
+            {/* Captions under the photo — high contrast for phone distance (Al 5 Sep). */}
+            {status === 'shown' && (
               <div
-                className="absolute bottom-6 left-1/2 flex -translate-x-1/2 flex-col items-center gap-1"
+                className="mt-3 flex w-full max-w-[min(90vw,720px)] flex-col items-center gap-2.5 px-2"
                 data-testid="image-viewer-meta"
               >
+                {!isPermanent && (
+                  <span
+                    className="rounded-full px-4 py-2.5 text-base font-semibold leading-snug tabular-nums"
+                    data-testid="image-viewer-status"
+                    style={{
+                      background: 'rgba(5,3,1,0.94)',
+                      border: '1px solid rgba(196,131,42,0.65)',
+                      color: '#FFF5E6',
+                      textShadow: '0 1px 2px rgba(0,0,0,0.75)',
+                    }}
+                  >
+                    {remainingViewsLabel(meta.remaining, meta.max)} · closes in {secondsLeft}s
+                  </span>
+                )}
                 <span
-                  className="rounded-full px-3 py-1 text-[11px]"
+                  className="max-w-[22rem] rounded-xl px-4 py-2.5 text-center text-base font-semibold leading-snug"
+                  data-testid="image-viewer-trust"
                   style={{
-                    background: 'rgba(30,21,8,0.9)',
-                    border: '1px solid rgba(196,131,42,0.45)',
-                    color: 'var(--cream)',
+                    background: 'rgba(5,3,1,0.94)',
+                    border: '1px solid rgba(240,224,192,0.28)',
+                    color: '#FFF5E6',
+                    textShadow: '0 1px 2px rgba(0,0,0,0.75)',
                   }}
                 >
-                  {remainingViewsLabel(meta.remaining, meta.max)} · closes in {secondsLeft}s
-                </span>
-                <span className="text-[10px]" style={{ color: '#6B5035' }}>
-                  Screenshots can’t be fully blocked on the web — view with trust.
+                  Screenshots can’t be fully blocked on the web. View with trust.
                 </span>
               </div>
             )}

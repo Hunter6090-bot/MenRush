@@ -163,6 +163,153 @@ async function mockChatWithPhoto(page: Page) {
   );
 }
 
+async function mockChatWithViewOncePhoto(page: Page) {
+  await page.route(
+    (url) => {
+      try {
+        const u = typeof url === 'string' ? new URL(url) : url;
+        return u.pathname === '/api' || u.pathname.startsWith('/api/');
+      } catch {
+        return false;
+      }
+    },
+    async (route) => {
+      const req = route.request();
+      const url = new URL(req.url());
+      const method = req.method();
+      const p = url.pathname;
+
+      if (method === 'GET' && p.includes(MEDIA_PATH)) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'image/jpeg',
+          body: TILE_JPEG,
+        });
+      }
+
+      if (method === 'POST' && p.includes(`/messages/${MSG_ID}/view`)) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: MSG_ID,
+            sender_id: PEER_ID,
+            receiver_id: OWNER.user.id,
+            message: '📷 Photo',
+            created_at: new Date().toISOString(),
+            media_type: 'image',
+            media_url: MEDIA_PATH,
+            is_disappearing: true,
+            max_views: 1,
+            view_count: 1,
+            remaining_views: 0,
+            media_clear: true,
+            sender_name: PEER_NAME,
+          }),
+        });
+      }
+
+      if (method === 'GET' && (p.endsWith('/users/me') || p.includes('/users/me?'))) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ...OWNER.user,
+            photo_url: MEDIA_PATH,
+            bio: 'Nearby for real — clear face, clear intent, no waiting around.',
+            looking_for: 'Chat and meet',
+            interests: ['Chat', 'Fitness', 'Nightlife'],
+            lat: 51.5,
+            lng: -0.12,
+          }),
+        });
+      }
+
+      if (method === 'GET' && p.includes('/notifications')) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ notifications: [], unread_count: 0 }),
+        });
+      }
+
+      if (method === 'GET' && p.includes(`/messages/conversation/${PEER_ID}`)) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: MSG_ID,
+              sender_id: PEER_ID,
+              receiver_id: OWNER.user.id,
+              message: '📷 Photo',
+              created_at: new Date().toISOString(),
+              media_type: 'image',
+              media_url: MEDIA_PATH,
+              is_disappearing: true,
+              max_views: 1,
+              view_count: 0,
+              remaining_views: 1,
+              media_clear: true,
+              sender_name: PEER_NAME,
+            },
+          ]),
+        });
+      }
+
+      if (method === 'GET' && p.includes(`/users/profile/${PEER_ID}`)) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: PEER_ID,
+            name: PEER_NAME,
+            age: 32,
+            photo_url: null,
+            online: true,
+            last_seen: new Date().toISOString(),
+          }),
+        });
+      }
+
+      if (method === 'GET' && (p.endsWith('/messages/conversations') || p.endsWith('/messages/unread'))) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(p.endsWith('/unread') ? { total: 0, bySender: {} } : []),
+        });
+      }
+
+      if (method === 'GET' && p.includes('/meet/')) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            my_confirmed: false,
+            peer_confirmed: false,
+            mutual: false,
+            my_confirmed_at: null,
+            peer_confirmed_at: null,
+          }),
+        });
+      }
+
+      if (method === 'GET') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({}),
+        });
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true }),
+      });
+    },
+  );
+}
+
 test.describe('chat photo viewer — back + standard frame', () => {
   test('Back returns to the same 1:1 thread; frame stays phone-safe', async ({ browser }) => {
     const ctx = await browser.newContext({
@@ -198,9 +345,27 @@ test.describe('chat photo viewer — back + standard frame', () => {
     // object-fit: contain on the opened image
     await expect(page.getByTestId('image-viewer-img')).toHaveCSS('object-fit', 'contain');
 
+    // Permanent: trust line under the photo — high contrast, period not em dash
+    await expect(page.getByTestId('image-viewer-meta')).toBeVisible({ timeout: 10_000 });
+    const trust = page.getByTestId('image-viewer-trust');
+    await expect(trust).toBeVisible();
+    await expect(trust).toHaveText(/Screenshots can’t be fully blocked on the web\. View with trust\./);
+    await expect(trust).not.toHaveText(/—/);
+    const trustStyles = await trust.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return {
+        fontSizePx: parseFloat(s.fontSize),
+        color: s.color,
+        background: s.backgroundColor,
+      };
+    });
+    expect(trustStyles.fontSizePx).toBeGreaterThanOrEqual(15);
+    // Must not be the old low-contrast copper (#6B5035)
+    expect(trustStyles.color.replace(/\s/g, '')).not.toMatch(/rgb\(107,\s*80,\s*53\)/);
+
     fs.mkdirSync(ARTIFACTS, { recursive: true });
     await page.screenshot({
-      path: path.join(ARTIFACTS, 'chat_photo_viewer_open_standard_frame.png'),
+      path: path.join(ARTIFACTS, 'chat_viewer_caption_permanent_legible.png'),
       fullPage: false,
     });
 
@@ -222,6 +387,58 @@ test.describe('chat photo viewer — back + standard frame', () => {
     await page.getByTestId('image-viewer-close').click();
     await expect(page.getByTestId('image-viewer')).toHaveCount(0);
     expect(page.url()).toContain(`/messages/${PEER_ID}`);
+    await expect(page.getByTestId('chat-header-profile')).toBeVisible();
+
+    await ctx.close();
+  });
+
+  test('view-once status + trust captions are large and high-contrast', async ({ browser }) => {
+    const ctx = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+    });
+    await authenticate(ctx);
+    const page = await ctx.newPage();
+    await mockChatWithViewOncePhoto(page);
+
+    await page.goto(`/messages/${PEER_ID}`);
+    await expect(page.getByTestId('image-locked').first()).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId('image-locked').first().click();
+
+    await expect(page.getByTestId('image-viewer')).toBeVisible();
+    await expect(page.getByTestId('image-viewer-meta')).toBeVisible({ timeout: 10_000 });
+
+    const status = page.getByTestId('image-viewer-status');
+    await expect(status).toBeVisible();
+    await expect(status).toContainText(/closes in \d+s/);
+    await expect(status).toContainText(/views? left|No views left|View once/i);
+
+    const statusStyles = await status.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { fontSizePx: parseFloat(s.fontSize), color: s.color };
+    });
+    expect(statusStyles.fontSizePx).toBeGreaterThanOrEqual(15);
+
+    const trust = page.getByTestId('image-viewer-trust');
+    await expect(trust).toHaveText(/Screenshots can’t be fully blocked on the web\. View with trust\./);
+    await expect(trust).not.toHaveText(/—/);
+    const trustStyles = await trust.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { fontSizePx: parseFloat(s.fontSize), color: s.color };
+    });
+    expect(trustStyles.fontSizePx).toBeGreaterThanOrEqual(15);
+    expect(trustStyles.color.replace(/\s/g, '')).not.toMatch(/rgb\(107,\s*80,\s*53\)/);
+
+    fs.mkdirSync(ARTIFACTS, { recursive: true });
+    await page.screenshot({
+      path: path.join(ARTIFACTS, 'chat_viewer_caption_view_once_legible.png'),
+      fullPage: false,
+    });
+
+    // Countdown / No views left behaviour still live — close returns to thread
+    await page.getByTestId('image-viewer-close').click();
+    await expect(page.getByTestId('image-viewer')).toHaveCount(0);
     await expect(page.getByTestId('chat-header-profile')).toBeVisible();
 
     await ctx.close();
