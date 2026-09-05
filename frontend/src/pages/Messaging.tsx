@@ -18,7 +18,7 @@ import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 import { PanicReportButton } from '../components/PanicReportButton';
 import { placeOutgoingCall } from '../lib/callBridge';
 import { mapCallMediaError } from '../lib/callMedia';
-import { MobileBackButton } from '../components/MobileBackButton';
+import { ChevronLeftIcon, MobileBackButton } from '../components/MobileBackButton';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { MissedCallIcon } from '../components/MissedCallIcon';
 import { isMissedCallMessage, MISSED_CALL_PREVIEW } from '../lib/missedCall';
@@ -28,6 +28,8 @@ import { profilePathForUser } from '../lib/profileLinks';
 import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 import { SoftBlurMedia, shouldBlurMedia } from '../components/SoftBlurMedia';
 import { compressChatImageFile } from '../lib/imageUpload';
+import { armOverlayBack } from '../lib/overlayBack';
+import { CHAT_IMAGE_VIEWER_FRAME } from '../lib/chatImageViewerFrame';
 import {
   appendUniqueMessage,
   CHAT_LIVE_REFRESH_EVENT,
@@ -179,6 +181,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const { setCalling, setCallSetupError, resetCall } = useCallStore();
   const navigate = useNavigate();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const savedScrollTopRef = useRef<number | null>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const inputValueRef = useRef('');
@@ -228,8 +232,28 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   }, [otherId, loadConversation]);
 
   useEffect(() => {
+    // Don't yank scroll while the photo viewer is open — restore on close instead.
+    if (viewerMsg) return;
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isOtherTyping]);
+  }, [messages, isOtherTyping, viewerMsg]);
+
+  const openImageViewer = useCallback((msg: Message) => {
+    if (messagesScrollRef.current) {
+      savedScrollTopRef.current = messagesScrollRef.current.scrollTop;
+    }
+    setViewerMsg(msg);
+  }, []);
+
+  const closeImageViewer = useCallback(() => {
+    setViewerMsg(null);
+    const top = savedScrollTopRef.current;
+    if (top == null) return;
+    requestAnimationFrame(() => {
+      if (messagesScrollRef.current) {
+        messagesScrollRef.current.scrollTop = top;
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (!otherId) return;
@@ -964,8 +988,10 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
       {/* ── Messages area ─────────────────────────────────────────────────── */}
       <div
+        ref={messagesScrollRef}
         className="flex-1 overflow-y-auto px-4 py-4"
         style={{ scrollbarWidth: 'thin' }}
+        data-testid="chat-messages-scroll"
       >
         {messages.length === 0 && !sending && (
           <div
@@ -1112,7 +1138,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                       msg={msg}
                       isMine={isMine}
                       showTail={showTail}
-                      onOpen={setViewerMsg}
+                      onOpen={openImageViewer}
                       onWithdraw={
                         canWithdrawMedia(msg, user?.id)
                           ? () => msg.id && handleWithdrawMedia(msg.id)
@@ -1409,7 +1435,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         <ImageViewer
           msg={viewerMsg}
           onConsume={handleConsumeView}
-          onClose={() => setViewerMsg(null)}
+          onClose={closeImageViewer}
         />
       )}
 
@@ -1966,25 +1992,29 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
     const blurred = shouldBlurMedia(msg.media_clear);
     return (
       <div className="flex flex-col items-end gap-1">
-        <div
-          className="relative overflow-hidden"
+        <button
+          type="button"
+          className="relative overflow-hidden cursor-zoom-in text-left"
           data-testid="image-permanent"
+          aria-label="Open photo"
+          onClick={() => onOpen(msg)}
           style={{
             background: 'var(--bg-card)',
             border: isMine ? 'none' : '1px solid var(--border-default)',
             borderRadius: radius,
             boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
+            padding: 0,
           }}
         >
           <SoftBlurMedia blurred={blurred}>
             <img
               src={url}
               alt={msg.message || 'photo'}
-              className="block max-w-[260px] max-h-[340px] object-cover cursor-zoom-in"
-              onClick={() => onOpen(msg)}
+              className="block max-w-[260px] max-h-[340px] object-cover pointer-events-none"
+              draggable={false}
             />
           </SoftBlurMedia>
-        </div>
+        </button>
         {onWithdraw && (
           <WithdrawMediaButton onClick={onWithdraw} loading={withdrawing} />
         )}
@@ -2068,8 +2098,10 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
 // only after the image has loaded and become visible (onLoad). A failed load
 // shows a retry and never burns a view. After loading, the photo stays up for a
 // viewing window so "view once" is actually viewable.
+// Back / Close (and Android system Back) always return to the same 1:1 thread.
 
 const VIEW_WINDOW_MS = 10_000;
+const CHAT_IMAGE_OVERLAY_ID = 'chat-image-viewer';
 
 interface ImageViewerProps {
   msg: Message;
@@ -2086,11 +2118,48 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
   );
   const [imgAttempt, setImgAttempt] = useState(0);
   const consumedRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const releaseOverlayRef = useRef<((opts?: { popEntry?: boolean }) => void) | null>(null);
   const baseUrl = getPhotoUrl(msg.media_url || undefined);
   const url =
     baseUrl && imgAttempt > 0
       ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}_retry=${imgAttempt}`
       : baseUrl;
+
+  const closeViewer = useCallback((fromUi: boolean) => {
+    releaseOverlayRef.current?.({ popEntry: fromUi });
+    releaseOverlayRef.current = null;
+    onCloseRef.current();
+  }, []);
+
+  // Trap browser / Android Back so it closes the viewer instead of leaving chat.
+  // Strict Mode remount-safe: cleanup does not history.back().
+  useEffect(() => {
+    const release = armOverlayBack(CHAT_IMAGE_OVERLAY_ID, () => {
+      releaseOverlayRef.current = null;
+      onCloseRef.current();
+    });
+    releaseOverlayRef.current = release;
+    return () => {
+      release();
+      if (releaseOverlayRef.current === release) {
+        releaseOverlayRef.current = null;
+      }
+    };
+  }, []);
+
+  // Escape always closes and returns to the thread.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeViewer(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [closeViewer]);
 
   // Disappearing images auto-close after the viewing window. Permanent images
   // stay open until the user closes them.
@@ -2100,12 +2169,12 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
     const tick = window.setInterval(() => {
       setSecondsLeft((s) => Math.max(0, s - 1));
     }, 1000);
-    const closer = window.setTimeout(onClose, VIEW_WINDOW_MS);
+    const closer = window.setTimeout(() => closeViewer(true), VIEW_WINDOW_MS);
     return () => {
       window.clearInterval(tick);
       window.clearTimeout(closer);
     };
-  }, [status, isPermanent, onClose]);
+  }, [status, isPermanent, closeViewer]);
 
   const handleLoad = async () => {
     if (consumedRef.current) {
@@ -2142,85 +2211,133 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex flex-col items-center justify-center"
+      className="fixed inset-0 z-[100] flex flex-col"
       data-testid="image-viewer"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Photo viewer"
       style={{ background: 'rgba(5,3,1,0.96)' }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Close photo"
-        data-testid="image-viewer-close"
-        className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center"
-        style={{ background: 'rgba(30,21,8,0.9)', border: '1px solid var(--border-default)', color: 'var(--cream)' }}
+      {/* Obvious Back + Close chrome — safe-area aware for notched phones */}
+      <div
+        className="flex flex-shrink-0 items-center justify-between gap-2 px-2 sm:px-3"
+        style={{
+          paddingTop: 'max(0.75rem, env(safe-area-inset-top, 0px))',
+          paddingLeft: 'max(0.5rem, env(safe-area-inset-left, 0px))',
+          paddingRight: 'max(0.5rem, env(safe-area-inset-right, 0px))',
+        }}
+        data-testid="image-viewer-chrome"
       >
-        <CloseIcon className="w-5 h-5" />
-      </button>
+        <button
+          type="button"
+          onClick={() => closeViewer(true)}
+          aria-label="Back to chat"
+          data-testid="image-viewer-back"
+          className="inline-flex min-h-[44px] min-w-[44px] items-center gap-0.5 rounded-xl px-2 text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.15)] active:scale-[0.98]"
+        >
+          <ChevronLeftIcon className="h-6 w-6 shrink-0" />
+          <span className="pr-1 text-sm font-bold leading-none">Back</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => closeViewer(true)}
+          aria-label="Close photo"
+          data-testid="image-viewer-close"
+          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-xl px-3 text-[var(--cream)] transition-colors hover:bg-[rgba(196,131,42,0.15)] active:scale-[0.98]"
+          style={{ background: 'rgba(30,21,8,0.9)', border: '1px solid var(--border-default)' }}
+        >
+          <CloseIcon className="h-5 w-5" />
+          <span className="text-sm font-bold leading-none">Close</span>
+        </button>
+      </div>
 
-      {status === 'error' ? (
-        <div className="flex flex-col items-center gap-3 text-center px-8">
-          <FlameIcon className="w-8 h-8" style={{ color: '#C4832A' }} />
-          <p className="text-sm" style={{ color: 'var(--cream)' }}>
-            Couldn’t load this photo.
-          </p>
-          <p className="text-xs" style={{ color: 'var(--cream-muted)' }}>
-            No view was used. Check your connection and try again.
-          </p>
-          <button
-            type="button"
-            data-testid="image-viewer-retry"
-            onClick={handleRetry}
-            className="text-xs font-semibold px-5 py-2 rounded-full mt-1"
-            style={{ background: 'linear-gradient(135deg, #C4832A, #A45E18)', color: '#FFF5E6' }}
-          >
-            Retry
-          </button>
-        </div>
-      ) : (
-        <>
-          {status === 'loading' && (
-            <div className="absolute" data-testid="image-viewer-loading">
-              <PulseRing size={28} label="Loading photo" />
-            </div>
-          )}
-          {url && (
-            <SoftBlurMedia blurred={shouldBlurMedia(msg.media_clear)}>
-              <img
-                key={imgAttempt}
-                src={url}
-                alt={msg.message || 'photo'}
-                data-testid="image-viewer-img"
-                draggable={false}
-                onLoad={handleLoad}
-                onError={handleError}
-                className="max-w-[92vw] max-h-[78vh] object-contain select-none"
-                style={{ opacity: status === 'shown' ? 1 : 0 }}
-              />
-            </SoftBlurMedia>
-          )}
-          {status === 'shown' && !isPermanent && (
-            <div
-              className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1"
-              data-testid="image-viewer-meta"
+      <div
+        className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))]"
+        // Tap empty chrome (not the photo) to close — same thread stays mounted.
+        onClick={(e) => {
+          if (e.target === e.currentTarget) closeViewer(true);
+        }}
+      >
+        {status === 'error' ? (
+          <div className="flex flex-col items-center gap-3 px-8 text-center">
+            <FlameIcon className="h-8 w-8" style={{ color: '#C4832A' }} />
+            <p className="text-sm" style={{ color: 'var(--cream)' }}>
+              Couldn’t load this photo.
+            </p>
+            <p className="text-xs" style={{ color: 'var(--cream-muted)' }}>
+              No view was used. Check your connection and try again.
+            </p>
+            <button
+              type="button"
+              data-testid="image-viewer-retry"
+              onClick={handleRetry}
+              className="mt-1 rounded-full px-5 py-2 text-xs font-semibold"
+              style={{ background: 'linear-gradient(135deg, #C4832A, #A45E18)', color: '#FFF5E6' }}
             >
-              <span
-                className="text-[11px] px-3 py-1 rounded-full"
+              Retry
+            </button>
+          </div>
+        ) : (
+          <>
+            {status === 'loading' && (
+              <div className="absolute" data-testid="image-viewer-loading">
+                <PulseRing size={28} label="Loading photo" />
+              </div>
+            )}
+            {url && (
+              // Standard open frame: every photo (tiny or huge) fits the same
+              // phone/desktop box — contain + centered letterbox/pillarbox.
+              <div
+                data-testid="image-viewer-frame"
+                className="flex items-center justify-center overflow-hidden"
                 style={{
-                  background: 'rgba(30,21,8,0.9)',
-                  border: '1px solid rgba(196,131,42,0.45)',
-                  color: 'var(--cream)',
+                  width: CHAT_IMAGE_VIEWER_FRAME.width,
+                  height: CHAT_IMAGE_VIEWER_FRAME.height,
+                  maxWidth: CHAT_IMAGE_VIEWER_FRAME.maxWidth,
+                  maxHeight: CHAT_IMAGE_VIEWER_FRAME.maxHeight,
+                  background: 'rgba(0,0,0,0.35)',
+                  borderRadius: 12,
                 }}
               >
-                {remainingViewsLabel(meta.remaining, meta.max)} · closes in {secondsLeft}s
-              </span>
-              <span className="text-[10px]" style={{ color: '#6B5035' }}>
-                Screenshots can’t be fully blocked on the web — view with trust.
-              </span>
-            </div>
-          )}
-        </>
-      )}
+                <SoftBlurMedia blurred={shouldBlurMedia(msg.media_clear)} className="h-full w-full">
+                  <img
+                    key={imgAttempt}
+                    src={url}
+                    alt={msg.message || 'photo'}
+                    data-testid="image-viewer-img"
+                    draggable={false}
+                    onLoad={handleLoad}
+                    onError={handleError}
+                    className="h-full w-full select-none object-contain"
+                    style={{ opacity: status === 'shown' ? 1 : 0 }}
+                  />
+                </SoftBlurMedia>
+              </div>
+            )}
+            {status === 'shown' && !isPermanent && (
+              <div
+                className="absolute bottom-6 left-1/2 flex -translate-x-1/2 flex-col items-center gap-1"
+                data-testid="image-viewer-meta"
+              >
+                <span
+                  className="rounded-full px-3 py-1 text-[11px]"
+                  style={{
+                    background: 'rgba(30,21,8,0.9)',
+                    border: '1px solid rgba(196,131,42,0.45)',
+                    color: 'var(--cream)',
+                  }}
+                >
+                  {remainingViewsLabel(meta.remaining, meta.max)} · closes in {secondsLeft}s
+                </span>
+                <span className="text-[10px]" style={{ color: '#6B5035' }}>
+                  Screenshots can’t be fully blocked on the web — view with trust.
+                </span>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 };
