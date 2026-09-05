@@ -56,7 +56,7 @@ async function authenticate(context: BrowserContext, result: LoginResult) {
 async function attachImage(page: Page) {
   await page
     .locator('input[type="file"][aria-label="Choose from gallery"]')
-    .setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: PNG_BUFFER });
+    .setInputFiles({ name: 'photo.jpg', mimeType: 'image/jpeg', buffer: JPEG_BUFFER });
 }
 
 /** Send with optional custom view count when rule is 'custom'. */
@@ -149,6 +149,38 @@ test('a permanent image stays available inline for the recipient', async ({ brow
   const bobPage = await bobCtx.newPage();
   await bobPage.goto(`/messages/${alice.user.id}`);
   // Recipient sees the image inline — no "tap to view", no tombstone.
+  await expect(bobPage.getByTestId('image-permanent').first()).toBeVisible();
+
+  await aliceCtx.close();
+  await bobCtx.close();
+});
+
+test('opening a permanent photo then Back returns to the same 1:1 thread', async ({ browser }) => {
+  const aliceCtx = await browser.newContext();
+  const bobCtx = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  await authenticate(aliceCtx, alice);
+  await authenticate(bobCtx, bob);
+
+  const alicePage = await aliceCtx.newPage();
+  await aliceSendsImage(alicePage, 'permanent');
+
+  const bobPage = await bobCtx.newPage();
+  await bobPage.goto(`/messages/${alice.user.id}`);
+  await expect(bobPage.getByTestId('image-permanent').first()).toBeVisible();
+  const threadUrl = bobPage.url();
+
+  await bobPage.getByTestId('image-permanent').first().locator('img').click();
+  await expect(bobPage.getByTestId('image-viewer')).toBeVisible();
+  await expect(bobPage.getByTestId('image-viewer-frame')).toBeVisible();
+  await expect(bobPage.getByTestId('image-viewer-back')).toBeVisible();
+  await bobPage.getByTestId('image-viewer-back').click();
+
+  await expect(bobPage.getByTestId('image-viewer')).toHaveCount(0);
+  expect(bobPage.url()).toBe(threadUrl);
   await expect(bobPage.getByTestId('image-permanent').first()).toBeVisible();
 
   await aliceCtx.close();
