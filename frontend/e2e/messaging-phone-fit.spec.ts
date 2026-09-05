@@ -165,7 +165,7 @@ for (const vp of PHONE_VIEWPORTS) {
       await page.goto(`/messages/${bob.user.id}`);
       await expect(page.getByTestId('messaging-root')).toBeVisible({ timeout: 20_000 });
       await expect(page.getByTestId('chat-composer')).toBeVisible();
-      await expect(page.getByText(long, { exact: true })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText(long, { exact: true }).first()).toBeVisible({ timeout: 15_000 });
 
       // Type so Send replaces Mic — composer width under pressure.
       await page.getByTestId('chat-text-input').fill('fit check');
@@ -173,6 +173,32 @@ for (const vp of PHONE_VIEWPORTS) {
 
       const metrics = await assertNoHorizontalOverflow(page, `${vp.name} open thread`);
       expect(metrics.scale).toBeCloseTo(1, 1);
+
+      // Guard against overflow-x:clip hiding a still-clipped composer/header.
+      const bounds = await page.evaluate(() => {
+        const vw = window.innerWidth;
+        const send = document.querySelector('[data-testid="chat-send-button"]');
+        const composer = document.querySelector('[data-testid="chat-composer"]');
+        const root = document.querySelector('[data-testid="messaging-root"]');
+        const rect = (el: Element | null) => {
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          return {
+            left: r.left,
+            right: r.right,
+            overflows: r.right > vw + 1 || r.left < -1,
+          };
+        };
+        return {
+          vw,
+          send: rect(send),
+          composer: rect(composer),
+          root: rect(root),
+        };
+      });
+      expect(bounds.send?.overflows, `${vp.name}: Send clipped`).toBeFalsy();
+      expect(bounds.composer?.overflows, `${vp.name}: composer clipped`).toBeFalsy();
+      expect(bounds.root?.overflows, `${vp.name}: messaging-root clipped`).toBeFalsy();
 
       await ctx.close();
     });
