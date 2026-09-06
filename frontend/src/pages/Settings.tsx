@@ -17,7 +17,10 @@ import {
 } from '../lib/theme';
 import { clearDeviceTrustToken } from '../lib/deviceTrust';
 import { isGenericAvatarUrl } from '../lib/genericAvatar';
-import { profileCompletionScore } from '../lib/profileDetails';
+import {
+  profileCompletionScore,
+  type ProfileEssentialItem,
+} from '../lib/profileDetails';
 
 const RADIUS_KEY = 'menrush_default_radius_km';
 
@@ -89,9 +92,12 @@ export const Settings = () => {
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportBusyId, setReportBusyId] = useState<string | null>(null);
 
-  const [completion, setCompletion] = useState<{ score: number; total: number; missing: string[] } | null>(
-    null,
-  );
+  const [completion, setCompletion] = useState<{
+    score: number;
+    total: number;
+    missing: string[];
+    missingItems: ProfileEssentialItem[];
+  } | null>(null);
   const [showDelete, setShowDelete] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState('');
@@ -398,23 +404,43 @@ export const Settings = () => {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[15px] font-bold text-[var(--cream)]">Complete your profile</p>
-                <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
-                  Name, date of birth, height, looking for, tags, hosting, and the rest —
-                  edit everything after signup.
-                </p>
                 {completion ? (
-                  <p className="mt-2 text-[12px] font-semibold text-[var(--cream-soft)]">
-                    {completion.score}/{completion.total} profile essentials filled
-                    {completion.missing.length > 0
-                      ? ` · Missing: ${completion.missing.slice(0, 3).join(', ')}${
-                          completion.missing.length > 3 ? '…' : ''
-                        }`
-                      : ' · Looking sharp'}
+                  <p
+                    className="mt-1 text-[12px] font-semibold text-[var(--cream-soft)]"
+                    data-testid="settings-profile-completion-score"
+                  >
+                    {completion.score}/{completion.total} filled
                   </p>
+                ) : null}
+                {completion && completion.missingItems.length > 0 ? (
+                  <div
+                    className="mt-3 flex flex-wrap gap-1.5"
+                    data-testid="settings-profile-missing-list"
+                    aria-label="Still missing"
+                  >
+                    <p className="w-full text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--cream-muted)]">
+                      Still missing
+                    </p>
+                    {completion.missingItems.map((item) => (
+                      <Link
+                        key={item.id}
+                        to={`/profile#${item.sectionId}`}
+                        data-testid={`settings-missing-${item.id}`}
+                        className="rounded-full border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.1)] px-2.5 py-1 text-[11px] font-semibold text-[#E0A14A] transition-colors hover:border-[var(--copper)] hover:bg-[rgba(196,131,42,0.18)]"
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
                 ) : null}
               </div>
               <Link
-                to="/profile"
+                to={
+                  completion && completion.missingItems.length > 0
+                    ? `/profile#${completion.missingItems[0].sectionId}`
+                    : '/profile'
+                }
+                data-testid="settings-profile-edit"
                 className="shrink-0 rounded-full border border-[rgba(196,131,42,0.4)] px-3.5 py-1.5 text-[12px] font-extrabold uppercase tracking-wide text-[#E0A14A] transition-colors hover:border-[var(--copper)] hover:bg-[rgba(196,131,42,0.1)]"
               >
                 Edit
