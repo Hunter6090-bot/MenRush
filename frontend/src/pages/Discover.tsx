@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { useNavigate } from 'react-router-dom';
 import { EventDTO, HotSpotDTO, Mood, hotSpotsAPI, profileMetaAPI, pulseAPI, usersAPI } from '../api/client';
 import { useLocationStore, useAuthStore } from '../hooks/store';
+import { useLatestCallback } from '../hooks/useLatestCallback';
 import { NearbyUser } from '../components/ProfileCard';
 import { Layout } from '../components/Layout';
 import { PulseFab } from '../components/PulseFab';
@@ -769,6 +770,11 @@ export const Discover = () => {
     return () => window.clearInterval(id);
   }, [pulseUntil]);
 
+  // GPS owns one subscription per mount. Camera/filter changes update its handlers
+  // without restarting the initial forced fetch (which otherwise loops on mapCenter).
+  const onLiveGps = useLatestCallback(applyLiveGps);
+  const onLocationFallback = useLatestCallback(applyLocationFallback);
+
   useEffect(() => {
     if (!navigator.geolocation) {
       trackEventOnce(
@@ -778,7 +784,7 @@ export const Discover = () => {
       );
       setError('Geolocation is not supported by your browser.');
       setLoading(false);
-      applyLocationFallback();
+      onLocationFallback();
       return;
     }
 
@@ -796,7 +802,7 @@ export const Discover = () => {
           { outcome: 'granted' },
           'location_permission_outcome',
         );
-        applyLiveGps(result.lat, result.lng, { force: true });
+        onLiveGps(result.lat, result.lng, { force: true });
         return;
       }
       if (result.error === 'denied' && window.isSecureContext) {
@@ -805,7 +811,7 @@ export const Discover = () => {
       if (!hasFetchedRef.current && !hasLiveGpsRef.current) {
         if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
         fallbackTimerRef.current = window.setTimeout(() => {
-          applyLocationFallback();
+          onLocationFallback();
         }, window.isSecureContext ? 3500 : 2500);
       }
     })();
@@ -817,7 +823,7 @@ export const Discover = () => {
           { outcome: 'granted' },
           'location_permission_outcome',
         );
-        applyLiveGps(coords.latitude, coords.longitude);
+        onLiveGps(coords.latitude, coords.longitude);
       },
       (positionError) => {
         const denied = positionError.code === positionError.PERMISSION_DENIED;
@@ -840,7 +846,7 @@ export const Discover = () => {
         if (!hasFetchedRef.current && !hasLiveGpsRef.current) {
           if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
           fallbackTimerRef.current = window.setTimeout(() => {
-            applyLocationFallback();
+            onLocationFallback();
           }, window.isSecureContext ? 4000 : 2500);
         }
         setError('');
@@ -852,7 +858,7 @@ export const Discover = () => {
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
       if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
     };
-  }, [applyLiveGps, applyLocationFallback]);
+  }, [onLiveGps, onLocationFallback]);
 
   // Live proximity: refresh the nearby roster every 20s using the latest location.
   useEffect(() => {
