@@ -80,6 +80,24 @@ async function mockApis(page: Page) {
     const method = req.method();
     const p = url.pathname;
 
+    if (method === 'GET' && p.includes('/users/me/referrals')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          referral_code: 'BOA90TEST',
+          verified_count: 0,
+          pending_count: 0,
+          credited_count: 0,
+          unlock_every: 3,
+          progress_to_unlock: 0,
+          unlocks_earned: 0,
+          pending_payout_total: 0,
+          referrals: [],
+        }),
+      });
+    }
+
     if (method === 'GET' && (p.endsWith('/users/me') || p.includes('/users/me?'))) {
       return route.fulfill({
         status: 200,
@@ -150,9 +168,14 @@ test.describe('profile missing essentials highlight', () => {
   test('Settings lists all missing chips; Profile highlights incomplete fields', async ({
     browser,
   }) => {
-    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const ctx = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      recordVideo: { dir: ARTIFACTS, size: { width: 390, height: 844 } },
+    });
     await authenticate(ctx);
     const page = await ctx.newPage();
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => pageErrors.push(String(err?.stack || err?.message || err)));
     await mockApis(page);
 
     await page.goto('/settings');
@@ -178,6 +201,9 @@ test.describe('profile missing essentials highlight', () => {
     await edit.click();
 
     await expect(page.getByTestId('profile-edit-form')).toBeVisible({ timeout: 15000 });
+    if (pageErrors.length) {
+      throw new Error(`Profile pageerror(s):\n${pageErrors.join('\n\n')}`);
+    }
     await expect(page.getByTestId('profile-missing-essentials-banner')).toBeVisible();
     await expect(page.getByTestId('profile-missing-essentials-list')).toBeVisible();
 
@@ -202,6 +228,21 @@ test.describe('profile missing essentials highlight', () => {
     await page.getByTestId('profile-missing-bio').click();
     await expect(page.locator('#profile-essential-bio')).toBeInViewport();
 
+    await page.waitForTimeout(400);
+    const video = page.video();
     await ctx.close();
+
+    if (video) {
+      const raw = await video.path();
+      const dest = path.join(ARTIFACTS, 'profile_missing_essentials_settings_to_highlight.webm');
+      if (raw && fs.existsSync(raw)) {
+        fs.copyFileSync(raw, dest);
+        try {
+          fs.unlinkSync(raw);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
   });
 });
