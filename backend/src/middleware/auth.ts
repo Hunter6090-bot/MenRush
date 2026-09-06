@@ -67,5 +67,9 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
     return res.status(400).json({ error: err.message });
   }
 
+  if (typeof err.message === 'string' && err.message.includes('Not allowed by CORS')) {
+    return res.status(403).json({ error: 'Not allowed by CORS' });
+  }
+
   return res.status(500).json({ error: 'Internal server error' });
 };

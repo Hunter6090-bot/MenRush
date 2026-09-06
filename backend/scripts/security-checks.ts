@@ -15,6 +15,7 @@ import {
   signMediaAccess,
   verifyMediaAccess,
 } from '../src/security/media';
+import { isAllowedOrigin, isMenRushVercelHost } from '../src/security/cors';
 
 type Test = { name: string; run: () => void | Promise<void> };
 const tests: Test[] = [];
@@ -205,6 +206,19 @@ test('source guards preserve location, push, socket, and media privacy boundarie
   assert.match(messages, /X-MenRush-Media-Clear/);
   assert.match(albums, /router\.get\('\/media\/:photoId'/);
   assert.match(albums, /X-MenRush-Media-Clear/);
+});
+
+test('CORS allows menrush.com and both Vercel project aliases', () => {
+  assert.equal(isAllowedOrigin(undefined), true);
+  assert.equal(isAllowedOrigin('https://menrush.com'), true);
+  assert.equal(isAllowedOrigin('https://www.menrush.com'), true);
+  assert.equal(isAllowedOrigin('https://menrush-4s6xpobzl-hunter6090-bots-projects.vercel.app'), true);
+  assert.equal(isAllowedOrigin('https://men-rush-jcu1vw5lv-men-ruch-vercel.vercel.app'), true);
+  assert.equal(isAllowedOrigin('https://men-rush.vercel.app'), true);
+  assert.equal(isAllowedOrigin('https://men-rush-git-main-men-ruch-vercel.vercel.app'), true);
+  assert.equal(isMenRushVercelHost('men-rush-jcu1vw5lv-men-ruch-vercel.vercel.app'), true);
+  assert.equal(isMenRushVercelHost('evil-app.vercel.app'), false);
+  assert.equal(isAllowedOrigin('https://evil-app.vercel.app'), false);
 });
 
 async function main() {
