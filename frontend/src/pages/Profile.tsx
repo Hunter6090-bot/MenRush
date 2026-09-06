@@ -68,7 +68,7 @@ function EssentialFieldLabel({
           className="ml-2 inline-block rounded-full bg-[rgba(196,131,42,0.2)] px-1.5 py-0.5 text-[9px] font-extrabold normal-case tracking-wide text-[#E0A14A]"
           data-testid="essential-needed-cue"
         >
-          Needed
+          Missing
         </span>
       ) : null}
     </label>
@@ -964,9 +964,14 @@ export const Profile = () => {
                 className="rounded-xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.08)] px-3.5 py-3"
                 data-testid="profile-missing-essentials-banner"
               >
-                <p className="text-[12px] font-bold text-[#E0A14A]">
-                  {essentials.score}/{essentials.total} essentials filled. Copper borders mark what
-                  still needs completing.
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--cream-muted)]">
+                  Still missing
+                </p>
+                <p
+                  className="mt-1 text-[12px] font-semibold text-[var(--cream-soft)]"
+                  data-testid="profile-missing-essentials-score"
+                >
+                  {essentials.score}/{essentials.total} filled
                 </p>
                 <ul className="mt-2 flex flex-wrap gap-1.5" data-testid="profile-missing-essentials-list">
                   {essentials.missingItems.map((item) => (
@@ -1347,13 +1352,6 @@ export const Profile = () => {
                   ({interests.length}/{PROFILE_INTERESTS_MAX})
                 </span>
               </EssentialFieldLabel>
-              {isEssentialMissing('tags') ? (
-                <p className="mb-2 text-[11px] font-medium text-[#E0A14A]">Pick at least 3 tags.</p>
-              ) : isEssentialMissing('body_vibe_tags') ? (
-                <p className="mb-2 text-[11px] font-medium text-[#E0A14A]">
-                  Add more tags for body / vibe (5+).
-                </p>
-              ) : null}
               <div className="space-y-4">
               {PROFILE_TAG_GROUPS.map((group) => (
                 <div key={group.label}>

@@ -404,25 +404,23 @@ export const Settings = () => {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[15px] font-bold text-[var(--cream)]">Complete your profile</p>
-                <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
-                  Name, date of birth, height, looking for, tags, hosting, and the rest. Edit
-                  everything after signup.
-                </p>
                 {completion ? (
                   <p
-                    className="mt-2 text-[12px] font-semibold text-[var(--cream-soft)]"
+                    className="mt-1 text-[12px] font-semibold text-[var(--cream-soft)]"
                     data-testid="settings-profile-completion-score"
                   >
-                    {completion.score}/{completion.total} profile essentials filled
-                    {completion.missingItems.length === 0 ? ' · Looking sharp' : null}
+                    {completion.score}/{completion.total} filled
                   </p>
                 ) : null}
                 {completion && completion.missingItems.length > 0 ? (
                   <div
                     className="mt-3 flex flex-wrap gap-1.5"
                     data-testid="settings-profile-missing-list"
-                    aria-label="Missing profile essentials"
+                    aria-label="Still missing"
                   >
+                    <p className="w-full text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--cream-muted)]">
+                      Still missing
+                    </p>
                     {completion.missingItems.map((item) => (
                       <Link
                         key={item.id}

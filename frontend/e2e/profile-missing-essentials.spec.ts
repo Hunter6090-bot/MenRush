@@ -180,10 +180,11 @@ test.describe('profile missing essentials highlight', () => {
 
     await page.goto('/settings');
     await expect(page.getByTestId('settings-profile-completion')).toBeVisible({ timeout: 15000 });
-    await expect(page.getByTestId('settings-profile-completion-score')).toContainText('0/11');
+    await expect(page.getByTestId('settings-profile-completion-score')).toContainText('0/11 filled');
 
     const missingList = page.getByTestId('settings-profile-missing-list');
     await expect(missingList).toBeVisible();
+    await expect(missingList.getByText('Still missing', { exact: true })).toBeVisible();
     for (const label of EXPECTED_MISSING) {
       await expect(missingList.getByText(label, { exact: true })).toBeVisible();
     }
@@ -205,6 +206,7 @@ test.describe('profile missing essentials highlight', () => {
       throw new Error(`Profile pageerror(s):\n${pageErrors.join('\n\n')}`);
     }
     await expect(page.getByTestId('profile-missing-essentials-banner')).toBeVisible();
+    await expect(page.getByTestId('profile-missing-essentials-banner').getByText('Still missing')).toBeVisible();
     await expect(page.getByTestId('profile-missing-essentials-list')).toBeVisible();
 
     for (const label of EXPECTED_MISSING) {
@@ -218,7 +220,7 @@ test.describe('profile missing essentials highlight', () => {
     await expect(page.getByTestId('profile-field-bio')).toBeVisible();
     await expect(page.locator('#profile-essential-bio[data-essential-missing="true"]')).toHaveCount(1);
     await expect(page.locator('#profile-essential-tags[data-essential-missing="true"]')).toHaveCount(1);
-    await expect(page.getByTestId('essential-needed-cue').first()).toBeVisible();
+    await expect(page.getByTestId('essential-needed-cue').first()).toHaveText('Missing');
 
     await page.screenshot({
       path: path.join(ARTIFACTS, 'profile_edit_missing_essentials_highlighted.png'),
