@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Profile essentials: list all missing + highlight on /profile | this branch `cursor/profile-missing-essentials-highlight-7848` | — | Cursor cloud — Al UX 6 Sep: Settings chips (no truncate); Profile copper highlight + Needed cue; deep-link Edit/#chips; checklist from `profileDetails`; #97–#99 parked; do not ping Al; Veriff lock untouched |
 | Veriff-only Profile verification | pending review on mvp-complete | Get verified direct SDK launch; retire Trust Centre/manual pages and grants; small copper badge; provider provenance | Codex — owner decision 5 Sep 2026; see docs/verification-one-flow.md; production deployment authorized 6 Sep; release based on live 6430aba |
 | Chat photo viewer caption contrast (status + trust under image) | this branch `cursor/chat-viewer-caption-contrast-a5e1` | — | Cursor cloud — Al UX 5 Sep: enlarge + high-contrast cream on dark scrim; period not em dash on trust line; keep #202 Back/Close + contain frame; view-once countdown unchanged; #97–#99 parked; do not ping Al |
 | P0 Messaging phone-fit (1:1 chat no pinch-zoom) | this branch `cursor/fix-messaging-phone-fit-3b18` PR `#203` | — | Cursor cloud — Al P0 5 Sep: Messaging leftovers after #191; shell/bubbles/media/composer overflow-x clip; e2e 360+390+430 scrollWidth≈clientWidth; no user-scalable=no; rebased onto main+#202 photo viewer (both survive); #97–#99 parked; do not ping Al |
