@@ -1,3 +1,4 @@
+import { FEATURES } from '../lib/featureFlags';
 import React, { useMemo, useState, useEffect } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../api/client';
@@ -18,7 +19,6 @@ import {
   readStoredPridePromoCode,
   storePridePromoCode,
 } from '../lib/pridePromo';
-import { FEATURES } from '../lib/featureFlags';
 import {
   publicErrorClass,
   publicInputClass,
@@ -185,11 +185,7 @@ export const Register = () => {
         ...(trimmedReferral ? { referral_code: trimmedReferral } : {}),
       });
       setAuth(res.data.user, res.data.token);
-      navigate(
-        FEATURES.veriffAfterSignup || FEATURES.requireIdVerification
-          ? '/verify/id'
-          : '/profile/setup',
-      );
+      navigate('/profile/setup');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed. Please try again.');
     } finally {

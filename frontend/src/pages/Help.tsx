@@ -7,8 +7,8 @@ const faqs = [
     a: 'Adult gay, bi, trans, discreet and curious men who want real-time local discovery, chat and verified profiles.',
   },
   {
-    q: 'Why do I need verification?',
-    a: 'Verification reduces fake profiles and underage access. It protects the quality of the room and keeps MenRush premium.',
+    q: 'How do I get verified?',
+    a: 'Tap Get verified on your Profile to complete an ID check and live selfie with Veriff. Verification is free and optional. Your Verified badge appears after Veriff approves.',
   },
   {
     q: 'Why does location matter?',

@@ -155,18 +155,9 @@ const GenerateInviteCodesSchema = z.object({
   note: z.string().max(200).optional(),
 });
 
-router.post('/verification/:id/approve', async (req: Request, res: Response) => {
+router.post('/verification/:id/approve', (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
-  try {
-    await verificationService.approveSubmission(req.params.id);
-    return res.json({ ok: true });
-  } catch (err: any) {
-    if (err?.code === 'submission_not_found') {
-      return res.status(404).json({ error: 'submission_not_found' });
-    }
-    console.error('[admin] verification approve error:', err);
-    return res.status(500).json({ error: 'verification_approve_failed' });
-  }
+  return res.status(409).json({ error: 'veriff_approval_required' });
 });
 
 router.post('/verification/:id/reject', async (req: Request, res: Response) => {
@@ -345,6 +336,7 @@ router.post('/users/verify', async (req: Request, res: Response) => {
     const { query } = await import('../db');
     const email = parsed.data.email.trim().toLowerCase();
     const verified = parsed.data.verified;
+    if (verified) return res.status(409).json({ error: 'veriff_approval_required' });
     const result = await query(
       `UPDATE users SET
          is_verified = $2,
@@ -411,13 +403,11 @@ router.post('/users/test-pair', async (req: Request, res: Response) => {
            age_assurance_status, age_assured_at,
            bio, looking_for, interests, photo_url
          ) VALUES (
-           $1,$2,$3,$4,28,true,'verified',NOW(),'verified',NOW(),'confirmed',NOW(),
+           $1,$2,$3,$4,28,false,'unverified',NULL,'unverified',NULL,'self_attested',NULL,
            $5,'video call testing',ARRAY['chat'],$6
          )
          ON CONFLICT (email) DO UPDATE SET
            password_hash = EXCLUDED.password_hash,
-           is_verified = true,
-           verification_status = 'verified',
            name = EXCLUDED.name,
            photo_url = EXCLUDED.photo_url`,
         [id, a.email, hash, a.name, 'Ops test pair for video calls.', a.photo],

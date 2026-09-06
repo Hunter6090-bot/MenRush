@@ -159,6 +159,8 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           </span>
         </div>
 
+        {user.is_verified ? <VerifiedBadge compact className="absolute bottom-3 right-3 z-10" /> : null}
+
         {/* Match button overlay */}
         <button
           type="button"
@@ -166,7 +168,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           disabled={liking || (liked && !isMutual)}
           aria-label={isMutual ? 'Open chat' : liked ? 'Match already sent' : `Match with ${user.name}`}
           data-testid={`profile-card-match-${user.id}`}
-          className={`absolute bottom-3 right-3 z-10 flex h-11 w-11 items-center justify-center rounded-full transition-all disabled:opacity-70 ${
+          className={`absolute bottom-3 left-3 z-10 flex h-11 w-11 items-center justify-center rounded-full transition-all disabled:opacity-70 ${
             liked
               ? 'bg-nn-copper text-nn-on-copper shadow-glow-copper'
               : 'bg-black/50 backdrop-blur-sm text-nn-copper-bright hover:bg-nn-copper/20 hover:scale-110'
@@ -181,7 +183,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         <div className="flex items-center gap-2 mb-1">
           <h3 className="font-bold text-[var(--cream)] text-base">{user.name}</h3>
           <span className="text-[var(--cream-muted)] text-sm">{user.age}</span>
-          {user.is_verified ? <VerifiedBadge /> : null}
+
         </div>
 
         {user.headline && (

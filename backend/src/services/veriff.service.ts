@@ -114,69 +114,74 @@ function frontendBase(): string {
   return (raw || 'http://localhost:5173').replace(/\/$/, '');
 }
 
+export interface VeriffProgress {
+  is_verified: boolean;
+  session_id: string | null;
+  session_url: string | null;
+  veriff_status: string | null;
+}
+
 export const veriffService = {
   isConfigured: isVeriffConfigured,
 
-  async createSession(userId: string, person?: { firstName?: string }): Promise<{
-    sessionId: string;
-    sessionUrl: string;
-  }> {
-    if (!isVeriffConfigured()) throw new VeriffConfigError();
+  async getProgress(userId: string): Promise<VeriffProgress> {
+    const result = await deps.query(
+      `SELECT COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified,
+              s.id AS session_id, s.session_url,
+              CASE WHEN s.status IN ('created', 'started', 'resubmission_requested')
+                         AND s.created_at < NOW() - INTERVAL '7 days'
+                   THEN 'expired' ELSE s.status END AS veriff_status
+         FROM users u LEFT JOIN veriff_sessions s
+           ON s.id::text = u.verification_session_id AND s.user_id = u.id
+        WHERE u.id = $1`, [userId],
+    );
+    if (!result.rows[0]) throw new Error('user_not_found');
+    return result.rows[0];
+  },
 
-    const callback = `${frontendBase()}/verify/pending`;
-    const body = {
-      verification: {
-        callback,
-        vendorData: userId,
-        person: person?.firstName ? { firstName: person.firstName } : undefined,
-      },
-    };
+  async markSubmitted(userId: string): Promise<void> {
+    // This endpoint can only set progress, never approve an identity.
+    await deps.query(
+      `UPDATE veriff_sessions s SET status = 'submitted', updated_at = NOW()
+        FROM users u WHERE u.id = $1 AND s.user_id = u.id
+          AND s.id::text = u.verification_session_id
+          AND s.status IN ('created', 'started', 'resubmission_requested')`, [userId],
+    );
+  },
+
+  async createSession(userId: string): Promise<{ sessionId: string; sessionUrl: string }> {
+    if (!isVeriffConfigured()) throw new VeriffConfigError();
+    const progress = await veriffService.getProgress(userId);
+    if (progress.is_verified) throw new Error('already_verified');
+    if (progress.veriff_status === 'submitted' || progress.veriff_status === 'review') {
+      throw new Error('verification_pending');
+    }
+    if (progress.session_id && progress.session_url &&
+        ['created', 'started', 'resubmission_requested'].includes(progress.veriff_status || '')) {
+      return { sessionId: progress.session_id, sessionUrl: progress.session_url };
+    }
 
     const res = await deps.fetch(`${VERIFF_API_BASE}/sessions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-AUTH-CLIENT': apiKey(),
-      },
-      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json', 'X-AUTH-CLIENT': apiKey() },
+      signal: AbortSignal.timeout(15000),
+      body: JSON.stringify({ verification: { callback: `${frontendBase()}/profile`, vendorData: userId } }),
     });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      console.error('[veriff] session create failed:', res.status, text.slice(0, 400));
-      throw new Error('veriff_session_failed');
-    }
-
-    const json = (await res.json()) as {
-      verification?: { id?: string; url?: string };
-    };
+    if (!res.ok) throw new Error('veriff_session_failed');
+    const json = await res.json() as { verification?: { id?: string; url?: string } };
     const sessionId = json.verification?.id;
     const sessionUrl = json.verification?.url;
-    if (!sessionId || !sessionUrl) {
-      throw new Error('veriff_session_malformed');
-    }
-
+    if (!sessionId || !sessionUrl) throw new Error('veriff_session_malformed');
     await deps.query(
       `INSERT INTO veriff_sessions (id, user_id, session_url, status, created_at, updated_at)
-       VALUES ($1, $2, $3, 'created', NOW(), NOW())
-       ON CONFLICT (id) DO UPDATE SET
-         session_url = EXCLUDED.session_url,
-         updated_at = NOW()`,
-      [sessionId, userId, sessionUrl],
+       VALUES ($1, $2, $3, 'created', NOW(), NOW())`, [sessionId, userId, sessionUrl],
     );
-
     await deps.query(
-      `UPDATE users
-          SET verification_status = 'pending',
-              verification_provider = 'veriff',
-              verification_session_id = $2,
-              rejection_reason = NULL,
-              updated_at = NOW()
-        WHERE id = $1
-          AND COALESCE(is_verified, FALSE) = FALSE`,
+      `UPDATE users SET verification_status = 'pending', verification_provider = 'veriff',
+              is_verified = FALSE, verification_session_id = $2, rejection_reason = NULL, updated_at = NOW()
+        WHERE id = $1 AND NOT COALESCE(is_verified AND verification_provider = 'veriff', FALSE)`,
       [userId, sessionId],
     );
-
     return { sessionId, sessionUrl };
   },
 
@@ -204,6 +209,7 @@ export const veriffService = {
     const signature = signVeriffHmac(id);
     const res = await deps.fetch(`${VERIFF_API_BASE}/sessions/${encodeURIComponent(id)}/decision`, {
       method: 'GET',
+      signal: AbortSignal.timeout(15000),
       headers: {
         'X-AUTH-CLIENT': apiKey(),
         'X-HMAC-SIGNATURE': signature,
@@ -272,7 +278,8 @@ export const veriffService = {
       `SELECT vs.id, vs.user_id, vs.status, vs.created_at
          FROM veriff_sessions vs
          JOIN users u ON u.id = vs.user_id
-        WHERE vs.status = 'created'
+        WHERE vs.status IN ('created', 'started', 'submitted', 'review', 'resubmission_requested')
+          AND u.verification_session_id = vs.id::text
           AND vs.created_at <= NOW() - ($1::double precision * INTERVAL '1 hour')
           AND COALESCE(u.is_verified, FALSE) = FALSE
           AND (
@@ -343,6 +350,11 @@ export const veriffService = {
               },
             };
             const outcome = await veriffService.applyDecision(payload);
+            if (!outcome.handled) {
+              skipped += 1;
+              results.push({ sessionId, userId, action: 'skipped_no_decision', detail: 'Session no longer current' });
+              continue;
+            }
             applied += 1;
             results.push({
               sessionId,
@@ -385,148 +397,53 @@ export const veriffService = {
   },
 
   async applyDecision(payload: {
-    verification?: {
-      id?: string;
-      status?: string;
-      vendorData?: string | null;
-      code?: number | string | null;
-      reason?: string | null;
-      reasonCode?: number | string | null;
-    };
+    verification?: { id?: string; status?: string; vendorData?: string | null;
+      code?: number | string | null; reason?: string | null; reasonCode?: number | string | null };
   }): Promise<{ handled: boolean; userId?: string; decision?: string }> {
     const verification = payload.verification;
     const sessionId = verification?.id?.trim();
-    const statusRaw = (verification?.status || '').toLowerCase().trim();
-    if (!sessionId || !statusRaw) {
-      return { handled: false };
-    }
-
-    const vendorUserId = (verification?.vendorData || '').trim() || null;
-
-    const sessionRes = await deps.query(
-      `SELECT id, user_id, status FROM veriff_sessions WHERE id = $1`,
-      [sessionId],
+    const decision = verification?.status?.toLowerCase().trim();
+    const decisions = ['approved', 'declined', 'resubmission_requested', 'expired', 'abandoned', 'review'];
+    if (!sessionId || !decision || !decisions.includes(decision)) return { handled: false };
+    const session = await deps.query(
+      `SELECT s.user_id, s.status FROM veriff_sessions s
+         JOIN users u ON u.id = s.user_id AND u.verification_session_id = s.id::text
+        WHERE s.id = $1`, [sessionId],
     );
-    let userId = sessionRes.rows[0]?.user_id as string | undefined;
-    if (!userId && vendorUserId) {
-      userId = vendorUserId;
-      await deps.query(
-        `INSERT INTO veriff_sessions (id, user_id, status, created_at, updated_at)
-         VALUES ($1, $2, 'created', NOW(), NOW())
-         ON CONFLICT (id) DO NOTHING`,
-        [sessionId, userId],
-      );
-    }
-    if (!userId) {
-      console.warn('[veriff] decision for unknown session:', sessionId);
-      return { handled: false };
-    }
-
-    // Idempotent: already approved stays approved.
-    if (sessionRes.rows[0]?.status === 'approved' && statusRaw !== 'approved') {
-      return { handled: true, userId, decision: 'approved' };
-    }
-
-    const mappedStatus: VeriffDecisionStatus =
-      statusRaw === 'approved' ||
-      statusRaw === 'declined' ||
-      statusRaw === 'resubmission_requested' ||
-      statusRaw === 'expired' ||
-      statusRaw === 'abandoned' ||
-      statusRaw === 'review'
-        ? (statusRaw as VeriffDecisionStatus)
-        : 'review';
-
-    const decisionCode =
-      verification?.code != null
-        ? String(verification.code)
-        : verification?.reasonCode != null
-          ? String(verification.reasonCode)
-          : null;
-
-    await deps.query(
-      `UPDATE veriff_sessions
-          SET status = $2,
-              decision_code = COALESCE($3, decision_code),
-              updated_at = NOW(),
-              decided_at = CASE
-                WHEN $2 IN ('approved', 'declined', 'expired', 'abandoned') THEN NOW()
-                ELSE decided_at
-              END
-        WHERE id = $1`,
-      [sessionId, mappedStatus, decisionCode],
+    const row = session.rows[0];
+    // Never attach unknown provider sessions by vendorData or overwrite a newer attempt.
+    if (!row) return { handled: false };
+    if (row.status === 'approved') return { handled: true, userId: row.user_id, decision: 'approved' };
+    const approved = decision === 'approved';
+    const status = approved ? 'verified' : decision === 'declined' ? 'rejected'
+      : decision === 'expired' || decision === 'abandoned' ? 'unverified' : 'pending';
+    const reason = decision === 'declined' ? 'Veriff did not approve this check.'
+      : decision === 'resubmission_requested' ? 'Continue your check with Veriff.' : null;
+    // One database statement: a failed user update must not leave an approved
+    // session whose retry can no longer award the badge.
+    const result = await deps.query(
+      `WITH updated_session AS (
+         UPDATE veriff_sessions SET status = $2, decision_code = $6, updated_at = NOW(),
+           decided_at = CASE WHEN $2 IN ('approved', 'declined', 'expired', 'abandoned', 'review')
+                             THEN NOW() ELSE decided_at END
+         WHERE id = $1 AND status <> 'approved' RETURNING id, user_id
+       )
+       UPDATE users u SET is_verified = $3, verification_status = $4,
+              verification_provider = 'veriff',
+              verified_at = CASE WHEN $3 THEN COALESCE(u.verified_at, NOW()) ELSE u.verified_at END,
+              rejection_reason = $5, updated_at = NOW()
+         FROM updated_session s
+        WHERE u.id = s.user_id AND u.verification_session_id = s.id::text
+          AND NOT COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE)
+        RETURNING u.id`,
+      [sessionId, decision, approved, status, reason, verification?.code != null ? String(verification.code) : null],
     );
-
-    if (mappedStatus === 'approved') {
-      await deps.query(
-        `UPDATE users
-            SET is_verified = TRUE,
-                verification_status = 'verified',
-                verification_provider = 'veriff',
-                verification_session_id = $2,
-                verified_at = NOW(),
-                rejection_reason = NULL,
-                updated_at = NOW()
-          WHERE id = $1`,
-        [userId, sessionId],
-      );
+    if (approved && result.rows.length) {
       try {
         const { referralService } = await import('./referral.service');
-        await referralService.onUserVerified(userId);
-      } catch (err) {
-        console.error('[veriff] referral onUserVerified failed', err);
-      }
-      return { handled: true, userId, decision: 'approved' };
+        await referralService.onUserVerified(row.user_id);
+      } catch (err) { console.error('[veriff] referral onUserVerified failed', err); }
     }
-
-    if (mappedStatus === 'declined') {
-      const reason =
-        (verification?.reason && String(verification.reason).slice(0, 280)) ||
-        'Verification was not approved. You can try again.';
-      await deps.query(
-        `UPDATE users
-            SET is_verified = FALSE,
-                verification_status = 'rejected',
-                verification_provider = 'veriff',
-                verification_session_id = $2,
-                rejection_reason = $3,
-                updated_at = NOW()
-          WHERE id = $1`,
-        [userId, sessionId, reason],
-      );
-      return { handled: true, userId, decision: 'declined' };
-    }
-
-    if (mappedStatus === 'resubmission_requested') {
-      await deps.query(
-        `UPDATE users
-            SET is_verified = FALSE,
-                verification_status = 'pending',
-                verification_provider = 'veriff',
-                verification_session_id = $2,
-                rejection_reason = 'Resubmission requested — complete Veriff again.',
-                updated_at = NOW()
-          WHERE id = $1
-            AND COALESCE(is_verified, FALSE) = FALSE`,
-        [userId, sessionId],
-      );
-      return { handled: true, userId, decision: 'resubmission_requested' };
-    }
-
-    // expired / abandoned / review — keep pending, never grant badge
-    await deps.query(
-      `UPDATE users
-          SET verification_status = CASE
-                WHEN COALESCE(is_verified, FALSE) THEN verification_status
-                ELSE 'pending'
-              END,
-              verification_provider = 'veriff',
-              verification_session_id = $2,
-              updated_at = NOW()
-        WHERE id = $1`,
-      [userId, sessionId],
-    );
-
-    return { handled: true, userId, decision: mappedStatus };
+    return result.rows.length ? { handled: true, userId: row.user_id, decision } : { handled: false };
   },
 };

@@ -195,26 +195,29 @@ export function NearbyProfileGrid({
             className="group relative overflow-hidden rounded-xl border border-nn-border bg-nn-card text-left shadow-card transition-all hover:-translate-y-[3px] hover:border-[rgba(196,131,42,0.4)] md:rounded-2xl"
             data-testid="nearby-grid-card"
           >
-            {onSelect ? (
-              <button
-                type="button"
-                onClick={() => onSelect(user)}
-                className="block w-full text-left"
-                aria-label={`Open profile for ${user.name}`}
-                data-testid={`nearby-grid-photo-${user.id}`}
-              >
-                <GridCardFace user={user} meta={meta} />
-              </button>
-            ) : (
-              <ProfilePhotoLink
-                userId={user.id}
-                name={user.name}
-                className="block w-full text-left"
-                data-testid={`nearby-grid-photo-${user.id}`}
-              >
-                <GridCardFace user={user} meta={meta} />
-              </ProfilePhotoLink>
-            )}
+            <div className="relative">
+              {onSelect ? (
+                <button
+                  type="button"
+                  onClick={() => onSelect(user)}
+                  className="block w-full text-left"
+                  aria-label={`Open profile for ${user.name}`}
+                  data-testid={`nearby-grid-photo-${user.id}`}
+                >
+                  <GridCardFace user={user} meta={meta} />
+                </button>
+              ) : (
+                <ProfilePhotoLink
+                  userId={user.id}
+                  name={user.name}
+                  className="block w-full text-left"
+                  data-testid={`nearby-grid-photo-${user.id}`}
+                >
+                  <GridCardFace user={user} meta={meta} />
+                </ProfilePhotoLink>
+              )}
+              {user.is_verified ? <VerifiedBadge compact className="absolute bottom-1.5 right-1.5 z-10" /> : null}
+            </div>
             {onMatch ? (
               <div className="border-t border-[var(--border-default)] p-1 md:p-1.5">
                 <button
@@ -248,7 +251,7 @@ function GridCardFace({ user, meta }: { user: NearbyUser; meta: string }) {
   return (
     <div className="relative aspect-square w-full bg-[var(--bg-elevated)]">
       <GridPhoto name={user.name} photoUrl={user.photo_url} age={user.age} />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent px-1.5 pb-1.5 pt-8 md:px-2.5 md:pb-2 md:pt-10">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent pl-1.5 pr-9 pb-1.5 pt-8 md:pl-2.5 md:pr-10 md:pb-2 md:pt-10">
         <div className="flex items-center gap-0.5 md:gap-1">
           <span
             className={`h-1.5 w-1.5 shrink-0 rounded-full md:h-2 md:w-2 ${user.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
@@ -256,7 +259,7 @@ function GridCardFace({ user, meta }: { user: NearbyUser; meta: string }) {
           <span className="truncate text-[11px] font-bold leading-tight text-[#FFF6E6] md:text-[12px] lg:text-[13px]">
             {user.name} {user.age}
           </span>
-          {user.is_verified ? <VerifiedBadge size="sm" /> : null}
+
         </div>
         <p className="mt-0.5 truncate text-[9px] font-semibold text-[var(--cream)] md:text-[11px]">{meta}</p>
         {user.looking_for ? (

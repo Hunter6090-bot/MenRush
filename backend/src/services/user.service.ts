@@ -82,7 +82,7 @@ export const userService = {
         u.id, u.name, CASE WHEN COALESCE(u.show_age, TRUE) THEN u.age ELSE NULL END AS age,
         u.bio, u.headline, u.looking_for, u.photo_url, u.cover_url, u.interests,
         u.height_cm, u.weight_kg, u.relationship_status, u.hosting_status,
-        u.is_verified, u.authenticity_status,
+        COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified, u.authenticity_status,
         -- Presence must be fresh: stuck online=true from a crashed tab is not "Active now".
         (p.online = TRUE AND p.last_seen IS NOT NULL AND p.last_seen > NOW() - INTERVAL '20 minutes') AS online,
         p.last_seen, p.available_until,
@@ -308,7 +308,7 @@ export const userService = {
         u.secondary_photo_urls, u.interests, u.created_at,
         u.height_cm, u.weight_kg, u.relationship_status, u.hosting_status,
         u.sexual_health_status, u.on_prep, u.last_tested_at::text AS last_tested_at,
-        u.is_verified, u.verification_status, u.authenticity_status,
+        COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified, u.verification_status, u.authenticity_status,
         u.is_premium, u.premium_tier, u.premium_until,
         p.lat, p.lng, p.online, p.last_seen, p.is_visible, p.available_until,
         p.is_ghost,
@@ -356,7 +356,7 @@ export const userService = {
         u.cover_position_x, u.cover_position_y, u.cover_zoom, u.interests, u.created_at,
         u.height_cm, u.weight_kg, u.relationship_status, u.hosting_status,
         u.sexual_health_status, u.on_prep, u.last_tested_at::text AS last_tested_at,
-        u.is_verified, u.authenticity_status,
+        COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified, u.authenticity_status,
         p.online, p.last_seen, p.available_until,
         CASE
           WHEN p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' THEN p.mood
@@ -831,7 +831,7 @@ export const userService = {
   async getMatches(userId: string) {
     const result = await query(
       `SELECT
-        u.id, u.name, u.age, u.bio, u.photo_url, u.is_verified, u.authenticity_status,
+        u.id, u.name, u.age, u.bio, u.photo_url, COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified, u.authenticity_status,
         p.online, p.last_seen,
         msg.message as last_message,
         msg.created_at as last_message_at,
@@ -879,7 +879,7 @@ export const userService = {
   async getReceivedLikes(userId: string) {
     const result = await query(
       `SELECT
-         u.id, u.name, u.age, u.bio, u.photo_url, u.is_verified, u.authenticity_status,
+         u.id, u.name, u.age, u.bio, u.photo_url, COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified, u.authenticity_status,
          p.online, p.last_seen,
          l.created_at AS liked_at
        FROM likes l
