@@ -6,12 +6,9 @@
 // access. Trust Centre = one optional Veriff path + one badge. No Authentic-person
 // ladder; Adult 18+ stays on signup DOB. Parked #97 stays parked.
 //
-// Veriff (ID + selfie) is opt-in only. Product lock: do not turn on
-// requireIdVerification for open signup — self-attested 18+ DOB only.
-// Set VITE_FEATURE_VERIFF=true to enable the post-signup Veriff entry path.
+// Veriff is available from Profile and never gates signup or ordinary access.
 export const FEATURES = {
   videoCalls: import.meta.env.VITE_FEATURE_VIDEO !== 'false',
   chatRooms: import.meta.env.VITE_FEATURE_ROOMS === 'true',
   requireIdVerification: false,
-  veriffAfterSignup: import.meta.env.VITE_FEATURE_VERIFF === 'true',
 } as const;

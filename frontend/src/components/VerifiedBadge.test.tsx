@@ -1,23 +1,23 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { VerifiedBadge } from './VerifiedBadge';
-
 describe('VerifiedBadge', () => {
-  it('renders Brand word Verified as the only mark', () => {
-    const { container } = render(<VerifiedBadge />);
-    const badge = screen.getByTestId('verified-badge');
-    expect(badge).toHaveTextContent('Verified');
-    expect(badge).not.toHaveTextContent('Identity checked');
-    expect(badge.className).toMatch(/font-bold/);
-    expect(container.querySelector('svg')).toBeTruthy();
-    expect(screen.queryByTestId('identity-checked-badge')).toBeNull();
-    expect(screen.queryByTestId('authentic-person-badge')).toBeNull();
-  });
-
-  it('does not expose Authentic person or honor language', () => {
+  it('labels and explains the badge on tap', () => {
     render(<VerifiedBadge />);
-    expect(screen.queryByText('Authentic person')).toBeNull();
-    expect(screen.queryByText(/badge of honor/i)).toBeNull();
-    expect(screen.queryByText(/strongest trust/i)).toBeNull();
+    const button = screen.getByRole('button', { name: /Verified/ });
+    expect(button).toHaveTextContent('Verified');
+    fireEvent.click(button);
+    expect(screen.getByRole('status')).toHaveTextContent('ID and live selfie verified through Veriff.');
+    fireEvent.keyDown(button, { key: 'Escape' });
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+  it('keeps photo badges compact, accessible and separate from navigation', () => {
+    const openProfile = vi.fn();
+    render(<div onClick={openProfile}><VerifiedBadge compact /></div>);
+    const button = screen.getByRole('button', { name: /Verified/ });
+    expect(button.textContent).toBe('');
+    fireEvent.click(button);
+    expect(openProfile).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 });

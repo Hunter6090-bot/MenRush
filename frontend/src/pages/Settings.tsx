@@ -880,19 +880,6 @@ export const Settings = () => {
           <SectionLabel>More</SectionLabel>
 
           <Link
-            to="/verify"
-            className="flex items-center gap-3.5 rounded-[14px] border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.08)] p-4 transition-colors hover:bg-[rgba(196,131,42,0.15)]"
-          >
-            <div className="flex-1">
-              <p className="text-[15px] font-bold text-[var(--cream)]">Trust centre</p>
-              <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
-                Optional Veriff check for Verified. Not required to use the app.
-              </p>
-            </div>
-            <span className="text-[13px] font-extrabold tracking-wide text-[#E0A14A]">OPEN</span>
-          </Link>
-
-          <Link
             to="/premium"
             className="mr-card block p-4 transition-colors hover:border-[var(--copper)]/40"
           >

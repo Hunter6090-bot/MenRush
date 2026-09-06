@@ -461,7 +461,7 @@ export const roomService = {
               ${roomTempNameSql('$2')} AS name,
               ${roomTempPhotoSql('$2')} AS photo_url,
               rm.role,
-              u.is_verified,
+              COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified,
               u.authenticity_status,
               ${roomUsingTempIdentitySql('$2')} AS using_temp_identity
        FROM room_members rm
@@ -587,7 +587,7 @@ export const roomService = {
               ti.photo_url AS temp_photo,
               u.name AS profile_name,
               u.photo_url AS profile_photo,
-              u.is_verified,
+              COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified,
               u.authenticity_status,
               ${roomUsingTempIdentitySql('$3')} AS using_temp_identity
          FROM users u

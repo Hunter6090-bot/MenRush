@@ -12,6 +12,8 @@ import { ProfileViewersCard, ProfileViewer } from '../components/ProfileViewersC
 import { normalizeProfileImageFile } from '../lib/imageUpload';
 import { CoverBanner, DEFAULT_COVER_FRAME, normalizeCoverFrame, type CoverFrame } from '../components/CoverBanner';
 import { CoverPhotoEditor } from '../components/CoverPhotoEditor';
+import { useVerification } from '../hooks/useVerification';
+import { ProfileVerification } from '../components/ProfileVerification';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { QRCodeSVG } from 'qrcode.react';
 import { profileUrl as buildProfileUrl } from '../lib/profileLinks';
@@ -72,6 +74,7 @@ interface ProfileData {
 type Toast = { type: 'success' | 'error'; msg: string };
 
 export const Profile = () => {
+  const verification = useVerification();
   const { user, token, setAuth, patchUser, logout } = useAuthStore();
   const betaPremiumFree = isBetaPremiumFree();
   const authIsPremium = Boolean(
@@ -582,9 +585,7 @@ export const Profile = () => {
                 <div className="min-w-0 flex-1 pb-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-2xl font-extrabold text-[var(--cream)]">{displayName || profile.name}</h2>
-                    {(profile as ProfileData & { is_verified?: boolean }).is_verified ? (
-                      <VerifiedBadge />
-                    ) : null}
+                    {verification.status?.is_verified ? <VerifiedBadge /> : null}
                     <StatusBadge online={!!profile.online} lastSeen={profile.last_seen} />
                   </div>
                   <p className="mt-1 text-sm text-[var(--cream-muted)]">
@@ -608,6 +609,7 @@ export const Profile = () => {
                   </div>
                 </div>
               </div>
+              <ProfileVerification verification={verification} />
             </div>
           </div>
 
@@ -831,7 +833,7 @@ export const Profile = () => {
                 </Link>
               </div>
             </div>
-            <h2 className="text-xl font-bold text-[var(--cream)]">{displayName || profile.name}</h2>
+            <div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-bold text-[var(--cream)]">{displayName || profile.name}</h2>{verification.status?.is_verified ? <VerifiedBadge /> : null}</div>
             <p className="text-[var(--cream-muted)] text-sm mt-0.5">
               {showAge
                 ? `Age ${
@@ -841,6 +843,7 @@ export const Profile = () => {
                   }`
                 : 'Age hidden on your public profile'}
             </p>
+            <ProfileVerification verification={verification} />
             {isGenericAvatarUrl(photoUrl) ? (
               <div
                 className="mt-3 rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-3 py-3 lg:hidden"

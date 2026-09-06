@@ -238,7 +238,7 @@ export const authService = {
            id, email, password_hash, name, age, date_of_birth, photo_url,
            is_verified, verification_status, age_assurance_status, referral_code
          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'self_attested', $10)
-         RETURNING id, email, name, age, date_of_birth, photo_url, is_verified, verification_status,
+         RETURNING id, email, name, age, date_of_birth, photo_url, COALESCE(is_verified AND verification_provider = 'veriff', FALSE) AS is_verified, verification_status,
                    age_assurance_status, authenticity_status, referral_code`,
         [
           id,
@@ -287,7 +287,7 @@ export const authService = {
       // Refresh entitlements after Pride or waitlist gift.
       {
         const refreshed = await client.query(
-          `SELECT id, email, name, age, date_of_birth, photo_url, is_verified, verification_status,
+          `SELECT id, email, name, age, date_of_birth, photo_url, COALESCE(is_verified AND verification_provider = 'veriff', FALSE) AS is_verified, verification_status,
                   age_assurance_status, authenticity_status,
                   COALESCE(is_premium, FALSE) AS is_premium,
                   COALESCE(premium_tier, 'free') AS premium_tier,
@@ -327,7 +327,7 @@ export const authService = {
 
   async login(data: LoginInput) {
     const result = await query(
-      `SELECT id, email, password_hash, name, photo_url, is_verified, verification_status,
+      `SELECT id, email, password_hash, name, photo_url, COALESCE(is_verified AND verification_provider = 'veriff', FALSE) AS is_verified, verification_status,
               COALESCE(is_premium, FALSE) AS is_premium,
               COALESCE(premium_tier, 'free') AS premium_tier,
               COALESCE(totp_enabled, FALSE) AS totp_enabled
@@ -446,7 +446,7 @@ export const authService = {
     }
 
     const result = await query(
-      `SELECT id, email, name, photo_url, is_verified, verification_status,
+      `SELECT id, email, name, photo_url, COALESCE(is_verified AND verification_provider = 'veriff', FALSE) AS is_verified, verification_status,
               COALESCE(is_premium, FALSE) AS is_premium,
               COALESCE(premium_tier, 'free') AS premium_tier
          FROM users WHERE id = $1`,

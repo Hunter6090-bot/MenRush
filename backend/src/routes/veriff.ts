@@ -7,7 +7,6 @@ import {
   veriffService,
   verifyVeriffWebhookSignature,
 } from '../services/veriff.service';
-import { query } from '../db';
 
 const router = Router();
 
@@ -33,18 +32,16 @@ router.post(
         return res.status(503).json({ error: 'veriff_not_configured' });
       }
 
-      const nameRes = await query(`SELECT name FROM users WHERE id = $1`, [req.userId!]);
-      const firstName = (nameRes.rows[0]?.name as string | undefined)?.split(/\s+/)[0];
-
-      const session = await veriffService.createSession(req.userId!, {
-        firstName: firstName || undefined,
-      });
+      const session = await veriffService.createSession(req.userId!);
 
       res.status(201).json({
         sessionId: session.sessionId,
         sessionUrl: session.sessionUrl,
       });
     } catch (err: any) {
+      if (err?.message === 'already_verified' || err?.message === 'verification_pending') {
+        return res.status(409).json({ error: err.message });
+      }
       if (err instanceof VeriffConfigError || err?.code === 'veriff_not_configured') {
         return res.status(503).json({ error: 'veriff_not_configured' });
       }
@@ -111,6 +108,15 @@ export async function handleVeriffDecisionWebhook(req: Request, res: Response): 
  * Must receive the raw body for HMAC (mounted before express.json in server.ts).
  */
 router.post('/webhook', veriffWebhookRawParser, handleVeriffDecisionWebhook);
+
+router.post('/submitted', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    await veriffService.markSubmitted(req.userId!);
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'verification_status_failed' });
+  }
+});
 
 router.get('/configured', authMiddleware, (_req: AuthRequest, res: Response) => {
   res.json({ configured: veriffService.isConfigured() });

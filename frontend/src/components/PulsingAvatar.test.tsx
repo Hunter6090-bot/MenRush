@@ -3,13 +3,13 @@ import { render, screen } from '@testing-library/react';
 import { PulsingAvatar } from './PulsingAvatar';
 
 describe('PulsingAvatar identity badge', () => {
-  it('shows a larger Verified mark on map pins when verified', () => {
+  it('shows a copper Verified mark on map pins when verified', () => {
     render(
       <PulsingAvatar isPulsing={false} size={44} isVerified>
         <span>face</span>
       </PulsingAvatar>,
     );
-    const badge = screen.getByTestId('map-verified-badge');
+    const badge = screen.getByTestId('map-identity-checked-badge');
     expect(badge).toHaveAttribute('aria-label', 'Verified');
     // size 44 → max(16, round(44*0.38)) = 17
     expect(badge.style.width).toBe('17px');

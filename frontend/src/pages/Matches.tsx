@@ -116,7 +116,10 @@ function PersonGridCard({
               <span className="truncate text-[11px] font-bold leading-tight text-[#FFF6E6] md:text-[12px] lg:text-[13px]">
                 {person.name} {person.age}
               </span>
-              {person.is_verified ? <VerifiedBadge size="sm" /> : null}
+              {person.is_verified ? (
+                <VerifiedBadge size="sm" />
+
+              ) : null}
             </div>
             <p className="mt-0.5 truncate text-[9px] font-semibold text-[var(--cream)] md:text-xs">{subtitle}</p>
           </div>

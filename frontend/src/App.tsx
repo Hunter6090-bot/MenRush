@@ -59,15 +59,7 @@ const Help = lazyNamed(() => import('./pages/Help'), 'Help');
 const Pride = lazyNamed(() => import('./pages/Pride'), 'Pride');
 const MessagingRoute = lazyNamed(() => import('./components/MessagingRoute'), 'MessagingRoute');
 const RoomsRoute = lazyNamed(() => import('./components/RoomsRoute'), 'RoomsRoute');
-const Verify = lazyNamed(() => import('./pages/Verify'), 'Verify');
-const VerifyVeriff = lazyNamed(() => import('./pages/VerifyVeriff'), 'VerifyVeriff');
-const VerifyScan = lazyNamed(() => import('./pages/VerifyScan'), 'VerifyScan');
-const VerifyPending = lazyNamed(() => import('./pages/VerifyPending'), 'VerifyPending');
-const VerifyRejected = lazyNamed(() => import('./pages/VerifyRejected'), 'VerifyRejected');
-const VerificationCentre = lazyNamed(
-  () => import('./pages/VerificationCentre'),
-  'VerificationCentre',
-);
+
 const Premium = lazyNamed(() => import('./pages/Premium'), 'Premium');
 const Events = lazyNamed(() => import('./pages/Events'), 'Events');
 const HotSpots = lazyNamed(() => import('./pages/HotSpots'), 'HotSpots');
@@ -258,49 +250,7 @@ function AppShell() {
           <Route path="/safety" element={<Safety />} />
           <Route path="/guidelines" element={<CommunityGuidelines />} />
           <Route path="/help" element={<Help />} />
-          <Route
-            path="/verify"
-            element={
-              <ProtectedRoute>
-                <VerificationCentre />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/verify/id"
-            element={
-              <ProtectedRoute>
-                {FEATURES.veriffAfterSignup ? <VerifyVeriff /> : <Verify />}
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/verify/id/manual"
-            element={
-              <ProtectedRoute>
-                <Verify />
-              </ProtectedRoute>
-            }
-          />
-          {/* Authentic-person live challenge removed — Veriff covers ID + liveness. */}
-          <Route path="/verify/authentic" element={<Navigate to="/verify" replace />} />
-          <Route path="/verify/scan/:sessionId" element={<VerifyScan />} />
-          <Route
-            path="/verify/pending"
-            element={
-              <ProtectedRoute>
-                <VerifyPending />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/verify/rejected"
-            element={
-              <ProtectedRoute>
-                <VerifyRejected />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/verify/*" element={<ProtectedRoute><Navigate to="/profile" replace /></ProtectedRoute>} />
           <Route
             path="/premium"
             element={

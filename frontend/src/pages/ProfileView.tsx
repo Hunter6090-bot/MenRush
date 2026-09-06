@@ -5,12 +5,14 @@ import { useAuthStore } from '../hooks/store';
 import { Layout } from '../components/Layout';
 import { UserAvatar } from '../components/UserAvatar';
 import { CoverBanner, normalizeCoverFrame } from '../components/CoverBanner';
+import { VerifiedBadge } from '../components/VerifiedBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { ProfileAlbumsSection } from '../components/ProfileAlbumsSection';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 import { formatHeight, formatWeight } from '../lib/age';
 
 interface ViewableUser {
+  is_verified?: boolean;
   id: string;
   name: string;
   age?: number;
@@ -285,7 +287,7 @@ export const ProfileView = () => {
                 </div>
               </div>
             </div>
-            <h2 className="text-xl font-bold text-[var(--cream)]">{user.name}</h2>
+            <div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-bold text-[var(--cream)]">{user.name}</h2>{user.is_verified ? <VerifiedBadge /> : null}</div>
             {typeof user.age === 'number' && (
               <p className="text-[var(--cream-muted)] text-sm mt-0.5">Age {user.age}</p>
             )}
