@@ -176,4 +176,16 @@ describe('GetTheApp walkthrough', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Install MenRush' })).toBeTruthy());
   });
+
+  it('footer links Sign up free to /register, not Waitlist to /', () => {
+    render(
+      <MemoryRouter>
+        <GetTheApp />
+      </MemoryRouter>,
+    );
+
+    const signup = screen.getByRole('link', { name: 'Sign up free' });
+    expect(signup.getAttribute('href')).toBe('/register');
+    expect(screen.queryByRole('link', { name: 'Waitlist' })).toBeNull();
+  });
 });
