@@ -202,7 +202,6 @@ export const usersAPI = {
     show_height?: boolean;
     show_weight?: boolean;
     show_relationship?: boolean;
-    show_hosting?: boolean;
   }) =>
     apiClient.post('/users/profile', data),
   uploadPhoto: (file: File) => {

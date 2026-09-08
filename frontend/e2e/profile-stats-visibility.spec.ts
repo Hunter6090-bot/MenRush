@@ -28,7 +28,6 @@ const COMPLETE_ME = {
   show_height: true,
   show_weight: true,
   show_relationship: true,
-  show_hosting: true,
   bio: 'Owner account nearby for real meetups tonight.',
   headline: 'Hosting in town',
   looking_for: 'Chat',
@@ -132,7 +131,7 @@ async function mockApis(page: Page) {
         height_cm: meState.show_height ? meState.height_cm : null,
         weight_kg: meState.show_weight ? meState.weight_kg : null,
         relationship_status: meState.show_relationship ? meState.relationship_status : null,
-        hosting_status: meState.show_hosting ? meState.hosting_status : null,
+        hosting_status: meState.hosting_status,
         is_verified: false,
         online: true,
       };

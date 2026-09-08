@@ -117,7 +117,6 @@ interface ProfileData {
   show_height?: boolean;
   show_weight?: boolean;
   show_relationship?: boolean;
-  show_hosting?: boolean;
   bio?: string;
   headline?: string;
   looking_for?: string;
@@ -164,7 +163,6 @@ export const Profile = () => {
   const [showHeight, setShowHeight] = useState(true);
   const [showWeight, setShowWeight] = useState(true);
   const [showRelationship, setShowRelationship] = useState(true);
-  const [showHosting, setShowHosting] = useState(true);
   const [bio, setBio] = useState('');
   const [headline, setHeadline] = useState('');
   const [lookingFor, setLookingFor] = useState('');
@@ -214,7 +212,6 @@ export const Profile = () => {
         setShowHeight(d.show_height !== false);
         setShowWeight(d.show_weight !== false);
         setShowRelationship(d.show_relationship !== false);
-        setShowHosting(d.show_hosting !== false);
         setBio(d.bio ?? '');
         setHeadline(d.headline ?? '');
         setLookingFor(d.looking_for ?? '');
@@ -488,7 +485,6 @@ export const Profile = () => {
         show_height: showHeight,
         show_weight: showWeight,
         show_relationship: showRelationship,
-        show_hosting: showHosting,
       });
       setProfile((p) => (p ? { ...p, ...res.data } : p));
       if (user && token) {
@@ -1326,49 +1322,36 @@ export const Profile = () => {
                   </div>
                 </div>
               </div>
+            </div>
 
-              <div
-                id={PROFILE_ESSENTIAL_SECTION_IDS.hosting}
-                className={`border-t border-[var(--border-default)]/70 py-3 ${
-                  isEssentialMissing('hosting') ? 'rounded-lg px-2 ring-2 ring-[#C4832A]/35' : ''
-                }`}
-                data-essential-missing={isEssentialMissing('hosting') ? 'true' : 'false'}
-                data-testid="profile-field-hosting"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    <EssentialFieldLabel incomplete={isEssentialMissing('hosting')}>
-                      Hosting
-                    </EssentialFieldLabel>
-                    <div className="flex flex-wrap gap-2">
-                      {HOSTING_STATUS_OPTIONS.map((opt) => {
-                        const active = hostingStatus === opt;
-                        return (
-                          <button
-                            key={opt}
-                            type="button"
-                            onClick={() => setHostingStatus(active ? '' : opt)}
-                            className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
-                              active
-                                ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
-                                : 'bg-[var(--bg-card)]/40 text-[var(--cream-muted)] border-[var(--border-default)]'
-                            }`}
-                          >
-                            {opt}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div className="pt-6">
-                    <StatsShowToggle
-                      checked={showHosting}
-                      onChange={setShowHosting}
-                      aria-label="Show hosting"
-                      testId="profile-show-hosting"
-                    />
-                  </div>
-                </div>
+            {/* Hosting labels/visibility ship in a separate Brand-signed PR — edit only here. */}
+            <div
+              id={PROFILE_ESSENTIAL_SECTION_IDS.hosting}
+              className={isEssentialMissing('hosting') ? ESSENTIAL_GROUP_HIGHLIGHT : undefined}
+              data-essential-missing={isEssentialMissing('hosting') ? 'true' : 'false'}
+              data-testid="profile-field-hosting"
+            >
+              <EssentialFieldLabel incomplete={isEssentialMissing('hosting')}>
+                Hosting
+              </EssentialFieldLabel>
+              <div className="flex flex-wrap gap-2">
+                {HOSTING_STATUS_OPTIONS.map((opt) => {
+                  const active = hostingStatus === opt;
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setHostingStatus(active ? '' : opt)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                        active
+                          ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
+                          : 'bg-[var(--bg-card)]/40 text-[var(--cream-muted)] border-[var(--border-default)]'
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

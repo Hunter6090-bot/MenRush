@@ -29,7 +29,6 @@ CREATE TABLE users (
   show_height BOOLEAN NOT NULL DEFAULT TRUE,
   show_weight BOOLEAN NOT NULL DEFAULT TRUE,
   show_relationship BOOLEAN NOT NULL DEFAULT TRUE,
-  show_hosting BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
