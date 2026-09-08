@@ -32,7 +32,7 @@ const COMPLETE_ME = {
   bio: 'Owner account nearby for real meetups tonight.',
   headline: 'Hosting in town',
   looking_for: 'Chat',
-  photo_url: '/uploads/profiles/statsvis.jpg',
+  photo_url: '/avatars/generic/02.svg',
   interests: ['Otter', 'Chat', 'Fitness', 'Nightlife', 'Casual'],
   height_cm: 180,
   weight_kg: 82,
@@ -73,6 +73,24 @@ async function mockApis(page: Page) {
     const url = new URL(req.url());
     const method = req.method();
     const p = url.pathname;
+
+    if (method === 'GET' && p.includes('/users/me/referrals')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          referral_code: 'STATSVIS',
+          verified_count: 0,
+          pending_count: 0,
+          credited_count: 0,
+          unlock_every: 3,
+          progress_to_unlock: 0,
+          unlocks_earned: 0,
+          pending_payout_total: 0,
+          referrals: [],
+        }),
+      });
+    }
 
     if (method === 'GET' && (p.endsWith('/users/me') || p.includes('/users/me?'))) {
       return route.fulfill({
@@ -265,8 +283,8 @@ test.describe('profile stats field visibility', () => {
     await expect(viewPage.getByText('StatsVis')).toBeVisible({ timeout: 15000 });
     await expect(viewPage.getByText('Age 35')).toHaveCount(0);
     await expect(viewPage.getByText(/5\s*['′]/)).toHaveCount(0);
-    await expect(viewPage.getByText('Single')).toBeVisible();
-    await expect(viewPage.getByText('Hosting')).toBeVisible();
+    await expect(viewPage.getByText('Single', { exact: true })).toBeVisible();
+    await expect(viewPage.getByText('Hosting', { exact: true })).toBeVisible();
     await viewPage.screenshot({
       path: path.join(ARTIFACTS, 'public_profile_hidden_stats_omitted.png'),
       fullPage: false,

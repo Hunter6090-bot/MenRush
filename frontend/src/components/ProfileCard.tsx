@@ -13,7 +13,7 @@ import { getDistanceLabel, isUserPulsing } from '../lib/discovery';
 export interface NearbyUser {
   id: string;
   name: string;
-  age?: number | null;
+  age?: number;
   bio?: string;
   headline?: string;
   looking_for?: string;

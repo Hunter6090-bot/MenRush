@@ -801,7 +801,7 @@ export const Profile = () => {
                 >
                   <p className="text-[12px] font-extrabold text-[var(--cream)]">Upgrade from a shared avatar</p>
                   <p className="mt-1 text-[11px] leading-relaxed text-[var(--cream-muted)]">
-                    Real photos get more matches. Upload a clear face or upper-body shot —
+                    Real photos get more matches. Upload a clear face or upper-body shot.
                   </p>
                   <button
                     type="button"
