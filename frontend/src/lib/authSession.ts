@@ -20,6 +20,7 @@ export type StoredAuthUser = {
   age?: number;
   bio?: string;
   photo_url?: string;
+  map_photo_url?: string | null;
   is_verified?: boolean;
   verification_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
   is_premium?: boolean;

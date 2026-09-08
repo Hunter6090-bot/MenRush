@@ -29,7 +29,7 @@ const complete = {
   interests: ['Otter', 'Chat', 'Fitness', 'Nightlife', 'Casual'],
   height_cm: 180,
   relationship_status: 'Single',
-  hosting_status: 'Hosting',
+  hosting_status: 'Hosting now',
 };
 
 describe('profileCompletionScore essentials checklist', () => {

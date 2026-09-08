@@ -28,6 +28,7 @@ import { NearbyProfileGrid } from '../components/NearbyProfileGrid';
 import { NearbyMapGridToggle, readNearbyView, writeNearbyView, type NearbyView } from '../components/NearbyMapGridToggle';
 import { DiscoveryShellPublisher } from '../context/DiscoveryShellContext';
 import type { ProfileSetupSnapshot } from '../lib/profileSetup';
+import { discoveryPhotoUrl } from '../lib/discoveryPhoto';
 import { profileFieldBlockers } from '../lib/profileSetup';
 import {
   LOCATION_DENIED_NOT_INCOMPLETE,
@@ -456,10 +457,16 @@ export const Discover = () => {
       .then((res) => {
         setActivationProfile(res.data as ProfileSetupSnapshot);
         if (res.data?.mood) setMood(res.data.mood as Mood);
-        const d = res.data as { name?: string; photo_url?: string | null; age?: number };
+        const d = res.data as {
+          name?: string;
+          photo_url?: string | null;
+          map_photo_url?: string | null;
+          age?: number;
+        };
         useAuthStore.getState().patchUser({
           name: d.name,
           photo_url: d.photo_url ?? undefined,
+          map_photo_url: d.map_photo_url ?? null,
           age: d.age,
         });
       })
@@ -1194,7 +1201,8 @@ export const Discover = () => {
           user={{
             id: selfUser?.id ?? 'self',
             name: selfUser?.name ?? 'You',
-            photo_url: selfUser?.photo_url,
+            photo_url:
+              discoveryPhotoUrl(selfUser?.map_photo_url, selfUser?.photo_url) ?? undefined,
             age: selfUser?.age,
             isPulsing: false,
           }}
@@ -1450,14 +1458,23 @@ export const Discover = () => {
         user={{
           id: authUser?.id ?? 'self',
           name: authUser?.name ?? 'You',
-          photo_url: authUser?.photo_url,
+          photo_url:
+            discoveryPhotoUrl(authUser?.map_photo_url, authUser?.photo_url) ?? undefined,
           age: authUser?.age,
           isPulsing: !!pulseUntil,
         }}
         size={size}
       />,
     );
-  }, [mapLoaded, pulseUntil, authUser?.id, authUser?.name, authUser?.photo_url, authUser?.age]);
+  }, [
+    mapLoaded,
+    pulseUntil,
+    authUser?.id,
+    authUser?.name,
+    authUser?.photo_url,
+    authUser?.map_photo_url,
+    authUser?.age,
+  ]);
 
   useEffect(() => {
     const map = mapRef.current;
