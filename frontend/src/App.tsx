@@ -39,6 +39,8 @@ const Login = lazyNamed(() => import('./pages/Login'), 'Login');
 const Register = lazyNamed(() => import('./pages/Register'), 'Register');
 const ForgotPassword = lazyNamed(() => import('./pages/ForgotPassword'), 'ForgotPassword');
 const ResetPassword = lazyNamed(() => import('./pages/ResetPassword'), 'ResetPassword');
+const CheckEmail = lazyNamed(() => import('./pages/CheckEmail'), 'CheckEmail');
+const ConfirmEmail = lazyNamed(() => import('./pages/ConfirmEmail'), 'ConfirmEmail');
 const Discover = lazyNamed(() => import('./pages/Discover'), 'Discover');
 const Stream = lazyNamed(() => import('./pages/Stream'), 'Stream');
 const Profile = lazyNamed(() => import('./pages/Profile'), 'Profile');
@@ -247,6 +249,8 @@ function AppShell() {
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/check-email" element={<CheckEmail />} />
+          <Route path="/confirm-email" element={<ConfirmEmail />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/cookies" element={<Cookies />} />

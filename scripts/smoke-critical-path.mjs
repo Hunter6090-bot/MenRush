@@ -55,6 +55,14 @@ async function main() {
   });
 
   let token = reg.body?.token;
+  if (!token && reg.body?.devConfirmToken) {
+    const confirm = await req('/api/auth/confirm-email', {
+      method: 'POST',
+      body: JSON.stringify({ token: reg.body.devConfirmToken }),
+    });
+    token = confirm.body?.token;
+    if (token) console.log('[smoke] register + confirm ok');
+  }
   if (!token) {
     console.log('[smoke] register skipped/failed:', reg.body?.error || reg.status);
     if (process.env.SMOKE_EMAIL && process.env.SMOKE_PASSWORD) {
@@ -73,7 +81,7 @@ async function main() {
       console.log('[smoke] PASS (partial)');
       return;
     }
-  } else {
+  } else if (!reg.body?.devConfirmToken) {
     console.log('[smoke] register ok');
   }
 

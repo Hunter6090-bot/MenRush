@@ -49,6 +49,8 @@ const AUTH_CHALLENGE_PATHS = [
   '/auth/2fa/verify',
   '/auth/forgot-password',
   '/auth/reset-password',
+  '/auth/confirm-email',
+  '/auth/resend-confirm',
   '/beta/validate-invite',
 ];
 
@@ -80,9 +82,33 @@ apiClient.interceptors.response.use(
 );
 
 export const authAPI = {
-  register: (data: unknown) => apiClient.post('/auth/register', data),
+  register: (data: unknown) =>
+    apiClient.post<{
+      ok: boolean;
+      requiresEmailConfirm: boolean;
+      email: string;
+      message?: string;
+      // Present only in non-production / EMAIL_CONFIRM_EXPOSE_TOKEN — never a session JWT.
+      devConfirmToken?: string;
+      user?: never;
+      token?: never;
+    }>('/auth/register', data),
   login: (data: { email: string; password: string; deviceTrustToken?: string }) =>
     apiClient.post('/auth/login', data),
+  confirmEmail: (data: { token: string }) =>
+    apiClient.post<{
+      ok: boolean;
+      alreadyConfirmed?: boolean;
+      email?: string;
+      message?: string;
+      user?: import('../lib/authSession').StoredAuthUser;
+      token?: string;
+    }>('/auth/confirm-email', data),
+  resendConfirm: (data: { email: string }) =>
+    apiClient.post<{ ok: boolean; sent: boolean; message?: string; devConfirmToken?: string }>(
+      '/auth/resend-confirm',
+      data,
+    ),
   verifyTwoFactorLogin: (data: {
     pendingToken: string;
     code: string;

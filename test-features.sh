@@ -70,20 +70,30 @@ SUFFIX=$(date +%s)
 RES1=$(curl -s -X POST "$API_URL/auth/register" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"alice+$SUFFIX@test.com\",\"password\":\"password123\",\"name\":\"Alice\",\"age\":25,\"invite_code\":\"$BETA_CODE\"}")
-TOKEN1=$(json_field "$RES1" "token")
-USER1_ID=$(json_field "$RES1" "user.id")
-[ -n "$TOKEN1" ] || die "Alice registration failed: $RES1"
-ok "Alice registered ($USER1_ID)"
+CONFIRM1=$(json_field "$RES1" "devConfirmToken")
+[ -n "$CONFIRM1" ] || die "Alice registration failed (no confirm token): $RES1"
+CONF1=$(curl -s -X POST "$API_URL/auth/confirm-email" \
+  -H "Content-Type: application/json" \
+  -d "{\"token\":\"$CONFIRM1\"}")
+TOKEN1=$(json_field "$CONF1" "token")
+USER1_ID=$(json_field "$CONF1" "user.id")
+[ -n "$TOKEN1" ] || die "Alice confirm failed: $CONF1"
+ok "Alice registered + confirmed ($USER1_ID)"
 
 # 3. Register User 2 (Bob)
 echo "👤 Registering Bob..."
 RES2=$(curl -s -X POST "$API_URL/auth/register" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"bob+$SUFFIX@test.com\",\"password\":\"password123\",\"name\":\"Bob\",\"age\":28,\"invite_code\":\"$BETA_CODE\"}")
-TOKEN2=$(json_field "$RES2" "token")
-USER2_ID=$(json_field "$RES2" "user.id")
-[ -n "$TOKEN2" ] || die "Bob registration failed: $RES2"
-ok "Bob registered ($USER2_ID)"
+CONFIRM2=$(json_field "$RES2" "devConfirmToken")
+[ -n "$CONFIRM2" ] || die "Bob registration failed (no confirm token): $RES2"
+CONF2=$(curl -s -X POST "$API_URL/auth/confirm-email" \
+  -H "Content-Type: application/json" \
+  -d "{\"token\":\"$CONFIRM2\"}")
+TOKEN2=$(json_field "$CONF2" "token")
+USER2_ID=$(json_field "$CONF2" "user.id")
+[ -n "$TOKEN2" ] || die "Bob confirm failed: $CONF2"
+ok "Bob registered + confirmed ($USER2_ID)"
 
 # 4. Login
 echo "🔐 Testing login..."

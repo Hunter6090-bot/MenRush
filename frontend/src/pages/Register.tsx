@@ -88,7 +88,6 @@ export const Register = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const setAuth = useAuthStore((s) => s.setAuth);
   const token = useAuthStore((s) => s.token);
 
   useEffect(() => {
@@ -184,8 +183,10 @@ export const Register = () => {
         ...(trimmedPromo ? { promo_code: trimmedPromo } : {}),
         ...(trimmedReferral ? { referral_code: trimmedReferral } : {}),
       });
-      setAuth(res.data.user, res.data.token);
-      navigate('/profile/setup');
+      // No session until email confirm — never setAuth from register.
+      const confirmEmail =
+        typeof res.data?.email === 'string' ? res.data.email : form.email.trim().toLowerCase();
+      navigate(`/check-email?email=${encodeURIComponent(confirmEmail)}`, { replace: true });
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed. Please try again.');
     } finally {

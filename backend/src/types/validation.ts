@@ -60,6 +60,14 @@ export const ResetPasswordSchema = z.object({
   password: z.string().min(8),
 });
 
+export const ConfirmEmailSchema = z.object({
+  token: z.string().min(1),
+});
+
+export const ResendConfirmEmailSchema = z.object({
+  email: normalizedEmail,
+});
+
 export const ChangePasswordSchema = z
   .object({
     current_password: z.string().min(1, 'Current password is required'),
@@ -288,6 +296,8 @@ export type RegisterInput = z.infer<typeof RegisterSchema>;
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type ForgotPasswordInput = z.infer<typeof ForgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
+export type ConfirmEmailInput = z.infer<typeof ConfirmEmailSchema>;
+export type ResendConfirmEmailInput = z.infer<typeof ResendConfirmEmailSchema>;
 export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
 export type ChangeEmailInput = z.infer<typeof ChangeEmailSchema>;
 export type ProfileInput = z.infer<typeof ProfileSchema>;

@@ -10,6 +10,9 @@ export function loginErrorMessage(err: unknown): string {
   if (apiError === 'Invalid credentials') {
     return 'Email or password is incorrect. Check both, or use Forgot password.';
   }
+  if (apiError && /confirm your email/i.test(apiError)) {
+    return apiError;
+  }
   if (apiError === 'Too many attempts, please try again in 15 minutes') {
     return apiError;
   }

@@ -61,9 +61,19 @@ test.beforeAll(async () => {
     });
     expect(reg.ok()).toBeTruthy();
     const regBody = await reg.json();
+    expect(regBody.requiresEmailConfirm).toBeTruthy();
+    expect(regBody.token).toBeFalsy();
+    expect(regBody.devConfirmToken).toBeTruthy();
+
+    const confirm = await api.post('/api/auth/confirm-email', {
+      data: { token: regBody.devConfirmToken },
+    });
+    expect(confirm.ok()).toBeTruthy();
+    const confirmBody = await confirm.json();
+    expect(confirmBody.token).toBeTruthy();
     liker = {
-      token: regBody.token,
-      user: regBody.user,
+      token: confirmBody.token,
+      user: confirmBody.user,
     };
 
     // Profiles are created lazily on location — received-likes JOIN requires a profile row.
