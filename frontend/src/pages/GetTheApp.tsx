@@ -170,7 +170,7 @@ export function GetTheApp() {
           </>
         )}
 
-        <p className="mt-8 text-center text-[13px] leading-[1.5] text-[#6B5840]">No App Store. No Play Store.<br />18+ only. <Link to="/" className="font-bold text-[#C4832A]">Waitlist</Link></p>
+        <p className="mt-8 text-center text-[13px] leading-[1.5] text-[#6B5840]">No App Store. No Play Store.<br />18+ only. <Link to="/register" className="font-bold text-[#C4832A]">Sign up free</Link></p>
       </main>
       <SiteFooter />
     </div>
