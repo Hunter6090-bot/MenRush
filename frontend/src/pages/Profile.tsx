@@ -37,6 +37,7 @@ import {
   PROFILE_INTERESTS_MAX,
   RELATIONSHIP_STATUS_OPTIONS,
   SEXUAL_HEALTH_STATUS_OPTIONS,
+  jumpToProfileEssential,
   profileCompletionScore,
   type ProfileEssentialId,
 } from '../lib/profileDetails';
@@ -74,12 +75,48 @@ function EssentialFieldLabel({
     </label>
   );
 }
+
+/** Compact Show/Hide switch for live Stats rows. Value stays stored when off. */
+function StatsShowToggle({
+  checked,
+  onChange,
+  'aria-label': ariaLabel,
+  testId,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  'aria-label': string;
+  testId: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      data-testid={testId}
+      onClick={() => onChange(!checked)}
+      className={`relative h-6 w-10 shrink-0 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C4832A]/60 ${
+        checked ? 'bg-[#C4832A]' : 'bg-[var(--border-strong)]'
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 h-5 w-5 rounded-full bg-[#F0E0C0] shadow transition-transform ${
+          checked ? 'left-4' : 'left-0.5'
+        }`}
+      />
+    </button>
+  );
+}
 interface ProfileData {
   id: string;
   name: string;
   age: number;
   date_of_birth?: string | null;
   show_age?: boolean;
+  show_height?: boolean;
+  show_weight?: boolean;
+  show_relationship?: boolean;
   bio?: string;
   headline?: string;
   looking_for?: string;
@@ -124,6 +161,9 @@ export const Profile = () => {
   const [displayName, setDisplayName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [showAge, setShowAge] = useState(true);
+  const [showHeight, setShowHeight] = useState(true);
+  const [showWeight, setShowWeight] = useState(true);
+  const [showRelationship, setShowRelationship] = useState(true);
   const [bio, setBio] = useState('');
   const [headline, setHeadline] = useState('');
   const [lookingFor, setLookingFor] = useState('');
@@ -173,6 +213,9 @@ export const Profile = () => {
             : '',
         );
         setShowAge(d.show_age !== false);
+        setShowHeight(d.show_height !== false);
+        setShowWeight(d.show_weight !== false);
+        setShowRelationship(d.show_relationship !== false);
         setBio(d.bio ?? '');
         setHeadline(d.headline ?? '');
         setLookingFor(d.looking_for ?? '');
@@ -267,10 +310,8 @@ export const Profile = () => {
     if (!profile) return;
     const hash = location.hash.replace(/^#/, '');
     if (!hash) return;
-    const el = document.getElementById(hash);
-    if (!el) return;
     const id = window.setTimeout(() => {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      jumpToProfileEssential(hash);
     }, 80);
     return () => window.clearTimeout(id);
   }, [location.hash, profile, essentials.missing.length]);
@@ -302,7 +343,7 @@ export const Profile = () => {
     setIsGhost(next);
     try {
       await profileMetaAPI.setGhost(next);
-      showToast('success', next ? 'Ghost mode on — you are invisible to others.' : 'Ghost mode off.');
+      showToast('success', next ? 'Ghost mode on. You are invisible to others.' : 'Ghost mode off.');
     } catch (err: unknown) {
       setIsGhost(previous);
       const code = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -378,7 +419,7 @@ export const Profile = () => {
           : p,
       );
       setCoverEditorOpen(true);
-      showToast('success', 'Cover uploaded — adjust framing');
+      showToast('success', 'Cover uploaded. Adjust framing');
     } catch (err: any) {
       showToast('error', err.response?.data?.error || 'Cover upload failed');
     } finally {
@@ -492,6 +533,9 @@ export const Profile = () => {
         on_prep: onPrep,
         last_tested_at: lastTestedAt || null,
         show_age: showAge,
+        show_height: showHeight,
+        show_weight: showWeight,
+        show_relationship: showRelationship,
       });
       setProfile((p) => (p ? { ...p, ...res.data } : p));
       if (user && token) {
@@ -817,7 +861,7 @@ export const Profile = () => {
                 >
                   <p className="text-[12px] font-extrabold text-[var(--cream)]">Upgrade from a shared avatar</p>
                   <p className="mt-1 text-[11px] leading-relaxed text-[var(--cream-muted)]">
-                    Real photos get more matches. Upload a clear face or upper-body shot —
+                    Real photos get more matches. Upload a clear face or upper-body shot.
                   </p>
                   <button
                     type="button"
@@ -1025,12 +1069,24 @@ export const Profile = () => {
           <form onSubmit={handleSave} className="space-y-4" data-testid="profile-edit-form">
             {essentials.missingItems.length > 0 ? (
               <div
-                className="rounded-xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.08)] px-3.5 py-3"
+                className="sticky top-0 z-20 -mx-1 mb-1 rounded-xl border border-[rgba(196,131,42,0.45)] bg-[rgba(26,14,3,0.94)] px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm"
                 data-testid="profile-missing-essentials-banner"
               >
                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--cream-muted)]">
                   Still missing
                 </p>
+                <button
+                  type="button"
+                  data-testid="profile-missing-named-jump"
+                  className="mt-1 text-left text-[14px] font-bold text-[#E0A14A] underline decoration-[#E0A14A]/50 underline-offset-2"
+                  onClick={() => {
+                    const first = essentials.missingItems[0];
+                    if (!first) return;
+                    jumpToProfileEssential(first.sectionId);
+                  }}
+                >
+                  Missing · {essentials.missingItems[0].label}
+                </button>
                 <p
                   className="mt-1 text-[12px] font-semibold text-[var(--cream-soft)]"
                   data-testid="profile-missing-essentials-score"
@@ -1046,9 +1102,7 @@ export const Profile = () => {
                         data-testid={`profile-missing-${item.id}`}
                         onClick={(e) => {
                           e.preventDefault();
-                          document
-                            .getElementById(item.sectionId)
-                            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          jumpToProfileEssential(item.sectionId);
                         }}
                       >
                         {item.label}
@@ -1138,44 +1192,29 @@ export const Profile = () => {
               <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1">2–24 letters, numbers, _ or -</p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div
-                id={PROFILE_ESSENTIAL_SECTION_IDS.date_of_birth}
-                data-essential-missing={isEssentialMissing('date_of_birth') ? 'true' : 'false'}
-              >
-                <EssentialFieldLabel incomplete={isEssentialMissing('date_of_birth')}>
-                  Date of birth
-                </EssentialFieldLabel>
-                <input
-                  type="date"
-                  value={dateOfBirth}
-                  onChange={(e) => setDateOfBirth(e.target.value)}
-                  max={new Date(new Date().setFullYear(new Date().getFullYear() - 18))
-                    .toISOString()
-                    .slice(0, 10)}
-                  className={`${inputClass} ${
-                    isEssentialMissing('date_of_birth') ? ESSENTIAL_INPUT_HIGHLIGHT : ''
-                  }`}
-                  aria-label="Date of birth"
-                  data-testid="profile-field-dob"
-                />
-                <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1">
-                  Age updates automatically. Never shown as a full date.
-                </p>
-              </div>
-              <div className="flex flex-col justify-end">
-                <label className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]/40 px-4 py-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={showAge}
-                    onChange={(e) => setShowAge(e.target.checked)}
-                    className="h-4 w-4 accent-[#C4832A]"
-                  />
-                  <span className="text-sm text-[var(--cream)]">
-                    Show age on my profile
-                  </span>
-                </label>
-              </div>
+            <div
+              id={PROFILE_ESSENTIAL_SECTION_IDS.date_of_birth}
+              data-essential-missing={isEssentialMissing('date_of_birth') ? 'true' : 'false'}
+            >
+              <EssentialFieldLabel incomplete={isEssentialMissing('date_of_birth')}>
+                Date of birth
+              </EssentialFieldLabel>
+              <input
+                type="date"
+                value={dateOfBirth}
+                onChange={(e) => setDateOfBirth(e.target.value)}
+                max={new Date(new Date().setFullYear(new Date().getFullYear() - 18))
+                  .toISOString()
+                  .slice(0, 10)}
+                className={`${inputClass} ${
+                  isEssentialMissing('date_of_birth') ? ESSENTIAL_INPUT_HIGHLIGHT : ''
+                }`}
+                aria-label="Date of birth"
+                data-testid="profile-field-dob"
+              />
+              <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1">
+                Age updates automatically. Never shown as a full date.
+              </p>
             </div>
 
             <div
@@ -1247,87 +1286,166 @@ export const Profile = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div
+              className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]/30 p-3 space-y-0"
+              data-testid="profile-stats-section"
+            >
+              <div className="mb-1 flex items-center justify-between px-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--cream-muted)]">
+                  Stats
+                </p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--cream-muted)]">
+                  Show
+                </p>
+              </div>
+
+              <div
+                className="flex items-center gap-3 border-t border-[var(--border-default)]/70 py-3"
+                data-testid="profile-stats-age"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium uppercase tracking-wide text-[var(--cream-muted)]">
+                    Age
+                  </p>
+                  <p className="mt-0.5 text-sm text-[var(--cream)]">
+                    {dateOfBirth
+                      ? ageFromDateOfBirth(dateOfBirth) ?? profile?.age ?? ''
+                      : profile?.age ?? 'From date of birth'}
+                  </p>
+                </div>
+                <StatsShowToggle
+                  checked={showAge}
+                  onChange={setShowAge}
+                  aria-label="Show age"
+                  testId="profile-show-age"
+                />
+              </div>
+
               <div
                 id={PROFILE_ESSENTIAL_SECTION_IDS.height}
+                className={`border-t border-[var(--border-default)]/70 py-3 ${
+                  isEssentialMissing('height') ? 'rounded-lg px-2 ring-2 ring-[#C4832A]/35' : ''
+                }`}
                 data-essential-missing={isEssentialMissing('height') ? 'true' : 'false'}
               >
-                <EssentialFieldLabel incomplete={isEssentialMissing('height')}>
-                  Height (cm)
-                </EssentialFieldLabel>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={120}
-                  max={250}
-                  value={heightCm}
-                  onChange={(e) => setHeightCm(e.target.value)}
-                  placeholder="178"
-                  className={`${inputClass} ${
-                    isEssentialMissing('height') ? ESSENTIAL_INPUT_HIGHLIGHT : ''
-                  }`}
-                  data-testid="profile-field-height"
-                />
-                {heightCm ? (
-                  <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1">
-                    {formatHeight(Number(heightCm))}
-                  </p>
-                ) : null}
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">
-                  Weight (kg)
-                </label>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={35}
-                  max={300}
-                  value={weightKg}
-                  onChange={(e) => setWeightKg(e.target.value)}
-                  placeholder="75"
-                  className={inputClass}
-                />
-                {weightKg ? (
-                  <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1">
-                    {formatWeight(Number(weightKg))}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-
-            <div
-              id={PROFILE_ESSENTIAL_SECTION_IDS.relationship_status}
-              className={
-                isEssentialMissing('relationship_status') ? ESSENTIAL_GROUP_HIGHLIGHT : undefined
-              }
-              data-essential-missing={isEssentialMissing('relationship_status') ? 'true' : 'false'}
-              data-testid="profile-field-relationship"
-            >
-              <EssentialFieldLabel incomplete={isEssentialMissing('relationship_status')}>
-                Relationship
-              </EssentialFieldLabel>
-              <div className="flex flex-wrap gap-2">
-                {RELATIONSHIP_STATUS_OPTIONS.map((opt) => {
-                  const active = relationshipStatus === opt;
-                  return (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => setRelationshipStatus(active ? '' : opt)}
-                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
-                        active
-                          ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
-                          : 'bg-[var(--bg-card)]/40 text-[var(--cream-muted)] border-[var(--border-default)]'
+                <div className="flex items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <EssentialFieldLabel incomplete={isEssentialMissing('height')}>
+                      Height (cm)
+                    </EssentialFieldLabel>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={120}
+                      max={250}
+                      value={heightCm}
+                      onChange={(e) => setHeightCm(e.target.value)}
+                      placeholder="178"
+                      className={`${inputClass} ${
+                        isEssentialMissing('height') ? ESSENTIAL_INPUT_HIGHLIGHT : ''
                       }`}
-                    >
-                      {opt}
-                    </button>
-                  );
-                })}
+                      data-testid="profile-field-height"
+                    />
+                    {heightCm ? (
+                      <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1">
+                        {formatHeight(Number(heightCm))}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="pt-6">
+                    <StatsShowToggle
+                      checked={showHeight}
+                      onChange={setShowHeight}
+                      aria-label="Show height"
+                      testId="profile-show-height"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className="flex items-start gap-3 border-t border-[var(--border-default)]/70 py-3"
+                data-testid="profile-stats-weight"
+              >
+                <div className="min-w-0 flex-1">
+                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[var(--cream-muted)]">
+                    Weight (kg)
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={35}
+                    max={300}
+                    value={weightKg}
+                    onChange={(e) => setWeightKg(e.target.value)}
+                    placeholder="75"
+                    className={inputClass}
+                    data-testid="profile-field-weight"
+                  />
+                  {weightKg ? (
+                    <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1">
+                      {formatWeight(Number(weightKg))}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="pt-6">
+                  <StatsShowToggle
+                    checked={showWeight}
+                    onChange={setShowWeight}
+                    aria-label="Show weight"
+                    testId="profile-show-weight"
+                  />
+                </div>
+              </div>
+
+              <div
+                id={PROFILE_ESSENTIAL_SECTION_IDS.relationship_status}
+                className={`border-t border-[var(--border-default)]/70 py-3 ${
+                  isEssentialMissing('relationship_status')
+                    ? 'rounded-lg px-2 ring-2 ring-[#C4832A]/35'
+                    : ''
+                }`}
+                data-essential-missing={isEssentialMissing('relationship_status') ? 'true' : 'false'}
+                data-testid="profile-field-relationship"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <EssentialFieldLabel incomplete={isEssentialMissing('relationship_status')}>
+                      Relationship
+                    </EssentialFieldLabel>
+                    <div className="flex flex-wrap gap-2">
+                      {RELATIONSHIP_STATUS_OPTIONS.map((opt) => {
+                        const active = relationshipStatus === opt;
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setRelationshipStatus(active ? '' : opt)}
+                            className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                              active
+                                ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
+                                : 'bg-[var(--bg-card)]/40 text-[var(--cream-muted)] border-[var(--border-default)]'
+                            }`}
+                          >
+                            {opt}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="pt-6">
+                    <StatsShowToggle
+                      checked={showRelationship}
+                      onChange={setShowRelationship}
+                      aria-label="Show relationship"
+                      testId="profile-show-relationship"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
+            {/* Brand Hosting options from #210. No Show toggle here (Stats Show is age/height/weight/relationship only). */}
             <div
               id={PROFILE_ESSENTIAL_SECTION_IDS.hosting}
               className={isEssentialMissing('hosting') ? ESSENTIAL_GROUP_HIGHLIGHT : undefined}
@@ -1612,7 +1730,7 @@ export const Profile = () => {
                 My Photos
               </p>
               <p className="text-xs mt-1" style={{ color: 'var(--cream-muted)' }}>
-                You decide who sees what — public, view once, or private.
+                You decide who sees what. Public, view once, or private.
               </p>
             </div>
             <span className="text-[var(--copper)] text-lg" aria-hidden>›</span>

@@ -207,6 +207,7 @@ test.describe('profile missing essentials highlight', () => {
     }
     await expect(page.getByTestId('profile-missing-essentials-banner')).toBeVisible();
     await expect(page.getByTestId('profile-missing-essentials-banner').getByText('Still missing')).toBeVisible();
+    await expect(page.getByTestId('profile-missing-named-jump')).toHaveText('Missing · Display name');
     await expect(page.getByTestId('profile-missing-essentials-list')).toBeVisible();
 
     for (const label of EXPECTED_MISSING) {
@@ -227,8 +228,22 @@ test.describe('profile missing essentials highlight', () => {
       fullPage: true,
     });
 
+    // Sticky named cue jumps to the first missing control and focuses it.
+    await page.getByTestId('profile-missing-named-jump').click();
+    await expect(page.locator('#profile-essential-name')).toBeInViewport();
+    await expect(page.getByTestId('profile-field-display-name')).toBeFocused();
+
     await page.getByTestId('profile-missing-bio').click();
     await expect(page.locator('#profile-essential-bio')).toBeInViewport();
+    await expect(page.getByTestId('profile-field-bio')).toBeFocused();
+
+    // Settings chip → exact field on Profile.
+    await page.goto('/settings');
+    await expect(page.getByTestId('settings-missing-headline')).toBeVisible();
+    await page.getByTestId('settings-missing-headline').click();
+    await expect(page.getByTestId('profile-edit-form')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('#profile-essential-headline')).toBeInViewport();
+    await expect(page.getByTestId('profile-field-headline')).toBeFocused();
 
     await page.waitForTimeout(400);
     const video = page.video();

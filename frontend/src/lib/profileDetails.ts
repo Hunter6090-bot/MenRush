@@ -182,3 +182,21 @@ export function profileCompletionScore(p: ProfileCompletionInput): {
 export function firstMissingEssentialSectionId(p: ProfileCompletionInput): string | null {
   return profileCompletionScore(p).missingItems[0]?.sectionId ?? null;
 }
+
+/**
+ * Scroll to a Profile essential section and focus its primary control.
+ * Used by Still missing chips and the sticky named incomplete cue.
+ */
+export function jumpToProfileEssential(sectionId: string): boolean {
+  if (typeof document === 'undefined') return false;
+  const el = document.getElementById(sectionId);
+  if (!el) return false;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  window.setTimeout(() => {
+    const focusable = el.querySelector<HTMLElement>(
+      'input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    focusable?.focus({ preventScroll: true });
+  }, 280);
+  return true;
+}
