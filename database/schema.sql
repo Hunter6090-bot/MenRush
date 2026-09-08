@@ -11,6 +11,7 @@ CREATE TABLE users (
   bio TEXT,
   photo_url TEXT,
   cover_url TEXT,
+  map_photo_url TEXT,
   cover_position_x REAL NOT NULL DEFAULT 50,
   cover_position_y REAL NOT NULL DEFAULT 50,
   cover_zoom REAL NOT NULL DEFAULT 1,

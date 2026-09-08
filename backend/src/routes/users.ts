@@ -59,6 +59,25 @@ const uploadCover = multer({
   fileFilter: uploadFileFilter('cover'),
 });
 
+const mapStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (req: any, file, cb) => {
+    try {
+      cb(null, safeUploadFilename('map', req.userId, file.mimetype));
+    } catch (error) {
+      cb(error as Error, '');
+    }
+  },
+});
+
+const uploadMap = multer({
+  storage: mapStorage,
+  limits: { fileSize: 12 * 1024 * 1024 },
+  fileFilter: uploadFileFilter('map'),
+});
+
 router.use(authMiddleware);
 
 router.post('/photo', verifiedMiddleware, upload.single('photo'), async (req: AuthRequest, res: Response) => {
@@ -95,6 +114,35 @@ router.post('/cover', verifiedMiddleware, uploadCover.single('cover'), async (re
     const stored = await finalizeLocalUpload('profiles', optimized.filename, optimized.path);
     const user = await userService.updateProfile(req.userId!, { cover_url: stored.publicUrl });
 
+    res.json(user);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/map-photo', verifiedMiddleware, uploadMap.single('photo'), async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    if (!(await validateFileSignature(req.file.path, req.file.mimetype))) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'File content does not match its type' });
+    }
+
+    const optimized = await optimizeImageFile(req.file.path, 'profile');
+    const stored = await finalizeLocalUpload('profiles', optimized.filename, optimized.path);
+    const user = await userService.updateProfile(req.userId!, { map_photo_url: stored.publicUrl });
+
+    res.json(user);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.delete('/map-photo', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await userService.updateProfile(req.userId!, { map_photo_url: null });
     res.json(user);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
