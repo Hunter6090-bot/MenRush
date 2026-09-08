@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Nearby grid profile sheet: unclipped avatar + readable hierarchy | this branch `cursor/fix-profile-sheet-clip-710d` | — | Cursor cloud — ProfileDrawer: avatar outside overflow-y scroll; distance top-safe; Graham fixture `/dev/profile-sheet`; #97–#99 parked; do not ping Al |
 | Get-the-app footer: Sign up free → /register | this branch `cursor/get-the-app-signup-free-8f6d` | — | Cursor cloud — Brand signed copy; kill Waitlist→`/`; page-local GetTheApp footer only; Terms/Privacy waitlist wording untouched; #97–#99 parked; do not ping Al |
 | Named missing-field jump + Stats Show toggles | this branch `cursor/profile-named-jump-stats-visibility-9f96` PR `#209` | — | Cursor cloud — rebase onto main+#210; migration `047_stats_field_visibility`; Show on age/height/weight/relationship only; keep Map photo + Brand Hosting from #210; no show_hosting; no Health Practices; #97–#99 parked; do not ping Al |
 | Brand Profile extras: Map photo + Hosting options | merged `#210` on main (`173f7c9`) | — | Cursor cloud — Brand signed 8 Sep 2026: Map photo plumbing + Nearby discovery face; Hosting Not hosting/Can host/Hosting now; migration `046_map_photo_hosting_brand`; no Health/Scene |
