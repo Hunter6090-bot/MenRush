@@ -127,7 +127,7 @@ async function mockApis(page: Page) {
 }
 
 test.describe('Profile Map photo + Hosting Brand', () => {
-  test('Edit Profile shows Map photo helper and Hosting options', async ({ page, context }) => {
+  test('Edit Profile shows Map photo helper and Hosting options', async ({ page, context }, testInfo) => {
     fs.mkdirSync(ARTIFACTS, { recursive: true });
     await authenticate(context);
     await mockApis(page);
@@ -149,9 +149,14 @@ test.describe('Profile Map photo + Hosting Brand', () => {
     await expect(hosting.getByRole('button', { name: 'Hosting now' })).toBeVisible();
     await expect(hosting.getByRole('button', { name: 'Travelling' })).toHaveCount(0);
 
+    const suffix = testInfo.project.name.includes('mobile') ? 'mobile' : 'desktop';
+    await mapSection.scrollIntoViewIfNeeded();
     await page.screenshot({
-      path: `${ARTIFACTS}/profile_map_photo_hosting_edit.png`,
-      fullPage: true,
+      path: `${ARTIFACTS}/profile_map_photo_section_${suffix}.png`,
+    });
+    await hosting.scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: `${ARTIFACTS}/profile_hosting_options_${suffix}.png`,
     });
   });
 });
