@@ -187,6 +187,7 @@ export const usersAPI = {
     looking_for?: string;
     photo_url?: string;
     cover_url?: string;
+    map_photo_url?: string | null;
     cover_position_x?: number;
     cover_position_y?: number;
     cover_zoom?: number;
@@ -218,6 +219,14 @@ export const usersAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  uploadMapPhoto: (file: File) => {
+    const formData = new FormData();
+    formData.append('photo', file);
+    return apiClient.post('/users/map-photo', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  clearMapPhoto: () => apiClient.delete('/users/map-photo'),
   likeUser: (id: string) => apiClient.post(`/users/like/${id}`),
   /** Unmatch — removes both like directions. Does not touch rooms. */
   unmatchUser: (id: string) =>

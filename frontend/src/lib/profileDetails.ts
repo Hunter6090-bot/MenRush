@@ -9,10 +9,9 @@ export const RELATIONSHIP_STATUS_OPTIONS = [
 ] as const;
 
 export const HOSTING_STATUS_OPTIONS = [
-  'Hosting',
-  'Travelling',
-  'Public only',
-  'Depends',
+  'Not hosting',
+  'Can host',
+  'Hosting now',
 ] as const;
 
 export const SEXUAL_HEALTH_STATUS_OPTIONS = [

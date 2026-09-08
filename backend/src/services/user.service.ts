@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { query } from '../db';
 import { defaultGenericAvatarUrl } from '../lib/genericAvatar';
+import { discoveryPhotoUrl } from '../lib/discoveryPhoto';
 import { accessControl } from '../security/access';
 import { ProfileInput } from '../types/validation';
 import { ageFromDateOfBirth, AGE_FILTER_MIN } from '../lib/age';
@@ -80,12 +81,11 @@ export const userService = {
     let queryStr = `
       SELECT
         u.id, u.name, CASE WHEN COALESCE(u.show_age, TRUE) THEN u.age ELSE NULL END AS age,
-        u.bio, u.headline, u.looking_for, u.photo_url, u.cover_url, u.interests,
+        u.bio, u.headline, u.looking_for, u.photo_url, u.cover_url, u.map_photo_url, u.interests,
         CASE WHEN COALESCE(u.show_height, TRUE) THEN u.height_cm ELSE NULL END AS height_cm,
         CASE WHEN COALESCE(u.show_weight, TRUE) THEN u.weight_kg ELSE NULL END AS weight_kg,
         CASE WHEN COALESCE(u.show_relationship, TRUE) THEN u.relationship_status ELSE NULL END AS relationship_status,
-        u.hosting_status,
-        COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified, u.authenticity_status,
+        u.hosting_status,        COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified, u.authenticity_status,
         -- Presence must be fresh: stuck online=true from a crashed tab is not "Active now".
         (p.online = TRUE AND p.last_seen IS NOT NULL AND p.last_seen > NOW() - INTERVAL '20 minutes') AS online,
         p.last_seen, p.available_until,
@@ -210,10 +210,12 @@ export const userService = {
           : { lat: originLat, lng: originLng };
 
       // Do not leak exact GPS in the API payload — only the fuzzed map pin.
-      const { real_lat: _rl, real_lng: _rg, ...publicRow } = row;
+      const { real_lat: _rl, real_lng: _rg, map_photo_url: mapPhoto, ...publicRow } = row;
 
       return {
         ...publicRow,
+        // Nearby Map / grid: Map photo when set so the main shot can stay private.
+        photo_url: discoveryPhotoUrl(mapPhoto, publicRow.photo_url) ?? publicRow.photo_url,
         lat: mapPoint.lat,
         lng: mapPoint.lng,
         distance_km: bucketed.toFixed(2),
@@ -309,7 +311,7 @@ export const userService = {
         u.show_height, u.show_weight, u.show_relationship,
         u.bio, u.headline, u.looking_for,
         u.photo_url, u.cover_url, u.cover_position_x, u.cover_position_y, u.cover_zoom,
-        u.secondary_photo_urls, u.interests, u.created_at,
+        u.map_photo_url, u.secondary_photo_urls, u.interests, u.created_at,
         u.height_cm, u.weight_kg, u.relationship_status, u.hosting_status,
         u.sexual_health_status, u.on_prep, u.last_tested_at::text AS last_tested_at,
         COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified, u.verification_status, u.authenticity_status,
@@ -356,7 +358,7 @@ export const userService = {
         u.id, u.name,
         CASE WHEN COALESCE(u.show_age, TRUE) THEN u.age ELSE NULL END AS age,
         u.bio, u.headline, u.looking_for,
-        u.photo_url, u.cover_url, u.secondary_photo_urls,
+        u.photo_url, u.cover_url, u.map_photo_url, u.secondary_photo_urls,
         u.cover_position_x, u.cover_position_y, u.cover_zoom, u.interests, u.created_at,
         CASE WHEN COALESCE(u.show_height, TRUE) THEN u.height_cm ELSE NULL END AS height_cm,
         CASE WHEN COALESCE(u.show_weight, TRUE) THEN u.weight_kg ELSE NULL END AS weight_kg,
@@ -458,6 +460,10 @@ export const userService = {
       updates.push(`cover_url = $${values.length + 1}`);
       values.push(data.cover_url || null);
     }
+    if (data.map_photo_url !== undefined) {
+      updates.push(`map_photo_url = $${values.length + 1}`);
+      values.push(data.map_photo_url || null);
+    }
     if (data.cover_position_x !== undefined) {
       updates.push(`cover_position_x = $${values.length + 1}`);
       values.push(data.cover_position_x);
@@ -522,10 +528,9 @@ export const userService = {
     const returnCols = `id, name, age, date_of_birth::text AS date_of_birth, show_age,
       show_height, show_weight, show_relationship,
       bio, headline, looking_for,
-      photo_url, cover_url, cover_position_x, cover_position_y, cover_zoom, interests,
+      photo_url, cover_url, map_photo_url, cover_position_x, cover_position_y, cover_zoom, interests,
       height_cm, weight_kg, relationship_status, hosting_status,
       sexual_health_status, on_prep, last_tested_at::text AS last_tested_at, secondary_photo_urls`;
-
     if (updates.length === 0) {
       const res = await query(
         `SELECT ${returnCols} FROM users WHERE id = $1`,

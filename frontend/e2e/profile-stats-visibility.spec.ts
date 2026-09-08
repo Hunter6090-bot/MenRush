@@ -36,7 +36,7 @@ const COMPLETE_ME = {
   height_cm: 180,
   weight_kg: 82,
   relationship_status: 'Single',
-  hosting_status: 'Hosting',
+  hosting_status: 'Hosting now',
   is_premium: true,
   beta_premium_included: true,
   is_visible: true,
@@ -283,7 +283,7 @@ test.describe('profile stats field visibility', () => {
     await expect(viewPage.getByText('Age 35')).toHaveCount(0);
     await expect(viewPage.getByText(/5\s*['′]/)).toHaveCount(0);
     await expect(viewPage.getByText('Single', { exact: true })).toBeVisible();
-    await expect(viewPage.getByText('Hosting', { exact: true })).toBeVisible();
+    await expect(viewPage.getByText('Hosting now', { exact: true })).toBeVisible();
     await viewPage.screenshot({
       path: path.join(ARTIFACTS, 'public_profile_hidden_stats_omitted.png'),
       fullPage: false,

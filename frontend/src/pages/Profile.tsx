@@ -122,6 +122,7 @@ interface ProfileData {
   looking_for?: string;
   photo_url?: string;
   cover_url?: string;
+  map_photo_url?: string | null;
   cover_position_x?: number;
   cover_position_y?: number;
   cover_zoom?: number;
@@ -168,6 +169,7 @@ export const Profile = () => {
   const [lookingFor, setLookingFor] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
   const [coverUrl, setCoverUrl] = useState('');
+  const [mapPhotoUrl, setMapPhotoUrl] = useState('');
   const [coverFrame, setCoverFrame] = useState<CoverFrame>(DEFAULT_COVER_FRAME);
   const [coverEditorOpen, setCoverEditorOpen] = useState(false);
   const [interests, setInterests] = useState<string[]>([]);
@@ -184,6 +186,7 @@ export const Profile = () => {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadingMapPhoto, setUploadingMapPhoto] = useState(false);
   const [locating, setLocating] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [profileViewers, setProfileViewers] = useState<ProfileViewer[]>([]);
@@ -194,6 +197,7 @@ export const Profile = () => {
   const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const mapPhotoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setProfileLoadError(null);
@@ -217,6 +221,7 @@ export const Profile = () => {
         setLookingFor(d.looking_for ?? '');
         setPhotoUrl(d.photo_url ?? '');
         setCoverUrl(d.cover_url ?? '');
+        setMapPhotoUrl(d.map_photo_url ?? '');
         setCoverFrame(
           normalizeCoverFrame(d.cover_position_x, d.cover_position_y, d.cover_zoom),
         );
@@ -234,6 +239,7 @@ export const Profile = () => {
         patchUser({
           name: d.name,
           photo_url: d.photo_url ?? undefined,
+          map_photo_url: d.map_photo_url ?? null,
           is_premium: d.is_premium,
           beta_premium_included: Boolean(
             (d as ProfileData & { beta_premium_included?: boolean }).beta_premium_included,
@@ -418,6 +424,51 @@ export const Profile = () => {
       showToast('error', err.response?.data?.error || 'Cover upload failed');
     } finally {
       setUploadingCover(false);
+    }
+  };
+
+  const handleMapPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.files?.[0];
+    if (!raw) return;
+    e.target.value = '';
+
+    const { file, error } = normalizeProfileImageFile(raw);
+    if (!file) {
+      showToast('error', error || 'Map photo upload failed');
+      return;
+    }
+
+    setUploadingMapPhoto(true);
+    try {
+      const res = await usersAPI.uploadMapPhoto(file);
+      const next = res.data.map_photo_url ?? '';
+      setMapPhotoUrl(next);
+      setProfile((p) => (p ? { ...p, map_photo_url: next } : p));
+      if (user && token) {
+        patchUser({ map_photo_url: next || null });
+      }
+      showToast('success', 'Map photo saved');
+    } catch (err: any) {
+      showToast('error', err.response?.data?.error || 'Map photo upload failed');
+    } finally {
+      setUploadingMapPhoto(false);
+    }
+  };
+
+  const handleClearMapPhoto = async () => {
+    setUploadingMapPhoto(true);
+    try {
+      await usersAPI.clearMapPhoto();
+      setMapPhotoUrl('');
+      setProfile((p) => (p ? { ...p, map_photo_url: null } : p));
+      if (user && token) {
+        patchUser({ map_photo_url: null });
+      }
+      showToast('success', 'Map photo cleared');
+    } catch (err: any) {
+      showToast('error', err.response?.data?.error || 'Could not clear Map photo');
+    } finally {
+      setUploadingMapPhoto(false);
     }
   };
 
@@ -608,6 +659,19 @@ export const Profile = () => {
           aria-label="Upload cover photo"
           title="Upload cover photo"
           disabled={uploadingCover}
+        />
+
+        <input
+          ref={mapPhotoInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleMapPhotoUpload}
+          className="hidden"
+          id="map-photo-upload"
+          aria-label="Upload map photo"
+          title="Upload map photo"
+          disabled={uploadingMapPhoto}
+          data-testid="map-photo-input"
         />
 
         {/* ── Desktop profile layout ── */}
@@ -1050,6 +1114,63 @@ export const Profile = () => {
             ) : null}
 
             <div
+              className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/40 p-4"
+              data-testid="map-photo-section"
+              id="profile-map-photo"
+            >
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--cream-muted)]">
+                Map photo
+              </p>
+              <p className="mt-1 text-[12px] leading-relaxed text-[var(--cream-muted)]">
+                Shown on Nearby Map when your main shot stays private.
+              </p>
+              <div className="mt-3 flex items-center gap-3">
+                <button
+                  type="button"
+                  aria-label={mapPhotoUrl ? 'Change map photo' : 'Upload map photo'}
+                  onClick={() => mapPhotoInputRef.current?.click()}
+                  disabled={uploadingMapPhoto}
+                  className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C4832A]/50 disabled:opacity-60"
+                  data-testid="map-photo-picker"
+                >
+                  {getPhotoUrl(mapPhotoUrl) ? (
+                    <img
+                      src={getPhotoUrl(mapPhotoUrl)!}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px] font-bold text-[#E0A14A]">
+                      <ImageIcon className="h-4 w-4" />
+                      {uploadingMapPhoto ? '…' : 'Add'}
+                    </span>
+                  )}
+                </button>
+                <div className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => mapPhotoInputRef.current?.click()}
+                    disabled={uploadingMapPhoto}
+                    className="rounded-full border border-[#C4832A]/35 bg-[rgba(196,131,42,0.12)] px-3 py-1.5 text-[11px] font-extrabold text-[#E0A14A] disabled:opacity-60"
+                  >
+                    {uploadingMapPhoto ? 'Uploading…' : mapPhotoUrl ? 'Change' : 'Upload'}
+                  </button>
+                  {mapPhotoUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleClearMapPhoto()}
+                      disabled={uploadingMapPhoto}
+                      className="ml-2 rounded-full border border-[var(--border-default)] px-3 py-1.5 text-[11px] font-semibold text-[var(--cream-muted)] disabled:opacity-60"
+                      data-testid="map-photo-clear"
+                    >
+                      Remove
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            <div
               id={PROFILE_ESSENTIAL_SECTION_IDS.display_name}
               data-essential-missing={isEssentialMissing('display_name') ? 'true' : 'false'}
             >
@@ -1324,7 +1445,7 @@ export const Profile = () => {
               </div>
             </div>
 
-            {/* Hosting labels/visibility ship in a separate Brand-signed PR — edit only here. */}
+            {/* Brand Hosting options from #210. No Show toggle here (Stats Show is age/height/weight/relationship only). */}
             <div
               id={PROFILE_ESSENTIAL_SECTION_IDS.hosting}
               className={isEssentialMissing('hosting') ? ESSENTIAL_GROUP_HIGHLIGHT : undefined}

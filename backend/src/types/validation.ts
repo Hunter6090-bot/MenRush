@@ -18,10 +18,9 @@ export const RELATIONSHIP_STATUSES = [
 ] as const;
 
 export const HOSTING_STATUSES = [
-  'Hosting',
-  'Travelling',
-  'Public only',
-  'Depends',
+  'Not hosting',
+  'Can host',
+  'Hosting now',
 ] as const;
 
 export const SEXUAL_HEALTH_STATUSES = [
@@ -94,6 +93,7 @@ export const ProfileSchema = z.object({
   looking_for: z.string().max(100).optional(),
   photo_url: z.string().optional(),
   cover_url: z.string().optional(),
+  map_photo_url: z.string().nullable().optional(),
   cover_position_x: z.number().min(0).max(100).optional(),
   cover_position_y: z.number().min(0).max(100).optional(),
   cover_zoom: z.number().min(1).max(3).optional(),

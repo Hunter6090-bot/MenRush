@@ -1,5 +1,5 @@
 -- Per-field Stats visibility (extend show_age). Hidden fields stay stored; public/nearby omit them.
--- Hosting visibility / label work is out of scope for this migration (separate Brand PR).
+-- Numbered 047 after #210 Map photo + Hosting Brand migration. Stats Show excludes Hosting.
 
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS show_height BOOLEAN NOT NULL DEFAULT TRUE,
