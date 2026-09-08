@@ -257,7 +257,7 @@ function GridCardFace({ user, meta }: { user: NearbyUser; meta: string }) {
             className={`h-1.5 w-1.5 shrink-0 rounded-full md:h-2 md:w-2 ${user.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
           />
           <span className="truncate text-[11px] font-bold leading-tight text-[#FFF6E6] md:text-[12px] lg:text-[13px]">
-            {user.name} {user.age}
+            {user.name}{typeof user.age === 'number' ? ` ${user.age}` : ''}
           </span>
 
         </div>

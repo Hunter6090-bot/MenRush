@@ -106,6 +106,10 @@ export const ProfileSchema = z.object({
   on_prep: z.boolean().nullable().optional(),
   last_tested_at: isoDateOnly.nullable().optional(),
   show_age: z.boolean().optional(),
+  show_height: z.boolean().optional(),
+  show_weight: z.boolean().optional(),
+  show_relationship: z.boolean().optional(),
+  show_hosting: z.boolean().optional(),
 });
 
 export const DeleteAccountSchema = z.object({

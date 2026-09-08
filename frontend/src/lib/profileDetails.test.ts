@@ -108,4 +108,10 @@ describe('profileCompletionScore essentials checklist', () => {
       PROFILE_ESSENTIAL_SECTION_IDS.headline,
     );
   });
+
+  it('names the first missing essential for the sticky jump cue', () => {
+    const result = profileCompletionScore({ ...complete, headline: '' });
+    expect(result.missingItems[0]?.label).toBe('Headline');
+    expect(result.missing[0]).toBe('Headline');
+  });
 });

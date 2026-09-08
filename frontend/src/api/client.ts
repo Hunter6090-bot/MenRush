@@ -199,6 +199,10 @@ export const usersAPI = {
     on_prep?: boolean | null;
     last_tested_at?: string | null;
     show_age?: boolean;
+    show_height?: boolean;
+    show_weight?: boolean;
+    show_relationship?: boolean;
+    show_hosting?: boolean;
   }) =>
     apiClient.post('/users/profile', data),
   uploadPhoto: (file: File) => {

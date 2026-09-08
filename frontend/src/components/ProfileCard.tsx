@@ -13,7 +13,7 @@ import { getDistanceLabel, isUserPulsing } from '../lib/discovery';
 export interface NearbyUser {
   id: string;
   name: string;
-  age: number;
+  age?: number | null;
   bio?: string;
   headline?: string;
   looking_for?: string;
@@ -182,7 +182,9 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
       <div className="p-4 flex-1 flex flex-col">
         <div className="flex items-center gap-2 mb-1">
           <h3 className="font-bold text-[var(--cream)] text-base">{user.name}</h3>
-          <span className="text-[var(--cream-muted)] text-sm">{user.age}</span>
+          {typeof user.age === 'number' ? (
+            <span className="text-[var(--cream-muted)] text-sm">{user.age}</span>
+          ) : null}
 
         </div>
 
