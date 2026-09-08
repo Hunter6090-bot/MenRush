@@ -209,7 +209,7 @@ export function ProfileDrawer({
           </span>
         </div>
 
-        <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
+        <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
           <div className="rounded-full bg-[color-mix(in_srgb,var(--bg-elevated)_88%,transparent)] border border-[var(--border-default)]">
             <ChatSafetyMenu
               peerId={user.id}
@@ -230,90 +230,115 @@ export function ProfileDrawer({
           </button>
         </div>
 
-        <div
-          className="relative w-full shrink-0"
-          style={{
-            height: isDesktop ? 360 : snap === "half" && !dragging ? 180 : 280,
-            maxHeight: isDesktop ? "46%" : "38%",
-            background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
-            transition: dragging ? "none" : "height 220ms ease",
-          }}
-        >
-          {cover ? (
-            <img src={cover} alt="" className="w-full h-full object-cover" onError={onCoverError} />
-          ) : photo ? (
-            <img
-              src={photo}
-              alt={user.name}
-              className="w-full h-full object-cover"
-              onError={onPhotoError}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <SilhouetteAvatar size={180} variant="card" />
-            </div>
-          )}
+        {/*
+          Hero + avatar live outside the scrollport so the circular face is never
+          clipped by overflow-y (the old -mt-12-inside-scroll pattern bisected
+          avatars on phone). Avatar sits in a non-scrolling row that overlaps the
+          hero via negative margin — fully in layout flow, so the sheet cannot
+          crop it mid-circle.
+        */}
+        <div className="relative z-10 w-full shrink-0" data-testid="profile-sheet-hero">
           <div
-            className="absolute inset-0 pointer-events-none"
-            style={{ background: "linear-gradient(to top, var(--bg-elevated) 0%, transparent 60%)" }}
-          />
-          {isPulsing ? (
-            <div className="absolute top-3 left-3">
-              <StatusBadge online={false} pulsing />
+            className="relative w-full overflow-hidden"
+            style={{
+              height: isDesktop ? 360 : snap === "half" && !dragging ? 200 : 260,
+              maxHeight: isDesktop ? "46vh" : "42vh",
+              background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
+              transition: dragging ? "none" : "height 220ms ease",
+            }}
+          >
+            {cover ? (
+              <img
+                src={cover}
+                alt=""
+                className="w-full h-full object-cover object-center"
+                onError={onCoverError}
+              />
+            ) : photo ? (
+              <img
+                src={photo}
+                alt={user.name}
+                className="w-full h-full object-cover object-top"
+                onError={onPhotoError}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <SilhouetteAvatar size={160} variant="card" />
+              </div>
+            )}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  "linear-gradient(to top, var(--bg-elevated) 0%, transparent 42%)",
+              }}
+            />
+            {/* Status + distance in the top band — away from the face mid-frame */}
+            <div className="absolute top-3 left-3 z-[1] flex flex-col items-start gap-1.5 max-w-[70%]">
+              {isPulsing ? (
+                <StatusBadge online={false} pulsing />
+              ) : user.online ? (
+                <StatusBadge online lastSeen={user.last_seen} size="xs" />
+              ) : null}
+              <DistancePill km={distance} label={distLabel} />
             </div>
-          ) : user.online ? (
-            <div className="absolute top-3 left-3">
-              <StatusBadge online lastSeen={user.last_seen} size="xs" />
-            </div>
-          ) : null}
-          <div className="absolute bottom-3 left-3">
-            <DistancePill km={distance} label={distLabel} />
           </div>
-        </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4">
-          <div className="flex items-end justify-between gap-3 -mt-12 mb-4">
+          {/* Full circular avatar — own flow row, overlaps hero, never scroll-clipped */}
+          <div className="relative z-[2] -mt-9 px-5 pointer-events-none">
             <ProfilePhotoLink
               userId={user.id}
               name={user.name}
-              className="inline-flex"
+              className="inline-flex pointer-events-auto"
               data-testid={`drawer-avatar-${user.id}`}
             >
-              <PulsingAvatar isPulsing={isPulsing} size={64} intensity="subtle">
+              <PulsingAvatar isPulsing={isPulsing} size={72} intensity="subtle">
                 <div
-                  className="w-full h-full rounded-full overflow-hidden border-2 flex items-center justify-center"
+                  className="w-full h-full rounded-full overflow-hidden border-[3px] flex items-center justify-center"
                   style={{
                     background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
-                    borderColor: "var(--copper)",
+                    borderColor: "var(--bg-elevated)",
+                    boxShadow: "0 0 0 2px var(--copper), 0 4px 16px rgba(0,0,0,0.45)",
                   }}
                 >
                   {photo ? (
-                    <img src={photo} alt="" className="w-full h-full object-cover" onError={onPhotoError} />
+                    <img
+                      src={photo}
+                      alt=""
+                      className="w-full h-full object-cover object-top"
+                      onError={onPhotoError}
+                    />
                   ) : (
-                    <SilhouetteAvatar size={56} variant="card" />
+                    <SilhouetteAvatar size={64} variant="card" />
                   )}
                 </div>
               </PulsingAvatar>
             </ProfilePhotoLink>
           </div>
+        </div>
 
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
+        <div className="relative z-0 flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-3 pb-4">
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
             <h2 className="font-display text-2xl font-bold tracking-wide uppercase text-[var(--cream)] truncate">
               {user.name}
             </h2>
-            {user.age ? <span className="text-[var(--cream-soft)] text-lg font-semibold">{user.age}</span> : null}
+            {user.age ? (
+              <span className="text-[var(--cream-soft)] text-lg font-semibold">{user.age}</span>
+            ) : null}
             {(user as { is_verified?: boolean }).is_verified ? <VerifiedBadge /> : null}
           </div>
-          <p className="text-sm font-medium text-[var(--cream-soft)]">
+          <p className="text-sm font-medium text-[var(--cream-soft)] leading-snug">
             {user.online ? "Active now" : "Offline"} · {distLabel} away
           </p>
 
           {user.headline && (
-            <p className="mt-3 text-sm text-[var(--cream)] leading-relaxed italic">"{user.headline}"</p>
+            <p className="mt-3 text-sm text-[var(--cream)] leading-relaxed italic">
+              "{user.headline}"
+            </p>
           )}
 
           {user.looking_for ? (
-            <div className="mt-3" data-testid="drawer-looking-for">
+            <div className="mt-4" data-testid="drawer-looking-for">
               <p className="text-[10px] font-black text-[var(--cream-muted)] uppercase tracking-[.18em] mb-1">
                 Looking for
               </p>
@@ -322,8 +347,11 @@ export function ProfileDrawer({
           ) : null}
 
           {user.mood ? (
-            <p className="mt-2 text-[12px] text-[var(--cream-muted)]">
-              Mood: <span className="font-semibold text-[var(--cream)]">{String(user.mood).replace(/_/g, " ")}</span>
+            <p className="mt-2 text-[12px] text-[var(--cream-muted)] leading-snug">
+              Mood:{" "}
+              <span className="font-semibold text-[var(--cream)]">
+                {String(user.mood).replace(/_/g, " ")}
+              </span>
             </p>
           ) : null}
 

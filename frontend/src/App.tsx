@@ -74,6 +74,10 @@ const RoomInRoomDmPreview = lazyNamed(
   () => import('./pages/RoomInRoomDmPreview'),
   'RoomInRoomDmPreview',
 );
+const ProfileDrawerPreview = lazyNamed(
+  () => import('./pages/ProfileDrawerPreview'),
+  'ProfileDrawerPreview',
+);
 
 function RouteFallback() {
   return (
@@ -384,6 +388,7 @@ function AppShell() {
             <>
               <Route path="/dev/room-temp-gate" element={<RoomTempIdentityGatePreview />} />
               <Route path="/dev/room-inroom-dm" element={<RoomInRoomDmPreview />} />
+              <Route path="/dev/profile-sheet" element={<ProfileDrawerPreview />} />
             </>
           ) : null}
           <Route path="*" element={<NotFound />} />
