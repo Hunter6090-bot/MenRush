@@ -233,16 +233,15 @@ export function ProfileDrawer({
         {/*
           Hero + avatar live outside the scrollport so the circular face is never
           clipped by overflow-y (the old -mt-12-inside-scroll pattern bisected
-          avatars on phone). Avatar sits in a non-scrolling row that overlaps the
-          hero via negative margin — fully in layout flow, so the sheet cannot
-          crop it mid-circle.
+          avatars on phone). Avatar is a full circle in its own row between photo
+          and name — no negative-margin hang into overflow-hidden bands.
         */}
         <div className="relative z-10 w-full shrink-0" data-testid="profile-sheet-hero">
           <div
             className="relative w-full overflow-hidden"
             style={{
-              height: isDesktop ? 360 : snap === "half" && !dragging ? 200 : 260,
-              maxHeight: isDesktop ? "46vh" : "42vh",
+              height: isDesktop ? 360 : snap === "half" && !dragging ? 200 : 240,
+              maxHeight: isDesktop ? "46vh" : "36vh",
               background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
               transition: dragging ? "none" : "height 220ms ease",
             }}
@@ -263,14 +262,14 @@ export function ProfileDrawer({
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <SilhouetteAvatar size={160} variant="card" />
+                <SilhouetteAvatar size={148} variant="card" />
               </div>
             )}
             <div
               className="absolute inset-0 pointer-events-none"
               style={{
                 background:
-                  "linear-gradient(to top, var(--bg-elevated) 0%, transparent 42%)",
+                  "linear-gradient(to top, var(--bg-elevated) 0%, transparent 38%)",
               }}
             />
             {/* Status + distance in the top band — away from the face mid-frame */}
@@ -284,21 +283,19 @@ export function ProfileDrawer({
             </div>
           </div>
 
-          {/* Full circular avatar — own flow row, overlaps hero, never scroll-clipped */}
-          <div className="relative z-[2] -mt-9 px-5 pointer-events-none">
+          {/* Full circular avatar — own padded row, never scroll-clipped or mid-cut */}
+          <div className="flex items-center px-5 pt-3 pb-1">
             <ProfilePhotoLink
               userId={user.id}
               name={user.name}
-              className="inline-flex pointer-events-auto"
+              className="inline-flex shrink-0 rounded-full ring-2 ring-[var(--copper)] shadow-[0_4px_14px_rgba(0,0,0,0.4)]"
               data-testid={`drawer-avatar-${user.id}`}
             >
               <PulsingAvatar isPulsing={isPulsing} size={72} intensity="subtle">
                 <div
-                  className="w-full h-full rounded-full overflow-hidden border-[3px] flex items-center justify-center"
+                  className="w-full h-full rounded-full overflow-hidden flex items-center justify-center"
                   style={{
                     background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
-                    borderColor: "var(--bg-elevated)",
-                    boxShadow: "0 0 0 2px var(--copper), 0 4px 16px rgba(0,0,0,0.45)",
                   }}
                 >
                   {photo ? (
@@ -309,7 +306,7 @@ export function ProfileDrawer({
                       onError={onPhotoError}
                     />
                   ) : (
-                    <SilhouetteAvatar size={64} variant="card" />
+                    <SilhouetteAvatar size={72} variant="card" />
                   )}
                 </div>
               </PulsingAvatar>
@@ -317,7 +314,7 @@ export function ProfileDrawer({
           </div>
         </div>
 
-        <div className="relative z-0 flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-3 pb-4">
+        <div className="relative z-0 flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-2 pb-4">
           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
             <h2 className="font-display text-2xl font-bold tracking-wide uppercase text-[var(--cream)] truncate">
               {user.name}
