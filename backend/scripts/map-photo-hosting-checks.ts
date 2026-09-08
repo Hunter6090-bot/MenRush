@@ -42,6 +42,27 @@ test('migration adds map_photo_url without wiping photo_url / albums', () => {
   assert.match(mig, /Hosting now/);
 });
 
+test('migration remaps Open + all leftovers before Brand CHECK', () => {
+  const mig = fs.readFileSync(migPath, 'utf8');
+  const rootMig = fs.readFileSync(
+    path.join(root, '../database/migrations/046_map_photo_hosting_brand.sql'),
+    'utf8',
+  );
+  assert.strictEqual(mig, rootMig, 'backend + root 046 must stay identical');
+  assert.match(mig, /DROP CONSTRAINT IF EXISTS users_hosting_status_chk/);
+  assert.match(mig, /WHEN 'Open' THEN 'Can host'/);
+  assert.match(
+    mig,
+    /WHERE hosting_status IS NOT NULL\s+AND hosting_status NOT IN \('Not hosting', 'Can host', 'Hosting now'\)/s,
+  );
+  assert.match(mig, /ELSE 'Not hosting'/);
+  // Drop before UPDATE so legacy CHECK cannot block Brand remaps.
+  const dropAt = mig.indexOf('DROP CONSTRAINT IF EXISTS users_hosting_status_chk');
+  const updateAt = mig.indexOf('UPDATE users');
+  const addAt = mig.lastIndexOf('ADD CONSTRAINT users_hosting_status_chk');
+  assert.ok(dropAt >= 0 && updateAt > dropAt && addAt > updateAt, 'DROP → UPDATE → ADD order');
+});
+
 test('HOSTING_STATUSES are Brand options only', () => {
   assert.deepStrictEqual([...HOSTING_STATUSES], ['Not hosting', 'Can host', 'Hosting now']);
 });
