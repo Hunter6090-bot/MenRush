@@ -88,6 +88,7 @@ export const Register = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const setAuth = useAuthStore((s) => s.setAuth);
   const token = useAuthStore((s) => s.token);
 
   useEffect(() => {
@@ -183,10 +184,23 @@ export const Register = () => {
         ...(trimmedPromo ? { promo_code: trimmedPromo } : {}),
         ...(trimmedReferral ? { referral_code: trimmedReferral } : {}),
       });
-      // No session until email confirm — never setAuth from register.
-      const confirmEmail =
-        typeof res.data?.email === 'string' ? res.data.email : form.email.trim().toLowerCase();
-      navigate(`/check-email?email=${encodeURIComponent(confirmEmail)}`, { replace: true });
+      // Gate path: no session until confirm. BOA90 lock may still return a legacy session
+      // for non-Al signups until EMAIL_CONFIRM_MAIL_OPEN=true.
+      if (res.data.requiresEmailConfirm) {
+        const confirmEmail =
+          typeof res.data.email === 'string' ? res.data.email : form.email.trim().toLowerCase();
+        navigate(`/check-email?email=${encodeURIComponent(confirmEmail)}`, { replace: true });
+        return;
+      }
+      if (res.data.token && res.data.user) {
+        setAuth(res.data.user, res.data.token);
+        navigate('/profile/setup', { replace: true });
+        return;
+      }
+      navigate(
+        `/check-email?email=${encodeURIComponent(form.email.trim().toLowerCase())}`,
+        { replace: true },
+      );
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed. Please try again.');
     } finally {

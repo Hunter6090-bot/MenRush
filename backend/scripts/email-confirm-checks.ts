@@ -13,11 +13,14 @@ import {
   WELCOME_EMAIL_SUBJECT,
   WELCOME_BULLETS,
   EMAIL_CONFIRM_TTL_MS,
+  EMAIL_CONFIRM_OWNER_EMAILS,
   buildConfirmEmailHtml,
   buildConfirmEmailText,
   buildWelcomeEmailHtml,
   buildWelcomeEmailText,
   shouldExposeConfirmToken,
+  isEmailConfirmMailOpen,
+  maySendEmailConfirmTransactional,
 } from '../src/services/email-confirm.emails';
 
 type Test = { name: string; run: () => void | Promise<void> };
@@ -77,11 +80,31 @@ test('shouldExposeConfirmToken respects EMAIL_CONFIRM_EXPOSE_TOKEN', () => {
   else process.env.NODE_ENV = prevNode;
 });
 
+test('BOA90 lock: Al allowlist only until EMAIL_CONFIRM_MAIL_OPEN', () => {
+  const prevOpen = process.env.EMAIL_CONFIRM_MAIL_OPEN;
+  delete process.env.EMAIL_CONFIRM_MAIL_OPEN;
+  assert.strictEqual(isEmailConfirmMailOpen(), false);
+  assert.strictEqual(maySendEmailConfirmTransactional('al@menrush.com'), true);
+  assert.strictEqual(maySendEmailConfirmTransactional('AL@MenRush.com'), true);
+  assert.strictEqual(maySendEmailConfirmTransactional('other@example.com', 'BOA90'), true);
+  assert.strictEqual(maySendEmailConfirmTransactional('other@example.com', 'Random'), false);
+  assert.strictEqual(maySendEmailConfirmTransactional('stranger@example.com'), false);
+
+  process.env.EMAIL_CONFIRM_MAIL_OPEN = 'true';
+  assert.strictEqual(isEmailConfirmMailOpen(), true);
+  assert.strictEqual(maySendEmailConfirmTransactional('stranger@example.com'), true);
+
+  if (prevOpen === undefined) delete process.env.EMAIL_CONFIRM_MAIL_OPEN;
+  else process.env.EMAIL_CONFIRM_MAIL_OPEN = prevOpen;
+});
+
 async function runDbTests() {
   // Lazy import so pure tests work without JWT_SECRET / DB when unset.
   process.env.JWT_SECRET = process.env.JWT_SECRET || 'email-confirm-check-secret';
   // Expose confirm token for the register→confirm path under test.
   process.env.EMAIL_CONFIRM_EXPOSE_TOKEN = 'true';
+  // Open mail gate for the full confirm path; BOA90 lock is covered by surface tests.
+  process.env.EMAIL_CONFIRM_MAIL_OPEN = 'true';
 
   const { query } = await import('../src/db');
   const { authService } = await import('../src/services/auth.service');
@@ -160,6 +183,31 @@ async function runDbTests() {
     assert.ok(login.token);
 
     console.log('ok — DB: register gate, confirm unlock, idempotent welcome');
+
+    // BOA90 lock: non-allowlisted signup gets legacy session, zero confirm/welcome mails.
+    process.env.EMAIL_CONFIRM_MAIL_OPEN = 'false';
+    const lockedBefore = sent.length;
+    const lockedEmail = `locked-${suffix}@test.menrush.local`;
+    const locked = await authService.register({
+      email: lockedEmail,
+      password,
+      name: `Locked_${suffix}`,
+      age: 28,
+    });
+    assert.strictEqual(locked.requiresEmailConfirm, false);
+    assert.ok(locked.token, 'legacy session while mail gate locked');
+    const lockedRow = await query(`SELECT id, email_confirmed FROM users WHERE LOWER(email) = $1`, [
+      lockedEmail,
+    ]);
+    ids.push(lockedRow.rows[0].id);
+    assert.strictEqual(lockedRow.rows[0].email_confirmed, true);
+    assert.strictEqual(
+      sent.length,
+      lockedBefore,
+      'BOA90 lock must not send confirm/welcome to non-Al',
+    );
+    assert.ok(EMAIL_CONFIRM_OWNER_EMAILS.includes('al@menrush.com'));
+    console.log('ok — DB: BOA90 lock holds mail for non-Al (legacy session)');
   } finally {
     setTransactionalEmailOverride(null);
     if (ids.length) {

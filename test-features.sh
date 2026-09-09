@@ -71,14 +71,23 @@ RES1=$(curl -s -X POST "$API_URL/auth/register" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"alice+$SUFFIX@test.com\",\"password\":\"password123\",\"name\":\"Alice\",\"age\":25,\"invite_code\":\"$BETA_CODE\"}")
 CONFIRM1=$(json_field "$RES1" "devConfirmToken")
-[ -n "$CONFIRM1" ] || die "Alice registration failed (no confirm token): $RES1"
-CONF1=$(curl -s -X POST "$API_URL/auth/confirm-email" \
-  -H "Content-Type: application/json" \
-  -d "{\"token\":\"$CONFIRM1\"}")
-TOKEN1=$(json_field "$CONF1" "token")
-USER1_ID=$(json_field "$CONF1" "user.id")
-[ -n "$TOKEN1" ] || die "Alice confirm failed: $CONF1"
-ok "Alice registered + confirmed ($USER1_ID)"
+TOKEN1=$(json_field "$RES1" "token")
+USER1_ID=$(json_field "$RES1" "user.id")
+if [ -n "$CONFIRM1" ]; then
+  CONF1=$(curl -s -X POST "$API_URL/auth/confirm-email" \
+    -H "Content-Type: application/json" \
+    -d "{\"token\":\"$CONFIRM1\"}")
+  TOKEN1=$(json_field "$CONF1" "token")
+  USER1_ID=$(json_field "$CONF1" "user.id")
+  [ -n "$TOKEN1" ] || die "Alice confirm failed: $CONF1"
+  ok "Alice registered + confirmed ($USER1_ID)"
+elif [ -n "$TOKEN1" ]; then
+  # BOA90 lock: non-Al may still get legacy session until EMAIL_CONFIRM_MAIL_OPEN=true
+  [ -n "$USER1_ID" ] || die "Alice registration failed: $RES1"
+  ok "Alice registered via legacy session during BOA90 lock ($USER1_ID)"
+else
+  die "Alice registration failed: $RES1"
+fi
 
 # 3. Register User 2 (Bob)
 echo "👤 Registering Bob..."
@@ -86,14 +95,22 @@ RES2=$(curl -s -X POST "$API_URL/auth/register" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"bob+$SUFFIX@test.com\",\"password\":\"password123\",\"name\":\"Bob\",\"age\":28,\"invite_code\":\"$BETA_CODE\"}")
 CONFIRM2=$(json_field "$RES2" "devConfirmToken")
-[ -n "$CONFIRM2" ] || die "Bob registration failed (no confirm token): $RES2"
-CONF2=$(curl -s -X POST "$API_URL/auth/confirm-email" \
-  -H "Content-Type: application/json" \
-  -d "{\"token\":\"$CONFIRM2\"}")
-TOKEN2=$(json_field "$CONF2" "token")
-USER2_ID=$(json_field "$CONF2" "user.id")
-[ -n "$TOKEN2" ] || die "Bob confirm failed: $CONF2"
-ok "Bob registered + confirmed ($USER2_ID)"
+TOKEN2=$(json_field "$RES2" "token")
+USER2_ID=$(json_field "$RES2" "user.id")
+if [ -n "$CONFIRM2" ]; then
+  CONF2=$(curl -s -X POST "$API_URL/auth/confirm-email" \
+    -H "Content-Type: application/json" \
+    -d "{\"token\":\"$CONFIRM2\"}")
+  TOKEN2=$(json_field "$CONF2" "token")
+  USER2_ID=$(json_field "$CONF2" "user.id")
+  [ -n "$TOKEN2" ] || die "Bob confirm failed: $CONF2"
+  ok "Bob registered + confirmed ($USER2_ID)"
+elif [ -n "$TOKEN2" ]; then
+  [ -n "$USER2_ID" ] || die "Bob registration failed: $RES2"
+  ok "Bob registered via legacy session during BOA90 lock ($USER2_ID)"
+else
+  die "Bob registration failed: $RES2"
+fi
 
 # 4. Login
 echo "🔐 Testing login..."

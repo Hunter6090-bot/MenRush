@@ -84,14 +84,15 @@ apiClient.interceptors.response.use(
 export const authAPI = {
   register: (data: unknown) =>
     apiClient.post<{
-      ok: boolean;
-      requiresEmailConfirm: boolean;
-      email: string;
+      ok?: boolean;
+      requiresEmailConfirm?: boolean;
+      email?: string;
       message?: string;
       // Present only in non-production / EMAIL_CONFIRM_EXPOSE_TOKEN — never a session JWT.
       devConfirmToken?: string;
-      user?: never;
-      token?: never;
+      // Legacy session only while EMAIL_CONFIRM_MAIL_OPEN is false (non-Al signups).
+      user?: import('../lib/authSession').StoredAuthUser;
+      token?: string;
     }>('/auth/register', data),
   login: (data: { email: string; password: string; deviceTrustToken?: string }) =>
     apiClient.post('/auth/login', data),

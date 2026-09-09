@@ -116,6 +116,38 @@ export function shouldExposeConfirmToken(): boolean {
   return process.env.NODE_ENV !== 'production';
 }
 
+/**
+ * Al lock (8 Sep 2026): first live confirm + welcome sends go to Al / BOA90 only.
+ * Default is locked until EMAIL_CONFIRM_MAIL_OPEN=true after Al Approves on BOA90.
+ * Transactional only — never a Resend blast / drip batch.
+ */
+export const EMAIL_CONFIRM_OWNER_EMAILS = ['al@menrush.com'] as const;
+export const EMAIL_CONFIRM_OWNER_NAMES = ['BOA90'] as const;
+
+export function isEmailConfirmMailOpen(): boolean {
+  const v = (process.env.EMAIL_CONFIRM_MAIL_OPEN ?? 'false').trim().toLowerCase();
+  return v === 'true' || v === '1' || v === 'yes';
+}
+
+/** True when confirm/welcome may be sent to this account (open gate, or owner allowlist). */
+export function maySendEmailConfirmTransactional(
+  email: string,
+  displayName?: string | null,
+): boolean {
+  if (isEmailConfirmMailOpen()) return true;
+  const normalized = email.trim().toLowerCase();
+  if ((EMAIL_CONFIRM_OWNER_EMAILS as readonly string[]).includes(normalized)) return true;
+  if (
+    displayName &&
+    (EMAIL_CONFIRM_OWNER_NAMES as readonly string[]).some(
+      (n) => n.toLowerCase() === displayName.trim().toLowerCase(),
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')

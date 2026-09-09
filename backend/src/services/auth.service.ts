@@ -27,6 +27,7 @@ import {
   buildWelcomeEmailHtml,
   buildWelcomeEmailText,
   shouldExposeConfirmToken,
+  maySendEmailConfirmTransactional,
 } from './email-confirm.emails';
 import { v4 as uuidv4 } from 'uuid';
 import { inviteCodeService } from './invite-code.service';
@@ -328,6 +329,28 @@ export const authService = {
         }
       }
 
+      // Al lock: confirm/welcome mails only to al@menrush.com / BOA90 until
+      // EMAIL_CONFIRM_MAIL_OPEN=true. Others keep legacy live session (no mass-send).
+      const sendConfirmMail = maySendEmailConfirmTransactional(
+        user.email as string,
+        user.name as string,
+      );
+
+      if (!sendConfirmMail) {
+        await query(
+          `UPDATE users SET email_confirmed = TRUE, updated_at = NOW() WHERE id = $1`,
+          [user.id],
+        );
+        console.log(
+          `[email-confirm] BOA90 lock — held confirm/welcome mail for ${user.email}; legacy session issued. First live mails are Al-only until EMAIL_CONFIRM_MAIL_OPEN=true.`,
+        );
+        return {
+          user,
+          token: signToken(user.id),
+          requiresEmailConfirm: false as const,
+        };
+      }
+
       // No session token until email is confirmed (product gate 8 Sep 2026).
       const rawConfirmToken = await this.createEmailConfirmToken(user.id);
       try {
@@ -375,6 +398,13 @@ export const authService = {
   },
 
   async sendConfirmEmail(deliverTo: string, rawToken: string): Promise<void> {
+    if (!maySendEmailConfirmTransactional(deliverTo)) {
+      console.log(
+        `[email-confirm] BOA90 lock — skipped confirm mail to ${deliverTo} (Al-only until EMAIL_CONFIRM_MAIL_OPEN=true)`,
+      );
+      return;
+    }
+
     const frontendUrl = (process.env.FRONTEND_URL || 'https://menrush.com').replace(/\/$/, '');
     const confirmUrl = `${frontendUrl}/confirm-email?token=${rawToken}`;
 
@@ -387,6 +417,13 @@ export const authService = {
   },
 
   async sendWelcomeEmailOnce(userId: string, deliverTo: string): Promise<boolean> {
+    if (!maySendEmailConfirmTransactional(deliverTo)) {
+      console.log(
+        `[email-confirm] BOA90 lock — skipped welcome mail to ${deliverTo} (Al-only until EMAIL_CONFIRM_MAIL_OPEN=true)`,
+      );
+      return false;
+    }
+
     // Claim the send slot first so concurrent confirm clicks cannot double-send.
     const claimed = await query(
       `UPDATE users

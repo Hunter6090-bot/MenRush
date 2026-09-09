@@ -81,7 +81,9 @@ async function main() {
       console.log('[smoke] PASS (partial)');
       return;
     }
-  } else if (!reg.body?.devConfirmToken) {
+  } else if (reg.body?.requiresEmailConfirm) {
+    console.log('[smoke] register ok (unexpected: confirm required but token present)');
+  } else {
     console.log('[smoke] register ok');
   }
 
