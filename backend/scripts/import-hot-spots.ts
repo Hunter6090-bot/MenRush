@@ -1,63 +1,56 @@
 /**
- * Import Hot Spots from a Squirt-style (or similar) JSON/CSV export.
+ * Import Hot Spots from a local JSON/CSV export (ops / first-party curation only).
  *
- * Freshness rule: skip any spot with no check-in OR comment activity
- * within the last 30 days (`lastActivity` / `last_checkin` / `last_comment`).
+ * Commercial venues only (saunas / nightlife / bars / cinema). Outdoor, parks,
+ * parking, transit, rest-facilities, and PSE-coded rows are rejected.
  *
- * Credentials: never hardcode. Optional scrape helpers may read SQUIRT_EMAIL /
- * SQUIRT_PASSWORD / SQUIRT_SESSION from the environment — this script itself
- * only imports a local file you already exported.
+ * Never invent lat/lng. Never scrape competitor sites from CI. Prefer venue-supplied
+ * or hand-verified coordinates. See docs/commercial-venue-hot-spots.md.
+ *
+ * Freshness rule (legacy community exports): skip rows with no check-in OR comment
+ * activity within the last 30 days when those fields are present.
  *
  * Usage:
- *   npm run hotspots:import -- --file /path/to/spots.json
- *   npm run hotspots:import -- --file /path/to/spots.csv --source squirt --dry-run
+ *   npm run hotspots:import -- --file /path/to/venues.json --dry-run
+ *   npm run hotspots:seed-commercial -- --file ./data/commercial-venues.sample.json --dry-run
  *
- * JSON shape (array or { spots: [...] }):
+ * Preferred commercial JSON shape:
  *   {
- *     "name": "Hampstead Heath",
+ *     "name": "Sweatbox Soho",
  *     "city": "London",
- *     "lat": 51.5613,
- *     "lng": -0.1722,
- *     "category": "open-spaces",
- *     "description": optional,
- *     "externalId": optional unique id from source,
- *     "lastActivity": "2026-07-01T12:00:00Z",
- *     "lastCheckin": optional ISO date,
- *     "lastComment": optional ISO date
+ *     "lat": 51.5132,
+ *     "lng": -0.1391,
+ *     "category": "saunas",
+ *     "nation": "England",
+ *     "source_url": "https://example.com",
+ *     "externalId": "ops-sweatbox-soho"
  *   }
  */
 import fs from 'fs';
 import path from 'path';
 import pool from '../src/db';
+import { COMMERCIAL_HOT_SPOT_CATEGORY_SLUGS } from '../src/services/hot-spots.service';
 
 const FRESHNESS_DAYS = 30;
+
+const ALLOWED = new Set<string>(COMMERCIAL_HOT_SPOT_CATEGORY_SLUGS);
 
 const CATEGORY_ALIASES: Record<string, string> = {
   sauna: 'saunas',
   saunas: 'saunas',
   spa: 'saunas',
   bathhouse: 'saunas',
-  park: 'parks-trails',
-  parks: 'parks-trails',
-  'parks-trails': 'parks-trails',
-  trail: 'parks-trails',
-  trails: 'parks-trails',
-  common: 'open-spaces',
-  commons: 'open-spaces',
-  'open-spaces': 'open-spaces',
-  heath: 'open-spaces',
-  outdoor: 'open-spaces',
-  parking: 'parking',
-  'car park': 'parking',
-  carpark: 'parking',
-  transit: 'transit',
-  station: 'transit',
-  stations: 'transit',
-  rest: 'rest-facilities',
-  'rest-facilities': 'rest-facilities',
-  toilets: 'rest-facilities',
-  amenities: 'rest-facilities',
+  club: 'nightlife',
+  nightlife: 'nightlife',
+  bar: 'bars',
+  bars: 'bars',
+  cinema: 'cinema',
+  'cinema-club': 'cinema',
+  'cinema_club': 'cinema',
 };
+
+const RED_REJECT =
+  /cottage|cottaging|glory\s*hole|truck\s*stop|cruising\s*area|nude\s*beach|public\s*toilet|pse\b|outdoor\s*play|known\s*cruising|redruth/i;
 
 type ImportSpot = {
   name: string;
@@ -247,10 +240,12 @@ function resolveActivity(spot: ImportSpot): Date | null {
   return valid.reduce((a, b) => (a.getTime() > b.getTime() ? a : b));
 }
 
-function resolveCategory(raw: string | null | undefined): string {
-  if (!raw) return 'open-spaces';
+function resolveCategory(raw: string | null | undefined): string | null {
+  if (!raw) return null;
   const key = raw.trim().toLowerCase();
-  return CATEGORY_ALIASES[key] ?? CATEGORY_ALIASES[key.replace(/\s+/g, '-')] ?? 'open-spaces';
+  const mapped =
+    CATEGORY_ALIASES[key] ?? CATEGORY_ALIASES[key.replace(/\s+/g, '-')] ?? key;
+  return ALLOWED.has(mapped) ? mapped : null;
 }
 
 async function main() {
@@ -264,9 +259,10 @@ async function main() {
   const spots = ext === '.csv' ? parseCsv(text) : parseJson(text);
 
   const cutoff = Date.now() - args.freshnessDays * 24 * 60 * 60 * 1000;
-  const fresh: Array<ImportSpot & { activityAt: Date }> = [];
+  const fresh: Array<ImportSpot & { activityAt: Date; categorySlug: string }> = [];
   let skippedStale = 0;
   let skippedInvalid = 0;
+  let skippedRed = 0;
 
   for (const spot of spots) {
     if (!spot.name?.trim() || !Number.isFinite(spot.lat) || !Number.isFinite(spot.lng)) {
@@ -277,16 +273,36 @@ async function main() {
       skippedInvalid += 1;
       continue;
     }
+    if (
+      RED_REJECT.test(spot.name) ||
+      RED_REJECT.test(String(spot.city || '')) ||
+      RED_REJECT.test(String(spot.description || '')) ||
+      RED_REJECT.test(String(spot.category || ''))
+    ) {
+      skippedRed += 1;
+      continue;
+    }
+    const categorySlug = resolveCategory(spot.category);
+    if (!categorySlug) {
+      skippedRed += 1;
+      continue;
+    }
     const activityAt = resolveActivity(spot);
-    if (!activityAt || activityAt.getTime() < cutoff) {
+    // Commercial ops rows without activity stamps are allowed (first-party curated).
+    const activity =
+      activityAt ??
+      (args.source.includes('ops') || args.source.includes('commercial')
+        ? new Date()
+        : null);
+    if (!activity || activity.getTime() < cutoff) {
       skippedStale += 1;
       continue;
     }
-    fresh.push({ ...spot, activityAt });
+    fresh.push({ ...spot, activityAt: activity, categorySlug });
   }
 
   console.log(
-    `[hotspots:import] loaded=${spots.length} fresh=${fresh.length} stale_skipped=${skippedStale} invalid_skipped=${skippedInvalid} freshness_days=${args.freshnessDays} dry_run=${args.dryRun}`,
+    `[hotspots:import] loaded=${spots.length} fresh=${fresh.length} stale_skipped=${skippedStale} invalid_skipped=${skippedInvalid} red_skipped=${skippedRed} freshness_days=${args.freshnessDays} dry_run=${args.dryRun}`,
   );
 
   if (args.dryRun) {
@@ -299,7 +315,7 @@ async function main() {
   }
 
   const catRes = await pool.query<{ id: number; slug: string }>(
-    `SELECT id, slug FROM hot_spot_categories`,
+    `SELECT id, slug FROM hot_spot_categories WHERE is_commercial = TRUE`,
   );
   const catBySlug = new Map(catRes.rows.map((r) => [r.slug, r.id]));
 
@@ -307,14 +323,19 @@ async function main() {
   let updated = 0;
 
   for (const spot of fresh) {
-    const slug = resolveCategory(spot.category);
-    const categoryId = catBySlug.get(slug) ?? catBySlug.get('open-spaces');
-    if (!categoryId) throw new Error('hot_spot_categories missing — run migrations first');
+    const slug = spot.categorySlug;
+    const categoryId = catBySlug.get(slug);
+    if (!categoryId) {
+      skippedRed += 1;
+      continue;
+    }
 
     const externalId = spot.externalId?.trim() || null;
     const name = spot.name.trim().slice(0, 120);
     const city = spot.city?.trim().slice(0, 60) || null;
-    const description = spot.description?.trim() || null;
+    const description =
+      spot.description?.trim() ||
+      `Commercial venue. Follow the venue's rules. MenRush does not run this place.`;
 
     if (externalId) {
       const existing = await pool.query(
@@ -326,8 +347,9 @@ async function main() {
           `UPDATE hot_spots
               SET name = $1, city = $2, description = $3,
                   latitude = $4, longitude = $5, category_id = $6,
-                  last_activity_at = $7, is_active = TRUE, is_user_generated = TRUE
-            WHERE id = $8`,
+                  last_activity_at = $7, is_active = TRUE, is_user_generated = FALSE,
+                  venue_type = COALESCE(venue_type, $8)
+            WHERE id = $9`,
           [
             name,
             city,
@@ -336,6 +358,7 @@ async function main() {
             spot.lng,
             categoryId,
             spot.activityAt.toISOString(),
+            slug.replace(/s$/, ''),
             existing.rows[0].id,
           ],
         );
@@ -371,10 +394,10 @@ async function main() {
     }
 
     await pool.query(
-      `INSERT INTO hot_spots
-         (category_id, name, city, description, latitude, longitude,
-          is_user_generated, source, external_id, last_activity_at, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8, $9, TRUE)`,
+      `INSERT INTO hot_spots (
+         category_id, name, city, description, latitude, longitude,
+         is_user_generated, is_active, source, external_id, last_activity_at, venue_type
+       ) VALUES ($1,$2,$3,$4,$5,$6,FALSE,TRUE,$7,$8,$9,$10)`,
       [
         categoryId,
         name,
@@ -385,12 +408,13 @@ async function main() {
         args.source,
         externalId,
         spot.activityAt.toISOString(),
+        slug.replace(/s$/, ''),
       ],
     );
     inserted += 1;
   }
 
-  console.log(`[hotspots:import] inserted=${inserted} updated=${updated} source=${args.source}`);
+  console.log(`[hotspots:import] inserted=${inserted} updated=${updated}`);
   await pool.end();
 }
 

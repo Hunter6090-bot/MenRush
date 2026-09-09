@@ -1,5 +1,6 @@
 import { createRoot, type Root } from 'react-dom/client';
 import { IconCruise } from './icons';
+import { CRUISE_PIN_LABEL } from '../lib/cruiseCopy';
 
 export type HotSpotPinData = {
   id: string;
@@ -18,6 +19,7 @@ interface HotSpotPinProps {
 
 /**
  * Always-visible Cruise marker on the Nearby map — cruise-ship icon at a glance.
+ * Pin label is Brand "Cruise". Chip on the map chrome is "Hot Spots".
  * Empty: solid copper pin (slightly quieter, never near-invisible).
  * Occupied: larger glow + pulse + venue name + approximate check-in count.
  * Does not invent venues or occupancy — only renders existing check-in data.
@@ -38,7 +40,7 @@ export function HotSpotPin({ spot, size = 48 }: HotSpotPinProps) {
       title={
         occupied
           ? `${spot.name} · ${countLabel} checked in`
-          : `${spot.name} · Cruise`
+          : `${spot.name} · ${CRUISE_PIN_LABEL}`
       }
       style={{
         width: pinSize,
@@ -54,6 +56,7 @@ export function HotSpotPin({ spot, size = 48 }: HotSpotPinProps) {
       data-hotspot-id={spot.id}
       data-hotspot-name={spot.name}
       data-cruise-pin="1"
+      data-cruise-label={CRUISE_PIN_LABEL}
     >
       {occupied ? (
         <span
@@ -134,33 +137,31 @@ export function HotSpotPin({ spot, size = 48 }: HotSpotPinProps) {
           }}
         />
       )}
-      {occupied ? (
-        <span
-          data-testid="hotspot-pin-name"
-          style={{
-            position: 'absolute',
-            left: '50%',
-            top: '100%',
-            transform: 'translateX(-50%)',
-            marginTop: 4,
-            maxWidth: 96,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            padding: '2px 6px',
-            borderRadius: 999,
-            background: 'rgba(26, 14, 3, 0.92)',
-            border: '1px solid rgba(196,131,42,0.55)',
-            color: '#F0E0C0',
-            fontSize: 10,
-            fontWeight: 800,
-            lineHeight: 1.2,
-            pointerEvents: 'none',
-          }}
-        >
-          {spot.name}
-        </span>
-      ) : null}
+      <span
+        data-testid={occupied ? 'hotspot-pin-name' : 'cruise-pin-label'}
+        style={{
+          position: 'absolute',
+          left: '50%',
+          top: '100%',
+          transform: 'translateX(-50%)',
+          marginTop: occupied ? 4 : 6,
+          maxWidth: 96,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          padding: '2px 6px',
+          borderRadius: 999,
+          background: 'rgba(26, 14, 3, 0.92)',
+          border: '1px solid rgba(196,131,42,0.55)',
+          color: '#F0E0C0',
+          fontSize: 10,
+          fontWeight: 800,
+          lineHeight: 1.2,
+          pointerEvents: 'none',
+        }}
+      >
+        {occupied ? spot.name : CRUISE_PIN_LABEL}
+      </span>
     </div>
   );
 }
@@ -172,8 +173,8 @@ export function createHotSpotPinElement(
 ): { element: HTMLDivElement; root: Root } {
   const el = document.createElement('div');
   const occupied = spot.live_count_exact > 0;
-  el.style.width = `${Math.max(size, occupied ? 104 : size)}px`;
-  el.style.height = `${size + (occupied ? 28 : 6)}px`;
+  el.style.width = `${Math.max(size, occupied ? 104 : 72)}px`;
+  el.style.height = `${size + 28}px`;
   el.style.position = 'relative';
   el.style.cursor = 'pointer';
   el.style.zIndex = occupied ? '3' : '2';

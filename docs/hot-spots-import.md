@@ -1,58 +1,58 @@
-# Hot Spots import (Squirt-style / community exports)
+# Hot Spots import (commercial venues only)
 
-Manual import path for cruising / venue dumps. **Do not scrape behind a login from CI
-or commit credentials.** Prefer a local export file you already have.
+Ops / first-party curated commercial venue import. **Do not scrape competitor listings
+from CI or commit credentials.** Prefer venue-supplied or hand-verified coordinates.
 
-## Freshness rule
+For the product lock, Brand face, and growth pointer checklist see
+[`commercial-venue-hot-spots.md`](./commercial-venue-hot-spots.md).
 
-Only spots with a check-in **or** comment (any of `lastActivity`, `lastCheckin`,
-`lastComment`) within the last **30 days** are imported. Older rows are skipped.
+## Allowed categories
 
-## Env vars (optional — never commit values)
+`saunas`, `nightlife`, `bars`, `cinema` only.
 
-| Var | Purpose |
-| --- | --- |
-| `SQUIRT_EMAIL` | Account email if you run a private scrape tooling outside this repo |
-| `SQUIRT_PASSWORD` | Account password (local shell / secret manager only) |
-| `SQUIRT_SESSION` | Session cookie / token if using an authenticated export helper |
-| `DATABASE_URL` | Postgres URL for the import script |
+Outdoor, parks, parking, transit, rest-facilities, PSE, cottaging, and similar RED rows
+are rejected by the importer.
 
-This repo’s import script **does not** call Squirt. It only reads a local JSON/CSV.
-
-## Commands
-
-From `backend/`:
+## Preferred path
 
 ```bash
-# Dry-run (no DB writes)
-npm run hotspots:import -- --file ../tmp/squirt-spots.json --dry-run
-
-# Import
-npm run hotspots:import -- --file ../tmp/squirt-spots.json --source squirt-import
-
-# CSV
-npm run hotspots:import -- --file ../tmp/spots.csv --source squirt-import
+cd backend
+npm run hotspots:seed-commercial -- --file ./data/your-verified-venues.json --dry-run
+npm run hotspots:seed-commercial -- --file ./data/your-verified-venues.json
 ```
+
+Sample template (coords intentionally null — fill after hand verification):
+
+`backend/data/commercial-venues.sample.json`
+
+## Legacy import
+
+```bash
+npm run hotspots:import -- --file ../tmp/venues.json --source ops-commercial --dry-run
+```
+
+Still reads a local JSON/CSV only. Commercial allow-list enforced. Freshness window applies
+unless `source` contains `ops` or `commercial`.
 
 ## JSON shape
 
 ```json
 {
-  "spots": [
+  "venues": [
     {
-      "name": "Example Heath",
+      "name": "Sweatbox Soho",
       "city": "London",
-      "lat": 51.56,
-      "lng": -0.17,
-      "category": "open-spaces",
-      "description": "Optional note",
-      "externalId": "squirt-123",
-      "lastActivity": "2026-07-10T12:00:00Z",
-      "lastCheckin": "2026-07-09T18:00:00Z",
-      "lastComment": "2026-07-08T09:00:00Z"
+      "nation": "England",
+      "category": "saunas",
+      "venue_type": "sauna",
+      "lat": 51.5132,
+      "lng": -0.1391,
+      "source_url": "https://example.com",
+      "external_id": "ops-sweatbox-soho",
+      "verified_at": "2026-09-09T12:00:00Z"
     }
   ]
 }
 ```
 
-CSV headers (flexible aliases): `name,city,lat,lng,category,description,externalId,lastActivity,lastCheckin,lastComment`.
+Never invent lat/lng. Never seed hours, prices, or fake check-in counts.

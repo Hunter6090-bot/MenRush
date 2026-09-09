@@ -59,6 +59,7 @@ import { readLayerVisible, writeLayerVisible } from '../lib/discoveryLayers';
 import { useIsDesktopLayout } from '../hooks/useMediaQuery';
 import { ProximitySlider } from '../components/ProximitySlider';
 import { IconMapExpand, IconDiscover, IconHotSpots } from '../components/icons';
+import { HOT_SPOTS_CHIP_LABEL, HOT_SPOTS_HELPER, HOT_SPOTS_RULES } from '../lib/cruiseCopy';
 import { MapLiveStatus } from '../components/MapLiveStatus';
 
 /** Map panel: swipe up to hide, swipe down to show, expand for large map. */
@@ -154,12 +155,15 @@ function MapFloatingChrome({
             type="button"
             onClick={onToggleHotSpotsLayer}
             data-testid="layer-toggle-hotspots"
-            aria-label={hotSpotsLayerOn ? 'Hide Cruise' : 'Show Cruise'}
+            aria-label={hotSpotsLayerOn ? `Hide ${HOT_SPOTS_CHIP_LABEL}` : `Show ${HOT_SPOTS_CHIP_LABEL}`}
             aria-pressed={hotSpotsLayerOn}
-            title={hotSpotsLayerOn ? 'Hide Cruise' : 'Show Cruise'}
-            className={`${mapChromeBtnClass} ${hotSpotsLayerOn ? '' : 'opacity-45'}`}
+            title={hotSpotsLayerOn ? `Hide ${HOT_SPOTS_CHIP_LABEL}` : `Show ${HOT_SPOTS_CHIP_LABEL}`}
+            className={`${mapChromeBtnClass} ${hotSpotsLayerOn ? '' : 'opacity-45'} gap-1 px-2.5`}
           >
             <IconHotSpots size={18} />
+            <span className="hidden text-[10px] font-extrabold tracking-wide sm:inline">
+              {HOT_SPOTS_CHIP_LABEL}
+            </span>
           </button>
           <button
             type="button"
@@ -187,6 +191,23 @@ function MapFloatingChrome({
           ) : null}
         </div>
       </div>
+      {hotSpotsLayerOn ? (
+        <div
+          className="pointer-events-none absolute inset-x-0 top-14 z-10 flex justify-center px-3"
+          data-testid="hotspots-map-helper"
+        >
+          <p
+            className="max-w-md rounded-xl border px-3 py-1.5 text-center text-[10px] font-semibold leading-snug"
+            style={{
+              background: 'rgba(13,10,6,0.88)',
+              color: 'rgba(240,224,192,0.88)',
+              borderColor: 'rgba(196,131,42,0.35)',
+            }}
+          >
+            {HOT_SPOTS_HELPER} {HOT_SPOTS_RULES}
+          </p>
+        </div>
+      ) : null}
       <MapLiveStatus
         nearbyCount={nearbyCount}
         liveCount={liveCount}
