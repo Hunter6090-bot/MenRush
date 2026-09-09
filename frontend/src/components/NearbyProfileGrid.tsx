@@ -16,7 +16,7 @@ import {
   matchInterestState,
 } from '../lib/matchCta';
 import { Link } from 'react-router-dom';
-import { useEffect } from 'react';
+import { memo, useEffect } from 'react';
 
 interface NearbyProfileGridProps {
   users: NearbyUser[];
@@ -48,7 +48,7 @@ interface NearbyProfileGridProps {
   beyondRadiusCount?: number;
 }
 
-export function NearbyProfileGrid({
+export const NearbyProfileGrid = memo(function NearbyProfileGrid({
   users,
   loading,
   onSelect,
@@ -258,9 +258,15 @@ export function NearbyProfileGrid({
       })}
     </div>
   );
-}
+});
 
-function GridCardFace({ user, meta }: { user: NearbyUser; meta: string }) {
+const GridCardFace = memo(function GridCardFace({
+  user,
+  meta,
+}: {
+  user: NearbyUser;
+  meta: string;
+}) {
   return (
     <div className="relative aspect-square w-full bg-[var(--bg-elevated)]">
       <GridPhoto name={user.name} photoUrl={user.photo_url} age={user.age} />
@@ -281,7 +287,7 @@ function GridCardFace({ user, meta }: { user: NearbyUser; meta: string }) {
       </div>
     </div>
   );
-}
+});
 
 function GridPhoto({
   name,
