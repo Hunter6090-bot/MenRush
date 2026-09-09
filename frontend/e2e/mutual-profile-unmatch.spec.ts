@@ -70,6 +70,7 @@ test('mutual profile shows Pass, Open chat, Unmatch — not two chat buttons', a
   await page.goto(`/profile/${bobId}`);
   await expect(page.getByTestId('profile-view-message')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId('profile-view-message')).toHaveText('Open chat');
+  await expect(page.getByTestId('profile-view-matched-status')).toHaveText(/Matched with/i);
   await expect(page.getByTestId('profile-view-unmatch')).toBeVisible();
   await expect(page.getByTestId('profile-view-unmatch')).toHaveText('Unmatch');
   await expect(page.getByRole('button', { name: 'Pass' })).toBeVisible();

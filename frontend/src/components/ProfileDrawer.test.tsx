@@ -80,6 +80,7 @@ describe('ProfileDrawer grid sheet layout', () => {
     expect(screen.getByRole('button', { name: /view full profile/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^pass$/i })).toBeInTheDocument();
     expect(screen.getByTestId('drawer-match')).toBeInTheDocument();
+    expect(screen.getByTestId('drawer-match')).toHaveTextContent(/^Match$/);
     expect(screen.getByText(/match is mutual interest/i)).toBeInTheDocument();
   });
 
@@ -89,5 +90,68 @@ describe('ProfileDrawer grid sheet layout', () => {
     const photoBand = hero.querySelector('[class*="overflow-hidden"]');
     expect(photoBand).toBeTruthy();
     expect(photoBand!.textContent).toMatch(/28 mi/);
+  });
+
+  it('shows muted Match (not Matched with) when one-way pending', () => {
+    render(
+      <MemoryRouter>
+        <ProfileDrawer
+          user={graham}
+          liked
+          mutual={false}
+          onClose={vi.fn()}
+          onLike={vi.fn()}
+          onPass={vi.fn()}
+          onMessage={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    const btn = screen.getByTestId('drawer-match');
+    expect(btn).toHaveTextContent(/^Match$/);
+    expect(btn).toBeDisabled();
+    expect(btn).not.toHaveTextContent(/Matched/i);
+    expect(btn.className).toMatch(/cream-muted|opacity-70|cursor-not-allowed/);
+  });
+
+  it('shows Matched with {name} only when mutual', () => {
+    render(
+      <MemoryRouter>
+        <ProfileDrawer
+          user={graham}
+          liked
+          mutual
+          onClose={vi.fn()}
+          onLike={vi.fn()}
+          onPass={vi.fn()}
+          onMessage={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    const btn = screen.getByTestId('drawer-open-chat');
+    expect(btn).toHaveTextContent('Matched with Graham');
+    expect(btn).not.toBeDisabled();
+  });
+
+  it('exposes enlarge hooks on cover and avatar when photos exist', () => {
+    const withPhotos: NearbyUser = {
+      ...graham,
+      photo_url: 'https://cdn.example/photo.jpg',
+      cover_url: 'https://cdn.example/cover.jpg',
+    };
+    render(
+      <MemoryRouter>
+        <ProfileDrawer
+          user={withPhotos}
+          liked={false}
+          onClose={vi.fn()}
+          onLike={vi.fn()}
+          onPass={vi.fn()}
+          onMessage={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('drawer-cover-enlarge')).toBeInTheDocument();
+    expect(screen.getByTestId('drawer-avatar-graham-1')).toBeInTheDocument();
+    expect(screen.getByTestId('drawer-avatar-graham-1').tagName).toBe('BUTTON');
   });
 });

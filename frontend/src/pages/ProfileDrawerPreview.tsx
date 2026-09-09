@@ -5,7 +5,7 @@ import { applyTheme } from '../lib/theme';
 
 /**
  * DEV-only visual harness for the Nearby grid → profile sheet (ProfileDrawer).
- * Reproduces the owner-phone layout case (Graham / silhouette / distance pill).
+ * Reproduces match CTA states + tap-to-enlarge for avatar/cover.
  * Route: /dev/profile-sheet
  */
 const GRAHAM: NearbyUser = {
@@ -18,15 +18,22 @@ const GRAHAM: NearbyUser = {
   online: false,
   distance_km: 45,
   distance_label: '28 mi',
+  photo_url: '/images/menrush/30-bear-portrait-night.jpeg',
+  cover_url: '/images/menrush/31-london-rooftop-dusk.jpeg',
 };
+
+type MatchDemo = 'none' | 'outgoing' | 'mutual';
 
 export function ProfileDrawerPreview() {
   const [open, setOpen] = useState(true);
-  const [liked, setLiked] = useState(false);
+  const [matchDemo, setMatchDemo] = useState<MatchDemo>('none');
 
   useEffect(() => {
     applyTheme('dark');
   }, []);
+
+  const liked = matchDemo === 'outgoing' || matchDemo === 'mutual';
+  const mutual = matchDemo === 'mutual';
 
   return (
     <div
@@ -39,16 +46,42 @@ export function ProfileDrawerPreview() {
           Profile sheet preview
         </p>
         <p className="mt-1 text-[12px] text-[var(--cream-muted)]">
-          Nearby grid → pull-up sheet. Avatar must be fully visible; distance not on the face.
+          Match CTA: idle / one-way pending / mutual. Tap avatar or cover to enlarge.
         </p>
-        <button
-          type="button"
-          className="mt-3 rounded-full border border-[rgba(196,131,42,0.35)] px-3 py-1.5 text-[12px] font-semibold"
-          onClick={() => setOpen(true)}
-          data-testid="profile-sheet-preview-open"
-        >
-          Open sheet
-        </button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded-full border border-[rgba(196,131,42,0.35)] px-3 py-1.5 text-[12px] font-semibold"
+            onClick={() => setOpen(true)}
+            data-testid="profile-sheet-preview-open"
+          >
+            Open sheet
+          </button>
+          {(
+            [
+              ['none', 'Idle Match'],
+              ['outgoing', 'One-way pending'],
+              ['mutual', 'Mutual'],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              data-testid={`profile-sheet-demo-${key}`}
+              className={`rounded-full border px-3 py-1.5 text-[12px] font-semibold ${
+                matchDemo === key
+                  ? 'border-[var(--copper)] bg-[rgba(196,131,42,0.18)] text-[var(--copper)]'
+                  : 'border-[var(--border-default)] text-[var(--cream-muted)]'
+              }`}
+              onClick={() => {
+                setMatchDemo(key);
+                setOpen(true);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="px-4 py-8 text-[13px] text-[var(--cream-muted)]">
         Simulated Nearby grid behind the sheet (phone widths).
@@ -57,8 +90,9 @@ export function ProfileDrawerPreview() {
         <ProfileDrawer
           user={GRAHAM}
           liked={liked}
+          mutual={mutual}
           onClose={() => setOpen(false)}
-          onLike={() => setLiked(true)}
+          onLike={() => setMatchDemo('outgoing')}
           onPass={() => setOpen(false)}
           onMessage={() => undefined}
         />

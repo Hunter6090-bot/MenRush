@@ -3,13 +3,21 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { usersAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
 import { Layout } from '../components/Layout';
-import { UserAvatar } from '../components/UserAvatar';
+import { UserAvatar, getPhotoUrl } from '../components/UserAvatar';
 import { CoverBanner, normalizeCoverFrame } from '../components/CoverBanner';
+import { ProfilePhotoViewer } from '../components/ProfilePhotoViewer';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { ProfileAlbumsSection } from '../components/ProfileAlbumsSection';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 import { formatHeight, formatWeight } from '../lib/age';
+import {
+  matchCtaAriaLabel,
+  matchCtaDisabled,
+  matchCtaLabel,
+  matchCtaToneClasses,
+  matchInterestState,
+} from '../lib/matchCta';
 
 interface ViewableUser {
   is_verified?: boolean;
@@ -91,6 +99,7 @@ export const ProfileView = () => {
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(
     null,
   );
+  const [viewer, setViewer] = useState<{ src: string; alt: string } | null>(null);
 
   useEffect(() => {
     if (!id) {
@@ -132,11 +141,7 @@ export const ProfileView = () => {
   }, []);
 
   const handleMatch = useCallback(async () => {
-    if (!user || matching || mutual) return;
-    if (liked) {
-      flash(`Match already sent to ${user.name}. Chat unlocks when he matches back · consent first.`);
-      return;
-    }
+    if (!user || matching || mutual || liked) return;
     setMatching(true);
     try {
       const res = await usersAPI.likeUser(user.id);
@@ -230,6 +235,10 @@ export const ProfileView = () => {
     );
   }
 
+  const matchState = matchInterestState({ liked, mutual });
+  const coverSrc = user.cover_url ? getPhotoUrl(user.cover_url) : undefined;
+  const photoSrc = user.photo_url ? getPhotoUrl(user.photo_url) : undefined;
+
   return (
     <Layout>
       <div className="max-w-xl mx-auto px-4 py-6 pb-10 space-y-4">
@@ -250,28 +259,57 @@ export const ProfileView = () => {
         ) : null}
 
         <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl overflow-hidden shadow-card" data-testid="profile-view-body">
-          {user.cover_url ? (
-            <CoverBanner
-              coverUrl={user.cover_url}
-              frame={normalizeCoverFrame(
-                user.cover_position_x,
-                user.cover_position_y,
-                user.cover_zoom,
-              )}
-            />
+          {coverSrc ? (
+            <button
+              type="button"
+              data-testid="profile-view-cover-enlarge"
+              aria-label={`Enlarge ${user.name}'s cover`}
+              className="block w-full cursor-zoom-in p-0 border-0 bg-transparent"
+              onClick={() => setViewer({ src: coverSrc, alt: `${user.name}'s cover` })}
+            >
+              <CoverBanner
+                coverUrl={user.cover_url!}
+                frame={normalizeCoverFrame(
+                  user.cover_position_x,
+                  user.cover_position_y,
+                  user.cover_zoom,
+                )}
+              />
+            </button>
           ) : (
             <div className="h-40 sm:h-32 bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#A45E18]/10" />
           )}
           <div className="px-5 pb-5">
             <div className="-mt-10 mb-3 flex items-end justify-between gap-2">
-              <UserAvatar
-                name={user.name}
-                photoUrl={user.photo_url}
-                age={user.age}
-                online={user.online}
-                size="xl"
-                className="ring-4 ring-[var(--bg-card)]"
-              />
+              {photoSrc ? (
+                <button
+                  type="button"
+                  data-testid="profile-view-avatar-enlarge"
+                  aria-label={`Enlarge ${user.name}'s photo`}
+                  className="rounded-full cursor-zoom-in p-0 border-0 bg-transparent"
+                  onClick={() => setViewer({ src: photoSrc, alt: user.name })}
+                >
+                  <UserAvatar
+                    name={user.name}
+                    photoUrl={user.photo_url}
+                    age={user.age}
+                    online={user.online}
+                    size="xl"
+                    linkToProfile={false}
+                    className="ring-4 ring-[var(--bg-card)]"
+                  />
+                </button>
+              ) : (
+                <UserAvatar
+                  name={user.name}
+                  photoUrl={user.photo_url}
+                  age={user.age}
+                  online={user.online}
+                  size="xl"
+                  linkToProfile={false}
+                  className="ring-4 ring-[var(--bg-card)]"
+                />
+              )}
               <div className="flex items-center gap-1.5 pb-1">
                 <StatusBadge online={!!user.online} lastSeen={user.last_seen} />
                 <div className="rounded-full border border-[var(--border-default)] bg-[var(--bg-primary)]/60">
@@ -357,11 +395,18 @@ export const ProfileView = () => {
           </button>
           {mutual ? (
             <>
+              <span
+                data-testid="profile-view-matched-status"
+                className="flex-[1.2] min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide text-center border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] text-[var(--copper)]"
+                aria-label={matchCtaAriaLabel('mutual', user.name)}
+              >
+                {matchCtaLabel('mutual', user.name)}
+              </span>
               <button
                 type="button"
                 onClick={handleMessage}
                 data-testid="profile-view-message"
-                className="flex-[1.4] min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide active:scale-[0.98] transition-all border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] text-[var(--copper)]"
+                className="flex-[1.2] min-w-[6.5rem] py-3 rounded-xl font-black text-sm tracking-wide active:scale-[0.98] transition-all border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] text-[var(--copper)]"
               >
                 Open chat
               </button>
@@ -379,16 +424,16 @@ export const ProfileView = () => {
             <>
               <button
                 type="button"
-                disabled={matching}
+                disabled={matchCtaDisabled(matchState, matching)}
+                aria-disabled={matchCtaDisabled(matchState, matching)}
+                aria-label={matchCtaAriaLabel(matchState, user.name)}
                 onClick={() => void handleMatch()}
                 data-testid="profile-view-match"
-                className={`flex-[1.4] min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide active:scale-[0.98] transition-all disabled:opacity-60 ${
-                  liked
-                    ? 'border border-[var(--copper)]/50 bg-transparent text-[var(--copper)]'
-                    : 'bg-[var(--copper)] text-[var(--nn-on-copper)] hover:bg-[var(--copper-light,#E0A14A)]'
-                }`}
+                className={`flex-[1.4] min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide transition-all ${
+                  matchState === 'none' ? 'uppercase active:scale-[0.98]' : ''
+                } ${matchCtaToneClasses(matchState)}`}
               >
-                {matching ? 'Sending…' : liked ? 'Matched' : 'Match'}
+                {matchCtaLabel(matchState, user.name, { sending: matching })}
               </button>
               <button
                 type="button"
@@ -405,6 +450,13 @@ export const ProfileView = () => {
           Match is mutual interest · Chat unlocks when he matches back · Report anytime
         </p>
       </div>
+      {viewer ? (
+        <ProfilePhotoViewer
+          src={viewer.src}
+          alt={viewer.alt}
+          onClose={() => setViewer(null)}
+        />
+      ) : null}
     </Layout>
   );
 };
