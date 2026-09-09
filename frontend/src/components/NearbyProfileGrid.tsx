@@ -8,6 +8,13 @@ import {
   PROFILE_TILE_SKELETON_CLASS,
 } from '../lib/profileTileGrid';
 import { useGridPhotoSrc, clearGridPhotoQueue } from '../lib/nearbyPhotoSrc';
+import {
+  matchCtaAriaLabel,
+  matchCtaCompactToneClasses,
+  matchCtaDisabled,
+  matchCtaLabel,
+  matchInterestState,
+} from '../lib/matchCta';
 import { Link } from 'react-router-dom';
 import { useEffect } from 'react';
 
@@ -189,6 +196,8 @@ export function NearbyProfileGrid({
         const liked = likedUserIds?.has(user.id) ?? false;
         const mutual = mutualUserIds?.has(user.id) ?? false;
         const matching = matchingUserId === user.id;
+        const matchState = matchInterestState({ liked, mutual });
+        const matchDisabled = matchCtaDisabled(matchState, matching);
         return (
           <div
             key={user.id}
@@ -222,21 +231,25 @@ export function NearbyProfileGrid({
               <div className="border-t border-[var(--border-default)] p-1 md:p-1.5">
                 <button
                   type="button"
-                  disabled={matching}
+                  disabled={matchDisabled}
+                  aria-disabled={matchDisabled}
+                  aria-label={matchCtaAriaLabel(matchState, user.name, {
+                    mutualOpensChat: true,
+                  })}
                   data-testid={`grid-match-${user.id}`}
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (matchDisabled) return;
                     void onMatch(user);
                   }}
-                  className={`w-full rounded-lg py-1.5 text-[10px] font-extrabold uppercase tracking-wide transition-colors disabled:opacity-60 md:rounded-xl md:py-2 md:text-[11px] ${
-                    mutual
-                      ? 'border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] text-[#E0A14A]'
-                      : liked
-                        ? 'border border-[rgba(196,131,42,0.5)] bg-transparent text-[#C4832A]'
-                        : 'bg-[#C4832A] text-[#1A0E03] hover:bg-[#E0A14A]'
-                  }`}
+                  className={`w-full rounded-lg py-1.5 text-[10px] font-extrabold tracking-wide transition-colors md:rounded-xl md:py-2 md:text-[11px] ${
+                    matchState === 'none' || matching ? 'uppercase' : ''
+                  } ${matchCtaCompactToneClasses(matchState)}`}
                 >
-                  {matching ? 'Sending…' : mutual ? 'Open chat' : liked ? 'Matched' : 'Match'}
+                  {matchCtaLabel(matchState, user.name, {
+                    sending: matching,
+                    mutualLabel: 'open_chat',
+                  })}
                 </button>
               </div>
             ) : null}

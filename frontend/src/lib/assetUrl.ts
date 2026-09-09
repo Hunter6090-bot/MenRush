@@ -61,6 +61,12 @@ export function resolveAssetUrl(url?: string | null): string | undefined {
     return origin ? `${origin}${trimmed}` : trimmed;
   }
 
+  // Public marketing / fixture images ship with the Vite app, not the API.
+  if (trimmed.startsWith('/images/') || trimmed.startsWith('/brand/')) {
+    const origin = getFrontendOrigin();
+    return origin ? `${origin}${trimmed}` : trimmed;
+  }
+
   // Signed chat media (`/api/messages/.../media?access=`) — keep same-origin so
   // Vercel rewrite + Safari byte-range play on one host (absolute Railway URLs
   // made iPhone video open ~12s after the message already arrived).
@@ -85,6 +91,10 @@ export function resolveUploadUrlCandidates(url?: string | null): string[] {
     return [trimmed];
   }
   if (trimmed.startsWith('/avatars/')) {
+    const resolved = resolveAssetUrl(trimmed);
+    return resolved ? [resolved] : [];
+  }
+  if (trimmed.startsWith('/images/') || trimmed.startsWith('/brand/')) {
     const resolved = resolveAssetUrl(trimmed);
     return resolved ? [resolved] : [];
   }

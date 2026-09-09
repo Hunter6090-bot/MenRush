@@ -4,6 +4,13 @@ import { usersAPI } from '../api/client';
 import { UserAvatar } from './UserAvatar';
 import { profilePathForUser } from '../lib/profileLinks';
 import { useAuthStore } from '../hooks/store';
+import {
+  matchCtaAriaLabel,
+  matchCtaCompactToneClasses,
+  matchCtaDisabled,
+  matchCtaLabel,
+  matchInterestState,
+} from '../lib/matchCta';
 
 interface ProfileSearchModalProps {
   open: boolean;
@@ -117,10 +124,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
       navigate(`/messages/${hit.id}`);
       return;
     }
-    if (likedIds.has(hit.id)) {
-      flash(`Match already sent to ${hit.name}. Chat unlocks when he matches back.`);
-      return;
-    }
+    if (likedIds.has(hit.id)) return;
     setMatchingId(hit.id);
     try {
       const res = await usersAPI.likeUser(hit.id);
@@ -224,6 +228,8 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
             const liked = likedIds.has(hit.id);
             const mutual = mutualIds.has(hit.id);
             const matching = matchingId === hit.id;
+            const matchState = matchInterestState({ liked, mutual });
+            const matchDisabled = matchCtaDisabled(matchState, matching);
             return (
               <div
                 key={hit.id}
@@ -264,18 +270,21 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
                   </button>
                   <button
                     type="button"
-                    disabled={matching}
+                    disabled={matchDisabled}
+                    aria-disabled={matchDisabled}
+                    aria-label={matchCtaAriaLabel(matchState, hit.name, {
+                      mutualOpensChat: true,
+                    })}
                     onClick={() => void handleMatch(hit)}
                     data-testid={`search-match-${hit.id}`}
-                    className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide disabled:opacity-60 ${
-                      mutual
-                        ? 'border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.15)] text-[#E0A14A]'
-                        : liked
-                          ? 'border border-[rgba(196,131,42,0.5)] text-[#C4832A]'
-                          : 'bg-[#C4832A] text-[#1A0E03] hover:bg-[#E0A14A]'
-                    }`}
+                    className={`rounded-full px-3 py-1 text-[11px] font-extrabold tracking-wide ${
+                      matchState === 'none' || matching ? 'uppercase' : ''
+                    } ${matchCtaCompactToneClasses(matchState)}`}
                   >
-                    {matching ? '…' : mutual ? 'Chat' : liked ? 'Matched' : 'Match'}
+                    {matchCtaLabel(matchState, hit.name, {
+                      sending: matching,
+                      mutualLabel: 'chat',
+                    })}
                   </button>
                   <button
                     type="button"
