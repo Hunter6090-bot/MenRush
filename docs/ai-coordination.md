@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| P0 Nearby Live honesty + map gestures + Pulse clear + speed + faded logo empty face | this branch `cursor/nearby-live-map-pulse-p0-6efa` PR `#216` | — | Cursor cloud — Live = online presence not radius All; Pulse FAB hidden on expanded map; memo/filter/gesture thrash cut; empty Nearby Grid/map pins use faded official medallion (opacity only, media lock); #213 email-confirm / #97–#99 / Cruise sales parked; BOA90 QA; do not ping Al |
 | P0 Match CTA one-way vs mutual + profile photo/cover enlarge | this branch `cursor/match-cta-photo-enlarge-85a1` | — | Cursor cloud — Match / muted Match / Matched with {name}; ProfilePhotoViewer reuse chat frame; #213 email-confirm / #97–#99 / Health / rooms-albums-Cruise / media lock parked; BOA90 QA; do not ping Al |
 | Get-the-app footer: Sign up free → /register | this branch `cursor/get-the-app-signup-free-8f6d` | — | Cursor cloud — Brand signed copy; kill Waitlist→`/`; page-local GetTheApp footer only; Terms/Privacy waitlist wording untouched; #97–#99 parked; do not ping Al |
 | Named missing-field jump + Stats Show toggles | this branch `cursor/profile-named-jump-stats-visibility-9f96` PR `#209` | — | Cursor cloud — rebase onto main+#210; migration `047_stats_field_visibility`; Show on age/height/weight/relationship only; keep Map photo + Brand Hosting from #210; no show_hosting; no Health Practices; #97–#99 parked; do not ping Al |
