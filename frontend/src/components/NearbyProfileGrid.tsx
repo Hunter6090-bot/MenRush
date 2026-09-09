@@ -1,5 +1,5 @@
 import type { NearbyUser } from './ProfileCard';
-import { SilhouetteAvatar } from './SilhouetteAvatar';
+import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
 import { VerifiedBadge } from './VerifiedBadge';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { formatActiveStatus, formatDistanceMiles, getTribeTag } from '../lib/discoveryFormat';
@@ -301,10 +301,12 @@ function GridPhoto({
   // Phone path: display API when live, else fetch+downscale — never leave blank tiles.
   const { src, phase } = useGridPhotoSrc(photoUrl, age);
 
-  if (phase === 'loading' || !src) {
+  // Empty / missing / generic avatar slots → faded official medallion (Brand).
+  // Real /uploads photos keep their bytes (media lock).
+  if (isNearbyPlaceholderFace(photoUrl, phase) || !src) {
     return (
-      <div className="flex h-full items-center justify-center" data-testid="nearby-photo-loading">
-        <SilhouetteAvatar size={56} variant="card" />
+      <div className="h-full w-full" data-testid="nearby-photo-placeholder">
+        <FadedBrandFace variant="tile" label={name} />
       </div>
     );
   }
