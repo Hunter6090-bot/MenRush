@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Dependabot npm group #218 (14 bumps) | this branch `dependabot/npm_and_yarn/backend/npm_and_yarn-064c8a6709` PR `#218` | — | Cursor cloud — rebase onto main+#219; pin react-router/dom to 6.30.x (v8 needs React 19); keep other bumps; #213 parked; do not ping Al |
 | Cruise / Hot Spots Brand face lines (18+ / no illegal activity) | this branch `cursor/cruise-brand-face-lines-4c31` | — | Cursor cloud — after #217 on main; Brand face on map helper + sheet + Cruise page; keep Meet in public · Consent first; Sales/Studio held; media lock; BOA90; do not ping Al |
 | UK commercial venue Cruise / Hot Spots seed (Legal GREEN only) | merged `#217` on main (`c0bbaf9`) | — | Cursor cloud — migrations 048–050 commercial lock; retire outdoor RED; Brand Hot Spots chip + Cruise pin + helper; ops seed path (no invent coords / no scrape); keep-list 4 prior curated saunas; growth pointers refined; CI+browser smoke green; #213/#97–#99 parked; BOA90; do not ping Al |
 | P0 Nearby Live honesty + map gestures + Pulse clear + speed + faded logo empty face | merged `#216` on main (`1de465c`) | — | Cursor cloud — Live = online presence not radius All; Pulse FAB hidden on expanded map; memo/filter/gesture thrash cut; empty Nearby Grid/map pins use faded official medallion (opacity only, media lock); #213 email-confirm / #97–#99 / Cruise sales parked; BOA90 QA; do not ping Al |
