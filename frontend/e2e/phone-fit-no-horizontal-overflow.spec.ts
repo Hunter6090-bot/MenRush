@@ -9,7 +9,7 @@
  * on discover/hotspots map surfaces.
  */
 import { expect, test, request as apiRequest, type BrowserContext, type Page } from '@playwright/test';
-import { TEST_PASSWORD, ALICE } from './test-accounts';
+import { TEST_PASSWORD, ALICE, BOB } from './test-accounts';
 import { PLAYWRIGHT_BASE_URL as BASE_URL } from './support/base-url';
 
 const PHONE_VIEWPORTS = [
@@ -143,7 +143,7 @@ const APP_ROUTES = [
   },
   {
     path: '/profile',
-    ready: 'h1, [data-testid="profile-field-bio"], text=Profile',
+    ready: '[data-testid="profile-field-bio"], input[type="text"], textarea',
     label: 'profile-own',
     focus: 'input[type="text"], textarea, input[type="date"]',
   },
@@ -211,8 +211,8 @@ for (const vp of PHONE_VIEWPORTS) {
         });
       }
 
-      // Other profile (Alice viewing herself is fine for overflow/shell; use Bob id if needed).
-      await page.goto(`/profile/${alice.user.id}`);
+      // Other profile (must be someone else — own id routes to /profile editor).
+      await page.goto(`/profile/${BOB.id}`);
       await expect(
         page.locator('[data-testid="profile-view-shell"], [data-testid="profile-view-body"]').first(),
       ).toBeVisible({ timeout: 20_000 });
