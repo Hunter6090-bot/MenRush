@@ -1,10 +1,14 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserAvatar } from './UserAvatar';
+import { StatusDot, UserAvatar } from './UserAvatar';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { MissedCallIcon } from './MissedCallIcon';
 import { ChatSafetyMenu } from './ChatSafetyMenu';
+import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
 import { MISSED_CALL_PREVIEW } from '../lib/missedCall';
+
+/** Thread-list face — circle only, slightly larger than UserAvatar md (44px). */
+const THREAD_AVATAR_PX = 52;
 
 interface ConversationItemProps {
   userId: string;
@@ -34,6 +38,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   const navigate = useNavigate();
   const isMissedCall = lastMessage === MISSED_CALL_PREVIEW;
   const isSidebar = variant === 'sidebar';
+  const useBrandEmptyFace = isNearbyPlaceholderFace(photoUrl);
 
   return (
     <div className="flex items-center gap-1">
@@ -52,14 +57,29 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
           className="relative shrink-0"
           data-testid={`conversation-avatar-${userId}`}
         >
-          <UserAvatar
-            name={name}
-            photoUrl={photoUrl}
-            online={online}
-            size="md"
-            linkToProfile={false}
-            className={isSidebar ? '!w-[46px] !h-[46px] ring-2 ring-[rgba(196,131,42,0.35)]' : undefined}
-          />
+          {useBrandEmptyFace ? (
+            <span
+              className="relative inline-flex shrink-0 overflow-hidden rounded-full"
+              style={{ width: THREAD_AVATAR_PX, height: THREAD_AVATAR_PX }}
+            >
+              <FadedBrandFace variant="pin" size={THREAD_AVATAR_PX} label={name} />
+              {online !== undefined ? (
+                <StatusDot
+                  online={online}
+                  className="absolute bottom-0.5 right-0.5 h-3 w-3"
+                />
+              ) : null}
+            </span>
+          ) : (
+            <UserAvatar
+              name={name}
+              photoUrl={photoUrl}
+              online={online}
+              size="md"
+              linkToProfile={false}
+              className="!h-[52px] !w-[52px]"
+            />
+          )}
         </ProfilePhotoLink>
 
         <button

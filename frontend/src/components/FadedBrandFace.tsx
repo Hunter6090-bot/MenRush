@@ -2,7 +2,7 @@ import { BRAND_MEDALLION_CUTOUT } from '../lib/brand';
 import type { GridPhotoPhase } from '../lib/nearbyPhotoSrc';
 
 /**
- * Brand re-signed empty face (Nearby Grid + map pins only).
+ * Brand re-signed empty face (Nearby Grid + map pins + Messages empty slots).
  *
  * Lock exactly:
  * - Asset: `/brand/medallion-transparent.png` only (official cutout)
@@ -12,7 +12,7 @@ import type { GridPhotoPhase } from '../lib/nearbyPhotoSrc';
  * - Empty/missing pics only — never wipe real user photos
  * - Not a Studio post image
  *
- * Chat does not use this component (letter / silhouette / UserAvatar there).
+ * Messages thread list uses this for empty/generic only (see ConversationItem).
  */
 export const FADED_BRAND_FACE_OPACITY = 0.42;
 
