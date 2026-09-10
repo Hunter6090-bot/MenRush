@@ -42,12 +42,15 @@ export function useLiveLocationPublisher() {
     deniedRef.current = false;
 
     const pushCoords = (latitude: number, longitude: number, force = false) => {
-      setLocation(latitude, longitude);
       const last = lastPushRef.current;
       const now = Date.now();
       const movedEnough =
         !last || distanceMeters(last.lat, last.lng, latitude, longitude) >= MIN_MOVE_METERS;
       const waitedEnough = !last || now - last.at >= MIN_PUSH_MS;
+      // Store itself gates sub-15m jitter; only publish when we intend a pin update.
+      if (force || !last || movedEnough) {
+        setLocation(latitude, longitude);
+      }
       if (!force && last && !movedEnough && !waitedEnough) return;
 
       lastPushRef.current = { lat: latitude, lng: longitude, at: now };

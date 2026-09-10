@@ -1,4 +1,5 @@
 import { createRoot, Root } from 'react-dom/client';
+import { memo } from 'react';
 import { PulsingAvatar } from './PulsingAvatar';
 import { useGridPhotoSrc } from '../lib/nearbyPhotoSrc';
 import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
@@ -17,7 +18,7 @@ interface MapMarkerProps {
   size?: number;
 }
 
-export function MapMarker({ user, size = 44 }: MapMarkerProps) {
+export const MapMarker = memo(function MapMarker({ user, size = 44 }: MapMarkerProps) {
   return (
     <div
       className={`cursor-pointer transition-transform duration-150 hover:scale-110 ${
@@ -46,7 +47,7 @@ export function MapMarker({ user, size = 44 }: MapMarkerProps) {
       </PulsingAvatar>
     </div>
   );
-}
+});
 
 function MapPhoto({
   name,

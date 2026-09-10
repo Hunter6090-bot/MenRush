@@ -24,6 +24,16 @@ interface ConversationListProps {
   className?: string;
 }
 
+function conversationsFingerprint(rows: ConversationRow[]): string {
+  if (!rows.length) return '';
+  return rows
+    .map(
+      (c) =>
+        `${c.other_user_id}\u0001${c.last_message_time}\u0001${c.last_message ?? ''}\u0001${c.unread_count ?? 0}\u0001${c.online ? 1 : 0}\u0001${c.photo_url ?? ''}`,
+    )
+    .join('\u0002');
+}
+
 export const ConversationList: React.FC<ConversationListProps> = ({
   activeUserId,
   variant = 'mobile',
@@ -41,7 +51,12 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   const fetchConversations = useCallback(() => {
     messagesAPI
       .getConversations()
-      .then((r) => setConvs(r.data))
+      .then((r) => {
+        const rows = Array.isArray(r.data) ? (r.data as ConversationRow[]) : [];
+        setConvs((prev) =>
+          conversationsFingerprint(prev) === conversationsFingerprint(rows) ? prev : rows,
+        );
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -50,12 +65,18 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     fetchConversations();
   }, [fetchConversations]);
 
+  // Socket inbox churn: debounce so a burst of messages does not refetch every event.
   useEffect(() => {
     if (!socket) return;
-    const onMessage = () => fetchConversations();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const onMessage = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => fetchConversations(), 280);
+    };
     socket.on('message', onMessage);
     return () => {
       socket.off('message', onMessage);
+      if (timer) clearTimeout(timer);
     };
   }, [socket, fetchConversations]);
 

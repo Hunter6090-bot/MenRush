@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { StatusDot, UserAvatar } from './UserAvatar';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
@@ -23,7 +23,7 @@ interface ConversationItemProps {
   variant?: 'default' | 'sidebar';
 }
 
-export const ConversationItem: React.FC<ConversationItemProps> = ({
+export const ConversationItem = memo(function ConversationItem({
   userId,
   name,
   photoUrl,
@@ -34,14 +34,16 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   onBlocked,
   isActive = false,
   variant = 'default',
-}) => {
+}: ConversationItemProps) {
   const navigate = useNavigate();
   const isMissedCall = lastMessage === MISSED_CALL_PREVIEW;
   const isSidebar = variant === 'sidebar';
   const useBrandEmptyFace = isNearbyPlaceholderFace(photoUrl);
 
   return (
-    <div className="flex items-center gap-1">
+    <div
+      className="flex items-center gap-1 [content-visibility:auto] [contain-intrinsic-size:auto_72px]"
+    >
       <div
         className={`group flex min-w-0 flex-1 items-center gap-3 text-left transition-all duration-200 ${
           isSidebar
@@ -130,7 +132,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
       <ChatSafetyMenu peerId={userId} peerName={name} onBlocked={onBlocked} />
     </div>
   );
-};
+});
 
 function formatRelative(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();

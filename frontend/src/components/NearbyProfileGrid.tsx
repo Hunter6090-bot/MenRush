@@ -48,6 +48,12 @@ interface NearbyProfileGridProps {
   beyondRadiusCount?: number;
 }
 
+/**
+ * Nearby Grid — memo boundary so Discover GPS/header churn does not rebuild tiles.
+ *
+ * PERF next pass (phone, 40+ tiles): window with @tanstack/react-virtual or
+ * CSS grid + IntersectionObserver mount; keep Brand empty face + Match CTA intact.
+ */
 export const NearbyProfileGrid = memo(function NearbyProfileGrid({
   users,
   loading,
@@ -191,71 +197,94 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
       className={PROFILE_TILE_GRID_CLASS}
       data-testid="nearby-profile-grid"
     >
-      {users.map((user) => {
-        const meta = `${formatDistanceMiles(user)} · ${getTribeTag(user)} · ${formatActiveStatus(user)}`;
-        const liked = likedUserIds?.has(user.id) ?? false;
-        const mutual = mutualUserIds?.has(user.id) ?? false;
-        const matching = matchingUserId === user.id;
-        const matchState = matchInterestState({ liked, mutual });
-        const matchDisabled = matchCtaDisabled(matchState, matching);
-        return (
-          <div
-            key={user.id}
-            className="group relative overflow-hidden rounded-xl border border-nn-border bg-nn-card text-left shadow-card transition-all hover:-translate-y-[3px] hover:border-[rgba(196,131,42,0.4)] md:rounded-2xl"
-            data-testid="nearby-grid-card"
+      {users.map((user) => (
+        <NearbyGridCard
+          key={user.id}
+          user={user}
+          liked={likedUserIds?.has(user.id) ?? false}
+          mutual={mutualUserIds?.has(user.id) ?? false}
+          matching={matchingUserId === user.id}
+          onSelect={onSelect}
+          onMatch={onMatch}
+        />
+      ))}
+    </div>
+  );
+});
+
+const NearbyGridCard = memo(function NearbyGridCard({
+  user,
+  liked,
+  mutual,
+  matching,
+  onSelect,
+  onMatch,
+}: {
+  user: NearbyUser;
+  liked: boolean;
+  mutual: boolean;
+  matching: boolean;
+  onSelect?: (user: NearbyUser) => void;
+  onMatch?: (user: NearbyUser) => void | Promise<void>;
+}) {
+  const meta = `${formatDistanceMiles(user)} · ${getTribeTag(user)} · ${formatActiveStatus(user)}`;
+  const matchState = matchInterestState({ liked, mutual });
+  const matchDisabled = matchCtaDisabled(matchState, matching);
+
+  return (
+    <div
+      className="group relative overflow-hidden rounded-xl border border-nn-border bg-nn-card text-left shadow-card transition-all hover:-translate-y-[3px] hover:border-[rgba(196,131,42,0.4)] md:rounded-2xl [content-visibility:auto] [contain-intrinsic-size:auto_220px]"
+      data-testid="nearby-grid-card"
+    >
+      <div className="relative">
+        {onSelect ? (
+          <button
+            type="button"
+            onClick={() => onSelect(user)}
+            className="block w-full text-left"
+            aria-label={`Open profile for ${user.name}`}
+            data-testid={`nearby-grid-photo-${user.id}`}
           >
-            <div className="relative">
-              {onSelect ? (
-                <button
-                  type="button"
-                  onClick={() => onSelect(user)}
-                  className="block w-full text-left"
-                  aria-label={`Open profile for ${user.name}`}
-                  data-testid={`nearby-grid-photo-${user.id}`}
-                >
-                  <GridCardFace user={user} meta={meta} />
-                </button>
-              ) : (
-                <ProfilePhotoLink
-                  userId={user.id}
-                  name={user.name}
-                  className="block w-full text-left"
-                  data-testid={`nearby-grid-photo-${user.id}`}
-                >
-                  <GridCardFace user={user} meta={meta} />
-                </ProfilePhotoLink>
-              )}
-              {user.is_verified ? <VerifiedBadge compact className="absolute bottom-1.5 right-1.5 z-10" /> : null}
-            </div>
-            {onMatch ? (
-              <div className="border-t border-[var(--border-default)] p-1 md:p-1.5">
-                <button
-                  type="button"
-                  disabled={matchDisabled}
-                  aria-disabled={matchDisabled}
-                  aria-label={matchCtaAriaLabel(matchState, user.name, {
-                    mutualOpensChat: true,
-                  })}
-                  data-testid={`grid-match-${user.id}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (matchDisabled) return;
-                    void onMatch(user);
-                  }}
-                  className={`w-full rounded-lg py-1.5 text-[10px] font-extrabold tracking-wide transition-colors md:rounded-xl md:py-2 md:text-[11px] ${
-                    matchState === 'none' || matching ? 'uppercase' : ''
-                  } ${matchCtaCompactToneClasses(matchState)}`}
-                >
-                  {matchCtaLabel(matchState, user.name, {
-                    sending: matching,
-                    mutualLabel: 'open_chat',
-                  })}
-                </button>
-              </div>
-            ) : null}
-          </div>
-        );
-      })}
+            <GridCardFace user={user} meta={meta} />
+          </button>
+        ) : (
+          <ProfilePhotoLink
+            userId={user.id}
+            name={user.name}
+            className="block w-full text-left"
+            data-testid={`nearby-grid-photo-${user.id}`}
+          >
+            <GridCardFace user={user} meta={meta} />
+          </ProfilePhotoLink>
+        )}
+        {user.is_verified ? <VerifiedBadge compact className="absolute bottom-1.5 right-1.5 z-10" /> : null}
+      </div>
+      {onMatch ? (
+        <div className="border-t border-[var(--border-default)] p-1 md:p-1.5">
+          <button
+            type="button"
+            disabled={matchDisabled}
+            aria-disabled={matchDisabled}
+            aria-label={matchCtaAriaLabel(matchState, user.name, {
+              mutualOpensChat: true,
+            })}
+            data-testid={`grid-match-${user.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (matchDisabled) return;
+              void onMatch(user);
+            }}
+            className={`w-full rounded-lg py-1.5 text-[10px] font-extrabold tracking-wide transition-colors md:rounded-xl md:py-2 md:text-[11px] ${
+              matchState === 'none' || matching ? 'uppercase' : ''
+            } ${matchCtaCompactToneClasses(matchState)}`}
+          >
+            {matchCtaLabel(matchState, user.name, {
+              sending: matching,
+              mutualLabel: 'open_chat',
+            })}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 });
