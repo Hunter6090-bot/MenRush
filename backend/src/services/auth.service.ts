@@ -1,5 +1,6 @@
 import bcryptjs from 'bcryptjs';
 import crypto from 'crypto';
+import type { PoolClient } from 'pg';
 import { query } from '../db';
 import pool from '../db';
 import { defaultGenericAvatarUrl } from '../lib/genericAvatar';
@@ -222,7 +223,16 @@ export const authService = {
       throw new Error('You must be 18 or older to join MenRush.');
     }
 
+    // Al lock: confirm/welcome mails only to al@menrush.com / BOA90 until
+    // EMAIL_CONFIRM_MAIL_OPEN=true. Others keep legacy live session (no mass-send).
+    // Decide before the transaction so confirm/token DB writes commit atomically
+    // with the user row (no post-COMMIT orphan on transient write failure).
+    const sendConfirmMail = maySendEmailConfirmTransactional(data.email, data.name);
+
     const client = await pool.connect();
+    let committed = false;
+    let user: Record<string, unknown> | null = null;
+    let rawConfirmToken: string | null = null;
     try {
       await client.query('BEGIN');
 
@@ -271,14 +281,14 @@ export const authService = {
         ],
       );
 
-      const user = result.rows[0];
+      user = result.rows[0];
 
       if (resolvedReferrer) {
-        await referralService.attachAtSignup(resolvedReferrer.referrerId, user.id, client);
+        await referralService.attachAtSignup(resolvedReferrer.referrerId, user!.id as string, client);
       }
 
       if (inviteCode) {
-        await inviteCodeService.redeemForRegistration(inviteCode, user.id, client);
+        await inviteCodeService.redeemForRegistration(inviteCode, user!.id as string, client);
       }
 
       // Redeem inside the same transaction so a failed Pride grant rolls back
@@ -287,18 +297,18 @@ export const authService = {
         // Entering the Pride-flagged invite NOW books Premium. No second entry at launch.
         await promoService.bookPrideInviteGrant(
           data.email,
-          user.id,
+          user!.id as string,
           prideInviteMonths,
           client,
         );
       } else if (usingSharedPride) {
-        await promoService.redeemSharedPride(promoCode!, data.email, user.id, client);
+        await promoService.redeemSharedPride(promoCode!, data.email, user!.id as string, client);
       } else if (usingPersonalPride) {
-        await promoService.redeemPersonalPride(promoCode!, data.email, user.id, client);
+        await promoService.redeemPersonalPride(promoCode!, data.email, user!.id as string, client);
       } else {
         // Terms 7.2 waitlist gift: 30 days Premium before 1 Oct 2026 UK.
         // Pride replaces this gift — do not stack.
-        await premiumService.grantWaitlistGift(user.id, client);
+        await premiumService.grantWaitlistGift(user!.id as string, client);
       }
 
       // Refresh entitlements after Pride or waitlist gift.
@@ -311,63 +321,36 @@ export const authService = {
                   premium_until,
                   premium_starts_at
            FROM users WHERE id = $1`,
-          [user.id],
+          [user!.id],
         );
         if (refreshed.rows[0]) {
-          Object.assign(user, refreshed.rows[0]);
+          Object.assign(user!, refreshed.rows[0]);
         }
+      }
+
+      // Confirm-gate DB writes must land in the same COMMIT as the user insert.
+      // A failure here ROLLBACKs — no orphan account with HTTP 400 after commit.
+      if (!sendConfirmMail) {
+        await client.query(
+          `UPDATE users SET email_confirmed = TRUE, updated_at = NOW() WHERE id = $1`,
+          [user!.id],
+        );
+        user!.email_confirmed = true;
+      } else {
+        // No session token until email is confirmed (product gate 8 Sep 2026).
+        rawConfirmToken = await this.createEmailConfirmToken(user!.id as string, client);
       }
 
       await client.query('COMMIT');
-
-      // DEV_AUTO_VERIFY fixtures still count as account-verified for referral unlock.
-      if (autoVerify && resolvedReferrer) {
+      committed = true;
+    } catch (error: any) {
+      if (!committed) {
         try {
-          await referralService.onUserVerified(user.id);
-        } catch (err) {
-          console.error('[auth] referral verify-on-register hook failed', err);
+          await client.query('ROLLBACK');
+        } catch (rollbackErr) {
+          console.error('[auth] register ROLLBACK failed', rollbackErr);
         }
       }
-
-      // Al lock: confirm/welcome mails only to al@menrush.com / BOA90 until
-      // EMAIL_CONFIRM_MAIL_OPEN=true. Others keep legacy live session (no mass-send).
-      const sendConfirmMail = maySendEmailConfirmTransactional(
-        user.email as string,
-        user.name as string,
-      );
-
-      if (!sendConfirmMail) {
-        await query(
-          `UPDATE users SET email_confirmed = TRUE, updated_at = NOW() WHERE id = $1`,
-          [user.id],
-        );
-        console.log(
-          `[email-confirm] BOA90 lock — held confirm/welcome mail for ${user.email}; legacy session issued. First live mails are Al-only until EMAIL_CONFIRM_MAIL_OPEN=true.`,
-        );
-        return {
-          user,
-          token: signToken(user.id),
-          requiresEmailConfirm: false as const,
-        };
-      }
-
-      // No session token until email is confirmed (product gate 8 Sep 2026).
-      const rawConfirmToken = await this.createEmailConfirmToken(user.id);
-      try {
-        await this.sendConfirmEmail(user.email as string, rawConfirmToken);
-      } catch (mailErr) {
-        console.error('[auth] confirm email send failed:', mailErr);
-      }
-
-      return {
-        ok: true as const,
-        requiresEmailConfirm: true as const,
-        email: user.email as string,
-        message: 'Check your email to confirm your account before signing in.',
-        ...(shouldExposeConfirmToken() ? { devConfirmToken: rawConfirmToken } : {}),
-      };
-    } catch (error: any) {
-      await client.query('ROLLBACK');
       if (error.code === '23505') {
         throw new Error('Email already exists');
       }
@@ -375,20 +358,56 @@ export const authService = {
     } finally {
       client.release();
     }
+
+    // Post-COMMIT work is best-effort only. Never throw "registration failed"
+    // after the user row exists — that was the orphan path.
+    if (autoVerify && resolvedReferrer) {
+      try {
+        await referralService.onUserVerified(user!.id as string);
+      } catch (err) {
+        console.error('[auth] referral verify-on-register hook failed', err);
+      }
+    }
+
+    if (!sendConfirmMail) {
+      console.log(
+        `[email-confirm] BOA90 lock — held confirm/welcome mail for ${user!.email}; legacy session issued. First live mails are Al-only until EMAIL_CONFIRM_MAIL_OPEN=true.`,
+      );
+      return {
+        user: user!,
+        token: signToken(user!.id as string),
+        requiresEmailConfirm: false as const,
+      };
+    }
+
+    try {
+      await this.sendConfirmEmail(user!.email as string, rawConfirmToken!);
+    } catch (mailErr) {
+      console.error('[auth] confirm email send failed:', mailErr);
+    }
+
+    return {
+      ok: true as const,
+      requiresEmailConfirm: true as const,
+      email: user!.email as string,
+      message: 'Check your email to confirm your account before signing in.',
+      ...(shouldExposeConfirmToken() ? { devConfirmToken: rawConfirmToken! } : {}),
+    };
   },
 
-  async createEmailConfirmToken(userId: string): Promise<string> {
+  async createEmailConfirmToken(userId: string, client?: PoolClient): Promise<string> {
+    const db = client ?? pool;
     const rawToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + EMAIL_CONFIRM_TTL_MS);
 
-    await query(
+    await db.query(
       `UPDATE email_confirm_tokens SET used_at = NOW()
        WHERE user_id = $1 AND used_at IS NULL`,
       [userId],
     );
 
-    await query(
+    await db.query(
       `INSERT INTO email_confirm_tokens (user_id, token_hash, expires_at)
        VALUES ($1, $2, $3)`,
       [userId, tokenHash, expiresAt],

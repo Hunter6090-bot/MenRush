@@ -208,6 +208,75 @@ async function runDbTests() {
     );
     assert.ok(EMAIL_CONFIRM_OWNER_EMAILS.includes('al@menrush.com'));
     console.log('ok — DB: BOA90 lock holds mail for non-Al (legacy session)');
+
+    // --- No-orphan: confirm-token write failure ROLLBACKs the whole register ---
+    process.env.EMAIL_CONFIRM_MAIL_OPEN = 'true';
+    const orphanEmail = `orphan-${suffix}@test.menrush.local`;
+    await query(`ALTER TABLE email_confirm_tokens RENAME TO email_confirm_tokens_bak_${suffix}`);
+    try {
+      await assert.rejects(
+        () =>
+          authService.register({
+            email: orphanEmail,
+            password,
+            name: `Orphan_${suffix}`,
+            age: 28,
+          }),
+        (err: Error) => !!err,
+      );
+      const orphanRow = await query(`SELECT id FROM users WHERE LOWER(email) = $1`, [orphanEmail]);
+      assert.strictEqual(
+        orphanRow.rows.length,
+        0,
+        'token-write failure must ROLLBACK — no orphan user row',
+      );
+      console.log('ok — DB: no orphan when confirm-token write fails (ROLLBACK)');
+    } finally {
+      await query(
+        `ALTER TABLE email_confirm_tokens_bak_${suffix} RENAME TO email_confirm_tokens`,
+      );
+    }
+
+    // --- Post-commit mail failure must still succeed registration (token already committed) ---
+    setTransactionalEmailOverride(async () => {
+      throw new Error('simulated confirm mail transport failure');
+    });
+    const mailFailEmail = `mailfail-${suffix}@test.menrush.local`;
+    const mailFailReg = await authService.register({
+      email: mailFailEmail,
+      password,
+      name: `MailFail_${suffix}`,
+      age: 28,
+    });
+    assert.strictEqual(mailFailReg.requiresEmailConfirm, true);
+    assert.ok(mailFailReg.devConfirmToken, 'token must exist even when mail send fails');
+    const mailFailRow = await query(
+      `SELECT id, email_confirmed FROM users WHERE LOWER(email) = $1`,
+      [mailFailEmail],
+    );
+    assert.strictEqual(mailFailRow.rows.length, 1, 'user committed despite mail failure');
+    ids.push(mailFailRow.rows[0].id);
+    assert.strictEqual(mailFailRow.rows[0].email_confirmed, false);
+    const tokenCount = await query(
+      `SELECT COUNT(*)::int AS n FROM email_confirm_tokens WHERE user_id = $1 AND used_at IS NULL`,
+      [mailFailRow.rows[0].id],
+    );
+    assert.strictEqual(tokenCount.rows[0].n, 1, 'confirm token committed with user');
+    // Resend path recovers the mail after transport recovers.
+    setTransactionalEmailOverride(async (params) => {
+      sent.push({
+        subject: params.subject,
+        to: Array.isArray(params.to) ? params.to[0] : params.to,
+      });
+      return { id: `mock-recover-${sent.length}`, provider: 'resend' };
+    });
+    const resent = await authService.resendConfirmEmail({ email: mailFailEmail });
+    assert.strictEqual(resent.ok, true);
+    const recoverMails = sent.filter(
+      (s) => s.subject === CONFIRM_EMAIL_SUBJECT && s.to.toLowerCase() === mailFailEmail,
+    );
+    assert.ok(recoverMails.length >= 1, 'resend recovers confirm mail after transport failure');
+    console.log('ok — DB: post-commit mail failure still registers; resend recovers');
   } finally {
     setTransactionalEmailOverride(null);
     if (ids.length) {
