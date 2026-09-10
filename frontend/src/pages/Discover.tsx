@@ -15,6 +15,7 @@ import {
   normalizeRadiusKm,
   radiusStepOptionsKm,
 } from '../lib/discoveryFormat';
+import { nearbyRosterFingerprint } from '../lib/nearbyRoster';
 import { ProfileDrawer } from '../components/ProfileDrawer';
 import { HotSpotSheet } from '../components/HotSpotSheet';
 import { createMapMarkerElement, MapMarker } from '../components/MapMarker';
@@ -446,7 +447,10 @@ export const Discover = () => {
   const [pulseError, setPulseError] = useState('');
   const [pulseOpenRequestId, setPulseOpenRequestId] = useState(0);
   const [selectedUser, setSelectedUser] = useState<NearbyUser | null>(null);
-  const { lat, lng, setLocation } = useLocationStore();
+  // Selectors — avoid re-rendering Discover on unrelated store writes.
+  const lat = useLocationStore((s) => s.lat);
+  const lng = useLocationStore((s) => s.lng);
+  const setLocation = useLocationStore((s) => s.setLocation);
   /** Seed from last known pin so returning to Nearby never jumps to a fake city. */
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(() =>
     lat != null && lng != null ? [lat, lng] : null,
@@ -494,6 +498,13 @@ export const Discover = () => {
   const fallbackTimerRef = useRef<number | null>(null);
   const usingFallbackLocationRef = useRef(false);
   const hasLiveGpsRef = useRef(false);
+  /** Stabilize GPS watch — do not recreate applyLiveGps when mapCenter/filters change. */
+  const mapCenterRef = useRef(mapCenter);
+  mapCenterRef.current = mapCenter;
+  const radiusRef = useRef(radius);
+  radiusRef.current = radius;
+  const discoveryFiltersRef = useRef(discoveryFilters);
+  discoveryFiltersRef.current = discoveryFilters;
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<Map<string, { marker: mapboxgl.Marker; root: Root; user: NearbyUser }>>(new Map());
@@ -590,7 +601,10 @@ export const Discover = () => {
         // getNearby already persists lat/lng — skip a redundant updateLocation RTT.
         const apiFilters = buildNearbyApiFilters(filters);
         const res = await usersAPI.getNearby(latitude, longitude, r, apiFilters);
-        setUsers(res.data);
+        // Skip identical polls — new array refs were redrawing Grid + remounting marker work.
+        setUsers((prev) =>
+          nearbyRosterFingerprint(prev) === nearbyRosterFingerprint(res.data) ? prev : res.data,
+        );
         // Cold density: count men outside current radius so Expand is intentional.
         if (res.data.length === 0 && r < MAX_RADIUS_KM - 0.5) {
           try {
@@ -671,18 +685,20 @@ export const Discover = () => {
       hasLiveGpsRef.current = true;
       clearLocationPrompts(latitude, longitude);
 
+      // Store gates sub-15m jitter; self marker still tracks every tick below.
       setLocation(latitude, longitude);
 
+      const currentCenter = mapCenterRef.current;
       const farFromPin =
-        mapCenter != null &&
-        distanceMeters(mapCenter[0], mapCenter[1], latitude, longitude) >= MAP_PAN_MIN_METERS;
+        currentCenter != null &&
+        distanceMeters(currentCenter[0], currentCenter[1], latitude, longitude) >= MAP_PAN_MIN_METERS;
       // Never steal the camera after the user has navigated the map themselves.
       const shouldRecenter =
         recoveringFromFallback ||
         options?.force ||
         (!userMovedMapRef.current && (!mapRef.current || farFromPin));
 
-      if (!mapCenter || shouldRecenter) {
+      if (!currentCenter || shouldRecenter) {
         setMapCenter([latitude, longitude]);
       }
 
@@ -714,9 +730,15 @@ export const Discover = () => {
       const isBackground = lastFetch != null && !recoveringFromFallback;
       hasFetchedRef.current = true;
       lastGpsFetchRef.current = { lat: latitude, lng: longitude, at: now };
-      fetchNearbyUsers(latitude, longitude, radius, discoveryFilters, { background: isBackground });
+      fetchNearbyUsers(
+        latitude,
+        longitude,
+        radiusRef.current,
+        discoveryFiltersRef.current,
+        { background: isBackground },
+      );
     },
-    [clearLocationPrompts, fetchNearbyUsers, mapCenter, radius, setLocation, discoveryFilters],
+    [clearLocationPrompts, fetchNearbyUsers, setLocation],
   );
 
   // Customer-facing "enable location" — persist pin even if Nearby fetch fails.
@@ -841,12 +863,13 @@ export const Discover = () => {
 
   useEffect(() => {
     if (!pulseUntil) return;
-    const id = window.setInterval(() => {
-      if (pulseUntil.getTime() <= Date.now()) {
-        setPulseUntil(null);
-      }
-    }, 1000);
-    return () => window.clearInterval(id);
+    const ms = Math.max(250, pulseUntil.getTime() - Date.now());
+    const id = window.setTimeout(() => {
+      setPulseUntil((current) =>
+        current && current.getTime() <= Date.now() ? null : current,
+      );
+    }, ms);
+    return () => window.clearTimeout(id);
   }, [pulseUntil]);
 
   useEffect(() => {
@@ -1401,6 +1424,7 @@ export const Discover = () => {
 
     const visibleIds = new Set<string>();
     // Reuse the memoized filtered roster — do not re-run client filters on every paint.
+    // Roster identity is gated in fetchNearbyUsers via nearbyRosterFingerprint.
     const mapUsers = displayUsers;
 
     // People layer off: leave visibleIds empty so the cleanup loop below removes every
@@ -1522,7 +1546,11 @@ export const Discover = () => {
       };
 
       if (existing) {
-        existing.marker.setLngLat(lngLat);
+        const prevLat = Number(existing.spot.latitude);
+        const prevLng = Number(existing.spot.longitude);
+        if (prevLat !== spot.latitude || prevLng !== spot.longitude) {
+          existing.marker.setLngLat(lngLat);
+        }
         const prevOccupied = existing.spot.live_count_exact > 0;
         const nextOccupied = spot.live_count_exact > 0;
         if (

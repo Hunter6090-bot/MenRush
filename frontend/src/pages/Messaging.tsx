@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, memo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { messagesAPI, usersAPI, meetAPI, MediaKind, MessageMediaKind, MessageDTO, MeetAgreementState, LibraryPhotoDTO } from '../api/client';
 import { trackEventOnce } from '../observability/analytics';
@@ -142,6 +142,13 @@ function canWithdrawMedia(msg: Message, userId?: string): boolean {
   );
 }
 
+/** Direct, premium openers — never creepy. 18+ consent-first tone. */
+const ICEBREAKERS = [
+  'Hey — saw you nearby. Free later?',
+  'Your profile stood out. Up for a chat?',
+  'What are you looking for tonight?',
+] as const;
+
 // ── Main component ───────────────────────────────────────────────────────────
 
 export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
@@ -175,8 +182,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const [meetSubmitting, setMeetSubmitting] = useState(false);
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
-  // Ticks once a second so disappearing countdowns and burned states update.
-  const [, setBurnTick] = useState(0);
+  // Disappearing countdown lives in ImageViewer only — do not 1Hz re-render the whole thread.
   const socket = useSocket();
   const user = useAuthStore((s) => s.user);
   const { setCalling, setCallSetupError, resetCall } = useCallStore();
@@ -361,13 +367,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       socket.off('meet:updated', onMeetUpdated);
     };
   }, [socket, otherId]);
-
-  // Drive disappearing-message countdowns. 1Hz is enough — the burn window
-  // is 10s, so users see the second-by-second tick clearly.
-  useEffect(() => {
-    const id = window.setInterval(() => setBurnTick((n) => n + 1), 1000);
-    return () => window.clearInterval(id);
-  }, []);
 
   // Auto-dismiss media error toasts so they don't stick around.
   useEffect(() => {
@@ -732,13 +731,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     void handleSend(e as unknown as React.FormEvent);
   };
 
-  /** Direct, premium openers — never creepy. 18+ consent-first tone. */
-  const ICEBREAKERS = [
-    'Hey — saw you nearby. Free later?',
-    'Your profile stood out. Up for a chat?',
-    'What are you looking for tonight?',
-  ] as const;
-
   /**
    * Desktop Enter + Android Gboard quirks: Chrome often reports IME keys as
    * `Unidentified` / keyCode 229, or routes Return through beforeinput
@@ -759,7 +751,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     void handleSend();
   };
 
-  const handleWithdrawMedia = async (messageId: string) => {
+  const handleWithdrawMedia = useCallback(async (messageId: string) => {
     if (withdrawingId) return;
     setWithdrawingId(messageId);
     try {
@@ -770,7 +762,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     } finally {
       setWithdrawingId(null);
     }
-  };
+  }, [withdrawingId]);
 
   const handleShareLocation = () => {
     if (!otherId || sharingLocation || uploadingMedia) return;
@@ -994,261 +986,21 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         />
       )}
 
-      {/* ── Messages area ─────────────────────────────────────────────────── */}
-      <div
-        ref={messagesScrollRef}
-        className="min-h-0 min-w-0 max-w-full flex-1 overflow-x-clip overflow-y-auto px-3 py-4 sm:px-4"
-        style={{ scrollbarWidth: 'thin' }}
-        data-testid="chat-messages-scroll"
-        data-messaging-thread="1"
-      >
-        {messages.length === 0 && !sending && (
-          <div
-            className="flex flex-col items-center justify-center h-full select-none px-4"
-            data-testid="chat-icebreakers"
-          >
-            <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
-            >
-              <BubbleIcon className="w-8 h-8" style={{ color: 'var(--copper)', opacity: 0.5 }} />
-            </div>
-            <p className="font-medium text-sm text-[var(--cream-muted)]">
-              No messages yet
-            </p>
-            <p className="text-xs mt-1 mb-4 text-center text-[var(--cream-muted)]">
-              Be direct. Consent first.
-            </p>
-            <div className="flex flex-col gap-2 w-full max-w-sm">
-              {ICEBREAKERS.map((line) => (
-                <button
-                  key={line}
-                  type="button"
-                  disabled={sending}
-                  onClick={() => void sendTextMessage(line)}
-                  className="rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-4 py-3 text-left text-[13px] font-medium text-[var(--cream)] transition-colors hover:bg-[rgba(196,131,42,0.2)] disabled:opacity-50"
-                >
-                  {line}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {messages.map((msg, i) => {
-          const isMine = msg.sender_id === user?.id;
-          const prevMsg = messages[i - 1];
-          const nextMsg = messages[i + 1];
-          const showDateSep = !isSameDay(prevMsg?.created_at, msg.created_at);
-          const showTail = !nextMsg || nextMsg.sender_id !== msg.sender_id;
-          const isGrouped = prevMsg && prevMsg.sender_id === msg.sender_id && !showDateSep;
-
-          if (isMissedCallMessage(msg)) {
-            return (
-              <React.Fragment key={msg.id ?? i}>
-                {showDateSep && (
-                  <div className="flex items-center gap-3 my-5">
-                    <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
-                    <span
-                      className="text-[10px] font-semibold px-3 py-1 rounded-full"
-                      style={{
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border-default)',
-                        color: 'var(--cream-muted)',
-                        letterSpacing: '0.06em',
-                      }}
-                    >
-                      {formatDateLabel(msg.created_at)}
-                    </span>
-                    <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
-                  </div>
-                )}
-                <div className="flex justify-center my-4" data-testid="missed-call-log">
-                  <div
-                    className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
-                    style={{
-                      background: 'rgba(176,67,46,0.12)',
-                      border: '1px solid rgba(217,106,82,0.35)',
-                      color: '#D96A52',
-                    }}
-                  >
-                    <MissedCallIcon size={14} className="shrink-0" />
-                    <span className="text-xs font-semibold">{MISSED_CALL_PREVIEW}</span>
-                    {msg.created_at && (
-                      <span className="text-[10px] opacity-80">{formatTime(msg.created_at)}</span>
-                    )}
-                  </div>
-                </div>
-              </React.Fragment>
-            );
-          }
-
-          return (
-            <React.Fragment key={msg.id ?? i}>
-              {/* Date separator */}
-              {showDateSep && (
-                <div className="flex items-center gap-3 my-5">
-                  <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
-                  <span
-                    className="text-[10px] font-semibold px-3 py-1 rounded-full"
-                    style={{
-                      background: 'var(--bg-card)',
-                      border: '1px solid var(--border-default)',
-                      color: 'var(--cream-muted)',
-                      letterSpacing: '0.06em',
-                    }}
-                  >
-                    {formatDateLabel(msg.created_at)}
-                  </span>
-                  <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
-                </div>
-              )}
-
-              {/* Message row — min-w-0 so long/media bubbles cannot widen the phone viewport */}
-              <div
-                className={`flex min-w-0 max-w-full ${isMine ? 'justify-end' : 'justify-start'} ${
-                  isGrouped ? 'mt-0.5' : 'mt-3'
-                }`}
-              >
-                {/* Received: avatar placeholder for spacing */}
-                {!isMine && (
-                  <div className="mr-2 mb-1 flex w-7 flex-shrink-0 items-end">
-                    {showTail && otherId ? (
-                      <ProfilePhotoLink
-                        userId={otherId}
-                        name={otherUser?.name}
-                        className="block"
-                        data-testid={`chat-bubble-avatar-${otherId}`}
-                      >
-                        {otherUser?.photo_url ? (
-                          <div
-                            className="h-7 w-7 overflow-hidden rounded-full"
-                            style={{ border: '1px solid var(--border-default)', flexShrink: 0 }}
-                          >
-                            <img
-                              src={otherUser.photo_url}
-                              alt={otherUser.name}
-                              className="h-full w-full object-cover"
-                            />
-                          </div>
-                        ) : (
-                          <SilhouetteAvatar size={28} variant="chat" />
-                        )}
-                      </ProfilePhotoLink>
-                    ) : null}
-                  </div>
-                )}
-
-                <div
-                  className={`flex min-w-0 max-w-[min(78%,20rem)] flex-col overflow-hidden ${
-                    isMine ? 'items-end' : 'items-start'
-                  }`}
-                >
-                  {msg.media_type === 'image' ? (
-                    <ImageBubble
-                      msg={msg}
-                      isMine={isMine}
-                      showTail={showTail}
-                      onOpen={openImageViewer}
-                      onWithdraw={
-                        canWithdrawMedia(msg, user?.id)
-                          ? () => msg.id && handleWithdrawMedia(msg.id)
-                          : undefined
-                      }
-                      withdrawing={withdrawingId === msg.id}
-                    />
-                  ) : msg.media_type === 'audio' ? (
-                    <AudioBubble
-                      msg={msg}
-                      isMine={isMine}
-                      showTail={showTail}
-                      onWithdraw={
-                        canWithdrawMedia(msg, user?.id)
-                          ? () => msg.id && handleWithdrawMedia(msg.id)
-                          : undefined
-                      }
-                      withdrawing={withdrawingId === msg.id}
-                    />
-                  ) : msg.media_type === 'video' ? (
-                    <VideoBubble
-                      msg={msg}
-                      isMine={isMine}
-                      showTail={showTail}
-                      onWithdraw={
-                        canWithdrawMedia(msg, user?.id)
-                          ? () => msg.id && handleWithdrawMedia(msg.id)
-                          : undefined
-                      }
-                      withdrawing={withdrawingId === msg.id}
-                    />
-                  ) : msg.media_type === 'location' ? (
-                    <LocationBubble
-                      msg={msg}
-                      isMine={isMine}
-                      showTail={showTail}
-                      peerName={otherUser?.name}
-                    />
-                  ) : (
-                    <div
-                      className="relative max-w-full break-words px-4 py-2.5 text-sm leading-relaxed [overflow-wrap:anywhere]"
-                      style={
-                        isMine
-                          ? {
-                              background: 'linear-gradient(135deg, #C4832A, #A45E18)',
-                              color: '#FFF5E6',
-                              borderRadius: showTail
-                                ? '18px 18px 4px 18px'
-                                : '18px 18px 18px 18px',
-                              boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
-                            }
-                          : {
-                              background: 'var(--bg-card)',
-                              border: '1px solid var(--border-default)',
-                              color: 'var(--cream)',
-                              borderRadius: showTail
-                                ? '18px 18px 18px 4px'
-                                : '18px 18px 18px 18px',
-                            }
-                      }
-                    >
-                      {msg.message}
-                    </div>
-                  )}
-                  {/* Timestamp */}
-                  {showTail && (
-                    <span
-                      className="text-[10px] mt-1 px-1"
-                      style={{ color: '#6B5035' }}
-                    >
-                      {formatTime(msg.created_at)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </React.Fragment>
-          );
-        })}
-
-        {/* Typing indicator */}
-        {isOtherTyping && (
-          <div className="flex justify-start mt-3">
-            <div className="w-7 flex-shrink-0 mr-2" />
-            <div
-              className="px-4 py-3 rounded-[18px] rounded-bl-[4px] flex items-center gap-1.5"
-              style={{
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border-default)',
-              }}
-            >
-              <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
-              <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
-              <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
-            </div>
-          </div>
-        )}
-
-        <div ref={bottomRef} />
-      </div>
+      {/* ── Messages area — memoized so composer keystrokes do not redraw bubbles ─ */}
+      <ChatThreadScroll
+        messages={messages}
+        userId={user?.id}
+        otherId={otherId}
+        otherUser={otherUser}
+        isOtherTyping={isOtherTyping}
+        withdrawingId={withdrawingId}
+        sending={sending}
+        messagesScrollRef={messagesScrollRef}
+        bottomRef={bottomRef}
+        onOpenImage={openImageViewer}
+        onWithdrawMedia={handleWithdrawMedia}
+        onSendIcebreaker={sendTextMessage}
+      />
 
       {/* ── Input bar ─────────────────────────────────────────────────────── */}
       <div
@@ -2662,3 +2414,297 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
     </div>
   );
 };
+
+/**
+ * Isolated message list — keeps typing/composer state from re-rendering every bubble.
+ *
+ * PERF next pass: virtualize with @tanstack/react-virtual when threads regularly
+ * exceed ~80 messages on phone; preserve date separators + media bubbles + scroll restore.
+ */
+interface ChatThreadScrollProps {
+  messages: Message[];
+  userId?: string;
+  otherId?: string;
+  otherUser: OtherUser | null;
+  isOtherTyping: boolean;
+  withdrawingId: string | null;
+  sending: boolean;
+  messagesScrollRef: React.RefObject<HTMLDivElement>;
+  bottomRef: React.RefObject<HTMLDivElement>;
+  onOpenImage: (msg: Message) => void;
+  onWithdrawMedia: (id: string) => void | Promise<void>;
+  onSendIcebreaker: (text: string) => void | Promise<void>;
+}
+
+const ChatThreadScroll = memo(function ChatThreadScroll({
+  messages,
+  userId,
+  otherId,
+  otherUser,
+  isOtherTyping,
+  withdrawingId,
+  sending,
+  messagesScrollRef,
+  bottomRef,
+  onOpenImage,
+  onWithdrawMedia,
+  onSendIcebreaker,
+}: ChatThreadScrollProps) {
+  return (
+      <div
+        ref={messagesScrollRef}
+        className="min-h-0 min-w-0 max-w-full flex-1 overflow-x-clip overflow-y-auto px-3 py-4 sm:px-4 [content-visibility:auto]"
+        style={{ scrollbarWidth: 'thin' }}
+        data-testid="chat-messages-scroll"
+        data-messaging-thread="1"
+      >
+        {messages.length === 0 && !sending && (
+          <div
+            className="flex flex-col items-center justify-center h-full select-none px-4"
+            data-testid="chat-icebreakers"
+          >
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
+            >
+              <BubbleIcon className="w-8 h-8" style={{ color: 'var(--copper)', opacity: 0.5 }} />
+            </div>
+            <p className="font-medium text-sm text-[var(--cream-muted)]">
+              No messages yet
+            </p>
+            <p className="text-xs mt-1 mb-4 text-center text-[var(--cream-muted)]">
+              Be direct. Consent first.
+            </p>
+            <div className="flex flex-col gap-2 w-full max-w-sm">
+              {ICEBREAKERS.map((line) => (
+                <button
+                  key={line}
+                  type="button"
+                  disabled={sending}
+                  onClick={() => void onSendIcebreaker(line)}
+                  className="rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-4 py-3 text-left text-[13px] font-medium text-[var(--cream)] transition-colors hover:bg-[rgba(196,131,42,0.2)] disabled:opacity-50"
+                >
+                  {line}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {messages.map((msg, i) => {
+          const isMine = msg.sender_id === userId;
+          const prevMsg = messages[i - 1];
+          const nextMsg = messages[i + 1];
+          const showDateSep = !isSameDay(prevMsg?.created_at, msg.created_at);
+          const showTail = !nextMsg || nextMsg.sender_id !== msg.sender_id;
+          const isGrouped = prevMsg && prevMsg.sender_id === msg.sender_id && !showDateSep;
+
+          if (isMissedCallMessage(msg)) {
+            return (
+              <React.Fragment key={msg.id ?? i}>
+                {showDateSep && (
+                  <div className="flex items-center gap-3 my-5">
+                    <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
+                    <span
+                      className="text-[10px] font-semibold px-3 py-1 rounded-full"
+                      style={{
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border-default)',
+                        color: 'var(--cream-muted)',
+                        letterSpacing: '0.06em',
+                      }}
+                    >
+                      {formatDateLabel(msg.created_at)}
+                    </span>
+                    <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
+                  </div>
+                )}
+                <div className="flex justify-center my-4" data-testid="missed-call-log">
+                  <div
+                    className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
+                    style={{
+                      background: 'rgba(176,67,46,0.12)',
+                      border: '1px solid rgba(217,106,82,0.35)',
+                      color: '#D96A52',
+                    }}
+                  >
+                    <MissedCallIcon size={14} className="shrink-0" />
+                    <span className="text-xs font-semibold">{MISSED_CALL_PREVIEW}</span>
+                    {msg.created_at && (
+                      <span className="text-[10px] opacity-80">{formatTime(msg.created_at)}</span>
+                    )}
+                  </div>
+                </div>
+              </React.Fragment>
+            );
+          }
+
+          return (
+            <React.Fragment key={msg.id ?? i}>
+              {/* Date separator */}
+              {showDateSep && (
+                <div className="flex items-center gap-3 my-5">
+                  <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
+                  <span
+                    className="text-[10px] font-semibold px-3 py-1 rounded-full"
+                    style={{
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border-default)',
+                      color: 'var(--cream-muted)',
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    {formatDateLabel(msg.created_at)}
+                  </span>
+                  <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
+                </div>
+              )}
+
+              {/* Message row — min-w-0 so long/media bubbles cannot widen the phone viewport */}
+              <div
+                className={`flex min-w-0 max-w-full [content-visibility:auto] [contain-intrinsic-size:auto_72px] ${isMine ? 'justify-end' : 'justify-start'} ${
+                  isGrouped ? 'mt-0.5' : 'mt-3'
+                }`}
+              >
+                {/* Received: avatar placeholder for spacing */}
+                {!isMine && (
+                  <div className="mr-2 mb-1 flex w-7 flex-shrink-0 items-end">
+                    {showTail && otherId ? (
+                      <ProfilePhotoLink
+                        userId={otherId}
+                        name={otherUser?.name}
+                        className="block"
+                        data-testid={`chat-bubble-avatar-${otherId}`}
+                      >
+                        {otherUser?.photo_url ? (
+                          <div
+                            className="h-7 w-7 overflow-hidden rounded-full"
+                            style={{ border: '1px solid var(--border-default)', flexShrink: 0 }}
+                          >
+                            <img
+                              src={otherUser.photo_url}
+                              alt={otherUser.name}
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <SilhouetteAvatar size={28} variant="chat" />
+                        )}
+                      </ProfilePhotoLink>
+                    ) : null}
+                  </div>
+                )}
+
+                <div
+                  className={`flex min-w-0 max-w-[min(78%,20rem)] flex-col overflow-hidden ${
+                    isMine ? 'items-end' : 'items-start'
+                  }`}
+                >
+                  {msg.media_type === 'image' ? (
+                    <ImageBubble
+                      msg={msg}
+                      isMine={isMine}
+                      showTail={showTail}
+                      onOpen={onOpenImage}
+                      onWithdraw={
+                        canWithdrawMedia(msg, userId)
+                          ? () => msg.id && void onWithdrawMedia(msg.id)
+                          : undefined
+                      }
+                      withdrawing={withdrawingId === msg.id}
+                    />
+                  ) : msg.media_type === 'audio' ? (
+                    <AudioBubble
+                      msg={msg}
+                      isMine={isMine}
+                      showTail={showTail}
+                      onWithdraw={
+                        canWithdrawMedia(msg, userId)
+                          ? () => msg.id && void onWithdrawMedia(msg.id)
+                          : undefined
+                      }
+                      withdrawing={withdrawingId === msg.id}
+                    />
+                  ) : msg.media_type === 'video' ? (
+                    <VideoBubble
+                      msg={msg}
+                      isMine={isMine}
+                      showTail={showTail}
+                      onWithdraw={
+                        canWithdrawMedia(msg, userId)
+                          ? () => msg.id && void onWithdrawMedia(msg.id)
+                          : undefined
+                      }
+                      withdrawing={withdrawingId === msg.id}
+                    />
+                  ) : msg.media_type === 'location' ? (
+                    <LocationBubble
+                      msg={msg}
+                      isMine={isMine}
+                      showTail={showTail}
+                      peerName={otherUser?.name}
+                    />
+                  ) : (
+                    <div
+                      className="relative max-w-full break-words px-4 py-2.5 text-sm leading-relaxed [overflow-wrap:anywhere]"
+                      style={
+                        isMine
+                          ? {
+                              background: 'linear-gradient(135deg, #C4832A, #A45E18)',
+                              color: '#FFF5E6',
+                              borderRadius: showTail
+                                ? '18px 18px 4px 18px'
+                                : '18px 18px 18px 18px',
+                              boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
+                            }
+                          : {
+                              background: 'var(--bg-card)',
+                              border: '1px solid var(--border-default)',
+                              color: 'var(--cream)',
+                              borderRadius: showTail
+                                ? '18px 18px 18px 4px'
+                                : '18px 18px 18px 18px',
+                            }
+                      }
+                    >
+                      {msg.message}
+                    </div>
+                  )}
+                  {/* Timestamp */}
+                  {showTail && (
+                    <span
+                      className="text-[10px] mt-1 px-1"
+                      style={{ color: '#6B5035' }}
+                    >
+                      {formatTime(msg.created_at)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </React.Fragment>
+          );
+        })}
+
+        {/* Typing indicator */}
+        {isOtherTyping && (
+          <div className="flex justify-start mt-3">
+            <div className="w-7 flex-shrink-0 mr-2" />
+            <div
+              className="px-4 py-3 rounded-[18px] rounded-bl-[4px] flex items-center gap-1.5"
+              style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-default)',
+              }}
+            >
+              <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
+              <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
+              <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
+            </div>
+          </div>
+        )}
+
+        <div ref={bottomRef} />
+      </div>
+
+  );
+});
