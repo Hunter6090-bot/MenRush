@@ -45,6 +45,7 @@ import { EventsRail } from '../components/EventsRail';
 import { countLiveOnline, isUserPulsing, distanceMeters } from '../lib/discovery';
 import type mapboxgl from 'mapbox-gl';
 import { loadMapbox, getLoadedMapbox } from '../lib/mapboxLazy';
+import { wireHtmlMarkerMapGestures } from '../lib/mapMarkerGestures';
 import {
   discoveryResultBucket,
   trackEventOnce,
@@ -76,12 +77,14 @@ function readDesktopMapExpanded(): boolean {
   }
 }
 
-/** Mobile heights — expanded is near-fullscreen clean map (NordVPN-style). */
+/**
+ * Mobile heights — expanded fills the Discover flex shell (not 100dvh).
+ * Using 100dvh inside main (already padded for header/tab) overflowed the
+ * viewport, reintroduced page rubber-band, and stole pan momentum after #216.
+ */
 function mapPanelHeightCss(mode: MapPanelMode): string {
   if (mode === 'hidden') return '0px';
-  if (mode === 'expanded') {
-    return 'calc(100dvh - var(--mobile-header-height) - var(--mobile-tab-bar-height) - 8px)';
-  }
+  if (mode === 'expanded') return '100%';
   return 'min(38vh, 360px)';
 }
 
@@ -221,7 +224,7 @@ function MapFloatingChrome({
   );
 }
 
-const INJECT_ID = '__discover_styles_v2__';
+const INJECT_ID = '__discover_styles_v3__';
 if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
   document.querySelectorAll('style[id^="__discover_styles"]').forEach((el) => el.remove());
   const s = document.createElement('style');
@@ -250,12 +253,20 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
     .discover-map-host {
       z-index: 0;
     }
-    /* Markers stay tappable but must not own multi-touch (pinch lands on canvas). */
+    /* Markers stay tappable; drag/pinch are forwarded in mapMarkerGestures.ts. */
     .discover-map-surface .mapboxgl-marker {
-      touch-action: none;
-      /* Markers capture single taps only — never block the canvas under a drag. */
+      touch-action: none !important;
       -webkit-user-select: none;
       user-select: none;
+      -webkit-touch-callout: none;
+    }
+    /* While a finger is on the map, kill iOS rubber-band / parent scroll steal. */
+    html.discover-map-gesturing,
+    html.discover-map-gesturing body {
+      overscroll-behavior: none;
+    }
+    html.discover-map-gesturing .discover-map-surface {
+      overscroll-behavior: none;
     }
     /* Chrome overlays never steal map drag/pinch (except explicit buttons). */
     .discover-map-surface .mapboxgl-ctrl-group {
@@ -341,8 +352,14 @@ const BROWSER_GPS_DENIED_NOTICE =
  * Re-assert Mapbox gesture handlers after layout thrash.
  * Pinch zoom must stay enabled on phone web; disableRotation keeps pinch as zoom-only
  * (rotation fighting the gesture feels like "pinch does nothing" on small screens).
+ * Never call while the map is mid-pan/zoom — re-enable resets inertia and feels sticky.
  */
 function assertMapGestures(map: mapboxgl.Map) {
+  try {
+    if (typeof map.isMoving === 'function' && map.isMoving()) return;
+  } catch {
+    /* map mid-teardown */
+  }
   map.dragPan.enable();
   map.scrollZoom.enable();
   map.touchZoomRotate.enable();
@@ -361,6 +378,21 @@ function assertMapGestures(map: mapboxgl.Map) {
     container.style.touchAction = 'none';
     container.classList.add('mapboxgl-touch-zoom-rotate', 'mapboxgl-touch-drag-pan');
   }
+}
+
+/** Lock document overscroll while a touch is active on the map surface (iOS PWA). */
+function bindMapOverscrollLock(surface: HTMLElement): () => void {
+  const start = () => document.documentElement.classList.add('discover-map-gesturing');
+  const end = () => document.documentElement.classList.remove('discover-map-gesturing');
+  surface.addEventListener('touchstart', start, { passive: true });
+  surface.addEventListener('touchend', end, { passive: true });
+  surface.addEventListener('touchcancel', end, { passive: true });
+  return () => {
+    surface.removeEventListener('touchstart', start);
+    surface.removeEventListener('touchend', end);
+    surface.removeEventListener('touchcancel', end);
+    end();
+  };
 }
 
 /** Min interval between nearby roster API calls during live GPS. */
@@ -1003,7 +1035,7 @@ export const Discover = () => {
   );
 
   // Mapbox needs resize when the collapsible panel / breakpoint / sidebar changes.
-  // Re-assert gestures once after layout settles — avoid double timers that jank pan/pinch.
+  // Re-assert gestures only when idle — never mid-pan (kills inertia / feels sticky).
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -1033,6 +1065,14 @@ export const Discover = () => {
       window.removeEventListener('menrush:shell-resize', onShellResize);
     };
   }, [mapPanelMode, desktopMapExpanded, isDesktopLayout, mapLoaded]);
+
+  // iOS/PWA: while touching the map surface, suppress document rubber-band.
+  useEffect(() => {
+    if (!mapLoaded) return;
+    const surfaces = document.querySelectorAll<HTMLElement>('.discover-map-surface');
+    const cleanups = Array.from(surfaces).map((el) => bindMapOverscrollLock(el));
+    return () => cleanups.forEach((fn) => fn());
+  }, [mapLoaded, mapPanelMode, desktopMapExpanded, isDesktopLayout, nearbyView]);
 
   const handleDiscoveryFiltersChange = useCallback(
     (next: DiscoveryFilterState) => {
@@ -1256,14 +1296,28 @@ export const Discover = () => {
         />,
       );
       selfEl.style.cursor = 'pointer';
+      selfEl.style.touchAction = 'none';
       selfEl.setAttribute('aria-label', 'Open your profile');
+      const selfSuppressClick = { current: false };
       selfEl.addEventListener('click', (e) => {
+        if (selfSuppressClick.current) {
+          e.preventDefault();
+          e.stopPropagation();
+          selfSuppressClick.current = false;
+          return;
+        }
         e.stopPropagation();
         navigate('/profile');
       });
       selfMarkerRef.current = new mapboxgl.Marker({ element: selfEl })
         .setLngLat([startCenter[1], startCenter[0]])
         .addTo(map);
+      wireHtmlMarkerMapGestures(selfEl, map, {
+        onNavigate: () => {
+          userMovedMapRef.current = true;
+        },
+        suppressClickRef: selfSuppressClick,
+      });
 
       mapRef.current = map;
     })();
@@ -1395,7 +1449,7 @@ export const Discover = () => {
         return;
       }
 
-      const { element, root } = createMapMarkerElement(
+      const { element, root, suppressClickRef } = createMapMarkerElement(
         markerUser,
         () => setSelectedUser(user),
         isPulsing ? 52 : 44,
@@ -1406,6 +1460,12 @@ export const Discover = () => {
       const marker = new mapboxgl.Marker({ element })
         .setLngLat(lngLat)
         .addTo(map);
+      wireHtmlMarkerMapGestures(element, map, {
+        onNavigate: () => {
+          userMovedMapRef.current = true;
+        },
+        suppressClickRef,
+      });
 
       markersRef.current.set(user.id, { marker, root, user });
     });
@@ -1479,12 +1539,24 @@ export const Discover = () => {
       }
 
       // Opens the in-map sheet (no navigation away) — see #67 acceptance criteria.
-      const { element, root } = createHotSpotPinElement(pinData, () => setSelectedHotSpot(spot), 52);
+      const { element, root, suppressClickRef } = createHotSpotPinElement(
+        pinData,
+        () => setSelectedHotSpot(spot),
+        52,
+      );
       const mapboxgl = getLoadedMapbox();
       if (!mapboxgl) return;
       const marker = new mapboxgl.Marker({ element, anchor: 'center' })
         .setLngLat(lngLat)
         .addTo(map);
+      // Hot Spot hit boxes are large (label + pad) — must forward pan/pinch or the
+      // map feels dead wherever Cruise pins cluster.
+      wireHtmlMarkerMapGestures(element, map, {
+        onNavigate: () => {
+          userMovedMapRef.current = true;
+        },
+        suppressClickRef,
+      });
       hotSpotMarkersRef.current.set(spot.id, { marker, root, spot });
     });
 
@@ -1607,8 +1679,10 @@ export const Discover = () => {
       />
       <h1 className="sr-only">Nearby discovery map</h1>
 
-      {/* Contain Discover in the viewport so body scroll cannot steal phone pinch-zoom. */}
-      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      {/* Contain Discover in the viewport so body scroll cannot steal phone pinch-zoom.
+          Match Rooms/Conversations: explicit shell height — h-full alone does not resolve
+          inside Layout's flex + overflow page-enter, which left expanded map ~minHeight. */}
+      <div className="flex h-[calc(100dvh-var(--mobile-header-height)-var(--mobile-tab-bar-height))] min-h-0 flex-col overflow-hidden overscroll-none lg:h-full">
       {!mobileMapExpanded ? (
       <div className="shrink-0">
       <>
@@ -1941,14 +2015,14 @@ export const Discover = () => {
         </div>
       </div>
       ) : (
-      <div className="relative flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-hidden">
+      <div className="relative flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-hidden overscroll-none">
         {/* Map outside the scroll region so pan/pinch aren't stolen by page scroll. */}
         <div
-          className={`discover-map-panel discover-map-surface relative w-full shrink-0 overflow-hidden border-b border-[var(--border-default)] bg-[#11100E] ${
+          className={`discover-map-panel discover-map-surface relative w-full overflow-hidden border-b border-[var(--border-default)] bg-[#11100E] ${
             mapPanelMode === 'hidden' ? 'is-hidden' : ''
-          }`}
+          } ${mapPanelMode === 'expanded' ? 'min-h-0 flex-1' : 'shrink-0'}`}
           style={{
-            height: mapPanelHeightCss(mapPanelMode),
+            height: mapPanelMode === 'expanded' ? undefined : mapPanelHeightCss(mapPanelMode),
             minHeight: mapPanelMode === 'hidden' ? 0 : 120,
           }}
           data-testid="discover-map-panel"
@@ -2059,7 +2133,10 @@ export const Discover = () => {
         </div>
 
         {/* When map hidden: show bar to pull it back */}
-        <div className="min-h-0 min-w-0 max-w-full flex-1 overflow-x-clip overflow-y-auto pb-24">
+        {/* List / filters — unmount scroll region while map is expanded so nothing
+            below can capture residual touch / rubber-band against the map. */}
+        {mapPanelMode !== 'expanded' ? (
+        <div className="min-h-0 min-w-0 max-w-full flex-1 overflow-x-clip overflow-y-auto overscroll-y-contain pb-24">
           <div className="min-w-0 space-y-3 px-4 pt-3">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <div
@@ -2181,6 +2258,7 @@ export const Discover = () => {
             ) : null}
           </div>
         </div>
+        ) : null}
       </div>
       )}
       </div>

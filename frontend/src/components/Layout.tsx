@@ -328,11 +328,18 @@ function LayoutInner({ children }: LayoutProps) {
           </Link>
         </div>
 
-        <main className="flex-1 min-h-0 max-lg:pt-[var(--mobile-header-height)] max-lg:pb-[var(--mobile-tab-bar-height)] lg:pb-0">
+        {/*
+          Flex column + overflow containment: banners (e.g. PushAlertBanner) must not
+          inflate past the viewport and reintroduce page scroll that fights Mapbox
+          pan/pinch on Nearby. Page content scrolls inside page-enter when needed.
+        */}
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden max-lg:pt-[var(--mobile-header-height)] max-lg:pb-[var(--mobile-tab-bar-height)] lg:pb-0">
           <LocationPresenceStrip />
           <ProfileDepthStrip />
           <PushAlertBanner />
-          <div className="page-enter h-full min-h-0">{children}</div>
+          <div className="page-enter min-h-0 min-w-0 flex-1 overflow-x-clip overflow-y-auto overscroll-y-contain">
+            {children}
+          </div>
         </main>
 
         <nav

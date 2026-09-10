@@ -113,6 +113,13 @@ test('expanded mobile map stays fully within the viewport', async ({ browser }) 
   const page = await ctx.newPage();
   await page.goto('/discover');
 
+  // Brand Grid-first: expand chrome only exists on the Map surface.
+  const mapToggle = page.getByTestId('nearby-map-grid-toggle');
+  await expect(mapToggle).toBeVisible({ timeout: 20_000 });
+  if ((await mapToggle.innerText()).trim().toLowerCase() === 'map') {
+    await mapToggle.click();
+  }
+
   const panel = page.getByTestId('discover-map-panel');
   await expect(panel).toBeVisible({ timeout: 20_000 });
 
@@ -236,11 +243,164 @@ test('mobile map canvas advertises pinch-ready touch handlers', async ({ browser
   const page = await ctx.newPage();
   await page.goto('/discover');
 
+  const mapToggle = page.getByTestId('nearby-map-grid-toggle');
+  await expect(mapToggle).toBeVisible({ timeout: 20_000 });
+  if ((await mapToggle.innerText()).trim().toLowerCase() === 'map') {
+    await mapToggle.click();
+  }
+
   const host = page.getByTestId('discover-map-canvas-host');
   await expect(host).toBeVisible({ timeout: 20_000 });
 
   const touchAction = await host.evaluate((el) => getComputedStyle(el).touchAction);
   expect(touchAction).toMatch(/none/i);
+
+  await ctx.close();
+});
+
+// Expanded map must fill the Discover flex shell — not 100dvh math that overflows
+// past header/tab padding and reintroduces page rubber-band (#216 leftover).
+test('expanded mobile map uses flex fill and stays within the shell', async ({ browser }) => {
+  const ctx = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+    geolocation: { latitude: 40.7128, longitude: -74.006 },
+    permissions: ['geolocation'],
+  });
+  await authenticate(ctx, alice);
+  const page = await ctx.newPage();
+  await page.goto('/discover');
+
+  const mapToggle = page.getByTestId('nearby-map-grid-toggle');
+  await expect(mapToggle).toBeVisible({ timeout: 20_000 });
+  if ((await mapToggle.innerText()).trim().toLowerCase() === 'map') {
+    await mapToggle.click();
+  }
+
+  const panel = page.getByTestId('discover-map-panel');
+  await expect(panel).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId('map-expand-toggle').click();
+  await expect(panel).toHaveAttribute('data-map-mode', 'expanded');
+
+  const metrics = await panel.evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    const main = document.querySelector('main');
+    const mainBox = main?.getBoundingClientRect();
+    return {
+      top: box.top,
+      bottom: box.bottom,
+      height: box.height,
+      mainBottom: mainBox?.bottom ?? 0,
+      mainTop: mainBox?.top ?? 0,
+      inlineHeight: (el as HTMLElement).style.height || '',
+      flexGrow: getComputedStyle(el).flexGrow,
+    };
+  });
+
+  // Must not use the old 100dvh inline height that overflowed the padded main.
+  expect(metrics.inlineHeight).not.toMatch(/100dvh|100vh/);
+  expect(Number(metrics.flexGrow)).toBeGreaterThan(0);
+  expect(metrics.top).toBeGreaterThanOrEqual(metrics.mainTop - 1);
+  expect(metrics.bottom).toBeLessThanOrEqual(metrics.mainBottom + 1);
+  // Near-fullscreen within the shell — not a short default strip.
+  expect(metrics.height).toBeGreaterThan(500);
+
+  // List scroll region must not sit under the expanded map (gesture conflict).
+  await expect(page.getByTestId('nearby-counts')).toHaveCount(0);
+
+  await ctx.close();
+});
+
+// HTML pins must advertise gesture forwarding so pan/pinch starting on a face works.
+test('map markers wire drag/pinch pass-through onto Mapbox', async ({ browser }) => {
+  const ctx = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+    geolocation: { latitude: 40.7128, longitude: -74.006 },
+    permissions: ['geolocation'],
+  });
+  await authenticate(ctx, alice);
+  const page = await ctx.newPage();
+
+  await page.route('**/api/users/nearby**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 'pin-1',
+          name: 'PinOne',
+          age: 30,
+          online: true,
+          distance_km: 0.3,
+          distance_label: '< 500 m',
+          lat: 40.7135,
+          lng: -74.0055,
+          last_seen: new Date().toISOString(),
+          photo_url: '/uploads/fake-pin.jpg',
+        },
+      ]),
+    });
+  });
+
+  await page.goto('/discover');
+  const mapToggle = page.getByTestId('nearby-map-grid-toggle');
+  await expect(mapToggle).toBeVisible({ timeout: 20_000 });
+  if ((await mapToggle.innerText()).trim().toLowerCase() === 'map') {
+    await mapToggle.click();
+  }
+
+  const host = page.getByTestId('discover-map-canvas-host');
+  await expect(host).toBeVisible({ timeout: 20_000 });
+
+  // Wait for Mapbox markers; self pin always exists once map loads.
+  await expect
+    .poll(async () =>
+      page.locator('.mapboxgl-marker[data-map-gesture-wired="1"]').count(),
+    )
+    .toBeGreaterThan(0);
+
+  const wiredTouchAction = await page
+    .locator('.mapboxgl-marker[data-map-gesture-wired="1"]')
+    .first()
+    .evaluate((el) => getComputedStyle(el).touchAction);
+  expect(wiredTouchAction).toMatch(/none/i);
+
+  await ctx.close();
+});
+
+// Grid ↔ Map toggle must still preserve surface after expand/shrink (do not regress).
+test('Grid Map toggle state survives expand shrink', async ({ browser }) => {
+  const ctx = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+    geolocation: { latitude: 40.7128, longitude: -74.006 },
+    permissions: ['geolocation'],
+  });
+  await authenticate(ctx, alice);
+  const page = await ctx.newPage();
+  await page.goto('/discover');
+
+  const toggle = page.getByTestId('nearby-map-grid-toggle');
+  await expect(toggle).toBeVisible({ timeout: 20_000 });
+  // Start from Grid (Brand default) → Map → expand → shrink → still Map.
+  if ((await toggle.innerText()).trim().toLowerCase() === 'map') {
+    // already showing Map button means current view is Grid
+  } else {
+    // showing Grid button means current view is Map — switch to Grid first
+    await toggle.click();
+  }
+  await toggle.click(); // → Map
+  await expect(page.getByTestId('discover-map-panel')).toBeVisible();
+  await page.getByTestId('map-expand-toggle').click();
+  await expect(page.getByTestId('discover-map-panel')).toHaveAttribute('data-map-mode', 'expanded');
+  await page.getByTestId('map-expand-toggle').click();
+  await expect(page.getByTestId('discover-map-panel')).toHaveAttribute('data-map-mode', 'default');
+  // Toggle still offers Grid (meaning we are on Map).
+  await expect(toggle).toContainText(/grid/i);
 
   await ctx.close();
 });

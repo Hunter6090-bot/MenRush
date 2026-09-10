@@ -81,15 +81,24 @@ export function createMapMarkerElement(
   user: MapMarkerUser,
   onTap: () => void,
   size = 44,
-): { element: HTMLDivElement; root: Root } {
+): { element: HTMLDivElement; root: Root; suppressClickRef: { current: boolean } } {
   const el = document.createElement('div');
   el.style.width = `${size}px`;
   el.style.height = `${size}px`;
+  el.style.touchAction = 'none';
+  /** Set by wireHtmlMarkerMapGestures after a drag/pinch so click is ignored. */
+  const suppressClickRef = { current: false };
   el.addEventListener('click', (e) => {
+    if (suppressClickRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      suppressClickRef.current = false;
+      return;
+    }
     e.stopPropagation();
     onTap();
   });
   const root = createRoot(el);
   root.render(<MapMarker user={user} size={size} />);
-  return { element: el, root };
+  return { element: el, root, suppressClickRef };
 }
