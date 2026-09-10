@@ -6,7 +6,7 @@ import {
   PublicAuthShell,
 } from '../components/PublicAuthShell';
 import { PulseRing } from '../components/PulseRing';
-import { storeInviteCode } from '../lib/betaInvite';
+import { storeInviteCode, BETA_INVITE_REQUIRED } from '../lib/betaInvite';
 import {
   publicCodeInputClass,
   publicErrorClass,
@@ -28,6 +28,10 @@ export const BetaAccess = () => {
   const submittingRef = useRef(false);
 
   useEffect(() => {
+    if (!BETA_INVITE_REQUIRED) {
+      navigate('/register', { replace: true });
+      return;
+    }
     // Prefill from waitlist welcome / invite email deep links.
     try {
       const params = new URLSearchParams(window.location.search);
@@ -116,9 +120,9 @@ export const BetaAccess = () => {
           {error ? <p className={publicErrorClass}>{error}</p> : null}
 
           <p className="m-0 text-sm leading-[1.55] text-[var(--cream-muted)]">
-            No code?{' '}
-            <Link to="/register" className={publicLinkClass}>
-              Sign up free
+            Codes are single-use and tied to selected waitlist members. No code?{' '}
+            <Link to="/coming-soon#waitlist" className={publicLinkClass}>
+              Join the waitlist
             </Link>
             .
           </p>

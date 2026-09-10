@@ -35,3 +35,4 @@ email-assets/send-log.md
 **/.venv/
 __pycache__/
 *.pyc
+tmp/

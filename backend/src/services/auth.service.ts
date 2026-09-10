@@ -747,6 +747,10 @@ export const authService = {
     return { userId: payload.userId };
   },
 
+  issueAccessToken(userId: string): string {
+    return signToken(userId);
+  },
+
   signHandoffToken(sessionId: string, userId: string): string {
     const payload: HandoffTokenPayload = {
       sessionId,
@@ -878,6 +882,8 @@ export const authService = {
 
     const { trustedDeviceService } = await import('./trusted-device.service');
     await trustedDeviceService.revokeAll(userId);
+    const { authSessionService } = await import('./auth-session.service');
+    await authSessionService.revokeAll(userId);
 
     return { ok: true };
   },
@@ -912,6 +918,8 @@ export const authService = {
 
     const { trustedDeviceService } = await import('./trusted-device.service');
     await trustedDeviceService.revokeAll(userId);
+    const { authSessionService } = await import('./auth-session.service');
+    await authSessionService.revokeAll(userId);
 
     return { ok: true };
   },

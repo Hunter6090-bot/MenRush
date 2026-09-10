@@ -28,7 +28,7 @@ const CONTEXT_MIMES: Record<UploadContext, Set<string>> = {
   profile: new Set(['image/jpeg', 'image/png', 'image/webp']),
   cover: new Set(['image/jpeg', 'image/png', 'image/webp']),
   map: new Set(['image/jpeg', 'image/png', 'image/webp']),
-  album: new Set(['image/jpeg', 'image/png', 'image/webp']),
+  album: new Set(['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm']),
   message: new Set(Object.keys(MIME_EXTENSIONS)),
   verification: new Set(['image/jpeg', 'image/png', 'image/webp']),
   'room-temp': new Set(['image/jpeg', 'image/png', 'image/webp']),

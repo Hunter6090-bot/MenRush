@@ -54,7 +54,7 @@ export const Landing = () => {
         } else if (!trustThisDevice) {
           clearDeviceTrustToken();
         }
-        setAuth(res.data.user, res.data.token);
+        setAuth(res.data.user, res.data.token, res.data.refresh_token);
         navigate('/discover');
         return;
       }
@@ -77,7 +77,7 @@ export const Landing = () => {
       if (res.data.deviceTrustToken) {
         saveDeviceTrustToken(normalizedEmail, res.data.deviceTrustToken);
       }
-      setAuth(res.data.user, res.data.token);
+      setAuth(res.data.user, res.data.token, res.data.refresh_token);
       navigate('/discover');
     } catch (err: unknown) {
       setError(loginErrorMessage(err));

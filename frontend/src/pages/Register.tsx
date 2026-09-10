@@ -193,7 +193,7 @@ export const Register = () => {
         return;
       }
       if (res.data.token && res.data.user) {
-        setAuth(res.data.user, res.data.token);
+        setAuth(res.data.user, res.data.token, (res.data as any).refresh_token);
         navigate('/profile/setup', { replace: true });
         return;
       }
@@ -207,6 +207,7 @@ export const Register = () => {
       setLoading(false);
     }
   };
+
 
   const segColor = (idx: number): string => {
     if (pwScore <= idx) return '#3D2B0E';

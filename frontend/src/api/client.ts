@@ -96,6 +96,8 @@ export const authAPI = {
     }>('/auth/register', data),
   login: (data: { email: string; password: string; deviceTrustToken?: string }) =>
     apiClient.post('/auth/login', data),
+  logout: (refreshToken?: string | null) =>
+    apiClient.post('/auth/logout', { refresh_token: refreshToken ?? undefined }),
   confirmEmail: (data: { token: string }) =>
     apiClient.post<{
       ok: boolean;
