@@ -165,8 +165,10 @@ test('Messages list: circle-only avatars, Brand empty face, no square ring', asy
   await expect(page.getByText('Nick')).toBeVisible();
   await expect(page.getByText('ChubbyBear')).toBeVisible();
 
-  // Empty + generic → Brand faded face (2 rows)
+  // Empty + generic → Brand faded face cutout (2 rows)
   await expect(page.getByTestId('faded-brand-face')).toHaveCount(2);
+  const emptyImg = page.getByTestId('faded-brand-face').first().locator('img');
+  await expect(emptyImg).toHaveAttribute('src', '/brand/medallion-transparent.png');
 
   // Real photo kept
   const realImg = page.locator(`img[alt="Bigbear25"]`);

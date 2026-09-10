@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ConversationItem } from './ConversationItem';
-import { BRAND_MEDALLION } from '../lib/brand';
+import { BRAND_MEDALLION_CUTOUT } from '../lib/brand';
 
 vi.mock('../hooks/store', () => ({
   useAuthStore: (sel: (s: { user: { id: string } | null }) => unknown) =>
@@ -45,7 +45,8 @@ describe('ConversationItem avatars', () => {
 
     expect(screen.getByTestId('faded-brand-face')).toBeInTheDocument();
     const img = screen.getByTestId('faded-brand-face').querySelector('img');
-    expect(img?.getAttribute('src')).toBe(BRAND_MEDALLION);
+    expect(img?.getAttribute('src')).toBe(BRAND_MEDALLION_CUTOUT);
+    expect(img?.getAttribute('src')).toBe('/brand/medallion-transparent.png');
 
     // Former square chrome: ring on a non-rounded wrapper
     expect(container.querySelector('[class*="ring-2"]')).toBeNull();
