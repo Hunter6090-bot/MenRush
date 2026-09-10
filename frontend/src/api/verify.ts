@@ -2,13 +2,14 @@ import { apiClient } from './client';
 
 export type VerificationStatus = 'unverified' | 'pending' | 'verified' | 'rejected';
 export type AgeAssuranceStatus = 'pending' | 'self_attested' | 'confirmed' | 'failed';
-export type TrustLevel = 'unconfirmed' | 'adult_confirmed' | 'authentic_person' | 'identity_checked';
+export type TrustLevel = 'unconfirmed' | 'adult_confirmed' | 'identity_checked';
 export type IdDocumentType = 'passport' | 'driving_license';
 
 export interface VerifyStatus {
   is_verified: boolean;
   status: VerificationStatus;
   provider: string | null;
+  veriff_status?: string | null;
   verified_at: string | null;
   rejection_reason: string | null;
   age_assurance_status: AgeAssuranceStatus;
@@ -144,8 +145,9 @@ export const verifyAPI = {
     if (handoffSessionId) form.append('handoff_session_id', handoffSessionId);
     return apiClient.post<VerifySubmitResult>('/verify/submit', form);
   },
-  status: () => apiClient.get<VerifyStatus>('/verify/status'),
+  status: () => apiClient.get<VerifyStatus>('/verify/status', { timeout: 15000 }),
   veriffConfigured: () => apiClient.get<{ configured: boolean }>('/verify/veriff/configured'),
+  submitVeriffSession: () => apiClient.post('/verify/veriff/submitted', undefined, { timeout: 15000 }),
   createVeriffSession: () =>
-    apiClient.post<{ sessionId: string; sessionUrl: string }>('/verify/veriff/session'),
+    apiClient.post<{ sessionId: string; sessionUrl: string }>('/verify/veriff/session', undefined, { timeout: 20000 }),
 };

@@ -160,4 +160,17 @@ describe('discovery age From–To range', () => {
       maxAge: 99,
     });
   });
+
+  it('verified filter uses is_verified only — no Authentic-person honor mark', () => {
+    const state = {
+      ...DEFAULT_DISCOVERY_FILTERS,
+      status: ['verified'] as typeof DEFAULT_DISCOVERY_FILTERS.status,
+    };
+    const people = [
+      user({ id: 'veriff', name: 'V', is_verified: true, authenticity_status: 'unverified' }),
+      user({ id: 'auth-only', name: 'A', is_verified: false, authenticity_status: 'verified' }),
+      user({ id: 'none', name: 'N', is_verified: false, authenticity_status: 'unverified' }),
+    ];
+    expect(applyDiscoveryClientFilters(people, state).map((u) => u.id)).toEqual(['veriff']);
+  });
 });

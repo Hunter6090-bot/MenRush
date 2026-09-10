@@ -1,6 +1,6 @@
 export type VerificationStatus = 'unverified' | 'pending' | 'verified' | 'rejected';
 export type AgeAssuranceStatus = 'pending' | 'self_attested' | 'confirmed' | 'failed';
-export type TrustLevel = 'unconfirmed' | 'adult_confirmed' | 'authentic_person' | 'identity_checked';
+export type TrustLevel = 'unconfirmed' | 'adult_confirmed' | 'identity_checked';
 
 export type VerificationProviderName = 'menrush';
 

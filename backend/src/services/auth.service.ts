@@ -1,5 +1,6 @@
 import bcryptjs from 'bcryptjs';
 import crypto from 'crypto';
+import type { PoolClient } from 'pg';
 import { query } from '../db';
 import pool from '../db';
 import { defaultGenericAvatarUrl } from '../lib/genericAvatar';
@@ -7,6 +8,8 @@ import {
   RegisterInput,
   LoginInput,
   ResetPasswordInput,
+  ConfirmEmailInput,
+  ResendConfirmEmailInput,
   ChangePasswordInput,
   ChangeEmailInput,
   DeleteAccountInput,
@@ -16,6 +19,17 @@ import {
   buildTransactionalEmail,
   transactionalParagraph,
 } from './transactional-email.template';
+import {
+  EMAIL_CONFIRM_TTL_MS,
+  CONFIRM_EMAIL_SUBJECT,
+  WELCOME_EMAIL_SUBJECT,
+  buildConfirmEmailHtml,
+  buildConfirmEmailText,
+  buildWelcomeEmailHtml,
+  buildWelcomeEmailText,
+  shouldExposeConfirmToken,
+  maySendEmailConfirmTransactional,
+} from './email-confirm.emails';
 import { v4 as uuidv4 } from 'uuid';
 import { inviteCodeService } from './invite-code.service';
 import {
@@ -27,6 +41,10 @@ import {
 import { assertPrideInviteEmailMatch } from './prideInvite.service';
 import { ageFromDateOfBirth } from '../lib/age';
 import { premiumService } from './premium.service';
+import { referralService } from './referral.service';
+
+const EMAIL_NOT_CONFIRMED_MESSAGE =
+  'Confirm your email before signing in. Check your inbox for the link.';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable is required');
@@ -116,8 +134,15 @@ export const authService = {
     const hashedPassword = await bcryptjs.hash(data.password, 10);
     const inviteCode = data.invite_code?.trim();
     const promoCode = data.promo_code?.trim();
+    const referralCodeRaw = data.referral_code?.trim();
     const usingSharedPride = !!(promoCode && isSharedPrideCode(promoCode));
     const usingPersonalPride = !!(promoCode && !isSharedPrideCode(promoCode));
+
+    // Resolve referral before INSERT — invalid codes fail closed (no user row).
+    let resolvedReferrer: { referrerId: string; code: string } | null = null;
+    if (referralCodeRaw) {
+      resolvedReferrer = await referralService.resolveReferrerForSignup(referralCodeRaw);
+    }
 
     let prideInviteMonths: number | null = null;
     if (inviteCode) {
@@ -198,7 +223,16 @@ export const authService = {
       throw new Error('You must be 18 or older to join MenRush.');
     }
 
+    // Al lock: confirm/welcome mails only to al@menrush.com / BOA90 until
+    // EMAIL_CONFIRM_MAIL_OPEN=true. Others keep legacy live session (no mass-send).
+    // Decide before the transaction so confirm/token DB writes commit atomically
+    // with the user row (no post-COMMIT orphan on transient write failure).
+    const sendConfirmMail = maySendEmailConfirmTransactional(data.email, data.name);
+
     const client = await pool.connect();
+    let committed = false;
+    let user: Record<string, unknown> | null = null;
+    let rawConfirmToken: string | null = null;
     try {
       await client.query('BEGIN');
 
@@ -209,13 +243,30 @@ export const authService = {
       }
       const defaultAvatar = defaultGenericAvatarUrl(age);
 
+      // Allocate a unique referral code before INSERT (user row does not exist yet).
+      let newReferralCode = referralService.generateReferralCode();
+      for (let i = 0; i < 8; i++) {
+        const clash = await client.query(
+          `SELECT 1 FROM users WHERE referral_code = $1 LIMIT 1`,
+          [newReferralCode],
+        );
+        if (clash.rows.length === 0) break;
+        newReferralCode = referralService.generateReferralCode();
+      }
+
+      // Self-referral guard if somehow the resolved referrer matched (impossible pre-insert).
+      if (resolvedReferrer && resolvedReferrer.referrerId === id) {
+        throw new Error('You cannot use your own referral code.');
+      }
+
       const result = await client.query(
         `INSERT INTO users (
            id, email, password_hash, name, age, date_of_birth, photo_url,
-           is_verified, verification_status, age_assurance_status
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'self_attested')
-         RETURNING id, email, name, age, date_of_birth, photo_url, is_verified, verification_status,
-                   age_assurance_status, authenticity_status`,
+           is_verified, verification_status, age_assurance_status, referral_code,
+           email_confirmed
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'self_attested', $10, FALSE)
+         RETURNING id, email, name, age, date_of_birth, photo_url, COALESCE(is_verified AND verification_provider = 'veriff', FALSE) AS is_verified, verification_status,
+                   age_assurance_status, authenticity_status, referral_code, email_confirmed`,
         [
           id,
           data.email,
@@ -226,13 +277,18 @@ export const authService = {
           defaultAvatar,
           autoVerify,
           autoVerify ? 'verified' : 'unverified',
+          newReferralCode,
         ],
       );
 
-      const user = result.rows[0];
+      user = result.rows[0];
+
+      if (resolvedReferrer) {
+        await referralService.attachAtSignup(resolvedReferrer.referrerId, user!.id as string, client);
+      }
 
       if (inviteCode) {
-        await inviteCodeService.redeemForRegistration(inviteCode, user.id, client);
+        await inviteCodeService.redeemForRegistration(inviteCode, user!.id as string, client);
       }
 
       // Redeem inside the same transaction so a failed Pride grant rolls back
@@ -241,43 +297,60 @@ export const authService = {
         // Entering the Pride-flagged invite NOW books Premium. No second entry at launch.
         await promoService.bookPrideInviteGrant(
           data.email,
-          user.id,
+          user!.id as string,
           prideInviteMonths,
           client,
         );
       } else if (usingSharedPride) {
-        await promoService.redeemSharedPride(promoCode!, data.email, user.id, client);
+        await promoService.redeemSharedPride(promoCode!, data.email, user!.id as string, client);
       } else if (usingPersonalPride) {
-        await promoService.redeemPersonalPride(promoCode!, data.email, user.id, client);
+        await promoService.redeemPersonalPride(promoCode!, data.email, user!.id as string, client);
       } else {
         // Terms 7.2 waitlist gift: 30 days Premium before 1 Oct 2026 UK.
         // Pride replaces this gift — do not stack.
-        await premiumService.grantWaitlistGift(user.id, client);
+        await premiumService.grantWaitlistGift(user!.id as string, client);
       }
 
       // Refresh entitlements after Pride or waitlist gift.
       {
         const refreshed = await client.query(
-          `SELECT id, email, name, age, date_of_birth, photo_url, is_verified, verification_status,
+          `SELECT id, email, name, age, date_of_birth, photo_url, COALESCE(is_verified AND verification_provider = 'veriff', FALSE) AS is_verified, verification_status,
                   age_assurance_status, authenticity_status,
                   COALESCE(is_premium, FALSE) AS is_premium,
                   COALESCE(premium_tier, 'free') AS premium_tier,
                   premium_until,
                   premium_starts_at
            FROM users WHERE id = $1`,
-          [user.id],
+          [user!.id],
         );
         if (refreshed.rows[0]) {
-          Object.assign(user, refreshed.rows[0]);
+          Object.assign(user!, refreshed.rows[0]);
         }
       }
 
-      await client.query('COMMIT');
+      // Confirm-gate DB writes must land in the same COMMIT as the user insert.
+      // A failure here ROLLBACKs — no orphan account with HTTP 400 after commit.
+      if (!sendConfirmMail) {
+        await client.query(
+          `UPDATE users SET email_confirmed = TRUE, updated_at = NOW() WHERE id = $1`,
+          [user!.id],
+        );
+        user!.email_confirmed = true;
+      } else {
+        // No session token until email is confirmed (product gate 8 Sep 2026).
+        rawConfirmToken = await this.createEmailConfirmToken(user!.id as string, client);
+      }
 
-      const token = signToken(user.id);
-      return { user, token };
+      await client.query('COMMIT');
+      committed = true;
     } catch (error: any) {
-      await client.query('ROLLBACK');
+      if (!committed) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackErr) {
+          console.error('[auth] register ROLLBACK failed', rollbackErr);
+        }
+      }
       if (error.code === '23505') {
         throw new Error('Email already exists');
       }
@@ -285,14 +358,237 @@ export const authService = {
     } finally {
       client.release();
     }
+
+    // Post-COMMIT work is best-effort only. Never throw "registration failed"
+    // after the user row exists — that was the orphan path.
+    if (autoVerify && resolvedReferrer) {
+      try {
+        await referralService.onUserVerified(user!.id as string);
+      } catch (err) {
+        console.error('[auth] referral verify-on-register hook failed', err);
+      }
+    }
+
+    if (!sendConfirmMail) {
+      console.log(
+        `[email-confirm] BOA90 lock — held confirm/welcome mail for ${user!.email}; legacy session issued. First live mails are Al-only until EMAIL_CONFIRM_MAIL_OPEN=true.`,
+      );
+      return {
+        user: user!,
+        token: signToken(user!.id as string),
+        requiresEmailConfirm: false as const,
+      };
+    }
+
+    try {
+      await this.sendConfirmEmail(user!.email as string, rawConfirmToken!);
+    } catch (mailErr) {
+      console.error('[auth] confirm email send failed:', mailErr);
+    }
+
+    return {
+      ok: true as const,
+      requiresEmailConfirm: true as const,
+      email: user!.email as string,
+      message: 'Check your email to confirm your account before signing in.',
+      ...(shouldExposeConfirmToken() ? { devConfirmToken: rawConfirmToken! } : {}),
+    };
+  },
+
+  async createEmailConfirmToken(userId: string, client?: PoolClient): Promise<string> {
+    const db = client ?? pool;
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + EMAIL_CONFIRM_TTL_MS);
+
+    await db.query(
+      `UPDATE email_confirm_tokens SET used_at = NOW()
+       WHERE user_id = $1 AND used_at IS NULL`,
+      [userId],
+    );
+
+    await db.query(
+      `INSERT INTO email_confirm_tokens (user_id, token_hash, expires_at)
+       VALUES ($1, $2, $3)`,
+      [userId, tokenHash, expiresAt],
+    );
+
+    return rawToken;
+  },
+
+  async sendConfirmEmail(deliverTo: string, rawToken: string): Promise<void> {
+    if (!maySendEmailConfirmTransactional(deliverTo)) {
+      console.log(
+        `[email-confirm] BOA90 lock — skipped confirm mail to ${deliverTo} (Al-only until EMAIL_CONFIRM_MAIL_OPEN=true)`,
+      );
+      return;
+    }
+
+    const frontendUrl = (process.env.FRONTEND_URL || 'https://menrush.com').replace(/\/$/, '');
+    const confirmUrl = `${frontendUrl}/confirm-email?token=${rawToken}`;
+
+    await sendTransactionalEmail({
+      to: deliverTo,
+      subject: CONFIRM_EMAIL_SUBJECT,
+      text: buildConfirmEmailText(confirmUrl),
+      html: buildConfirmEmailHtml(confirmUrl),
+    });
+  },
+
+  async sendWelcomeEmailOnce(userId: string, deliverTo: string): Promise<boolean> {
+    if (!maySendEmailConfirmTransactional(deliverTo)) {
+      console.log(
+        `[email-confirm] BOA90 lock — skipped welcome mail to ${deliverTo} (Al-only until EMAIL_CONFIRM_MAIL_OPEN=true)`,
+      );
+      return false;
+    }
+
+    // Claim the send slot first so concurrent confirm clicks cannot double-send.
+    const claimed = await query(
+      `UPDATE users
+       SET welcome_email_sent_at = NOW(), updated_at = NOW()
+       WHERE id = $1 AND welcome_email_sent_at IS NULL
+       RETURNING id`,
+      [userId],
+    );
+    if (claimed.rows.length === 0) {
+      return false;
+    }
+
+    try {
+      await sendTransactionalEmail({
+        to: deliverTo,
+        subject: WELCOME_EMAIL_SUBJECT,
+        text: buildWelcomeEmailText(),
+        html: buildWelcomeEmailHtml(),
+      });
+      return true;
+    } catch (err) {
+      // Allow a later confirm/resend path to retry if the mailer failed after claim.
+      await query(
+        `UPDATE users SET welcome_email_sent_at = NULL, updated_at = NOW() WHERE id = $1`,
+        [userId],
+      );
+      throw err;
+    }
+  },
+
+  async confirmEmail(data: ConfirmEmailInput) {
+    const tokenHash = crypto.createHash('sha256').update(data.token).digest('hex');
+    const result = await query(
+      `SELECT t.id AS token_id, t.user_id, t.used_at, t.expires_at,
+              u.email, u.name, u.photo_url,
+              COALESCE(u.email_confirmed, FALSE) AS email_confirmed,
+              COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified,
+              u.verification_status,
+              COALESCE(u.is_premium, FALSE) AS is_premium,
+              COALESCE(u.premium_tier, 'free') AS premium_tier
+         FROM email_confirm_tokens t
+         JOIN users u ON u.id = t.user_id
+        WHERE t.token_hash = $1`,
+      [tokenHash],
+    );
+
+    if (result.rows.length === 0) {
+      throw new Error('Invalid or expired confirmation link');
+    }
+
+    const row = result.rows[0];
+
+    if (row.email_confirmed) {
+      // Idempotent: already confirmed — never send welcome again.
+      return {
+        ok: true as const,
+        alreadyConfirmed: true as const,
+        email: row.email as string,
+        message: 'Email already confirmed. You can sign in.',
+      };
+    }
+
+    if (row.used_at || new Date(row.expires_at).getTime() <= Date.now()) {
+      throw new Error('Invalid or expired confirmation link');
+    }
+
+    await query(
+      `UPDATE users
+       SET email_confirmed = TRUE, updated_at = NOW()
+       WHERE id = $1`,
+      [row.user_id],
+    );
+    await query(`UPDATE email_confirm_tokens SET used_at = NOW() WHERE id = $1`, [
+      row.token_id,
+    ]);
+    // Invalidate any other outstanding confirm tokens for this user.
+    await query(
+      `UPDATE email_confirm_tokens SET used_at = NOW()
+       WHERE user_id = $1 AND used_at IS NULL`,
+      [row.user_id],
+    );
+
+    try {
+      await this.sendWelcomeEmailOnce(row.user_id as string, row.email as string);
+    } catch (welcomeErr) {
+      console.error('[auth] welcome email send failed:', welcomeErr);
+    }
+
+    const publicUser = {
+      id: row.user_id as string,
+      email: row.email as string,
+      name: row.name as string,
+      photo_url: row.photo_url ?? undefined,
+      is_verified: row.is_verified,
+      verification_status: row.verification_status,
+      is_premium: row.is_premium ?? false,
+      premium_tier: row.premium_tier ?? 'free',
+    };
+
+    return {
+      ok: true as const,
+      alreadyConfirmed: false as const,
+      user: publicUser,
+      token: signToken(row.user_id as string),
+      message: 'Email confirmed. Welcome to MenRush.',
+    };
+  },
+
+  async resendConfirmEmail(data: ResendConfirmEmailInput) {
+    const result = await query(
+      `SELECT id, email, COALESCE(email_confirmed, FALSE) AS email_confirmed
+         FROM users WHERE LOWER(email) = $1`,
+      [data.email],
+    );
+
+    // Always ok — do not leak whether the email exists.
+    if (result.rows.length === 0) {
+      return { ok: true as const, sent: true as const };
+    }
+
+    const user = result.rows[0];
+    if (user.email_confirmed) {
+      return { ok: true as const, sent: true as const };
+    }
+
+    const rawToken = await this.createEmailConfirmToken(user.id as string);
+    try {
+      await this.sendConfirmEmail(user.email as string, rawToken);
+    } catch (mailErr) {
+      console.error('[auth] resend confirm email failed:', mailErr);
+    }
+
+    return {
+      ok: true as const,
+      sent: true as const,
+      ...(shouldExposeConfirmToken() ? { devConfirmToken: rawToken } : {}),
+    };
   },
 
   async login(data: LoginInput) {
     const result = await query(
-      `SELECT id, email, password_hash, name, photo_url, is_verified, verification_status,
+      `SELECT id, email, password_hash, name, photo_url, COALESCE(is_verified AND verification_provider = 'veriff', FALSE) AS is_verified, verification_status,
               COALESCE(is_premium, FALSE) AS is_premium,
               COALESCE(premium_tier, 'free') AS premium_tier,
-              COALESCE(totp_enabled, FALSE) AS totp_enabled
+              COALESCE(totp_enabled, FALSE) AS totp_enabled,
+              COALESCE(email_confirmed, TRUE) AS email_confirmed
          FROM users WHERE LOWER(email) = $1`,
       [data.email]
     );
@@ -306,6 +602,10 @@ export const authService = {
 
     if (!validPassword) {
       throw new Error('Invalid credentials');
+    }
+
+    if (!user.email_confirmed) {
+      throw new Error(EMAIL_NOT_CONFIRMED_MESSAGE);
     }
 
     const publicUser = {
@@ -408,7 +708,7 @@ export const authService = {
     }
 
     const result = await query(
-      `SELECT id, email, name, photo_url, is_verified, verification_status,
+      `SELECT id, email, name, photo_url, COALESCE(is_verified AND verification_provider = 'veriff', FALSE) AS is_verified, verification_status,
               COALESCE(is_premium, FALSE) AS is_premium,
               COALESCE(premium_tier, 'free') AS premium_tier
          FROM users WHERE id = $1`,

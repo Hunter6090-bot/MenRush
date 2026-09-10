@@ -6,6 +6,8 @@ export interface DiscoveryPresence {
   is_pulsing?: boolean | null;
   pulse_expires_at?: string | null;
   available_until?: string | null;
+  /** Backend: online=true AND last_seen within the presence window (~20m). */
+  online?: boolean | null;
 }
 
 function hasFutureTimestamp(value?: string | null): boolean {
@@ -17,6 +19,23 @@ function hasFutureTimestamp(value?: string | null): boolean {
 export function isUserPulsing(user: DiscoveryPresence): boolean {
   if (user.is_pulsing) return true;
   return hasFutureTimestamp(user.pulse_expires_at) || hasFutureTimestamp(user.available_until);
+}
+
+/**
+ * "Live" / Active now — presence only. Never equate radius/filter headcount with Live.
+ * Matches backend nearby SQL: online AND last_seen within ~20 minutes.
+ */
+export function isUserOnlineNow(user: DiscoveryPresence): boolean {
+  return user.online === true;
+}
+
+/** Count men who are actually online now among a nearby/filtered roster. */
+export function countLiveOnline(users: readonly DiscoveryPresence[]): number {
+  let n = 0;
+  for (const user of users) {
+    if (isUserOnlineNow(user)) n += 1;
+  }
+  return n;
 }
 
 export function getDistanceLabel(user: DiscoveryPresence): string {

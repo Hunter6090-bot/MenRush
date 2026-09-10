@@ -118,8 +118,7 @@ function PersonGridCard({
               </span>
               {person.is_verified ? (
                 <VerifiedBadge size="sm" />
-              ) : person.authenticity_status === 'verified' ? (
-                <VerifiedBadge size="sm" level="authentic_person" />
+
               ) : null}
             </div>
             <p className="mt-0.5 truncate text-[9px] font-semibold text-[var(--cream)] md:text-xs">{subtitle}</p>

@@ -239,15 +239,17 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   useEffect(() => {
     if (!roomId || !settingsOpen) return;
     // In-room settings roster = live presence only (leave leaves no trace).
-    setMembers(
-      participants.map((p) => ({
+    setMembers((prev) => {
+      const prevById = new Map(prev.map((m) => [m.id, m]));
+      return participants.map((p) => ({
         id: p.user_id,
         name: p.name,
         photo_url: p.photo_url ?? undefined,
-        using_temp_identity: true,
-        role: undefined,
-      })),
-    );
+        using_temp_identity: prevById.get(p.user_id)?.using_temp_identity ?? false,
+        role: prevById.get(p.user_id)?.role,
+        is_verified: prevById.get(p.user_id)?.is_verified,
+      }));
+    });
   }, [roomId, settingsOpen, participants]);
 
   useEffect(() => {
@@ -309,6 +311,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       user_id: string;
       name?: string;
       photo_url?: string | null;
+      using_temp_identity?: boolean;
     }) => {
       if (data.room_id !== roomId) return;
       if (data.type === 'leave') {
@@ -344,6 +347,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           user_id: data.user_id,
           name: data.name,
           photo_url: data.photo_url,
+          using_temp_identity: !!data.using_temp_identity,
         }),
       );
       setMembers((prev) => {
@@ -354,7 +358,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                   ...m,
                   name: data.name ?? m.name,
                   photo_url: data.photo_url ?? m.photo_url,
-                  using_temp_identity: true,
+                  using_temp_identity: !!data.using_temp_identity,
                 }
               : m,
           );
@@ -365,7 +369,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             id: data.user_id,
             name: data.name ?? 'Member',
             photo_url: data.photo_url ?? undefined,
-            using_temp_identity: true,
+            using_temp_identity: !!data.using_temp_identity,
           },
         ];
       });
@@ -373,7 +377,12 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
 
     const onPresenceSync = (data: {
       room_id: string;
-      participants: Array<{ user_id: string; name: string; photo_url?: string | null }>;
+      participants: Array<{
+        user_id: string;
+        name: string;
+        photo_url?: string | null;
+        using_temp_identity?: boolean;
+      }>;
     }) => {
       if (data.room_id !== roomId) return;
       applyPresenceSync(data.participants);
@@ -385,7 +394,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           id: p.user_id,
           name: p.name,
           photo_url: p.photo_url ?? undefined,
-          using_temp_identity: true,
+          using_temp_identity: !!p.using_temp_identity,
         })),
       );
       // If open DM peer is no longer present, drop the window.
@@ -804,30 +813,59 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           roomDescription={room.description}
           activeCount={room.member_count}
           roomTheme={room.name}
-          onReady={async ({ displayName, photoUrl: gatePhotoUrl, saveName, savePhoto }) => {
-            if (!gatePhotoUrl) {
-              throw new Error('temp_photo_required');
+          profileName={user?.name}
+          profilePhotoUrl={user?.photo_url}
+          onReady={async (choice) => {
+            if (choice.mode === 'profile') {
+              // Clear any leftover temp so presence resolves to profile.
+              try {
+                await roomsAPI.deleteTempIdentity(roomId!);
+              } catch {
+                /* still enter with local profile face */
+              }
+              const profileName = user?.name?.trim() || 'Member';
+              const profilePhoto = user?.photo_url ?? null;
+              if (user?.id) {
+                upsertParticipant({
+                  user_id: user.id,
+                  name: profileName,
+                  photo_url: profilePhoto,
+                  isLive: true,
+                  isSelf: true,
+                });
+                setMembers([
+                  {
+                    id: user.id,
+                    name: profileName,
+                    photo_url: profilePhoto ?? undefined,
+                    using_temp_identity: false,
+                  },
+                ]);
+              }
+              setIdentityReady(true);
+              return;
             }
+
             await roomsAPI.setTempIdentity(roomId!, {
-              display_name: displayName,
-              photo_url: gatePhotoUrl,
-              save_name: saveName,
-              save_photo: savePhoto,
+              display_name: choice.displayName,
+              photo_url: choice.photoUrl || undefined,
+              save_name: choice.saveName,
+              save_photo: choice.savePhoto,
             });
-            // First paint uses TEMP identity only — never auth profile photo/name.
+            // Temp path: name required, photo optional (null → letter avatar).
             if (user?.id) {
               upsertParticipant({
                 user_id: user.id,
-                name: displayName,
-                photo_url: gatePhotoUrl,
+                name: choice.displayName,
+                photo_url: choice.photoUrl || null,
                 isLive: true,
                 isSelf: true,
               });
               setMembers([
                 {
                   id: user.id,
-                  name: displayName,
-                  photo_url: gatePhotoUrl,
+                  name: choice.displayName,
+                  photo_url: choice.photoUrl || undefined,
                   using_temp_identity: true,
                 },
               ]);

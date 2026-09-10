@@ -61,10 +61,27 @@ test.beforeAll(async () => {
     });
     expect(reg.ok()).toBeTruthy();
     const regBody = await reg.json();
-    liker = {
-      token: regBody.token,
-      user: regBody.user,
-    };
+    if (regBody.requiresEmailConfirm) {
+      expect(regBody.token).toBeFalsy();
+      expect(regBody.devConfirmToken).toBeTruthy();
+      const confirm = await api.post('/api/auth/confirm-email', {
+        data: { token: regBody.devConfirmToken },
+      });
+      expect(confirm.ok()).toBeTruthy();
+      const confirmBody = await confirm.json();
+      expect(confirmBody.token).toBeTruthy();
+      liker = {
+        token: confirmBody.token,
+        user: confirmBody.user,
+      };
+    } else {
+      // BOA90 lock: non-Al signups keep legacy session until EMAIL_CONFIRM_MAIL_OPEN=true.
+      expect(regBody.token).toBeTruthy();
+      liker = {
+        token: regBody.token,
+        user: regBody.user,
+      };
+    }
 
     // Profiles are created lazily on location — received-likes JOIN requires a profile row.
     const loc = await api.post('/api/users/location', {
@@ -134,8 +151,10 @@ test('likeUser success path from profile Match CTA', async ({ browser }) => {
     const matchBtn = page.getByTestId('profile-view-match');
     await expect(matchBtn).toBeVisible({ timeout: 15_000 });
     const label = (await matchBtn.textContent())?.trim() ?? '';
-    if (label === 'Matched') {
-      expect(label).toBe('Matched');
+    if (label === 'Match' && matchBtn.isDisabled()) {
+      // One-way pending: muted Match, not Matched with …
+      expect(label).toBe('Match');
+      await expect(matchBtn).toBeDisabled();
     } else {
       await expect(matchBtn).toHaveText('Match');
       await matchBtn.click();
@@ -149,8 +168,12 @@ test('likeUser success path from profile Match CTA', async ({ browser }) => {
         .catch(() => false);
       if (unmatchVisible) {
         await expect(page.getByTestId('profile-view-message')).toHaveText(/Open chat/i);
+        await expect(page.getByTestId('profile-view-matched-status')).toHaveText(
+          /Matched with/i,
+        );
       } else {
-        await expect(page.getByTestId('profile-view-match')).toHaveText(/Matched/i);
+        await expect(page.getByTestId('profile-view-match')).toHaveText(/^Match$/);
+        await expect(page.getByTestId('profile-view-match')).toBeDisabled();
       }
     }
   }

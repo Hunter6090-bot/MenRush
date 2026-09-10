@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { usersAPI, profileMetaAPI, Mood, MOOD_LABELS } from '../api/client';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { Layout } from '../components/Layout';
@@ -12,6 +12,8 @@ import { ProfileViewersCard, ProfileViewer } from '../components/ProfileViewersC
 import { normalizeProfileImageFile } from '../lib/imageUpload';
 import { CoverBanner, DEFAULT_COVER_FRAME, normalizeCoverFrame, type CoverFrame } from '../components/CoverBanner';
 import { CoverPhotoEditor } from '../components/CoverPhotoEditor';
+import { useVerification } from '../hooks/useVerification';
+import { ProfileVerification } from '../components/ProfileVerification';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { QRCodeSVG } from 'qrcode.react';
 import { profileUrl as buildProfileUrl } from '../lib/profileLinks';
@@ -27,25 +29,100 @@ import { clearProfileSetupSkip, isProfileSetupComplete } from '../lib/profileSet
 import { isGenericAvatarUrl } from '../lib/genericAvatar';
 import { isBetaPremiumFree } from '../lib/betaInvite';
 import { IconSettings } from '../components/icons';
+import { ReferralCard } from '../components/ReferralCard';
 import { ageFromDateOfBirth, formatHeight, formatWeight } from '../lib/age';
 import {
   HOSTING_STATUS_OPTIONS,
+  PROFILE_ESSENTIAL_SECTION_IDS,
   PROFILE_INTERESTS_MAX,
   RELATIONSHIP_STATUS_OPTIONS,
   SEXUAL_HEALTH_STATUS_OPTIONS,
+  jumpToProfileEssential,
+  profileCompletionScore,
+  type ProfileEssentialId,
 } from '../lib/profileDetails';
 
+const ESSENTIAL_INPUT_HIGHLIGHT =
+  'border-[#C4832A] ring-2 ring-[#C4832A]/40 bg-[rgba(196,131,42,0.06)]';
+const ESSENTIAL_GROUP_HIGHLIGHT =
+  'rounded-xl border border-[#C4832A]/55 bg-[rgba(196,131,42,0.06)] p-3 ring-2 ring-[#C4832A]/25';
+
+function EssentialFieldLabel({
+  incomplete,
+  children,
+  htmlFor,
+}: {
+  incomplete: boolean;
+  children: React.ReactNode;
+  htmlFor?: string;
+}) {
+  return (
+    <label
+      htmlFor={htmlFor}
+      className={`mb-1.5 block text-xs font-medium uppercase tracking-wide ${
+        incomplete ? 'text-[#E0A14A]' : 'text-[var(--cream-muted)]'
+      }`}
+    >
+      {children}
+      {incomplete ? (
+        <span
+          className="ml-2 inline-block rounded-full bg-[rgba(196,131,42,0.2)] px-1.5 py-0.5 text-[9px] font-extrabold normal-case tracking-wide text-[#E0A14A]"
+          data-testid="essential-needed-cue"
+        >
+          Missing
+        </span>
+      ) : null}
+    </label>
+  );
+}
+
+/** Compact Show/Hide switch for live Stats rows. Value stays stored when off. */
+function StatsShowToggle({
+  checked,
+  onChange,
+  'aria-label': ariaLabel,
+  testId,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  'aria-label': string;
+  testId: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      data-testid={testId}
+      onClick={() => onChange(!checked)}
+      className={`relative h-6 w-10 shrink-0 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C4832A]/60 ${
+        checked ? 'bg-[#C4832A]' : 'bg-[var(--border-strong)]'
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 h-5 w-5 rounded-full bg-[#F0E0C0] shadow transition-transform ${
+          checked ? 'left-4' : 'left-0.5'
+        }`}
+      />
+    </button>
+  );
+}
 interface ProfileData {
   id: string;
   name: string;
   age: number;
   date_of_birth?: string | null;
   show_age?: boolean;
+  show_height?: boolean;
+  show_weight?: boolean;
+  show_relationship?: boolean;
   bio?: string;
   headline?: string;
   looking_for?: string;
   photo_url?: string;
   cover_url?: string;
+  map_photo_url?: string | null;
   cover_position_x?: number;
   cover_position_y?: number;
   cover_zoom?: number;
@@ -71,6 +148,7 @@ interface ProfileData {
 type Toast = { type: 'success' | 'error'; msg: string };
 
 export const Profile = () => {
+  const verification = useVerification();
   const { user, token, setAuth, patchUser, logout } = useAuthStore();
   const betaPremiumFree = isBetaPremiumFree();
   const authIsPremium = Boolean(
@@ -78,15 +156,20 @@ export const Profile = () => {
   );
   const { lat, lng, setLocation } = useLocationStore();
   const navigate = useNavigate();
+  const location = useLocation();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [showAge, setShowAge] = useState(true);
+  const [showHeight, setShowHeight] = useState(true);
+  const [showWeight, setShowWeight] = useState(true);
+  const [showRelationship, setShowRelationship] = useState(true);
   const [bio, setBio] = useState('');
   const [headline, setHeadline] = useState('');
   const [lookingFor, setLookingFor] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
   const [coverUrl, setCoverUrl] = useState('');
+  const [mapPhotoUrl, setMapPhotoUrl] = useState('');
   const [coverFrame, setCoverFrame] = useState<CoverFrame>(DEFAULT_COVER_FRAME);
   const [coverEditorOpen, setCoverEditorOpen] = useState(false);
   const [interests, setInterests] = useState<string[]>([]);
@@ -103,6 +186,7 @@ export const Profile = () => {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadingMapPhoto, setUploadingMapPhoto] = useState(false);
   const [locating, setLocating] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [profileViewers, setProfileViewers] = useState<ProfileViewer[]>([]);
@@ -113,6 +197,7 @@ export const Profile = () => {
   const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const mapPhotoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setProfileLoadError(null);
@@ -128,11 +213,15 @@ export const Profile = () => {
             : '',
         );
         setShowAge(d.show_age !== false);
+        setShowHeight(d.show_height !== false);
+        setShowWeight(d.show_weight !== false);
+        setShowRelationship(d.show_relationship !== false);
         setBio(d.bio ?? '');
         setHeadline(d.headline ?? '');
         setLookingFor(d.looking_for ?? '');
         setPhotoUrl(d.photo_url ?? '');
         setCoverUrl(d.cover_url ?? '');
+        setMapPhotoUrl(d.map_photo_url ?? '');
         setCoverFrame(
           normalizeCoverFrame(d.cover_position_x, d.cover_position_y, d.cover_zoom),
         );
@@ -150,6 +239,7 @@ export const Profile = () => {
         patchUser({
           name: d.name,
           photo_url: d.photo_url ?? undefined,
+          map_photo_url: d.map_photo_url ?? null,
           is_premium: d.is_premium,
           beta_premium_included: Boolean(
             (d as ProfileData & { beta_premium_included?: boolean }).beta_premium_included,
@@ -180,6 +270,52 @@ export const Profile = () => {
       .finally(() => setProfileViewsLoading(false));
   }, []);
 
+  const essentials = useMemo(() => {
+    const parsedHeight = heightCm.trim() === '' ? null : Number(heightCm);
+    return profileCompletionScore({
+      name: displayName,
+      date_of_birth: dateOfBirth || null,
+      age: profile?.age,
+      bio,
+      headline,
+      looking_for: lookingFor,
+      photo_url: isGenericAvatarUrl(photoUrl) ? null : photoUrl,
+      interests,
+      height_cm: Number.isFinite(parsedHeight as number) ? parsedHeight : null,
+      relationship_status: relationshipStatus || null,
+      hosting_status: hostingStatus || null,
+    });
+  }, [
+    displayName,
+    dateOfBirth,
+    profile?.age,
+    bio,
+    headline,
+    lookingFor,
+    photoUrl,
+    interests,
+    heightCm,
+    relationshipStatus,
+    hostingStatus,
+  ]);
+
+  const missingEssentialIds = useMemo(
+    () => new Set<ProfileEssentialId>(essentials.missingItems.map((m) => m.id)),
+    [essentials.missingItems],
+  );
+
+  const isEssentialMissing = (id: ProfileEssentialId) => missingEssentialIds.has(id);
+
+  useEffect(() => {
+    if (!profile) return;
+    const hash = location.hash.replace(/^#/, '');
+    if (!hash) return;
+    const id = window.setTimeout(() => {
+      jumpToProfileEssential(hash);
+    }, 80);
+    return () => window.clearTimeout(id);
+  }, [location.hash, profile, essentials.missing.length]);
+
   const handleMood = async (next: Mood | null) => {
     const previous = mood;
     setMood(next);
@@ -207,7 +343,7 @@ export const Profile = () => {
     setIsGhost(next);
     try {
       await profileMetaAPI.setGhost(next);
-      showToast('success', next ? 'Ghost mode on — you are invisible to others.' : 'Ghost mode off.');
+      showToast('success', next ? 'Ghost mode on. You are invisible to others.' : 'Ghost mode off.');
     } catch (err: unknown) {
       setIsGhost(previous);
       const code = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -283,11 +419,56 @@ export const Profile = () => {
           : p,
       );
       setCoverEditorOpen(true);
-      showToast('success', 'Cover uploaded — adjust framing');
+      showToast('success', 'Cover uploaded. Adjust framing');
     } catch (err: any) {
       showToast('error', err.response?.data?.error || 'Cover upload failed');
     } finally {
       setUploadingCover(false);
+    }
+  };
+
+  const handleMapPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.files?.[0];
+    if (!raw) return;
+    e.target.value = '';
+
+    const { file, error } = normalizeProfileImageFile(raw);
+    if (!file) {
+      showToast('error', error || 'Map photo upload failed');
+      return;
+    }
+
+    setUploadingMapPhoto(true);
+    try {
+      const res = await usersAPI.uploadMapPhoto(file);
+      const next = res.data.map_photo_url ?? '';
+      setMapPhotoUrl(next);
+      setProfile((p) => (p ? { ...p, map_photo_url: next } : p));
+      if (user && token) {
+        patchUser({ map_photo_url: next || null });
+      }
+      showToast('success', 'Map photo saved');
+    } catch (err: any) {
+      showToast('error', err.response?.data?.error || 'Map photo upload failed');
+    } finally {
+      setUploadingMapPhoto(false);
+    }
+  };
+
+  const handleClearMapPhoto = async () => {
+    setUploadingMapPhoto(true);
+    try {
+      await usersAPI.clearMapPhoto();
+      setMapPhotoUrl('');
+      setProfile((p) => (p ? { ...p, map_photo_url: null } : p));
+      if (user && token) {
+        patchUser({ map_photo_url: null });
+      }
+      showToast('success', 'Map photo cleared');
+    } catch (err: any) {
+      showToast('error', err.response?.data?.error || 'Could not clear Map photo');
+    } finally {
+      setUploadingMapPhoto(false);
     }
   };
 
@@ -352,6 +533,9 @@ export const Profile = () => {
         on_prep: onPrep,
         last_tested_at: lastTestedAt || null,
         show_age: showAge,
+        show_height: showHeight,
+        show_weight: showWeight,
+        show_relationship: showRelationship,
       });
       setProfile((p) => (p ? { ...p, ...res.data } : p));
       if (user && token) {
@@ -477,6 +661,19 @@ export const Profile = () => {
           disabled={uploadingCover}
         />
 
+        <input
+          ref={mapPhotoInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleMapPhotoUpload}
+          className="hidden"
+          id="map-photo-upload"
+          aria-label="Upload map photo"
+          title="Upload map photo"
+          disabled={uploadingMapPhoto}
+          data-testid="map-photo-input"
+        />
+
         {/* ── Desktop profile layout ── */}
         <div className="hidden lg:block space-y-6">
           <div className="overflow-hidden rounded-3xl border border-[var(--border-default)] bg-[var(--bg-card)] shadow-card">
@@ -581,12 +778,7 @@ export const Profile = () => {
                 <div className="min-w-0 flex-1 pb-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-2xl font-extrabold text-[var(--cream)]">{displayName || profile.name}</h2>
-                    {(profile as ProfileData & { is_verified?: boolean }).is_verified ? (
-                      <VerifiedBadge />
-                    ) : (profile as ProfileData & { authenticity_status?: string }).authenticity_status ===
-                      'verified' ? (
-                      <VerifiedBadge level="authentic_person" />
-                    ) : null}
+                    {verification.status?.is_verified ? <VerifiedBadge /> : null}
                     <StatusBadge online={!!profile.online} lastSeen={profile.last_seen} />
                   </div>
                   <p className="mt-1 text-sm text-[var(--cream-muted)]">
@@ -610,6 +802,7 @@ export const Profile = () => {
                   </div>
                 </div>
               </div>
+              <ProfileVerification verification={verification} />
             </div>
           </div>
 
@@ -668,7 +861,7 @@ export const Profile = () => {
                 >
                   <p className="text-[12px] font-extrabold text-[var(--cream)]">Upgrade from a shared avatar</p>
                   <p className="mt-1 text-[11px] leading-relaxed text-[var(--cream-muted)]">
-                    Real photos get more matches. Upload a clear face or upper-body shot —
+                    Real photos get more matches. Upload a clear face or upper-body shot.
                   </p>
                   <button
                     type="button"
@@ -833,7 +1026,7 @@ export const Profile = () => {
                 </Link>
               </div>
             </div>
-            <h2 className="text-xl font-bold text-[var(--cream)]">{displayName || profile.name}</h2>
+            <div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-bold text-[var(--cream)]">{displayName || profile.name}</h2>{verification.status?.is_verified ? <VerifiedBadge /> : null}</div>
             <p className="text-[var(--cream-muted)] text-sm mt-0.5">
               {showAge
                 ? `Age ${
@@ -843,6 +1036,7 @@ export const Profile = () => {
                   }`
                 : 'Age hidden on your public profile'}
             </p>
+            <ProfileVerification verification={verification} />
             {isGenericAvatarUrl(photoUrl) ? (
               <div
                 className="mt-3 rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-3 py-3 lg:hidden"
@@ -872,86 +1066,205 @@ export const Profile = () => {
         <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 shadow-card lg:rounded-3xl">
           <h3 className="text-[var(--cream)] font-semibold mb-4">Edit Profile</h3>
 
-          <form onSubmit={handleSave} className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">
+          <form onSubmit={handleSave} className="space-y-4" data-testid="profile-edit-form">
+            {essentials.missingItems.length > 0 ? (
+              <div
+                className="sticky top-0 z-20 -mx-1 mb-1 rounded-xl border border-[rgba(196,131,42,0.45)] bg-[rgba(26,14,3,0.94)] px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm"
+                data-testid="profile-missing-essentials-banner"
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--cream-muted)]">
+                  Still missing
+                </p>
+                <button
+                  type="button"
+                  data-testid="profile-missing-named-jump"
+                  className="mt-1 text-left text-[14px] font-bold text-[#E0A14A] underline decoration-[#E0A14A]/50 underline-offset-2"
+                  onClick={() => {
+                    const first = essentials.missingItems[0];
+                    if (!first) return;
+                    jumpToProfileEssential(first.sectionId);
+                  }}
+                >
+                  Missing · {essentials.missingItems[0].label}
+                </button>
+                <p
+                  className="mt-1 text-[12px] font-semibold text-[var(--cream-soft)]"
+                  data-testid="profile-missing-essentials-score"
+                >
+                  {essentials.score}/{essentials.total} filled
+                </p>
+                <ul className="mt-2 flex flex-wrap gap-1.5" data-testid="profile-missing-essentials-list">
+                  {essentials.missingItems.map((item) => (
+                    <li key={item.id}>
+                      <a
+                        href={`#${item.sectionId}`}
+                        className="inline-block rounded-full border border-[rgba(196,131,42,0.45)] px-2.5 py-1 text-[11px] font-semibold text-[#E0A14A]"
+                        data-testid={`profile-missing-${item.id}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          jumpToProfileEssential(item.sectionId);
+                        }}
+                      >
+                        {item.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <div
+              className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/40 p-4"
+              data-testid="map-photo-section"
+              id="profile-map-photo"
+            >
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--cream-muted)]">
+                Map photo
+              </p>
+              <p className="mt-1 text-[12px] leading-relaxed text-[var(--cream-muted)]">
+                Shown on Nearby Map when your main shot stays private.
+              </p>
+              <div className="mt-3 flex items-center gap-3">
+                <button
+                  type="button"
+                  aria-label={mapPhotoUrl ? 'Change map photo' : 'Upload map photo'}
+                  onClick={() => mapPhotoInputRef.current?.click()}
+                  disabled={uploadingMapPhoto}
+                  className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C4832A]/50 disabled:opacity-60"
+                  data-testid="map-photo-picker"
+                >
+                  {getPhotoUrl(mapPhotoUrl) ? (
+                    <img
+                      src={getPhotoUrl(mapPhotoUrl)!}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px] font-bold text-[#E0A14A]">
+                      <ImageIcon className="h-4 w-4" />
+                      {uploadingMapPhoto ? '…' : 'Add'}
+                    </span>
+                  )}
+                </button>
+                <div className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => mapPhotoInputRef.current?.click()}
+                    disabled={uploadingMapPhoto}
+                    className="rounded-full border border-[#C4832A]/35 bg-[rgba(196,131,42,0.12)] px-3 py-1.5 text-[11px] font-extrabold text-[#E0A14A] disabled:opacity-60"
+                  >
+                    {uploadingMapPhoto ? 'Uploading…' : mapPhotoUrl ? 'Change' : 'Upload'}
+                  </button>
+                  {mapPhotoUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleClearMapPhoto()}
+                      disabled={uploadingMapPhoto}
+                      className="ml-2 rounded-full border border-[var(--border-default)] px-3 py-1.5 text-[11px] font-semibold text-[var(--cream-muted)] disabled:opacity-60"
+                      data-testid="map-photo-clear"
+                    >
+                      Remove
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            <div
+              id={PROFILE_ESSENTIAL_SECTION_IDS.display_name}
+              data-essential-missing={isEssentialMissing('display_name') ? 'true' : 'false'}
+            >
+              <EssentialFieldLabel incomplete={isEssentialMissing('display_name')}>
                 Display name
-              </label>
+              </EssentialFieldLabel>
               <input
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 maxLength={24}
                 autoComplete="nickname"
-                className={inputClass}
+                className={`${inputClass} ${
+                  isEssentialMissing('display_name') ? ESSENTIAL_INPUT_HIGHLIGHT : ''
+                }`}
                 placeholder="How you show up nearby"
+                data-testid="profile-field-display-name"
               />
               <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1">2–24 letters, numbers, _ or -</p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">
-                  Date of birth
-                </label>
-                <input
-                  type="date"
-                  value={dateOfBirth}
-                  onChange={(e) => setDateOfBirth(e.target.value)}
-                  max={new Date(new Date().setFullYear(new Date().getFullYear() - 18))
-                    .toISOString()
-                    .slice(0, 10)}
-                  className={inputClass}
-                  aria-label="Date of birth"
-                />
-                <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1">
-                  Age updates automatically. Never shown as a full date.
-                </p>
-              </div>
-              <div className="flex flex-col justify-end">
-                <label className="flex items-center gap-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]/40 px-4 py-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={showAge}
-                    onChange={(e) => setShowAge(e.target.checked)}
-                    className="h-4 w-4 accent-[#C4832A]"
-                  />
-                  <span className="text-sm text-[var(--cream)]">
-                    Show age on my profile
-                  </span>
-                </label>
-              </div>
+            <div
+              id={PROFILE_ESSENTIAL_SECTION_IDS.date_of_birth}
+              data-essential-missing={isEssentialMissing('date_of_birth') ? 'true' : 'false'}
+            >
+              <EssentialFieldLabel incomplete={isEssentialMissing('date_of_birth')}>
+                Date of birth
+              </EssentialFieldLabel>
+              <input
+                type="date"
+                value={dateOfBirth}
+                onChange={(e) => setDateOfBirth(e.target.value)}
+                max={new Date(new Date().setFullYear(new Date().getFullYear() - 18))
+                  .toISOString()
+                  .slice(0, 10)}
+                className={`${inputClass} ${
+                  isEssentialMissing('date_of_birth') ? ESSENTIAL_INPUT_HIGHLIGHT : ''
+                }`}
+                aria-label="Date of birth"
+                data-testid="profile-field-dob"
+              />
+              <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1">
+                Age updates automatically. Never shown as a full date.
+              </p>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">Bio</label>
+            <div
+              id={PROFILE_ESSENTIAL_SECTION_IDS.bio}
+              data-essential-missing={isEssentialMissing('bio') ? 'true' : 'false'}
+            >
+              <EssentialFieldLabel incomplete={isEssentialMissing('bio')}>Bio</EssentialFieldLabel>
               <textarea
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 placeholder="Tell people about yourself…"
                 rows={3}
                 maxLength={500}
-                className="w-full bg-[var(--bg-card)]/60 border border-[var(--border-default)] text-[var(--cream)] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all resize-none"
+                className={`w-full bg-[var(--bg-card)]/60 border border-[var(--border-default)] text-[var(--cream)] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all resize-none ${
+                  isEssentialMissing('bio') ? ESSENTIAL_INPUT_HIGHLIGHT : ''
+                }`}
+                data-testid="profile-field-bio"
               />
               <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1 text-right">{bio.length}/500</p>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">Headline</label>
+            <div
+              id={PROFILE_ESSENTIAL_SECTION_IDS.headline}
+              data-essential-missing={isEssentialMissing('headline') ? 'true' : 'false'}
+            >
+              <EssentialFieldLabel incomplete={isEssentialMissing('headline')}>
+                Headline
+              </EssentialFieldLabel>
               <input
                 type="text"
                 value={headline}
                 onChange={(e) => setHeadline(e.target.value)}
                 placeholder="One line about you…"
                 maxLength={100}
-                className={inputClass}
+                className={`${inputClass} ${
+                  isEssentialMissing('headline') ? ESSENTIAL_INPUT_HIGHLIGHT : ''
+                }`}
+                data-testid="profile-field-headline"
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">
+            <div
+              id={PROFILE_ESSENTIAL_SECTION_IDS.looking_for}
+              className={isEssentialMissing('looking_for') ? ESSENTIAL_GROUP_HIGHLIGHT : undefined}
+              data-essential-missing={isEssentialMissing('looking_for') ? 'true' : 'false'}
+              data-testid="profile-field-looking"
+            >
+              <EssentialFieldLabel incomplete={isEssentialMissing('looking_for')}>
                 Looking for
-              </label>
+              </EssentialFieldLabel>
               <div className="flex flex-wrap gap-2">
                 {PROFILE_LOOKING_FOR_TAGS.map((tag) => {
                   const active = lookingFor === tag;
@@ -973,78 +1286,175 @@ export const Profile = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">
-                  Height (cm)
-                </label>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={120}
-                  max={250}
-                  value={heightCm}
-                  onChange={(e) => setHeightCm(e.target.value)}
-                  placeholder="178"
-                  className={inputClass}
-                />
-                {heightCm ? (
-                  <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1">
-                    {formatHeight(Number(heightCm))}
-                  </p>
-                ) : null}
+            <div
+              className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]/30 p-3 space-y-0"
+              data-testid="profile-stats-section"
+            >
+              <div className="mb-1 flex items-center justify-between px-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--cream-muted)]">
+                  Stats
+                </p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--cream-muted)]">
+                  Show
+                </p>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">
-                  Weight (kg)
-                </label>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={35}
-                  max={300}
-                  value={weightKg}
-                  onChange={(e) => setWeightKg(e.target.value)}
-                  placeholder="75"
-                  className={inputClass}
-                />
-                {weightKg ? (
-                  <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1">
-                    {formatWeight(Number(weightKg))}
-                  </p>
-                ) : null}
-              </div>
-            </div>
 
-            <div>
-              <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">
-                Relationship
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {RELATIONSHIP_STATUS_OPTIONS.map((opt) => {
-                  const active = relationshipStatus === opt;
-                  return (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => setRelationshipStatus(active ? '' : opt)}
-                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
-                        active
-                          ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
-                          : 'bg-[var(--bg-card)]/40 text-[var(--cream-muted)] border-[var(--border-default)]'
+              <div
+                className="flex items-center gap-3 border-t border-[var(--border-default)]/70 py-3"
+                data-testid="profile-stats-age"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium uppercase tracking-wide text-[var(--cream-muted)]">
+                    Age
+                  </p>
+                  <p className="mt-0.5 text-sm text-[var(--cream)]">
+                    {dateOfBirth
+                      ? ageFromDateOfBirth(dateOfBirth) ?? profile?.age ?? ''
+                      : profile?.age ?? 'From date of birth'}
+                  </p>
+                </div>
+                <StatsShowToggle
+                  checked={showAge}
+                  onChange={setShowAge}
+                  aria-label="Show age"
+                  testId="profile-show-age"
+                />
+              </div>
+
+              <div
+                id={PROFILE_ESSENTIAL_SECTION_IDS.height}
+                className={`border-t border-[var(--border-default)]/70 py-3 ${
+                  isEssentialMissing('height') ? 'rounded-lg px-2 ring-2 ring-[#C4832A]/35' : ''
+                }`}
+                data-essential-missing={isEssentialMissing('height') ? 'true' : 'false'}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <EssentialFieldLabel incomplete={isEssentialMissing('height')}>
+                      Height (cm)
+                    </EssentialFieldLabel>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={120}
+                      max={250}
+                      value={heightCm}
+                      onChange={(e) => setHeightCm(e.target.value)}
+                      placeholder="178"
+                      className={`${inputClass} ${
+                        isEssentialMissing('height') ? ESSENTIAL_INPUT_HIGHLIGHT : ''
                       }`}
-                    >
-                      {opt}
-                    </button>
-                  );
-                })}
+                      data-testid="profile-field-height"
+                    />
+                    {heightCm ? (
+                      <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1">
+                        {formatHeight(Number(heightCm))}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="pt-6">
+                    <StatsShowToggle
+                      checked={showHeight}
+                      onChange={setShowHeight}
+                      aria-label="Show height"
+                      testId="profile-show-height"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className="flex items-start gap-3 border-t border-[var(--border-default)]/70 py-3"
+                data-testid="profile-stats-weight"
+              >
+                <div className="min-w-0 flex-1">
+                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[var(--cream-muted)]">
+                    Weight (kg)
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={35}
+                    max={300}
+                    value={weightKg}
+                    onChange={(e) => setWeightKg(e.target.value)}
+                    placeholder="75"
+                    className={inputClass}
+                    data-testid="profile-field-weight"
+                  />
+                  {weightKg ? (
+                    <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1">
+                      {formatWeight(Number(weightKg))}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="pt-6">
+                  <StatsShowToggle
+                    checked={showWeight}
+                    onChange={setShowWeight}
+                    aria-label="Show weight"
+                    testId="profile-show-weight"
+                  />
+                </div>
+              </div>
+
+              <div
+                id={PROFILE_ESSENTIAL_SECTION_IDS.relationship_status}
+                className={`border-t border-[var(--border-default)]/70 py-3 ${
+                  isEssentialMissing('relationship_status')
+                    ? 'rounded-lg px-2 ring-2 ring-[#C4832A]/35'
+                    : ''
+                }`}
+                data-essential-missing={isEssentialMissing('relationship_status') ? 'true' : 'false'}
+                data-testid="profile-field-relationship"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <EssentialFieldLabel incomplete={isEssentialMissing('relationship_status')}>
+                      Relationship
+                    </EssentialFieldLabel>
+                    <div className="flex flex-wrap gap-2">
+                      {RELATIONSHIP_STATUS_OPTIONS.map((opt) => {
+                        const active = relationshipStatus === opt;
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setRelationshipStatus(active ? '' : opt)}
+                            className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                              active
+                                ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
+                                : 'bg-[var(--bg-card)]/40 text-[var(--cream-muted)] border-[var(--border-default)]'
+                            }`}
+                          >
+                            {opt}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="pt-6">
+                    <StatsShowToggle
+                      checked={showRelationship}
+                      onChange={setShowRelationship}
+                      aria-label="Show relationship"
+                      testId="profile-show-relationship"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">
+            {/* Brand Hosting options from #210. No Show toggle here (Stats Show is age/height/weight/relationship only). */}
+            <div
+              id={PROFILE_ESSENTIAL_SECTION_IDS.hosting}
+              className={isEssentialMissing('hosting') ? ESSENTIAL_GROUP_HIGHLIGHT : undefined}
+              data-essential-missing={isEssentialMissing('hosting') ? 'true' : 'false'}
+              data-testid="profile-field-hosting"
+            >
+              <EssentialFieldLabel incomplete={isEssentialMissing('hosting')}>
                 Hosting
-              </label>
+              </EssentialFieldLabel>
               <div className="flex flex-wrap gap-2">
                 {HOSTING_STATUS_OPTIONS.map((opt) => {
                   const active = hostingStatus === opt;
@@ -1127,10 +1537,15 @@ export const Profile = () => {
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-[var(--cream-muted)] mb-1.5 uppercase tracking-wide">
+            <div
+              id={PROFILE_ESSENTIAL_SECTION_IDS.real_photo}
+              className={isEssentialMissing('real_photo') ? ESSENTIAL_GROUP_HIGHLIGHT : undefined}
+              data-essential-missing={isEssentialMissing('real_photo') ? 'true' : 'false'}
+              data-testid="profile-field-photo"
+            >
+              <EssentialFieldLabel incomplete={isEssentialMissing('real_photo')}>
                 Profile Photo
-              </label>
+              </EssentialFieldLabel>
               <div className="flex gap-4 items-center">
                 <button
                   type="button"
@@ -1156,13 +1571,27 @@ export const Profile = () => {
               </p>
             </div>
 
-            <div className="space-y-4">
-              <label className="block text-xs font-medium text-[var(--cream-muted)] uppercase tracking-wide">
+            <div
+              id={PROFILE_ESSENTIAL_SECTION_IDS.tags}
+              className={
+                isEssentialMissing('tags') || isEssentialMissing('body_vibe_tags')
+                  ? ESSENTIAL_GROUP_HIGHLIGHT
+                  : undefined
+              }
+              data-essential-missing={
+                isEssentialMissing('tags') || isEssentialMissing('body_vibe_tags') ? 'true' : 'false'
+              }
+              data-testid="profile-field-tags"
+            >
+              <EssentialFieldLabel
+                incomplete={isEssentialMissing('tags') || isEssentialMissing('body_vibe_tags')}
+              >
                 Your tags{' '}
                 <span className="normal-case text-[var(--cream-muted)]/50">
                   ({interests.length}/{PROFILE_INTERESTS_MAX})
                 </span>
-              </label>
+              </EssentialFieldLabel>
+              <div className="space-y-4">
               {PROFILE_TAG_GROUPS.map((group) => (
                 <div key={group.label}>
                   <p className="text-[10px] font-black text-[var(--cream-muted)]/60 uppercase tracking-[.18em]">
@@ -1199,6 +1628,7 @@ export const Profile = () => {
                   </div>
                 </div>
               ))}
+              </div>
             </div>
 
             <button
@@ -1231,6 +1661,8 @@ export const Profile = () => {
           hiddenCount={profileViewsHidden}
           loading={profileViewsLoading}
         />
+
+        <ReferralCard />
 
         {/* ── Location card ── */}
         <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 flex items-center justify-between shadow-card">
@@ -1298,7 +1730,7 @@ export const Profile = () => {
                 My Photos
               </p>
               <p className="text-xs mt-1" style={{ color: 'var(--cream-muted)' }}>
-                You decide who sees what — public, view once, or private.
+                You decide who sees what. Public, view once, or private.
               </p>
             </div>
             <span className="text-[var(--copper)] text-lg" aria-hidden>›</span>

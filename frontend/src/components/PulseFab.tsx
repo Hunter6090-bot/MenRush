@@ -43,9 +43,12 @@ export function PulseFab({
   const lastOpenRequestId = useRef(openRequestId);
 
   useEffect(() => {
+    // Only tick while Pulse is active, cooling down, or the sheet is open —
+    // avoids a 1Hz Discover-adjacent re-render tax when idle.
+    if (!isPulsing && !nextPulseAllowedAt && !modalOpen) return;
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [isPulsing, nextPulseAllowedAt, modalOpen]);
 
   const minutesLeft = pulseExpiresAt
     ? Math.max(0, Math.ceil((new Date(pulseExpiresAt).getTime() - now) / 60000))
@@ -140,6 +143,10 @@ export function PulseFab({
             ${isPulsing ? "animate-pulse-glow" : ""}
             ${onCooldown ? "opacity-70" : "hover:scale-105 active:scale-95"}
           `}
+          style={{
+            // Keep clear of Mapbox bottom-right controls when the map panel is mid-height.
+            marginBottom: "env(safe-area-inset-bottom, 0px)",
+          }}
         >
           <IconPulse
             size={22}

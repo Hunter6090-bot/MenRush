@@ -235,8 +235,8 @@ export const Terms = () => {
               {sectionHeading(SECTIONS[2])}
               {para(
                 <>
-                  <Strong>3.1</Strong> MenRush may require identity and age verification before
-                  users can access discovery, matches, rooms or chat. Verification helps reduce
+                  <Strong>3.1</Strong> The Verified badge is optional and free. Complete an ID check and live selfie
+                  with Veriff from your Profile to receive the badge after approval. Verification helps reduce
                   fake profiles, underage access and platform abuse.
                 </>,
               )}

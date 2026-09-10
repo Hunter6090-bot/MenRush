@@ -16,7 +16,7 @@ Keep only:
 - Official bronze medallion (`BrandMark` → menrush-logo / medallion only). Do not redraw MENRUSH as type.
 - Overline: `PRIDE PROMOTION · UK`
 - Headline: `3 months Premium from launch`
-- One gold **Claim Pride code** button (opens email + 18+ confirm form)
+- One gold **Claim Pride code** button (opens email + 18+ confirm form). Never **Resend my Pride code** on this face — claim framing stays after the issue window closes.
 - Form-adjacent: submitting the form sends the invite. It is not the grant. Enter the code at register. You cannot use Premium before launch.
 - One quiet line: **Terms and conditions apply.** linked to `/terms`
 
@@ -39,7 +39,7 @@ Night `#0D0A06`, copper `#C4832A`, cream `#F0E0C0`, official logo unmodified. Cl
 
 ## Behaviour (do not change)
 
-Register still accepts personal `PRIDE-XXXX-XXXX` by 31 October 2026 and printed `PRIDE 3MONTH FREE` by 5 September 2026. Claim form, Resend, clocks, payment, adult-assurance stay as shipped.
+Register still accepts personal `PRIDE-XXXX-XXXX` by 31 October 2026 and printed `PRIDE 3MONTH FREE` by 5 September 2026. Claim form (behind Claim Pride code), clocks, payment, adult-assurance stay as shipped. Do not print `PRIDE 3MONTH FREE` on the face.
 
 ## Tests
 

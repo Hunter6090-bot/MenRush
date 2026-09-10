@@ -90,9 +90,9 @@ export const BetaAccess = () => {
   return (
     <PublicAuthShell showFooter>
       <PublicAuthHero
-        title="Beta access is"
-        accent="invite-only."
-        copy="Enter the invite code from your email to create your account and start meeting nearby."
+        title="Have an invite?"
+        accent="Enter your code."
+        copy="Optional. If you have a MENRUSH invite from email, enter it here. Otherwise sign up free. No code needed."
       />
 
       <div className={publicPanelClass}>

@@ -12,10 +12,6 @@ export { DocumentAlreadyUsedError, VerificationStateRow, VerificationStatus };
 
 const verificationDir = path.resolve(__dirname, '../../../uploads/verification');
 
-function autoApproveEnabled(): boolean {
-  return process.env.VERIFICATION_AUTO_APPROVE !== 'false';
-}
-
 async function removeSubmissionFiles(
   idFrontKey: string,
   selfieKey: string,
@@ -28,18 +24,6 @@ async function removeSubmissionFiles(
   ]);
 }
 
-async function latestSubmission(userId: string) {
-  const res = await query(
-    `SELECT id, id_front_key, id_back_key, selfie_key, status
-       FROM verification_submissions
-      WHERE user_id = $1
-      ORDER BY created_at DESC
-      LIMIT 1`,
-    [userId],
-  );
-  return res.rows[0] ?? null;
-}
-
 export const verificationService = {
   async getState(userId: string): Promise<VerificationStateRow> {
     const res = await query(
@@ -49,7 +33,6 @@ export const verificationService = {
               authenticity_status, authenticity_verified_at,
               CASE
                 WHEN is_verified THEN 'identity_checked'
-                WHEN authenticity_status = 'verified' THEN 'authentic_person'
                 WHEN age_assurance_status = 'confirmed' THEN 'adult_confirmed'
                 ELSE 'unconfirmed'
               END AS trust_level
@@ -74,175 +57,11 @@ export const verificationService = {
       nationality?: string | null;
     },
   ): Promise<SubmitVerificationResult> {
-    const state = await this.getState(userId);
-    if (state.is_verified) {
-      const err = new Error('already_verified');
-      (err as any).code = 'already_verified';
-      throw err;
-    }
-
-    const previous = await latestSubmission(userId);
-    if (previous) {
-      await removeSubmissionFiles(previous.id_front_key, previous.selfie_key, previous.id_back_key);
-    }
-
-    const { faceMatchService } = await import('./face-match.service');
-    const faceResult = await faceMatchService.compare(files.idFrontPath, files.selfiePath);
-
-    type SubmissionStatus = 'pending' | 'approved' | 'rejected';
-    let submissionStatus: SubmissionStatus = 'pending';
-    let userStatus: VerificationStatus = 'pending';
-    let rejectionReason: string | null = null;
-    let reviewedBy: string | null = null;
-    let reviewedAt: Date | null = null;
-
-    if (!faceResult.engineAvailable) {
-      submissionStatus = 'pending';
-      userStatus = 'pending';
-    } else if (!faceResult.idFaceFound) {
-      submissionStatus = 'rejected';
-      userStatus = 'rejected';
-      rejectionReason = 'document_unverified_other';
-      reviewedBy = 'auto';
-      reviewedAt = new Date();
-    } else if (!faceResult.selfieFaceFound) {
-      submissionStatus = 'rejected';
-      userStatus = 'rejected';
-      rejectionReason = 'selfie_unverified_other';
-      reviewedBy = 'auto';
-      reviewedAt = new Date();
-    } else if (faceResult.match) {
-      if (autoApproveEnabled()) {
-        submissionStatus = 'approved';
-        userStatus = 'verified';
-        reviewedBy = 'auto';
-        reviewedAt = new Date();
-      }
-    } else if (faceResult.review) {
-      submissionStatus = 'pending';
-      userStatus = 'pending';
-    } else {
-      submissionStatus = 'rejected';
-      userStatus = 'rejected';
-      rejectionReason = 'selfie_face_mismatch';
-      reviewedBy = 'auto';
-      reviewedAt = new Date();
-    }
-
-    const submissionRes = await query(
-      `INSERT INTO verification_submissions (
-         user_id, id_front_key, id_back_key, selfie_key,
-         id_type, nationality,
-         face_match_distance, face_match_passed,
-         status, rejection_reason, reviewed_by, reviewed_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-       RETURNING id`,
-      [
-        userId,
-        files.idFrontKey,
-        files.idBackKey ?? null,
-        files.selfieKey,
-        files.idType,
-        files.nationality ?? null,
-        faceResult.distance,
-        faceResult.match,
-        submissionStatus,
-        rejectionReason,
-        reviewedBy,
-        reviewedAt,
-      ],
-    );
-
-    const submissionId = submissionRes.rows[0].id as string;
-
-    if (userStatus === 'verified') {
-      await this.markVerified(userId, submissionId);
-      return {
-        provider: 'menrush',
-        status: 'verified',
-        face_match_distance: faceResult.distance,
-      };
-    }
-
-    if (userStatus === 'rejected') {
-      await query(
-        `UPDATE users
-            SET verification_status = 'rejected',
-                verification_provider = 'menrush',
-                verification_session_id = $2,
-                rejection_reason = $3,
-                updated_at = NOW()
-          WHERE id = $1`,
-        [userId, submissionId, rejectionReason],
-      );
-      await removeSubmissionFiles(files.idFrontKey, files.selfieKey, files.idBackKey);
-      await query(
-        `UPDATE verification_submissions SET sensitive_files_deleted_at = NOW() WHERE id = $1`,
-        [submissionId],
-      );
-      return {
-        provider: 'menrush',
-        status: 'rejected',
-        rejection_reason: rejectionReason,
-        face_match_distance: faceResult.distance,
-      };
-    }
-
-    await query(
-      `UPDATE users
-          SET verification_status = 'pending',
-              verification_provider = 'menrush',
-              verification_session_id = $2,
-              rejection_reason = NULL,
-              updated_at = NOW()
-        WHERE id = $1`,
-      [userId, submissionId],
-    );
-
-    return {
-      provider: 'menrush',
-      status: userStatus,
-      face_match_distance: faceResult.distance,
-    };
+    throw new Error('veriff_approval_required');
   },
 
   async markVerified(userId: string, submissionId?: string | null): Promise<void> {
-    await query(
-      `UPDATE users
-          SET is_verified = TRUE,
-              verification_status = 'verified',
-              verification_provider = 'menrush',
-              verification_session_id = COALESCE($2, verification_session_id),
-              verified_at = NOW(),
-              rejection_reason = NULL,
-              updated_at = NOW()
-        WHERE id = $1`,
-      [userId, submissionId ?? null],
-    );
-
-    if (submissionId) {
-      await query(
-        `UPDATE verification_submissions
-            SET status = 'approved',
-                reviewed_by = COALESCE(reviewed_by, 'admin'),
-                reviewed_at = COALESCE(reviewed_at, NOW())
-          WHERE id = $1`,
-        [submissionId],
-      );
-      const files = await query(
-        `SELECT id_front_key, id_back_key, selfie_key
-           FROM verification_submissions WHERE id = $1`,
-        [submissionId],
-      );
-      const row = files.rows[0];
-      if (row) {
-        await removeSubmissionFiles(row.id_front_key, row.selfie_key, row.id_back_key);
-        await query(
-          `UPDATE verification_submissions SET sensitive_files_deleted_at = NOW() WHERE id = $1`,
-          [submissionId],
-        );
-      }
-    }
+    throw new Error('veriff_approval_required');
   },
 
   async markRejected(userId: string, reason: string, submissionId?: string | null): Promise<void> {
@@ -251,7 +70,7 @@ export const verificationService = {
           SET verification_status = 'rejected',
               rejection_reason = $2,
               updated_at = NOW()
-        WHERE id = $1`,
+        WHERE id = $1 AND verification_provider IS DISTINCT FROM 'veriff'`,
       [userId, reason],
     );
 

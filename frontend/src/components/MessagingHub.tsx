@@ -13,31 +13,31 @@ export const MessagingHub = () => {
 
   return (
     <Layout>
-      <div className="flex h-[calc(100dvh-var(--desktop-workspace-header))] min-h-0 overflow-hidden bg-[var(--bg-primary)]">
+      <div className="flex h-[calc(100dvh-var(--desktop-workspace-header))] min-h-0 min-w-0 max-w-full overflow-hidden bg-[var(--bg-primary)]">
         <aside className="flex w-[320px] shrink-0 flex-col border-r border-[var(--border-default)] bg-[var(--bg-primary)]">
           <div className="shrink-0 border-b border-[var(--border-default)] px-4 py-4">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)]">
                   Inbox
                 </p>
-                <p className="text-sm font-semibold text-[var(--cream)]">{ROUTE_LABELS.messages}</p>
+                <p className="truncate text-sm font-semibold text-[var(--cream)]">{ROUTE_LABELS.messages}</p>
               </div>
               <ThemeToggle variant="header" />
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-hidden">
+          <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
             <ConversationList
               activeUserId={otherId}
               variant="sidebar"
               showHeader={false}
-              className="h-full"
+              className="h-full min-w-0"
             />
           </div>
         </aside>
 
-        <section className="flex min-w-0 flex-1 flex-col bg-[var(--bg-primary)]">
+        <section className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-x-clip bg-[var(--bg-primary)]">
           {otherId ? (
             <Messages embedded />
           ) : (

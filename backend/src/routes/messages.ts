@@ -2,13 +2,19 @@ import { Router, Response } from 'express';
 import fs from 'fs';
 import multer from 'multer';
 import { messageService } from '../services/message.service';
+import { albumService } from '../services/album.service';
 import { sendPushToUser } from '../services/push.service';
 import { notificationService } from '../services/notification.service';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { SecurityError } from '../security/access';
 import { resolveMediaPath, verifyMediaAccess } from '../security/media';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
-import { MessageSchema, MediaMessageFormSchema, LocationMessageSchema } from '../types/validation';
+import {
+  MessageSchema,
+  MediaMessageFormSchema,
+  AlbumMediaMessageSchema,
+  LocationMessageSchema,
+} from '../types/validation';
 import { getUploadSubdir } from '../lib/uploads-root';
 import { optimizeImageFile } from '../services/image-optimize.service';
 
@@ -32,6 +38,7 @@ function pushNewMessage(receiverId: string, senderName: string, senderId: string
 
 // ── Multer storage for message media (images + voice notes) ──────────────
 const mediaDir = getUploadSubdir('messages');
+const albumMediaDir = getUploadSubdir('albums');
 fs.mkdirSync(mediaDir, { recursive: true });
 
 const mediaUpload = multer({
@@ -242,6 +249,97 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
     try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
     if (!res.headersSent) {
       res.status(400).json({ error: error.message });
+    }
+  }
+});
+
+/**
+ * Attach a My Photos library photo into a 1:1 thread.
+ * Copies bytes into message storage — never deletes, moves, re-uploads over,
+ * or changes album visibility / album_photos / album_grants.
+ */
+router.post('/media/from-album', async (req: AuthRequest, res: Response) => {
+  const parsed = AlbumMediaMessageSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.errors[0].message });
+  }
+
+  const { receiver_id, photo_id, caption, disappearing, max_views } = parsed.data;
+  let copiedKey: string | null = null;
+
+  try {
+    const owned = await albumService.getOwnedPhotoForAttach(req.userId!, photo_id);
+    const src = resolveMediaPath(albumMediaDir, owned.storageKey);
+    if (!fs.existsSync(src)) {
+      return res.status(404).json({ error: 'photo_file_missing' });
+    }
+
+    // Snapshot into message storage so chat withdraw never touches the album original.
+    copiedKey = safeUploadFilename('message', req.userId!, owned.mimeType);
+    const dest = resolveMediaPath(mediaDir, copiedKey);
+    fs.copyFileSync(src, dest);
+
+    let storageKey = copiedKey;
+    let mimeType = owned.mimeType.startsWith('image/') ? owned.mimeType : 'image/jpeg';
+    if (mimeType.startsWith('image/')) {
+      const optimized = await optimizeImageFile(dest, 'chat');
+      storageKey = optimized.filename;
+      mimeType = optimized.mimeType;
+      if (optimized.filename !== copiedKey) {
+        try {
+          fs.unlinkSync(dest);
+        } catch {
+          /* ignore */
+        }
+        copiedKey = optimized.filename;
+      }
+    }
+
+    const message = await messageService.sendMediaMessage(req.userId!, receiver_id, {
+      mediaType: 'image',
+      storageKey,
+      mimeType,
+      caption,
+      disappearing,
+      maxViews: max_views,
+    });
+
+    res.status(201).json(message);
+
+    const io = req.app.get('io');
+    void messageService
+      .forViewer(message, receiver_id)
+      .then((forReceiver) => {
+        io.to(`user:${receiver_id}`).emit('message', forReceiver);
+      })
+      .catch(() => undefined);
+
+    pushNewMessage(receiver_id, message.sender_name ?? '', req.userId!, '\u{1F4F7} Photo');
+
+    void notificationService
+      .notify(io, {
+        userId: receiver_id,
+        actorId: req.userId!,
+        type: 'photo',
+        title: `${message.sender_name ?? 'Someone'} sent a photo`,
+        body: caption || undefined,
+        linkPath: `/messages/${req.userId}`,
+      })
+      .catch((notifyErr) => {
+        console.error('[notification:media:from-album]', notifyErr);
+      });
+  } catch (error: any) {
+    if (copiedKey) {
+      try {
+        fs.unlinkSync(resolveMediaPath(mediaDir, copiedKey));
+      } catch {
+        /* ignore */
+      }
+    }
+    if (!res.headersSent) {
+      const code = error?.message || 'Failed to attach photo';
+      const status = code === 'photo_not_owned' ? 404 : 400;
+      res.status(status).json({ error: code });
     }
   }
 });

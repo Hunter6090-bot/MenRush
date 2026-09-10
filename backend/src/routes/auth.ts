@@ -8,6 +8,8 @@ import {
   LoginSchema,
   ForgotPasswordSchema,
   ResetPasswordSchema,
+  ConfirmEmailSchema,
+  ResendConfirmEmailSchema,
   ChangePasswordSchema,
   ChangeEmailSchema,
   DeleteAccountSchema,
@@ -48,6 +50,22 @@ const forgotPasswordLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const confirmEmailLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'production' ? 20 : 200,
+  message: { error: 'Too many confirmation attempts, please try again in 15 minutes' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const resendConfirmLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: 'Too many resend requests, please try again in 15 minutes' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 router.post('/register', authLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = RegisterSchema.parse(req.body);
@@ -65,6 +83,32 @@ router.post('/login', authLimiter, async (req: AuthRequest, res: Response) => {
     res.json(await withBrowserSession(result, req.get('user-agent') || undefined));
   } catch (error: any) {
     res.status(401).json({ error: error.message });
+  }
+});
+
+router.post('/confirm-email', confirmEmailLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const data = ConfirmEmailSchema.parse(req.body);
+    const result = await authService.confirmEmail(data);
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/resend-confirm', resendConfirmLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const data = ResendConfirmEmailSchema.parse(req.body);
+    const result = await authService.resendConfirmEmail(data);
+    res.json({
+      ok: true,
+      sent: true,
+      message:
+        'If that email needs confirmation, we sent a new link. Check your inbox and spam — valid for 24 hours.',
+      ...(result.devConfirmToken ? { devConfirmToken: result.devConfirmToken } : {}),
+    });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
   }
 });
 

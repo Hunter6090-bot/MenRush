@@ -1,19 +1,23 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { VerifiedBadge } from './VerifiedBadge';
-
 describe('VerifiedBadge', () => {
-  it('renders Identity checked with prominent weight by default', () => {
-    const { container } = render(<VerifiedBadge />);
-    const badge = screen.getByTestId('identity-checked-badge');
-    expect(badge).toHaveTextContent('Identity checked');
-    expect(badge.className).toMatch(/font-bold/);
-    expect(badge.className).toMatch(/text-\[11\.5px\]/);
-    expect(container.querySelector('svg')).toBeTruthy();
+  it('labels and explains the badge on tap', () => {
+    render(<VerifiedBadge />);
+    const button = screen.getByRole('button', { name: /Verified/ });
+    expect(button).toHaveTextContent('Verified');
+    fireEvent.click(button);
+    expect(screen.getByRole('status')).toHaveTextContent('ID and live selfie verified through Veriff.');
+    fireEvent.keyDown(button, { key: 'Escape' });
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
-
-  it('keeps Authentic person as a separate trust claim', () => {
-    render(<VerifiedBadge level="authentic_person" />);
-    expect(screen.getByTestId('authentic-person-badge')).toHaveTextContent('Authentic person');
+  it('keeps photo badges compact, accessible and separate from navigation', () => {
+    const openProfile = vi.fn();
+    render(<div onClick={openProfile}><VerifiedBadge compact /></div>);
+    const button = screen.getByRole('button', { name: /Verified/ });
+    expect(button.textContent).toBe('');
+    fireEvent.click(button);
+    expect(openProfile).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 });

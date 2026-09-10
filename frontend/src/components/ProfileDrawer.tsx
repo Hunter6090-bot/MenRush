@@ -4,7 +4,7 @@ import { NearbyUser } from "./ProfileCard";
 import { SilhouetteAvatar } from "./SilhouetteAvatar";
 import { PulsingAvatar } from "./PulsingAvatar";
 import { useResolvingPhotoSrc } from "./UserAvatar";
-import { ProfilePhotoLink } from "./ProfilePhotoLink";
+import { ProfilePhotoViewer } from "./ProfilePhotoViewer";
 import { IconPulse, IconClose } from "./icons";
 import { StatusBadge } from "./StatusBadge";
 import { DistancePill } from "./DistancePill";
@@ -12,6 +12,13 @@ import { VerifiedBadge } from "./VerifiedBadge";
 import { ChatSafetyMenu } from "./ChatSafetyMenu";
 import { getDistanceLabel, isUserPulsing } from "../lib/discovery";
 import { profilePathForUser } from "../lib/profileLinks";
+import {
+  matchCtaAriaLabel,
+  matchCtaDisabled,
+  matchCtaLabel,
+  matchCtaToneClasses,
+  matchInterestState,
+} from "../lib/matchCta";
 import { useAuthStore } from "../hooks/store";
 import { useIsDesktopLayout } from "../hooks/useMediaQuery";
 
@@ -146,6 +153,7 @@ export function ProfileDrawer({
     user?.age,
   );
   const { src: cover, onError: onCoverError } = useResolvingPhotoSrc(user?.cover_url);
+  const [viewer, setViewer] = useState<{ src: string; alt: string } | null>(null);
 
   if (!user) return null;
 
@@ -153,6 +161,11 @@ export function ProfileDrawer({
   const distLabel = getDistanceLabel(user);
   const isPulsing = isUserPulsing(user);
   const dragging = dragVh != null;
+  const matchState = matchInterestState({ liked, mutual });
+  const matchLabel = matchCtaLabel(matchState, user.name);
+  const matchDisabled = matchCtaDisabled(matchState);
+  const heroEnlargeSrc = cover || photo || null;
+  const avatarEnlargeSrc = photo || null;
 
   return (
     <div
@@ -209,7 +222,7 @@ export function ProfileDrawer({
           </span>
         </div>
 
-        <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
+        <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
           <div className="rounded-full bg-[color-mix(in_srgb,var(--bg-elevated)_88%,transparent)] border border-[var(--border-default)]">
             <ChatSafetyMenu
               peerId={user.id}
@@ -230,90 +243,135 @@ export function ProfileDrawer({
           </button>
         </div>
 
-        <div
-          className="relative w-full shrink-0"
-          style={{
-            height: isDesktop ? 360 : snap === "half" && !dragging ? 180 : 280,
-            maxHeight: isDesktop ? "46%" : "38%",
-            background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
-            transition: dragging ? "none" : "height 220ms ease",
-          }}
-        >
-          {cover ? (
-            <img src={cover} alt="" className="w-full h-full object-cover" onError={onCoverError} />
-          ) : photo ? (
-            <img
-              src={photo}
-              alt={user.name}
-              className="w-full h-full object-cover"
-              onError={onPhotoError}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <SilhouetteAvatar size={180} variant="card" />
-            </div>
-          )}
+        {/*
+          Hero + avatar live outside the scrollport so the circular face is never
+          clipped by overflow-y (the old -mt-12-inside-scroll pattern bisected
+          avatars on phone). Avatar is a full circle in its own row between photo
+          and name — no negative-margin hang into overflow-hidden bands.
+        */}
+        <div className="relative z-10 w-full shrink-0" data-testid="profile-sheet-hero">
           <div
-            className="absolute inset-0 pointer-events-none"
-            style={{ background: "linear-gradient(to top, var(--bg-elevated) 0%, transparent 60%)" }}
-          />
-          {isPulsing ? (
-            <div className="absolute top-3 left-3">
-              <StatusBadge online={false} pulsing />
+            className="relative w-full overflow-hidden"
+            style={{
+              height: isDesktop ? 360 : snap === "half" && !dragging ? 200 : 240,
+              maxHeight: isDesktop ? "46vh" : "36vh",
+              background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
+              transition: dragging ? "none" : "height 220ms ease",
+            }}
+          >
+            {heroEnlargeSrc ? (
+              <button
+                type="button"
+                data-testid="drawer-cover-enlarge"
+                aria-label={`Enlarge ${cover ? "cover" : "photo"}`}
+                className="absolute inset-0 block h-full w-full cursor-zoom-in p-0 border-0"
+                onClick={() =>
+                  setViewer({
+                    src: heroEnlargeSrc,
+                    alt: cover ? `${user.name}'s cover` : user.name,
+                  })
+                }
+              >
+                <img
+                  src={heroEnlargeSrc}
+                  alt=""
+                  className={`w-full h-full object-cover ${cover ? "object-center" : "object-top"}`}
+                  onError={cover ? onCoverError : onPhotoError}
+                />
+              </button>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <SilhouetteAvatar size={148} variant="card" />
+              </div>
+            )}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  "linear-gradient(to top, var(--bg-elevated) 0%, transparent 38%)",
+              }}
+            />
+            {/* Status + distance in the top band — away from the face mid-frame */}
+            <div className="absolute top-3 left-3 z-[1] flex flex-col items-start gap-1.5 max-w-[70%] pointer-events-none">
+              {isPulsing ? (
+                <StatusBadge online={false} pulsing />
+              ) : user.online ? (
+                <StatusBadge online lastSeen={user.last_seen} size="xs" />
+              ) : null}
+              <DistancePill km={distance} label={distLabel} />
             </div>
-          ) : user.online ? (
-            <div className="absolute top-3 left-3">
-              <StatusBadge online lastSeen={user.last_seen} size="xs" />
-            </div>
-          ) : null}
-          <div className="absolute bottom-3 left-3">
-            <DistancePill km={distance} label={distLabel} />
+          </div>
+
+          {/* Full circular avatar — own padded row, never scroll-clipped or mid-cut */}
+          <div className="flex items-center px-5 pt-3 pb-1">
+            {avatarEnlargeSrc ? (
+              <button
+                type="button"
+                data-testid={`drawer-avatar-${user.id}`}
+                aria-label={`Enlarge ${user.name}'s photo`}
+                className="inline-flex shrink-0 rounded-full ring-2 ring-[var(--copper)] shadow-[0_4px_14px_rgba(0,0,0,0.4)] cursor-zoom-in p-0 border-0 bg-transparent"
+                onClick={() =>
+                  setViewer({ src: avatarEnlargeSrc, alt: user.name })
+                }
+              >
+                <PulsingAvatar isPulsing={isPulsing} size={72} intensity="subtle">
+                  <div
+                    className="w-full h-full rounded-full overflow-hidden flex items-center justify-center"
+                    style={{
+                      background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
+                    }}
+                  >
+                    <img
+                      src={avatarEnlargeSrc}
+                      alt=""
+                      className="w-full h-full object-cover object-top"
+                      onError={onPhotoError}
+                    />
+                  </div>
+                </PulsingAvatar>
+              </button>
+            ) : (
+              <div
+                className="inline-flex shrink-0 rounded-full ring-2 ring-[var(--copper)] shadow-[0_4px_14px_rgba(0,0,0,0.4)]"
+                data-testid={`drawer-avatar-${user.id}`}
+              >
+                <PulsingAvatar isPulsing={isPulsing} size={72} intensity="subtle">
+                  <div
+                    className="w-full h-full rounded-full overflow-hidden flex items-center justify-center"
+                    style={{
+                      background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
+                    }}
+                  >
+                    <SilhouetteAvatar size={72} variant="card" />
+                  </div>
+                </PulsingAvatar>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4">
-          <div className="flex items-end justify-between gap-3 -mt-12 mb-4">
-            <ProfilePhotoLink
-              userId={user.id}
-              name={user.name}
-              className="inline-flex"
-              data-testid={`drawer-avatar-${user.id}`}
-            >
-              <PulsingAvatar isPulsing={isPulsing} size={64} intensity="subtle">
-                <div
-                  className="w-full h-full rounded-full overflow-hidden border-2 flex items-center justify-center"
-                  style={{
-                    background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
-                    borderColor: "var(--copper)",
-                  }}
-                >
-                  {photo ? (
-                    <img src={photo} alt="" className="w-full h-full object-cover" onError={onPhotoError} />
-                  ) : (
-                    <SilhouetteAvatar size={56} variant="card" />
-                  )}
-                </div>
-              </PulsingAvatar>
-            </ProfilePhotoLink>
-          </div>
-
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
+        <div className="relative z-0 flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-2 pb-4">
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
             <h2 className="font-display text-2xl font-bold tracking-wide uppercase text-[var(--cream)] truncate">
               {user.name}
             </h2>
-            {user.age ? <span className="text-[var(--cream-soft)] text-lg font-semibold">{user.age}</span> : null}
-            {(user as { is_verified?: boolean }).is_verified ? <VerifiedBadge /> : (user as { authenticity_status?: string }).authenticity_status === 'verified' ? <VerifiedBadge level="authentic_person" /> : null}
+            {user.age ? (
+              <span className="text-[var(--cream-soft)] text-lg font-semibold">{user.age}</span>
+            ) : null}
+            {(user as { is_verified?: boolean }).is_verified ? <VerifiedBadge /> : null}
           </div>
-          <p className="text-sm font-medium text-[var(--cream-soft)]">
+          <p className="text-sm font-medium text-[var(--cream-soft)] leading-snug">
             {user.online ? "Active now" : "Offline"} · {distLabel} away
           </p>
 
           {user.headline && (
-            <p className="mt-3 text-sm text-[var(--cream)] leading-relaxed italic">"{user.headline}"</p>
+            <p className="mt-3 text-sm text-[var(--cream)] leading-relaxed italic">
+              "{user.headline}"
+            </p>
           )}
 
           {user.looking_for ? (
-            <div className="mt-3" data-testid="drawer-looking-for">
+            <div className="mt-4" data-testid="drawer-looking-for">
               <p className="text-[10px] font-black text-[var(--cream-muted)] uppercase tracking-[.18em] mb-1">
                 Looking for
               </p>
@@ -322,8 +380,11 @@ export function ProfileDrawer({
           ) : null}
 
           {user.mood ? (
-            <p className="mt-2 text-[12px] text-[var(--cream-muted)]">
-              Mood: <span className="font-semibold text-[var(--cream)]">{String(user.mood).replace(/_/g, " ")}</span>
+            <p className="mt-2 text-[12px] text-[var(--cream-muted)] leading-snug">
+              Mood:{" "}
+              <span className="font-semibold text-[var(--cream)]">
+                {String(user.mood).replace(/_/g, " ")}
+              </span>
             </p>
           ) : null}
 
@@ -377,25 +438,23 @@ export function ProfileDrawer({
             )}
             <button
               type="button"
+              disabled={matchDisabled}
+              aria-disabled={matchDisabled}
+              aria-label={matchCtaAriaLabel(matchState, user.name, {
+                mutualOpensChat: true,
+              })}
               onClick={() => {
-                if (mutual) onMessage();
-                else if (liked) {
-                  onSafetyNotice?.(
-                    "Match sent — chat unlocks when he matches back · consent first.",
-                    "success",
-                  );
-                } else {
-                  void onLike();
-                }
+                if (matchState === "mutual") onMessage();
+                else if (matchState === "none") void onLike();
               }}
-              data-testid={mutual ? "drawer-open-chat" : "drawer-match"}
-              className={`flex-1 py-3.5 rounded-[var(--radius-md)] font-black text-sm uppercase tracking-wide active:scale-[0.98] transition-all ${
-                mutual || !liked
-                  ? "bg-[var(--copper)] text-[var(--nn-on-copper)] hover:bg-[var(--copper-light,#E0A14A)]"
-                  : "border border-[var(--copper)] bg-transparent text-[var(--copper)]"
-              }`}
+              data-testid={
+                matchState === "mutual" ? "drawer-open-chat" : "drawer-match"
+              }
+              className={`flex-1 py-3.5 rounded-[var(--radius-md)] font-black text-sm tracking-wide transition-all ${
+                matchState === "none" ? "uppercase active:scale-[0.98]" : ""
+              } ${matchState === "mutual" ? "normal-case" : ""} ${matchCtaToneClasses(matchState)}`}
             >
-              {mutual ? "Open chat" : liked ? "Matched" : "Match"}
+              {matchLabel}
             </button>
             {onPulseBack && isPulsing && (
               <button
@@ -414,6 +473,15 @@ export function ProfileDrawer({
           </p>
         </div>
       </div>
+      {viewer ? (
+        <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+          <ProfilePhotoViewer
+            src={viewer.src}
+            alt={viewer.alt}
+            onClose={() => setViewer(null)}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

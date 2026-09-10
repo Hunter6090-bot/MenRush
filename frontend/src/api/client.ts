@@ -49,6 +49,8 @@ const AUTH_CHALLENGE_PATHS = [
   '/auth/2fa/verify',
   '/auth/forgot-password',
   '/auth/reset-password',
+  '/auth/confirm-email',
+  '/auth/resend-confirm',
   '/beta/validate-invite',
 ];
 
@@ -80,11 +82,36 @@ apiClient.interceptors.response.use(
 );
 
 export const authAPI = {
-  register: (data: unknown) => apiClient.post('/auth/register', data),
+  register: (data: unknown) =>
+    apiClient.post<{
+      ok?: boolean;
+      requiresEmailConfirm?: boolean;
+      email?: string;
+      message?: string;
+      // Present only in non-production / EMAIL_CONFIRM_EXPOSE_TOKEN — never a session JWT.
+      devConfirmToken?: string;
+      // Legacy session only while EMAIL_CONFIRM_MAIL_OPEN is false (non-Al signups).
+      user?: import('../lib/authSession').StoredAuthUser;
+      token?: string;
+    }>('/auth/register', data),
   login: (data: { email: string; password: string; deviceTrustToken?: string }) =>
     apiClient.post('/auth/login', data),
   logout: (refreshToken?: string | null) =>
     apiClient.post('/auth/logout', { refresh_token: refreshToken ?? undefined }),
+  confirmEmail: (data: { token: string }) =>
+    apiClient.post<{
+      ok: boolean;
+      alreadyConfirmed?: boolean;
+      email?: string;
+      message?: string;
+      user?: import('../lib/authSession').StoredAuthUser;
+      token?: string;
+    }>('/auth/confirm-email', data),
+  resendConfirm: (data: { email: string }) =>
+    apiClient.post<{ ok: boolean; sent: boolean; message?: string; devConfirmToken?: string }>(
+      '/auth/resend-confirm',
+      data,
+    ),
   verifyTwoFactorLogin: (data: {
     pendingToken: string;
     code: string;
@@ -126,6 +153,27 @@ export const betaAPI = {
 
 export const usersAPI = {
   getMe: () => apiClient.get('/users/me'),
+  getReferrals: () =>
+    apiClient.get<{
+      referral_code: string;
+      verified_count: number;
+      pending_count: number;
+      credited_count: number;
+      unlock_every: number;
+      progress_to_unlock: number;
+      unlocks_earned: number;
+      pending_payout_total: number;
+      referrals: Array<{
+        referred_user_id: string;
+        name: string | null;
+        status: 'pending' | 'verified' | 'credited';
+        payout_amount: number;
+        payout_status: 'none' | 'pending' | 'paid';
+        created_at: string;
+        verified_at: string | null;
+        credited_at: string | null;
+      }>;
+    }>('/users/me/referrals'),
   getNearby: (
     lat: number,
     lng: number,
@@ -168,6 +216,7 @@ export const usersAPI = {
     looking_for?: string;
     photo_url?: string;
     cover_url?: string;
+    map_photo_url?: string | null;
     cover_position_x?: number;
     cover_position_y?: number;
     cover_zoom?: number;
@@ -180,6 +229,9 @@ export const usersAPI = {
     on_prep?: boolean | null;
     last_tested_at?: string | null;
     show_age?: boolean;
+    show_height?: boolean;
+    show_weight?: boolean;
+    show_relationship?: boolean;
   }) =>
     apiClient.post('/users/profile', data),
   uploadPhoto: (file: File) => {
@@ -196,6 +248,14 @@ export const usersAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  uploadMapPhoto: (file: File) => {
+    const formData = new FormData();
+    formData.append('photo', file);
+    return apiClient.post('/users/map-photo', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  clearMapPhoto: () => apiClient.delete('/users/map-photo'),
   likeUser: (id: string) => apiClient.post(`/users/like/${id}`),
   /** Unmatch — removes both like directions. Does not touch rooms. */
   unmatchUser: (id: string) =>
@@ -404,6 +464,26 @@ export const messagesAPI = {
       timeout: 180_000,
     });
   },
+  /**
+   * Attach an existing My Photos library photo into a 1:1 thread.
+   * Server copies bytes — does not delete, move, or change album visibility.
+   */
+  sendFromAlbum: (
+    receiver_id: string,
+    photo_id: string,
+    opts: { disappearing?: boolean; maxViews?: number; caption?: string } = {},
+  ) =>
+    apiClient.post<MessageDTO>(
+      '/messages/media/from-album',
+      {
+        receiver_id,
+        photo_id,
+        caption: opts.caption,
+        disappearing: opts.disappearing,
+        max_views: opts.maxViews,
+      },
+      { timeout: 60_000 },
+    ),
   markViewed: (messageId: string) =>
     apiClient.post<MessageDTO>(`/messages/${messageId}/view`),
   withdrawMedia: (messageId: string) =>
@@ -476,7 +556,7 @@ export const roomsAPI = {
     roomId: string,
     data: {
       display_name: string;
-      photo_url: string;
+      photo_url?: string;
       save_name?: boolean;
       save_photo?: boolean;
     },
@@ -700,6 +780,10 @@ export interface HotSpotDTO {
   checkin_ttl_hours?: number;
   /** True when at least one non-expired check-in is present. */
   has_active_checkins?: boolean;
+  nation?: string | null;
+  venue_type?: string | null;
+  source_url?: string | null;
+  verified_at?: string | null;
 }
 
 export const hotSpotsAPI = {

@@ -40,6 +40,8 @@ const Login = lazyNamed(() => import('./pages/Login'), 'Login');
 const Register = lazyNamed(() => import('./pages/Register'), 'Register');
 const ForgotPassword = lazyNamed(() => import('./pages/ForgotPassword'), 'ForgotPassword');
 const ResetPassword = lazyNamed(() => import('./pages/ResetPassword'), 'ResetPassword');
+const CheckEmail = lazyNamed(() => import('./pages/CheckEmail'), 'CheckEmail');
+const ConfirmEmail = lazyNamed(() => import('./pages/ConfirmEmail'), 'ConfirmEmail');
 const Discover = lazyNamed(() => import('./pages/Discover'), 'Discover');
 const Stream = lazyNamed(() => import('./pages/Stream'), 'Stream');
 const Profile = lazyNamed(() => import('./pages/Profile'), 'Profile');
@@ -60,19 +62,7 @@ const Help = lazyNamed(() => import('./pages/Help'), 'Help');
 const Pride = lazyNamed(() => import('./pages/Pride'), 'Pride');
 const MessagingRoute = lazyNamed(() => import('./components/MessagingRoute'), 'MessagingRoute');
 const RoomsRoute = lazyNamed(() => import('./components/RoomsRoute'), 'RoomsRoute');
-const Verify = lazyNamed(() => import('./pages/Verify'), 'Verify');
-const VerifyVeriff = lazyNamed(() => import('./pages/VerifyVeriff'), 'VerifyVeriff');
-const VerifyScan = lazyNamed(() => import('./pages/VerifyScan'), 'VerifyScan');
-const VerifyPending = lazyNamed(() => import('./pages/VerifyPending'), 'VerifyPending');
-const VerifyRejected = lazyNamed(() => import('./pages/VerifyRejected'), 'VerifyRejected');
-const VerificationCentre = lazyNamed(
-  () => import('./pages/VerificationCentre'),
-  'VerificationCentre',
-);
-const AuthenticityVerify = lazyNamed(
-  () => import('./pages/AuthenticityVerify'),
-  'AuthenticityVerify',
-);
+
 const Premium = lazyNamed(() => import('./pages/Premium'), 'Premium');
 const Events = lazyNamed(() => import('./pages/Events'), 'Events');
 const HotSpots = lazyNamed(() => import('./pages/HotSpots'), 'HotSpots');
@@ -86,6 +76,10 @@ const RoomTempIdentityGatePreview = lazyNamed(
 const RoomInRoomDmPreview = lazyNamed(
   () => import('./pages/RoomInRoomDmPreview'),
   'RoomInRoomDmPreview',
+);
+const ProfileDrawerPreview = lazyNamed(
+  () => import('./pages/ProfileDrawerPreview'),
+  'ProfileDrawerPreview',
 );
 
 function RouteFallback() {
@@ -257,6 +251,8 @@ function AppShell() {
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/check-email" element={<CheckEmail />} />
+          <Route path="/confirm-email" element={<ConfirmEmail />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/cookies" element={<Cookies />} />
@@ -264,55 +260,7 @@ function AppShell() {
           <Route path="/safety" element={<Safety />} />
           <Route path="/guidelines" element={<CommunityGuidelines />} />
           <Route path="/help" element={<Help />} />
-          <Route
-            path="/verify"
-            element={
-              <ProtectedRoute>
-                <VerificationCentre />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/verify/id"
-            element={
-              <ProtectedRoute>
-                {FEATURES.veriffAfterSignup ? <VerifyVeriff /> : <Verify />}
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/verify/id/manual"
-            element={
-              <ProtectedRoute>
-                <Verify />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/verify/authentic"
-            element={
-              <ProtectedRoute>
-                <AuthenticityVerify />
-              </ProtectedRoute>
-            }
-          />
-          <Route path="/verify/scan/:sessionId" element={<VerifyScan />} />
-          <Route
-            path="/verify/pending"
-            element={
-              <ProtectedRoute>
-                <VerifyPending />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/verify/rejected"
-            element={
-              <ProtectedRoute>
-                <VerifyRejected />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/verify/*" element={<ProtectedRoute><Navigate to="/profile" replace /></ProtectedRoute>} />
           <Route
             path="/premium"
             element={
@@ -446,6 +394,7 @@ function AppShell() {
             <>
               <Route path="/dev/room-temp-gate" element={<RoomTempIdentityGatePreview />} />
               <Route path="/dev/room-inroom-dm" element={<RoomInRoomDmPreview />} />
+              <Route path="/dev/profile-sheet" element={<ProfileDrawerPreview />} />
             </>
           ) : null}
           <Route path="*" element={<NotFound />} />

@@ -13,7 +13,10 @@ import roomRoutes from './routes/rooms';
 import pushRoutes from './routes/push';
 import pulseRoutes from './routes/pulse';
 import verifyRoutes from './routes/verify';
-import veriffRoutes from './routes/veriff';
+import veriffRoutes, {
+  handleVeriffDecisionWebhook,
+  veriffWebhookRawParser,
+} from './routes/veriff';
 import premiumRoutes from './routes/premium';
 import premiumWebhookRoutes from './routes/premium-webhook';
 import contactRoutes from './routes/contact';
@@ -84,6 +87,9 @@ app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use('/api/premium/webhook', premiumWebhookRoutes);
 // Veriff decision webhook needs the raw body for HMAC (before express.json).
 app.use('/api/verify/veriff', veriffRoutes);
+// Alias: Station sometimes posts to /api/verify/webhook — must not hit JWT auth on /api/verify.
+// Primary portal URL remains /api/verify/veriff/webhook.
+app.post('/api/verify/webhook', veriffWebhookRawParser, handleVeriffDecisionWebhook);
 app.use(express.json());
 app.use('/api/verify', verifyRoutes);
 // Profile / message / album media. fallthrough:true so missing files hit a clean 404
@@ -574,12 +580,8 @@ io.on('connection', (socket: Socket) => {
       const member = await roomService.isMember(userId, roomId);
       if (!member) return;
 
-      // Block presence until temp name+photo are set — never broadcast real profile.
+      // Join with chosen identity: profile by default, or active temp disguise.
       const presence = await roomService.resolveRoomPresence(userId, roomId);
-      if (!presence.using_temp_identity) {
-        socket.emit('room:identity-required', { room_id: roomId });
-        return;
-      }
 
       socket.join(`room:${roomId}`);
 
@@ -590,6 +592,7 @@ io.on('connection', (socket: Socket) => {
         name: presence.name,
         photo_url: presence.photo_url,
         is_verified: presence.is_verified,
+        using_temp_identity: presence.using_temp_identity,
       });
 
       const peers = await io.in(`room:${roomId}`).fetchSockets();
@@ -607,12 +610,12 @@ io.on('connection', (socket: Socket) => {
         await Promise.all(
           uniqueUserIds.map(async (peerUserId: string) => {
             const p = await roomService.resolveRoomPresence(peerUserId, roomId);
-            if (!p.using_temp_identity) return null;
             return {
               user_id: peerUserId,
               name: p.name,
               photo_url: p.photo_url,
               is_verified: p.is_verified,
+              using_temp_identity: p.using_temp_identity,
             };
           }),
         )
@@ -793,9 +796,8 @@ io.on('connection', (socket: Socket) => {
     const userId = socketToUser.get(socket.id);
     const roomId = resolveRoomId(data);
     if (!userId || !roomId || typeof data.typing !== 'boolean') return;
-    // Room typing must use temp identity — never the canonical profile name.
+    // Typing shows the same display identity as presence (profile or temp).
     const presence = await roomService.resolveRoomPresence(userId, roomId);
-    if (!presence.using_temp_identity) return;
     socket.to(`room:${roomId}`).emit('room:typing', {
       roomId,
       room_id: roomId,

@@ -10,6 +10,7 @@ import { HotSpotPin, createHotSpotPinElement } from '../components/HotSpotPin';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { formatDistanceFromKm } from '../lib/localeUnits';
 import { mapboxStyleForTheme, resolvedThemeNow, THEME_CHANGED_EVENT } from '../lib/mapTheme';
+import { HOT_SPOTS_CONSENT, HOT_SPOTS_PAGE_BLURB } from '../lib/cruiseCopy';
 
 export const HotSpots = () => {
   const { lat, lng } = useLocationStore();
@@ -178,10 +179,11 @@ export const HotSpots = () => {
             Safety tips
           </Link>
         </div>
-        <p className="mb-5 max-w-2xl text-sm leading-relaxed text-[var(--cream-muted)]">
-          See who&apos;s around popular venues and open areas across the UK. Check in anonymously or
-          with your profile. Map pins stay visible — dim when empty, solid when someone is checked in.
-          Free members see rounded live counts; Premium shows exact numbers.
+        <p className="mb-5 max-w-2xl text-sm leading-relaxed text-[var(--cream-muted)]" data-testid="hotspots-page-brand-face">
+          {HOT_SPOTS_PAGE_BLURB} Free members see rounded check-in counts. Premium shows exact numbers.
+        </p>
+        <p className="mb-5 text-[12px] font-semibold text-[var(--cream-muted)]" data-testid="hotspots-page-consent">
+          {HOT_SPOTS_CONSENT}
         </p>
 
         {lat != null && lng != null && !tokenMissing ? (
@@ -192,7 +194,7 @@ export const HotSpots = () => {
           >
             <div ref={mapContainerRef} className="absolute inset-0 h-full w-full" />
             <div className="pointer-events-none absolute bottom-3 left-3 rounded-full border border-[rgba(196,131,42,0.4)] bg-[rgba(13,10,6,0.85)] px-3 py-1.5 text-[11px] font-semibold text-[var(--cream-muted)]">
-              Solid = checked in · Dim = empty
+              Hot Spots. Solid = checked in. Dim = empty.
             </div>
           </div>
         ) : null}
@@ -250,7 +252,7 @@ export const HotSpots = () => {
                 Nearby map
               </Link>
             </div>
-            <p className="mt-4 text-[11px] text-[var(--cream-muted)]">Meet in public · Consent first</p>
+            <p className="mt-4 text-[11px] text-[var(--cream-muted)]">{HOT_SPOTS_CONSENT}</p>
           </div>
         ) : loading ? (
           <div className="flex justify-center py-20">
@@ -295,9 +297,11 @@ export const HotSpots = () => {
                   </div>
                   <div className="rounded-full border border-[var(--border-default)] bg-[rgba(196,131,42,0.12)] px-3 py-1 text-center">
                     <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--cream-muted)]">
-                      Live
+                      {spot.has_active_checkins || spot.live_count_exact > 0 ? 'Active' : 'Empty'}
                     </p>
-                    <p className="text-lg font-extrabold text-[#E0A14A]">{spot.live_count}</p>
+                    <p className="text-lg font-extrabold text-[#E0A14A]">
+                      {spot.has_active_checkins || spot.live_count_exact > 0 ? spot.live_count : '—'}
+                    </p>
                   </div>
                 </div>
 

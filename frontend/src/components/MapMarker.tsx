@@ -1,6 +1,7 @@
 import { createRoot, Root } from 'react-dom/client';
 import { PulsingAvatar } from './PulsingAvatar';
 import { useGridPhotoSrc } from '../lib/nearbyPhotoSrc';
+import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
 
 export interface MapMarkerUser {
   id: string;
@@ -59,18 +60,9 @@ function MapPhoto({
   size: number;
 }) {
   const { src, phase } = useGridPhotoSrc(photoUrl, age);
-  if (!src || phase === 'loading') {
-    // Always show a pin face — initial letter, never a blank hole on the map.
-    const initial = (name?.trim()?.[0] || '?').toUpperCase();
-    return (
-      <div
-        className="flex h-full w-full items-center justify-center font-extrabold text-[#F0E0C0]"
-        style={{ fontSize: Math.max(14, Math.round(size * 0.38)) }}
-        aria-label={name}
-      >
-        {initial}
-      </div>
-    );
+  if (isNearbyPlaceholderFace(photoUrl, phase) || !src) {
+    // Faded official medallion — same empty face as Nearby Grid (Brand).
+    return <FadedBrandFace variant="pin" size={size} label={name} />;
   }
   return (
     <img
@@ -89,15 +81,24 @@ export function createMapMarkerElement(
   user: MapMarkerUser,
   onTap: () => void,
   size = 44,
-): { element: HTMLDivElement; root: Root } {
+): { element: HTMLDivElement; root: Root; suppressClickRef: { current: boolean } } {
   const el = document.createElement('div');
   el.style.width = `${size}px`;
   el.style.height = `${size}px`;
+  el.style.touchAction = 'none';
+  /** Set by wireHtmlMarkerMapGestures after a drag/pinch so click is ignored. */
+  const suppressClickRef = { current: false };
   el.addEventListener('click', (e) => {
+    if (suppressClickRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      suppressClickRef.current = false;
+      return;
+    }
     e.stopPropagation();
     onTap();
   });
   const root = createRoot(el);
   root.render(<MapMarker user={user} size={size} />);
-  return { element: el, root };
+  return { element: el, root, suppressClickRef };
 }

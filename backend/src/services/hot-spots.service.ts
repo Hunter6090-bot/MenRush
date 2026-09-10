@@ -4,12 +4,21 @@ import { premiumService } from './premium.service';
 /** Venue check-in pins expire after this many hours (documented product choice). */
 export const ACTIVE_CHECKIN_TTL_HOURS = 4;
 
+/** Public Cruise filters — commercial premises only (Legal RED outdoor/PSE excluded). */
+export const COMMERCIAL_HOT_SPOT_CATEGORY_SLUGS = [
+  'saunas',
+  'nightlife',
+  'bars',
+  'cinema',
+] as const;
+
 export type HotSpotCategory = {
   id: number;
   slug: string;
   name: string;
   icon: string;
   description: string | null;
+  is_commercial?: boolean;
 };
 
 export type HotSpotRow = {
@@ -32,6 +41,10 @@ export type HotSpotRow = {
   checkin_ttl_hours: number;
   /** True when at least one non-expired check-in is present. */
   has_active_checkins: boolean;
+  nation: string | null;
+  venue_type: string | null;
+  source_url: string | null;
+  verified_at: string | null;
 };
 
 function formatLiveCount(exact: number, isPremium: boolean): number | string {
@@ -61,14 +74,35 @@ function mapSpotRow(row: Record<string, unknown>, isPremium: boolean): HotSpotRo
       row.my_checkin_anonymous == null ? null : Boolean(row.my_checkin_anonymous),
     checkin_ttl_hours: ACTIVE_CHECKIN_TTL_HOURS,
     has_active_checkins: exact > 0,
+    nation: (row.nation as string | null) ?? null,
+    venue_type: (row.venue_type as string | null) ?? null,
+    source_url: (row.source_url as string | null) ?? null,
+    verified_at: row.verified_at != null ? String(row.verified_at) : null,
   };
 }
+
+const SPOT_SELECT_COLS = `
+          hs.id,
+          hs.name,
+          hs.city,
+          hs.description,
+          hs.latitude,
+          hs.longitude,
+          hs.category_id,
+          hs.nation,
+          hs.venue_type,
+          hs.source_url,
+          hs.verified_at,
+          c.slug AS category_slug,
+          c.name AS category_name,
+          c.icon AS category_icon`;
 
 export const hotSpotsService = {
   async listCategories(): Promise<HotSpotCategory[]> {
     const res = await query(
-      `SELECT id, slug, name, icon, description
+      `SELECT id, slug, name, icon, description, is_commercial
          FROM hot_spot_categories
+        WHERE is_commercial = TRUE
         ORDER BY sort_order ASC, name ASC`,
     );
     return res.rows;
@@ -102,16 +136,7 @@ export const hotSpotsService = {
 
     const res = await query(
       `SELECT
-          hs.id,
-          hs.name,
-          hs.city,
-          hs.description,
-          hs.latitude,
-          hs.longitude,
-          hs.category_id,
-          c.slug AS category_slug,
-          c.name AS category_name,
-          c.icon AS category_icon,
+          ${SPOT_SELECT_COLS},
           ROUND((ST_Distance(
             ST_SetSRID(ST_MakePoint(hs.longitude, hs.latitude), 4326)::geography,
             ST_MakePoint($2, $1)::geography
@@ -141,6 +166,7 @@ export const hotSpotsService = {
          FROM hot_spots hs
          JOIN hot_spot_categories c ON c.id = hs.category_id
         WHERE hs.is_active = TRUE
+          AND c.is_commercial = TRUE
           AND ST_DWithin(
             ST_SetSRID(ST_MakePoint(hs.longitude, hs.latitude), 4326)::geography,
             ST_MakePoint($2, $1)::geography,
@@ -159,16 +185,7 @@ export const hotSpotsService = {
     const isPremium = await premiumService.isPremium(userId);
     const res = await query(
       `SELECT
-          hs.id,
-          hs.name,
-          hs.city,
-          hs.description,
-          hs.latitude,
-          hs.longitude,
-          hs.category_id,
-          c.slug AS category_slug,
-          c.name AS category_name,
-          c.icon AS category_icon,
+          ${SPOT_SELECT_COLS},
           NULL::numeric AS distance_km,
           (
             SELECT COUNT(*)::int
@@ -194,7 +211,7 @@ export const hotSpotsService = {
           ) AS my_checkin_anonymous
          FROM hot_spots hs
          JOIN hot_spot_categories c ON c.id = hs.category_id
-        WHERE hs.id = $1 AND hs.is_active = TRUE`,
+        WHERE hs.id = $1 AND hs.is_active = TRUE AND c.is_commercial = TRUE`,
       [spotId, userId, String(ACTIVE_CHECKIN_TTL_HOURS)],
     );
     if (!res.rows[0]) return null;
@@ -342,13 +359,19 @@ export const hotSpotsService = {
       if (!categoryId) throw new Error('Nightlife category missing');
       const venueLabel = (event.venue_name || event.name).slice(0, 120);
       const created = await query(
-        `INSERT INTO hot_spots (category_id, name, city, description, latitude, longitude, is_user_generated, event_id)
-         VALUES ($1, $2, NULL, $3, $4, $5, TRUE, $6)
+        `INSERT INTO hot_spots (
+           category_id, name, city, description, latitude, longitude,
+           is_user_generated, event_id, venue_type, source
+         )
+         VALUES ($1, $2, NULL, $3, $4, $5, TRUE, $6, 'club', 'event-checkin')
          RETURNING id`,
         [
           categoryId,
           venueLabel,
-          `Venue pin for ${event.name}`.slice(0, 240),
+          `Commercial venue pin for ${event.name}. Follow the venue's rules. MenRush does not run this place.`.slice(
+            0,
+            240,
+          ),
           lat,
           lng,
           event.id,

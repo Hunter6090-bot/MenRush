@@ -103,8 +103,8 @@ export function PulsingAvatar({
       {isVerified && (
         <span
           data-testid="map-identity-checked-badge"
-          aria-label="Identity checked"
-          title="Identity checked"
+          aria-label="Verified"
+          title="ID and live selfie verified through Veriff"
           className="absolute z-20 rounded-full flex items-center justify-center"
           style={{
             width: badgeSize,

@@ -35,22 +35,24 @@ export function launchVeriffInContext(
     onCanceled: () => void;
   },
 ): VeriffFrameHandle {
-  persistVeriffSessionUrl(sessionUrl);
+  let completed = false;
 
   return createVeriffFrame({
     url: sessionUrl,
     lang: 'en',
     onReload: () => {
-      persistVeriffSessionUrl(sessionUrl);
       window.location.reload();
     },
     onEvent: (msg) => {
+      if (completed) return;
       if (msg === MESSAGES.SUBMITTED || msg === MESSAGES.FINISHED) {
+        completed = true;
         clearPersistedVeriffSessionUrl();
         handlers.onSubmitted();
         return;
       }
       if (msg === MESSAGES.CANCELED) {
+        completed = true;
         clearPersistedVeriffSessionUrl();
         handlers.onCanceled();
       }

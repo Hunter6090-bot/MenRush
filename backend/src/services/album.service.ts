@@ -542,6 +542,38 @@ export const albumService = {
     };
   },
 
+  /**
+   * Owner-only read for chat attach. Returns storage pointers only —
+   * never mutates album_photos, visibility, grants, or disk files.
+   */
+  async getOwnedPhotoForAttach(ownerId: string, photoId: string): Promise<{
+    id: string;
+    albumId: string;
+    storageKey: string;
+    mimeType: string;
+    visibility: PhotoVisibility;
+    photoUrl: string;
+  }> {
+    await accessControl.requireVerified(ownerId);
+    const result = await query(
+      `SELECT p.id, p.album_id, p.storage_key, p.mime_type, p.visibility, p.photo_url
+         FROM album_photos p
+         JOIN albums a ON a.id = p.album_id
+        WHERE p.id = $1 AND a.user_id = $2 AND p.storage_key IS NOT NULL`,
+      [photoId, ownerId],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error('photo_not_owned');
+    return {
+      id: row.id as string,
+      albumId: row.album_id as string,
+      storageKey: row.storage_key as string,
+      mimeType: (row.mime_type as string) || 'image/jpeg',
+      visibility: parseVisibility(row.visibility),
+      photoUrl: row.photo_url as string,
+    };
+  },
+
   async viewerMediaClear(viewerId: string, ownerId: string): Promise<boolean> {
     const viewerIsPremium = await resolveViewerPremium(viewerId);
     return computeMediaClear({

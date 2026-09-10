@@ -11,6 +11,7 @@ CREATE TABLE users (
   bio TEXT,
   photo_url TEXT,
   cover_url TEXT,
+  map_photo_url TEXT,
   cover_position_x REAL NOT NULL DEFAULT 50,
   cover_position_y REAL NOT NULL DEFAULT 50,
   cover_zoom REAL NOT NULL DEFAULT 1,
@@ -26,6 +27,11 @@ CREATE TABLE users (
   on_prep BOOLEAN,
   last_tested_at DATE,
   show_age BOOLEAN NOT NULL DEFAULT TRUE,
+  show_height BOOLEAN NOT NULL DEFAULT TRUE,
+  show_weight BOOLEAN NOT NULL DEFAULT TRUE,
+  show_relationship BOOLEAN NOT NULL DEFAULT TRUE,
+  email_confirmed BOOLEAN NOT NULL DEFAULT TRUE,
+  welcome_email_sent_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );

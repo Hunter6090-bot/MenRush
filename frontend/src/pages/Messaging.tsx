@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { messagesAPI, usersAPI, meetAPI, MediaKind, MessageMediaKind, MessageDTO, MeetAgreementState } from '../api/client';
+import { messagesAPI, usersAPI, meetAPI, MediaKind, MessageMediaKind, MessageDTO, MeetAgreementState, LibraryPhotoDTO } from '../api/client';
 import { trackEventOnce } from '../observability/analytics';
 import { useSocket } from '../hooks/useSocket';
 import { useAuthStore, useCallStore, useUnreadStore } from '../hooks/store';
@@ -13,11 +13,12 @@ import { FEATURES } from '../lib/featureFlags';
 import { SelfieCaptureModal } from '../components/SelfieCaptureModal';
 import { CameraCaptureChooser } from '../components/CameraCaptureChooser';
 import { VideoNoteCaptureModal } from '../components/VideoNoteCaptureModal';
+import { ChatAttachLibrarySheet } from '../components/ChatAttachLibrarySheet';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 import { PanicReportButton } from '../components/PanicReportButton';
 import { placeOutgoingCall } from '../lib/callBridge';
 import { mapCallMediaError } from '../lib/callMedia';
-import { MobileBackButton } from '../components/MobileBackButton';
+import { ChevronLeftIcon, MobileBackButton } from '../components/MobileBackButton';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { MissedCallIcon } from '../components/MissedCallIcon';
 import { isMissedCallMessage, MISSED_CALL_PREVIEW } from '../lib/missedCall';
@@ -27,6 +28,8 @@ import { profilePathForUser } from '../lib/profileLinks';
 import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 import { SoftBlurMedia, shouldBlurMedia } from '../components/SoftBlurMedia';
 import { compressChatImageFile } from '../lib/imageUpload';
+import { armOverlayBack } from '../lib/overlayBack';
+import { CHAT_IMAGE_VIEWER_FRAME } from '../lib/chatImageViewerFrame';
 import {
   appendUniqueMessage,
   CHAT_LIVE_REFRESH_EVENT,
@@ -156,6 +159,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   // Image composer: hold the selected file for preview + view-rule choice
   // before sending (instead of sending immediately on pick).
   const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [pendingLibraryPhotos, setPendingLibraryPhotos] = useState<LibraryPhotoDTO[] | null>(null);
   const [pendingPreparing, setPendingPreparing] = useState(false);
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
   const [viewRule, setViewRule] = useState<ViewRule>('once');
@@ -163,6 +167,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   // Recipient image viewer (transient full-screen view of a disappearing image).
   const [viewerMsg, setViewerMsg] = useState<Message | null>(null);
   const [cameraChooserOpen, setCameraChooserOpen] = useState(false);
+  const [attachLibraryOpen, setAttachLibraryOpen] = useState(false);
   const [selfieOpen, setSelfieOpen] = useState(false);
   const [videoNoteOpen, setVideoNoteOpen] = useState(false);
   const [meetState, setMeetState] = useState<MeetAgreementState | null>(null);
@@ -176,6 +181,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const { setCalling, setCallSetupError, resetCall } = useCallStore();
   const navigate = useNavigate();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const savedScrollTopRef = useRef<number | null>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const inputValueRef = useRef('');
@@ -225,8 +232,28 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   }, [otherId, loadConversation]);
 
   useEffect(() => {
+    // Don't yank scroll while the photo viewer is open — restore on close instead.
+    if (viewerMsg) return;
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isOtherTyping]);
+  }, [messages, isOtherTyping, viewerMsg]);
+
+  const openImageViewer = useCallback((msg: Message) => {
+    if (messagesScrollRef.current) {
+      savedScrollTopRef.current = messagesScrollRef.current.scrollTop;
+    }
+    setViewerMsg(msg);
+  }, []);
+
+  const closeImageViewer = useCallback(() => {
+    setViewerMsg(null);
+    const top = savedScrollTopRef.current;
+    if (top == null) return;
+    requestAnimationFrame(() => {
+      if (messagesScrollRef.current) {
+        messagesScrollRef.current.scrollTop = top;
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (!otherId) return;
@@ -407,8 +434,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     if (!normalized || !otherId) return;
     setMediaError('');
     setViewRule('once');
+    setPendingLibraryPhotos(null);
     setPendingPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
+      if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
       return URL.createObjectURL(normalized);
     });
     setPendingImage(normalized);
@@ -419,7 +447,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       .then((compressed) => {
         setPendingImage(compressed);
         setPendingPreviewUrl((prev) => {
-          if (prev) URL.revokeObjectURL(prev);
+          if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
           return URL.createObjectURL(compressed);
         });
       })
@@ -427,21 +455,54 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       .finally(() => setPendingPreparing(false));
   };
 
-  const clearPendingImage = useCallback(() => {
+  const stageLibraryPhotos = (photos: LibraryPhotoDTO[]) => {
+    if (!photos.length || !otherId) return;
+    setMediaError('');
+    setViewRule('once');
     setPendingImage(null);
     setPendingPreparing(false);
     setPendingPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
+      if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setPendingLibraryPhotos(photos);
+  };
+
+  const clearPendingImage = useCallback(() => {
+    setPendingImage(null);
+    setPendingLibraryPhotos(null);
+    setPendingPreparing(false);
+    setPendingPreviewUrl((prev) => {
+      if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
       return null;
     });
   }, []);
 
   const handleSendPendingImage = async () => {
-    if (!pendingImage || !otherId || uploadingMedia) return;
+    if (!otherId || uploadingMedia) return;
     const { disappearing, maxViews } = ruleToSendOptions(viewRule, customViews);
     setMediaError('');
     setUploadingMedia(true);
     try {
+      if (pendingLibraryPhotos && pendingLibraryPhotos.length > 0) {
+        // Send selected library photos — album rows / visibility stay untouched.
+        for (const photo of pendingLibraryPhotos) {
+          const res = await messagesAPI.sendFromAlbum(otherId, photo.id, {
+            disappearing,
+            maxViews,
+          });
+          setMessages((prev) => [...prev, res.data]);
+        }
+        clearPendingImage();
+        trackEventOnce(
+          'first_message_success',
+          { kind: 'image', surface: 'direct_message', source: 'my_photos' },
+          'first_message_success',
+        );
+        return;
+      }
+
+      if (!pendingImage) return;
       // Re-run compress if staging still preparing, or as a cheap no-op when small.
       const file = await compressChatImageFile(pendingImage);
       const res = await messagesAPI.sendMedia(otherId, file, {
@@ -468,11 +529,14 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     }
   };
 
-  // ── Media: gallery attach + camera chooser (Picture | Video) ─────────────
-  const handleAttachClick = () => fileInputRef.current?.click();
+  // ── Media: My Photos attach + device gallery secondary + camera chooser ──
+  const handleAttachClick = () => {
+    if (uploadingMedia || pendingImage || pendingLibraryPhotos || recording) return;
+    setAttachLibraryOpen(true);
+  };
 
   const handleCameraClick = () => {
-    if (uploadingMedia || pendingImage || recording) return;
+    if (uploadingMedia || pendingImage || pendingLibraryPhotos || recording) return;
     setCameraChooserOpen(true);
   };
 
@@ -783,17 +847,18 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
   return (
     <div
+      data-testid="messaging-root"
       className={
         embedded
-          ? 'flex h-full min-h-0 flex-col'
-          : 'fixed inset-0 flex flex-col'
+          ? 'flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-x-clip'
+          : 'fixed inset-0 flex min-w-0 max-w-full flex-col overflow-x-clip'
       }
       style={{ background: 'var(--bg-primary)' }}
     >
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <header
-        className={`flex-shrink-0 flex items-center gap-1.5 border-b border-[var(--border-default)] px-2 sm:px-4 bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl ${
+        className={`flex-shrink-0 flex min-w-0 max-w-full items-center gap-1 border-b border-[var(--border-default)] px-1.5 sm:gap-1.5 sm:px-4 bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl overflow-x-clip ${
           embedded ? '' : 'pt-[env(safe-area-inset-top,0px)]'
         }`}
         style={{
@@ -806,7 +871,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         <MobileBackButton
           fallback="/conversations"
           onClick={() => navigate('/conversations')}
-          className="-ml-1"
+          showLabel={false}
+          className="-ml-0.5"
         />
 
         {/* Avatar + name block — centered, tappable to open profile */}
@@ -856,7 +922,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             <button
               onClick={() => void handleStartVideoCall()}
               aria-label="Start video call"
-              className="flex-shrink-0 w-[42px] h-[42px] rounded-xl flex items-center justify-center transition-all duration-150 active:scale-95 mr-cta-gradient"
+              className="mr-cta-gradient flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl transition-all duration-150 active:scale-95 sm:h-[42px] sm:w-[42px]"
               style={{
                 boxShadow: '0 2px 12px rgba(196,131,42,0.35)',
               }}
@@ -869,7 +935,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                   '0 2px 12px rgba(196,131,42,0.35)';
               }}
             >
-              <VideoIcon className="w-4 h-4 text-white" />
+              <VideoIcon className="h-4 w-4 text-white" />
             </button>
           </>
         )}
@@ -924,8 +990,11 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
       {/* ── Messages area ─────────────────────────────────────────────────── */}
       <div
-        className="flex-1 overflow-y-auto px-4 py-4"
+        ref={messagesScrollRef}
+        className="min-h-0 min-w-0 max-w-full flex-1 overflow-x-clip overflow-y-auto px-3 py-4 sm:px-4"
         style={{ scrollbarWidth: 'thin' }}
+        data-testid="chat-messages-scroll"
+        data-messaging-thread="1"
       >
         {messages.length === 0 && !sending && (
           <div
@@ -1029,15 +1098,15 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 </div>
               )}
 
-              {/* Message row */}
+              {/* Message row — min-w-0 so long/media bubbles cannot widen the phone viewport */}
               <div
-                className={`flex ${isMine ? 'justify-end' : 'justify-start'} ${
+                className={`flex min-w-0 max-w-full ${isMine ? 'justify-end' : 'justify-start'} ${
                   isGrouped ? 'mt-0.5' : 'mt-3'
                 }`}
               >
                 {/* Received: avatar placeholder for spacing */}
                 {!isMine && (
-                  <div className="w-7 flex-shrink-0 mr-2 flex items-end mb-1">
+                  <div className="mr-2 mb-1 flex w-7 flex-shrink-0 items-end">
                     {showTail && otherId ? (
                       <ProfilePhotoLink
                         userId={otherId}
@@ -1047,13 +1116,13 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                       >
                         {otherUser?.photo_url ? (
                           <div
-                            className="w-7 h-7 rounded-full overflow-hidden"
+                            className="h-7 w-7 overflow-hidden rounded-full"
                             style={{ border: '1px solid var(--border-default)', flexShrink: 0 }}
                           >
                             <img
                               src={otherUser.photo_url}
                               alt={otherUser.name}
-                              className="w-full h-full object-cover"
+                              className="h-full w-full object-cover"
                             />
                           </div>
                         ) : (
@@ -1065,14 +1134,16 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 )}
 
                 <div
-                  className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} max-w-[62%]`}
+                  className={`flex min-w-0 max-w-[min(78%,20rem)] flex-col overflow-hidden ${
+                    isMine ? 'items-end' : 'items-start'
+                  }`}
                 >
                   {msg.media_type === 'image' ? (
                     <ImageBubble
                       msg={msg}
                       isMine={isMine}
                       showTail={showTail}
-                      onOpen={setViewerMsg}
+                      onOpen={openImageViewer}
                       onWithdraw={
                         canWithdrawMedia(msg, user?.id)
                           ? () => msg.id && handleWithdrawMedia(msg.id)
@@ -1113,7 +1184,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                     />
                   ) : (
                     <div
-                      className="relative px-4 py-2.5 text-sm leading-relaxed"
+                      className="relative max-w-full break-words px-4 py-2.5 text-sm leading-relaxed [overflow-wrap:anywhere]"
                       style={
                         isMine
                           ? {
@@ -1175,7 +1246,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
       {/* ── Input bar ─────────────────────────────────────────────────────── */}
       <div
-        className="flex-shrink-0 border-t border-[var(--border-default)] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] backdrop-blur-xl relative z-[70]"
+        className="relative z-[70] min-w-0 max-w-full flex-shrink-0 overflow-x-clip border-t border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-primary)_94%,transparent)] px-2 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] backdrop-blur-xl sm:px-4"
         data-testid="chat-composer"
       >
         {mediaError && (
@@ -1202,19 +1273,25 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         />
 
         {/* Image composer — preview + view-rule choice before sending */}
-        {pendingImage && pendingPreviewUrl && (
+        {(pendingImage && pendingPreviewUrl) ||
+        (pendingLibraryPhotos && pendingLibraryPhotos.length > 0) ? (
           <ImageComposer
-            previewUrl={pendingPreviewUrl}
+            previewUrl={
+              pendingPreviewUrl ||
+              getPhotoUrl(pendingLibraryPhotos![0].photo_url) ||
+              pendingLibraryPhotos![0].photo_url
+            }
             rule={viewRule}
             customViews={customViews}
             uploading={uploadingMedia}
             preparing={pendingPreparing}
+            photoCount={pendingLibraryPhotos?.length ?? 1}
             onRuleChange={setViewRule}
             onCustomViewsChange={setCustomViews}
             onCancel={clearPendingImage}
             onSend={handleSendPendingImage}
           />
-        )}
+        ) : null}
 
         {recording ? (
           // Recording-only bar — Stop sends, Cancel discards.
@@ -1257,45 +1334,46 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             </button>
           </div>
         ) : (
-          <form onSubmit={handleSend} className="flex items-center gap-2">
+          <form onSubmit={handleSend} className="flex min-w-0 max-w-full items-center gap-1.5 sm:gap-2">
             <button
               type="button"
               onClick={handleShareLocation}
-              disabled={uploadingMedia || sharingLocation || !!pendingImage}
+              disabled={uploadingMedia || sharingLocation || !!pendingImage || !!pendingLibraryPhotos}
               aria-label="Send current location"
               title="Send current location"
-              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper"
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
             >
-              <LocationPinIcon className="w-4 h-4" />
+              <LocationPinIcon className="h-4 w-4" />
             </button>
 
             {/* Camera — opens Picture | Video chooser, then live camera */}
             <button
               type="button"
               onClick={handleCameraClick}
-              disabled={uploadingMedia || !!pendingImage || recording}
+              disabled={uploadingMedia || !!pendingImage || !!pendingLibraryPhotos || recording}
               aria-label="Open camera"
               title="Take a picture or video"
               data-testid="chat-camera-button"
-              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper"
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
             >
-              <CameraIcon className="w-4 h-4" />
+              <CameraIcon className="h-4 w-4" />
             </button>
 
-            {/* Gallery / attachments */}
+            {/* My Photos attach (device gallery secondary inside sheet) */}
             <button
               type="button"
               onClick={handleAttachClick}
-              disabled={uploadingMedia || !!pendingImage}
-              aria-label="Attach from gallery"
-              title="Attach from gallery"
-              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 border border-nn-border bg-nn-card text-nn-copper"
+              disabled={uploadingMedia || !!pendingImage || !!pendingLibraryPhotos}
+              aria-label="Attach from My Photos"
+              title="Attach from My Photos"
+              data-testid="chat-attach-button"
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
             >
-              <AttachIcon className="w-4 h-4" />
+              <AttachIcon className="h-4 w-4" />
             </button>
 
-            {/* Text input */}
-            <div className="relative flex-1">
+            {/* Text input — min-w-0 so flex siblings cannot shove past the phone edge */}
+            <div className="relative min-w-0 flex-1">
               <input
                 ref={inputRef}
                 type="text"
@@ -1308,7 +1386,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 enterKeyHint="send"
                 inputMode="text"
                 data-testid="chat-text-input"
-                className="w-full text-sm px-5 py-3 rounded-full focus:outline-none transition-all duration-200"
+                className="w-full min-w-0 rounded-full px-3 py-2.5 text-sm transition-all duration-200 focus:outline-none sm:px-5 sm:py-3"
                 style={{
                   background: 'var(--bg-card)',
                   border: '1px solid var(--border-default)',
@@ -1336,7 +1414,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 aria-label="Send message"
                 data-testid="chat-send-button"
                 onPointerDown={handleSendPointerDown}
-                className="flex-shrink-0 rounded-full px-5 py-2.5 text-sm font-bold mr-cta-gradient transition-all duration-200 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed min-h-[46px]"
+                className="mr-cta-gradient min-h-[40px] flex-shrink-0 rounded-full px-3 py-2 text-sm font-bold transition-all duration-200 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 sm:min-h-[46px] sm:px-5 sm:py-2.5"
               >
                 {sending ? <PulseRing size={16} label="Sending" /> : 'Send'}
               </button>
@@ -1348,9 +1426,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 aria-label="Record voice note"
                 title="Record voice note"
                 data-testid="chat-voice-button"
-                className="flex-shrink-0 w-[46px] h-[46px] rounded-full flex items-center justify-center active:scale-95 disabled:opacity-40 mr-cta-gradient text-[#FFF6E6] shadow-[0_2px_12px_rgba(196,131,42,0.4)]"
+                className="mr-cta-gradient flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-[#FFF6E6] shadow-[0_2px_12px_rgba(196,131,42,0.4)] active:scale-95 disabled:opacity-40 sm:h-[46px] sm:w-[46px]"
               >
-                <MicIcon className="w-4 h-4" />
+                <MicIcon className="h-4 w-4" />
               </button>
             )}
           </form>
@@ -1362,7 +1440,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         <ImageViewer
           msg={viewerMsg}
           onConsume={handleConsumeView}
-          onClose={() => setViewerMsg(null)}
+          onClose={closeImageViewer}
         />
       )}
 
@@ -1371,6 +1449,19 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         onClose={() => setCameraChooserOpen(false)}
         onChoosePicture={handleChoosePicture}
         onChooseVideo={handleChooseVideo}
+      />
+
+      <ChatAttachLibrarySheet
+        open={attachLibraryOpen}
+        onClose={() => setAttachLibraryOpen(false)}
+        onConfirm={(photos) => {
+          setAttachLibraryOpen(false);
+          stageLibraryPhotos(photos);
+        }}
+        onDeviceGallery={() => {
+          setAttachLibraryOpen(false);
+          fileInputRef.current?.click();
+        }}
       />
 
       <SelfieCaptureModal
@@ -1423,10 +1514,10 @@ const LocationBubble: React.FC<LocationBubbleProps> = ({ msg, isMine, showTail, 
       };
 
   return (
-    <div className="relative px-4 py-3 text-sm leading-relaxed max-w-[240px]" style={bubbleStyle}>
-      <div className="flex items-start gap-2">
-        <LocationPinIcon className="w-5 h-5 shrink-0 mt-0.5" />
-        <div>
+    <div className="relative max-w-full px-4 py-3 text-sm leading-relaxed break-words [overflow-wrap:anywhere]" style={bubbleStyle}>
+      <div className="flex min-w-0 items-start gap-2">
+        <LocationPinIcon className="mt-0.5 h-5 w-5 shrink-0" />
+        <div className="min-w-0">
           <p className="font-semibold">{label}</p>
           {coords ? (
             <p className="mt-1 text-[11px] opacity-80">
@@ -1488,18 +1579,18 @@ const MeetConsentBar: React.FC<MeetConsentBarProps> = ({
 
   return (
     <div
-      className="flex-shrink-0 px-4 py-3 border-b"
+      className="flex-shrink-0 max-w-full overflow-x-clip border-b px-3 py-3 sm:px-4"
       style={{ borderColor: 'var(--border-default)', background: 'color-mix(in srgb, var(--bg-card) 95%, transparent)' }}
       data-testid="meet-consent-bar"
     >
-      <p className="text-xs font-semibold" style={{ color: 'var(--cream)' }}>
+      <p className="text-xs font-semibold break-words" style={{ color: 'var(--cream)' }}>
         Ready to meet?
       </p>
-      <p className="text-[11px] mt-1 leading-relaxed" style={{ color: 'var(--cream-muted)' }}>
+      <p className="mt-1 text-[11px] leading-relaxed break-words [overflow-wrap:anywhere]" style={{ color: 'var(--cream-muted)' }}>
         Confirm only when you&apos;re happy to arrange a meet-up with {peerName}. Both of you must
         agree before this shows as mutual.
       </p>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+      <div className="mt-2 flex min-w-0 max-w-full flex-wrap items-center gap-2">
         {state.my_confirmed ? (
           <>
             <span className="text-[11px] font-medium" style={{ color: '#C4832A' }}>
@@ -1675,6 +1766,7 @@ interface ImageComposerProps {
   customViews: number;
   uploading: boolean;
   preparing?: boolean;
+  photoCount?: number;
   onRuleChange: (rule: ViewRule) => void;
   onCustomViewsChange: (n: number) => void;
   onCancel: () => void;
@@ -1687,6 +1779,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
   customViews,
   uploading,
   preparing = false,
+  photoCount = 1,
   onRuleChange,
   onCustomViewsChange,
   onCancel,
@@ -1705,23 +1798,24 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
 
   return (
     <div
-      className="mb-3 p-3 rounded-2xl"
+      className="mb-3 max-w-full overflow-x-clip rounded-2xl p-3"
       data-testid="image-composer"
       style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
     >
-      <div className="flex gap-3">
+      <div className="flex min-w-0 gap-3">
         <img
           src={previewUrl}
           alt="Selected photo preview"
           data-testid="image-composer-preview"
-          className="w-20 h-20 rounded-xl object-cover flex-shrink-0"
+          className="h-20 w-20 flex-shrink-0 rounded-xl object-cover"
           style={{ border: '1px solid var(--border-default)' }}
         />
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold mb-2" style={{ color: 'var(--cream)' }}>
-            Photo · <span data-testid="image-composer-rule">{VIEW_RULE_LABELS[rule]}</span>
+        <div className="min-w-0 flex-1">
+          <p className="mb-2 text-xs font-semibold" style={{ color: 'var(--cream)' }}>
+            {photoCount > 1 ? `${photoCount} photos` : 'Photo'} ·{' '}
+            <span data-testid="image-composer-rule">{VIEW_RULE_LABELS[rule]}</span>
           </p>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex max-w-full flex-wrap gap-1.5">
             {rules.map((r) => {
               const active = r === rule;
               return (
@@ -1731,7 +1825,7 @@ const ImageComposer: React.FC<ImageComposerProps> = ({
                   onClick={() => onRuleChange(r)}
                   data-testid={`rule-${r}`}
                   aria-pressed={active}
-                  className="text-[11px] px-2.5 py-1 rounded-full transition-all active:scale-95"
+                  className="rounded-full px-2.5 py-1 text-[11px] transition-all active:scale-95"
                   style={{
                     background: active ? 'rgba(196,131,42,0.22)' : 'var(--bg-primary)',
                     border: `1px solid ${active ? '#C4832A' : 'var(--border-default)'}`,
@@ -1834,19 +1928,18 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
 
   if (isWithdrawnMedia(msg)) {
     return (
-      <div className="flex flex-col items-end gap-1">
+      <div className="flex max-w-full flex-col items-end gap-1">
         <div
-          className="px-4 py-3 flex items-center gap-2 text-xs"
+          className="flex max-w-full items-center gap-2 px-4 py-3 text-xs break-words [overflow-wrap:anywhere]"
           data-testid="media-withdrawn"
           style={{
             background: 'var(--bg-card)',
             border: '1px solid var(--border-default)',
             color: 'var(--cream-muted)',
             borderRadius: radius,
-            minWidth: 200,
           }}
         >
-          <FlameIcon className="w-4 h-4" />
+          <FlameIcon className="h-4 w-4 shrink-0" />
           <span>{msg.message || 'Photo withdrawn'}</span>
         </div>
       </div>
@@ -1861,17 +1954,16 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
   if (isDisappearing && isExhausted) {
     return (
       <div
-        className="px-4 py-3 flex items-center gap-2 text-xs"
+        className="flex max-w-full items-center gap-2 px-4 py-3 text-xs"
         data-testid="image-unavailable"
         style={{
           background: 'var(--bg-card)',
           border: '1px solid var(--border-default)',
           color: 'var(--cream-muted)',
           borderRadius: radius,
-          minWidth: 200,
         }}
       >
-        <FlameIcon className="w-4 h-4" />
+        <FlameIcon className="h-4 w-4 shrink-0" />
         <span>Photo no longer available</span>
       </div>
     );
@@ -1884,7 +1976,7 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
       // an empty hole — show the caption/fallback until refetch fills media_url.
       return (
         <div
-          className="px-4 py-3 text-sm"
+          className="max-w-full px-4 py-3 text-sm break-words [overflow-wrap:anywhere]"
           data-testid="image-pending"
           style={{
             background: isMine
@@ -1893,7 +1985,6 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
             color: isMine ? '#FFF5E6' : 'var(--cream)',
             border: isMine ? 'none' : '1px solid var(--border-default)',
             borderRadius: radius,
-            minWidth: 160,
           }}
         >
           {msg.message || '📷 Photo'}
@@ -1902,26 +1993,30 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
     }
     const blurred = shouldBlurMedia(msg.media_clear);
     return (
-      <div className="flex flex-col items-end gap-1">
-        <div
-          className="relative overflow-hidden"
+      <div className="flex w-full max-w-full flex-col items-end gap-1">
+        <button
+          type="button"
+          className="relative w-full max-w-full overflow-hidden cursor-zoom-in text-left"
           data-testid="image-permanent"
+          aria-label="Open photo"
+          onClick={() => onOpen(msg)}
           style={{
             background: 'var(--bg-card)',
             border: isMine ? 'none' : '1px solid var(--border-default)',
             borderRadius: radius,
             boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
+            padding: 0,
           }}
         >
           <SoftBlurMedia blurred={blurred}>
             <img
               src={url}
               alt={msg.message || 'photo'}
-              className="block max-w-[260px] max-h-[340px] object-cover cursor-zoom-in"
-              onClick={() => onOpen(msg)}
+              className="block h-auto w-full max-h-[340px] object-cover pointer-events-none"
+              draggable={false}
             />
           </SoftBlurMedia>
-        </div>
+        </button>
         {onWithdraw && (
           <WithdrawMediaButton onClick={onWithdraw} loading={withdrawing} />
         )}
@@ -1940,20 +2035,19 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
         ? 'Viewed'
         : `Opened · ${remainingLabel}`;
     return (
-      <div className="flex flex-col items-end gap-1">
+      <div className="flex max-w-full flex-col items-end gap-1">
         <div
-          className="px-4 py-3 flex items-center gap-3 text-xs"
+          className="flex max-w-full items-center gap-3 px-4 py-3 text-xs"
           data-testid="image-sent-status"
           style={{
             background: 'linear-gradient(135deg, #C4832A, #A45E18)',
             color: '#FFF5E6',
             borderRadius: radius,
-            minWidth: 200,
             boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
           }}
         >
-          <FlameIcon className="w-4 h-4" />
-          <div className="flex flex-col">
+          <FlameIcon className="h-4 w-4 shrink-0" />
+          <div className="flex min-w-0 flex-col">
             <span className="font-semibold">Photo · {remainingViewsLabel(null, msg.max_views)}</span>
             <span style={{ color: 'rgba(255,245,230,0.8)' }}>{status}</span>
           </div>
@@ -1972,10 +2066,8 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
       type="button"
       onClick={() => onOpen(msg)}
       data-testid="image-locked"
-      className="relative overflow-hidden flex items-center justify-center active:scale-[0.98] transition-transform"
+      className="relative aspect-square w-full max-w-[220px] overflow-hidden flex items-center justify-center active:scale-[0.98] transition-transform"
       style={{
-        width: 220,
-        height: 220,
         background: 'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-primary) 100%)',
         border: '1px solid var(--border-default)',
         borderRadius: radius,
@@ -1984,10 +2076,10 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
     >
       <div className="flex flex-col items-center gap-2 px-4 text-center">
         <div
-          className="w-12 h-12 rounded-full flex items-center justify-center"
+          className="flex h-12 w-12 items-center justify-center rounded-full"
           style={{ background: 'rgba(196,131,42,0.15)', border: '1px solid rgba(196,131,42,0.4)' }}
         >
-          <FlameIcon className="w-5 h-5" style={{ color: '#C4832A' }} />
+          <FlameIcon className="h-5 w-5" style={{ color: '#C4832A' }} />
         </div>
         <p className="text-xs font-semibold" style={{ color: 'var(--cream)' }}>
           Tap to view
@@ -2005,8 +2097,10 @@ const ImageBubble: React.FC<ImageBubbleProps> = ({
 // only after the image has loaded and become visible (onLoad). A failed load
 // shows a retry and never burns a view. After loading, the photo stays up for a
 // viewing window so "view once" is actually viewable.
+// Back / Close (and Android system Back) always return to the same 1:1 thread.
 
 const VIEW_WINDOW_MS = 10_000;
+const CHAT_IMAGE_OVERLAY_ID = 'chat-image-viewer';
 
 interface ImageViewerProps {
   msg: Message;
@@ -2023,11 +2117,48 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
   );
   const [imgAttempt, setImgAttempt] = useState(0);
   const consumedRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const releaseOverlayRef = useRef<((opts?: { popEntry?: boolean }) => void) | null>(null);
   const baseUrl = getPhotoUrl(msg.media_url || undefined);
   const url =
     baseUrl && imgAttempt > 0
       ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}_retry=${imgAttempt}`
       : baseUrl;
+
+  const closeViewer = useCallback((fromUi: boolean) => {
+    releaseOverlayRef.current?.({ popEntry: fromUi });
+    releaseOverlayRef.current = null;
+    onCloseRef.current();
+  }, []);
+
+  // Trap browser / Android Back so it closes the viewer instead of leaving chat.
+  // Strict Mode remount-safe: cleanup does not history.back().
+  useEffect(() => {
+    const release = armOverlayBack(CHAT_IMAGE_OVERLAY_ID, () => {
+      releaseOverlayRef.current = null;
+      onCloseRef.current();
+    });
+    releaseOverlayRef.current = release;
+    return () => {
+      release();
+      if (releaseOverlayRef.current === release) {
+        releaseOverlayRef.current = null;
+      }
+    };
+  }, []);
+
+  // Escape always closes and returns to the thread.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeViewer(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [closeViewer]);
 
   // Disappearing images auto-close after the viewing window. Permanent images
   // stay open until the user closes them.
@@ -2037,12 +2168,12 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
     const tick = window.setInterval(() => {
       setSecondsLeft((s) => Math.max(0, s - 1));
     }, 1000);
-    const closer = window.setTimeout(onClose, VIEW_WINDOW_MS);
+    const closer = window.setTimeout(() => closeViewer(true), VIEW_WINDOW_MS);
     return () => {
       window.clearInterval(tick);
       window.clearTimeout(closer);
     };
-  }, [status, isPermanent, onClose]);
+  }, [status, isPermanent, closeViewer]);
 
   const handleLoad = async () => {
     if (consumedRef.current) {
@@ -2079,85 +2210,147 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ msg, onConsume, onClose }) =>
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex flex-col items-center justify-center"
+      className="fixed inset-0 z-[100] flex flex-col"
       data-testid="image-viewer"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Photo viewer"
       style={{ background: 'rgba(5,3,1,0.96)' }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Close photo"
-        data-testid="image-viewer-close"
-        className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center"
-        style={{ background: 'rgba(30,21,8,0.9)', border: '1px solid var(--border-default)', color: 'var(--cream)' }}
+      {/* Obvious Back + Close chrome — safe-area aware for notched phones */}
+      <div
+        className="flex flex-shrink-0 items-center justify-between gap-2 px-2 sm:px-3"
+        style={{
+          paddingTop: 'max(0.75rem, env(safe-area-inset-top, 0px))',
+          paddingLeft: 'max(0.5rem, env(safe-area-inset-left, 0px))',
+          paddingRight: 'max(0.5rem, env(safe-area-inset-right, 0px))',
+        }}
+        data-testid="image-viewer-chrome"
       >
-        <CloseIcon className="w-5 h-5" />
-      </button>
+        <button
+          type="button"
+          onClick={() => closeViewer(true)}
+          aria-label="Back to chat"
+          data-testid="image-viewer-back"
+          className="inline-flex min-h-[44px] min-w-[44px] items-center gap-0.5 rounded-xl px-2 text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.15)] active:scale-[0.98]"
+        >
+          <ChevronLeftIcon className="h-6 w-6 shrink-0" />
+          <span className="pr-1 text-sm font-bold leading-none">Back</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => closeViewer(true)}
+          aria-label="Close photo"
+          data-testid="image-viewer-close"
+          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-xl px-3 text-[var(--cream)] transition-colors hover:bg-[rgba(196,131,42,0.15)] active:scale-[0.98]"
+          style={{ background: 'rgba(30,21,8,0.9)', border: '1px solid var(--border-default)' }}
+        >
+          <CloseIcon className="h-5 w-5" />
+          <span className="text-sm font-bold leading-none">Close</span>
+        </button>
+      </div>
 
-      {status === 'error' ? (
-        <div className="flex flex-col items-center gap-3 text-center px-8">
-          <FlameIcon className="w-8 h-8" style={{ color: '#C4832A' }} />
-          <p className="text-sm" style={{ color: 'var(--cream)' }}>
-            Couldn’t load this photo.
-          </p>
-          <p className="text-xs" style={{ color: 'var(--cream-muted)' }}>
-            No view was used. Check your connection and try again.
-          </p>
-          <button
-            type="button"
-            data-testid="image-viewer-retry"
-            onClick={handleRetry}
-            className="text-xs font-semibold px-5 py-2 rounded-full mt-1"
-            style={{ background: 'linear-gradient(135deg, #C4832A, #A45E18)', color: '#FFF5E6' }}
-          >
-            Retry
-          </button>
-        </div>
-      ) : (
-        <>
-          {status === 'loading' && (
-            <div className="absolute" data-testid="image-viewer-loading">
-              <PulseRing size={28} label="Loading photo" />
-            </div>
-          )}
-          {url && (
-            <SoftBlurMedia blurred={shouldBlurMedia(msg.media_clear)}>
-              <img
-                key={imgAttempt}
-                src={url}
-                alt={msg.message || 'photo'}
-                data-testid="image-viewer-img"
-                draggable={false}
-                onLoad={handleLoad}
-                onError={handleError}
-                className="max-w-[92vw] max-h-[78vh] object-contain select-none"
-                style={{ opacity: status === 'shown' ? 1 : 0 }}
-              />
-            </SoftBlurMedia>
-          )}
-          {status === 'shown' && !isPermanent && (
-            <div
-              className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1"
-              data-testid="image-viewer-meta"
+      <div
+        className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))]"
+        // Tap empty chrome (not the photo) to close — same thread stays mounted.
+        onClick={(e) => {
+          if (e.target === e.currentTarget) closeViewer(true);
+        }}
+      >
+        {status === 'error' ? (
+          <div className="flex flex-col items-center gap-3 px-8 text-center">
+            <FlameIcon className="h-8 w-8" style={{ color: '#C4832A' }} />
+            <p className="text-sm" style={{ color: 'var(--cream)' }}>
+              Couldn’t load this photo.
+            </p>
+            <p className="text-xs" style={{ color: 'var(--cream-muted)' }}>
+              No view was used. Check your connection and try again.
+            </p>
+            <button
+              type="button"
+              data-testid="image-viewer-retry"
+              onClick={handleRetry}
+              className="mt-1 rounded-full px-5 py-2 text-xs font-semibold"
+              style={{ background: 'linear-gradient(135deg, #C4832A, #A45E18)', color: '#FFF5E6' }}
             >
-              <span
-                className="text-[11px] px-3 py-1 rounded-full"
+              Retry
+            </button>
+          </div>
+        ) : (
+          <>
+            {status === 'loading' && (
+              <div className="absolute" data-testid="image-viewer-loading">
+                <PulseRing size={28} label="Loading photo" />
+              </div>
+            )}
+            {url && (
+              // Standard open frame: every photo (tiny or huge) fits the same
+              // phone/desktop box — contain + centered letterbox/pillarbox.
+              <div
+                data-testid="image-viewer-frame"
+                className="flex items-center justify-center overflow-hidden"
                 style={{
-                  background: 'rgba(30,21,8,0.9)',
-                  border: '1px solid rgba(196,131,42,0.45)',
-                  color: 'var(--cream)',
+                  width: CHAT_IMAGE_VIEWER_FRAME.width,
+                  height: CHAT_IMAGE_VIEWER_FRAME.height,
+                  maxWidth: CHAT_IMAGE_VIEWER_FRAME.maxWidth,
+                  maxHeight: CHAT_IMAGE_VIEWER_FRAME.maxHeight,
+                  background: 'rgba(0,0,0,0.35)',
+                  borderRadius: 12,
                 }}
               >
-                {remainingViewsLabel(meta.remaining, meta.max)} · closes in {secondsLeft}s
-              </span>
-              <span className="text-[10px]" style={{ color: '#6B5035' }}>
-                Screenshots can’t be fully blocked on the web — view with trust.
-              </span>
-            </div>
-          )}
-        </>
-      )}
+                <SoftBlurMedia blurred={shouldBlurMedia(msg.media_clear)} className="h-full w-full">
+                  <img
+                    key={imgAttempt}
+                    src={url}
+                    alt={msg.message || 'photo'}
+                    data-testid="image-viewer-img"
+                    draggable={false}
+                    onLoad={handleLoad}
+                    onError={handleError}
+                    className="h-full w-full select-none object-contain"
+                    style={{ opacity: status === 'shown' ? 1 : 0 }}
+                  />
+                </SoftBlurMedia>
+              </div>
+            )}
+            {/* Captions under the photo — high contrast for phone distance (Al 5 Sep). */}
+            {status === 'shown' && (
+              <div
+                className="mt-3 flex w-full max-w-[min(90vw,720px)] flex-col items-center gap-2.5 px-2"
+                data-testid="image-viewer-meta"
+              >
+                {!isPermanent && (
+                  <span
+                    className="rounded-full px-4 py-2.5 text-base font-semibold leading-snug tabular-nums"
+                    data-testid="image-viewer-status"
+                    style={{
+                      background: 'rgba(5,3,1,0.94)',
+                      border: '1px solid rgba(196,131,42,0.65)',
+                      color: '#FFF5E6',
+                      textShadow: '0 1px 2px rgba(0,0,0,0.75)',
+                    }}
+                  >
+                    {remainingViewsLabel(meta.remaining, meta.max)} · closes in {secondsLeft}s
+                  </span>
+                )}
+                <span
+                  className="max-w-[22rem] rounded-xl px-4 py-2.5 text-center text-base font-semibold leading-snug"
+                  data-testid="image-viewer-trust"
+                  style={{
+                    background: 'rgba(5,3,1,0.94)',
+                    border: '1px solid rgba(240,224,192,0.28)',
+                    color: '#FFF5E6',
+                    textShadow: '0 1px 2px rgba(0,0,0,0.75)',
+                  }}
+                >
+                  Screenshots can’t be fully blocked on the web. View with trust.
+                </span>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 };
@@ -2298,33 +2491,32 @@ const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail, onWith
   const progressPct = duration > 0 ? Math.min(100, (position / duration) * 100) : 0;
 
   return (
-    <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
+    <div className={`flex max-w-full flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
       <div
-        className="flex items-center gap-3 px-3 py-2.5"
+        className="flex w-full min-w-0 max-w-full items-center gap-3 px-3 py-2.5"
         style={{
           background: isMine ? 'linear-gradient(135deg, #C4832A, #A45E18)' : 'var(--bg-elevated)',
           border: isMine ? 'none' : '1px solid var(--border-default)',
           color: isMine ? '#FFF5E6' : 'var(--cream)',
           borderRadius: radius,
           boxShadow: isMine ? '0 2px 12px rgba(196,131,42,0.28)' : 'none',
-          minWidth: 200,
         }}
       >
         <button
           type="button"
           onClick={() => void togglePlay()}
           aria-label={playing ? 'Pause voice note' : 'Play voice note'}
-          className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center active:scale-95"
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full active:scale-95"
           style={{
             background: isMine ? 'rgba(13,10,6,0.35)' : 'rgba(196,131,42,0.18)',
             color: isMine ? '#FFF5E6' : 'var(--copper)',
           }}
         >
-          {playing ? <PauseIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4 ml-0.5" />}
+          {playing ? <PauseIcon className="h-4 w-4" /> : <PlayIcon className="ml-0.5 h-4 w-4" />}
         </button>
-        <div className="flex-1 flex flex-col gap-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div
-            className="h-1.5 rounded-full overflow-hidden"
+            className="h-1.5 overflow-hidden rounded-full"
             style={{ background: isMine ? 'rgba(13,10,6,0.35)' : 'rgba(196,131,42,0.18)' }}
           >
             <div
@@ -2406,13 +2598,12 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
   };
 
   return (
-    <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
+    <div className={`flex max-w-full flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
       <div
-        className="relative overflow-hidden"
+        className="relative w-full max-w-full overflow-hidden"
         style={{
           borderRadius: radius,
           border: isMine ? 'none' : '1px solid var(--border-default)',
-          maxWidth: 260,
           background: 'var(--bg-elevated)',
         }}
       >
@@ -2426,14 +2617,14 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
                 playsInline
                 // metadata + Accept-Ranges lets Safari paint/play before full file.
                 preload="metadata"
-                className="block w-full max-h-[320px] bg-black"
+                className="block h-auto max-h-[320px] w-full bg-black"
               />
             ) : (
               <button
                 type="button"
                 onClick={armAndPlay}
                 data-testid="video-bubble-open"
-                className="flex h-[180px] w-full min-w-[200px] flex-col items-center justify-center gap-2 bg-black/90 text-[#F0E0C0]"
+                className="flex h-[180px] w-full flex-col items-center justify-center gap-2 bg-black/90 text-[#F0E0C0]"
                 aria-label="Open video"
               >
                 <span

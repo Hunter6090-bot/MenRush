@@ -40,11 +40,11 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
     ? 'Shared avatar — real photos get matched first'
     : locationOnly || (needsLocation && fieldsComplete)
       ? 'Turn on location for Nearby'
-      : primary === 'avatar'
+        : primary === 'avatar'
         ? 'You are invisible on the map'
         : primary === 'location'
-          ? 'We need your location — others only see distance'
-          : 'Complete your profile — more views, more matches';
+          ? 'We need your location. Others only see distance'
+          : 'Complete your profile. More views, more matches';
 
   const showLocationCta =
     !photoUpgrade && (locationOnly || primary === 'location' || (needsLocation && fieldsComplete)) && Boolean(onEnableLocation);

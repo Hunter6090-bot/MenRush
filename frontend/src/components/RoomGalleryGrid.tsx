@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RoomParticipant } from '../hooks/useRoomVideo';
+import { roomLetterAvatar } from '../lib/roomLetterAvatar';
 import {
   attachRemoteAudio,
   attachStreamToVideo,
@@ -143,7 +144,7 @@ function ParticipantTile({
               color: '#C4832A',
             }}
           >
-            {participant.name.slice(0, 2).toUpperCase()}
+            {roomLetterAvatar(participant.name)}
           </div>
         ))}
 

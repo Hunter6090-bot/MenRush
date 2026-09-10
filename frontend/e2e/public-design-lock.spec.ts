@@ -37,9 +37,13 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
 
   await expect(page.getByRole('heading', { name: /What you get/i })).toBeVisible();
   await expect(page.getByRole('heading', { name: /^Nearby$/i })).toBeVisible();
-  await expect(page.getByRole('heading', { name: /^Video rooms$/i })).toBeVisible();
-  await expect(page.getByRole('heading', { name: /^Rooms$/i })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: /^Matches$/i })).toBeVisible();
+  // Brand live-face kill: no Video rooms card on What you get (LIVE NOW + rooms read as open).
+  await expect(page.getByRole('heading', { name: /^Video rooms$/i })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: /^Rooms$/i })).toHaveCount(0);
+  await expect(
+    page.getByText('Group spaces for men who already know the vibe. Less noise. More signal.'),
+  ).toHaveCount(0);
 
   // Period lock on card bodies — no em dash, en dash, or hyphen-as-aside (same as hero overline).
   await expect(
@@ -50,9 +54,6 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   await expect(
     page.getByText('Mutual interest opens chat. Direct when it is real. No endless maybe.'),
   ).toBeVisible();
-  await expect(
-    page.getByText('Group spaces for men who already know the vibe. Less noise. More signal.'),
-  ).toBeVisible();
 
   // Product lock 31 Aug 2026: open signup waitlist gift; Pride replaces it (no stack).
   // Do not say invite-only until open — hero is Sign up free / UK BETA OPEN.
@@ -61,6 +62,9 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   await expect(page.getByText(/Pride promo replaces that gift and does not stack/i)).toBeVisible();
   await expect(page.getByText(/invite-only until/i)).toHaveCount(0);
   await expect(page.getByText(/Invite-only until then/i)).toHaveCount(0);
+  // Brand: referrals live on register/profile only — never on the landing face.
+  await expect(page.getByText(/referral/i)).toHaveCount(0);
+  await expect(page.getByTestId('register-referral-input')).toHaveCount(0);
 
   for (const pattern of FORBIDDEN_CTA_PATTERNS) {
     await expect(page.getByRole('button', { name: pattern })).toHaveCount(0);
@@ -142,6 +146,12 @@ test.describe('public design lock — auth pages', () => {
     await assertAuthShell(page);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Have an invite/i);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Enter your code/i);
+    // Period lock on /beta hero — no em dash, en dash, or hyphen-as-aside.
+    await expect(
+      page.getByText(
+        'Optional. If you have a MENRUSH invite from email, enter it here. Otherwise sign up free. No code needed.',
+      ),
+    ).toBeVisible();
     await expect(page.locator('#beta-invite-code')).toBeVisible();
     await expect(page.getByRole('button', { name: /^Continue$/i })).toHaveCount(1);
     await expect(page.getByRole('link', { name: /Sign up free/i })).toHaveAttribute(
@@ -172,6 +182,18 @@ test.describe('public design lock — auth pages', () => {
     await expect(page.getByTestId('register-pride-note')).toHaveText(
       /Optional Pride promo if you have one\.?/i,
     );
+    await expect(page.getByTestId('register-referral-input')).toBeVisible();
+    await expect(page.getByTestId('register-referral-input')).toHaveAttribute(
+      'placeholder',
+      'If a friend shared one',
+    );
+    await expect(page.getByTestId('register-referral-note')).toHaveText(
+      /Optional\. Not required to sign up\.?/i,
+    );
+    // Referral sits after Pride — not a gate.
+    const prideBox = await page.getByTestId('register-promo-input').boundingBox();
+    const refBox = await page.getByTestId('register-referral-input').boundingBox();
+    expect(prideBox && refBox && refBox.y > prideBox.y).toBeTruthy();
     await expect(page.getByText(/PRIDE 3MONTH FREE or PRIDE-XXXX/i)).toHaveCount(0);
     await expect(page.getByTestId('register-gift-note')).toContainText(
       /Pride promo replaces that gift and does not stack/i,

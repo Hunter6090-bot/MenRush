@@ -9,11 +9,18 @@ import { usersAPI } from '../api/client';
 import { VerifiedBadge } from './VerifiedBadge';
 import { MoodBadge } from './MoodPicker';
 import { getDistanceLabel, isUserPulsing } from '../lib/discovery';
+import {
+  matchCtaAriaLabel,
+  matchCtaDisabled,
+  matchCtaLabel,
+  matchCtaToneClasses,
+  matchInterestState,
+} from '../lib/matchCta';
 
 export interface NearbyUser {
   id: string;
   name: string;
-  age: number;
+  age?: number;
   bio?: string;
   headline?: string;
   looking_for?: string;
@@ -71,10 +78,11 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   const handleLike = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (liking) return;
-    if (liked || isMutual) {
-      if (isMutual) navigate(`/messages/${user.id}`);
+    if (isMutual) {
+      navigate(`/messages/${user.id}`);
       return;
     }
+    if (liked) return;
 
     setLiking(true);
     setLikeHint(null);
@@ -101,6 +109,9 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
       setLiking(false);
     }
   };
+
+  const matchState = matchInterestState({ liked, mutual: isMutual });
+  const matchDisabled = matchCtaDisabled(matchState, liking);
 
   return (
     <div className="group relative bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl shadow-card overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover hover:border-[#C4832A]/25 flex flex-col">
@@ -159,18 +170,23 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           </span>
         </div>
 
+        {user.is_verified ? <VerifiedBadge compact className="absolute bottom-3 right-3 z-10" /> : null}
+
         {/* Match button overlay */}
         <button
           type="button"
           onClick={handleLike}
-          disabled={liking || (liked && !isMutual)}
-          aria-label={isMutual ? 'Open chat' : liked ? 'Match already sent' : `Match with ${user.name}`}
+          disabled={matchDisabled}
+          aria-disabled={matchDisabled}
+          aria-label={matchCtaAriaLabel(matchState, user.name, { mutualOpensChat: true })}
           data-testid={`profile-card-match-${user.id}`}
-          className={`absolute bottom-3 right-3 z-10 flex h-11 w-11 items-center justify-center rounded-full transition-all disabled:opacity-70 ${
-            liked
-              ? 'bg-nn-copper text-nn-on-copper shadow-glow-copper'
-              : 'bg-black/50 backdrop-blur-sm text-nn-copper-bright hover:bg-nn-copper/20 hover:scale-110'
-          } border border-nn-border`}
+          className={`absolute bottom-3 left-3 z-10 flex h-11 w-11 items-center justify-center rounded-full transition-all ${
+            matchState === 'outgoing'
+              ? 'bg-[var(--bg-card)] text-[var(--cream-muted)] opacity-70 cursor-not-allowed border border-[var(--border-default)]'
+              : matchState === 'mutual'
+                ? 'bg-nn-copper text-nn-on-copper shadow-glow-copper border border-nn-border'
+                : 'bg-black/50 backdrop-blur-sm text-nn-copper-bright hover:bg-nn-copper/20 hover:scale-110 border border-nn-border'
+          }`}
         >
           <IconMatches size={20} />
         </button>
@@ -180,8 +196,10 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
       <div className="p-4 flex-1 flex flex-col">
         <div className="flex items-center gap-2 mb-1">
           <h3 className="font-bold text-[var(--cream)] text-base">{user.name}</h3>
-          <span className="text-[var(--cream-muted)] text-sm">{user.age}</span>
-          {user.is_verified ? <VerifiedBadge /> : user.authenticity_status === 'verified' ? <VerifiedBadge level="authentic_person" /> : null}
+          {typeof user.age === 'number' ? (
+            <span className="text-[var(--cream-muted)] text-sm">{user.age}</span>
+          ) : null}
+
         </div>
 
         {user.headline && (
@@ -227,19 +245,28 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
 
         <button
           type="button"
-          disabled={liking || (liked && !isMutual)}
+          disabled={matchDisabled}
+          aria-disabled={matchDisabled}
+          aria-label={matchCtaAriaLabel(matchState, user.name, { mutualOpensChat: true })}
           data-testid={`profile-card-match-cta-${user.id}`}
           onClick={
-            isMutual
+            matchState === 'mutual'
               ? (e) => {
                   e.stopPropagation();
                   navigate(`/messages/${user.id}`);
                 }
               : handleLike
           }
-          className="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#A45E18] hover:from-[#D4943B] hover:to-[#C4832A] text-white text-sm font-semibold transition-all duration-200 hover:shadow-glow-blue active:scale-95 disabled:opacity-60"
+          className={`mt-4 w-full py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+            matchState === 'none'
+              ? 'bg-gradient-to-r from-[#C4832A] to-[#A45E18] hover:from-[#D4943B] hover:to-[#C4832A] text-white hover:shadow-glow-blue active:scale-95'
+              : matchCtaToneClasses(matchState)
+          }`}
         >
-          {liking ? 'Sending…' : isMutual ? 'Open chat' : liked ? 'Matched' : 'Match'}
+          {matchCtaLabel(matchState, user.name, {
+            sending: liking,
+            mutualLabel: 'open_chat',
+          })}
         </button>
         {likeHint ? (
           <p className="mt-2 text-center text-[11px] text-[var(--cream-muted)]" role="status">

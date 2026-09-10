@@ -12,7 +12,6 @@ import {
 } from '../lib/publicStyles';
 import {
   clearStoredPridePromoCode,
-  isPrideInviteIssueOpen,
   PRIDE_INVITE_CAMPAIGN_ID,
 } from '../lib/pridePromo';
 
@@ -40,7 +39,6 @@ export const Pride = () => {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
-  const inviteOpen = isPrideInviteIssueOpen();
 
   useEffect(() => {
     trackEventOnce('landing_viewed', { surface: 'pride', ...getAttributionParams() });
@@ -160,7 +158,7 @@ export const Pride = () => {
                   setClaimOpen(true);
                 }}
               >
-                {inviteOpen ? 'Claim Pride code' : 'Resend my Pride code'}
+                Claim Pride code
               </button>
             ) : (
               <form
@@ -206,11 +204,7 @@ export const Pride = () => {
                   disabled={submitting}
                   data-testid="pride-invite-submit"
                 >
-                  {submitting
-                    ? 'Sending…'
-                    : inviteOpen
-                      ? 'Email my Pride code'
-                      : 'Resend my Pride code'}
+                  {submitting ? 'Sending…' : 'Email my Pride code'}
                 </button>
                 {formError ? (
                   <p className={publicErrorClass} data-testid="pride-invite-error" role="alert">

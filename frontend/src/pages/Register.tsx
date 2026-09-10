@@ -1,3 +1,4 @@
+import { FEATURES } from '../lib/featureFlags';
 import React, { useMemo, useState, useEffect } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../api/client';
@@ -18,7 +19,6 @@ import {
   readStoredPridePromoCode,
   storePridePromoCode,
 } from '../lib/pridePromo';
-import { FEATURES } from '../lib/featureFlags';
 import {
   publicErrorClass,
   publicInputClass,
@@ -74,6 +74,8 @@ export const Register = () => {
     if (fromQuery) return fromQuery.trim().toUpperCase().replace(/\s+/g, ' ');
     return fromStore || '';
   });
+  const referralFromQuery = searchParams.get('ref')?.trim() || '';
+  const [referralCode, setReferralCode] = useState(() => referralFromQuery.toUpperCase());
   const [form, setForm] = useState<FormState>({
     displayName: '',
     email: '',
@@ -168,6 +170,7 @@ export const Register = () => {
     setLoading(true);
     try {
       const trimmedPromo = promoCode.trim();
+      const trimmedReferral = referralCode.trim();
       if (trimmedPromo) {
         clearStoredPridePromoCode();
       }
@@ -179,9 +182,25 @@ export const Register = () => {
         password: form.password,
         ...(inviteCode ? { invite_code: inviteCode } : {}),
         ...(trimmedPromo ? { promo_code: trimmedPromo } : {}),
+        ...(trimmedReferral ? { referral_code: trimmedReferral } : {}),
       });
-      setAuth(res.data.user, res.data.token, res.data.refresh_token);
-      navigate(FEATURES.requireIdVerification ? '/verify/id' : '/profile/setup');
+      // Gate path: no session until confirm. BOA90 lock may still return a legacy session
+      // for non-Al signups until EMAIL_CONFIRM_MAIL_OPEN=true.
+      if (res.data.requiresEmailConfirm) {
+        const confirmEmail =
+          typeof res.data.email === 'string' ? res.data.email : form.email.trim().toLowerCase();
+        navigate(`/check-email?email=${encodeURIComponent(confirmEmail)}`, { replace: true });
+        return;
+      }
+      if (res.data.token && res.data.user) {
+        setAuth(res.data.user, res.data.token, (res.data as any).refresh_token);
+        navigate('/profile/setup', { replace: true });
+        return;
+      }
+      navigate(
+        `/check-email?email=${encodeURIComponent(form.email.trim().toLowerCase())}`,
+        { replace: true },
+      );
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed. Please try again.');
     } finally {
@@ -372,6 +391,30 @@ export const Register = () => {
             />
             <p className={helperClass} data-testid="register-pride-note">
               Optional Pride promo if you have one.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2.5">
+            <label className={publicLabelClass} htmlFor="register-referral-code">
+              Referral code (optional)
+            </label>
+            <input
+              id="register-referral-code"
+              type="text"
+              value={referralCode}
+              onChange={(e) => {
+                setError('');
+                setReferralCode(e.target.value.toUpperCase());
+              }}
+              placeholder="If a friend shared one"
+              aria-label="Referral code"
+              autoComplete="off"
+              spellCheck={false}
+              className={`${publicInputClass} font-mono tracking-[0.08em]`}
+              data-testid="register-referral-input"
+            />
+            <p className={helperClass} data-testid="register-referral-note">
+              Optional. Not required to sign up.
             </p>
           </div>
 
