@@ -73,7 +73,7 @@ UPDATE hot_spots
        venue_type = 'sauna',
        nation = 'England',
        source = 'commercial-curated',
-       description = 'Commercial sauna. Follow the venue''s rules. MenRush does not run this place.',
+       description = NULL,
        is_active = TRUE
  WHERE city = 'London'
    AND name ILIKE 'Sweatbox%'
@@ -84,7 +84,7 @@ UPDATE hot_spots
        venue_type = 'sauna',
        nation = 'England',
        source = 'commercial-curated',
-       description = 'Commercial sauna. Follow the venue''s rules. MenRush does not run this place.',
+       description = NULL,
        is_active = TRUE
  WHERE city = 'London'
    AND name ILIKE 'Pleasuredrome%'
@@ -95,7 +95,7 @@ UPDATE hot_spots
        venue_type = 'sauna',
        nation = 'England',
        source = 'commercial-curated',
-       description = 'Commercial sauna. Follow the venue''s rules. MenRush does not run this place.',
+       description = NULL,
        is_active = TRUE
  WHERE city = 'Brighton'
    AND name ILIKE '%Brighton Sauna%'
@@ -106,7 +106,7 @@ UPDATE hot_spots
        venue_type = 'sauna',
        nation = 'Scotland',
        source = 'commercial-curated',
-       description = 'Commercial sauna. Follow the venue''s rules. MenRush does not run this place.',
+       description = NULL,
        is_active = TRUE
  WHERE city = 'Glasgow'
    AND name ILIKE '%Pipeworks%'
