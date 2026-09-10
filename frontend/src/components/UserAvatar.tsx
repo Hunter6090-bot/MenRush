@@ -120,27 +120,25 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   const href = useProfilePhotoHref(userId);
   const shouldLink = Boolean(href) && linkToProfile !== false;
 
-  const face = (
-    <div
-      className={`${s.outer} rounded-full overflow-hidden bg-gradient-to-br from-[#C4832A]/30 to-[#C4832A]/10 border border-[var(--border-default)] flex items-center justify-center font-semibold text-[var(--cream)]`}
-    >
-      {src ? (
-        <img
-          src={src}
-          alt={name}
-          className="w-full h-full object-cover"
-          onError={onError}
-          loading="lazy"
-        />
-      ) : (
-        <span className={s.text}>{initial}</span>
-      )}
-    </div>
-  );
-
+  // Size + rounded-full live on the relative wrapper so className overrides
+  // (e.g. !w-[52px]) and rings follow the circle — not a square chrome box.
   const content = (
-    <div className={`relative flex-shrink-0 ${className}`}>
-      {face}
+    <div className={`relative flex-shrink-0 ${s.outer} rounded-full ${className}`}>
+      <div
+        className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-[var(--border-default)] bg-gradient-to-br from-[#C4832A]/30 to-[#C4832A]/10 font-semibold text-[var(--cream)]"
+      >
+        {src ? (
+          <img
+            src={src}
+            alt={name}
+            className="h-full w-full object-cover"
+            onError={onError}
+            loading="lazy"
+          />
+        ) : (
+          <span className={s.text}>{initial}</span>
+        )}
+      </div>
       {showStatus && online !== undefined && (
         <StatusDot online={online} className={`absolute ${s.dotPos} ${s.dot}`} />
       )}
