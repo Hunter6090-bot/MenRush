@@ -86,6 +86,8 @@ export const userService = {
         CASE WHEN COALESCE(u.show_weight, TRUE) THEN u.weight_kg ELSE NULL END AS weight_kg,
         CASE WHEN COALESCE(u.show_relationship, TRUE) THEN u.relationship_status ELSE NULL END AS relationship_status,
         u.hosting_status,        COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified, u.authenticity_status,
+        -- Account age only (privacy-safe) — powers Nearby NEW badge / New filter. Not exact GPS.
+        u.created_at,
         -- Presence must be fresh: stuck online=true from a crashed tab is not "Active now".
         (p.online = TRUE AND p.last_seen IS NOT NULL AND p.last_seen > NOW() - INTERVAL '20 minutes') AS online,
         p.last_seen, p.available_until,
@@ -212,8 +214,18 @@ export const userService = {
       // Do not leak exact GPS in the API payload — only the fuzzed map pin.
       const { real_lat: _rl, real_lng: _rg, map_photo_url: mapPhoto, ...publicRow } = row;
 
+      // Account age only — ISO string for Nearby NEW treatment (not exact GPS).
+      const createdRaw = row.created_at;
+      const created_at =
+        createdRaw instanceof Date
+          ? createdRaw.toISOString()
+          : typeof createdRaw === 'string'
+            ? createdRaw
+            : undefined;
+
       return {
         ...publicRow,
+        created_at,
         // Nearby Map / grid: Map photo when set so the main shot can stay private.
         photo_url: discoveryPhotoUrl(mapPhoto, publicRow.photo_url) ?? publicRow.photo_url,
         lat: mapPoint.lat,

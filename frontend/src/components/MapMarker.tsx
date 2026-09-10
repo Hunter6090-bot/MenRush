@@ -3,6 +3,7 @@ import { memo } from 'react';
 import { PulsingAvatar } from './PulsingAvatar';
 import { useGridPhotoSrc } from '../lib/nearbyPhotoSrc';
 import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
+import { NewJoinerBadge } from './NewJoinerBadge';
 
 export interface MapMarkerUser {
   id: string;
@@ -11,6 +12,8 @@ export interface MapMarkerUser {
   age?: number;
   isPulsing: boolean;
   isVerified?: boolean;
+  /** Account age within NEW window — small corner pill on pin. */
+  isNew?: boolean;
 }
 
 interface MapMarkerProps {
@@ -21,7 +24,7 @@ interface MapMarkerProps {
 export const MapMarker = memo(function MapMarker({ user, size = 44 }: MapMarkerProps) {
   return (
     <div
-      className={`cursor-pointer transition-transform duration-150 hover:scale-110 ${
+      className={`relative cursor-pointer transition-transform duration-150 hover:scale-110 ${
         user.isPulsing ? 'animate-pulse-breathe' : ''
       }`}
       style={{ width: size, height: size }}
@@ -45,6 +48,7 @@ export const MapMarker = memo(function MapMarker({ user, size = 44 }: MapMarkerP
           <MapPhoto name={user.name} photoUrl={user.photo_url} age={user.age} size={size} />
         </div>
       </PulsingAvatar>
+      {user.isNew ? <NewJoinerBadge variant="dot" /> : null}
     </div>
   );
 });

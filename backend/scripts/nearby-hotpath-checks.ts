@@ -13,7 +13,7 @@ const src = fs.readFileSync(
 
 const start = src.indexOf('async getNearbyUsers(');
 assert.ok(start >= 0, 'getNearbyUsers missing');
-const slice = src.slice(start, start + 2500);
+const slice = src.slice(start, start + 3500);
 
 assert.match(slice, /void query\(\s*`UPDATE profiles/);
 assert.match(slice, /void this\.ensureDefaultAvatar/);
@@ -25,5 +25,6 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(slice, /await this\.ensureDefaultAvatar/);
 assert.doesNotMatch(slice, /await this\.backfillMissingAvatarsNear/);
+assert.match(slice, /u\.created_at/, 'nearby SELECT must include u.created_at for NEW joiners');
 
 console.log('nearby-hotpath-checks: ok');

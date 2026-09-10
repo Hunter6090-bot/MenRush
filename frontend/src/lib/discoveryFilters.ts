@@ -2,6 +2,7 @@ import type { Mood } from '../api/client';
 import { MOOD_LABELS } from '../api/client';
 import type { NearbyUser } from '../components/ProfileCard';
 import { INTENT_FILTERS, matchesIntentFilter, type IntentFilter } from './discoveryFormat';
+import { createdAtMs, isNewlyJoined } from './newJoiner';
 
 /** Profile tag groups — shared with Profile editor. */
 export const DISCOVERY_FILTER_CATEGORIES = [
@@ -108,6 +109,8 @@ export const AGE_SELECT_OPTIONS: readonly number[] = Array.from(
 export const STATUS_FILTER_OPTIONS = [
   { id: 'online', label: 'Online now' },
   { id: 'pulsing', label: 'Pulsing now' },
+  /** Brand-signed Status chip — same face as Grid/Map pill. */
+  { id: 'new', label: 'NEW' },
   { id: 'hasPhoto', label: 'Has photo' },
   { id: 'verified', label: 'Trust checked' },
 ] as const;
@@ -260,6 +263,10 @@ export function applyDiscoveryClientFilters(users: NearbyUser[], state: Discover
   if (state.status.includes('online')) {
     result = result.filter((u) => u.online);
   }
+  if (state.status.includes('new')) {
+    // Recently joined within NEW_JOINER_WINDOW_DAYS — Nearby-scoped only.
+    result = result.filter((u) => isNewlyJoined(u.created_at));
+  }
   if (state.status.includes('hasPhoto')) {
     result = result.filter((u) => !!u.photo_url);
   }
@@ -283,6 +290,11 @@ export function applyDiscoveryClientFilters(users: NearbyUser[], state: Discover
 
   if (state.mood) {
     result = result.filter((u) => u.mood === state.mood);
+  }
+
+  // NEW status: surface newest joiners first (created_at DESC).
+  if (state.status.includes('new')) {
+    result = [...result].sort((a, b) => createdAtMs(b.created_at) - createdAtMs(a.created_at));
   }
 
   return result;

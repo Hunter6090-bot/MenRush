@@ -44,6 +44,7 @@ import {
 } from '../lib/discoveryFilters';
 import { EventsRail } from '../components/EventsRail';
 import { countLiveOnline, isUserPulsing, distanceMeters } from '../lib/discovery';
+import { createdAtMs, isNewlyJoined } from '../lib/newJoiner';
 import type mapboxgl from 'mapbox-gl';
 import { loadMapbox, getLoadedMapbox } from '../lib/mapboxLazy';
 import {
@@ -1423,6 +1424,14 @@ export const Discover = () => {
       const ap = isUserPulsing(a) ? 1 : 0;
       const bp = isUserPulsing(b) ? 1 : 0;
       if (ap !== bp) return bp - ap;
+      // Soft-surface fresh joiners after Pulse so NEW guys aren't buried by distance.
+      const an = isNewlyJoined(a.created_at) ? 1 : 0;
+      const bn = isNewlyJoined(b.created_at) ? 1 : 0;
+      if (an !== bn) return bn - an;
+      if (an && bn) {
+        const byAge = createdAtMs(b.created_at) - createdAtMs(a.created_at);
+        if (byAge !== 0) return byAge;
+      }
       return parseFloat(String(a.distance_km)) - parseFloat(String(b.distance_km));
     });
   }, [users]);
@@ -1450,6 +1459,7 @@ export const Discover = () => {
       if (user.lat == null || user.lng == null) return;
       visibleIds.add(user.id);
       const isPulsing = isUserPulsing(user);
+      const isNew = isNewlyJoined(user.created_at);
       const markerUser = {
         id: user.id,
         name: user.name,
@@ -1457,6 +1467,7 @@ export const Discover = () => {
         age: user.age,
         isPulsing,
         isVerified: !!(user as any).is_verified,
+        isNew,
       };
       const lngLat: [number, number] = [Number(user.lng), Number(user.lat)];
       const existing = markersRef.current.get(user.id);
@@ -1478,7 +1489,8 @@ export const Discover = () => {
           prev.name !== user.name ||
           prev.photo_url !== user.photo_url ||
           isUserPulsing(prev) !== isPulsing ||
-          !!(prev as any).is_verified !== !!(user as any).is_verified;
+          !!(prev as any).is_verified !== !!(user as any).is_verified ||
+          isNewlyJoined(prev.created_at) !== isNew;
         if (visualChanged) {
           const markerSize = isPulsing ? 52 : 44;
           existing.root.render(<MapMarker user={markerUser} size={markerSize} />);
