@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   appendUniqueMessage,
-  CONVERSATION_PAGE_SIZE,
   mergeConversationRows,
   peerIdFromMessagesUrl,
+  prependOlderMessages,
   resolveNotificationHref,
   conversationFingerprint,
   conversationPathFromPushNotification,
@@ -108,13 +108,33 @@ describe('appendUniqueMessage / mergeConversationRows', () => {
     );
 
     const merged = mergeConversationRows(current, fromServer);
-    expect(merged).toHaveLength(CONVERSATION_PAGE_SIZE);
+    // Keep painted history above the live page (scroll-back); never re-append at end.
     expect(merged.map((m) => m.id)).toEqual(
-      Array.from({ length: 50 }, (_, i) => `m${i + 2}`),
+      Array.from({ length: 51 }, (_, i) => `m${i + 1}`),
     );
-    // Oldest painted row must not jump to the end.
+    expect(merged[0]?.id).toBe('m1');
     expect(merged[merged.length - 1]?.id).toBe('m51');
-    expect(merged.some((m) => m.id === 'm1')).toBe(false);
+  });
+
+  it('prepends an older page without disturbing the live tip order', () => {
+    const live = [
+      msg('m3', '2026-09-10T10:00:02.000Z'),
+      msg('m4', '2026-09-10T10:00:03.000Z'),
+    ];
+    const older = [
+      msg('m1', '2026-09-10T10:00:00.000Z'),
+      msg('m2', '2026-09-10T10:00:01.000Z'),
+    ];
+    expect(prependOlderMessages(live, older).map((m) => m.id)).toEqual([
+      'm1',
+      'm2',
+      'm3',
+      'm4',
+    ]);
+    expect(prependOlderMessages(live, [msg('m3', '2026-09-10T10:00:02.000Z')]).map((m) => m.id)).toEqual([
+      'm3',
+      'm4',
+    ]);
   });
 
   it('keeps a live socket row newer than the polled page until the next fetch includes it', () => {

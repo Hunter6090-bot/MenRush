@@ -116,12 +116,14 @@ export function appendUniqueMessage<T extends { id?: string; created_at?: string
  * earlier messages suddenly jumped to the bottom on the next poll/reconnect.
  *
  * Fix: union by id (server wins), keep true no-id optimistic rows, sort by
- * created_at, then cap to the newest page window.
+ * created_at. Rows older than the polled page stay above it (scroll-back /
+ * previously painted history) — never re-appended at the bottom. Soft-cap the
+ * open-thread buffer so a long-lived poll does not grow forever.
  */
 export function mergeConversationRows<T extends { id?: string; created_at?: string | null }>(
   current: T[],
   fromServer: T[],
-  opts?: { windowSize?: number },
+  opts?: { windowSize?: number; maxBuffered?: number },
 ): T[] {
   if (!Array.isArray(fromServer)) return current;
   if (!Array.isArray(current) || current.length === 0) {
@@ -142,12 +144,45 @@ export function mergeConversationRows<T extends { id?: string; created_at?: stri
   }
 
   const dated = sortMessagesChronologically([...byId.values()]);
-  const windowSize = opts?.windowSize ?? Math.max(fromServer.length, CONVERSATION_PAGE_SIZE);
-  const capped = dated.length > windowSize ? dated.slice(dated.length - windowSize) : dated;
+  // Keep scroll-back history above the live page; only trim the oldest tail
+  // when the open buffer is huge. Default live page size stays the floor.
+  const liveFloor = opts?.windowSize ?? Math.max(fromServer.length, CONVERSATION_PAGE_SIZE);
+  const maxBuffered = opts?.maxBuffered ?? Math.max(liveFloor * 4, 200);
+  const trimmed =
+    dated.length > maxBuffered ? dated.slice(dated.length - maxBuffered) : dated;
 
-  if (pendingNoId.length === 0) return capped;
+  if (pendingNoId.length === 0) return trimmed;
   // Optimistic rows without ids stay after the dated window (sending UX).
-  return [...capped, ...pendingNoId];
+  return [...trimmed, ...pendingNoId];
+}
+
+/**
+ * Prepend an older page into the open thread without dropping the live tip.
+ * Server/older rows win on id collision; result stays chronological.
+ */
+export function prependOlderMessages<T extends { id?: string; created_at?: string | null }>(
+  current: T[],
+  olderPage: T[],
+): T[] {
+  if (!Array.isArray(olderPage) || olderPage.length === 0) return current;
+  if (!Array.isArray(current) || current.length === 0) {
+    return sortMessagesChronologically(olderPage);
+  }
+  const byId = new Map<string, T>();
+  const pendingNoId: T[] = [];
+  for (const m of olderPage) {
+    if (m.id) byId.set(m.id, m);
+    else pendingNoId.push(m);
+  }
+  for (const m of current) {
+    if (m.id) {
+      if (!byId.has(m.id)) byId.set(m.id, m);
+    } else {
+      pendingNoId.push(m);
+    }
+  }
+  const dated = sortMessagesChronologically([...byId.values()]);
+  return pendingNoId.length === 0 ? dated : [...dated, ...pendingNoId];
 }
 
 /** Stable fingerprint so open-thread polls do not re-render/scroll when unchanged. */

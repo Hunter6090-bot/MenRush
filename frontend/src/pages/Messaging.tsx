@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState, memo } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, memo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { messagesAPI, usersAPI, meetAPI, MediaKind, MessageMediaKind, MessageDTO, MeetAgreementState, LibraryPhotoDTO } from '../api/client';
 import { trackEventOnce } from '../observability/analytics';
@@ -31,10 +31,17 @@ import { compressChatImageFile } from '../lib/imageUpload';
 import { armOverlayBack } from '../lib/overlayBack';
 import { CHAT_IMAGE_VIEWER_FRAME } from '../lib/chatImageViewerFrame';
 import {
+  shouldLoadOlderOnScroll,
+  shouldStickToBottomOnUpdate,
+  restoreScrollAfterPrepend,
+} from '../lib/chatScroll';
+import {
   appendUniqueMessage,
   CHAT_LIVE_REFRESH_EVENT,
+  CONVERSATION_PAGE_SIZE,
   conversationFingerprint,
   mergeConversationRows,
+  prependOlderMessages,
   sortMessagesChronologically,
 } from '../lib/pushDeepLink';
 
@@ -190,6 +197,15 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const savedScrollTopRef = useRef<number | null>(null);
+  /** Follow latest only while near the tip (or after own send). */
+  const stickToBottomRef = useRef(true);
+  /** One-shot: own send always snaps to latest even if reading history. */
+  const forceStickAfterSendRef = useRef(false);
+  /** scrollHeight before an older-page prepend — restore in useLayoutEffect. */
+  const pendingPrependHeightRef = useRef<number | null>(null);
+  const loadingOlderRef = useRef(false);
+  const [hasMoreOlder, setHasMoreOlder] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const inputValueRef = useRef('');
@@ -206,6 +222,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       .getConversation(otherId)
       .then((r) => {
         const rows = Array.isArray(r.data) ? (r.data as Message[]) : [];
+        if (opts?.replace) {
+          setHasMoreOlder(rows.length >= CONVERSATION_PAGE_SIZE);
+        }
         setMessages((prev) => {
           // Always normalize order: poll merge used to re-append rows that slid
           // out of the LIMIT page and jump earlier bubbles to the bottom.
@@ -219,12 +238,79 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         });
       })
       .catch(() => {
-        if (opts?.replace) setMessages([]);
+        if (opts?.replace) {
+          setMessages([]);
+          setHasMoreOlder(false);
+        }
       });
   }, [otherId]);
 
+  const markOwnSendStick = useCallback(() => {
+    forceStickAfterSendRef.current = true;
+    stickToBottomRef.current = true;
+  }, []);
+
+  const loadOlderMessages = useCallback(() => {
+    if (!otherId || loadingOlderRef.current || !hasMoreOlder) return;
+    const oldestId = messages.find((m) => !!m.id)?.id;
+    if (!oldestId) return;
+
+    const scroller = messagesScrollRef.current;
+    pendingPrependHeightRef.current = scroller?.scrollHeight ?? null;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    // Reading history — never snap to tip after this prepend.
+    stickToBottomRef.current = false;
+
+    messagesAPI
+      .getConversation(otherId, { before: oldestId, limit: CONVERSATION_PAGE_SIZE })
+      .then((r) => {
+        const rows = Array.isArray(r.data) ? (r.data as Message[]) : [];
+        if (rows.length < CONVERSATION_PAGE_SIZE) setHasMoreOlder(false);
+        if (rows.length === 0) {
+          pendingPrependHeightRef.current = null;
+          return;
+        }
+        setMessages((prev) => {
+          const next = prependOlderMessages(prev, rows);
+          if (conversationFingerprint(prev) === conversationFingerprint(next)) {
+            pendingPrependHeightRef.current = null;
+            return prev;
+          }
+          return next;
+        });
+      })
+      .catch(() => {
+        pendingPrependHeightRef.current = null;
+      })
+      .finally(() => {
+        loadingOlderRef.current = false;
+        setLoadingOlder(false);
+      });
+  }, [otherId, hasMoreOlder, messages]);
+
+  const handleThreadScroll = useCallback(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    stickToBottomRef.current = shouldStickToBottomOnUpdate(el);
+    if (
+      shouldLoadOlderOnScroll(el, {
+        loading: loadingOlderRef.current,
+        hasMore: hasMoreOlder,
+      })
+    ) {
+      loadOlderMessages();
+    }
+  }, [hasMoreOlder, loadOlderMessages]);
+
   useEffect(() => {
     if (!otherId) return;
+    stickToBottomRef.current = true;
+    forceStickAfterSendRef.current = false;
+    pendingPrependHeightRef.current = null;
+    loadingOlderRef.current = false;
+    setHasMoreOlder(true);
+    setLoadingOlder(false);
     loadConversation({ replace: true });
     usersAPI
       .getProfile(otherId)
@@ -239,10 +325,32 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     useUnreadStore.getState().clearUnreadFrom(otherId);
   }, [otherId, loadConversation]);
 
+  // Preserve visual position after older history is prepended (before paint).
+  useLayoutEffect(() => {
+    const prevHeight = pendingPrependHeightRef.current;
+    const el = messagesScrollRef.current;
+    if (prevHeight == null || !el) return;
+    restoreScrollAfterPrepend(el, prevHeight);
+    pendingPrependHeightRef.current = null;
+    // Keep stick off — user was reading history.
+    stickToBottomRef.current = false;
+  }, [messages]);
+
   useEffect(() => {
     // Don't yank scroll while the photo viewer is open — restore on close instead.
+    // Owner lock: while reading earlier history (not near latest edge), never
+    // force scroll on poll / socket / merge / typing re-render.
     if (viewerMsg) return;
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const force = forceStickAfterSendRef.current;
+    if (!force && !stickToBottomRef.current) return;
+    const stick = shouldStickToBottomOnUpdate(messagesScrollRef.current, { force });
+    if (!stick) {
+      stickToBottomRef.current = false;
+      return;
+    }
+    forceStickAfterSendRef.current = false;
+    stickToBottomRef.current = true;
+    bottomRef.current?.scrollIntoView({ behavior: force ? 'smooth' : 'auto' });
   }, [messages, isOtherTyping, viewerMsg]);
 
   const openImageViewer = useCallback((msg: Message) => {
@@ -492,6 +600,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             disappearing,
             maxViews,
           });
+          markOwnSendStick();
           setMessages((prev) => appendUniqueMessage(prev, res.data));
         }
         clearPendingImage();
@@ -511,6 +620,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         disappearing,
         maxViews,
       });
+      markOwnSendStick();
       setMessages((prev) => appendUniqueMessage(prev, res.data));
       clearPendingImage();
       trackEventOnce(
@@ -561,6 +671,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
           kind: 'video',
           durationMs,
         });
+        markOwnSendStick();
         setMessages((prev) => appendUniqueMessage(prev, res.data));
       } catch (err: any) {
         setMediaError(err?.response?.data?.error || 'Failed to send video');
@@ -568,7 +679,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         setUploadingMedia(false);
       }
     },
-    [otherId, uploadingMedia],
+    [otherId, uploadingMedia, markOwnSendStick],
   );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -613,6 +724,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             kind: 'audio',
             durationMs: duration,
           });
+          markOwnSendStick();
           setMessages((prev) => appendUniqueMessage(prev, res.data));
         } catch (err: any) {
           setMediaError(err?.response?.data?.error || 'Failed to send voice note');
@@ -681,6 +793,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       try {
         const res = await messagesAPI.sendMessage(otherId, current);
         const saved: Message = res.data;
+        markOwnSendStick();
         setMessages((prev) => appendUniqueMessage(prev, saved));
         trackEventOnce(
           'first_message_success',
@@ -711,7 +824,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         setSending(false);
       }
     },
-    [otherId, user, emitTyping],
+    [otherId, user, emitTyping, markOwnSendStick],
   );
 
   const handleSend = async (e?: React.FormEvent | React.KeyboardEvent) => {
@@ -783,6 +896,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             position.coords.latitude,
             position.coords.longitude,
           );
+          markOwnSendStick();
           setMessages((prev) => appendUniqueMessage(prev, res.data));
         } catch {
           setMediaError('Could not share your location.');
@@ -995,8 +1109,11 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         isOtherTyping={isOtherTyping}
         withdrawingId={withdrawingId}
         sending={sending}
+        loadingOlder={loadingOlder}
+        hasMoreOlder={hasMoreOlder}
         messagesScrollRef={messagesScrollRef}
         bottomRef={bottomRef}
+        onScroll={handleThreadScroll}
         onOpenImage={openImageViewer}
         onWithdrawMedia={handleWithdrawMedia}
         onSendIcebreaker={sendTextMessage}
@@ -2429,8 +2546,11 @@ interface ChatThreadScrollProps {
   isOtherTyping: boolean;
   withdrawingId: string | null;
   sending: boolean;
+  loadingOlder: boolean;
+  hasMoreOlder: boolean;
   messagesScrollRef: React.RefObject<HTMLDivElement>;
   bottomRef: React.RefObject<HTMLDivElement>;
+  onScroll: () => void;
   onOpenImage: (msg: Message) => void;
   onWithdrawMedia: (id: string) => void | Promise<void>;
   onSendIcebreaker: (text: string) => void | Promise<void>;
@@ -2444,8 +2564,11 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
   isOtherTyping,
   withdrawingId,
   sending,
+  loadingOlder,
+  hasMoreOlder,
   messagesScrollRef,
   bottomRef,
+  onScroll,
   onOpenImage,
   onWithdrawMedia,
   onSendIcebreaker,
@@ -2453,11 +2576,24 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
   return (
       <div
         ref={messagesScrollRef}
-        className="min-h-0 min-w-0 max-w-full flex-1 overflow-x-clip overflow-y-auto px-3 py-4 sm:px-4 [content-visibility:auto]"
+        onScroll={onScroll}
+        className="min-h-0 min-w-0 max-w-full flex-1 overflow-x-clip overflow-y-auto px-3 py-4 sm:px-4 [content-visibility:auto] [overflow-anchor:none]"
         style={{ scrollbarWidth: 'thin' }}
         data-testid="chat-messages-scroll"
         data-messaging-thread="1"
+        data-stick-policy="near-bottom-or-own-send"
       >
+        {(loadingOlder || hasMoreOlder) && messages.length > 0 && (
+          <div
+            className="mb-3 flex justify-center"
+            data-testid="chat-load-older"
+            aria-hidden={!loadingOlder}
+          >
+            <span className="text-[10px] font-medium text-[var(--cream-muted)]">
+              {loadingOlder ? 'Loading earlier…' : hasMoreOlder ? 'Scroll for earlier' : ''}
+            </span>
+          </div>
+        )}
         {messages.length === 0 && !sending && (
           <div
             className="flex flex-col items-center justify-center h-full select-none px-4"

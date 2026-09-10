@@ -437,8 +437,13 @@ export const messagesAPI = {
     ),
   sendLocation: (receiver_id: string, lat: number, lng: number) =>
     apiClient.post<MessageDTO>('/messages/location', { receiver_id, lat, lng }),
-  getConversation: (otherId: string) =>
-    apiClient.get<MessageDTO[]>(`/messages/conversation/${otherId}`),
+  getConversation: (otherId: string, opts?: { before?: string; limit?: number }) =>
+    apiClient.get<MessageDTO[]>(`/messages/conversation/${otherId}`, {
+      params: {
+        ...(opts?.before ? { before: opts.before } : {}),
+        ...(opts?.limit != null ? { limit: opts.limit } : {}),
+      },
+    }),
   getConversations: () => apiClient.get('/messages/conversations'),
   getUnreadSummary: () =>
     apiClient.get<{ total: number; bySender: Record<string, number> }>('/messages/unread'),

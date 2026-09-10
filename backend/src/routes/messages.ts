@@ -391,7 +391,20 @@ router.post('/:messageId/withdraw', async (req: AuthRequest, res: Response) => {
 
 router.get('/conversation/:otherId', async (req: AuthRequest, res: Response) => {
   try {
-    const messages = await messageService.getConversation(req.userId!, req.params.otherId);
+    const before =
+      typeof req.query.before === 'string' && req.query.before.trim()
+        ? req.query.before.trim()
+        : undefined;
+    const rawLimit = typeof req.query.limit === 'string' ? Number(req.query.limit) : 50;
+    const limit = Number.isFinite(rawLimit)
+      ? Math.min(100, Math.max(1, Math.round(rawLimit)))
+      : 50;
+    const messages = await messageService.getConversation(
+      req.userId!,
+      req.params.otherId,
+      limit,
+      before,
+    );
     res.json(messages);
   } catch (error: unknown) {
     if (error instanceof SecurityError) {
