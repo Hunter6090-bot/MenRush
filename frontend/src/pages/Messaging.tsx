@@ -853,7 +853,11 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
           ? 'flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-x-clip'
           : 'fixed inset-0 flex min-w-0 max-w-full flex-col overflow-x-clip'
       }
-      style={{ background: 'var(--bg-primary)' }}
+      style={{
+        background: 'var(--bg-primary)',
+        // Kill iOS double-tap zoom trap on the thread chrome (pinch still allowed).
+        touchAction: 'manipulation',
+      }}
     >
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
@@ -1386,12 +1390,14 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 enterKeyHint="send"
                 inputMode="text"
                 data-testid="chat-text-input"
-                className="w-full min-w-0 rounded-full px-3 py-2.5 text-sm transition-all duration-200 focus:outline-none sm:px-5 sm:py-3"
+                // ≥16px: iOS Safari auto-zooms focused inputs under 16px and sticks >1× until pinch-out.
+                className="w-full min-w-0 rounded-full px-3 py-2.5 text-[16px] leading-snug transition-all duration-200 focus:outline-none sm:px-5 sm:py-3"
                 style={{
                   background: 'var(--bg-card)',
                   border: '1px solid var(--border-default)',
                   color: 'var(--cream)',
                   caretColor: '#C4832A',
+                  fontSize: '16px',
                 }}
                 onFocus={(e) => {
                   e.currentTarget.style.border = '1px solid rgba(196,131,42,0.5)';
