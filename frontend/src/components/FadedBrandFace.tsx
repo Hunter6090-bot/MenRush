@@ -2,9 +2,17 @@ import { BRAND_MEDALLION_CUTOUT } from '../lib/brand';
 import type { GridPhotoPhase } from '../lib/nearbyPhotoSrc';
 
 /**
- * Brand-signed empty face for Nearby Grid + map pins.
- * Official two-men medallion cutout only — opacity fade + face zoom, never redrawn.
- * Brand may tweak opacity later; keep a single constant.
+ * Brand re-signed empty face (Nearby Grid + map pins only).
+ *
+ * Lock exactly:
+ * - Asset: `/brand/medallion-transparent.png` only (official cutout)
+ * - No black circle fill — filled medallion out of this empty face
+ * - Zoom crop/scale so the two faces read large (CSS only; no new artwork)
+ * - Fade opacity only — unmodified mark artwork
+ * - Empty/missing pics only — never wipe real user photos
+ * - Not a Studio post image
+ *
+ * Chat does not use this component (letter / silhouette / UserAvatar there).
  */
 export const FADED_BRAND_FACE_OPACITY = 0.42;
 
@@ -32,8 +40,8 @@ interface FadedBrandFaceProps {
 }
 
 /**
- * Crop/scale so the two bronze profiles dominate.
- * Transparent cutout + overflow clip — no black disc from the logo asset.
+ * Crop/scale so the two bronze profiles dominate the tile/pin.
+ * Transparent cutout + overflow clip — logo itself must not bring a black disc.
  */
 const FACE_ZOOM =
   'pointer-events-none select-none absolute left-1/2 top-[40%] -translate-x-1/2 -translate-y-1/2 max-w-none object-cover';

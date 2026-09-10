@@ -5,8 +5,8 @@ export const BRAND_LOGO_MASTER = '/brand/menrush-logo.png';
 export const BRAND_MEDALLION = '/brand/menrush-logo-512.png';
 export const BRAND_MEDALLION_SMALL = '/brand/menrush-logo-192.png';
 /**
- * Official RGBA cutout — circle fill / black surround removed.
- * Use for empty Nearby Grid / map-pin faces only; BrandMark keeps BRAND_MEDALLION.
+ * Brand re-signed empty-face cutout only (`/brand/medallion-transparent.png`).
+ * No black circle fill. Not for BrandMark, Chat, or Studio post images.
  */
 export const BRAND_MEDALLION_CUTOUT = '/brand/medallion-transparent.png';
 
