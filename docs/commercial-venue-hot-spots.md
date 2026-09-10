@@ -34,7 +34,25 @@ Do **not** invent lat/lng, hours, prices, partnership claims, or fake occupancy.
   Pleasuredrome, The Brighton Sauna, The Pipeworks Glasgow) kept with existing coords.
   `verified_at` stays NULL until ops hand-verifies. No new coordinates invented.
 
-## How ops adds venues (no scrape)
+## Growth pointers (verify before seed)
+
+Permissioned / manual curation only. Prefer empty seed plumbing until lat/lng are hand-verified.
+
+- London: Sweatbox Soho; Pleasuredrome; Covent Garden Health Spa; The Locker Room; Sailors Sauna; E15 Club
+- Manchester/NW: Basement Complex; Nero's Sauna (Bury); Acqua Sauna + W3 Sauna (Blackpool); Dolphin Sauna (New Brighton); Pennine Sauna (Shaw); Sauna Sauna (Northwich); Sweat Sauna (Carlisle)
+- Birmingham/WM: Yumbo; Spartan Club; Heroes Sauna (Stourbridge); The Greenhouse Sauna (Darlaston). Skip Just For You (closed).
+- Brighton/SE: The Brighton Sauna; The Boiler Room Sauna (Hove); ME1 Sauna (Rochester); Tropics Day Spa (Portsmouth)
+- Leeds/Yorkshire: Pipeworks Leeds; Plastic Ivy (Dewsbury); ClubZeus Sheffield; Gentry Spa (Hull). Skip Steam Complex Leeds (temp closed).
+- SW: Manticore Spa (Plymouth); Steamer Quay (Torquay); SaunaBar (Bournemouth); Touch Sauna (Swindon). SKIP Redruth (HOLD).
+- East Midlands: Splash Spa (Leicester); Club Zeus (Mansfield)
+- NE: Number 52 Sauna (Newcastle); Greenhouse Sauna (Luton — verify)
+- Scotland: Steamworks (Edinburgh); The Pipeworks (Glasgow)
+- Wales: Greenhouse Gay Sauna (Newport)
+- NI: Outside Sauna (Belfast)
+- Cinema GREEN: Empire Cinema Club (Huddersfield)
+
+Import aliases map Bathhouse/Gym → `saunas`, Nightclub → `nightlife`, Bar/Cafe/Hotel → `bars`, Theater/Video Arcade → `cinema`.
+RED never: Park, Truck Stop, Cruising Area, Nude Beach, Has Glory Hole, outdoor PSE.
 
 1. Hand-verify name, city, nation, type, and public website.
 2. Obtain lat/lng from the venue (or from a permitted first-party map listing). Never invent.
