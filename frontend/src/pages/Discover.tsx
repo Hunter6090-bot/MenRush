@@ -46,7 +46,14 @@ import { EventsRail } from '../components/EventsRail';
 import { countLiveOnline, isUserPulsing, distanceMeters } from '../lib/discovery';
 import type mapboxgl from 'mapbox-gl';
 import { loadMapbox, getLoadedMapbox } from '../lib/mapboxLazy';
-import { wireHtmlMarkerMapGestures } from '../lib/mapMarkerGestures';
+import {
+  hitTestMapPins,
+  markMarkerCanvasPassThrough,
+  peoplePinHitRadiusPx,
+  hotSpotPinHitRadiusPx,
+  selfPinHitRadiusPx,
+  type HitCandidate,
+} from '../lib/mapMarkerHitTest';
 import {
   discoveryResultBucket,
   trackEventOnce,
@@ -254,14 +261,20 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
     .discover-map-host {
       z-index: 0;
     }
-    /* Markers stay tappable; drag/pinch are forwarded in mapMarkerGestures.ts. */
-    .discover-map-surface .mapboxgl-marker {
+    /* Soft continuous pan/pinch: HTML pins must NEVER capture touches.
+       Descendants can re-enable pointer-events even when the parent is none —
+       force the whole subtree off so the GL canvas owns drag/pinch + inertia.
+       Taps open profiles via map click hit-test (mapMarkerHitTest.ts). */
+    .discover-map-surface .mapboxgl-marker,
+    .discover-map-surface .mapboxgl-marker * {
+      pointer-events: none !important;
       touch-action: none !important;
       -webkit-user-select: none;
       user-select: none;
       -webkit-touch-callout: none;
     }
-    /* While a finger is on the map, kill iOS rubber-band / parent scroll steal. */
+    /* While a finger is on the map, kill rubber-band / parent scroll steal
+       (Android Chrome + iPhone — same parent-scroll fight on both). */
     html.discover-map-gesturing,
     html.discover-map-gesturing body {
       overscroll-behavior: none;
@@ -354,6 +367,8 @@ const BROWSER_GPS_DENIED_NOTICE =
  * Pinch zoom must stay enabled on phone web; disableRotation keeps pinch as zoom-only
  * (rotation fighting the gesture feels like "pinch does nothing" on small screens).
  * Never call while the map is mid-pan/zoom — re-enable resets inertia and feels sticky.
+ *
+ * dragPan options tune phone inertia (Android Chrome + iPhone) toward soft continuous.
  */
 function assertMapGestures(map: mapboxgl.Map) {
   try {
@@ -361,7 +376,18 @@ function assertMapGestures(map: mapboxgl.Map) {
   } catch {
     /* map mid-teardown */
   }
-  map.dragPan.enable();
+  // Soft continuous phone pan — slightly lower deceleration than Mapbox defaults
+  // so a flick keeps rolling on Android and iPhone (HTML pins no longer steal).
+  try {
+    map.dragPan.enable({
+      linearity: 0.35,
+      easing: (t: number) => t * (2 - t),
+      maxSpeed: 1600,
+      deceleration: 2200,
+    });
+  } catch {
+    map.dragPan.enable();
+  }
   map.scrollZoom.enable();
   map.touchZoomRotate.enable();
   map.touchZoomRotate.disableRotation();
@@ -381,7 +407,7 @@ function assertMapGestures(map: mapboxgl.Map) {
   }
 }
 
-/** Lock document overscroll while a touch is active on the map surface (iOS PWA). */
+/** Lock document overscroll while a touch is active on the map surface (phone web). */
 function bindMapOverscrollLock(surface: HTMLElement): () => void {
   const start = () => document.documentElement.classList.add('discover-map-gesturing');
   const end = () => document.documentElement.classList.remove('discover-map-gesturing');
@@ -1089,7 +1115,7 @@ export const Discover = () => {
     };
   }, [mapPanelMode, desktopMapExpanded, isDesktopLayout, mapLoaded]);
 
-  // iOS/PWA: while touching the map surface, suppress document rubber-band.
+  // Phone web (Android + iPhone): while touching the map, suppress document rubber-band.
   useEffect(() => {
     if (!mapLoaded) return;
     const surfaces = document.querySelectorAll<HTMLElement>('.discover-map-surface');
@@ -1319,30 +1345,16 @@ export const Discover = () => {
         />,
       );
       selfEl.style.cursor = 'pointer';
-      selfEl.style.touchAction = 'none';
+      markMarkerCanvasPassThrough(selfEl);
       selfEl.setAttribute('aria-label', 'Open your profile');
-      const selfSuppressClick = { current: false };
-      selfEl.addEventListener('click', (e) => {
-        if (selfSuppressClick.current) {
-          e.preventDefault();
-          e.stopPropagation();
-          selfSuppressClick.current = false;
-          return;
-        }
-        e.stopPropagation();
-        navigate('/profile');
-      });
       selfMarkerRef.current = new mapboxgl.Marker({ element: selfEl })
         .setLngLat([startCenter[1], startCenter[0]])
         .addTo(map);
-      wireHtmlMarkerMapGestures(selfEl, map, {
-        onNavigate: () => {
-          userMovedMapRef.current = true;
-        },
-        suppressClickRef: selfSuppressClick,
-      });
+      markMarkerCanvasPassThrough(selfEl);
 
       mapRef.current = map;
+      // E2E / BOA90 tooling: read center+zoom after touch pan across pins.
+      (window as unknown as { __menrushDiscoverMap?: mapboxgl.Map }).__menrushDiscoverMap = map;
     })();
 
     return () => {
@@ -1366,6 +1378,11 @@ export const Discover = () => {
         live.remove();
       }
       mapRef.current = null;
+      try {
+        delete (window as unknown as { __menrushDiscoverMap?: mapboxgl.Map }).__menrushDiscoverMap;
+      } catch {
+        /* ignore */
+      }
       selfMarkerRef.current = null;
       selfDotRef.current = null;
       const root = selfRootRef.current;
@@ -1468,12 +1485,14 @@ export const Discover = () => {
           const el = existing.marker.getElement();
           el.style.width = `${markerSize}px`;
           el.style.height = `${markerSize}px`;
+          // React re-render can restore pointer-events on <img> — re-lock pass-through.
+          markMarkerCanvasPassThrough(el);
         }
         existing.user = user;
         return;
       }
 
-      const { element, root, suppressClickRef } = createMapMarkerElement(
+      const { element, root } = createMapMarkerElement(
         markerUser,
         () => setSelectedUser(user),
         isPulsing ? 52 : 44,
@@ -1481,15 +1500,11 @@ export const Discover = () => {
 
       const mapboxgl = getLoadedMapbox();
       if (!mapboxgl) return;
+      markMarkerCanvasPassThrough(element);
       const marker = new mapboxgl.Marker({ element })
         .setLngLat(lngLat)
         .addTo(map);
-      wireHtmlMarkerMapGestures(element, map, {
-        onNavigate: () => {
-          userMovedMapRef.current = true;
-        },
-        suppressClickRef,
-      });
+      markMarkerCanvasPassThrough(element);
 
       markersRef.current.set(user.id, { marker, root, user });
     });
@@ -1561,30 +1576,25 @@ export const Discover = () => {
           existing.spot.category_icon !== spot.category_icon
         ) {
           existing.root.render(<HotSpotPin spot={pinData} size={52} />);
+          markMarkerCanvasPassThrough(existing.marker.getElement());
         }
         existing.spot = spot;
         return;
       }
 
       // Opens the in-map sheet (no navigation away) — see #67 acceptance criteria.
-      const { element, root, suppressClickRef } = createHotSpotPinElement(
+      const { element, root } = createHotSpotPinElement(
         pinData,
         () => setSelectedHotSpot(spot),
         52,
       );
       const mapboxgl = getLoadedMapbox();
       if (!mapboxgl) return;
+      markMarkerCanvasPassThrough(element);
       const marker = new mapboxgl.Marker({ element, anchor: 'center' })
         .setLngLat(lngLat)
         .addTo(map);
-      // Hot Spot hit boxes are large (label + pad) — must forward pan/pinch or the
-      // map feels dead wherever Cruise pins cluster.
-      wireHtmlMarkerMapGestures(element, map, {
-        onNavigate: () => {
-          userMovedMapRef.current = true;
-        },
-        suppressClickRef,
-      });
+      markMarkerCanvasPassThrough(element);
       hotSpotMarkersRef.current.set(spot.id, { marker, root, spot });
     });
 
@@ -1630,6 +1640,7 @@ export const Discover = () => {
         size={size}
       />,
     );
+    if (el) markMarkerCanvasPassThrough(el);
   }, [
     mapLoaded,
     pulseUntil,
@@ -1639,6 +1650,73 @@ export const Discover = () => {
     authUser?.map_photo_url,
     authUser?.age,
   ]);
+
+  // Pins are pointer-events:none so the canvas owns soft continuous pan/pinch.
+  // Taps land on the map → hit-test projected pin positions (people / Cruise / self).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+
+    const onClick = (e: mapboxgl.MapMouseEvent) => {
+      type PinKind = 'self' | 'person' | 'hotspot';
+      const candidates: Array<HitCandidate<PinKind>> = [];
+
+      const selfMarker = selfMarkerRef.current;
+      if (selfMarker) {
+        const ll = selfMarker.getLngLat();
+        candidates.push({
+          kind: 'self',
+          id: 'self',
+          lng: ll.lng,
+          lat: ll.lat,
+          radiusPx: selfPinHitRadiusPx(!!pulseUntil),
+        });
+      }
+
+      markersRef.current.forEach(({ user }, id) => {
+        if (user.lat == null || user.lng == null) return;
+        candidates.push({
+          kind: 'person',
+          id,
+          lng: Number(user.lng),
+          lat: Number(user.lat),
+          radiusPx: peoplePinHitRadiusPx(isUserPulsing(user)),
+        });
+      });
+
+      hotSpotMarkersRef.current.forEach(({ spot }, id) => {
+        candidates.push({
+          kind: 'hotspot',
+          id,
+          lng: spot.longitude,
+          lat: spot.latitude,
+          radiusPx: hotSpotPinHitRadiusPx(spot.live_count_exact > 0),
+        });
+      });
+
+      const hit = hitTestMapPins(map, e.point, candidates);
+      if (!hit) return;
+
+      if (hit.kind === 'self') {
+        navigate('/profile');
+        return;
+      }
+      if (hit.kind === 'person') {
+        const entry = markersRef.current.get(hit.id);
+        if (entry) setSelectedUser(entry.user);
+        return;
+      }
+      if (hit.kind === 'hotspot') {
+        const entry = hotSpotMarkersRef.current.get(hit.id);
+        if (entry) setSelectedHotSpot(entry.spot);
+      }
+    };
+
+    map.on('click', onClick);
+    return () => {
+      map.off('click', onClick);
+    };
+  }, [mapLoaded, pulseUntil, navigate]);
 
   useEffect(() => {
     const map = mapRef.current;

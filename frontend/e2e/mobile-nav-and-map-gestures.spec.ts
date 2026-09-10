@@ -312,8 +312,9 @@ test('expanded mobile map uses flex fill and stays within the shell', async ({ b
   await ctx.close();
 });
 
-// HTML pins must advertise gesture forwarding so pan/pinch starting on a face works.
-test('map markers wire drag/pinch pass-through onto Mapbox', async ({ browser }) => {
+// Soft continuous pan/pinch: HTML pins must pass touches to the Mapbox canvas
+// (pointer-events:none). #224's panBy forwarding cannot deliver native inertia.
+test('map markers pass touches through to Mapbox canvas', async ({ browser }) => {
   const ctx = await browser.newContext({
     viewport: { width: 390, height: 844 },
     hasTouch: true,
@@ -358,15 +359,231 @@ test('map markers wire drag/pinch pass-through onto Mapbox', async ({ browser })
   // Wait for Mapbox markers; self pin always exists once map loads.
   await expect
     .poll(async () =>
-      page.locator('.mapboxgl-marker[data-map-gesture-wired="1"]').count(),
+      page.locator('.mapboxgl-marker[data-map-canvas-pass-through="1"]').count(),
     )
     .toBeGreaterThan(0);
 
-  const wiredTouchAction = await page
-    .locator('.mapboxgl-marker[data-map-gesture-wired="1"]')
+  const markerPe = await page
+    .locator('.mapboxgl-marker[data-map-canvas-pass-through="1"]')
     .first()
-    .evaluate((el) => getComputedStyle(el).touchAction);
-  expect(wiredTouchAction).toMatch(/none/i);
+    .evaluate((el) => ({
+      pe: getComputedStyle(el).pointerEvents,
+      touch: getComputedStyle(el).touchAction,
+      childPe: el.querySelector('*')
+        ? getComputedStyle(el.querySelector('*') as Element).pointerEvents
+        : 'none',
+    }));
+  expect(markerPe.pe).toMatch(/none/i);
+  expect(markerPe.touch).toMatch(/none/i);
+  expect(markerPe.childPe).toMatch(/none/i);
+
+  // Canvas container must advertise native Mapbox pan + pinch handlers.
+  const canvasReady = await host.evaluate((el) => {
+    const container = el.querySelector('.mapboxgl-canvas-container');
+    const canvas = el.querySelector('canvas.mapboxgl-canvas');
+    return {
+      hasDrag: !!container?.classList.contains('mapboxgl-touch-drag-pan'),
+      hasPinch: !!container?.classList.contains('mapboxgl-touch-zoom-rotate'),
+      canvasPe: canvas ? getComputedStyle(canvas).pointerEvents : '',
+      canvasTouch: canvas ? getComputedStyle(canvas).touchAction : '',
+    };
+  });
+  expect(canvasReady.hasDrag).toBe(true);
+  expect(canvasReady.hasPinch).toBe(true);
+  expect(canvasReady.canvasPe).toMatch(/auto|all/i);
+  expect(canvasReady.canvasTouch).toMatch(/none/i);
+
+  await ctx.close();
+});
+
+/**
+ * Owner lock: stickiness is Android + iPhone — HTML pins must not steal the canvas.
+ * At a face-pin screen point, hit-testing must reach the Mapbox canvas, and a drag
+ * from that point must move the map (native dragPan). Chromium + Android UA covers
+ * the owner-reproduced Android Chrome path; same DOM contract applies on iPhone.
+ */
+async function cdpMouseDrag(
+  page: Page,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  steps = 20,
+) {
+  const client = await page.context().newCDPSession(page);
+  await client.send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    x: from.x,
+    y: from.y,
+  });
+  await client.send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x: from.x,
+    y: from.y,
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+  });
+  for (let i = 1; i <= steps; i++) {
+    const x = from.x + ((to.x - from.x) * i) / steps;
+    const y = from.y + ((to.y - from.y) * i) / steps;
+    await client.send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x,
+      y,
+      button: 'left',
+      buttons: 1,
+    });
+  }
+  await client.send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x: to.x,
+    y: to.y,
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+  });
+  await client.detach();
+}
+
+test('drag starting on an HTML pin moves the map (Android+iPhone contract)', async ({
+  browser,
+}) => {
+  const ctx = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    // Pixel-class Android Chrome — owner reproduced stickiness here first.
+    userAgent:
+      'Mozilla/5.0 (Linux; Android 13; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+    geolocation: { latitude: 40.7128, longitude: -74.006 },
+    permissions: ['geolocation'],
+  });
+  await authenticate(ctx, alice);
+  const page = await ctx.newPage();
+
+  await page.route('**/api/users/nearby**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 'pin-drag-1',
+          name: 'DragPin',
+          age: 30,
+          online: true,
+          distance_km: 0.2,
+          distance_label: '< 500 m',
+          lat: 40.7132,
+          lng: -74.0058,
+          last_seen: new Date().toISOString(),
+          photo_url: '/uploads/fake-drag-pin.jpg',
+        },
+      ]),
+    });
+  });
+
+  await page.goto('/discover');
+  const mapToggle = page.getByTestId('nearby-map-grid-toggle');
+  await expect(mapToggle).toBeVisible({ timeout: 20_000 });
+  if ((await mapToggle.innerText()).trim().toLowerCase() === 'map') {
+    await mapToggle.click();
+  }
+
+  const host = page.getByTestId('discover-map-canvas-host');
+  await expect(host).toBeVisible({ timeout: 20_000 });
+
+  // Larger surface — fewer chrome collisions while asserting pin→canvas hit-test.
+  await page.getByTestId('map-expand-toggle').click();
+  await expect(page.getByTestId('discover-map-panel')).toHaveAttribute('data-map-mode', 'expanded');
+
+  await expect
+    .poll(async () =>
+      page.locator('.mapboxgl-marker[data-map-canvas-pass-through="1"]').count(),
+    )
+    .toBeGreaterThan(1);
+
+  await expect
+    .poll(async () =>
+      page.evaluate(() => ((window as unknown as { __menrushDiscoverMap?: unknown }).__menrushDiscoverMap ? 1 : 0)),
+    )
+    .toBe(1);
+
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        const map = (window as unknown as { __menrushDiscoverMap: { loaded: () => boolean; once: (e: string, cb: () => void) => void } })
+          .__menrushDiscoverMap;
+        if (map.loaded()) resolve();
+        else map.once('load', () => resolve());
+        map.once('idle', () => resolve());
+        window.setTimeout(() => resolve(), 1500);
+      }),
+  );
+
+  // Prefer a people pin (nth 1) — not self. Hit-test must fall through to canvas.
+  const pin = page.locator('.mapboxgl-marker[data-map-canvas-pass-through="1"]').nth(1);
+  const startBox = await pin.boundingBox();
+  expect(startBox).not.toBeNull();
+  const from = {
+    x: startBox!.x + startBox!.width / 2,
+    y: startBox!.y + startBox!.height / 2,
+  };
+
+  const hit = await page.evaluate(({ x, y }) => {
+    const el = document.elementFromPoint(x, y);
+    return {
+      tag: el?.tagName ?? '',
+      className: String((el as HTMLElement | null)?.className ?? ''),
+      pe: el ? getComputedStyle(el).pointerEvents : '',
+    };
+  }, from);
+  // Root cause of sticky Android+iPhone map: pin capturing hits. Must be canvas.
+  expect(hit.tag).toMatch(/CANVAS/i);
+  expect(hit.className).toMatch(/mapboxgl-canvas/);
+  expect(hit.pe).toMatch(/auto|all/i);
+
+  const before = await page.evaluate(() => {
+    const map = (window as unknown as { __menrushDiscoverMap: { getCenter: () => { lng: number; lat: number }; getZoom: () => number } })
+      .__menrushDiscoverMap;
+    const c = map.getCenter();
+    return { lng: c.lng, lat: c.lat, zoom: map.getZoom() };
+  });
+
+  await cdpMouseDrag(page, from, { x: from.x - 140, y: from.y + 50 });
+
+  await expect
+    .poll(async () => {
+      const after = await page.evaluate(() => {
+        const map = (window as unknown as { __menrushDiscoverMap: { getCenter: () => { lng: number; lat: number } } })
+          .__menrushDiscoverMap;
+        const c = map.getCenter();
+        return { lng: c.lng, lat: c.lat };
+      });
+      return Math.hypot(after.lng - before.lng, after.lat - before.lat);
+    })
+    .toBeGreaterThan(0.00005);
+
+  // Pinch handler must stay armed (rotation off) — same contract Android + iPhone.
+  const pinch = await page.evaluate(() => {
+    const map = (
+      window as unknown as {
+        __menrushDiscoverMap: {
+          touchZoomRotate: { isEnabled: () => boolean };
+          dragPan: { isEnabled: () => boolean };
+          getCanvasContainer: () => HTMLElement;
+        };
+      }
+    ).__menrushDiscoverMap;
+    const container = map.getCanvasContainer();
+    return {
+      touchZoom: map.touchZoomRotate.isEnabled(),
+      dragPan: map.dragPan.isEnabled(),
+      hasDragClass: container.classList.contains('mapboxgl-touch-drag-pan'),
+      hasPinchClass: container.classList.contains('mapboxgl-touch-zoom-rotate'),
+    };
+  });
+  expect(pinch.touchZoom).toBe(true);
+  expect(pinch.dragPan).toBe(true);
+  expect(pinch.hasDragClass).toBe(true);
+  expect(pinch.hasPinchClass).toBe(true);
 
   await ctx.close();
 });
