@@ -184,8 +184,23 @@ export const Register = () => {
         ...(trimmedPromo ? { promo_code: trimmedPromo } : {}),
         ...(trimmedReferral ? { referral_code: trimmedReferral } : {}),
       });
-      setAuth(res.data.user, res.data.token);
-      navigate('/profile/setup');
+      // Gate path: no session until confirm. BOA90 lock may still return a legacy session
+      // for non-Al signups until EMAIL_CONFIRM_MAIL_OPEN=true.
+      if (res.data.requiresEmailConfirm) {
+        const confirmEmail =
+          typeof res.data.email === 'string' ? res.data.email : form.email.trim().toLowerCase();
+        navigate(`/check-email?email=${encodeURIComponent(confirmEmail)}`, { replace: true });
+        return;
+      }
+      if (res.data.token && res.data.user) {
+        setAuth(res.data.user, res.data.token);
+        navigate('/profile/setup', { replace: true });
+        return;
+      }
+      navigate(
+        `/check-email?email=${encodeURIComponent(form.email.trim().toLowerCase())}`,
+        { replace: true },
+      );
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed. Please try again.');
     } finally {

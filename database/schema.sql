@@ -30,6 +30,8 @@ CREATE TABLE users (
   show_height BOOLEAN NOT NULL DEFAULT TRUE,
   show_weight BOOLEAN NOT NULL DEFAULT TRUE,
   show_relationship BOOLEAN NOT NULL DEFAULT TRUE,
+  email_confirmed BOOLEAN NOT NULL DEFAULT TRUE,
+  welcome_email_sent_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
