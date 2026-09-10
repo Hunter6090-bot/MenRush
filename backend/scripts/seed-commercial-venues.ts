@@ -34,6 +34,7 @@ const CATEGORY_ALIASES: Record<string, string> = {
   bars: 'bars',
   cafe: 'bars',
   restaurant: 'bars',
+  'cafe and restaurant': 'bars',
   hotel: 'bars',
   hotels: 'bars',
   cinema: 'cinema',
@@ -47,7 +48,28 @@ const CATEGORY_ALIASES: Record<string, string> = {
 
 /** Explicit RED rejects — never import even if someone remaps aliases. */
 const RED_REJECT =
-  /cottage|cottaging|glory\s*hole|truck\s*stop|cruising\s*area|nude\s*beach|public\s*toilet|pse\b|outdoor\s*play|known\s*cruising|redruth/i;
+  /cottage|cottaging|glory\s*hole|truck\s*stop|cruising\s*area|nude\s*beach|public\s*toilet|pse\b|outdoor\s*play|known\s*cruising|redruth|\bpark\b|open[- ]spaces|rest[- ]facilit/i;
+
+const RED_CATEGORY_KEYS = new Set([
+  'park',
+  'parks',
+  'parks-trails',
+  'truck stop',
+  'truck-stop',
+  'cruising area',
+  'cruising-area',
+  'nude beach',
+  'nude-beach',
+  'has glory hole',
+  'glory hole',
+  'outdoor',
+  'outdoor pse',
+  'open-spaces',
+  'parking',
+  'transit',
+  'rest-facilities',
+  'pse',
+]);
 
 type VenueRow = {
   name: string;
@@ -93,6 +115,7 @@ function parseArgs(argv: string[]): Args {
 function resolveCategory(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const key = raw.trim().toLowerCase();
+  if (RED_CATEGORY_KEYS.has(key) || RED_REJECT.test(key)) return null;
   return CATEGORY_ALIASES[key] ?? (ALLOWED.has(key) ? key : null);
 }
 

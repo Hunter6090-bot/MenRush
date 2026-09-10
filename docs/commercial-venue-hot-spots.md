@@ -36,23 +36,26 @@ Do **not** invent lat/lng, hours, prices, partnership claims, or fake occupancy.
 
 ## Growth pointers (verify before seed)
 
-Permissioned / manual curation only. Prefer empty seed plumbing until lat/lng are hand-verified.
+Permissioned / manual curation only. Prefer schema + admin/manual seed if coordinates cannot be hand-verified without scrape. Never invent lat/lng. Never scrape gaysaunas.co.uk wholesale.
 
 - London: Sweatbox Soho; Pleasuredrome; Covent Garden Health Spa; The Locker Room; Sailors Sauna; E15 Club
-- Manchester/NW: Basement Complex; Nero's Sauna (Bury); Acqua Sauna + W3 Sauna (Blackpool); Dolphin Sauna (New Brighton); Pennine Sauna (Shaw); Sauna Sauna (Northwich); Sweat Sauna (Carlisle)
-- Birmingham/WM: Yumbo; Spartan Club; Heroes Sauna (Stourbridge); The Greenhouse Sauna (Darlaston). Skip Just For You (closed).
+- Manchester/NW: Basement Complex (Manchester); Nero's Sauna (Bury); Acqua Sauna (Blackpool); W3 Sauna (Blackpool); Dolphin Sauna (New Brighton); Pennine Sauna (Shaw); Sauna Sauna (Northwich); Sweat Sauna (Carlisle)
+- Birmingham/WM: Yumbo Birmingham; Spartan Club Birmingham; Heroes Sauna (Stourbridge); The Greenhouse Sauna (Darlaston). Skip Just For You (closed).
 - Brighton/SE: The Brighton Sauna; The Boiler Room Sauna (Hove); ME1 Sauna (Rochester); Tropics Day Spa (Portsmouth)
 - Leeds/Yorkshire: Pipeworks Leeds; Plastic Ivy (Dewsbury); ClubZeus Sheffield; Gentry Spa (Hull). Skip Steam Complex Leeds (temp closed).
-- SW: Manticore Spa (Plymouth); Steamer Quay (Torquay); SaunaBar (Bournemouth); Touch Sauna (Swindon). SKIP Redruth (HOLD).
+- SW: Manticore Spa (Plymouth); Steamer Quay (Torquay); SaunaBar (Bournemouth); Touch Sauna (Swindon). SKIP Redruth (social-play HOLD until named verified commercial private premises).
 - East Midlands: Splash Spa (Leicester); Club Zeus (Mansfield)
-- NE: Number 52 Sauna (Newcastle); Greenhouse Sauna (Luton — verify)
+- NE/other: Number 52 Sauna (Newcastle); Greenhouse Sauna (Luton) — verify city/region
 - Scotland: Steamworks (Edinburgh); The Pipeworks (Glasgow)
 - Wales: Greenhouse Gay Sauna (Newport)
 - NI: Outside Sauna (Belfast)
-- Cinema GREEN: Empire Cinema Club (Huddersfield)
+- Cinema GREEN: Empire Cinema Club (Huddersfield) — adult cinema / members club framing, not cottage wink
 
-Import aliases map Bathhouse/Gym → `saunas`, Nightclub → `nightlife`, Bar/Cafe/Hotel → `bars`, Theater/Video Arcade → `cinema`.
-RED never: Park, Truck Stop, Cruising Area, Nude Beach, Has Glory Hole, outdoor PSE.
+**GREEN filter types** (map into commercial slugs): Bathhouse, Bar, Nightclub, Video Arcade, Theater, Cafe and Restaurant, Gym, Sauna, Hotels.
+
+**RED never seed:** Park, Truck Stop, Cruising Area, Nude Beach, Has Glory Hole, outdoor PSE.
+
+## How ops adds venues (no scrape)
 
 1. Hand-verify name, city, nation, type, and public website.
 2. Obtain lat/lng from the venue (or from a permitted first-party map listing). Never invent.
