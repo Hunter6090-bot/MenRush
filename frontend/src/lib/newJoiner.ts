@@ -1,9 +1,10 @@
 /**
  * Nearby fresh-face treatment — newly joined accounts AND visitor boost.
  *
- * Brand signed face (Sep 2026):
+ * Brand lock (confirmed): visitors share the same face as joiners.
  * - Pill/badge: `NEW`
  * - Alt/helper: `Just joined`
+ * Do not invent a separate visitor pill/label.
  *
  * Account-age NEW: created within NEW_JOINER_WINDOW_DAYS (7).
  * Visitor NEW: backend visitor_expires_at still in the future (VISITOR_TTL_HOURS=48

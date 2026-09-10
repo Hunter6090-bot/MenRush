@@ -7,8 +7,8 @@ interface NewJoinerBadgeProps {
 }
 
 /**
- * Nearby NEW treatment — Brand-signed pill `NEW`, helper `Just joined`.
- * Covers newly joined accounts and visitor fresh-face boost.
+ * Nearby NEW treatment — Brand-locked pill `NEW`, helper `Just joined`.
+ * Same face for newly joined and visitor fresh-face (Brand confirmed — no visitor-only copy).
  * Chat inbox NEW stays parked.
  */
 export function NewJoinerBadge({ variant = 'chip', className = '' }: NewJoinerBadgeProps) {
