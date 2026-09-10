@@ -138,7 +138,8 @@ test('Nearby Grid shows NEW badge and Status NEW filter surfaces fresh joiners',
 
   await expect(page.getByText('FreshGuy').first()).toBeVisible();
   await expect(page.getByText('Veteran')).toHaveCount(0);
-  await expect(page.getByTestId('nearby-new-badge')).toHaveCount(1);
+  // Grid-scoped: map peek can also show a NEW pin for the same guy (expected).
+  await expect(page.getByTestId('nearby-profile-grid').getByTestId('nearby-new-badge')).toHaveCount(1);
 
   await ctx.close();
 });
