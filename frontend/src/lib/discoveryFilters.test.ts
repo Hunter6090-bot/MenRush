@@ -181,6 +181,7 @@ describe('discovery NEW joiners status', () => {
   const oldIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const newerIso = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString();
   const olderNewIso = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+  const visitorExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
   it('exposes NEW status chip (Brand-signed face)', () => {
     expect(STATUS_FILTER_OPTIONS.some((o) => o.id === 'new' && o.label === 'NEW')).toBe(true);
@@ -202,6 +203,29 @@ describe('discovery NEW joiners status', () => {
       'older-new',
     ]);
     expect(countActiveDiscoveryFilters(state)).toBe(1);
+  });
+
+  it('includes active visitors in NEW filter (Brand same pill)', () => {
+    const state = {
+      ...DEFAULT_DISCOVERY_FILTERS,
+      status: ['new'] as typeof DEFAULT_DISCOVERY_FILTERS.status,
+    };
+    const people = [
+      user({ id: 'vet', name: 'Vet', created_at: oldIso, distance_km: 0.2 }),
+      user({
+        id: 'visitor',
+        name: 'Visitor',
+        created_at: oldIso,
+        is_visitor: true,
+        visitor_expires_at: visitorExpiry,
+        distance_km: 3,
+      }),
+      user({ id: 'fresh', name: 'Fresh', created_at: newerIso, distance_km: 4 }),
+    ];
+    expect(applyDiscoveryClientFilters(people, state).map((u) => u.id)).toEqual([
+      'fresh',
+      'visitor',
+    ]);
   });
 
   it('does not require NEW when status is empty', () => {

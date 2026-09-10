@@ -2,7 +2,7 @@ import type { Mood } from '../api/client';
 import { MOOD_LABELS } from '../api/client';
 import type { NearbyUser } from '../components/ProfileCard';
 import { INTENT_FILTERS, matchesIntentFilter, type IntentFilter } from './discoveryFormat';
-import { createdAtMs, isNewlyJoined } from './newJoiner';
+import { createdAtMs, isFreshFaceNearby, isNewlyJoined, isVisitorFresh } from './newJoiner';
 
 /** Profile tag groups — shared with Profile editor. */
 export const DISCOVERY_FILTER_CATEGORIES = [
@@ -264,8 +264,8 @@ export function applyDiscoveryClientFilters(users: NearbyUser[], state: Discover
     result = result.filter((u) => u.online);
   }
   if (state.status.includes('new')) {
-    // Recently joined within NEW_JOINER_WINDOW_DAYS — Nearby-scoped only.
-    result = result.filter((u) => isNewlyJoined(u.created_at));
+    // Newly joined (7d) OR active visitor fresh-face — Nearby-scoped only.
+    result = result.filter((u) => isFreshFaceNearby(u));
   }
   if (state.status.includes('hasPhoto')) {
     result = result.filter((u) => !!u.photo_url);
@@ -292,9 +292,21 @@ export function applyDiscoveryClientFilters(users: NearbyUser[], state: Discover
     result = result.filter((u) => u.mood === state.mood);
   }
 
-  // NEW status: surface newest joiners first (created_at DESC).
+  // NEW status: surface fresh faces first — newest joiners, then active visitors.
   if (state.status.includes('new')) {
-    result = [...result].sort((a, b) => createdAtMs(b.created_at) - createdAtMs(a.created_at));
+    result = [...result].sort((a, b) => {
+      const aJoin = isNewlyJoined(a.created_at) ? 1 : 0;
+      const bJoin = isNewlyJoined(b.created_at) ? 1 : 0;
+      if (aJoin !== bJoin) return bJoin - aJoin;
+      if (aJoin && bJoin) {
+        const byAge = createdAtMs(b.created_at) - createdAtMs(a.created_at);
+        if (byAge !== 0) return byAge;
+      }
+      const aVis = isVisitorFresh(a) ? 1 : 0;
+      const bVis = isVisitorFresh(b) ? 1 : 0;
+      if (aVis !== bVis) return bVis - aVis;
+      return createdAtMs(b.visitor_expires_at) - createdAtMs(a.visitor_expires_at);
+    });
   }
 
   return result;

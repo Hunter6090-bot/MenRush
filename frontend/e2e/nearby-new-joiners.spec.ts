@@ -93,6 +93,21 @@ test('Nearby Grid shows NEW badge and Status NEW filter surfaces fresh joiners',
           interests: ['Bear'],
         },
         {
+          id: 'u-visitor',
+          name: 'TownVisitor',
+          age: 31,
+          photo_url: '/avatars/generic/30s.svg',
+          online: true,
+          distance_km: 0.9,
+          distance_label: '0.6 mi',
+          lat: 51.5145,
+          lng: -0.1368,
+          created_at: veteranCreated,
+          is_visitor: true,
+          visitor_expires_at: new Date(now + 36 * 60 * 60 * 1000).toISOString(),
+          interests: ['Otter'],
+        },
+        {
           id: 'u-vet',
           name: 'Veteran',
           age: 34,
@@ -118,14 +133,18 @@ test('Nearby Grid shows NEW badge and Status NEW filter surfaces fresh joiners',
 
   await expect(page.getByTestId('nearby-profile-grid')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('FreshGuy').first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText('TownVisitor').first()).toBeVisible();
   await expect(page.getByText('Veteran').first()).toBeVisible();
 
-  // NEW badge only on the fresh joiner card.
+  // NEW badge on newly joined + visitor; not on veteran.
   const freshCard = page.locator('[data-testid="nearby-grid-card"]').filter({ hasText: 'FreshGuy' });
+  const visitorCard = page.locator('[data-testid="nearby-grid-card"]').filter({ hasText: 'TownVisitor' });
   const vetCard = page.locator('[data-testid="nearby-grid-card"]').filter({ hasText: 'Veteran' });
   await expect(freshCard.getByTestId('nearby-new-badge')).toBeVisible();
   await expect(freshCard.getByTestId('nearby-new-badge')).toHaveText('NEW');
   await expect(freshCard.getByTestId('nearby-new-badge')).toHaveAttribute('aria-label', 'Just joined');
+  await expect(visitorCard.getByTestId('nearby-new-badge')).toBeVisible();
+  await expect(visitorCard.getByTestId('nearby-new-badge')).toHaveText('NEW');
   await expect(vetCard.getByTestId('nearby-new-badge')).toHaveCount(0);
 
   // Open Filters & mood → Status → NEW.
@@ -137,9 +156,10 @@ test('Nearby Grid shows NEW badge and Status NEW filter surfaces fresh joiners',
   await page.getByTestId('status-filter-new').click();
 
   await expect(page.getByText('FreshGuy').first()).toBeVisible();
+  await expect(page.getByText('TownVisitor').first()).toBeVisible();
   await expect(page.getByText('Veteran')).toHaveCount(0);
-  // Grid-scoped: map peek can also show a NEW pin for the same guy (expected).
-  await expect(page.getByTestId('nearby-profile-grid').getByTestId('nearby-new-badge')).toHaveCount(1);
+  // Grid-scoped: map peek can also show NEW pins for the same guys (expected).
+  await expect(page.getByTestId('nearby-profile-grid').getByTestId('nearby-new-badge')).toHaveCount(2);
 
   await ctx.close();
 });

@@ -4,7 +4,7 @@ import { VerifiedBadge } from './VerifiedBadge';
 import { NewJoinerBadge } from './NewJoinerBadge';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { formatActiveStatus, formatDistanceMiles, getTribeTag } from '../lib/discoveryFormat';
-import { isNewlyJoined } from '../lib/newJoiner';
+import { isFreshFaceNearby } from '../lib/newJoiner';
 import {
   PROFILE_TILE_GRID_CLASS,
   PROFILE_TILE_SKELETON_CLASS,
@@ -259,7 +259,7 @@ const NearbyGridCard = memo(function NearbyGridCard({
             <GridCardFace user={user} meta={meta} />
           </ProfilePhotoLink>
         )}
-        {isNewlyJoined(user.created_at) ? <NewJoinerBadge /> : null}
+        {isFreshFaceNearby(user) ? <NewJoinerBadge /> : null}
         {user.is_verified ? <VerifiedBadge compact className="absolute bottom-1.5 right-1.5 z-10" /> : null}
       </div>
       {onMatch ? (

@@ -8,7 +8,8 @@ interface NewJoinerBadgeProps {
 
 /**
  * Nearby NEW treatment — Brand-signed pill `NEW`, helper `Just joined`.
- * Account-age only; Chat inbox NEW stays parked.
+ * Covers newly joined accounts and visitor fresh-face boost.
+ * Chat inbox NEW stays parked.
  */
 export function NewJoinerBadge({ variant = 'chip', className = '' }: NewJoinerBadgeProps) {
   if (variant === 'dot') {

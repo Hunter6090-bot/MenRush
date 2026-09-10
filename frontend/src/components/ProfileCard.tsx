@@ -46,6 +46,10 @@ export interface NearbyUser {
    * Not exact GPS; privacy-safe.
    */
   created_at?: string;
+  /** Active visitor fresh-face boost (left home area; TTL not expired). */
+  is_visitor?: boolean;
+  /** ISO expiry for visitor boost — null when not visiting. */
+  visitor_expires_at?: string | null;
 }
 
 interface ProfileCardProps {
