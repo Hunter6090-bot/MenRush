@@ -25,3 +25,7 @@ While locked, other signups keep a **legacy live session** (no confirm/welcome m
 ## Brand copy
 
 Unchanged. Welcome still omits rooms, temp profile, albums, Cruise.
+
+## Migration
+
+`051_email_confirm.sql` (renumbered off `048` so Cruise Hot Spots `#217` keeps `048`–`050`).
