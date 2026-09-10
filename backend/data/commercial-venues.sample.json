@@ -1,0 +1,80 @@
+{
+  "venues": [],
+  "_ops_note": "Add hand-verified commercial venues only. Each row needs real lat/lng — never invent. Never scrape gaysaunas.co.uk wholesale. Skip closed (Just For You, Steam Complex Leeds temp closed) and Social-play/Redruth until named private premises. Permissioned/manual curation or venue-supplied data only.",
+  "example_row_shape": {
+    "name": "Venue name",
+    "city": "London",
+    "nation": "England",
+    "category": "saunas",
+    "venue_type": "sauna",
+    "lat": 51.5,
+    "lng": -0.1,
+    "source_url": "https://example.com",
+    "external_id": "ops-example",
+    "verified_at": "2026-09-09T12:00:00Z"
+  },
+  "category_map_green": {
+    "saunas": ["Sauna", "Bathhouse", "Gym"],
+    "nightlife": ["Nightclub"],
+    "bars": ["Bar", "Cafe and Restaurant", "Hotels"],
+    "cinema": ["Video Arcade", "Theater", "Cinema club"]
+  },
+  "category_red_never_seed": [
+    "Park",
+    "Truck Stop",
+    "Cruising Area",
+    "Nude Beach",
+    "Has Glory Hole",
+    "outdoor PSE",
+    "cottage",
+    "public toilet"
+  ],
+  "growth_pointers_verify_before_seed": {
+    "London": ["Sweatbox Soho", "Pleasuredrome", "Covent Garden Health Spa", "The Locker Room", "Sailors Sauna", "E15 Club"],
+    "Manchester_NW": [
+      "Basement Complex (Manchester)",
+      "Nero's Sauna (Bury)",
+      "Acqua Sauna (Blackpool)",
+      "W3 Sauna (Blackpool)",
+      "Dolphin Sauna (New Brighton)",
+      "Pennine Sauna (Shaw)",
+      "Sauna Sauna (Northwich)",
+      "Sweat Sauna (Carlisle)"
+    ],
+    "Birmingham_WM": [
+      "Yumbo Birmingham",
+      "Spartan Club Birmingham",
+      "Heroes Sauna (Stourbridge)",
+      "The Greenhouse Sauna (Darlaston)"
+    ],
+    "Brighton_SE": [
+      "The Brighton Sauna",
+      "The Boiler Room Sauna (Hove)",
+      "ME1 Sauna (Rochester)",
+      "Tropics Day Spa (Portsmouth)"
+    ],
+    "Leeds_Yorkshire": [
+      "Pipeworks Leeds",
+      "Plastic Ivy (Dewsbury)",
+      "ClubZeus Sheffield",
+      "Gentry Spa (Hull)"
+    ],
+    "SW": [
+      "Manticore Spa (Plymouth)",
+      "Steamer Quay (Torquay)",
+      "SaunaBar (Bournemouth)",
+      "Touch Sauna (Swindon)"
+    ],
+    "East_Midlands": ["Splash Spa (Leicester)", "Club Zeus (Mansfield)"],
+    "NE": ["Number 52 Sauna (Newcastle)", "Greenhouse Sauna (Luton) — verify city/region"],
+    "Scotland": ["Steamworks (Edinburgh)", "The Pipeworks (Glasgow)"],
+    "Wales": ["Greenhouse Gay Sauna (Newport)"],
+    "NI": ["Outside Sauna (Belfast)"],
+    "Cinema": ["Empire Cinema Club (Huddersfield)"]
+  },
+  "skip": [
+    "Just For You (closed)",
+    "Steam Complex Leeds (temp closed)",
+    "Redruth / Social-play (HOLD until named verified commercial private premises)"
+  ]
+}

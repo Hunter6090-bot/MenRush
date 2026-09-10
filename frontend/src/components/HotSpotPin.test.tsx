@@ -22,12 +22,12 @@ describe('HotSpotPin', () => {
     expect(screen.getByTestId('cruise-ship-icon')).toBeInTheDocument();
   });
 
-  it('hides name label when empty but still shows cruise-ship icon', () => {
+  it('shows Cruise pin label when empty and still shows cruise-ship icon', () => {
     render(
       <HotSpotPin
         spot={{
           id: 'spot-2',
-          name: 'Quiet Park',
+          name: 'Quiet Venue',
           live_count_exact: 0,
           live_count: 0,
         }}
@@ -36,6 +36,7 @@ describe('HotSpotPin', () => {
 
     expect(screen.getByTestId('hotspot-pin-dim')).toBeInTheDocument();
     expect(screen.queryByTestId('hotspot-pin-name')).not.toBeInTheDocument();
+    expect(screen.getByTestId('cruise-pin-label')).toHaveTextContent('Cruise');
     expect(screen.getByTestId('cruise-ship-icon')).toBeInTheDocument();
   });
 });

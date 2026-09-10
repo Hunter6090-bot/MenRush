@@ -751,6 +751,10 @@ export interface HotSpotDTO {
   checkin_ttl_hours?: number;
   /** True when at least one non-expired check-in is present. */
   has_active_checkins?: boolean;
+  nation?: string | null;
+  venue_type?: string | null;
+  source_url?: string | null;
+  verified_at?: string | null;
 }
 
 export const hotSpotsAPI = {

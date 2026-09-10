@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import type { HotSpotDTO } from '../api/client';
 import { IconClose } from './icons';
 import { formatDistanceFromKm } from '../lib/localeUnits';
+import { HOT_SPOTS_HELPER, HOT_SPOTS_RULES } from '../lib/cruiseCopy';
 
 interface HotSpotSheetProps {
   spot: HotSpotDTO | null;
@@ -13,12 +14,13 @@ interface HotSpotSheetProps {
 }
 
 /**
- * In-map Cruise details + check-in/out (#67 — selecting a Cruise pin on Nearby opens
- * details and check-in controls without navigating away). Mirrors HotSpots.tsx's card
- * actions exactly; `/hot-spots` itself is untouched and still works for direct/deep links.
+ * In-map Cruise details + check-in/out. Selecting a Cruise pin on Nearby opens
+ * details and check-in without navigating away. Active/check-in counts only when real.
  */
 export function HotSpotSheet({ spot, isPremium, acting, error, onClose, onCheckIn }: HotSpotSheetProps) {
   if (!spot) return null;
+
+  const active = Boolean(spot.has_active_checkins ?? spot.live_count_exact > 0);
 
   return (
     <div
@@ -51,16 +53,37 @@ export function HotSpotSheet({ spot, isPremium, acting, error, onClose, onCheckI
         <h2 className="text-lg font-bold text-[var(--cream)]">{spot.name}</h2>
         <p className="mt-0.5 text-[13px] text-[var(--cream-muted)]">
           {spot.city ?? 'UK'}
+          {spot.nation ? ` · ${spot.nation}` : ''}
           {spot.distance_km != null ? ` · ${formatDistanceFromKm(Number(spot.distance_km))}` : ''}
+        </p>
+
+        <p className="mt-2 text-[11px] leading-relaxed text-[var(--cream-muted)]">
+          {HOT_SPOTS_HELPER} {HOT_SPOTS_RULES}
         </p>
 
         {spot.description ? (
           <p className="mt-3 text-[13px] leading-relaxed text-[var(--cream-muted)]">{spot.description}</p>
         ) : null}
 
-        <div className="mt-3 flex items-center gap-2">
-          <span className="inline-flex h-2.5 w-2.5 rounded-full bg-[#3D7A2E]" />
-          <p className="text-[13px] font-bold text-[var(--cream)]">{spot.live_count} checked in</p>
+        {spot.source_url ? (
+          <a
+            href={spot.source_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-block text-[12px] font-semibold text-[#C4832A] hover:text-[#E0A14A]"
+          >
+            Venue website
+          </a>
+        ) : null}
+
+        <div className="mt-3 flex items-center gap-2" data-testid="hotspot-sheet-activity">
+          <span
+            className="inline-flex h-2.5 w-2.5 rounded-full"
+            style={{ background: active ? '#3D7A2E' : 'rgba(240,224,192,0.35)' }}
+          />
+          <p className="text-[13px] font-bold text-[var(--cream)]">
+            {active ? `${spot.live_count} checked in` : 'No check-ins right now'}
+          </p>
         </div>
         <p className="mt-1 text-[11px] text-[var(--cream-muted)]">
           Check-ins expire after {spot.checkin_ttl_hours ?? 4} hours.

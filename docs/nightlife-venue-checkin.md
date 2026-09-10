@@ -12,8 +12,9 @@ existing Hot Spots data shape (API/route keep `/hot-spots` for compatibility).
 | Check-in | Free for all verified users |
 | Promote Your Event | Premium only (`/premium` redirect when not Premium) |
 | Pin content | Venue name + approximate check-in count (`live_count` rounded for Free); cruise-ship icon on Nearby |
-| Face | Product name is **Cruise** (map layer + `/hot-spots` page heading) |
+| Face | Product pin label is **Cruise**; map chip is **Hot Spots** (API/route keep `/hot-spots`) |
 | Shape | Reuses `HotSpotDTO` with `checkin_ttl_hours` + `has_active_checkins` |
+| Scope | Commercial venues only after migration `048` (saunas / nightlife / bars / cinema) |
 
 ## API
 

@@ -13,6 +13,8 @@
     "test:social-oct1": "ts-node scripts/test-social-oct1-seed.ts",
     "waitlist:import": "ts-node src/scripts/import-waitlist.ts",
     "hotspots:import": "ts-node scripts/import-hot-spots.ts",
+    "hotspots:seed-commercial": "ts-node scripts/seed-commercial-venues.ts",
+    "test:commercial-hotspots": "ts-node scripts/commercial-hotspots-checks.ts",
     "invite:generate": "ts-node src/scripts/generate-invite-codes.ts",
     "invite:send-wave-2": "ts-node src/scripts/send-wave-2-invites.ts",
     "notify:id-verification-paused": "ts-node src/scripts/send-id-verification-paused.ts",
