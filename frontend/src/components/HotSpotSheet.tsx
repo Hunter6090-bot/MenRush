@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import type { HotSpotDTO } from '../api/client';
 import { IconClose } from './icons';
 import { formatDistanceFromKm } from '../lib/localeUnits';
-import { HOT_SPOTS_HELPER, HOT_SPOTS_RULES } from '../lib/cruiseCopy';
+import { HOT_SPOTS_CONSENT, HOT_SPOTS_FACE } from '../lib/cruiseCopy';
 
 interface HotSpotSheetProps {
   spot: HotSpotDTO | null;
@@ -57,8 +57,14 @@ export function HotSpotSheet({ spot, isPremium, acting, error, onClose, onCheckI
           {spot.distance_km != null ? ` · ${formatDistanceFromKm(Number(spot.distance_km))}` : ''}
         </p>
 
-        <p className="mt-2 text-[11px] leading-relaxed text-[var(--cream-muted)]">
-          {HOT_SPOTS_HELPER} {HOT_SPOTS_RULES}
+        <p
+          className="mt-2 text-[11px] leading-relaxed text-[var(--cream-muted)]"
+          data-testid="hotspot-sheet-brand-face"
+        >
+          {HOT_SPOTS_FACE}
+        </p>
+        <p className="mt-1 text-[11px] font-semibold text-[var(--cream-muted)]" data-testid="hotspot-sheet-consent">
+          {HOT_SPOTS_CONSENT}
         </p>
 
         {spot.description ? (

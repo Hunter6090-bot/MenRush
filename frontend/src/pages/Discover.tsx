@@ -59,7 +59,7 @@ import { readLayerVisible, writeLayerVisible } from '../lib/discoveryLayers';
 import { useIsDesktopLayout } from '../hooks/useMediaQuery';
 import { ProximitySlider } from '../components/ProximitySlider';
 import { IconMapExpand, IconDiscover, IconHotSpots } from '../components/icons';
-import { HOT_SPOTS_CHIP_LABEL, HOT_SPOTS_HELPER, HOT_SPOTS_RULES } from '../lib/cruiseCopy';
+import { HOT_SPOTS_CHIP_LABEL, HOT_SPOTS_CONSENT, HOT_SPOTS_FACE } from '../lib/cruiseCopy';
 import { MapLiveStatus } from '../components/MapLiveStatus';
 
 /** Map panel: swipe up to hide, swipe down to show, expand for large map. */
@@ -197,14 +197,16 @@ function MapFloatingChrome({
           data-testid="hotspots-map-helper"
         >
           <p
-            className="max-w-md rounded-xl border px-3 py-1.5 text-center text-[10px] font-semibold leading-snug"
+            className="max-w-lg rounded-xl border px-3 py-1.5 text-center text-[10px] font-semibold leading-snug"
             style={{
               background: 'rgba(13,10,6,0.88)',
               color: 'rgba(240,224,192,0.88)',
               borderColor: 'rgba(196,131,42,0.35)',
             }}
+            data-testid="hotspots-map-helper-copy"
           >
-            {HOT_SPOTS_HELPER} {HOT_SPOTS_RULES}
+            {HOT_SPOTS_FACE}
+            <span className="mt-0.5 block opacity-90">{HOT_SPOTS_CONSENT}</span>
           </p>
         </div>
       ) : null}
