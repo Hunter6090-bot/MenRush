@@ -40,7 +40,7 @@ export const publicSelectClass =
 
 /** Dark select for in-app verify document steps (WebApp.dc.html doc flow). */
 export const publicDarkSelectClass =
-  'w-full rounded-xl border border-[#3D2B0E] bg-[#1E1508] px-4 py-3.5 text-[15px] text-[#F0E0C0] focus:outline-none focus:ring-2 focus:ring-[#C4832A]/40';
+  'w-full rounded-xl border border-[#3D2B0E] bg-[#1E1508] px-4 py-3.5 text-[16px] text-[#F0E0C0] focus:outline-none focus:ring-2 focus:ring-[#C4832A]/40';
 
 export const publicInfoBoxClass =
   'rounded-[18px] border border-[rgba(240,224,192,0.2)] bg-[rgba(13,10,6,0.35)] px-5 py-4';

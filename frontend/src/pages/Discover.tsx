@@ -1788,7 +1788,7 @@ export const Discover = () => {
       {/* Contain Discover in the viewport so body scroll cannot steal phone pinch-zoom.
           Match Rooms/Conversations: explicit shell height — h-full alone does not resolve
           inside Layout's flex + overflow page-enter, which left expanded map ~minHeight. */}
-      <div className="flex h-[calc(100dvh-var(--mobile-header-height)-var(--mobile-tab-bar-height))] min-h-0 flex-col overflow-hidden overscroll-none lg:h-full">
+      <div className="flex h-[calc(100dvh-var(--mobile-header-height)-var(--mobile-tab-bar-height))] min-h-0 min-w-0 max-w-full flex-col overflow-x-clip overflow-hidden overscroll-none lg:h-full" data-testid="discover-shell">
       {!mobileMapExpanded ? (
       <div className="shrink-0">
       <>

@@ -15,6 +15,10 @@
  * Events rail) must not widen the document — iOS otherwise invites
  * pinch-to-shrink. Keep pinch available for maps/video (do not set
  * user-scalable=no here). overflow-x: clip where supported; hidden fallback.
+ *
+ * touch-action: manipulation kills double-tap zoom traps on chrome/lists
+ * without disabling intentional map pinch (Discover/Hot Spots force
+ * touch-action: none on map surfaces).
  */
 html {
   -webkit-text-size-adjust: 100%;
@@ -22,6 +26,7 @@ html {
   max-width: 100%;
   overflow-x: hidden;
   overflow-x: clip;
+  touch-action: manipulation;
 }
 
 body {
@@ -36,6 +41,7 @@ body {
   overflow-x: hidden;
   overflow-x: clip;
   position: relative;
+  touch-action: manipulation;
 }
 
 #root {
@@ -54,6 +60,27 @@ details:not([open]) > *:not(summary) {
 img,
 video {
   max-width: 100%;
+}
+
+/*
+ * iOS Safari auto-zooms focused text controls when computed font-size < 16px.
+ * Unlayered rule beats Tailwind utilities (text-sm / text-[14px] / text-[15px]).
+ * File/checkbox/radio/range/button controls are excluded.
+ */
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='hidden']):not([type='button']):not([type='submit']):not([type='reset']):not([type='image']),
+textarea,
+select {
+  font-size: 16px;
+}
+
+/* Map surfaces keep intentional pan/pinch (overrides html/body manipulation). */
+.discover-map-surface,
+.discover-map-host,
+.hotspots-map-surface,
+[data-testid='hotspots-map'] .mapboxgl-map,
+[data-testid='hotspots-map'] .mapboxgl-canvas-container,
+[data-testid='hotspots-map'] .mapboxgl-canvas {
+  touch-action: none;
 }
 
 input:-webkit-autofill,

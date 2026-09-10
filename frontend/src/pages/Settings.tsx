@@ -25,7 +25,7 @@ import {
 const RADIUS_KEY = 'menrush_default_radius_km';
 
 const fieldClass =
-  'w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3.5 py-2.5 text-[14px] text-[var(--cream)] placeholder:text-[var(--cream-faded)] outline-none focus:border-[var(--copper)]';
+  'w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3.5 py-2.5 text-[16px] text-[var(--cream)] placeholder:text-[var(--cream-faded)] outline-none focus:border-[var(--copper)]';
 
 function SectionLabel({ children }: { children: string }) {
   return (
@@ -393,7 +393,7 @@ export const Settings = () => {
 
   return (
     <Layout>
-      <div className="mx-auto max-w-[620px] px-6 py-6">
+      <div className="mx-auto min-w-0 max-w-[620px] overflow-x-clip px-4 py-6 sm:px-6" data-testid="settings-shell">
         <h1 className="mb-1 text-2xl font-extrabold text-[var(--cream)]">Settings</h1>
         <p className="mb-5 text-[13px] text-[var(--cream-muted)]">
           Account, location, and how you show up nearby.

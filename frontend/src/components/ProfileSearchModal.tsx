@@ -184,7 +184,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search by name…"
-            className="min-w-0 flex-1 bg-transparent text-sm text-[var(--cream)] placeholder:text-[var(--cream-muted)]/70 focus:outline-none"
+            className="min-w-0 flex-1 bg-transparent text-[16px] text-[var(--cream)] placeholder:text-[var(--cream-muted)]/70 focus:outline-none"
           />
           <button
             type="button"

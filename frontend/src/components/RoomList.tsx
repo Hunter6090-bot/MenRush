@@ -219,7 +219,7 @@ export const RoomList: React.FC<RoomListProps> = ({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search rooms..."
-              className="w-full rounded-2xl py-3 pl-10 pr-4 text-sm transition-all duration-200 focus:outline-none"
+              className="w-full rounded-2xl py-3 pl-10 pr-4 text-[16px] transition-all duration-200 focus:outline-none"
               style={{
                 background: 'var(--bg-card)',
                 border: '1px solid var(--border-default)',
