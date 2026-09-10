@@ -35,6 +35,7 @@ import {
   CHAT_LIVE_REFRESH_EVENT,
   conversationFingerprint,
   mergeConversationRows,
+  sortMessagesChronologically,
 } from '../lib/pushDeepLink';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
@@ -200,11 +201,12 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       .then((r) => {
         const rows = Array.isArray(r.data) ? (r.data as Message[]) : [];
         setMessages((prev) => {
-          const next = opts?.replace ? rows : mergeConversationRows(prev, rows);
-          if (
-            !opts?.replace &&
-            conversationFingerprint(prev) === conversationFingerprint(next)
-          ) {
+          // Always normalize order: poll merge used to re-append rows that slid
+          // out of the LIMIT page and jump earlier bubbles to the bottom.
+          const next = opts?.replace
+            ? sortMessagesChronologically(rows)
+            : mergeConversationRows(prev, rows);
+          if (conversationFingerprint(prev) === conversationFingerprint(next)) {
             return prev;
           }
           return next;
@@ -491,7 +493,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             disappearing,
             maxViews,
           });
-          setMessages((prev) => [...prev, res.data]);
+          setMessages((prev) => appendUniqueMessage(prev, res.data));
         }
         clearPendingImage();
         trackEventOnce(
@@ -510,7 +512,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         disappearing,
         maxViews,
       });
-      setMessages((prev) => [...prev, res.data]);
+      setMessages((prev) => appendUniqueMessage(prev, res.data));
       clearPendingImage();
       trackEventOnce(
         'first_message_success',
@@ -560,7 +562,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
           kind: 'video',
           durationMs,
         });
-        setMessages((prev) => [...prev, res.data]);
+        setMessages((prev) => appendUniqueMessage(prev, res.data));
       } catch (err: any) {
         setMediaError(err?.response?.data?.error || 'Failed to send video');
       } finally {
@@ -612,7 +614,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             kind: 'audio',
             durationMs: duration,
           });
-          setMessages((prev) => [...prev, res.data]);
+          setMessages((prev) => appendUniqueMessage(prev, res.data));
         } catch (err: any) {
           setMediaError(err?.response?.data?.error || 'Failed to send voice note');
         } finally {
@@ -680,7 +682,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       try {
         const res = await messagesAPI.sendMessage(otherId, current);
         const saved: Message = res.data;
-        setMessages((prev) => (prev.some((m) => m.id === saved.id) ? prev : [...prev, saved]));
+        setMessages((prev) => appendUniqueMessage(prev, saved));
         trackEventOnce(
           'first_message_success',
           { kind: 'text', surface: 'direct_message' },
@@ -789,7 +791,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             position.coords.latitude,
             position.coords.longitude,
           );
-          setMessages((prev) => [...prev, res.data]);
+          setMessages((prev) => appendUniqueMessage(prev, res.data));
         } catch {
           setMediaError('Could not share your location.');
         } finally {
