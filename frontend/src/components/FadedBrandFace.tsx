@@ -1,9 +1,9 @@
-import { BRAND_MEDALLION } from '../lib/brand';
+import { BRAND_MEDALLION_CUTOUT } from '../lib/brand';
 import type { GridPhotoPhase } from '../lib/nearbyPhotoSrc';
 
 /**
  * Brand-signed empty face for Nearby Grid + map pins.
- * Official two-men medallion only — opacity fade, never redrawn or type-replaced.
+ * Official two-men medallion cutout only — opacity fade + face zoom, never redrawn.
  * Brand may tweak opacity later; keep a single constant.
  */
 export const FADED_BRAND_FACE_OPACITY = 0.42;
@@ -31,6 +31,13 @@ interface FadedBrandFaceProps {
   label?: string;
 }
 
+/**
+ * Crop/scale so the two bronze profiles dominate.
+ * Transparent cutout + overflow clip — no black disc from the logo asset.
+ */
+const FACE_ZOOM =
+  'pointer-events-none select-none absolute left-1/2 top-[40%] -translate-x-1/2 -translate-y-1/2 max-w-none object-cover';
+
 export function FadedBrandFace({
   size,
   className = '',
@@ -48,14 +55,17 @@ export function FadedBrandFace({
       aria-label={label}
     >
       <img
-        src={BRAND_MEDALLION}
+        src={BRAND_MEDALLION_CUTOUT}
         alt=""
         draggable={false}
         decoding="async"
-        className={`pointer-events-none select-none object-contain ${
-          isPin ? 'h-[78%] w-[78%]' : 'h-[62%] w-[62%] max-h-[140px] max-w-[140px]'
+        className={`${FACE_ZOOM} ${
+          isPin
+            ? 'h-[240%] w-[240%] min-h-[240%] min-w-[240%]'
+            : 'h-[220%] w-[220%] min-h-[220%] min-w-[220%]'
         }`}
         style={{ opacity: FADED_BRAND_FACE_OPACITY }}
+        data-faded-face-zoom={isPin ? 'pin' : 'tile'}
       />
     </div>
   );
