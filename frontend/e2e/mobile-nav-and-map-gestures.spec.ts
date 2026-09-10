@@ -312,8 +312,9 @@ test('expanded mobile map uses flex fill and stays within the shell', async ({ b
   await ctx.close();
 });
 
-// HTML pins must advertise gesture forwarding so pan/pinch starting on a face works.
-test('map markers wire drag/pinch pass-through onto Mapbox', async ({ browser }) => {
+// Soft continuous pan/pinch: HTML pins must pass touches to the Mapbox canvas
+// (pointer-events:none). #224's panBy forwarding cannot deliver native inertia.
+test('map markers pass touches through to Mapbox canvas', async ({ browser }) => {
   const ctx = await browser.newContext({
     viewport: { width: 390, height: 844 },
     hasTouch: true,
@@ -358,15 +359,39 @@ test('map markers wire drag/pinch pass-through onto Mapbox', async ({ browser })
   // Wait for Mapbox markers; self pin always exists once map loads.
   await expect
     .poll(async () =>
-      page.locator('.mapboxgl-marker[data-map-gesture-wired="1"]').count(),
+      page.locator('.mapboxgl-marker[data-map-canvas-pass-through="1"]').count(),
     )
     .toBeGreaterThan(0);
 
-  const wiredTouchAction = await page
-    .locator('.mapboxgl-marker[data-map-gesture-wired="1"]')
+  const markerPe = await page
+    .locator('.mapboxgl-marker[data-map-canvas-pass-through="1"]')
     .first()
-    .evaluate((el) => getComputedStyle(el).touchAction);
-  expect(wiredTouchAction).toMatch(/none/i);
+    .evaluate((el) => ({
+      pe: getComputedStyle(el).pointerEvents,
+      touch: getComputedStyle(el).touchAction,
+      childPe: el.querySelector('*')
+        ? getComputedStyle(el.querySelector('*') as Element).pointerEvents
+        : 'none',
+    }));
+  expect(markerPe.pe).toMatch(/none/i);
+  expect(markerPe.touch).toMatch(/none/i);
+  expect(markerPe.childPe).toMatch(/none/i);
+
+  // Canvas container must advertise native Mapbox pan + pinch handlers.
+  const canvasReady = await host.evaluate((el) => {
+    const container = el.querySelector('.mapboxgl-canvas-container');
+    const canvas = el.querySelector('canvas.mapboxgl-canvas');
+    return {
+      hasDrag: !!container?.classList.contains('mapboxgl-touch-drag-pan'),
+      hasPinch: !!container?.classList.contains('mapboxgl-touch-zoom-rotate'),
+      canvasPe: canvas ? getComputedStyle(canvas).pointerEvents : '',
+      canvasTouch: canvas ? getComputedStyle(canvas).touchAction : '',
+    };
+  });
+  expect(canvasReady.hasDrag).toBe(true);
+  expect(canvasReady.hasPinch).toBe(true);
+  expect(canvasReady.canvasPe).toMatch(/auto|all/i);
+  expect(canvasReady.canvasTouch).toMatch(/none/i);
 
   await ctx.close();
 });
