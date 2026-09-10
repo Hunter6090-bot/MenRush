@@ -45,8 +45,8 @@ type VenueRow = {
   nation?: string | null;
   category: string;
   venue_type?: string | null;
-  lat: number;
-  lng: number;
+  lat?: number | string | null;
+  lng?: number | string | null;
   source_url?: string | null;
   external_id?: string | null;
   verified_at?: string | null;
@@ -111,8 +111,6 @@ async function main() {
   for (const v of venues) {
     const name = (v.name || '').trim();
     const city = (v.city || '').trim();
-    const lat = Number(v.lat);
-    const lng = Number(v.lng);
     const slug = resolveCategory(v.category);
 
     if (!name || !city) {
@@ -130,6 +128,14 @@ async function main() {
       skipped += 1;
       continue;
     }
+    // Never invent coords. JSON null must not coerce via Number(null) === 0.
+    if (v.lat == null || v.lng == null || v.lat === '' || v.lng === '') {
+      console.warn(`[skip] missing lat/lng for ${name} (${city}) — never invent coordinates`);
+      skipped += 1;
+      continue;
+    }
+    const lat = Number(v.lat);
+    const lng = Number(v.lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
       console.warn(`[skip] missing/invalid lat/lng for ${name} (${city}) — never invent coordinates`);
       skipped += 1;
@@ -137,6 +143,12 @@ async function main() {
     }
     if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
       console.warn(`[skip] out-of-range coords for ${name}`);
+      skipped += 1;
+      continue;
+    }
+    // Reject 0,0 sentinel (common null-coercion mistake) for UK commercial venues.
+    if (lat === 0 && lng === 0) {
+      console.warn(`[skip] 0,0 coords for ${name} — refuse sentinel; never invent`);
       skipped += 1;
       continue;
     }

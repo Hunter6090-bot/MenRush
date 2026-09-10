@@ -1,19 +1,18 @@
 {
-  "venues": [
-    {
-      "_comment": "Ops fill: verified lat/lng + optional public website only. Never invent coords. Never scrape gaysaunas.co.uk wholesale. Skip closed (Just For You, Steam Complex Leeds temp closed) and Social-play/Redruth until named private premises.",
-      "name": "EXAMPLE — replace before seed",
-      "city": "London",
-      "nation": "England",
-      "category": "saunas",
-      "venue_type": "sauna",
-      "lat": null,
-      "lng": null,
-      "source_url": null,
-      "external_id": "example-do-not-seed",
-      "verified_at": null
-    }
-  ],
+  "venues": [],
+  "_ops_note": "Add hand-verified commercial venues only. Each row needs real lat/lng — never invent. Never scrape gaysaunas.co.uk wholesale. Skip closed (Just For You, Steam Complex Leeds temp closed) and Social-play/Redruth until named private premises.",
+  "example_row_shape": {
+    "name": "Venue name",
+    "city": "London",
+    "nation": "England",
+    "category": "saunas",
+    "venue_type": "sauna",
+    "lat": 51.5,
+    "lng": -0.1,
+    "source_url": "https://example.com",
+    "external_id": "ops-example",
+    "verified_at": "2026-09-09T12:00:00Z"
+  },
   "growth_pointers_verify_before_seed": {
     "London": ["Sweatbox Soho", "Pleasuredrome", "Covent Garden Health Spa", "The Locker Room", "Sailors Sauna", "E15 Club"],
     "Manchester_NW": ["Basement Complex", "Nero's Sauna (Bury)", "Acqua + W3 (Blackpool)", "Dolphin (New Brighton)", "Pennine (Shaw)", "Sauna Sauna (Northwich)", "Sweat Sauna (Carlisle)"],
