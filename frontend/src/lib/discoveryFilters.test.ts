@@ -7,6 +7,7 @@ import {
   DEFAULT_DISCOVERY_FILTERS,
   MORE_FILTER_CATEGORY_IDS,
   PRIMARY_DISCOVERY_FILTER_CATEGORIES,
+  STATUS_FILTER_OPTIONS,
   applyDiscoveryClientFilters,
   buildInterestTags,
   buildNearbyApiFilters,
@@ -172,5 +173,69 @@ describe('discovery age From–To range', () => {
       user({ id: 'none', name: 'N', is_verified: false, authenticity_status: 'unverified' }),
     ];
     expect(applyDiscoveryClientFilters(people, state).map((u) => u.id)).toEqual(['veriff']);
+  });
+});
+
+describe('discovery NEW joiners status', () => {
+  const nowIso = new Date().toISOString();
+  const oldIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const newerIso = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString();
+  const olderNewIso = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+  const visitorExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+  it('exposes NEW status chip (Brand-signed face)', () => {
+    expect(STATUS_FILTER_OPTIONS.some((o) => o.id === 'new' && o.label === 'NEW')).toBe(true);
+  });
+
+  it('filters to recently joined and sorts newest first', () => {
+    const state = {
+      ...DEFAULT_DISCOVERY_FILTERS,
+      status: ['new'] as typeof DEFAULT_DISCOVERY_FILTERS.status,
+    };
+    const people = [
+      user({ id: 'old', name: 'Old', created_at: oldIso, distance_km: 0.2 }),
+      user({ id: 'newer', name: 'Newer', created_at: newerIso, distance_km: 5 }),
+      user({ id: 'older-new', name: 'OlderNew', created_at: olderNewIso, distance_km: 1 }),
+      user({ id: 'no-date', name: 'NoDate', distance_km: 0.1 }),
+    ];
+    expect(applyDiscoveryClientFilters(people, state).map((u) => u.id)).toEqual([
+      'newer',
+      'older-new',
+    ]);
+    expect(countActiveDiscoveryFilters(state)).toBe(1);
+  });
+
+  it('includes active visitors in NEW filter (Brand same pill)', () => {
+    const state = {
+      ...DEFAULT_DISCOVERY_FILTERS,
+      status: ['new'] as typeof DEFAULT_DISCOVERY_FILTERS.status,
+    };
+    const people = [
+      user({ id: 'vet', name: 'Vet', created_at: oldIso, distance_km: 0.2 }),
+      user({
+        id: 'visitor',
+        name: 'Visitor',
+        created_at: oldIso,
+        is_visitor: true,
+        visitor_expires_at: visitorExpiry,
+        distance_km: 3,
+      }),
+      user({ id: 'fresh', name: 'Fresh', created_at: newerIso, distance_km: 4 }),
+    ];
+    expect(applyDiscoveryClientFilters(people, state).map((u) => u.id)).toEqual([
+      'fresh',
+      'visitor',
+    ]);
+  });
+
+  it('does not require NEW when status is empty', () => {
+    const people = [
+      user({ id: 'fresh', name: 'Fresh', created_at: nowIso }),
+      user({ id: 'veteran', name: 'Vet', created_at: oldIso }),
+    ];
+    expect(applyDiscoveryClientFilters(people, DEFAULT_DISCOVERY_FILTERS).map((u) => u.id)).toEqual([
+      'fresh',
+      'veteran',
+    ]);
   });
 });

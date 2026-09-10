@@ -235,6 +235,7 @@ export function DiscoveryFilterPanel({
                     type="button"
                     aria-pressed={value.status.includes(option.id)}
                     onClick={() => toggleStatus(option.id)}
+                    data-testid={`status-filter-${option.id}`}
                     className={pillClass(value.status.includes(option.id))}
                   >
                     {option.label}

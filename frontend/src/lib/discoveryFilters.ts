@@ -2,6 +2,7 @@ import type { Mood } from '../api/client';
 import { MOOD_LABELS } from '../api/client';
 import type { NearbyUser } from '../components/ProfileCard';
 import { INTENT_FILTERS, matchesIntentFilter, type IntentFilter } from './discoveryFormat';
+import { createdAtMs, isFreshFaceNearby, isNewlyJoined, isVisitorFresh } from './newJoiner';
 
 /** Profile tag groups — shared with Profile editor. */
 export const DISCOVERY_FILTER_CATEGORIES = [
@@ -108,6 +109,8 @@ export const AGE_SELECT_OPTIONS: readonly number[] = Array.from(
 export const STATUS_FILTER_OPTIONS = [
   { id: 'online', label: 'Online now' },
   { id: 'pulsing', label: 'Pulsing now' },
+  /** Brand-signed Status chip — same face as Grid/Map pill. */
+  { id: 'new', label: 'NEW' },
   { id: 'hasPhoto', label: 'Has photo' },
   { id: 'verified', label: 'Trust checked' },
 ] as const;
@@ -260,6 +263,10 @@ export function applyDiscoveryClientFilters(users: NearbyUser[], state: Discover
   if (state.status.includes('online')) {
     result = result.filter((u) => u.online);
   }
+  if (state.status.includes('new')) {
+    // Newly joined (7d) OR active visitor fresh-face — Nearby-scoped only.
+    result = result.filter((u) => isFreshFaceNearby(u));
+  }
   if (state.status.includes('hasPhoto')) {
     result = result.filter((u) => !!u.photo_url);
   }
@@ -283,6 +290,23 @@ export function applyDiscoveryClientFilters(users: NearbyUser[], state: Discover
 
   if (state.mood) {
     result = result.filter((u) => u.mood === state.mood);
+  }
+
+  // NEW status: surface fresh faces first — newest joiners, then active visitors.
+  if (state.status.includes('new')) {
+    result = [...result].sort((a, b) => {
+      const aJoin = isNewlyJoined(a.created_at) ? 1 : 0;
+      const bJoin = isNewlyJoined(b.created_at) ? 1 : 0;
+      if (aJoin !== bJoin) return bJoin - aJoin;
+      if (aJoin && bJoin) {
+        const byAge = createdAtMs(b.created_at) - createdAtMs(a.created_at);
+        if (byAge !== 0) return byAge;
+      }
+      const aVis = isVisitorFresh(a) ? 1 : 0;
+      const bVis = isVisitorFresh(b) ? 1 : 0;
+      if (aVis !== bVis) return bVis - aVis;
+      return createdAtMs(b.visitor_expires_at) - createdAtMs(a.visitor_expires_at);
+    });
   }
 
   return result;

@@ -41,6 +41,15 @@ export interface NearbyUser {
   pulse_expires_at?: string | null;
   /** Active mood (auto-expires after 6h server-side; null when unset/expired). */
   mood?: import('../api/client').Mood | null;
+  /**
+   * Account created_at (ISO) from `/users/nearby` — account age only for NEW badge.
+   * Not exact GPS; privacy-safe.
+   */
+  created_at?: string;
+  /** Active visitor fresh-face boost (left home area; TTL not expired). */
+  is_visitor?: boolean;
+  /** ISO expiry for visitor boost — null when not visiting. */
+  visitor_expires_at?: string | null;
 }
 
 interface ProfileCardProps {
