@@ -47,11 +47,8 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
-<<<<<<< HEAD
-| P0 Messaging iPhone 1× open (post-#203) | this branch `cursor/messaging-iphone-1x-fit-88ea` | — | Cursor cloud — #203 overflow still OK; regress = composer `text-sm` (14px) iOS auto-zoom + double-tap zoom trap + Conversations 100dvh nest after #224 Layout; lock input ≥16px + touch-action:manipulation + inbox h-full; e2e font/scale; BOA90 iPhone 14; do not ping Al |
-=======
-| P0 chat timeline reorder (earlier msgs jump) | this branch `cursor/fix-chat-message-reorder-2f25` | — | Cursor cloud — Al/BOA90 via Zoul lock; `mergeConversationRows` appended LIMIT-slid ids at end on 2.5s poll; union+sort+cap; focused PR; #163 same Messaging path but empty-flash only — do not unblock; BOA90; do not ping Al |
->>>>>>> c126232 (fix(chat): stop earlier messages jumping after poll merge (cursor))
+| P0 chat timeline reorder (earlier msgs jump) | this branch `cursor/fix-chat-message-reorder-2f25` PR `#225` | — | Cursor cloud — rebased onto main+#226; Al/BOA90 via Zoul lock; `mergeConversationRows` LIMIT-slid ids; union+sort+cap; keep #226 composer 16px / touch-action / Conversations h-full; #163 held; BOA90; do not ping Al |
+| P0 Messaging iPhone 1× open (post-#203) | merged `#226` on main (`3d3708b`) | — | Cursor cloud — composer ≥16px + touch-action:manipulation + inbox h-full; e2e font/scale; BOA90 iPhone 14; do not ping Al |
 | P0 Nearby map mobile pan/pinch (post-#216) | this branch `cursor/nearby-map-mobile-gestures-7023` | — | Cursor cloud — #216 left HTML pins swallowing drag/pinch + expanded 100dvh overflow rubber-band; wire marker→Mapbox gestures; flex-fill expanded map; Layout main overflow contain; BOA90; do not ping Al |
  Messages thread list: drop square avatar frame + slightly larger circle + Brand empty face | this branch `cursor/messages-avatar-no-square-1bce` PR `#222` | — | Cursor cloud — owner phone feedback; remove sidebar `ring-2` square chrome on ConversationItem; 52px circle; empty/generic → FadedBrandFace cutout+zoom (inherits #221/#223; media lock on /uploads); UserAvatar size+rounded on wrapper; rebased onto main+#221+#223; #213/#97–#99 parked; BOA90; do not ping Al |
 | Nearby empty face: transparent cutout + face zoom (`FadedBrandFace`) | merged `#221` + lock `#223` on main | — | Cursor cloud — Brand re-signed: `/brand/medallion-transparent.png` + CSS face zoom; #223 Chat audit superseded by #222 Messages empty face; BOA90; do not ping Al |
