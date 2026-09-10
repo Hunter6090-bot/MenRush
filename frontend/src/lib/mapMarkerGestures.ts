@@ -1,10 +1,8 @@
 /**
- * @deprecated Soft continuous Nearby pan/pinch requires the Mapbox canvas to own
- * touches. HTML marker → panBy forwarding (PR #224) cannot deliver native inertia.
- * Use mapMarkerHitTest.ts + pointer-events:none markers instead.
- *
- * This file remains only so old imports fail loudly in review — prefer deleting
- * call sites. Kept temporarily with the hit-test re-exports removed.
+ * @deprecated Soft continuous Nearby pan/pinch (Android Chrome + iPhone) requires
+ * the Mapbox canvas to own touches. HTML marker → panBy forwarding (PR #224) cannot
+ * deliver native inertia on either platform. Use mapMarkerHitTest.ts +
+ * pointer-events:none markers instead.
  */
 export {
   hitTestMapPins,

@@ -1,8 +1,9 @@
 /**
  * Nearby map pins are HTML Mapbox markers. If they capture pointer events, they
- * steal pan/pinch from the GL canvas and the map feels sticky — especially on
- * dense iPhone Nearby views. Soft continuous drag/pinch requires the canvas to
- * own every touch (native dragPan + touchZoomRotate + inertia).
+ * steal pan/pinch from the GL canvas and the map feels sticky on phone —
+ * Android Chrome and iPhone alike (owner lock: not iOS-only). Soft continuous
+ * drag/pinch requires the canvas to own every touch (native dragPan +
+ * touchZoomRotate + inertia). #224's panBy forwarding cannot meet that bar.
  *
  * Contract:
  * - Markers: pointer-events: none (including descendants)

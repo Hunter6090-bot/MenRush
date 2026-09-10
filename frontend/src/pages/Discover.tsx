@@ -273,7 +273,8 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
       user-select: none;
       -webkit-touch-callout: none;
     }
-    /* While a finger is on the map, kill iOS rubber-band / parent scroll steal. */
+    /* While a finger is on the map, kill rubber-band / parent scroll steal
+       (Android Chrome + iPhone — same parent-scroll fight on both). */
     html.discover-map-gesturing,
     html.discover-map-gesturing body {
       overscroll-behavior: none;
@@ -367,7 +368,7 @@ const BROWSER_GPS_DENIED_NOTICE =
  * (rotation fighting the gesture feels like "pinch does nothing" on small screens).
  * Never call while the map is mid-pan/zoom — re-enable resets inertia and feels sticky.
  *
- * dragPan options tune iOS PWA inertia toward "soft continuous" (product bar for Nearby).
+ * dragPan options tune phone inertia (Android Chrome + iPhone) toward soft continuous.
  */
 function assertMapGestures(map: mapboxgl.Map) {
   try {
@@ -376,7 +377,7 @@ function assertMapGestures(map: mapboxgl.Map) {
     /* map mid-teardown */
   }
   // Soft continuous phone pan — slightly lower deceleration than Mapbox defaults
-  // so a flick keeps rolling instead of dying under dense HTML pin overlays.
+  // so a flick keeps rolling on Android and iPhone (HTML pins no longer steal).
   try {
     map.dragPan.enable({
       linearity: 0.35,
@@ -406,7 +407,7 @@ function assertMapGestures(map: mapboxgl.Map) {
   }
 }
 
-/** Lock document overscroll while a touch is active on the map surface (iOS PWA). */
+/** Lock document overscroll while a touch is active on the map surface (phone web). */
 function bindMapOverscrollLock(surface: HTMLElement): () => void {
   const start = () => document.documentElement.classList.add('discover-map-gesturing');
   const end = () => document.documentElement.classList.remove('discover-map-gesturing');
@@ -1114,7 +1115,7 @@ export const Discover = () => {
     };
   }, [mapPanelMode, desktopMapExpanded, isDesktopLayout, mapLoaded]);
 
-  // iOS/PWA: while touching the map surface, suppress document rubber-band.
+  // Phone web (Android + iPhone): while touching the map, suppress document rubber-band.
   useEffect(() => {
     if (!mapLoaded) return;
     const surfaces = document.querySelectorAll<HTMLElement>('.discover-map-surface');
@@ -1352,6 +1353,8 @@ export const Discover = () => {
       markMarkerCanvasPassThrough(selfEl);
 
       mapRef.current = map;
+      // E2E / BOA90 tooling: read center+zoom after touch pan across pins.
+      (window as unknown as { __menrushDiscoverMap?: mapboxgl.Map }).__menrushDiscoverMap = map;
     })();
 
     return () => {
@@ -1375,6 +1378,11 @@ export const Discover = () => {
         live.remove();
       }
       mapRef.current = null;
+      try {
+        delete (window as unknown as { __menrushDiscoverMap?: mapboxgl.Map }).__menrushDiscoverMap;
+      } catch {
+        /* ignore */
+      }
       selfMarkerRef.current = null;
       selfDotRef.current = null;
       const root = selfRootRef.current;
