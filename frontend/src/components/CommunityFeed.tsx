@@ -181,7 +181,7 @@ export function CommunityFeed({
             maxLength={MAX_CHARS}
             rows={compact ? 2 : 3}
             placeholder="What's happening nearby?"
-            className="w-full resize-none rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 py-2.5 text-[14px] leading-relaxed text-[var(--cream)] placeholder:text-[var(--cream-muted)] focus:border-[#C4832A] focus:outline-none"
+            className="w-full resize-none rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 py-2.5 text-[16px] leading-relaxed text-[var(--cream)] placeholder:text-[var(--cream-muted)] focus:border-[#C4832A] focus:outline-none"
           />
           <div className="mt-2 flex items-center justify-between gap-2">
             <span

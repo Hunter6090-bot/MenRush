@@ -595,7 +595,7 @@ export const Profile = () => {
   };
 
   const inputClass =
-    'w-full bg-[var(--bg-card)]/60 border border-[var(--border-default)] text-[var(--cream)] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all';
+    'w-full bg-[var(--bg-card)]/60 border border-[var(--border-default)] text-[var(--cream)] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-[16px] focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all';
 
   if (!profile) {
     return (
@@ -636,7 +636,7 @@ export const Profile = () => {
         </div>
       )}
 
-      <div className="mx-auto max-w-xl space-y-4 px-4 py-4 pb-28 lg:max-w-6xl lg:space-y-8 lg:px-8 lg:py-8 lg:pb-12">
+      <div className="mx-auto min-w-0 max-w-xl space-y-4 overflow-x-clip px-4 py-4 pb-28 lg:max-w-6xl lg:space-y-8 lg:px-8 lg:py-8 lg:pb-12">
         <input
           ref={photoInputRef}
           type="file"
@@ -1228,7 +1228,7 @@ export const Profile = () => {
                 placeholder="Tell people about yourself…"
                 rows={3}
                 maxLength={500}
-                className={`w-full bg-[var(--bg-card)]/60 border border-[var(--border-default)] text-[var(--cream)] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all resize-none ${
+                className={`w-full bg-[var(--bg-card)]/60 border border-[var(--border-default)] text-[var(--cream)] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-[16px] focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all resize-none ${
                   isEssentialMissing('bio') ? ESSENTIAL_INPUT_HIGHLIGHT : ''
                 }`}
                 data-testid="profile-field-bio"

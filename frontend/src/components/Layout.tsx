@@ -127,8 +127,9 @@ function LayoutInner({ children }: LayoutProps) {
   return (
     <div
       className="min-h-dvh min-w-0 max-w-full overflow-x-clip bg-[var(--bg-primary)] lg:grid lg:grid-cols-[var(--desktop-sidebar-width)_minmax(0,1fr)]"
-      style={{ ['--desktop-sidebar-width' as string]: sidebarWidth }}
+      style={{ ['--desktop-sidebar-width' as string]: sidebarWidth, touchAction: 'manipulation' }}
       data-sidebar={sidebarExpanded ? 'expanded' : 'collapsed'}
+      data-testid="app-shell"
     >
       <aside
         className={`hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:border-r lg:border-[var(--border-default)] lg:bg-nn-bg lg:py-5 transition-[width] duration-300 ease-[var(--ease-out)] ${
@@ -231,7 +232,10 @@ function LayoutInner({ children }: LayoutProps) {
       </aside>
 
       <div className="flex min-h-dvh min-w-0 max-w-full flex-col overflow-x-clip lg:col-start-2">
-        <header className="lg:hidden fixed top-0 left-0 right-0 z-50 max-w-full border-b border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-primary)_92%,transparent)] backdrop-blur-xl pt-[env(safe-area-inset-top,0px)]">
+        <header
+          className="lg:hidden fixed top-0 left-0 right-0 z-50 max-w-full overflow-x-clip border-b border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-primary)_92%,transparent)] backdrop-blur-xl pt-[env(safe-area-inset-top,0px)]"
+          style={{ touchAction: 'manipulation' }}
+        >
           <div className="flex h-[3.25rem] min-w-0 items-center gap-1 px-2 sm:gap-2 sm:px-3">
             <div className="w-10 shrink-0">
               {showMobileBack ? (
@@ -333,11 +337,14 @@ function LayoutInner({ children }: LayoutProps) {
           inflate past the viewport and reintroduce page scroll that fights Mapbox
           pan/pinch on Nearby. Page content scrolls inside page-enter when needed.
         */}
-        <main className="flex min-h-0 flex-1 flex-col overflow-hidden max-lg:pt-[var(--mobile-header-height)] max-lg:pb-[var(--mobile-tab-bar-height)] lg:pb-0">
+        <main className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-x-clip overflow-hidden max-lg:pt-[var(--mobile-header-height)] max-lg:pb-[var(--mobile-tab-bar-height)] lg:pb-0">
           <LocationPresenceStrip />
           <ProfileDepthStrip />
           <PushAlertBanner />
-          <div className="page-enter min-h-0 min-w-0 flex-1 overflow-x-clip overflow-y-auto overscroll-y-contain">
+          <div
+            className="page-enter min-h-0 min-w-0 max-w-full flex-1 overflow-x-clip overflow-y-auto overscroll-y-contain"
+            style={{ touchAction: 'manipulation' }}
+          >
             {children}
           </div>
         </main>
@@ -345,6 +352,7 @@ function LayoutInner({ children }: LayoutProps) {
         <nav
           className="lg:hidden fixed bottom-0 left-0 right-0 z-50 max-w-full overflow-x-clip px-3 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] pt-2"
           aria-label="Primary"
+          style={{ touchAction: 'manipulation' }}
         >
           <div
             className={`flex min-w-0 max-w-full items-stretch overflow-x-clip rounded-[1.35rem] border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-elevated)_95%,transparent)] shadow-[var(--shadow-lg)] backdrop-blur-xl ${

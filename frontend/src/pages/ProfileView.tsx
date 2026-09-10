@@ -241,7 +241,7 @@ export const ProfileView = () => {
 
   return (
     <Layout>
-      <div className="max-w-xl mx-auto px-4 py-6 pb-10 space-y-4">
+      <div className="mx-auto min-w-0 max-w-xl space-y-4 overflow-x-clip px-4 py-6 pb-10" data-testid="profile-view-shell">
         {safetyNotice ? (
           <div
             role="status"
@@ -385,7 +385,7 @@ export const ProfileView = () => {
 
         <ProfileAlbumsSection ownerId={user.id} ownerName={user.name} />
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex min-w-0 max-w-full flex-wrap gap-2 overflow-x-clip">
           <button
             type="button"
             onClick={handlePass}

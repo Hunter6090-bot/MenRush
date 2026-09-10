@@ -72,7 +72,7 @@ export function DiscoveryFilterPanel({
   const category = PRIMARY_DISCOVERY_FILTER_CATEGORIES.find((c) => c.id === activeCategory);
 
   const ageSelectClass =
-    'min-w-[4.5rem] rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)]/70 px-2.5 py-2 text-sm font-semibold text-[var(--cream)] outline-none focus:border-[var(--copper)]';
+    'min-w-[4.5rem] rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)]/70 px-2.5 py-2 text-[16px] font-semibold text-[var(--cream)] outline-none focus:border-[var(--copper)]';
 
   return (
     <div
