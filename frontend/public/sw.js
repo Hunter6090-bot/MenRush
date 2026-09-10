@@ -1,5 +1,34 @@
 // MenRush Service Worker — background push for messages and incoming calls, with deep-link recovery.
-// SW_VERSION=2026-09-01-call-ring-always-v5 — bump to force clients onto new click/call logic.
+// SW_VERSION=2026-09-10-call-ring-trim-hook-v6 — bump to force clients onto new click/call logic.
+//
+// Incoming call sound (Legal GREEN interim):
+// - Default: OS notification sound (`silent: false`) — no Trim/Nokia file shipped.
+// - Once Brand drops a cleared marker at /audio/call-ring.trim.cleared.json + licensed
+//   MP3, call pushes may set Notification `sound` to that same-origin path (Android;
+//   iOS ignores custom sound). Mirror of frontend/src/lib/callRingAsset.ts — keep in sync.
+
+const CALL_RING_TRIM_CLEARED_MARKER = '/audio/call-ring.trim.cleared.json';
+const CALL_RING_TRIM_SRC_DEFAULT = '/audio/call-ring.trim.mp3';
+
+async function resolveCallNotificationSound() {
+  try {
+    const res = await fetch(CALL_RING_TRIM_CLEARED_MARKER, {
+      cache: 'no-store',
+      credentials: 'same-origin',
+    });
+    if (!res.ok) return undefined;
+    const meta = await res.json();
+    if (!meta || meta.cleared !== true) return undefined;
+    const src =
+      typeof meta.src === 'string' && meta.src.trim()
+        ? meta.src.trim()
+        : CALL_RING_TRIM_SRC_DEFAULT;
+    if (!src.startsWith('/audio/') || src.includes('..')) return undefined;
+    return src;
+  } catch {
+    return undefined;
+  }
+}
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
@@ -101,26 +130,33 @@ self.addEventListener('push', (event) => {
   const title = data.title || (isCall ? 'Incoming call' : 'MenRush');
   // tag encodes peer id so notificationclick can recover if data is stripped.
   const tag = data.tag || (otherId ? 'msg-' + otherId : isCall ? 'menrush-call' : 'menrush');
-  const options = {
-    body: data.body || (isCall ? 'Incoming video call' : 'New activity on MenRush'),
-    icon: data.icon || '/brand/icon-192.png',
-    badge: '/brand/icon-48.png',
-    tag,
-    renotify: true,
-    silent: false,
-    requireInteraction: isCall,
-    vibrate: isCall ? [300, 120, 300, 120, 300, 120, 400] : [180, 80, 180],
-    data: { url: href, path, otherId, kind },
-    actions: isCall
-      ? [
-          { action: 'answer', title: 'Answer' },
-          { action: 'dismiss', title: 'Decline' },
-        ]
-      : [],
-  };
-
   event.waitUntil(
     (async () => {
+      const options = {
+        body: data.body || (isCall ? 'Incoming video call' : 'New activity on MenRush'),
+        icon: data.icon || '/brand/icon-192.png',
+        badge: '/brand/icon-48.png',
+        tag,
+        renotify: true,
+        silent: false,
+        requireInteraction: isCall,
+        vibrate: isCall ? [300, 120, 300, 120, 300, 120, 400] : [180, 80, 180],
+        data: { url: href, path, otherId, kind },
+        actions: isCall
+          ? [
+              { action: 'answer', title: 'Answer' },
+              { action: 'dismiss', title: 'Decline' },
+            ]
+          : [],
+      };
+
+      // Custom sound only when Legal/Brand clearance marker is present. Otherwise
+      // leave undefined so the OS plays its default notification tone.
+      if (isCall) {
+        const sound = await resolveCallNotificationSound();
+        if (sound) options.sound = sound;
+      }
+
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       for (const client of windows) {
         try {
