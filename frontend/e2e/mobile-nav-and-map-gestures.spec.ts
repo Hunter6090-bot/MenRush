@@ -113,6 +113,13 @@ test('expanded mobile map stays fully within the viewport', async ({ browser }) 
   const page = await ctx.newPage();
   await page.goto('/discover');
 
+  // Brand Grid-first: expand chrome only exists on the Map surface.
+  const mapToggle = page.getByTestId('nearby-map-grid-toggle');
+  await expect(mapToggle).toBeVisible({ timeout: 20_000 });
+  if ((await mapToggle.innerText()).trim().toLowerCase() === 'map') {
+    await mapToggle.click();
+  }
+
   const panel = page.getByTestId('discover-map-panel');
   await expect(panel).toBeVisible({ timeout: 20_000 });
 
