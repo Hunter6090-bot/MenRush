@@ -6,6 +6,11 @@ import { accessControl } from '../security/access';
 import { ProfileInput } from '../types/validation';
 import { ageFromDateOfBirth, AGE_FILTER_MIN } from '../lib/age';
 import { premiumService } from './premium.service';
+import {
+  isVisitorBoostActive,
+  planVisitorLocationUpdate,
+  type VisitorProfileState,
+} from '../lib/visitorFreshFace';
 
 /**
  * Privacy fuzz for map pins: keep people near where they actually are, with a
@@ -88,6 +93,13 @@ export const userService = {
         u.hosting_status,        COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified, u.authenticity_status,
         -- Account age only (privacy-safe) — powers Nearby NEW badge / New filter. Not exact GPS.
         u.created_at,
+        -- Visitor fresh-face: active boost only (never home coords).
+        (p.visitor_expires_at IS NOT NULL AND p.visitor_expires_at > NOW()) AS is_visitor,
+        CASE
+          WHEN p.visitor_expires_at IS NOT NULL AND p.visitor_expires_at > NOW()
+          THEN p.visitor_expires_at
+          ELSE NULL
+        END AS visitor_expires_at,
         -- Presence must be fresh: stuck online=true from a crashed tab is not "Active now".
         (p.online = TRUE AND p.last_seen IS NOT NULL AND p.last_seen > NOW() - INTERVAL '20 minutes') AS online,
         p.last_seen, p.available_until,
@@ -168,11 +180,12 @@ export const userService = {
       queryStr += ` AND p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' AND p.mood ILIKE $${values.length}`;
     }
 
-    // Spec: pulse first, then fresh presence. Real photos rank above shared
-    // generic avatars so the grid feels intentional and incentivizes upgrades.
+    // Spec: pulse first, then visitor/new-face boost, then fresh presence.
+    // Real photos rank above shared generic avatars.
     queryStr += ` ORDER BY
       (u.is_pulsing AND u.pulse_expires_at > NOW()) DESC,
       (p.available_until IS NOT NULL AND p.available_until > NOW()) DESC,
+      (p.visitor_expires_at IS NOT NULL AND p.visitor_expires_at > NOW()) DESC,
       (p.online = TRUE AND p.last_seen > NOW() - INTERVAL '20 minutes') DESC,
       (u.photo_url IS NOT NULL AND u.photo_url NOT LIKE '/avatars/generic/%') DESC,
       p.last_seen DESC NULLS LAST
@@ -223,9 +236,20 @@ export const userService = {
             ? createdRaw
             : undefined;
 
+      const visitorRaw = row.visitor_expires_at;
+      const visitor_expires_at =
+        visitorRaw instanceof Date
+          ? visitorRaw.toISOString()
+          : typeof visitorRaw === 'string'
+            ? visitorRaw
+            : null;
+      const is_visitor = Boolean(row.is_visitor) && isVisitorBoostActive(visitor_expires_at);
+
       return {
         ...publicRow,
         created_at,
+        is_visitor,
+        visitor_expires_at: is_visitor ? visitor_expires_at : null,
         // Nearby Map / grid: Map photo when set so the main shot can stay private.
         photo_url: discoveryPhotoUrl(mapPhoto, publicRow.photo_url) ?? publicRow.photo_url,
         lat: mapPoint.lat,
@@ -406,6 +430,7 @@ export const userService = {
   },
 
   async updateLocation(userId: string, lat: number, lng: number) {
+    // Upsert live pin + presence first.
     await query(
       `INSERT INTO profiles (user_id, location, lat, lng, online, last_seen, share_live_location_with_matches)
        VALUES ($1, ST_MakePoint($3, $2), $2, $3, true, NOW(), TRUE)
@@ -415,8 +440,73 @@ export const userService = {
          lng = $3,
          online = true,
          last_seen = NOW()`,
-      [userId, lat, lng]
+      [userId, lat, lng],
     );
+
+    // Visitor fresh-face: seed home / start visit / clear on return (honest dwell).
+    // Never invent density — only boost accounts that actually left home.
+    const existing = await query(
+      `SELECT home_lat, home_lng, visitor_since, visitor_expires_at,
+              visitor_anchor_lat, visitor_anchor_lng
+         FROM profiles
+        WHERE user_id = $1`,
+      [userId],
+    );
+    const row = existing.rows[0] as VisitorProfileState | undefined;
+    if (!row) return;
+
+    const plan = planVisitorLocationUpdate(lat, lng, {
+      home_lat: row.home_lat != null ? Number(row.home_lat) : null,
+      home_lng: row.home_lng != null ? Number(row.home_lng) : null,
+      visitor_since: row.visitor_since,
+      visitor_expires_at: row.visitor_expires_at,
+      visitor_anchor_lat:
+        row.visitor_anchor_lat != null ? Number(row.visitor_anchor_lat) : null,
+      visitor_anchor_lng:
+        row.visitor_anchor_lng != null ? Number(row.visitor_anchor_lng) : null,
+    });
+
+    if (plan.action === 'seed_home') {
+      await query(
+        `UPDATE profiles
+            SET home_lat = $2,
+                home_lng = $3,
+                home_set_at = NOW(),
+                visitor_since = NULL,
+                visitor_expires_at = NULL,
+                visitor_anchor_lat = NULL,
+                visitor_anchor_lng = NULL
+          WHERE user_id = $1
+            AND home_lat IS NULL`,
+        [userId, plan.homeLat, plan.homeLng],
+      );
+      return;
+    }
+
+    if (plan.action === 'clear_visitor') {
+      await query(
+        `UPDATE profiles
+            SET visitor_since = NULL,
+                visitor_expires_at = NULL,
+                visitor_anchor_lat = NULL,
+                visitor_anchor_lng = NULL
+          WHERE user_id = $1`,
+        [userId],
+      );
+      return;
+    }
+
+    if (plan.action === 'start_visit') {
+      await query(
+        `UPDATE profiles
+            SET visitor_since = $2,
+                visitor_expires_at = $3,
+                visitor_anchor_lat = $4,
+                visitor_anchor_lng = $5
+          WHERE user_id = $1`,
+        [userId, plan.since, plan.expiresAt, plan.anchorLat, plan.anchorLng],
+      );
+    }
   },
 
   async setOnlineStatus(userId: string, online: boolean) {

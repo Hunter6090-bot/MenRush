@@ -26,5 +26,10 @@ assert.doesNotMatch(
 assert.doesNotMatch(slice, /await this\.ensureDefaultAvatar/);
 assert.doesNotMatch(slice, /await this\.backfillMissingAvatarsNear/);
 assert.match(slice, /u\.created_at/, 'nearby SELECT must include u.created_at for NEW joiners');
+assert.match(
+  slice,
+  /visitor_expires_at/,
+  'nearby SELECT must include visitor_expires_at for fresh-face boost',
+);
 
 console.log('nearby-hotpath-checks: ok');
