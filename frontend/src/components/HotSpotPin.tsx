@@ -170,7 +170,7 @@ export function createHotSpotPinElement(
   spot: HotSpotPinData,
   onTap: () => void,
   size = 48,
-): { element: HTMLDivElement; root: Root } {
+): { element: HTMLDivElement; root: Root; suppressClickRef: { current: boolean } } {
   const el = document.createElement('div');
   const occupied = spot.live_count_exact > 0;
   el.style.width = `${Math.max(size, occupied ? 104 : 72)}px`;
@@ -180,11 +180,20 @@ export function createHotSpotPinElement(
   el.style.zIndex = occupied ? '3' : '2';
   el.style.display = 'flex';
   el.style.justifyContent = 'center';
+  el.style.touchAction = 'none';
+  /** Set by wireHtmlMarkerMapGestures after a drag/pinch so click is ignored. */
+  const suppressClickRef = { current: false };
   el.addEventListener('click', (e) => {
+    if (suppressClickRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      suppressClickRef.current = false;
+      return;
+    }
     e.stopPropagation();
     onTap();
   });
   const root = createRoot(el);
   root.render(<HotSpotPin spot={spot} size={size} />);
-  return { element: el, root };
+  return { element: el, root, suppressClickRef };
 }
