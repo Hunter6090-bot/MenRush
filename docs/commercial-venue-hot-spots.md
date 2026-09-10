@@ -6,8 +6,8 @@ Brand face on the Nearby Map:
 | --- | --- |
 | Pin label | **Cruise** (cruise-ship icon) |
 | Map chip | **Hot Spots** (same cruise-ship icon). No extra tab. |
-| Helper | Commercial venues only. Saunas and gay venues. |
-| Rules | Follow the venue's rules. MenRush does not run these places. |
+| Helper / sheet / page | Commercial venues only. Saunas and gay venues. 18+ only. Follow the venue's rules. MenRush does not run these places. No illegal activity. |
+| Consent cue | Meet in public · Consent first |
 | Check-in | Existing Check in / Check in anonymously / Check out (4h TTL) |
 
 Spot layer ≠ live-user layer. Active / check-in counts only when real check-ins exist.
