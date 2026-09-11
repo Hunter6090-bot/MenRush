@@ -417,18 +417,22 @@ export function createPeerConnection(
   iceServers: RTCIceServer[],
   options?: { forceRelay?: boolean },
 ): RTCPeerConnection {
-  // Mobile: force TURN relay — host/srflx pairs often fail phone↔home Wi‑Fi
-  // (exactly the "your camera works, waiting for his video" stuck state).
-  const forceRelay =
-    options?.forceRelay === true ||
-    (options?.forceRelay !== false && (isIOSCallDevice() || isAndroidCallDevice()));
+  // Only force relay when caller explicitly asks — forcing relay with a dead
+  // free TURN produced ZERO candidates and permanent "waiting for his video".
+  const forceRelay = options?.forceRelay === true;
+  const hasTurn = iceServers.some((s) => {
+    const u = Array.isArray(s.urls) ? s.urls.join(',') : String(s.urls || '');
+    return /turns?:/i.test(u) && Boolean(s.username || s.credential);
+  });
 
   return new RTCPeerConnection({
     iceServers,
     bundlePolicy: 'max-bundle',
     rtcpMuxPolicy: 'require',
     iceCandidatePoolSize: 10,
-    iceTransportPolicy: forceRelay ? 'relay' : 'all',
+    // Prefer all so same-LAN still works; when TURN is real, browsers pick relay
+    // automatically for hard NATs. Force relay only if TURN present + requested.
+    iceTransportPolicy: forceRelay && hasTurn ? 'relay' : 'all',
   });
 }
 
