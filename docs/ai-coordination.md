@@ -47,11 +47,8 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
-<<<<<<< HEAD
-| React 19 upgrade (Router stays v6) — PR ONE | this branch `cursor/react-19-upgrade-1801` | — | Cursor cloud — Al via Product staged beta upgrade; React 19.3 + types; react-leaflet 5 + RQ 4.44 peers; RR pinned 6.30.x (no v7); JSX/RefObject type fixes; BOA90 smoke: login + nav + match→chat; RR v7 separate later; do not ping Al |
-=======
-| Adult Assurance signup gate (Veriff document DOB → `verified_age_18_plus`) | PR branch `cursor/adult-assurance-enforcement-fac3` (#97) | — | Cursor cloud — Al unpark; Legal/Zoul: under-18 no account; age gate ≠ Verified badge; no OSA/KYC/UGC claims; BOA90 fixture; do not self-merge |
->>>>>>> 386637b (feat(adult-assurance): Veriff document DOB signup gate (cursor))
+| Adult Assurance signup gate (Veriff document DOB → `verified_age_18_plus`) | PR branch `cursor/adult-assurance-enforcement-fac3` (#97) | — | Cursor cloud — rebased onto main+#247 React 19; Legal/Zoul: under-18 no account; age gate ≠ Verified badge; no OSA/KYC/UGC claims; BOA90 fixture; do not self-merge |
+| React 19 upgrade (Router stays v6) — PR ONE | merged `#247` on main (`8ada980`) | — | Cursor cloud — Al via Product staged beta upgrade; React 19.3 + types; react-leaflet 5 + RQ 4.44 peers; RR pinned 6.30.x (no v7); JSX/RefObject type fixes; BOA90 smoke: login + nav + match→chat; RR v7 separate later; do not ping Al |
 | P0 chat video stream-first + hard timeout (post-#245) | this branch `cursor/fix-video-stream-fast-0055` | — | Cursor cloud — after Product squash-merged #245 thrash fix; stream thread signed URL into `<video>` immediately (no JWT media-url wait); hard timeout 3.5s → tap-to-retry; preload auto; skip Premium lookup on Range when Discreet off; keep #239 MP4; BOA90: 0:13 note leaves `--:--` in ~1–2s; Product squash-merge; do not ping Al |
 | P0 chat video never finishes download (black player `--:--`) | merged `#245` on main (`b23f825`) | — | Cursor cloud — Al via Product: open-thread poll re-signed `?access=` thrash; fingerprint strip; lock play src; GET media-url; loading + tap-to-retry; TTL 6h; keep #239 MP4; Product squash-merged; do not ping Al |
 | P0 Matches + Messages instant tab paint (SWR cache) | merged `#244` on main (`a306c0e`) | — | Cursor cloud — Al via Product: prefetch/cache Matches+inbox; stale-while-revalidate; warm on shell/login/Nearby; short skeleton then honest empty/error; progressive photo names-first; preserve #242/#225/#231; Matches own bottom-nav (no Chat sub-tab); BOA90 soft-refresh: reopen Chat/Matches after Nearby; do not ping Al |
