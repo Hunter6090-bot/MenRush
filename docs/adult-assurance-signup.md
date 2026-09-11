@@ -36,11 +36,15 @@ Real production Railway never enables the fixture (`NODE_ENV=production` + non-s
 ## API
 
 - `GET /api/auth/adult-assurance/required`
-- `POST /api/auth/adult-assurance/start`
-- `GET /api/auth/adult-assurance/:sessionId` (issues token when `passed`)
-- `POST /api/auth/adult-assurance/:sessionId/submitted`
-- `POST /api/auth/adult-assurance/fixture` (non-prod / BOA90)
-- Register body may include `adult_assurance_token`
+- `POST /api/auth/adult-assurance/start` — mutation limiter (**12 / 15 min** prod)
+- `GET /api/auth/adult-assurance/:sessionId` (issues token when `passed`) — **dedicated status-poll limiter** (**120 / 15 min** prod)
+- `POST /api/auth/adult-assurance/:sessionId/submitted` — mutation limiter (12 / 15 min prod)
+- `POST /api/auth/adult-assurance/fixture` (non-prod / BOA90) — mutation limiter
+- Register body may include `adult_assurance_token` — register/login stay on `authLimiter` (**10 / 15 min** prod; unchanged)
+
+### Rate limits (why status is separate)
+
+Register polls `GET /adult-assurance/:sessionId` every **2s** for up to **120s** (≤60 GETs per attempt). That must not share the tight mutation bucket (12) or register/login (10). Status-poll ceiling **120 / 15 min** allows one full timeout + one retry without HTTP 429; start/submitted/fixture and auth endpoints keep their abuse ceilings.
 
 Identity webhooks remain on `/api/verify/veriff/webhook` (and alias). `applyDecision` tries adult-assurance sessions first, then identity.
 
