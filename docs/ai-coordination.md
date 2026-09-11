@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| Adult Assurance signup gate (liveness + optional ID Verified tick) | PR branch `cursor/adult-assurance-enforcement-fac3` (#97) | — | Cursor cloud — Al MERGE WHEN READY; Brand final sign; Product squash-merge; mig 058–059; do not self-merge |
 | Outdoor Hot Spots Batch 1 (Al Legal override) | this branch `cursor/hotspots-outdoor-batch1-2653` | — | Cursor cloud — Al override Legal RED Batch 1 only (2026-09-12); mig **057** + `outdoor-hotspots.batch1-2026-09.json` + `hotspots:seed-outdoor`; 24 OSM-geocoded / 0 invent / 0 toilets / no Tropics; map visibility = commercial OR ops-curated outdoor; Brand/Studio claims held; Scene chips untouched; CSV 1269 out of scope; do not ping Al |
 | P0 Settings + Profile won't scroll (viewport-capped) | this branch `cursor/fix-settings-profile-scroll-9933` | — | Cursor cloud — Al via Product: Layout min-h-dvh + page-enter overscroll-contain trapped scroll; lock app-shell h-dvh so page-enter scrolls; keep #224/#229/#231; e2e both routes; BOA90 soft-refresh: reopen Settings+Profile after Nearby; Product squash-merge; do not ping Al |
 | React 19 upgrade (Router stays v6) — PR ONE | merged `#247` on main (`8ada980`) | — | Cursor cloud — Al via Product staged beta upgrade; React 19.3 + types; react-leaflet 5 + RQ 4.44 peers; RR pinned 6.30.x (no v7); JSX/RefObject type fixes; BOA90 smoke: login + nav + match→chat; RR v7 separate later; do not ping Al |

@@ -46,6 +46,7 @@ apiClient.interceptors.request.use((config) => {
 const AUTH_CHALLENGE_PATHS = [
   '/auth/login',
   '/auth/register',
+  '/auth/adult-assurance',
   '/auth/2fa/verify',
   '/auth/forgot-password',
   '/auth/reset-password',
@@ -94,6 +95,31 @@ export const authAPI = {
       user?: import('../lib/authSession').StoredAuthUser;
       token?: string;
     }>('/auth/register', data),
+  /** Signup 18+ age gate (document DOB). Not the optional Verified badge. */
+  adultAssuranceRequired: () =>
+    apiClient.get<{ required: boolean; fixtureAllowed: boolean }>('/auth/adult-assurance/required'),
+  startAdultAssurance: () =>
+    apiClient.post<{ sessionId: string; sessionUrl: string }>('/auth/adult-assurance/start'),
+  adultAssuranceStatus: (sessionId: string) =>
+    apiClient.get<{
+      sessionId: string;
+      status: string;
+      assurance_token?: string;
+      underage?: boolean;
+    }>(`/auth/adult-assurance/${sessionId}`),
+  markAdultAssuranceSubmitted: (sessionId: string) =>
+    apiClient.post(`/auth/adult-assurance/${sessionId}/submitted`),
+  /** Non-prod BOA90 / CI fixture only — never in production. */
+  adultAssuranceFixture: (data: {
+    sessionId: string;
+    outcome: 'adult' | 'underage' | 'declined' | 'missing_dob';
+    yearsOld?: number;
+  }) =>
+    apiClient.post<{
+      handled: boolean;
+      adultStatus?: string;
+      assurance_token?: string;
+    }>('/auth/adult-assurance/fixture', data),
   login: (data: { email: string; password: string; deviceTrustToken?: string }) =>
     apiClient.post('/auth/login', data),
   logout: (refreshToken?: string | null) =>

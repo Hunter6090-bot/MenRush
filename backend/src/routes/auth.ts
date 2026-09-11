@@ -15,11 +15,18 @@ import {
   DeleteAccountSchema,
   TwoFactorCodeSchema,
   TwoFactorVerifyLoginSchema,
+  AdultAssuranceFixtureSchema,
 } from '../types/validation';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 import { query } from '../db';
 import { z } from 'zod';
 import { authSessionService } from '../services/auth-session.service';
+import {
+  adultAssuranceService,
+  isAdultAssuranceRequiredAtSignup,
+  isAdultAssuranceTestFixtureAllowed,
+} from '../services/adult-assurance.service';
+import { VeriffConfigError } from '../services/veriff.service';
 
 const router = Router();
 
@@ -38,6 +45,14 @@ const authLimiter = rateLimit({
   // Higher ceiling in non-production so pre-deploy / local suites don't trip the gate.
   max: process.env.NODE_ENV === 'production' ? 10 : 200,
   message: { error: 'Too many attempts, please try again in 15 minutes' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const adultAssuranceLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'production' ? 12 : 100,
+  message: { error: 'Too many adult-assurance attempts, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -64,6 +79,94 @@ const resendConfirmLimiter = rateLimit({
   message: { error: 'Too many resend requests, please try again in 15 minutes' },
   standardHeaders: true,
   legacyHeaders: false,
+});
+
+/**
+ * GET /api/auth/adult-assurance/required
+ * Front-end uses this to know whether Veriff age gate is mandatory on /register.
+ */
+router.get('/adult-assurance/required', (_req, res: Response) => {
+  res.json({
+    required: isAdultAssuranceRequiredAtSignup(),
+    fixtureAllowed: isAdultAssuranceTestFixtureAllowed(),
+  });
+});
+
+/**
+ * POST /api/auth/adult-assurance/start
+ * Creates a pre-account Veriff session. No user row is created.
+ */
+router.post('/adult-assurance/start', adultAssuranceLimiter, async (_req, res: Response) => {
+  try {
+    const session = await adultAssuranceService.startSession();
+    res.status(201).json(session);
+  } catch (err: any) {
+    if (err instanceof VeriffConfigError || err?.code === 'veriff_not_configured') {
+      return res.status(503).json({ error: 'veriff_not_configured' });
+    }
+    if (err?.message === 'veriff_session_failed' || err?.message === 'veriff_session_malformed') {
+      return res.status(502).json({ error: err.message });
+    }
+    console.error('[adult-assurance] start error:', err);
+    res.status(500).json({ error: 'adult_assurance_start_failed' });
+  }
+});
+
+/**
+ * GET /api/auth/adult-assurance/:sessionId
+ * Poll decision. When passed, returns a one-time assurance_token for register.
+ */
+router.get('/adult-assurance/:sessionId', adultAssuranceLimiter, async (req, res: Response) => {
+  try {
+    const sessionId = String(req.params.sessionId || '').trim();
+    if (!/^[0-9a-f-]{36}$/i.test(sessionId)) {
+      return res.status(400).json({ error: 'invalid_session' });
+    }
+    const status = await adultAssuranceService.issueTokenIfPassed(sessionId);
+    if (!status) return res.status(404).json({ error: 'session_not_found' });
+    res.json(status);
+  } catch (err) {
+    console.error('[adult-assurance] status error:', err);
+    res.status(500).json({ error: 'adult_assurance_status_failed' });
+  }
+});
+
+router.post('/adult-assurance/:sessionId/submitted', adultAssuranceLimiter, async (req, res: Response) => {
+  try {
+    const sessionId = String(req.params.sessionId || '').trim();
+    if (!/^[0-9a-f-]{36}$/i.test(sessionId)) {
+      return res.status(400).json({ error: 'invalid_session' });
+    }
+    await adultAssuranceService.markSubmitted(sessionId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[adult-assurance] submitted error:', err);
+    res.status(500).json({ error: 'adult_assurance_submitted_failed' });
+  }
+});
+
+/**
+ * POST /api/auth/adult-assurance/fixture
+ * BOA90 / CI controlled path. Never available in production.
+ */
+router.post('/adult-assurance/fixture', adultAssuranceLimiter, async (req, res: Response) => {
+  try {
+    if (!isAdultAssuranceTestFixtureAllowed()) {
+      return res.status(404).json({ error: 'not_found' });
+    }
+    const data = AdultAssuranceFixtureSchema.parse(req.body);
+    const result = await adultAssuranceService.applyTestFixture(data);
+    res.json(result);
+  } catch (err: any) {
+    if (err?.name === 'ZodError') {
+      return res.status(400).json({ error: 'invalid_fixture' });
+    }
+    if (err?.message === 'adult_assurance_fixture_disabled') {
+      return res.status(404).json({ error: 'not_found' });
+    }
+    console.error('[adult-assurance] fixture error:', err);
+    res.status(500).json({ error: 'adult_assurance_fixture_failed' });
+  }
 });
 
 router.post('/register', authLimiter, async (req: AuthRequest, res: Response) => {
