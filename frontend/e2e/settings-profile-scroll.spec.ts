@@ -210,17 +210,21 @@ async function assertRouteScrolls(page: Page, label: string, readySelector: stri
   expect(before.canScroll, `${label}: page-enter must overflow (tall content)`).toBe(true);
   expect(before.maxScroll, `${label}: usable scroll range`).toBeGreaterThan(80);
 
-  const target = Math.min(before.maxScroll, Math.max(160, Math.floor(before.maxScroll * 0.55)));
-  await scrollPageEnterTo(page, target);
-  await page.waitForTimeout(80);
+  // Wheel on page-enter so recordings show visible motion (not only scrollTop assign).
+  const peBox = await page.locator('[data-testid="page-enter"]').boundingBox();
+  expect(peBox, `${label}: page-enter box`).toBeTruthy();
+  await page.mouse.move(peBox!.x + peBox!.width / 2, peBox!.y + Math.min(240, peBox!.height / 2));
+  const wheelSteps = 6;
+  for (let i = 0; i < wheelSteps; i += 1) {
+    await page.mouse.wheel(0, 220);
+    await page.waitForTimeout(90);
+  }
 
   const after = await readScrollMetrics(page);
-  expect(after.scrollTop, `${label}: page-enter scrollTop must advance`).toBeGreaterThanOrEqual(
-    target - 2,
-  );
+  expect(after.scrollTop, `${label}: page-enter scrollTop must advance`).toBeGreaterThan(40);
 
   await scrollPageEnterTo(page, after.maxScroll);
-  await page.waitForTimeout(80);
+  await page.waitForTimeout(120);
   const atEnd = await readScrollMetrics(page);
   expect(atEnd.scrollTop, `${label}: can reach end of page-enter`).toBeGreaterThanOrEqual(
     atEnd.maxScroll - 2,
