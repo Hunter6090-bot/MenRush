@@ -1,22 +1,17 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { messagesAPI } from '../api/client';
 import { ConversationItem } from './ConversationItem';
 import { CreateGroupModal } from './CreateGroupModal';
 import { FEATURES } from '../lib/featureFlags';
 import { useAuthStore, useUnreadStore } from '../hooks/store';
 import { useSocket } from '../hooks/useSocket';
-import { rememberInboxThread } from '../lib/conversationHistoryCache';
+import {
+  readCachedInbox,
+  refreshInbox,
+  type InboxConversationRow,
+} from '../lib/tabListCache';
 
-export interface ConversationRow {
-  other_user_id: string;
-  other_user_name: string;
-  last_message_time: string;
-  last_message?: string;
-  photo_url?: string;
-  online?: boolean;
-  unread_count?: number;
-}
+export type ConversationRow = InboxConversationRow;
 
 interface ConversationListProps {
   activeUserId?: string;
@@ -35,46 +30,72 @@ function conversationsFingerprint(rows: ConversationRow[]): string {
     .join('\u0002');
 }
 
+/** Max time to keep cold-start skeletons if the network hangs. */
+const COLD_SKELETON_MS = 4500;
+
 export const ConversationList: React.FC<ConversationListProps> = ({
   activeUserId,
   variant = 'mobile',
   showHeader = true,
   className = '',
 }) => {
-  const [convs, setConvs] = useState<ConversationRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = readCachedInbox();
+  const [convs, setConvs] = useState<ConversationRow[]>(() => cached ?? []);
+  const [loading, setLoading] = useState(() => cached === undefined);
+  const [loadError, setLoadError] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
   const navigate = useNavigate();
   const unreadBySender = useUnreadStore((s) => s.unreadBySender);
   const selfId = useAuthStore((s) => s.user?.id);
   const socket = useSocket();
   const isSidebar = variant === 'sidebar';
+  const hungRef = useRef(false);
 
   const fetchConversations = useCallback(() => {
-    messagesAPI
-      .getConversations()
-      .then((r) => {
-        const rows = Array.isArray(r.data) ? (r.data as ConversationRow[]) : [];
+    return refreshInbox(selfId)
+      .then((rows) => {
         setConvs((prev) =>
           conversationsFingerprint(prev) === conversationsFingerprint(rows) ? prev : rows,
         );
-        // Seed thread cache from inbox previews so open-chat paints last-known text immediately.
-        for (const row of rows) {
-          if (!row?.other_user_id) continue;
-          rememberInboxThread(row.other_user_id, {
-            lastMessage: row.last_message,
-            lastMessageTime: row.last_message_time,
-            selfId,
-          });
-        }
+        setLoadError(false);
       })
-      .catch(() => {})
+      .catch(() => {
+        const fallback = readCachedInbox();
+        if (fallback) {
+          setConvs((prev) =>
+            conversationsFingerprint(prev) === conversationsFingerprint(fallback)
+              ? prev
+              : fallback,
+          );
+          setLoadError(false);
+          return;
+        }
+        setLoadError(true);
+      })
       .finally(() => setLoading(false));
   }, [selfId]);
 
   useEffect(() => {
-    fetchConversations();
+    void fetchConversations();
   }, [fetchConversations]);
+
+  // Cold start hang: do not leave blank skeletons forever.
+  useEffect(() => {
+    if (!loading) return;
+    const id = window.setTimeout(() => {
+      if (hungRef.current) return;
+      hungRef.current = true;
+      const fallback = readCachedInbox();
+      if (fallback) {
+        setConvs(fallback);
+        setLoading(false);
+        return;
+      }
+      setLoading(false);
+      setLoadError(true);
+    }, COLD_SKELETON_MS);
+    return () => window.clearTimeout(id);
+  }, [loading]);
 
   // Socket inbox churn: debounce so a burst of messages does not refetch every event.
   useEffect(() => {
@@ -82,7 +103,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     let timer: ReturnType<typeof setTimeout> | null = null;
     const onMessage = () => {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => fetchConversations(), 280);
+      timer = setTimeout(() => void fetchConversations(), 280);
     };
     socket.on('message', onMessage);
     return () => {
@@ -142,7 +163,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
 
       <div className={`min-h-0 flex-1 overflow-y-auto ${isSidebar ? 'px-2 py-3' : ''}`}>
         {loading ? (
-          <div className="space-y-2">
+          <div className="space-y-2" data-testid="conversations-skeleton">
             {[...Array(5)].map((_, i) => (
               <div
                 key={i}
@@ -151,6 +172,25 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                 }`}
               />
             ))}
+          </div>
+        ) : loadError && convs.length === 0 ? (
+          <div
+            className={`text-center animate-fade-in ${isSidebar ? 'px-4 py-14' : 'py-16'}`}
+            data-testid="conversations-error"
+          >
+            <p className="mb-3 text-sm text-[var(--cream-muted)]">Could not load conversations.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setLoading(true);
+                setLoadError(false);
+                hungRef.current = false;
+                void fetchConversations();
+              }}
+              className="rounded-full border border-[rgba(196,131,42,0.5)] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A]"
+            >
+              Try again
+            </button>
           </div>
         ) : convs.length === 0 ? (
           <div
@@ -192,7 +232,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             </p>
           </div>
         ) : (
-          <div className={`animate-fade-in ${isSidebar ? 'space-y-1' : 'space-y-2'}`}>
+          <div
+            className={`animate-fade-in ${isSidebar ? 'space-y-1' : 'space-y-2'}`}
+            data-testid="conversations-list"
+          >
             {convs.map((c) => (
               <ConversationItem
                 key={c.other_user_id}
@@ -203,7 +246,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                 lastMessageTime={c.last_message_time}
                 lastMessage={c.last_message}
                 unreadCount={c.unread_count ?? unreadBySender[c.other_user_id] ?? 0}
-                onBlocked={fetchConversations}
+                onBlocked={() => void fetchConversations()}
                 isActive={activeUserId === c.other_user_id}
                 variant={isSidebar ? 'sidebar' : 'default'}
               />

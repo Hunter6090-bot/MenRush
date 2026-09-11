@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { usersAPI } from '../api/client';
 import { useAuthStore, useNotificationStore, useUnreadStore } from '../hooks/store';
 import { UserAvatar } from './UserAvatar';
 import { mobileBackFallback, shouldShowMobileBack } from '../lib/mobileBack';
@@ -16,6 +15,7 @@ import { LocationPresenceStrip } from './LocationPresenceStrip';
 import { ProfileDepthStrip } from './ProfileDepthStrip';
 import { ThemeToggle } from './ThemeToggle';
 import { PushAlertBanner } from './PushAlertBanner';
+import { readCachedMatches, refreshMatches } from '../lib/tabListCache';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -60,18 +60,22 @@ function LayoutInner({ children }: LayoutProps) {
   const [sidebarExpanded, setSidebarExpanded] = useState(readSidebarExpanded);
   const { state: discoveryShell } = useDiscoveryShell();
 
-  // Badge count only — do not refetch on every mobile tab change (that was a
-  // page-to-page API waterfall on phones). Refresh on mount + focus/visibility.
+  // Badge count — seed from warm Matches cache, then SWR refresh on mount/focus.
+  // Shares refreshMatches() with Matches page so the tab is never a cold start.
   useEffect(() => {
     let cancelled = false;
+    const cached = readCachedMatches();
+    if (cached) setMatchCount(cached.matches.length);
     const refresh = () => {
-      usersAPI
-        .getMatches()
-        .then((res) => {
-          if (!cancelled) setMatchCount(res.data?.length ?? 0);
+      refreshMatches()
+        .then((snap) => {
+          if (!cancelled) setMatchCount(snap.matches.length);
         })
         .catch(() => {
-          if (!cancelled) setMatchCount(0);
+          if (!cancelled) {
+            const fallback = readCachedMatches();
+            setMatchCount(fallback?.matches.length ?? 0);
+          }
         });
     };
     refresh();

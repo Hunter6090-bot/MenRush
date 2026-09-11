@@ -17,6 +17,7 @@ import { ToastNotifications } from './components/ToastNotifications';
 import { InstallPrompt } from './components/InstallPrompt';
 import { savePostAuthRedirect } from './lib/profileLinks';
 import { prefetchAppRouteChunks } from './lib/routeChunks';
+import { warmTabListCaches } from './lib/tabListCache';
 import { readStoredToken } from './lib/authSession';
 
 /**
@@ -179,6 +180,7 @@ function AppEntry() {
 
 function AppShell() {
   const token = useAuthStore((s) => s.token);
+  const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const rehydrateAuth = useAuthStore((s) => s.rehydrateAuth);
 
@@ -218,7 +220,9 @@ function AppShell() {
   useEffect(() => {
     if (!token) return;
     prefetchAppRouteChunks();
-  }, [token]);
+    // Warm Matches + Chat inbox so bottom-nav tabs paint from cache (SWR).
+    warmTabListCaches(user?.id);
+  }, [token, user?.id]);
 
   usePushNotifications(!!token);
   usePushDeepLink(!!token);
