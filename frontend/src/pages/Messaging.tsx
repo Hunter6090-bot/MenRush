@@ -39,6 +39,7 @@ import {
 import {
   VIDEO_LOAD_TIMEOUT_MS,
   chatVideoUnsupportedHint,
+  resolveChatVideoPlayUrl,
   type ChatVideoLoadState,
 } from '../lib/chatVideoPlayback';
 import {
@@ -2547,10 +2548,10 @@ const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail, onWith
 };
 
 // ── VideoBubble ──────────────────────────────────────────────────────────────
-// Progressive stream with a locked play src. Open-thread polls re-sign media
-// URLs every ~2.5s; binding src to that rotating grant restarted the download
-// forever (black frame, duration `--:--`). We refresh the grant once on open /
-// retry, wait for loadedmetadata, and surface an honest tap-to-retry on failure.
+// Progressive Range stream into <video> — do NOT await a JWT media-url refresh
+// (or full blob) before first frame. Lock play src so open-thread poll re-grants
+// cannot remount src every ~2.5s (that caused forever black + duration `--:--`).
+// Hard timeout → tap-to-retry; refresh grant only on retry / missing URL.
 
 interface VideoBubbleProps {
   msg: Message;
@@ -2580,7 +2581,7 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
     };
   }, []);
 
-  // Wait for metadata (or timeout / error) once a play src is locked in.
+  // Wait for metadata / first frame (or short timeout / error) once src is locked.
   // Keep error listeners through `ready` so a mid-play void surfaces retry UI
   // instead of a forever-black native player with duration `--:--`.
   useEffect(() => {
@@ -2612,9 +2613,13 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
     const onCanPlay = () => {
       if (loadState === 'loading') succeed();
     };
+    const onLoadedData = () => {
+      if (loadState === 'loading') succeed();
+    };
     const onError = () => fail('Download failed. Tap to try again');
 
     el.addEventListener('loadedmetadata', onMeta);
+    el.addEventListener('loadeddata', onLoadedData);
     el.addEventListener('canplay', onCanPlay);
     el.addEventListener('error', onError);
 
@@ -2632,6 +2637,7 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
 
     return () => {
       el.removeEventListener('loadedmetadata', onMeta);
+      el.removeEventListener('loadeddata', onLoadedData);
       el.removeEventListener('canplay', onCanPlay);
       el.removeEventListener('error', onError);
       if (timer != null) window.clearTimeout(timer);
@@ -2657,26 +2663,34 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
 
   const blurred = shouldBlurMedia(msg.media_clear);
 
-  const beginLoad = () => {
+  const beginLoad = (opts?: { refreshGrant?: boolean }) => {
     if (blurred) return;
     const gen = ++loadGenRef.current;
+    const preferRefresh = opts?.refreshGrant === true;
     setLoadState('loading');
     setErrorHint(null);
-    setPlaySrc(null);
 
+    // Fast path: stream the thread-signed URL immediately (progressive Range).
+    // Do not await JWT /media-url before first byte — that alone blew the 1–2s bar.
+    if (!preferRefresh && propUrl) {
+      setPlaySrc(propUrl);
+      return;
+    }
+
+    // Retry / missing URL: refresh grant, then stream the fresh signed URL.
+    setPlaySrc(null);
     void (async () => {
-      let resolved = propUrl;
+      let refreshed: string | null = null;
       let mime: string | undefined;
 
       if (msg.id) {
         try {
           const res = await messagesAPI.getMediaUrl(msg.id);
           if (gen !== loadGenRef.current) return;
-          const fresh = getPhotoUrl(res.data.url);
-          if (fresh) resolved = fresh;
+          refreshed = getPhotoUrl(res.data.url) || null;
           mime = res.data.mime_type;
         } catch {
-          // Fall through to the thread's signed URL if refresh fails.
+          // Fall through to the thread URL if refresh fails.
         }
       }
 
@@ -2689,13 +2703,18 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
         return;
       }
 
+      const resolved = resolveChatVideoPlayUrl({
+        threadUrl: propUrl,
+        refreshedUrl: refreshed,
+        preferRefresh: true,
+      });
+
       if (!resolved) {
         setErrorHint('Video unavailable');
         setLoadState('error');
         return;
       }
 
-      // Lock src — ignore later poll re-grants until the user retries.
       setPlaySrc(resolved);
     })();
   };
@@ -2725,8 +2744,8 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
                   controls={loadState === 'ready' && !blurred}
                   playsInline
                   {...{ 'webkit-playsinline': 'true' }}
-                  // metadata + Accept-Ranges lets Safari paint/play before full file.
-                  preload="metadata"
+                  // auto + Accept-Ranges: short notes start painting before full file.
+                  preload="auto"
                   className="block h-auto min-h-[180px] max-h-[320px] w-full bg-black"
                   data-testid="video-bubble-player"
                   data-load-state={loadState}
@@ -2752,7 +2771,7 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
                   ) : (
                     <button
                       type="button"
-                      onClick={beginLoad}
+                      onClick={() => beginLoad({ refreshGrant: loadState === 'error' })}
                       data-testid={loadState === 'error' ? 'video-bubble-retry' : 'video-bubble-open'}
                       className="flex flex-col items-center justify-center gap-2 text-[#F0E0C0]"
                       aria-label={loadState === 'error' ? 'Retry video' : 'Open video'}

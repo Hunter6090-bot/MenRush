@@ -238,7 +238,7 @@ async function mockChatWithVideo(page: Page, state: { accessToken: string; failM
 }
 
 test.describe('chat video open (no black forever player)', () => {
-  test('locks play src across poll re-grants and shows tap-to-retry on error', async ({
+  test('streams thread URL fast, locks src across polls, retries with fresh grant', async ({
     browser,
   }) => {
     const ctx = await browser.newContext({
@@ -260,13 +260,17 @@ test.describe('chat video open (no black forever player)', () => {
       fullPage: false,
     });
 
+    const openStarted = Date.now();
     await page.getByTestId('video-bubble-open').click();
-    // Loading can be brief with a warm grant — assert player readiness as the gate.
+    // Fast path streams the thread-signed URL immediately (no JWT media-url wait).
     const player = page.getByTestId('video-bubble-player');
-    await expect(player).toBeVisible({ timeout: 10000 });
-    await expect(player).toHaveAttribute('data-load-state', 'ready');
+    await expect(player).toBeVisible({ timeout: 2000 });
+    await expect(player).toHaveAttribute('data-load-state', 'ready', { timeout: 2000 });
+    const openMs = Date.now() - openStarted;
+    expect(openMs).toBeLessThan(2000);
     const srcAfterOpen = await player.getAttribute('data-test-src');
-    expect(srcAfterOpen).toContain('fresh-open-grant');
+    expect(srcAfterOpen).toMatch(/access=poll-/);
+    expect(srcAfterOpen).not.toContain('fresh-open-grant');
     await page.screenshot({
       path: '/opt/cursor/artifacts/chat_video_ready_playing.png',
       fullPage: false,
@@ -276,10 +280,6 @@ test.describe('chat video open (no black forever player)', () => {
     await page.waitForTimeout(3200);
     await expect(player).toHaveAttribute('data-test-src', srcAfterOpen!);
     await expect(player).toHaveAttribute('data-load-state', 'ready');
-    await page.screenshot({
-      path: '/opt/cursor/artifacts/chat_video_src_locked_after_poll.png',
-      fullPage: false,
-    });
 
     // Honest retry — never leave a fake ready player on a void.
     await page.evaluate(() => {
@@ -296,15 +296,11 @@ test.describe('chat video open (no black forever player)', () => {
     });
 
     await page.getByTestId('video-bubble-retry').click();
-    await expect(page.getByTestId('video-bubble-player')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByTestId('video-bubble-player')).toHaveAttribute(
-      'data-load-state',
-      'ready',
-    );
-    await page.screenshot({
-      path: '/opt/cursor/artifacts/chat_video_retry_recovered.png',
-      fullPage: false,
-    });
+    const retried = page.getByTestId('video-bubble-player');
+    await expect(retried).toBeVisible({ timeout: 5000 });
+    await expect(retried).toHaveAttribute('data-load-state', 'ready');
+    // Retry refreshes the grant.
+    await expect(retried).toHaveAttribute('data-test-src', /fresh-open-grant/);
 
     await ctx.close();
   });

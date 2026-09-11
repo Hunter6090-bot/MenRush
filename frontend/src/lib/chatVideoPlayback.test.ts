@@ -4,6 +4,7 @@ import {
   chatMediaPath,
   chatVideoUnsupportedHint,
   isAppleIncompatibleVideoMime,
+  resolveChatVideoPlayUrl,
 } from './chatVideoPlayback';
 
 describe('chatVideoPlayback', () => {
@@ -21,12 +22,38 @@ describe('chatVideoPlayback', () => {
     expect(isAppleIncompatibleVideoMime(undefined)).toBe(false);
   });
 
-  it('keeps a finite load timeout so stuck downloads surface retry UI', () => {
-    expect(VIDEO_LOAD_TIMEOUT_MS).toBeGreaterThan(5_000);
-    expect(VIDEO_LOAD_TIMEOUT_MS).toBeLessThanOrEqual(60_000);
+  it('keeps a short hard timeout so stuck downloads surface retry UI fast', () => {
+    expect(VIDEO_LOAD_TIMEOUT_MS).toBeGreaterThanOrEqual(2_000);
+    expect(VIDEO_LOAD_TIMEOUT_MS).toBeLessThanOrEqual(5_000);
   });
 
   it('chatVideoUnsupportedHint is null for MP4', () => {
     expect(chatVideoUnsupportedHint('video/mp4')).toBeNull();
+  });
+
+  it('streams the thread signed URL first; refresh only when preferred', () => {
+    expect(
+      resolveChatVideoPlayUrl({
+        threadUrl: '/api/messages/1/media?access=thread',
+        refreshedUrl: '/api/messages/1/media?access=fresh',
+        preferRefresh: false,
+      }),
+    ).toBe('/api/messages/1/media?access=thread');
+
+    expect(
+      resolveChatVideoPlayUrl({
+        threadUrl: '/api/messages/1/media?access=thread',
+        refreshedUrl: '/api/messages/1/media?access=fresh',
+        preferRefresh: true,
+      }),
+    ).toBe('/api/messages/1/media?access=fresh');
+
+    expect(
+      resolveChatVideoPlayUrl({
+        threadUrl: null,
+        refreshedUrl: '/api/messages/1/media?access=fresh',
+        preferRefresh: false,
+      }),
+    ).toBe('/api/messages/1/media?access=fresh');
   });
 });
