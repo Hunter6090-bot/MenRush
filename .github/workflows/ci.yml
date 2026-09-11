@@ -53,6 +53,8 @@ jobs:
         run: npm ci
       - name: Adult assurance checks
         run: npm run test:adult-assurance
+      - name: Adult assurance status-poll rate limit
+        run: npm run test:adult-assurance-rate-limit
       - name: Veriff checks
         run: npm run test:veriff
 

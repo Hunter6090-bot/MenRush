@@ -49,10 +49,32 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+/**
+ * Tight limiter for adult-assurance *mutations* (start / submitted / fixture).
+ * Must stay low — each start opens a Veriff session. Do not put the status
+ * poll on this bucket: Register polls every 2s for up to 120s (~60 GETs).
+ */
 const adultAssuranceLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: process.env.NODE_ENV === 'production' ? 12 : 100,
   message: { error: 'Too many adult-assurance attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * Dedicated status-poll limiter for GET /adult-assurance/:sessionId.
+ *
+ * Why 120 / 15 min (prod): frontend polls every ADULT_POLL_MS=2s for at most
+ * ADULT_POLL_MAX_MS=120s → ≤60 GETs per gate attempt. Ceiling 120 allows one
+ * full timeout + one retry (or a slow Veriff webhook) without HTTP 429, while
+ * still capping runaway clients. Must not share adultAssuranceLimiter (12) or
+ * authLimiter (register/login stay at 10 / 15 min).
+ */
+const adultAssuranceStatusPollLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'production' ? 120 : 500,
+  message: { error: 'Too many age-check status polls, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -115,8 +137,9 @@ router.post('/adult-assurance/start', adultAssuranceLimiter, async (_req, res: R
 /**
  * GET /api/auth/adult-assurance/:sessionId
  * Poll decision. When passed, returns a one-time assurance_token for register.
+ * Uses adultAssuranceStatusPollLimiter (not the tight mutation limiter).
  */
-router.get('/adult-assurance/:sessionId', adultAssuranceLimiter, async (req, res: Response) => {
+router.get('/adult-assurance/:sessionId', adultAssuranceStatusPollLimiter, async (req, res: Response) => {
   try {
     const sessionId = String(req.params.sessionId || '').trim();
     if (!/^[0-9a-f-]{36}$/i.test(sessionId)) {
