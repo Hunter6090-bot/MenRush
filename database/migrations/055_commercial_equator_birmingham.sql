@@ -1,8 +1,7 @@
--- Zoul + Legal follow-on GREEN commercial venues (2026-09).
--- Appends 4 hand-verified venues promoted from prior AMBER research list.
--- Soft-four AMBER stay out: Centre Stage, Eden, Equator, Blayds.
--- Outdoor / PSE / Redruth HOLD untouched. Keep-list untouched.
--- Copy = name + type + area only (description NULL). Never invent lat/lng.
+-- Zoul + Legal: Equator Bar Birmingham promoted GREEN.
+-- Soft AMBER still excluded: Centre Stage MCR, Eden Bar, Blayds Bar.
+-- Outdoor / PSE untouched. Keep-list untouched.
+-- Narrows prior 054 Equator% defensive deactivate so this venue stays active.
 -- Soft-refresh: npm run hotspots:seed-commercial -- --file ./data/commercial-venues.green-expand-2026-09.json
 
 INSERT INTO hot_spots (
@@ -28,18 +27,9 @@ SELECT
   NOW()
 FROM hot_spot_categories c
 JOIN (VALUES
-  ('nightlife', 'Fire London', 'London', 'England', 'nightlife',
-   'https://www.firelondon.net/', 51.4849543, -0.1234373,
-   'green-2026-09:fire-london', '2026-09-11T15:00:00Z'),
-  ('bars', 'City of Quebec', 'London', 'England', 'bar',
-   'https://www.greeneking.co.uk/pubs/greater-london/city-of-quebec', 51.513979, -0.157818,
-   'green-2026-09:city-of-quebec-london', '2026-09-11T15:00:00Z'),
-  ('bars', 'EVA Manchester', 'Manchester', 'England', 'bar',
-   'https://evamanchester.com/', 53.4772822, -2.2375077,
-   'green-2026-09:eva-manchester', '2026-09-11T15:00:00Z'),
-  ('nightlife', 'Fibre Leeds', 'Leeds', 'England', 'nightlife',
-   'https://fibreleeds.com/', 53.7950442, -1.5423158,
-   'green-2026-09:fibre-leeds', '2026-09-11T15:00:00Z')
+  ('bars', 'Equator Bar Birmingham', 'Birmingham', 'England', 'bar',
+   'https://www.equator-bar.co.uk/', 52.4730608, -1.8957279,
+   'green-2026-09:equator-birmingham', '2026-09-11T15:10:00Z')
 ) AS v(cat_slug, name, city, nation, venue_type, source_url, lat, lng, external_id, verified_at)
   ON c.slug = v.cat_slug
  AND c.is_commercial = TRUE
@@ -64,24 +54,16 @@ UPDATE hot_spots hs
        is_user_generated = FALSE
   FROM hot_spot_categories c
   JOIN (VALUES
-  ('nightlife', 'Fire London', 'London', 'England', 'nightlife',
-   'https://www.firelondon.net/', 51.4849543, -0.1234373,
-   'green-2026-09:fire-london', '2026-09-11T15:00:00Z'),
-  ('bars', 'City of Quebec', 'London', 'England', 'bar',
-   'https://www.greeneking.co.uk/pubs/greater-london/city-of-quebec', 51.513979, -0.157818,
-   'green-2026-09:city-of-quebec-london', '2026-09-11T15:00:00Z'),
-  ('bars', 'EVA Manchester', 'Manchester', 'England', 'bar',
-   'https://evamanchester.com/', 53.4772822, -2.2375077,
-   'green-2026-09:eva-manchester', '2026-09-11T15:00:00Z'),
-  ('nightlife', 'Fibre Leeds', 'Leeds', 'England', 'nightlife',
-   'https://fibreleeds.com/', 53.7950442, -1.5423158,
-   'green-2026-09:fibre-leeds', '2026-09-11T15:00:00Z')
+  ('bars', 'Equator Bar Birmingham', 'Birmingham', 'England', 'bar',
+   'https://www.equator-bar.co.uk/', 52.4730608, -1.8957279,
+   'green-2026-09:equator-birmingham', '2026-09-11T15:10:00Z')
   ) AS v(cat_slug, name, city, nation, venue_type, source_url, lat, lng, external_id, verified_at)
     ON c.slug = v.cat_slug AND c.is_commercial = TRUE
  WHERE hs.source = 'ops-commercial'
    AND hs.external_id = v.external_id;
 
--- Soft AMBER held (defensive; never seeded). Equator Bar Birmingham is GREEN (mig 055).
+-- Soft AMBER held (do not seed / keep inactive if present).
+-- Equator Bar Birmingham is GREEN — do not match Equator%.
 UPDATE hot_spots
    SET is_active = FALSE
  WHERE is_user_generated = FALSE
@@ -89,7 +71,14 @@ UPDATE hot_spots
      name ILIKE 'Centre Stage%'
      OR name ILIKE 'Eden Bar%'
      OR name ILIKE 'Blayds%'
-   );
+   )
+   AND NOT (name = 'Equator Bar Birmingham' AND city = 'Birmingham');
+
+-- Ensure Equator Bar Birmingham remains active after any prior Equator% deactivate.
+UPDATE hot_spots
+   SET is_active = TRUE
+ WHERE source = 'ops-commercial'
+   AND external_id = 'green-2026-09:equator-birmingham';
 
 -- Keep-list remains active.
 UPDATE hot_spots

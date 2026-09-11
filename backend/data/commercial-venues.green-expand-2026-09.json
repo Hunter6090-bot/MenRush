@@ -1,5 +1,5 @@
 {
-  "_ops_note": "Zoul GREEN expand 2026-09 (+ Legal follow-on). Hand-verified lat/lng only (venue site / Ordnance Code-Point / OSM named POI matching venue address). Keep-list untouched. Soft-four AMBER (Centre Stage, Eden, Equator, Blayds) + remaining AMBER/RED omitted. Copy = name + type + area only.",
+  "_ops_note": "Zoul GREEN expand 2026-09 (+ Legal follow-on). Hand-verified lat/lng only (venue site / Ordnance Code-Point / OSM named POI matching venue address). Keep-list untouched. Soft AMBER held: Centre Stage MCR, Eden Bar, Blayds Bar. Outdoor/PSE omitted. Copy = name + type + area only.",
   "_verify_pass": "2026-09-11",
   "_deferred": [],
   "venues": [
@@ -379,12 +379,26 @@
       "external_id": "green-2026-09:fibre-leeds",
       "verified_at": "2026-09-11T15:00:00Z",
       "description": null
+    },
+    {
+      "name": "Equator Bar Birmingham",
+      "city": "Birmingham",
+      "nation": "England",
+      "category": "bars",
+      "venue_type": "bar",
+      "lat": 52.4730608,
+      "lng": -1.8957279,
+      "source_url": "https://www.equator-bar.co.uk/",
+      "external_id": "green-2026-09:equator-birmingham",
+      "verified_at": "2026-09-11T15:10:00Z",
+      "description": null
     }
   ],
   "_follow_on": [
     "Fire London",
     "City of Quebec",
     "EVA Manchester",
-    "Fibre Leeds"
+    "Fibre Leeds",
+    "Equator Bar Birmingham"
   ]
 }

@@ -77,12 +77,12 @@ Legacy `npm run hotspots:import` is locked to the same commercial allow-list and
 
 ## GREEN expand 2026-09 (Zoul merge-green + Legal follow-on)
 
-Migration `053` + follow-on `054` + ops JSON
-`backend/data/commercial-venues.green-expand-2026-09.json` seed **29** hand-verified
-commercial venues (25 initial GREEN + 4 Legal follow-on: Fire London, City of Quebec,
-EVA Manchester, Fibre Leeds). Keep-list unchanged.
+Migrations `053` + `054` + `055` + ops JSON
+`backend/data/commercial-venues.green-expand-2026-09.json` seed **30** hand-verified
+commercial venues (25 initial GREEN + 5 Legal follow-on: Fire London, City of Quebec,
+EVA Manchester, Fibre Leeds, Equator Bar Birmingham). Keep-list unchanged.
 
-**Soft-four AMBER (do not seed):** Centre Stage, Eden, Equator, Blayds.
+**Soft AMBER (do not seed):** Centre Stage MCR, Eden Bar, Blayds Bar.
 Remaining AMBER research names and RED outdoor/PSE omitted. Deferred this pass: **none**.
 
 ### BOA90 soft-refresh (Cruise map)
@@ -92,7 +92,7 @@ After migrate (or JSON seed) on the BOA90 environment:
 1. Nearby Map → enable **Hot Spots** chip (cruise-ship icon). Layer toggles independent of People.
 2. Pan UK — new pins show **Cruise** until a real check-in exists; then venue name + count only.
 3. Confirm keep-list still present (Sweatbox Soho, Pleasuredrome, Brighton Sauna, Pipeworks Glasgow).
-4. Confirm soft-four AMBER and outdoor pins are absent.
+4. Confirm soft AMBER (Centre Stage / Eden Bar / Blayds) and outdoor pins are absent.
 5. Open one sheet → Check in / anonymous / Check out (4h TTL) still works.
 
 Re-apply without waiting for deploy migrate:

@@ -81,14 +81,13 @@ UPDATE hot_spots hs
  WHERE hs.source = 'ops-commercial'
    AND hs.external_id = v.external_id;
 
--- Soft-four AMBER must not be active under these names (defensive; never seeded).
+-- Soft AMBER held (defensive; never seeded). Equator Bar Birmingham is GREEN (mig 055).
 UPDATE hot_spots
    SET is_active = FALSE
  WHERE is_user_generated = FALSE
    AND (
      name ILIKE 'Centre Stage%'
-     OR name ILIKE 'Eden%'
-     OR name ILIKE 'Equator%'
+     OR name ILIKE 'Eden Bar%'
      OR name ILIKE 'Blayds%'
    );
 
