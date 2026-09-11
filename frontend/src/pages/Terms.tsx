@@ -192,9 +192,12 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>1.4</Strong> We reserve the right to request age verification at any
-                  time and to suspend or terminate your account if we have reason to believe you
-                  do not meet the eligibility requirements.
+                  <Strong>1.4</Strong> Signup includes an 18+ age check based on the date of birth
+                  on your identity document. If that check shows you are under 18, no MenRush
+                  account is created. That age gate is separate from the optional Verified badge
+                  described in section 3. We may also request further age checks later and may
+                  suspend or terminate an account if we have reason to believe you do not meet
+                  the eligibility requirements.
                 </>,
               )}
             </section>
@@ -236,8 +239,9 @@ export const Terms = () => {
               {para(
                 <>
                   <Strong>3.1</Strong> The Verified badge is optional and free. Complete an ID check and live selfie
-                  with Veriff from your Profile to receive the badge after approval. Verification helps reduce
-                  fake profiles, underage access and platform abuse.
+                  with Veriff from your Profile to receive the badge after approval. The badge helps reduce
+                  fake profiles. It is not the signup 18+ age gate in section 1.4, and it does not mean every
+                  member is identity-checked or that MenRush pre-moderates all user content.
                 </>,
               )}
               {para(

@@ -91,11 +91,17 @@ export async function handleVeriffDecisionWebhook(req: Request, res: Response): 
           provider: 'veriff',
           decision: result.decision,
           is_verified: result.decision === 'approved',
+          underage: Boolean(result.underage),
         });
       }
     }
 
-    res.status(200).json({ status: 'ok' });
+    // Pre-signup adult-assurance has no user socket — clients poll status.
+    res.status(200).json({
+      status: 'ok',
+      ...(result.adultStatus ? { adultStatus: result.adultStatus } : {}),
+      ...(result.underage ? { underage: true } : {}),
+    });
   } catch (err) {
     console.error('[veriff] webhook error:', err);
     res.status(500).json({ error: 'webhook_failed' });

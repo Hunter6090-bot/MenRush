@@ -1,5 +1,5 @@
 import { FEATURES } from '../lib/featureFlags';
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
@@ -28,6 +28,7 @@ import {
   publicPanelClass,
   publicPrimaryButtonClass,
 } from '../lib/publicStyles';
+import { launchVeriffInContext, type VeriffFrameHandle } from '../lib/veriff';
 
 interface FormState {
   displayName: string;
@@ -63,6 +64,89 @@ function passwordScore(pw: string): 0 | 1 | 2 | 3 {
   return 0;
 }
 
+const ADULT_POLL_MS = 2000;
+const ADULT_POLL_MAX_MS = 120_000;
+
+/**
+ * Run signup 18+ age gate (document DOB via Veriff). Not the optional Verified badge.
+ * Under-18 → rejection path; no account is created.
+ */
+async function completeAdultAssuranceGate(opts: {
+  fixtureAllowed: boolean;
+  frameRef: React.MutableRefObject<VeriffFrameHandle | null>;
+  signal: { cancelled: boolean };
+}): Promise<{ token: string } | { underage: true } | { error: string }> {
+  const { data: started } = await authAPI.startAdultAssurance();
+  const sessionId = started.sessionId;
+  const sessionUrl = started.sessionUrl;
+
+  // BOA90 / local fixture: apply outcome without a live Veriff document.
+  // Under-18 rejection: /register?adultFixture=underage
+  const fixtureParam =
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('adultFixture')
+      : null;
+  if (opts.fixtureAllowed && fixtureParam) {
+    const outcome =
+      fixtureParam === 'underage'
+        ? 'underage'
+        : fixtureParam === 'declined'
+          ? 'declined'
+          : 'adult';
+    const fix = await authAPI.adultAssuranceFixture({ sessionId, outcome });
+    if (fix.data.adultStatus === 'underage' || outcome === 'underage') {
+      return { underage: true };
+    }
+    if (fix.data.assurance_token) return { token: fix.data.assurance_token };
+    const polled = await authAPI.adultAssuranceStatus(sessionId);
+    if (polled.data.underage || polled.data.status === 'underage') return { underage: true };
+    if (polled.data.assurance_token) return { token: polled.data.assurance_token };
+    return { error: 'Age check did not finish. Please try again.' };
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    opts.frameRef.current = launchVeriffInContext(sessionUrl, {
+      onSubmitted: () => {
+        if (settled) return;
+        settled = true;
+        opts.frameRef.current?.close();
+        opts.frameRef.current = null;
+        void authAPI.markAdultAssuranceSubmitted(sessionId).catch(() => undefined);
+        resolve();
+      },
+      onCanceled: () => {
+        if (settled) return;
+        settled = true;
+        opts.frameRef.current = null;
+        reject(new Error('Age check cancelled.'));
+      },
+    });
+  });
+
+  const startedAt = Date.now();
+  while (!opts.signal.cancelled && Date.now() - startedAt < ADULT_POLL_MAX_MS) {
+    const { data } = await authAPI.adultAssuranceStatus(sessionId);
+    if (data.underage || data.status === 'underage') return { underage: true };
+    if (data.status === 'passed' && data.assurance_token) {
+      return { token: data.assurance_token };
+    }
+    if (
+      data.status === 'declined' ||
+      data.status === 'expired' ||
+      data.status === 'abandoned' ||
+      data.status === 'failed'
+    ) {
+      return {
+        error:
+          'Age check did not pass. MenRush is 18+ only. This is not the optional Verified badge — try again with your own document.',
+      };
+    }
+    await new Promise((r) => setTimeout(r, ADULT_POLL_MS));
+  }
+  return { error: 'Age check timed out. Please try again.' };
+}
+
 export const Register = () => {
   const [searchParams] = useSearchParams();
   const inviteFromQuery = searchParams.get('invite')?.trim() || '';
@@ -87,15 +171,42 @@ export const Register = () => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [assurancePhase, setAssurancePhase] = useState<'idle' | 'checking'>('idle');
+  const [adultRequired, setAdultRequired] = useState(false);
+  const [fixtureAllowed, setFixtureAllowed] = useState(false);
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
   const token = useAuthStore((s) => s.token);
+  const frameRef = useRef<VeriffFrameHandle | null>(null);
+  const cancelRef = useRef({ cancelled: false });
 
   useEffect(() => {
     if (inviteFromQuery) {
       storeInviteCode(inviteFromQuery);
     }
   }, [inviteFromQuery]);
+
+  useEffect(() => {
+    let alive = true;
+    void authAPI
+      .adultAssuranceRequired()
+      .then((res) => {
+        if (!alive) return;
+        setAdultRequired(Boolean(res.data.required));
+        setFixtureAllowed(Boolean(res.data.fixtureAllowed));
+      })
+      .catch(() => {
+        if (!alive) return;
+        setAdultRequired(false);
+        setFixtureAllowed(false);
+      });
+    return () => {
+      alive = false;
+      cancelRef.current.cancelled = true;
+      frameRef.current?.close();
+      frameRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (!promoFromQuery) return;
@@ -105,7 +216,6 @@ export const Register = () => {
       storePridePromoCode(PRIDE_PROMO_CODE);
       return;
     }
-    // Personal emailed code from deep link.
     setPromoCode(promoFromQuery.trim().toUpperCase());
     clearStoredPridePromoCode();
   }, [promoFromQuery]);
@@ -168,7 +278,28 @@ export const Register = () => {
     }
 
     setLoading(true);
+    cancelRef.current.cancelled = false;
     try {
+      let adultToken: string | undefined;
+      if (adultRequired) {
+        setAssurancePhase('checking');
+        const gate = await completeAdultAssuranceGate({
+          fixtureAllowed,
+          frameRef,
+          signal: cancelRef.current,
+        });
+        setAssurancePhase('idle');
+        if ('underage' in gate) {
+          navigate('/register/underage', { replace: true });
+          return;
+        }
+        if ('error' in gate) {
+          setError(gate.error);
+          return;
+        }
+        adultToken = gate.token;
+      }
+
       const trimmedPromo = promoCode.trim();
       const trimmedReferral = referralCode.trim();
       if (trimmedPromo) {
@@ -183,9 +314,8 @@ export const Register = () => {
         ...(inviteCode ? { invite_code: inviteCode } : {}),
         ...(trimmedPromo ? { promo_code: trimmedPromo } : {}),
         ...(trimmedReferral ? { referral_code: trimmedReferral } : {}),
+        ...(adultToken ? { adult_assurance_token: adultToken } : {}),
       });
-      // Gate path: no session until confirm. BOA90 lock may still return a legacy session
-      // for non-Al signups until EMAIL_CONFIRM_MAIL_OPEN=true.
       if (res.data.requiresEmailConfirm) {
         const confirmEmail =
           typeof res.data.email === 'string' ? res.data.email : form.email.trim().toLowerCase();
@@ -202,12 +332,13 @@ export const Register = () => {
         { replace: true },
       );
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Registration failed. Please try again.');
+      const msg = err?.message || err.response?.data?.error || 'Registration failed. Please try again.';
+      setError(typeof msg === 'string' ? msg : 'Registration failed. Please try again.');
     } finally {
+      setAssurancePhase('idle');
       setLoading(false);
     }
   };
-
 
   const segColor = (idx: number): string => {
     if (pwScore <= idx) return '#3D2B0E';
@@ -215,6 +346,13 @@ export const Register = () => {
     if (pwScore === 2) return '#C4832A';
     return '#D4943B';
   };
+
+  const submitLabel =
+    assurancePhase === 'checking'
+      ? 'Checking you are 18+…'
+      : loading
+        ? 'Creating account…'
+        : 'Create Account';
 
   return (
     <PublicAuthShell>
@@ -249,8 +387,9 @@ export const Register = () => {
               required
               minLength={2}
               maxLength={24}
+              pattern="[A-Za-z0-9_-]{2,24}"
               className={publicInputClass}
-              data-testid="register-username-input"
+              autoComplete="username"
             />
           </div>
 
@@ -263,40 +402,39 @@ export const Register = () => {
               type="email"
               value={form.email}
               onChange={setField('email')}
-              placeholder="you@example.com"
-              aria-label="Email address"
+              placeholder="you@email.com"
+              required
+              className={publicInputClass}
+              autoComplete="email"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2.5">
+            <label className={publicLabelClass} htmlFor="register-dob">
+              Date of birth
+            </label>
+            <input
+              id="register-dob"
+              type="date"
+              value={form.dob}
+              onChange={setField('dob')}
               required
               className={publicInputClass}
             />
-            <p className={helperClass}>We&apos;ll use this to sign you in.</p>
+            <p className={helperClass}>You must be 18 or older.</p>
           </div>
 
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <div className="flex flex-col gap-2.5">
-              <label className={publicLabelClass} htmlFor="register-dob">
-                Date of Birth
-              </label>
-              <input
-                id="register-dob"
-                type="date"
-                value={form.dob}
-                onChange={setField('dob')}
-                aria-label="Date of birth"
-                required
-                className={publicInputClass}
-              />
-              <p className={helperClass}>You must be 18 or older.</p>
-            </div>
-            <div className="flex flex-col gap-2.5">
-              <label className={publicLabelClass} htmlFor="register-password">
-                Password
-              </label>
+          <div className="flex flex-col gap-2.5">
+            <label className={publicLabelClass} htmlFor="register-password">
+              Password
+            </label>
+            <div className="flex flex-col gap-2">
               <input
                 id="register-password"
                 type="password"
                 value={form.password}
                 onChange={setField('password')}
-                placeholder="Min 12 chars, mixed case, 1 number"
+                placeholder="At least 12 characters"
                 required
                 minLength={12}
                 className={publicInputClass}
@@ -418,6 +556,13 @@ export const Register = () => {
             </p>
           </div>
 
+          {adultRequired ? (
+            <p className={helperClass} data-testid="register-adult-assurance-note">
+              Before your account is created, we run an 18+ age check from your document date of
+              birth. That is not the optional Verified badge on Profile.
+            </p>
+          ) : null}
+
           {error ? <p className={publicErrorClass}>{error}</p> : null}
 
           <p className={helperClass} data-testid="register-gift-note">
@@ -428,10 +573,10 @@ export const Register = () => {
           <button type="submit" disabled={loading} className={publicPrimaryButtonClass}>
             {loading ? (
               <>
-                <PulseRing size={16} /> Creating account…
+                <PulseRing size={16} /> {submitLabel}
               </>
             ) : (
-              'Create Account'
+              submitLabel
             )}
           </button>
 
