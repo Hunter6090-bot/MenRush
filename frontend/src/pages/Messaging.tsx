@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, memo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { messagesAPI, usersAPI, meetAPI, MediaKind, MessageMediaKind, MessageDTO, MeetAgreementState, LibraryPhotoDTO } from '../api/client';
 import { trackEventOnce } from '../observability/analytics';
 import { useSocket } from '../hooks/useSocket';
@@ -45,6 +45,16 @@ import {
   prependOlderMessages,
   sortMessagesChronologically,
 } from '../lib/pushDeepLink';
+import {
+  appendCachedThreadMessage,
+  isPreviewSeedMessage,
+  readCachedThread,
+  rememberInboxThread,
+  stripPreviewSeedMessages,
+  threadLikelyHasHistory,
+  writeCachedThread,
+} from '../lib/conversationHistoryCache';
+import type { ThreadOpenState } from '../components/ConversationItem';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
 interface Message extends Partial<MessageDTO> {
@@ -64,6 +74,24 @@ interface Message extends Partial<MessageDTO> {
   remaining_views?: number | null;
   expired?: boolean;
   media_clear?: boolean;
+}
+
+function seedThreadForOpen(
+  peerId: string | undefined,
+  selfId: string | undefined,
+  nav: ThreadOpenState | null,
+): Message[] {
+  if (!peerId) return [];
+  const preview = nav?.threadPreview;
+  if (preview && preview.peerId === peerId && preview.lastMessage) {
+    rememberInboxThread(peerId, {
+      lastMessage: preview.lastMessage,
+      lastMessageTime: preview.lastMessageTime,
+      selfId,
+    });
+  }
+  const cached = readCachedThread(peerId);
+  return cached ? (cached as Message[]) : [];
 }
 
 /** Sender's chosen viewing rule for an outgoing image. */
@@ -161,11 +189,26 @@ const ICEBREAKERS = [
 
 export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const { otherId } = useParams<{ otherId: string }>();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const location = useLocation();
+  const navState = (location.state as ThreadOpenState | null) || null;
+  const user = useAuthStore((s) => s.user);
+  // Seed from nav preview / session cache so existing threads never flash empty.
+  const [messages, setMessages] = useState<Message[]>(() =>
+    seedThreadForOpen(otherId, user?.id, navState),
+  );
+  const [historyReady, setHistoryReady] = useState(
+    () => readCachedThread(otherId) !== undefined,
+  );
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
-  const [otherUser, setOtherUser] = useState<OtherUser | null>(null);
+  const [otherUser, setOtherUser] = useState<OtherUser | null>(() => {
+    const preview = navState?.threadPreview;
+    if (preview && otherId && preview.peerId === otherId && preview.name) {
+      return { name: preview.name, photo_url: preview.photoUrl };
+    }
+    return null;
+  });
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -192,7 +235,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
   // Disappearing countdown lives in ImageViewer only — do not 1Hz re-render the whole thread.
   const socket = useSocket();
-  const user = useAuthStore((s) => s.user);
   const { setCalling, setCallSetupError, resetCall } = useCallStore();
   const navigate = useNavigate();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -217,6 +259,20 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const recordStreamRef = useRef<MediaStream | null>(null);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  /** Append a confirmed server row to the open thread + session cache. */
+  const commitThreadMessage = useCallback(
+    (msg: Message) => {
+      if (!otherId) return;
+      setMessages((prev) => {
+        const next = appendUniqueMessage(stripPreviewSeedMessages(prev), msg);
+        appendCachedThreadMessage(otherId, msg);
+        return next;
+      });
+      setHistoryReady(true);
+    },
+    [otherId],
+  );
+
   const loadConversation = useCallback((opts?: { replace?: boolean }) => {
     if (!otherId) return;
     messagesAPI
@@ -227,21 +283,34 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
           setHasMoreOlder(rows.length >= CONVERSATION_PAGE_SIZE);
         }
         setMessages((prev) => {
+          // Drop inbox preview seeds before merge so LIMIT-window union stays correct.
+          const base = stripPreviewSeedMessages(prev);
           // Always normalize order: poll merge used to re-append rows that slid
           // out of the LIMIT page and jump earlier bubbles to the bottom.
           const next = opts?.replace
             ? sortMessagesChronologically(rows)
-            : mergeConversationRows(prev, rows);
-          if (conversationFingerprint(prev) === conversationFingerprint(next)) {
+            : mergeConversationRows(base, rows);
+          if (
+            conversationFingerprint(base) === conversationFingerprint(next) &&
+            base.length === prev.length
+          ) {
             return prev;
           }
+          writeCachedThread(otherId, next);
           return next;
         });
+        setHistoryReady(true);
       })
       .catch(() => {
         if (opts?.replace) {
-          setMessages([]);
+          // Keep any cached/preview paint; only clear when we had nothing to show.
+          setMessages((prev) => {
+            if (prev.length > 0) return prev;
+            writeCachedThread(otherId, []);
+            return [];
+          });
           setHasMoreOlder(false);
+          setHistoryReady(true);
         }
       });
   }, [otherId]);
@@ -253,7 +322,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
   const loadOlderMessages = useCallback(() => {
     if (!otherId || loadingOlderRef.current || !hasMoreOlder) return;
-    const oldestId = messages.find((m) => !!m.id)?.id;
+    // Skip inbox preview seeds — they are not real server message ids.
+    const oldestId = messages.find((m) => m.id && !isPreviewSeedMessage(m))?.id;
     if (!oldestId) return;
 
     const scroller = messagesScrollRef.current;
@@ -278,6 +348,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             pendingPrependHeightRef.current = null;
             return prev;
           }
+          writeCachedThread(otherId, next);
           return next;
         });
       })
@@ -304,6 +375,31 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     }
   }, [hasMoreOlder, loadOlderMessages]);
 
+  // Paint before browser paint: nav preview + session cache (survives lazy remount).
+  useLayoutEffect(() => {
+    if (!otherId) return;
+    const seeded = seedThreadForOpen(otherId, user?.id, navState);
+    if (seeded.length > 0) {
+      setMessages(seeded);
+      setHistoryReady(true);
+    } else {
+      const cached = readCachedThread(otherId);
+      setMessages(cached ? (cached as Message[]) : []);
+      setHistoryReady(cached !== undefined);
+    }
+    const preview = navState?.threadPreview;
+    if (preview && preview.peerId === otherId && preview.name) {
+      setOtherUser((prev) =>
+        prev?.name
+          ? prev
+          : {
+              name: preview.name,
+              photo_url: preview.photoUrl,
+            },
+      );
+    }
+  }, [otherId, user?.id, navState]);
+
   useEffect(() => {
     if (!otherId) return;
     stickToBottomRef.current = true;
@@ -312,6 +408,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     loadingOlderRef.current = false;
     setHasMoreOlder(true);
     setLoadingOlder(false);
+    setIsOtherTyping(false);
+    // Keep any seeded preview while fetching; do not blank the thread.
     loadConversation({ replace: true });
     usersAPI
       .getProfile(otherId)
@@ -342,6 +440,13 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     // Owner lock: while reading earlier history (not near latest edge), never
     // force scroll on poll / socket / merge / typing re-render.
     if (viewerMsg) return;
+    // Avoid scrolling away a single inbox-preview seed before real history arrives.
+    if (
+      messages.length > 0 &&
+      messages.every((m) => isPreviewSeedMessage(m))
+    ) {
+      return;
+    }
     const force = forceStickAfterSendRef.current;
     if (!force && !stickToBottomRef.current) return;
     const stick = shouldStickToBottomOnUpdate(messagesScrollRef.current, { force });
@@ -428,7 +533,12 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
     const onMessage = (data: Message) => {
       if (data.sender_id === otherId || data.receiver_id === otherId) {
-        setMessages((prev) => appendUniqueMessage(prev, data));
+        setMessages((prev) => {
+          const next = appendUniqueMessage(stripPreviewSeedMessages(prev), data);
+          appendCachedThreadMessage(otherId, data);
+          return next;
+        });
+        setHistoryReady(true);
       }
     };
     const onTyping = ({ typing }: { typing: boolean }) => setIsOtherTyping(typing);
@@ -602,7 +712,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             maxViews,
           });
           markOwnSendStick();
-          setMessages((prev) => appendUniqueMessage(prev, res.data));
+          commitThreadMessage(res.data);
         }
         clearPendingImage();
         trackEventOnce(
@@ -622,7 +732,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         maxViews,
       });
       markOwnSendStick();
-      setMessages((prev) => appendUniqueMessage(prev, res.data));
+      commitThreadMessage(res.data);
       clearPendingImage();
       trackEventOnce(
         'first_message_success',
@@ -674,7 +784,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
           durationMs,
         });
         markOwnSendStick();
-        setMessages((prev) => appendUniqueMessage(prev, res.data));
+        commitThreadMessage(res.data);
       } catch (err: any) {
         const code = String(err?.response?.data?.error || '');
         setMediaError(
@@ -686,7 +796,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         setUploadingMedia(false);
       }
     },
-    [otherId, uploadingMedia, markOwnSendStick],
+    [otherId, uploadingMedia, markOwnSendStick, commitThreadMessage],
   );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -732,7 +842,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             durationMs: duration,
           });
           markOwnSendStick();
-          setMessages((prev) => appendUniqueMessage(prev, res.data));
+          commitThreadMessage(res.data);
         } catch (err: any) {
           setMediaError(err?.response?.data?.error || 'Failed to send voice note');
         } finally {
@@ -758,7 +868,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       setMediaError('Microphone access denied.');
       setRecording(false);
     }
-  }, [recording, uploadingMedia, otherId]);
+  }, [recording, uploadingMedia, otherId, markOwnSendStick, commitThreadMessage]);
 
   const handleStopRecording = useCallback(() => {
     const mr = mediaRecorderRef.current;
@@ -801,7 +911,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         const res = await messagesAPI.sendMessage(otherId, current);
         const saved: Message = res.data;
         markOwnSendStick();
-        setMessages((prev) => appendUniqueMessage(prev, saved));
+        commitThreadMessage(saved);
         trackEventOnce(
           'first_message_success',
           { kind: 'text', surface: 'direct_message' },
@@ -831,7 +941,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         setSending(false);
       }
     },
-    [otherId, user, emitTyping, markOwnSendStick],
+    [otherId, user, emitTyping, markOwnSendStick, commitThreadMessage],
   );
 
   const handleSend = async (e?: React.FormEvent | React.KeyboardEvent) => {
@@ -904,7 +1014,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             position.coords.longitude,
           );
           markOwnSendStick();
-          setMessages((prev) => appendUniqueMessage(prev, res.data));
+          commitThreadMessage(res.data);
         } catch {
           setMediaError('Could not share your location.');
         } finally {
@@ -1116,6 +1226,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         isOtherTyping={isOtherTyping}
         withdrawingId={withdrawingId}
         sending={sending}
+        historyReady={historyReady}
         loadingOlder={loadingOlder}
         hasMoreOlder={hasMoreOlder}
         messagesScrollRef={messagesScrollRef}
@@ -2554,6 +2665,7 @@ interface ChatThreadScrollProps {
   isOtherTyping: boolean;
   withdrawingId: string | null;
   sending: boolean;
+  historyReady: boolean;
   loadingOlder: boolean;
   hasMoreOlder: boolean;
   messagesScrollRef: React.RefObject<HTMLDivElement>;
@@ -2572,6 +2684,7 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
   isOtherTyping,
   withdrawingId,
   sending,
+  historyReady,
   loadingOlder,
   hasMoreOlder,
   messagesScrollRef,
@@ -2602,7 +2715,31 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
             </span>
           </div>
         )}
-        {messages.length === 0 && !sending && (
+        {messages.length === 0 &&
+          !sending &&
+          (!historyReady || threadLikelyHasHistory(otherId)) && (
+          <div
+            className="flex flex-col gap-3 pt-2"
+            data-testid="chat-history-loading"
+            aria-busy="true"
+            aria-label="Loading conversation"
+          >
+            {[0.92, 0.7, 0.84].map((width, i) => (
+              <div
+                key={i}
+                className={`h-11 animate-pulse rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] ${
+                  i % 2 === 0 ? 'self-start' : 'self-end'
+                }`}
+                style={{ width: `${Math.round(width * 100)}%`, maxWidth: 280 }}
+              />
+            ))}
+          </div>
+        )}
+
+        {messages.length === 0 &&
+          !sending &&
+          historyReady &&
+          !threadLikelyHasHistory(otherId) && (
           <div
             className="flex flex-col items-center justify-center h-full select-none px-4"
             data-testid="chat-icebreakers"
