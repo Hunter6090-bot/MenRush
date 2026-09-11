@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallba
 import { createRoot, type Root } from 'react-dom/client';
 import { useNavigate } from 'react-router-dom';
 import { EventDTO, HotSpotDTO, Mood, hotSpotsAPI, profileMetaAPI, pulseAPI, usersAPI } from '../api/client';
+import { readCachedMatches, refreshMatches } from '../lib/tabListCache';
 import { useLocationStore, useAuthStore } from '../hooks/store';
 import { NearbyUser } from '../components/ProfileCard';
 import { Layout } from '../components/Layout';
@@ -601,13 +602,14 @@ export const Discover = () => {
       .then((res) => setMood(res.data.mood ?? null))
       .catch(() => {});
     // Hydrate Match CTA after reload — outbound likes + mutual matches (separate).
+    // Also warm the shared Matches tab cache so /matches is never a cold start from Nearby.
     Promise.all([
       usersAPI.getSentLikes().catch(() => ({ data: { ids: [] as string[] } })),
-      usersAPI.getMatches().catch(() => ({ data: [] as Array<{ id: string }> })),
+      refreshMatches().catch(() => readCachedMatches() ?? { matches: [], likes: [] }),
     ])
-      .then(([sentRes, matchesRes]) => {
+      .then(([sentRes, matchesSnap]) => {
         const sent = sentRes.data?.ids ?? [];
-        const mutual = (matchesRes.data ?? []).map((m: { id: string }) => m.id).filter(Boolean);
+        const mutual = (matchesSnap.matches ?? []).map((m) => m.id).filter(Boolean);
         setMatchedUsers((prev) => new Set([...prev, ...mutual]));
         const likedIds = [...sent, ...mutual];
         if (likedIds.length > 0) {

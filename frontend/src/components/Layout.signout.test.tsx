@@ -41,9 +41,18 @@ vi.mock('react-router-dom', async () => {
 vi.mock('../api/client', () => ({
   usersAPI: {
     getMatches: vi.fn().mockResolvedValue({ data: [] }),
+    getReceivedLikes: vi.fn().mockResolvedValue({ data: [] }),
     getMe: vi.fn().mockResolvedValue({ data: {} }),
     updateLocation: vi.fn(),
   },
+  messagesAPI: {
+    getConversations: vi.fn().mockResolvedValue({ data: [] }),
+  },
+}));
+
+vi.mock('../lib/tabListCache', () => ({
+  readCachedMatches: vi.fn().mockReturnValue(undefined),
+  refreshMatches: vi.fn().mockResolvedValue({ matches: [], likes: [] }),
 }));
 
 vi.mock('../lib/navConfig', () => ({
