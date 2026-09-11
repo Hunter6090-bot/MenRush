@@ -7,7 +7,7 @@ import { sendPushToUser } from '../services/push.service';
 import { notificationService } from '../services/notification.service';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { SecurityError } from '../security/access';
-import { resolveMediaPath, verifyMediaAccess } from '../security/media';
+import { resolveMediaPath, signedMediaUrl, verifyMediaAccess } from '../security/media';
 import {
   safeUploadFilename,
   uploadFileFilter,
@@ -355,6 +355,28 @@ router.post('/media/from-album', async (req: AuthRequest, res: Response) => {
       const status = code === 'photo_not_owned' ? 404 : 400;
       res.status(status).json({ error: code });
     }
+  }
+});
+
+/**
+ * Fresh signed media URL for an existing message (JWT auth).
+ * Used by VideoBubble so playback does not depend on a grant that may have
+ * expired in a cached thread row, and so open/retry never remounts on poll churn.
+ */
+router.get('/:messageId/media-url', async (req: AuthRequest, res: Response) => {
+  try {
+    const media = await messageService.getMedia(req.userId!, req.params.messageId);
+    const resource = `/api/messages/${req.params.messageId}/media`;
+    return res.json({
+      url: signedMediaUrl(resource, req.userId!),
+      mime_type: media.mimeType,
+      media_type: media.mediaType,
+    });
+  } catch (error) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.code });
+    }
+    return res.status(404).json({ error: 'media_unavailable' });
   }
 });
 

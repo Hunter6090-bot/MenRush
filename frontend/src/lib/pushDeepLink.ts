@@ -185,6 +185,20 @@ export function prependOlderMessages<T extends { id?: string; created_at?: strin
   return pendingNoId.length === 0 ? dated : [...dated, ...pendingNoId];
 }
 
+/**
+ * Strip signed `?access=` (and any other query) so poll re-grants do not look
+ * like content changes. Including the rotating token in fingerprints forced
+ * open-thread polls to remount every media bubble every ~2.5s — chat video
+ * `<video src>` restarted forever and never reached loadedmetadata (black
+ * player, duration `--:--`).
+ */
+export function mediaUrlPath(url?: string | null): string {
+  if (!url) return '';
+  const raw = String(url).trim();
+  if (!raw) return '';
+  return raw.split('?', 1)[0] || '';
+}
+
 /** Stable fingerprint so open-thread polls do not re-render/scroll when unchanged. */
 export function conversationFingerprint(
   rows: Array<{ id?: string; media_url?: string | null; message?: string; view_count?: number }>,
@@ -193,7 +207,7 @@ export function conversationFingerprint(
   return rows
     .map(
       (m) =>
-        `${m.id ?? ''}\u0001${m.media_url ?? ''}\u0001${m.message ?? ''}\u0001${m.view_count ?? ''}`,
+        `${m.id ?? ''}\u0001${mediaUrlPath(m.media_url)}\u0001${m.message ?? ''}\u0001${m.view_count ?? ''}`,
     )
     .join('\u0002');
 }

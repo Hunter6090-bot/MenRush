@@ -185,6 +185,36 @@ describe('conversationFingerprint', () => {
     ]);
     expect(before).not.toEqual(after);
   });
+
+  it('ignores rotating signed access tokens on the same media path', () => {
+    const a = conversationFingerprint([
+      {
+        id: 'vid-1',
+        message: '🎥 Video',
+        media_url: '/api/messages/vid-1/media?access=token.aaa',
+        view_count: 0,
+      },
+    ]);
+    const b = conversationFingerprint([
+      {
+        id: 'vid-1',
+        message: '🎥 Video',
+        media_url: '/api/messages/vid-1/media?access=token.bbb',
+        view_count: 0,
+      },
+    ]);
+    expect(a).toEqual(b);
+  });
+
+  it('still changes when the media path itself changes', () => {
+    const a = conversationFingerprint([
+      { id: '1', message: 'x', media_url: '/api/messages/1/media?access=a' },
+    ]);
+    const b = conversationFingerprint([
+      { id: '1', message: 'x', media_url: '/api/messages/other/media?access=a' },
+    ]);
+    expect(a).not.toEqual(b);
+  });
 });
 
 describe('conversationPathFromPushNotification', () => {
