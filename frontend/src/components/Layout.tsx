@@ -130,7 +130,7 @@ function LayoutInner({ children }: LayoutProps) {
 
   return (
     <div
-      className="min-h-dvh min-w-0 max-w-full overflow-x-clip bg-[var(--bg-primary)] lg:grid lg:grid-cols-[var(--desktop-sidebar-width)_minmax(0,1fr)]"
+      className="h-dvh max-h-dvh min-w-0 max-w-full overflow-x-clip overflow-y-hidden bg-[var(--bg-primary)] lg:grid lg:grid-cols-[var(--desktop-sidebar-width)_minmax(0,1fr)]"
       style={{ ['--desktop-sidebar-width' as string]: sidebarWidth, touchAction: 'manipulation' }}
       data-sidebar={sidebarExpanded ? 'expanded' : 'collapsed'}
       data-testid="app-shell"
@@ -235,7 +235,7 @@ function LayoutInner({ children }: LayoutProps) {
         </div>
       </aside>
 
-      <div className="flex min-h-dvh min-w-0 max-w-full flex-col overflow-x-clip lg:col-start-2">
+      <div className="flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-x-clip overflow-y-hidden lg:col-start-2">
         <header
           className="lg:hidden fixed top-0 left-0 right-0 z-50 max-w-full overflow-x-clip border-b border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-primary)_92%,transparent)] backdrop-blur-xl pt-[env(safe-area-inset-top,0px)]"
           style={{ touchAction: 'manipulation' }}
@@ -337,9 +337,12 @@ function LayoutInner({ children }: LayoutProps) {
         </div>
 
         {/*
-          Flex column + overflow containment: banners (e.g. PushAlertBanner) must not
-          inflate past the viewport and reintroduce page scroll that fights Mapbox
-          pan/pinch on Nearby. Page content scrolls inside page-enter when needed.
+          Viewport-locked shell (h-dvh on app-shell): page-enter is the only vertical
+          scrollport. min-h-dvh alone let flex children grow with content, so
+          overflow-y-auto never engaged; overscroll-y-contain then blocked document
+          scroll chaining — Settings/Profile felt capped at the viewport. Keep
+          overflow-hidden on main so banners cannot inflate past the shell and fight
+          Mapbox pan/pinch on Nearby (#224). Chat keeps its own thread scroller (#231).
         */}
         <main className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-x-clip overflow-hidden max-lg:pt-[var(--mobile-header-height)] max-lg:pb-[var(--mobile-tab-bar-height)] lg:pb-0">
           <LocationPresenceStrip />
@@ -348,6 +351,7 @@ function LayoutInner({ children }: LayoutProps) {
           <div
             className="page-enter min-h-0 min-w-0 max-w-full flex-1 overflow-x-clip overflow-y-auto overscroll-y-contain"
             style={{ touchAction: 'manipulation' }}
+            data-testid="page-enter"
           >
             {children}
           </div>
