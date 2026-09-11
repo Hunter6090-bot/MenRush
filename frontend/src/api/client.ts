@@ -579,6 +579,26 @@ export const roomsAPI = {
     apiClient.delete(`/rooms/${roomId}/temp-identity`),
 };
 
+// ── Map feed (Sniffies-style location chat on Discover map) ─────────────────
+export interface MapFeedMessage {
+  id: string;
+  display_name: string;
+  photo_url?: string | null;
+  message: string;
+  created_at: string;
+  /** Distance bucket label e.g. "< 500m" */
+  distance_label?: string;
+}
+
+export const mapFeedAPI = {
+  list: (lat?: number, lng?: number, limit = 20) =>
+    apiClient.get<{ messages: MapFeedMessage[] }>('/map-feed', {
+      params: { lat, lng, limit },
+    }),
+  post: (data: { message: string; lat?: number; lng?: number; display_name?: string }) =>
+    apiClient.post<MapFeedMessage>('/map-feed', data),
+};
+
 export type ContactSubmitPayload = {
   name: string;
   email: string;
