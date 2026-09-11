@@ -463,8 +463,8 @@ export const messagesAPI = {
         ? file.name
         : `${opts.kind}-${Date.now()}.${extensionForMediaMime(upload.type, opts.kind)}`;
     fd.append('media', upload, filename);
+    // Do not set Content-Type: axios must add the multipart boundary itself.
     return apiClient.post<MessageDTO>('/messages/media', fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       // Android→iPhone multi‑MB uploads were timing out / retrying (~50s then ~20s).
       timeout: 180_000,
     });

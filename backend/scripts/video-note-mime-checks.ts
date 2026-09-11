@@ -111,8 +111,9 @@ test('iPhone/Safari path: cleaned video/mp4 uploads', async () => {
 });
 
 test('reject reasons name mime (not container/codec/size) for true mime rejects', () => {
-  assert.equal(normalizeUploadMime('video/quicktime'), 'video/quicktime');
-  assert.equal(allowedUpload('video/quicktime', 'message'), false);
+  // iPhone often reports QuickTime — canonicalise to video/mp4 so send works.
+  assert.equal(normalizeUploadMime('video/quicktime'), 'video/mp4');
+  assert.equal(allowedUpload('video/quicktime', 'message'), true);
   assert.equal(allowedUpload('application/octet-stream', 'message'), false);
   assert.equal(allowedUpload('video/webm', 'message'), true);
   assert.equal(allowedUpload('video/mp4', 'message'), true);

@@ -8,7 +8,14 @@ import { notificationService } from '../services/notification.service';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { SecurityError } from '../security/access';
 import { resolveMediaPath, verifyMediaAccess } from '../security/media';
-import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
+import {
+  safeUploadFilename,
+  uploadFileFilter,
+  validateFileSignature,
+  sniffMediaMimeFromPath,
+  normalizeUploadMime,
+  allowedUpload,
+} from '../security/uploads';
 import {
   MessageSchema,
   MediaMessageFormSchema,
@@ -167,6 +174,13 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
   }
 
   const { receiver_id, kind, caption, disappearing, max_views, duration_ms } = parsed.data;
+  const sniffed = await sniffMediaMimeFromPath(req.file.path, kind);
+  if (sniffed) req.file.mimetype = sniffed;
+  else req.file.mimetype = normalizeUploadMime(req.file.mimetype) || req.file.mimetype;
+  if (!allowedUpload(req.file.mimetype, 'message')) {
+    try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+    return res.status(400).json({ error: 'Unsupported upload type' });
+  }
   if (!(await validateFileSignature(req.file.path, req.file.mimetype))) {
     try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
     return res.status(400).json({ error: 'File content does not match its type' });
