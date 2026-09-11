@@ -27,9 +27,11 @@ Do **not** say in product UI or PR copy that “all users are ID-verified.”
 | --- | --- |
 | `VERIFF_API_KEY` / `VERIFF_SHARED_SECRET` | Existing Veriff credentials (reuse — no second vendor) |
 | `ADULT_ASSURANCE_SIGNUP_REQUIRED` | `true` / `false` override. Default: required when Veriff is configured |
-| `ADULT_ASSURANCE_ALLOW_TEST_FIXTURE` | Non-prod only. Enables `/api/auth/adult-assurance/fixture` and fixture start without Veriff |
+| `ADULT_ASSURANCE_ALLOW_TEST_FIXTURE` | Must be `true` to enable `/api/auth/adult-assurance/fixture` and fixture start without Veriff |
+| `ADULT_ASSURANCE_STAGING_FIXTURE` | Optional escape when Railway staging still has `NODE_ENV=production` |
+| `RAILWAY_ENVIRONMENT` / `RAILWAY_ENVIRONMENT_NAME` | If name contains `staging`/`stage`, fixtures allowed even with `NODE_ENV=production` |
 
-Production never enables the fixture (`NODE_ENV=production` hard-bans it).
+Real production Railway never enables the fixture (`NODE_ENV=production` + non-staging env). Prefer `NODE_ENV=staging` on Railway staging when possible.
 
 ## API
 
@@ -50,10 +52,24 @@ Identity webhooks remain on `/api/verify/veriff/webhook` (and alias). `applyDeci
 
 Owner account is adult. Use the **controlled fixture** for under-18; do not use a real underage document.
 
-### Staging / local (fixture)
+### Staging / local (fixture) — BOA90 on Vercel preview
+
+Primary Vercel preview for PR #97 rewrites `/api` → Railway **staging**
+(`https://backend-staging-f3aa.up.railway.app`), not production.
+
+On Railway **staging** (deploy this PR branch backend before Al tests):
 
 ```bash
-# backend .env (never production)
+ADULT_ASSURANCE_ALLOW_TEST_FIXTURE=true
+ADULT_ASSURANCE_SIGNUP_REQUIRED=true
+# Prefer NODE_ENV=staging. If Railway keeps NODE_ENV=production, either
+# rely on RAILWAY_ENVIRONMENT=staging or set:
+# ADULT_ASSURANCE_STAGING_FIXTURE=true
+```
+
+Local:
+
+```bash
 ADULT_ASSURANCE_ALLOW_TEST_FIXTURE=true
 ADULT_ASSURANCE_SIGNUP_REQUIRED=true
 # Veriff keys optional when fixture is on

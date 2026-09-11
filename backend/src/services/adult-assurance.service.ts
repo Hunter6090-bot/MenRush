@@ -47,9 +47,29 @@ function frontendBase(): string {
   return base.replace(/\/$/, '');
 }
 
+/**
+ * BOA90 / staging fixture gate.
+ * Requires ADULT_ASSURANCE_ALLOW_TEST_FIXTURE=true.
+ * Hard-bans real production. Railway staging often still sets NODE_ENV=production —
+ * allow when RAILWAY_ENVIRONMENT* looks like staging, NODE_ENV=staging, or
+ * ADULT_ASSURANCE_STAGING_FIXTURE=true (explicit staging escape hatch).
+ * Never set those staging markers on production Railway.
+ */
 export function isAdultAssuranceTestFixtureAllowed(): boolean {
-  if (process.env.NODE_ENV === 'production') return false;
-  return process.env.ADULT_ASSURANCE_ALLOW_TEST_FIXTURE === 'true';
+  if (process.env.ADULT_ASSURANCE_ALLOW_TEST_FIXTURE !== 'true') return false;
+  const nodeEnv = (process.env.NODE_ENV || '').trim().toLowerCase();
+  if (nodeEnv !== 'production') return true;
+
+  const railway = (
+    process.env.RAILWAY_ENVIRONMENT ||
+    process.env.RAILWAY_ENVIRONMENT_NAME ||
+    ''
+  )
+    .trim()
+    .toLowerCase();
+  if (railway.includes('staging') || railway.includes('stage')) return true;
+  if (process.env.ADULT_ASSURANCE_STAGING_FIXTURE === 'true') return true;
+  return false;
 }
 
 /**

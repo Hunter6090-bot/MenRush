@@ -182,10 +182,14 @@ async function main() {
   });
   assert.equal(missResult.adultStatus, 'failed');
 
-  // Production fixture hard-ban.
+  // Production fixture hard-ban (NODE_ENV=production without Railway staging markers).
   const prevNode = process.env.NODE_ENV;
+  const prevRailway = process.env.RAILWAY_ENVIRONMENT;
+  const prevStagingFlag = process.env.ADULT_ASSURANCE_STAGING_FIXTURE;
   process.env.NODE_ENV = 'production';
-  // Re-import won't reload; call the guard directly via applyTestFixture which checks env.
+  delete process.env.RAILWAY_ENVIRONMENT;
+  delete process.env.RAILWAY_ENVIRONMENT_NAME;
+  delete process.env.ADULT_ASSURANCE_STAGING_FIXTURE;
   await assert.rejects(
     () =>
       adultAssuranceService.applyTestFixture({
@@ -194,7 +198,14 @@ async function main() {
       }),
     /adult_assurance_fixture_disabled/,
   );
+  // Railway staging with NODE_ENV=production may still allow fixtures.
+  process.env.RAILWAY_ENVIRONMENT = 'staging';
+  assert.equal(isAdultAssuranceTestFixtureAllowed(), true);
   process.env.NODE_ENV = prevNode;
+  if (prevRailway === undefined) delete process.env.RAILWAY_ENVIRONMENT;
+  else process.env.RAILWAY_ENVIRONMENT = prevRailway;
+  if (prevStagingFlag === undefined) delete process.env.ADULT_ASSURANCE_STAGING_FIXTURE;
+  else process.env.ADULT_ASSURANCE_STAGING_FIXTURE = prevStagingFlag;
 
   // veriff.applyDecision routes adult sessions without creating users.
   // Keep Veriff "configured" for signature helpers, but force fixture start path
