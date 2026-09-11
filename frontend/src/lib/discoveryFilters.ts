@@ -12,18 +12,19 @@ export const DISCOVERY_FILTER_CATEGORIES = [
     singleSelect: true,
     tags: [
       'All',
-      'Chat',
-      'Drinks',
-      'Date',
       'NSA',
       'Hookup',
       'Casual',
-      'Dating',
       'FWB',
       'Discreet',
       'Hosting',
       'Can Travel',
       'Right Now',
+      'Oral',
+      'Anal',
+      'Rim',
+      'JO',
+      'Threesome',
     ],
   },
   {
@@ -34,12 +35,40 @@ export const DISCOVERY_FILTER_CATEGORIES = [
   {
     id: 'tribe',
     label: 'Tribe',
-    tags: ['Twink', 'Twunk', 'Otter', 'Bear', 'Cub', 'Daddy', 'Wolf', 'Jock', 'Leather', 'Rugged', 'Geek'],
+    tags: [
+      'Twink',
+      'Twunk',
+      'Otter',
+      'Bear',
+      'Cub',
+      'Daddy',
+      'Wolf',
+      'Jock',
+      'Leather',
+      'Rugged',
+      'Geek',
+      'Pup',
+      'Chub',
+      'Muscle',
+    ],
   },
   {
     id: 'body',
     label: 'Body',
-    tags: ['Slim', 'Athletic', 'Muscular', 'Stocky', 'Chubby', 'Hairy', 'Smooth', 'Tatted'],
+    tags: [
+      'Slim',
+      'Athletic',
+      'Muscular',
+      'Stocky',
+      'Chubby',
+      'Hairy',
+      'Smooth',
+      'Tatted',
+      'Average',
+      'Toned',
+      'Large',
+      'Dad bod',
+    ],
   },
   {
     id: 'ethnicity',
@@ -60,17 +89,57 @@ export const DISCOVERY_FILTER_CATEGORIES = [
   {
     id: 'vibe',
     label: 'Vibe',
-    tags: ['Kinky', 'Vanilla', 'Open', 'Sober', 'PnP-Free'],
+    tags: [
+      'Kinky',
+      'Vanilla',
+      'Horny',
+      'Filthy',
+      'Rough',
+      'Oral',
+      'Anal',
+      'Rim',
+      'JO',
+      'Dominant',
+      'Submissive',
+      'Sober',
+      'PnP-Free',
+    ],
   },
   {
     id: 'scene',
     label: 'Scene',
-    tags: ['Gym', 'Bar', 'Club', 'Sauna', 'Cruising', 'House Party', 'Coffee', 'Outdoors'],
+    tags: [
+      'Sauna',
+      'Cruising',
+      'Darkroom',
+      'Glory hole',
+      'Hotel',
+      'Private',
+      'Club',
+      'After hours',
+      'Car',
+      'Toilets',
+      'House Party',
+      'Gym',
+      'Bar',
+    ],
   },
   {
     id: 'connection',
     label: 'Connection',
-    tags: ['Friends', 'Networking', 'Group', 'Couples', 'Poly', 'Long-term', 'Short-term'],
+    tags: [
+      'Group',
+      'Couples',
+      'Poly',
+      'Threesome',
+      'Gangbang',
+      'Cam',
+      'Overnight',
+      'Host',
+      'Travel',
+      'Now',
+      'Short-term',
+    ],
   },
 ] as const;
 
@@ -96,15 +165,22 @@ export function getMoreFilterCategories() {
 
 export const API_LOOKING_FOR_INTENTS = new Set<string>(INTENT_FILTERS.filter((v) => v !== 'All'));
 
+export const AGE_PRESETS = [
+  { id: 'any', label: 'Any age', min: undefined as number | undefined, max: undefined as number | undefined },
+  { id: '18-21', label: '18–21', min: 18, max: 21 },
+  { id: '22-29', label: '22–29', min: 22, max: 29 },
+  { id: '30-39', label: '30–39', min: 30, max: 39 },
+  { id: '40-49', label: '40–49', min: 40, max: 49 },
+  /** Once 60+ exists, 50+ means 50–59 (not 50–99). */
+  { id: '50+', label: '50–59', min: 50, max: 59 },
+  { id: '60+', label: '60+', min: 60, max: 99 },
+] as const;
+
+export type AgePresetId = (typeof AGE_PRESETS)[number]['id'];
+
 /** Discovery age filter floor/ceiling — everyone on the app is 18+. */
 export const AGE_CLAMP_MIN = 18;
 export const AGE_CLAMP_MAX = 99;
-
-/** Every integer From/To option (18…99) for native `<select>`s. */
-export const AGE_SELECT_OPTIONS: readonly number[] = Array.from(
-  { length: AGE_CLAMP_MAX - AGE_CLAMP_MIN + 1 },
-  (_, i) => AGE_CLAMP_MIN + i,
-);
 
 export const STATUS_FILTER_OPTIONS = [
   { id: 'online', label: 'Online now' },
@@ -125,10 +201,10 @@ export const MOOD_FILTER_OPTIONS = Object.entries(MOOD_LABELS).map(([value, labe
 export interface DiscoveryFilterState {
   intent: string;
   interests: string[];
-  /** Who-you-want-to-see lower bound (inclusive). Default 18. */
-  ageFrom: number;
-  /** Who-you-want-to-see upper bound (inclusive). Default 99. */
-  ageTo: number;
+  agePreset: AgePresetId;
+  /** Custom age bounds; when set, presets are deselected (agePreset = any). */
+  customAgeMin?: number;
+  customAgeMax?: number;
   status: StatusFilterId[];
   mood?: Mood;
 }
@@ -136,8 +212,9 @@ export interface DiscoveryFilterState {
 export const DEFAULT_DISCOVERY_FILTERS: DiscoveryFilterState = {
   intent: 'All',
   interests: [],
-  ageFrom: AGE_CLAMP_MIN,
-  ageTo: AGE_CLAMP_MAX,
+  agePreset: 'any',
+  customAgeMin: undefined,
+  customAgeMax: undefined,
   status: [],
   mood: undefined,
 };
@@ -146,9 +223,12 @@ export function clampAge(value: number): number {
   return Math.min(AGE_CLAMP_MAX, Math.max(AGE_CLAMP_MIN, Math.trunc(value)));
 }
 
-/** True when the range is narrower than the open 18–99 default. */
+export function hasCustomAge(state: DiscoveryFilterState): boolean {
+  return state.customAgeMin != null || state.customAgeMax != null;
+}
+
 export function hasActiveAgeFilter(state: DiscoveryFilterState): boolean {
-  return state.ageFrom !== AGE_CLAMP_MIN || state.ageTo !== AGE_CLAMP_MAX;
+  return hasCustomAge(state) || state.agePreset !== 'any';
 }
 
 export function countActiveDiscoveryFilters(state: DiscoveryFilterState): number {
@@ -168,50 +248,46 @@ export function countMoreFilterSelections(state: DiscoveryFilterState): number {
   return state.interests.filter((tag) => moreTags.has(tag)).length;
 }
 
-/** Resolved From–To for Nearby API + client filters. Always clamped 18–99; From ≤ To. */
-export function resolveAgeRange(state: DiscoveryFilterState): { minAge: number; maxAge: number } {
-  let minAge = clampAge(state.ageFrom);
-  let maxAge = clampAge(state.ageTo);
-  if (minAge > maxAge) {
-    maxAge = minAge; // snap To up to From
+export function getAgeRange(presetId: AgePresetId): { minAge?: number; maxAge?: number } {
+  const preset = AGE_PRESETS.find((p) => p.id === presetId);
+  if (!preset || preset.id === 'any') return {};
+  return { minAge: preset.min, maxAge: preset.max };
+}
+
+/** Prefer custom min/max when present; otherwise use the selected preset. */
+export function resolveAgeRange(state: DiscoveryFilterState): { minAge?: number; maxAge?: number } {
+  if (hasCustomAge(state)) {
+    let minAge = state.customAgeMin;
+    let maxAge = state.customAgeMax;
+    if (minAge != null && maxAge != null && minAge > maxAge) {
+      [minAge, maxAge] = [maxAge, minAge];
+    }
+    return { minAge, maxAge };
   }
-  return { minAge, maxAge };
+  return getAgeRange(state.agePreset);
 }
 
-/** Set From; if From > To, snap To up to From. */
-export function withAgeFrom(state: DiscoveryFilterState, ageFrom: number): DiscoveryFilterState {
-  const from = clampAge(ageFrom);
-  const to = clampAge(state.ageTo);
+/** Selecting a preset clears custom age. */
+export function withAgePreset(state: DiscoveryFilterState, agePreset: AgePresetId): DiscoveryFilterState {
   return {
     ...state,
-    ageFrom: from,
-    ageTo: from > to ? from : to,
+    agePreset,
+    customAgeMin: undefined,
+    customAgeMax: undefined,
   };
 }
 
-/** Set To; if From > To, snap To up to From. */
-export function withAgeTo(state: DiscoveryFilterState, ageTo: number): DiscoveryFilterState {
-  const from = clampAge(state.ageFrom);
-  const to = clampAge(ageTo);
-  return {
-    ...state,
-    ageFrom: from,
-    ageTo: from > to ? from : to,
-  };
-}
-
-/** Set both ends at once (clamped; To snapped up if inverted). */
-export function withAgeRange(
+/** Setting custom age deselects presets (agePreset → any). Values are clamped 18–99. */
+export function withCustomAge(
   state: DiscoveryFilterState,
-  ageFrom: number,
-  ageTo: number,
+  customAgeMin?: number,
+  customAgeMax?: number,
 ): DiscoveryFilterState {
-  const from = clampAge(ageFrom);
-  const to = clampAge(ageTo);
   return {
     ...state,
-    ageFrom: from,
-    ageTo: from > to ? from : to,
+    agePreset: 'any',
+    customAgeMin: customAgeMin == null || Number.isNaN(customAgeMin) ? undefined : clampAge(customAgeMin),
+    customAgeMax: customAgeMax == null || Number.isNaN(customAgeMax) ? undefined : clampAge(customAgeMax),
   };
 }
 

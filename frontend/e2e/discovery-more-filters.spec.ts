@@ -65,6 +65,12 @@ test('Discover more filters drawer selects vibe/scene and refetches nearby', asy
   const before = nearbyRequests.length;
   await page.getByTestId('more-filter-tag-Kinky').click();
   await page.getByTestId('more-filter-tag-Gym').click();
+  await expect(page.getByTestId('more-filter-tag-Filthy')).toBeVisible();
+  await expect(page.getByTestId('more-filter-tag-Glory hole')).toBeVisible();
+  await expect(page.getByTestId('more-filter-tag-Threesome')).toBeVisible();
+  await expect(page.getByTestId('more-filter-tag-Romantic')).toHaveCount(0);
+  await expect(page.getByTestId('more-filter-tag-Coffee')).toHaveCount(0);
+  await expect(page.getByTestId('more-filter-tag-Friends')).toHaveCount(0);
 
   await expect
     .poll(
