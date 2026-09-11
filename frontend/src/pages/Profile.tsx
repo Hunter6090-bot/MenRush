@@ -4,6 +4,7 @@ import { usersAPI, profileMetaAPI, Mood, MOOD_LABELS } from '../api/client';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { Layout } from '../components/Layout';
 import { UserAvatar } from '../components/UserAvatar';
+import { FadedBrandFace, isNearbyPlaceholderFace } from '../components/FadedBrandFace';
 import { StatusBadge } from '../components/StatusBadge';
 import { PulseRing } from '../components/PulseRing';
 import { MoodPicker } from '../components/MoodPicker';
@@ -757,14 +758,24 @@ export const Profile = () => {
                     uploading ? 'pointer-events-none opacity-70' : ''
                   }`}
                 >
-                  <UserAvatar
-                    name={profile.name}
-                    photoUrl={profile.photo_url}
-                    online={profile.online}
-                    size="xl"
-                    showStatus={false}
-                    className="ring-4 ring-[var(--bg-card)] transition-opacity group-hover:opacity-90"
-                  />
+                  {isNearbyPlaceholderFace(profile.photo_url) ? (
+                    <span
+                      className="relative inline-flex shrink-0 overflow-hidden rounded-full ring-4 ring-[var(--bg-card)] transition-opacity group-hover:opacity-90"
+                      style={{ width: 96, height: 96 }}
+                      data-testid="profile-empty-brand-face"
+                    >
+                      <FadedBrandFace variant="profile" size={96} label={profile.name} />
+                    </span>
+                  ) : (
+                    <UserAvatar
+                      name={profile.name}
+                      photoUrl={profile.photo_url}
+                      online={profile.online}
+                      size="xl"
+                      showStatus={false}
+                      className="ring-4 ring-[var(--bg-card)] transition-opacity group-hover:opacity-90"
+                    />
+                  )}
                   <span className="absolute inset-0 rounded-full bg-black/0 transition-colors group-hover:bg-black/20" />
                   <span className="absolute bottom-1 right-1 flex h-9 w-9 items-center justify-center rounded-full border-2 border-[var(--bg-card)] bg-[#C4832A] text-[var(--nn-on-copper)] shadow-lg transition-transform group-hover:scale-105">
                     {uploading ? (
@@ -809,7 +820,7 @@ export const Profile = () => {
           <div className="grid grid-cols-[280px_1fr] gap-8">
             <div className="space-y-3">
               <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]">
-                {getPhotoUrl(photoUrl) ? (
+                {getPhotoUrl(photoUrl) && !isNearbyPlaceholderFace(photoUrl) ? (
                   <img
                     src={getPhotoUrl(photoUrl)!}
                     alt={profile.name}
@@ -817,7 +828,7 @@ export const Profile = () => {
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center">
-                    <UserAvatar name={profile.name} photoUrl={profile.photo_url} size="xl" showStatus={false} />
+                    <FadedBrandFace variant="profile" size={96} label={profile.name} />
                   </div>
                 )}
                 <button
@@ -977,14 +988,24 @@ export const Profile = () => {
                     uploading ? 'pointer-events-none opacity-70' : ''
                   }`}
                 >
-                  <UserAvatar
-                    name={profile.name}
-                    photoUrl={profile.photo_url}
-                    online={profile.online}
-                    size="xl"
-                    showStatus={false}
-                    className="ring-4 ring-[var(--bg-card)] transition-opacity group-hover:opacity-90 group-active:opacity-80"
-                  />
+                  {isNearbyPlaceholderFace(profile.photo_url) ? (
+                    <span
+                      className="relative inline-flex shrink-0 overflow-hidden rounded-full ring-4 ring-[var(--bg-card)] transition-opacity group-hover:opacity-90 group-active:opacity-80"
+                      style={{ width: 96, height: 96 }}
+                      data-testid="profile-empty-brand-face-mobile"
+                    >
+                      <FadedBrandFace variant="profile" size={96} label={profile.name} />
+                    </span>
+                  ) : (
+                    <UserAvatar
+                      name={profile.name}
+                      photoUrl={profile.photo_url}
+                      online={profile.online}
+                      size="xl"
+                      showStatus={false}
+                      className="ring-4 ring-[var(--bg-card)] transition-opacity group-hover:opacity-90 group-active:opacity-80"
+                    />
+                  )}
                   <span className="absolute inset-0 rounded-full bg-black/0 transition-colors group-hover:bg-black/20 group-active:bg-black/30" />
                   <span className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-[var(--bg-card)] bg-[#C4832A] text-[var(--nn-on-copper)] shadow-lg transition-transform group-hover:scale-105 group-active:scale-95">
                     {uploading ? (

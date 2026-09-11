@@ -64,7 +64,7 @@ export const ConversationItem = memo(function ConversationItem({
               className="relative inline-flex shrink-0 overflow-hidden rounded-full"
               style={{ width: THREAD_AVATAR_PX, height: THREAD_AVATAR_PX }}
             >
-              <FadedBrandFace variant="pin" size={THREAD_AVATAR_PX} label={name} />
+              <FadedBrandFace variant="profile" size={THREAD_AVATAR_PX} label={name} />
               {online !== undefined ? (
                 <StatusDot
                   online={online}

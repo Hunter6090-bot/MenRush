@@ -44,9 +44,13 @@ describe('ConversationItem avatars', () => {
     });
 
     expect(screen.getByTestId('faded-brand-face')).toBeInTheDocument();
+    expect(screen.getByTestId('faded-brand-face').getAttribute('data-faded-variant')).toBe(
+      'profile',
+    );
     const img = screen.getByTestId('faded-brand-face').querySelector('img');
     expect(img?.getAttribute('src')).toBe(BRAND_MEDALLION_CUTOUT);
     expect(img?.getAttribute('src')).toBe('/brand/medallion-transparent.png');
+    expect(img?.getAttribute('data-faded-face-zoom')).toBe('profile');
 
     // Former square chrome: ring on a non-rounded wrapper
     expect(container.querySelector('[class*="ring-2"]')).toBeNull();
