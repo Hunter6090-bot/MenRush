@@ -2829,8 +2829,8 @@ interface ChatThreadScrollProps {
   historyReady: boolean;
   loadingOlder: boolean;
   hasMoreOlder: boolean;
-  messagesScrollRef: React.RefObject<HTMLDivElement>;
-  bottomRef: React.RefObject<HTMLDivElement>;
+  messagesScrollRef: React.RefObject<HTMLDivElement | null>;
+  bottomRef: React.RefObject<HTMLDivElement | null>;
   onScroll: () => void;
   onOpenImage: (msg: Message) => void;
   onWithdrawMedia: (id: string) => void | Promise<void>;
