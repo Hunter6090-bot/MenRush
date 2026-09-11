@@ -27,6 +27,7 @@ import { DiscoveryFilterPanel } from '../components/DiscoveryFilterPanel';
 import { MoreFiltersDrawer } from '../components/MoreFiltersDrawer';
 import { NearbyProfileGrid } from '../components/NearbyProfileGrid';
 import { NearbyMapGridToggle, readNearbyView, writeNearbyView, type NearbyView } from '../components/NearbyMapGridToggle';
+import { NearbySortToggle } from '../components/NearbySortToggle';
 import { DiscoveryShellPublisher } from '../context/DiscoveryShellContext';
 import type { ProfileSetupSnapshot } from '../lib/profileSetup';
 import { discoveryPhotoUrl } from '../lib/discoveryPhoto';
@@ -44,7 +45,13 @@ import {
 } from '../lib/discoveryFilters';
 import { EventsRail } from '../components/EventsRail';
 import { countLiveOnline, isUserPulsing, distanceMeters } from '../lib/discovery';
-import { createdAtMs, isFreshFaceNearby, isNewlyJoined } from '../lib/newJoiner';
+import { isFreshFaceNearby } from '../lib/newJoiner';
+import {
+  readNearbySort,
+  sortNearbyUsers,
+  writeNearbySort,
+  type NearbySortMode,
+} from '../lib/nearbySort';
 import type mapboxgl from 'mapbox-gl';
 import { loadMapbox, getLoadedMapbox } from '../lib/mapboxLazy';
 import {
@@ -451,6 +458,11 @@ export const Discover = () => {
     return DEFAULT_RADIUS_KM;
   });
   const [nearbyView, setNearbyView] = useState<NearbyView>(() => readNearbyView());
+  const [nearbySort, setNearbySort] = useState<NearbySortMode>(() => readNearbySort());
+  const handleNearbySortChange = useCallback((next: NearbySortMode) => {
+    setNearbySort(next);
+    writeNearbySort(next);
+  }, []);
   const [mapPanelMode, setMapPanelMode] = useState<MapPanelMode>(() => {
     // Keep Grid/Map surface and map panel height in sync on first paint.
     if (readNearbyView() === 'grid') return 'hidden';
@@ -1419,27 +1431,11 @@ export const Discover = () => {
     return () => window.removeEventListener(THEME_CHANGED_EVENT, onThemeChanged);
   }, []);
 
-  const sortedUsers = useMemo(() => {
-    return [...users].sort((a, b) => {
-      const ap = isUserPulsing(a) ? 1 : 0;
-      const bp = isUserPulsing(b) ? 1 : 0;
-      if (ap !== bp) return bp - ap;
-      // Soft-surface fresh faces (newly joined + visitor boost) after Pulse.
-      const an = isFreshFaceNearby(a) ? 1 : 0;
-      const bn = isFreshFaceNearby(b) ? 1 : 0;
-      if (an !== bn) return bn - an;
-      if (an && bn) {
-        const aJoin = isNewlyJoined(a.created_at) ? 1 : 0;
-        const bJoin = isNewlyJoined(b.created_at) ? 1 : 0;
-        if (aJoin !== bJoin) return bJoin - aJoin;
-        if (aJoin && bJoin) {
-          const byAge = createdAtMs(b.created_at) - createdAtMs(a.created_at);
-          if (byAge !== 0) return byAge;
-        }
-      }
-      return parseFloat(String(a.distance_km)) - parseFloat(String(b.distance_km));
-    });
-  }, [users]);
+  // Explicit Nearest (distance-first) vs Latest (fresh faces / newest first).
+  const sortedUsers = useMemo(
+    () => sortNearbyUsers(users, nearbySort),
+    [users, nearbySort],
+  );
 
   const displayUsers = useMemo(
     () => applyDiscoveryClientFilters(sortedUsers, discoveryFilters),
@@ -2009,6 +2005,7 @@ export const Discover = () => {
                 : `${nearbyCount} ${nearbyCount === 1 ? 'man' : 'men'} nearby`}
           </h2>
           <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
+          <NearbySortToggle mode={nearbySort} onChange={handleNearbySortChange} />
           <NearbyMapGridToggle view={nearbyView} onChange={setNearbySurface} />
         </div>
         {nearbyView === 'grid' && !needsLocationGate ? (
@@ -2296,7 +2293,8 @@ export const Discover = () => {
                 </p>
               </div>
               <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
+                <NearbySortToggle mode={nearbySort} onChange={handleNearbySortChange} />
                 <NearbyMapGridToggle view={nearbyView} onChange={setNearbySurface} />
               </div>
             </div>
