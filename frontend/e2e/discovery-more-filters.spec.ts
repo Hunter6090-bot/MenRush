@@ -68,6 +68,10 @@ test('Discover more filters drawer selects vibe/scene and refetches nearby', asy
   await expect(page.getByTestId('more-filter-tag-Filthy')).toBeVisible();
   await expect(page.getByTestId('more-filter-tag-Glory hole')).toBeVisible();
   await expect(page.getByTestId('more-filter-tag-Threesome')).toBeVisible();
+  // Legal colour (Zoul/Product): RED Scene chips off live face; Glory hole stays.
+  await expect(page.getByTestId('more-filter-tag-Cruising')).toHaveCount(0);
+  await expect(page.getByTestId('more-filter-tag-Car')).toHaveCount(0);
+  await expect(page.getByTestId('more-filter-tag-Toilets')).toHaveCount(0);
   await expect(page.getByTestId('more-filter-tag-Romantic')).toHaveCount(0);
   await expect(page.getByTestId('more-filter-tag-Coffee')).toHaveCount(0);
   await expect(page.getByTestId('more-filter-tag-Friends')).toHaveCount(0);

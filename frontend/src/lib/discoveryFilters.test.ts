@@ -83,19 +83,21 @@ describe('discovery more filters', () => {
     ]);
     expect(tagsFor('scene')).toEqual([
       'Sauna',
-      'Cruising',
       'Darkroom',
       'Glory hole',
       'Hotel',
       'Private',
       'Club',
       'After hours',
-      'Car',
-      'Toilets',
       'House Party',
       'Gym',
       'Bar',
     ]);
+    // Legal colour: SOA / PSE risk tags stay off the live Scene face (chips only).
+    for (const redScene of ['Cruising', 'Car', 'Toilets']) {
+      expect(tagsFor('scene')).not.toContain(redScene);
+      expect(JSON.stringify(DISCOVERY_FILTER_CATEGORIES)).not.toContain(`"${redScene}"`);
+    }
     expect(tagsFor('connection')).toEqual([
       'Group',
       'Couples',
