@@ -66,27 +66,32 @@ const KEEP_LIST = new Set([
 ]);
 
 const AMBER_NEVER = [
+  // Soft-four stay AMBER (Zoul + Legal follow-on).
+  'Centre Stage',
+  'Eden',
+  'Equator',
+  'Blayds',
+  // Remaining research AMBER not promoted this pass.
   'Vault 139',
-  'Fire',
   "Nero's",
   'Neros',
   'Acqua',
   'W3',
   'Pennine',
-  'Centre Stage',
-  'EVA',
   'Yumbo',
   'Spartan',
   'Greenhouse Darlaston',
-  'Eden',
-  'Equator',
   'Hove Den',
-  'Fibre',
-  'Blayds',
   'Gentry',
   'Greenhouse Newport',
   'Outside Belfast',
-  'Quebec',
+];
+
+const FOLLOW_ON_GREEN = [
+  'Fire London',
+  'City of Quebec',
+  'EVA Manchester',
+  'Fibre Leeds',
 ];
 
 type ExpandVenue = {
@@ -106,8 +111,14 @@ const expandRaw = JSON.parse(fs.readFileSync(expandPath, 'utf8')) as {
   _deferred?: unknown[];
 };
 assert.ok(Array.isArray(expandRaw.venues), 'green expand JSON must have venues[]');
-assert.strictEqual(expandRaw.venues.length, 25, 'expected 25 GREEN venues this pass');
+assert.strictEqual(expandRaw.venues.length, 29, 'expected 29 GREEN venues (25 + 4 follow-on)');
 assert.deepStrictEqual(expandRaw._deferred ?? [], [], 'deferred list must be empty this pass');
+for (const name of FOLLOW_ON_GREEN) {
+  assert.ok(
+    expandRaw.venues.some((v) => v.name === name),
+    `follow-on GREEN missing: ${name}`,
+  );
+}
 
 const seenExt = new Set<string>();
 for (const v of expandRaw.venues) {

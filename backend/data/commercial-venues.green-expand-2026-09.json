@@ -1,5 +1,5 @@
 {
-  "_ops_note": "Zoul GREEN expand 2026-09. Hand-verified lat/lng only (venue site / Ordnance Code-Point / OSM named POI matching venue address). Keep-list untouched. AMBER/RED omitted. Copy = name + type + area only.",
+  "_ops_note": "Zoul GREEN expand 2026-09 (+ Legal follow-on). Hand-verified lat/lng only (venue site / Ordnance Code-Point / OSM named POI matching venue address). Keep-list untouched. Soft-four AMBER (Centre Stage, Eden, Equator, Blayds) + remaining AMBER/RED omitted. Copy = name + type + area only.",
   "_verify_pass": "2026-09-11",
   "_deferred": [],
   "venues": [
@@ -327,6 +327,64 @@
       "external_id": "green-2026-09:steamworks-edinburgh",
       "verified_at": "2026-09-11T12:00:00Z",
       "description": null
+    },
+    {
+      "name": "Fire London",
+      "city": "London",
+      "nation": "England",
+      "category": "nightlife",
+      "venue_type": "nightlife",
+      "lat": 51.4849543,
+      "lng": -0.1234373,
+      "source_url": "https://www.firelondon.net/",
+      "external_id": "green-2026-09:fire-london",
+      "verified_at": "2026-09-11T15:00:00Z",
+      "description": null
+    },
+    {
+      "name": "City of Quebec",
+      "city": "London",
+      "nation": "England",
+      "category": "bars",
+      "venue_type": "bar",
+      "lat": 51.513979,
+      "lng": -0.157818,
+      "source_url": "https://www.greeneking.co.uk/pubs/greater-london/city-of-quebec",
+      "external_id": "green-2026-09:city-of-quebec-london",
+      "verified_at": "2026-09-11T15:00:00Z",
+      "description": null
+    },
+    {
+      "name": "EVA Manchester",
+      "city": "Manchester",
+      "nation": "England",
+      "category": "bars",
+      "venue_type": "bar",
+      "lat": 53.4772822,
+      "lng": -2.2375077,
+      "source_url": "https://evamanchester.com/",
+      "external_id": "green-2026-09:eva-manchester",
+      "verified_at": "2026-09-11T15:00:00Z",
+      "description": null
+    },
+    {
+      "name": "Fibre Leeds",
+      "city": "Leeds",
+      "nation": "England",
+      "category": "nightlife",
+      "venue_type": "nightlife",
+      "lat": 53.7950442,
+      "lng": -1.5423158,
+      "source_url": "https://fibreleeds.com/",
+      "external_id": "green-2026-09:fibre-leeds",
+      "verified_at": "2026-09-11T15:00:00Z",
+      "description": null
     }
+  ],
+  "_follow_on": [
+    "Fire London",
+    "City of Quebec",
+    "EVA Manchester",
+    "Fibre Leeds"
   ]
 }

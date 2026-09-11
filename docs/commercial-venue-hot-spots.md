@@ -75,11 +75,15 @@ No hours, prices, or user/activity counts in seed. Description stays null (sheet
 
 Legacy `npm run hotspots:import` is locked to the same commercial allow-list and rejects RED text.
 
-## GREEN expand 2026-09 (Zoul merge-green)
+## GREEN expand 2026-09 (Zoul merge-green + Legal follow-on)
 
-Migration `053` + ops JSON `backend/data/commercial-venues.green-expand-2026-09.json`
-seed **25** hand-verified commercial venues (sauna / bar / nightlife / cinema). Keep-list
-unchanged. All 20 AMBER candidates and RED outdoor/PSE omitted. Deferred this pass: **none**.
+Migration `053` + follow-on `054` + ops JSON
+`backend/data/commercial-venues.green-expand-2026-09.json` seed **29** hand-verified
+commercial venues (25 initial GREEN + 4 Legal follow-on: Fire London, City of Quebec,
+EVA Manchester, Fibre Leeds). Keep-list unchanged.
+
+**Soft-four AMBER (do not seed):** Centre Stage, Eden, Equator, Blayds.
+Remaining AMBER research names and RED outdoor/PSE omitted. Deferred this pass: **none**.
 
 ### BOA90 soft-refresh (Cruise map)
 
@@ -88,7 +92,7 @@ After migrate (or JSON seed) on the BOA90 environment:
 1. Nearby Map → enable **Hot Spots** chip (cruise-ship icon). Layer toggles independent of People.
 2. Pan UK — new pins show **Cruise** until a real check-in exists; then venue name + count only.
 3. Confirm keep-list still present (Sweatbox Soho, Pleasuredrome, Brighton Sauna, Pipeworks Glasgow).
-4. Confirm no AMBER / park / outdoor pins.
+4. Confirm soft-four AMBER and outdoor pins are absent.
 5. Open one sheet → Check in / anonymous / Check out (4h TTL) still works.
 
 Re-apply without waiting for deploy migrate:
