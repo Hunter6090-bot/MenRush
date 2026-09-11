@@ -54,6 +54,12 @@ describe('ProfileDrawer grid sheet layout', () => {
     const avatar = screen.getByTestId('drawer-avatar-graham-1');
     expect(hero).toContainElement(avatar);
 
+    // Empty photo → Brand faded face (same size 72, profile crop)
+    const brandFace = screen.getByTestId('faded-brand-face');
+    expect(avatar).toContainElement(brandFace);
+    expect(brandFace.getAttribute('data-faded-variant')).toBe('profile');
+    expect(brandFace).toHaveStyle({ width: '72px', height: '72px' });
+
     // Avatar must not live under an overflow-y-auto/scroll ancestor — that
     // bisected faces on phone when paired with -mt-* overlap.
     let node: HTMLElement | null = avatar.parentElement;

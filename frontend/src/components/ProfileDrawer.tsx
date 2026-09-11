@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { NearbyUser } from "./ProfileCard";
 import { SilhouetteAvatar } from "./SilhouetteAvatar";
+import { FadedBrandFace } from "./FadedBrandFace";
 import { PulsingAvatar } from "./PulsingAvatar";
 import { useResolvingPhotoSrc } from "./UserAvatar";
 import { ProfilePhotoViewer } from "./ProfilePhotoViewer";
@@ -342,7 +343,7 @@ export function ProfileDrawer({
                       background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
                     }}
                   >
-                    <SilhouetteAvatar size={72} variant="card" />
+                    <FadedBrandFace variant="profile" size={72} label={user.name} />
                   </div>
                 </PulsingAvatar>
               </div>
