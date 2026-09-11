@@ -5,6 +5,7 @@ import { messageService } from '../services/message.service';
 import { albumService } from '../services/album.service';
 import { sendPushToUser } from '../services/push.service';
 import { notificationService } from '../services/notification.service';
+import { isDiscreetMediaBlurEnabled } from '../services/discreet-media';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { SecurityError } from '../security/access';
 import { resolveMediaPath, signedMediaUrl, verifyMediaAccess } from '../security/media';
@@ -68,11 +69,16 @@ router.get('/:messageId/media', async (req, res) => {
     const resource = `/api/messages/${req.params.messageId}/media`;
     const grant = verifyMediaAccess(String(req.query.access || ''), resource);
     const media = await messageService.getMedia(grant.viewerId, req.params.messageId);
-    const mediaClear = await messageService.viewerMediaClear(
-      grant.viewerId,
-      media.senderId,
-      media.mediaType,
-    );
+    // Blur decision already ships on the conversation payload for SoftBlurMedia.
+    // When Discreet blur is off, skip the Premium lookup on every Range request
+    // so short video notes can paint the first frame faster.
+    const mediaClear = isDiscreetMediaBlurEnabled()
+      ? await messageService.viewerMediaClear(
+          grant.viewerId,
+          media.senderId,
+          media.mediaType,
+        )
+      : true;
     const absolute = resolveMediaPath(mediaDir, media.storageKey);
     // Safari needs Accept-Ranges to start playback before the full download
     // (Pete iPhone ~12s open on chat video that had already arrived).
