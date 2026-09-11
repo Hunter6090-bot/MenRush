@@ -108,17 +108,17 @@ export const DISCOVERY_FILTER_CATEGORIES = [
   {
     id: 'scene',
     label: 'Scene',
+    // Legal colour (Zoul/Product): keep venue/scene tags only.
+    // RED hide from live filter/editor face: Cruising, Car, Toilets (SOA 2003 / PSE).
+    // Stored profile tags may still include those — do not mass-rewrite DB.
     tags: [
       'Sauna',
-      'Cruising',
       'Darkroom',
       'Glory hole',
       'Hotel',
       'Private',
       'Club',
       'After hours',
-      'Car',
-      'Toilets',
       'House Party',
       'Gym',
       'Bar',
