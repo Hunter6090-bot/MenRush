@@ -444,6 +444,12 @@ export const messagesAPI = {
         ...(opts?.limit != null ? { limit: opts.limit } : {}),
       },
     }),
+  /** Fresh signed media URL for video/audio/image open + retry (avoids expired cache grants). */
+  getMediaUrl: (messageId: string) =>
+    apiClient.get<{ url: string; mime_type: string; media_type: string | null }>(
+      `/messages/${messageId}/media-url`,
+      { timeout: 15_000 },
+    ),
   getConversations: () => apiClient.get('/messages/conversations'),
   getUnreadSummary: () =>
     apiClient.get<{ total: number; bySender: Record<string, number> }>('/messages/unread'),

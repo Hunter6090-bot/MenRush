@@ -37,6 +37,11 @@ import {
   restoreScrollAfterPrepend,
 } from '../lib/chatScroll';
 import {
+  VIDEO_LOAD_TIMEOUT_MS,
+  chatVideoUnsupportedHint,
+  type ChatVideoLoadState,
+} from '../lib/chatVideoPlayback';
+import {
   appendUniqueMessage,
   CHAT_LIVE_REFRESH_EVENT,
   CONVERSATION_PAGE_SIZE,
@@ -2542,6 +2547,10 @@ const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail, onWith
 };
 
 // ── VideoBubble ──────────────────────────────────────────────────────────────
+// Progressive stream with a locked play src. Open-thread polls re-sign media
+// URLs every ~2.5s; binding src to that rotating grant restarted the download
+// forever (black frame, duration `--:--`). We refresh the grant once on open /
+// retry, wait for loadedmetadata, and surface an honest tap-to-retry on failure.
 
 interface VideoBubbleProps {
   msg: Message;
@@ -2552,15 +2561,82 @@ interface VideoBubbleProps {
 }
 
 const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWithdraw, withdrawing }) => {
-  const url = getPhotoUrl(msg.media_url || undefined);
+  const propUrl = getPhotoUrl(msg.media_url || undefined);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [armed, setArmed] = useState(false);
+  const loadGenRef = useRef(0);
+  const [loadState, setLoadState] = useState<ChatVideoLoadState>('idle');
+  const [playSrc, setPlaySrc] = useState<string | null>(null);
+  const [errorHint, setErrorHint] = useState<string | null>(null);
   const withdrawn = isWithdrawnMedia(msg);
   const radius = showTail
     ? isMine
       ? '18px 18px 4px 18px'
       : '18px 18px 18px 4px'
     : '18px';
+
+  useEffect(() => {
+    return () => {
+      loadGenRef.current += 1;
+    };
+  }, []);
+
+  // Wait for metadata (or timeout / error) once a play src is locked in.
+  // Keep error listeners through `ready` so a mid-play void surfaces retry UI
+  // instead of a forever-black native player with duration `--:--`.
+  useEffect(() => {
+    if ((loadState !== 'loading' && loadState !== 'ready') || !playSrc) return;
+    const el = videoRef.current;
+    if (!el) return;
+
+    const gen = loadGenRef.current;
+    let settled = loadState === 'ready';
+
+    const succeed = () => {
+      if (settled || gen !== loadGenRef.current) return;
+      settled = true;
+      setLoadState('ready');
+      void el.play().catch(() => undefined);
+    };
+
+    const fail = (hint: string) => {
+      if (gen !== loadGenRef.current) return;
+      settled = true;
+      setPlaySrc(null);
+      setErrorHint(hint);
+      setLoadState('error');
+    };
+
+    const onMeta = () => {
+      if (loadState === 'loading') succeed();
+    };
+    const onCanPlay = () => {
+      if (loadState === 'loading') succeed();
+    };
+    const onError = () => fail('Download failed. Tap to try again');
+
+    el.addEventListener('loadedmetadata', onMeta);
+    el.addEventListener('canplay', onCanPlay);
+    el.addEventListener('error', onError);
+
+    let timer: number | undefined;
+    if (loadState === 'loading') {
+      timer = window.setTimeout(
+        () => fail('Still downloading. Tap to try again'),
+        VIDEO_LOAD_TIMEOUT_MS,
+      );
+      // Cached / already-buffered
+      if (el.readyState >= HTMLMediaElement.HAVE_METADATA) {
+        succeed();
+      }
+    }
+
+    return () => {
+      el.removeEventListener('loadedmetadata', onMeta);
+      el.removeEventListener('canplay', onCanPlay);
+      el.removeEventListener('error', onError);
+      if (timer != null) window.clearTimeout(timer);
+    };
+  }, [loadState, playSrc]);
 
   if (withdrawn) {
     return (
@@ -2581,16 +2657,52 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
 
   const blurred = shouldBlurMedia(msg.media_clear);
 
-  const armAndPlay = () => {
-    if (blurred || !url) return;
-    setArmed(true);
-    // Defer play until src is attached with preload metadata (range-friendly).
-    requestAnimationFrame(() => {
-      const el = videoRef.current;
-      if (!el) return;
-      void el.play().catch(() => undefined);
-    });
+  const beginLoad = () => {
+    if (blurred) return;
+    const gen = ++loadGenRef.current;
+    setLoadState('loading');
+    setErrorHint(null);
+    setPlaySrc(null);
+
+    void (async () => {
+      let resolved = propUrl;
+      let mime: string | undefined;
+
+      if (msg.id) {
+        try {
+          const res = await messagesAPI.getMediaUrl(msg.id);
+          if (gen !== loadGenRef.current) return;
+          const fresh = getPhotoUrl(res.data.url);
+          if (fresh) resolved = fresh;
+          mime = res.data.mime_type;
+        } catch {
+          // Fall through to the thread's signed URL if refresh fails.
+        }
+      }
+
+      if (gen !== loadGenRef.current) return;
+
+      const unsupported = chatVideoUnsupportedHint(mime);
+      if (unsupported) {
+        setErrorHint(unsupported);
+        setLoadState('error');
+        return;
+      }
+
+      if (!resolved) {
+        setErrorHint('Video unavailable');
+        setLoadState('error');
+        return;
+      }
+
+      // Lock src — ignore later poll re-grants until the user retries.
+      setPlaySrc(resolved);
+    })();
   };
+
+  const showPlayer = (loadState === 'loading' || loadState === 'ready') && !!playSrc;
+  const showOverlay =
+    loadState === 'idle' || loadState === 'loading' || loadState === 'error' || blurred;
 
   return (
     <div className={`flex max-w-full flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
@@ -2602,38 +2714,68 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
           background: 'var(--bg-elevated)',
         }}
       >
-        {url ? (
+        {propUrl || showPlayer ? (
           <SoftBlurMedia blurred={blurred} data-testid="video-bubble">
-            {armed ? (
-              <video
-                ref={videoRef}
-                src={url}
-                controls={!blurred}
-                playsInline
-                {...{ 'webkit-playsinline': 'true' }}
-                // metadata + Accept-Ranges lets Safari paint/play before full file.
-                preload="metadata"
-                className="block h-auto max-h-[320px] w-full bg-black"
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={armAndPlay}
-                data-testid="video-bubble-open"
-                className="flex h-[180px] w-full flex-col items-center justify-center gap-2 bg-black/90 text-[#F0E0C0]"
-                aria-label="Open video"
-              >
-                <span
-                  className="flex h-12 w-12 items-center justify-center rounded-full bg-[#C4832A] text-lg font-extrabold text-[#1A0E03]"
-                  aria-hidden
-                >
-                  ▶
-                </span>
-                <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--cream-muted)]">
-                  Tap to open
-                </span>
-              </button>
-            )}
+            <div className="relative w-full bg-black">
+              {showPlayer ? (
+                <video
+                  ref={videoRef}
+                  key={playSrc}
+                  src={playSrc || undefined}
+                  controls={loadState === 'ready' && !blurred}
+                  playsInline
+                  {...{ 'webkit-playsinline': 'true' }}
+                  // metadata + Accept-Ranges lets Safari paint/play before full file.
+                  preload="metadata"
+                  className="block h-auto min-h-[180px] max-h-[320px] w-full bg-black"
+                  data-testid="video-bubble-player"
+                  data-load-state={loadState}
+                />
+              ) : (
+                <div className="h-[180px] w-full bg-black/90" aria-hidden />
+              )}
+
+              {showOverlay && !blurred ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 px-3">
+                  {loadState === 'loading' ? (
+                    <div
+                      className="flex flex-col items-center gap-2 text-[#F0E0C0]"
+                      data-testid="video-bubble-loading"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <PulseRing size={44} />
+                      <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--cream-muted)]">
+                        Loading…
+                      </span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={beginLoad}
+                      data-testid={loadState === 'error' ? 'video-bubble-retry' : 'video-bubble-open'}
+                      className="flex flex-col items-center justify-center gap-2 text-[#F0E0C0]"
+                      aria-label={loadState === 'error' ? 'Retry video' : 'Open video'}
+                    >
+                      <span
+                        className="flex h-12 w-12 items-center justify-center rounded-full bg-[#C4832A] text-lg font-extrabold text-[#1A0E03]"
+                        aria-hidden
+                      >
+                        {loadState === 'error' ? '↻' : '▶'}
+                      </span>
+                      <span className="text-center text-[11px] font-bold uppercase tracking-wide text-[var(--cream-muted)]">
+                        {loadState === 'error' ? 'Tap to try again' : 'Tap to open'}
+                      </span>
+                      {loadState === 'error' && errorHint ? (
+                        <span className="max-w-[16rem] text-center text-[10px] font-medium normal-case tracking-normal text-[#F0E0C0]/90">
+                          {errorHint}
+                        </span>
+                      ) : null}
+                    </button>
+                  )}
+                </div>
+              ) : null}
+            </div>
           </SoftBlurMedia>
         ) : (
           <div className="px-4 py-6 text-xs text-[var(--cream-muted)]">Video unavailable</div>
