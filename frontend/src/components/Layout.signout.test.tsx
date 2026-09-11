@@ -65,6 +65,21 @@ vi.mock('../lib/navConfig', () => ({
       mobileTab: true,
       Icon: () => null,
     },
+    {
+      to: '/matches',
+      label: 'Matches',
+      desktopNav: true,
+      mobileTab: true,
+      Icon: () => null,
+    },
+    {
+      to: '/conversations',
+      label: 'Messages',
+      shortLabel: 'Chat',
+      desktopNav: true,
+      mobileTab: true,
+      Icon: () => null,
+    },
   ],
   isNavActive: () => true,
   mobilePageTitle: () => 'Nearby',
@@ -102,5 +117,23 @@ describe('Layout sign out', () => {
     await user.click(screen.getByTestId('sign-out-confirm-btn'));
     expect(logout).toHaveBeenCalledTimes(1);
     expect(navigate).toHaveBeenCalledWith('/login');
+  });
+
+  it('renders Nearby ↔ Matches ↔ Chat bottom nav links (React 19 / RR v6)', () => {
+    render(
+      <MemoryRouter>
+        <Layout>
+          <div>child</div>
+        </Layout>
+      </MemoryRouter>,
+    );
+
+    const primary = screen.getByRole('navigation', { name: 'Primary' });
+    expect(primary.querySelector('a[href="/discover"]')).toBeTruthy();
+    expect(primary.querySelector('a[href="/matches"]')).toBeTruthy();
+    expect(primary.querySelector('a[href="/conversations"]')).toBeTruthy();
+    expect(screen.getByTestId('mobile-nav-discover')).toBeTruthy();
+    expect(screen.getByTestId('mobile-nav-matches')).toBeTruthy();
+    expect(screen.getByTestId('mobile-nav-conversations')).toBeTruthy();
   });
 });

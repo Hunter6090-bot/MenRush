@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ComponentType, type ReactNode } from 'react';
+import { lazy, Suspense, type ComponentType, type ReactElement, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { RequireProfileSetup } from './components/RequireProfileSetup';
@@ -101,7 +101,7 @@ function LazyRoute({ children }: { children: ReactNode }) {
   return <Suspense fallback={<RouteFallback />}>{children}</Suspense>;
 }
 
-function ProtectedRoute({ children }: { children: JSX.Element }) {
+function ProtectedRoute({ children }: { children: ReactElement }) {
   const token = useAuthStore((s) => s.token);
   const location = useLocation();
   if (!token) {
@@ -117,7 +117,7 @@ function RequireVerified({
   children,
   allowIncompleteProfile = false,
 }: {
-  children: JSX.Element;
+  children: ReactElement;
   allowIncompleteProfile?: boolean;
 }) {
   const token = useAuthStore((s) => s.token);
