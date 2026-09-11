@@ -3,6 +3,8 @@
  * Run: npx ts-node scripts/commercial-hotspots-checks.ts
  */
 import assert from 'assert';
+import fs from 'fs';
+import path from 'path';
 import {
   ACTIVE_CHECKIN_TTL_HOURS,
   COMMERCIAL_HOT_SPOT_CATEGORY_SLUGS,
@@ -53,7 +55,85 @@ const redFilterTypes = [
 ];
 assert.ok(redFilterTypes.every((t) => /park|truck|cruising|nude|glory|pse/i.test(t)));
 
+const RED_TEXT =
+  /cottage|cottaging|glory\s*hole|truck\s*stop|cruising\s*area|nude\s*beach|public\s*toilet|pse\b|outdoor\s*play|known\s*cruising|redruth|\bpark\b/i;
+
+const KEEP_LIST = new Set([
+  'Sweatbox Soho|London',
+  'Pleasuredrome|London',
+  'The Brighton Sauna|Brighton',
+  'The Pipeworks Glasgow|Glasgow',
+]);
+
+const AMBER_NEVER = [
+  'Vault 139',
+  'Fire',
+  "Nero's",
+  'Neros',
+  'Acqua',
+  'W3',
+  'Pennine',
+  'Centre Stage',
+  'EVA',
+  'Yumbo',
+  'Spartan',
+  'Greenhouse Darlaston',
+  'Eden',
+  'Equator',
+  'Hove Den',
+  'Fibre',
+  'Blayds',
+  'Gentry',
+  'Greenhouse Newport',
+  'Outside Belfast',
+  'Quebec',
+];
+
+type ExpandVenue = {
+  name: string;
+  city: string;
+  category: string;
+  lat: number;
+  lng: number;
+  source_url?: string | null;
+  external_id?: string | null;
+  description?: string | null;
+};
+
+const expandPath = path.join(__dirname, '../data/commercial-venues.green-expand-2026-09.json');
+const expandRaw = JSON.parse(fs.readFileSync(expandPath, 'utf8')) as {
+  venues: ExpandVenue[];
+  _deferred?: unknown[];
+};
+assert.ok(Array.isArray(expandRaw.venues), 'green expand JSON must have venues[]');
+assert.strictEqual(expandRaw.venues.length, 25, 'expected 25 GREEN venues this pass');
+assert.deepStrictEqual(expandRaw._deferred ?? [], [], 'deferred list must be empty this pass');
+
+const seenExt = new Set<string>();
+for (const v of expandRaw.venues) {
+  assert.ok(v.name && v.city, `missing name/city: ${JSON.stringify(v)}`);
+  assert.ok((allowed as Set<string>).has(v.category), `non-commercial category: ${v.name} ${v.category}`);
+  assert.ok(!RED_TEXT.test(v.name) && !RED_TEXT.test(v.city), `RED text in seed: ${v.name}`);
+  assert.ok(
+    !AMBER_NEVER.some((a) => v.name.toLowerCase().includes(a.toLowerCase())),
+    `AMBER venue must not be seeded: ${v.name}`,
+  );
+  assert.ok(!KEEP_LIST.has(`${v.name}|${v.city}`), `keep-list duplicate: ${v.name}`);
+  assert.ok(Number.isFinite(v.lat) && Number.isFinite(v.lng), `missing lat/lng: ${v.name}`);
+  assert.ok(!(v.lat === 0 && v.lng === 0), `0,0 sentinel: ${v.name}`);
+  assert.ok(Math.abs(v.lat) <= 90 && Math.abs(v.lng) <= 180, `out of range: ${v.name}`);
+  assert.ok(v.source_url, `prefer venue-owned source_url: ${v.name}`);
+  assert.ok(v.external_id, `external_id required: ${v.name}`);
+  assert.ok(!seenExt.has(v.external_id!), `duplicate external_id: ${v.external_id}`);
+  seenExt.add(v.external_id!);
+  assert.ok(
+    v.description == null || String(v.description).trim() === '',
+    `copy lock — description must be empty: ${v.name}`,
+  );
+}
+
 console.log('✓ commercial category allow-list locked');
 console.log('✓ RED outdoor/PSE slugs excluded');
 console.log('✓ GREEN filter-type map documented (9 types)');
+console.log(`✓ green expand JSON: ${expandRaw.venues.length} venues, 0 deferred, no AMBER/keep-list dupes`);
 console.log('commercial-hotspots-checks: ok');

@@ -197,9 +197,12 @@ async function main() {
     const nation = (v.nation || '').trim().slice(0, 40) || null;
     const sourceUrl = (v.source_url || '').trim() || null;
     const externalId = (v.external_id || `${city}:${name}`).slice(0, 120);
+    // Copy lock: name + type + area only. No hours/prices/partnership/recommended claims.
+    // Explicit null/omitted description stays NULL (sheet already shows Brand helper once).
     const description =
-      (v.description || '').trim() ||
-      `Commercial venue. Follow the venue's rules. MenRush does not run this place.`;
+      v.description == null || String(v.description).trim() === ''
+        ? null
+        : String(v.description).trim().slice(0, 500);
     const verifiedAt = v.verified_at ? new Date(v.verified_at) : null;
 
     if (args.dryRun) {
@@ -237,7 +240,7 @@ async function main() {
           nation,
           venueType,
           sourceUrl,
-          description.slice(0, 500),
+          description,
           lat,
           lng,
           verifiedAt,
@@ -260,7 +263,7 @@ async function main() {
           nation,
           venueType,
           sourceUrl,
-          description.slice(0, 500),
+          description,
           lat,
           lng,
           args.source,
