@@ -4,6 +4,8 @@ on:
   pull_request:
     branches:
       - main
+      # Land rate-limit / age-gate fixes into open #97 without retargeting to main.
+      - cursor/adult-assurance-enforcement-fac3
   workflow_dispatch:
 
 permissions:
