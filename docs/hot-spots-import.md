@@ -25,6 +25,15 @@ Sample template (coords intentionally null — fill after hand verification):
 
 `backend/data/commercial-venues.sample.json`
 
+Hand-verified GREEN expand (2026-09, 25 venues) — also applied by migration `053`:
+
+`backend/data/commercial-venues.green-expand-2026-09.json`
+
+```bash
+npm run hotspots:seed-commercial -- --file ./data/commercial-venues.green-expand-2026-09.json --dry-run
+npm run hotspots:seed-commercial -- --file ./data/commercial-venues.green-expand-2026-09.json
+```
+
 ## Legacy import
 
 ```bash

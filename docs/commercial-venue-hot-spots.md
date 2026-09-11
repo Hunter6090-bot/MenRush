@@ -58,7 +58,7 @@ Permissioned / manual curation only. Prefer schema + admin/manual seed if coordi
 ## How ops adds venues (no scrape)
 
 1. Hand-verify name, city, nation, type, and public website.
-2. Obtain lat/lng from the venue (or from a permitted first-party map listing). Never invent.
+2. Obtain lat/lng from the venue site, Google Business, or Ordnance (Code-Point / named map POI matching the venue address). Never invent.
 3. Skip closed venues (e.g. Just For You) and temp-closed (e.g. Steam Complex Leeds).
 4. Add a row to a local JSON file (copy `backend/data/commercial-venues.sample.json`).
 5. Dry-run, then seed:
@@ -71,9 +71,40 @@ npm run hotspots:seed-commercial -- --file ./data/your-verified-venues.json
 
 Fields: `name`, `city`, `nation`, `category` (`saunas`|`nightlife`|`bars`|`cinema`),
 `venue_type`, `lat`, `lng`, optional `source_url`, `external_id`, `verified_at`.
-No hours, prices, or user/activity counts in seed.
+No hours, prices, or user/activity counts in seed. Description stays null (sheet shows Brand helper).
 
 Legacy `npm run hotspots:import` is locked to the same commercial allow-list and rejects RED text.
+
+## GREEN expand 2026-09 (Zoul merge-green + Legal follow-on)
+
+Migrations `053` + `054` + `055` + ops JSON
+`backend/data/commercial-venues.green-expand-2026-09.json` seed **30** hand-verified
+commercial venues (25 initial GREEN + 5 Legal follow-on: Fire London, City of Quebec,
+EVA Manchester, Fibre Leeds, Equator Bar Birmingham). Keep-list unchanged.
+
+**Soft AMBER (do not seed):** Centre Stage MCR, Eden Bar, Blayds Bar.
+Remaining AMBER research names and RED outdoor/PSE omitted. Deferred this pass: **none**.
+
+### BOA90 soft-refresh (Cruise map)
+
+After migrate (or JSON seed) on the BOA90 environment:
+
+1. Nearby Map → enable **Hot Spots** chip (cruise-ship icon). Layer toggles independent of People.
+2. Pan UK — new pins show **Cruise** until a real check-in exists; then venue name + count only.
+3. Confirm keep-list still present (Sweatbox Soho, Pleasuredrome, Brighton Sauna, Pipeworks Glasgow).
+4. Confirm soft AMBER (Centre Stage / Eden Bar / Blayds) and outdoor pins are absent.
+5. Open one sheet → Check in / anonymous / Check out (4h TTL) still works.
+
+Re-apply without waiting for deploy migrate:
+
+```bash
+cd backend
+npm run hotspots:seed-commercial -- --file ./data/commercial-venues.green-expand-2026-09.json --dry-run
+npm run hotspots:seed-commercial -- --file ./data/commercial-venues.green-expand-2026-09.json
+```
+
+**Brand note:** public Cruise density claims stay held until Brand signs density. Seed only;
+no marketing copy that counts or recommends venues.
 
 ## Media lock
 
