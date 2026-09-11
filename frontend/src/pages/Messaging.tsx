@@ -13,6 +13,7 @@ import { FEATURES } from '../lib/featureFlags';
 import { SelfieCaptureModal } from '../components/SelfieCaptureModal';
 import { CameraCaptureChooser } from '../components/CameraCaptureChooser';
 import { VideoNoteCaptureModal } from '../components/VideoNoteCaptureModal';
+import { videoFileFromRecorderBlob } from '../lib/mediaMime';
 import { ChatAttachLibrarySheet } from '../components/ChatAttachLibrarySheet';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 import { PanicReportButton } from '../components/PanicReportButton';
@@ -667,14 +668,20 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       setUploadingMedia(true);
       setMediaError('');
       try {
-        const res = await messagesAPI.sendMedia(otherId, blob, {
+        const file = blob instanceof File ? blob : await videoFileFromRecorderBlob(blob);
+        const res = await messagesAPI.sendMedia(otherId, file, {
           kind: 'video',
           durationMs,
         });
         markOwnSendStick();
         setMessages((prev) => appendUniqueMessage(prev, res.data));
       } catch (err: any) {
-        setMediaError(err?.response?.data?.error || 'Failed to send video');
+        const code = String(err?.response?.data?.error || '');
+        setMediaError(
+          /unsupported|not supported|does not match/i.test(code)
+            ? 'This video could not be sent. Record again and tap Send.'
+            : code || 'Failed to send video',
+        );
       } finally {
         setUploadingMedia(false);
       }
@@ -2492,6 +2499,7 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
                 src={url}
                 controls={!blurred}
                 playsInline
+                {...{ 'webkit-playsinline': 'true' }}
                 // metadata + Accept-Ranges lets Safari paint/play before full file.
                 preload="metadata"
                 className="block h-auto max-h-[320px] w-full bg-black"
