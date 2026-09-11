@@ -4,6 +4,7 @@ import { usersAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
 import { Layout } from '../components/Layout';
 import { UserAvatar, getPhotoUrl } from '../components/UserAvatar';
+import { FadedBrandFace, isNearbyPlaceholderFace } from '../components/FadedBrandFace';
 import { CoverBanner, normalizeCoverFrame } from '../components/CoverBanner';
 import { ProfilePhotoViewer } from '../components/ProfilePhotoViewer';
 import { VerifiedBadge } from '../components/VerifiedBadge';
@@ -281,7 +282,7 @@ export const ProfileView = () => {
           )}
           <div className="px-5 pb-5">
             <div className="-mt-10 mb-3 flex items-end justify-between gap-2">
-              {photoSrc ? (
+              {photoSrc && !isNearbyPlaceholderFace(user.photo_url) ? (
                 <button
                   type="button"
                   data-testid="profile-view-avatar-enlarge"
@@ -299,6 +300,18 @@ export const ProfileView = () => {
                     className="ring-4 ring-[var(--bg-card)]"
                   />
                 </button>
+              ) : isNearbyPlaceholderFace(user.photo_url) ? (
+                <span
+                  className="relative inline-flex shrink-0 overflow-hidden rounded-full ring-4 ring-[var(--bg-card)]"
+                  style={{ width: 96, height: 96 }}
+                  data-testid="profile-view-empty-brand-face"
+                >
+                  <FadedBrandFace
+                    variant="profile"
+                    size={96}
+                    label={user.name}
+                  />
+                </span>
               ) : (
                 <UserAvatar
                   name={user.name}
