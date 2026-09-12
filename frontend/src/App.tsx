@@ -269,6 +269,7 @@ function AppShell() {
           <Route path="/safety" element={<Safety />} />
           <Route path="/guidelines" element={<CommunityGuidelines />} />
           <Route path="/help" element={<Help />} />
+          {/* Absolute Navigate only — no relative links under this splat, so keep path+/splat. */}
           <Route path="/verify/*" element={<ProtectedRoute><Navigate to="/profile" replace /></ProtectedRoute>} />
           <Route
             path="/premium"
@@ -421,6 +422,7 @@ function AppShell() {
 
 export default function App() {
   return (
+    // v7: startTransition + relativeSplatPath are defaults (enabled on v6 via ROUTER_V7_FUTURE first).
     <BrowserRouter>
       <AppShell />
     </BrowserRouter>
