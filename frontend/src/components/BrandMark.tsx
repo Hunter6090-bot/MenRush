@@ -1,6 +1,7 @@
 /**
- * MenRush brand mark — official bronze two-profile medallion only
- * (master: public/brand/menrush-logo.png → BRAND_MEDALLION).
+ * MenRush brand mark — official circular cutout only
+ * (`/brand/medallion-transparent.png` → BRAND_MEDALLION).
+ * Transparent outside the circle; never black-plate / filled square.
  * Never invent a mark, never draw MENRUSH as type, never CSS letter-in-circle.
  */
 import { BRAND_MEDALLION, BRAND_MEDALLION_SMALL } from '../lib/brand';

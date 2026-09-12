@@ -16,6 +16,10 @@ export const FORBIDDEN_LOGO_URLS = [
   'https://menrush.com/menrush-logo.png',
   'http://menrush.com/menrush-logo.png',
   'https://www.menrush.com/menrush-logo.png',
+  'https://menrush.com/brand/menrush-logo.png',
+  'https://menrush.com/brand/menrush-logo-512.png',
+  'https://menrush.com/brand/menrush-logo-192.png',
+  'https://menrush.com/brand/medallion-transparent.png',
 ];
 
 const RASTER_MIME = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif']);
@@ -32,7 +36,14 @@ const MENRUSH_PUBLIC_BASE = 'https://menrush.com/images';
 export function isForbiddenLogoUrl(url) {
   if (!url || typeof url !== 'string') return false;
   const u = url.trim().toLowerCase().split('?')[0].replace(/\/$/, '');
-  return FORBIDDEN_LOGO_URLS.some((bad) => u === bad.toLowerCase() || u.endsWith('/menrush-logo.png'));
+  return FORBIDDEN_LOGO_URLS.some(
+    (bad) =>
+      u === bad.toLowerCase() ||
+      u.endsWith('/menrush-logo.png') ||
+      u.endsWith('/menrush-logo-512.png') ||
+      u.endsWith('/menrush-logo-192.png') ||
+      u.endsWith('/medallion-transparent.png'),
+  );
 }
 
 export function isPublicHttpsImageUrl(url) {

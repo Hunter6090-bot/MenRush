@@ -16,8 +16,8 @@ const VISUALS_DIR = path.join(__dirname, '..', 'public', 'visuals');
 
 const ALLOWED_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg']);
 
-/** Official MenRush medallion — unmodified. */
-export const OFFICIAL_LOGO = 'https://menrush.com/menrush-logo.png';
+/** Official MenRush medallion — transparent cutout only (no black square). */
+export const OFFICIAL_LOGO = 'https://menrush.com/brand/medallion-transparent.png';
 
 /** Built-in photo plate options (not Midjourney film-set scenes). */
 export const PHOTO_PLATES = [
@@ -186,7 +186,8 @@ export function updateDraftMedia(draftId, fields = {}) {
   if (typeof fields.publicImageUrl === 'string') {
     const next = fields.publicImageUrl.trim().slice(0, 2000);
     // Never store the sacred logo as a post image URL.
-    if (/menrush-logo\.png/i.test(next)) {
+    // Never store black-plate or chrome cutout as a post image URL.
+    if (/menrush-logo\.png|medallion-transparent\.png/i.test(next)) {
       entry.publicImageUrl = '';
       entry.publicImageHash = null;
       entry.publicImageHost = null;

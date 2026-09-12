@@ -46,7 +46,7 @@ export function RoomTempIdentityGatePreview() {
       const photo_url =
         file instanceof File && typeof URL !== 'undefined' && URL.createObjectURL
           ? URL.createObjectURL(file)
-          : '/brand/medallion-380.png';
+          : '/brand/medallion-transparent.png';
       return { data: { photo_url } } as never;
     };
 

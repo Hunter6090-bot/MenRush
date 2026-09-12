@@ -1,6 +1,6 @@
 /**
  * Single-column auth shell — MenRush Design System handoff + beta-launch-handoff.
- * Brand: bronze two-profile medallion (master: brand/menrush-logo.png).
+ * Brand: official transparent cutout (`/brand/medallion-transparent.png`).
  */
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';

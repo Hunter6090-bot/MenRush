@@ -16,7 +16,7 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   await expect(headerBrandLink).toHaveCount(1);
   await expect(headerBrandLink).toHaveAttribute('href', '/');
   await expect(headerBrandLink.getByTestId('brand-mark')).toBeVisible();
-  await expect(headerBrandLink.locator('img[src*="menrush-logo-192"]')).toBeVisible();
+  await expect(headerBrandLink.locator('img[src*="medallion-transparent"]')).toBeVisible();
 
   const signInLink = page.getByRole('link', { name: /^Sign in$/i });
   await expect(signInLink).toHaveCount(1);
@@ -87,9 +87,11 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   await expect(inviteLink).toBeVisible();
   await expect(inviteLink).toHaveAttribute('href', '/beta');
 
-  // Hero keeps the large medallion; header uses compact sm (192).
+  // Hero + header both use the official transparent cutout (no black-plate logos).
   await expect(page.getByTestId('brand-mark')).toHaveCount(2);
-  await expect(page.locator('main img[src*="menrush-logo-512"]')).toBeVisible();
+  await expect(page.locator('main img[src*="medallion-transparent"]')).toBeVisible();
+  await expect(page.locator('img[src*="menrush-logo-512"]')).toHaveCount(0);
+  await expect(page.locator('img[src*="menrush-logo-192"]')).toHaveCount(0);
   await expect(page.locator('img[src*="medallion-480"]')).toHaveCount(0);
 }
 
@@ -101,7 +103,8 @@ async function assertAuthShell(page: import('@playwright/test').Page) {
 async function assertBrandMark(page: import('@playwright/test').Page) {
   const mark = page.getByTestId('brand-mark').first();
   await expect(mark).toBeVisible();
-  await expect(mark.locator('img[src*="menrush-logo-512"]')).toBeVisible();
+  await expect(mark.locator('img[src*="medallion-transparent"]')).toBeVisible();
+  await expect(page.locator('img[src*="menrush-logo-512"]')).toHaveCount(0);
   await expect(page.locator('img[src*="medallion-480"]')).toHaveCount(0);
 }
 
