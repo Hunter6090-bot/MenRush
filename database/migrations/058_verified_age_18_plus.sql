@@ -1,7 +1,7 @@
 -- Adult assurance via Veriff liveness / age-estimation at signup (UK 18+ lock).
 -- verified_age_18_plus is set after liveness pass (or later identity adult DOB).
 -- adult_assurance_sessions hold pre-account Veriff sessions — no DOB/PII stored.
--- See also 058_adult_assurance_liveness_id.sql for optional ID → Verified tick.
+-- See also 059_adult_assurance_liveness_id.sql for optional ID → Verified tick.
 
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS verified_age_18_plus BOOLEAN NOT NULL DEFAULT FALSE;

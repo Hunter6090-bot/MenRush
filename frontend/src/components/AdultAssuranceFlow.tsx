@@ -55,7 +55,7 @@ export const ADULT_ASSURANCE_COPY = {
   /** Register form helper (before gate opens). */
   registerHelper:
     'Next: a Veriff selfie for 18+. Optional ID adds a Verified tick. MenRush never keeps copies of your ID.',
-  /** @deprecated kept for any leftover imports — prefer hero keys */
+  /** @deprecated kept for any leftover imports. Prefer hero keys. */
   introTitle: 'Quick selfie',
   introBody: "Confirms you're 18+. Takes about ten seconds.",
   upsellTitle: 'You are through.',

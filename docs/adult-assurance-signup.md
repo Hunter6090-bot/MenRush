@@ -58,8 +58,8 @@ Source of truth in UI: `frontend/src/components/AdultAssuranceFlow.tsx` → `ADU
 
 ## Migrations
 
-- `057_verified_age_18_plus.sql` — `users.verified_age_18_plus` + `adult_assurance_sessions`
-- `058_adult_assurance_liveness_id.sql` — `check_kind`, `parent_session_id`, `id_verified`, `id_session_id`
+- `058_verified_age_18_plus.sql` — `users.verified_age_18_plus` + `adult_assurance_sessions` (057 taken by outdoor Hot Spots on main)
+- `059_adult_assurance_liveness_id.sql` — `check_kind`, `parent_session_id`, `id_verified`, `id_session_id`
 
 ## BOA90 fixtures (staging)
 
