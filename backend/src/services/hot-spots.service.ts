@@ -13,8 +13,9 @@ export const COMMERCIAL_HOT_SPOT_CATEGORY_SLUGS = [
 ] as const;
 
 /**
- * Batch 1 outdoor categories (Al Legal override 2026-09-12: seed + map pins only).
- * Still non-commercial — commercial importer must keep rejecting these slugs.
+ * Outdoor categories (Batch 1 seed artifact). Not public on the map —
+ * Al ORDER pulled Batch 1 outdoor OFF; public Cruise is commercial-only again.
+ * Commercial importer must keep rejecting these slugs.
  */
 export const OUTDOOR_HOT_SPOT_CATEGORY_SLUGS = [
   'parks-trails',
@@ -22,19 +23,18 @@ export const OUTDOOR_HOT_SPOT_CATEGORY_SLUGS = [
   'parking',
 ] as const;
 
-/** SQL predicate: commercial OR curated Batch 1 outdoor (source ops-curated). */
+/**
+ * SQL predicate for public Cruise list/get: commercial venues only.
+ * Outdoor Batch 1 (`ops-curated` parks-trails/open-spaces/parking) stays off the map
+ * even if DB rows remain (soft-inactive preferred; do not DELETE).
+ * spotAlias kept for call-site compatibility; unused while visibility is commercial-only.
+ */
 export function isPublicHotSpotVisibilitySql(
   categoryAlias = 'c',
-  spotAlias = 'hs',
+  _spotAlias = 'hs',
 ): string {
-  return `(
-          ${categoryAlias}.is_commercial = TRUE
-          OR (
-            ${spotAlias}.source = 'ops-curated'
-            AND ${spotAlias}.is_user_generated = FALSE
-            AND ${categoryAlias}.slug IN ('parks-trails', 'open-spaces', 'parking')
-          )
-        )`;
+  void _spotAlias;
+  return `${categoryAlias}.is_commercial = TRUE`;
 }
 
 export type HotSpotCategory = {
@@ -246,7 +246,14 @@ export const hotSpotsService = {
   },
 
   async checkIn(userId: string, spotId: string, anonymous: boolean) {
-    const spot = await query(`SELECT id FROM hot_spots WHERE id = $1 AND is_active = TRUE`, [spotId]);
+    const spot = await query(
+      `SELECT hs.id
+         FROM hot_spots hs
+         JOIN hot_spot_categories c ON c.id = hs.category_id
+        WHERE hs.id = $1 AND hs.is_active = TRUE
+          AND ${isPublicHotSpotVisibilitySql('c', 'hs')}`,
+      [spotId],
+    );
     if (!spot.rows[0]) {
       throw new Error('Spot not found');
     }
@@ -284,7 +291,14 @@ export const hotSpotsService = {
 
   /** Record a comment and bump spot freshness (used by ops / future UI). */
   async addComment(userId: string, spotId: string, body: string, anonymous = true) {
-    const spot = await query(`SELECT id FROM hot_spots WHERE id = $1 AND is_active = TRUE`, [spotId]);
+    const spot = await query(
+      `SELECT hs.id
+         FROM hot_spots hs
+         JOIN hot_spot_categories c ON c.id = hs.category_id
+        WHERE hs.id = $1 AND hs.is_active = TRUE
+          AND ${isPublicHotSpotVisibilitySql('c', 'hs')}`,
+      [spotId],
+    );
     if (!spot.rows[0]) {
       throw new Error('Spot not found');
     }

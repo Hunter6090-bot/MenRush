@@ -1,16 +1,17 @@
 /**
- * Ops seed: curated outdoor Hot Spots (Batch 1 Legal override).
+ * Ops seed: curated outdoor Hot Spots (Batch 1 — HISTORICAL).
  *
- * Commercial importer rejects outdoor — use this script (or migration 057) instead.
- * Never invent lat/lng. Skip rows missing finite coordinates.
+ * PUBLIC OFF (Al ORDER): outdoor Batch 1 is off the public map. Product deactivated
+ * ops-curated-batch1-2026-09:* in production. Do NOT re-run this seed to re-activate.
+ * This script refuses unless --allow-reactivate is passed (emergency only).
+ *
+ * Commercial importer rejects outdoor — use this script (or migration 057) only if Product
+ * explicitly re-opens outdoor. Never invent lat/lng. Skip rows missing finite coordinates.
  * Descriptions: Public park / Woodland / Car park only.
  *
- * Usage:
+ * Usage (blocked by default):
  *   npm run hotspots:seed-outdoor -- --file ./data/outdoor-hotspots.batch1-2026-09.json --dry-run
- *   npm run hotspots:seed-outdoor -- --file ./data/outdoor-hotspots.batch1-2026-09.json
- *
- * Production soft-refresh (without waiting for migrate):
- *   railway run -s backend -- npm run hotspots:seed-outdoor -- --file ./data/outdoor-hotspots.batch1-2026-09.json
+ *   npm run hotspots:seed-outdoor -- --file ./data/outdoor-hotspots.batch1-2026-09.json --allow-reactivate
  */
 import fs from 'fs';
 import path from 'path';
@@ -34,13 +35,14 @@ type SpotRow = {
   nation?: string | null;
 };
 
-type Args = { file: string; dryRun: boolean; source: string };
+type Args = { file: string; dryRun: boolean; source: string; allowReactivate: boolean };
 
 function parseArgs(argv: string[]): Args {
   const args = argv.slice(2);
   let file = '';
   let dryRun = false;
   let source = 'ops-curated';
+  let allowReactivate = false;
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
     if (arg === '--file' || arg === '-f') {
@@ -51,6 +53,8 @@ function parseArgs(argv: string[]): Args {
       i += 1;
     } else if (arg === '--dry-run') {
       dryRun = true;
+    } else if (arg === '--allow-reactivate') {
+      allowReactivate = true;
     }
   }
   if (!file) {
@@ -58,7 +62,7 @@ function parseArgs(argv: string[]): Args {
       'Missing --file <path>. Example: npm run hotspots:seed-outdoor -- --file ./data/outdoor-hotspots.batch1-2026-09.json --dry-run',
     );
   }
-  return { file: path.resolve(file), dryRun, source };
+  return { file: path.resolve(file), dryRun, source, allowReactivate };
 }
 
 function slugExternalId(name: string): string {
@@ -71,6 +75,13 @@ function slugExternalId(name: string): string {
 
 async function main() {
   const args = parseArgs(process.argv);
+  if (!args.allowReactivate) {
+    console.error(
+      'Refused: outdoor Batch 1 is PUBLIC OFF (Al ORDER). Do NOT re-run this seed to re-activate.\n' +
+        'Public map is commercial-only. Pass --allow-reactivate only if Product explicitly re-opens outdoor.',
+    );
+    process.exit(1);
+  }
   const raw = JSON.parse(fs.readFileSync(args.file, 'utf8')) as {
     spots?: SpotRow[];
     venues?: SpotRow[];

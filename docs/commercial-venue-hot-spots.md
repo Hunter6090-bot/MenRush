@@ -106,19 +106,13 @@ npm run hotspots:seed-commercial -- --file ./data/commercial-venues.green-expand
 **Brand note:** public Cruise density claims stay held until Brand signs density. Seed only;
 no marketing copy that counts or recommends venues.
 
-## Outdoor Batch 1 (Al Legal override 2026-09-12)
+## Outdoor Batch 1 — PUBLIC OFF (Al ORDER 2026-09-12)
 
-Al overrode Legal RED for **Batch 1 seed + map pins only** (24 South Coast / IOW / NF
-places). See `docs/outdoor-hotspots-batch1.md`. Commercial importer still rejects outdoor.
-Brand face helper stays commercial-only; Studio density claims still held.
-
-```bash
-cd backend
-npm run hotspots:seed-outdoor -- --file ./data/outdoor-hotspots.batch1-2026-09.json --dry-run
-npm run hotspots:seed-outdoor -- --file ./data/outdoor-hotspots.batch1-2026-09.json
-```
-
-Migration `057` auto-applies on backend deploy.
+Outdoor Batch 1 was seeded under an Al Legal override, then **pulled off the public map**.
+Production DB: Product set `is_active=false` for `ops-curated-batch1-2026-09:*`.
+Code: `isPublicHotSpotVisibilitySql` is commercial-only again (no ops-curated outdoor path).
+Do **not** re-run `hotspots:seed-outdoor` or import the big outdoor CSV. Soft-inactive rows stay;
+do not DELETE. Scene chips Toilets/Car/Cruising stay hidden. See `docs/outdoor-hotspots-batch1.md`.
 
 ## Media lock
 
