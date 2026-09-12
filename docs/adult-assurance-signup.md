@@ -5,8 +5,8 @@
 ## What it does
 
 1. Before a `users` row is created, signup starts a **pre-account** Veriff liveness session (`adult_assurance_sessions`, `check_kind=liveness`).
-2. On decision webhook: read `additionalVerifiedData.estimatedAge` when present. Under 18 → `status=underage`, no account. Approved with no underage signal → pass + one-time `adult_assurance_token`. **No DOB required. We never store ID images / DOB / document numbers.**
-3. After liveness pass, UI offers optional ID: “Add ID for Verified tick?” Yes / Skip.
+2. On decision webhook: read `additionalVerifiedData.estimatedAge` when present. Under 18 → `status=underage`, no account. Approved with no underage signal → pass + one-time `adult_assurance_token`. **No DOB required.** MenRush does not keep copies of ID documents (Veriff processes as processor).
+3. After liveness pass, UI offers optional ID: “Want a Verified tick?” Add ID with Veriff / Skip.
 4. If Yes: second Veriff ID session (`check_kind=id`, linked via `parent_session_id`). Approved → parent `id_verified=true`.
 5. `POST /auth/register` redeems the token → `verified_age_18_plus=true`. If `id_verified`, also sets `is_verified` + `verification_provider='veriff'` (Verified tick).
 6. Rejection UI: `/register/underage`.
@@ -26,11 +26,11 @@ Do **not** say “all users are ID-verified.”
 
 | Screen | Copy |
 | --- | --- |
-| A Intro | **Quick age check** — Selfie confirms you’re 18+ and real. Optional ID adds a Verified tick. We don’t store your ID — Veriff checks it. CTA: Start selfie check |
-| B Progress / success | Checking you’re 18+… / 18+ confirmed. |
-| C Upsell | **Add ID for Verified?** Optional. Skip to stay discreet. We don’t keep your document. Add ID / Skip |
-| D ID success | Verified tick earned. |
-| E Fail | MenRush is 18+ only. No account was created. |
+| A Intro | **Quick selfie** — Confirms you are 18+ and real. How it works: Veriff selfie; optional ID later for Verified. MenRush does not keep copies of your ID. Age gate only. CTA: Continue with Veriff |
+| B Progress / success | Opening Veriff… / 18+ confirmed. Age check done. |
+| C Upsell | **Want a Verified tick?** Age check is done. Verified = optional ID. MenRush does not keep copies of your ID. Add ID with Veriff / Skip |
+| D ID success | Verified tick earned. Separate from the age gate you already passed. |
+| E Fail | MenRush is 18+ only. Age check failed. No account was created. |
 
 Source of truth in UI: `frontend/src/components/AdultAssuranceFlow.tsx` → `ADULT_ASSURANCE_COPY`.
 

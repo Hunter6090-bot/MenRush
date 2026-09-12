@@ -1,6 +1,6 @@
 /**
- * Under-18 / fail rejection after signup age check.
- * Hard-fail — no account. Factual copy only — not Verified / KYC / OSA claims.
+ * Under-18 / fail rejection after signup age check (liveness).
+ * Hard-fail — no account. Age gate only — not Verified / KYC / OSA.
  */
 import { Link } from 'react-router-dom';
 import {
@@ -24,12 +24,12 @@ export const RegisterUnderage = () => {
 
       <div className={`${publicPanelClass} flex flex-col gap-5`} data-testid="register-underage">
         <p className="m-0 text-[15px] leading-[1.6] text-[var(--cream-muted)]">
-          This room is for adult men nearby. If the check shows you are under 18, signup stops
-          here. We do not keep an account or profile for you.
+          This room is for adult men nearby. If the selfie age check shows you are under 18,
+          signup stops here. We do not keep an account or profile for you.
         </p>
         <p className="m-0 text-[15px] leading-[1.6] text-[var(--cream-muted)]">
-          This is an 18+ gate, not a Verified tick. Do not retry with someone else&apos;s selfie
-          or ID.
+          This is the 18+ age gate only. It is not a Verified tick and not a government ID check
+          at signup. Do not retry with someone else&apos;s selfie or ID.
         </p>
         <Link to="/coming-soon" className={`${publicPrimaryButtonClass} text-center no-underline`}>
           Back to MenRush

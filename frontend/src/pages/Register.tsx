@@ -92,6 +92,9 @@ export const Register = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showAssurance, setShowAssurance] = useState(false);
+  const [assurancePhase, setAssurancePhase] = useState<
+    'intro' | 'liveness' | 'liveness_ok' | 'upsell' | 'id' | 'id_ok' | 'done'
+  >('intro');
   const [adultRequired, setAdultRequired] = useState(false);
   const [fixtureAllowed, setFixtureAllowed] = useState(false);
   const navigate = useNavigate();
@@ -252,16 +255,37 @@ export const Register = () => {
 
   const submitLabel = loading ? 'Creating account…' : 'Create Account';
 
+  const assuranceHero =
+    !showAssurance
+      ? { title: 'Create your', accent: 'account.', copy: 'Pick a username and password.' }
+      : assurancePhase === 'upsell' || assurancePhase === 'id' || assurancePhase === 'id_ok'
+        ? {
+            title: 'Want a',
+            accent: 'Verified tick?',
+            copy: 'Optional ID. Age check already done.',
+          }
+        : assurancePhase === 'liveness' || assurancePhase === 'liveness_ok'
+          ? {
+              title: 'Quick',
+              accent: 'selfie.',
+              copy: 'Veriff handles the check.',
+            }
+          : {
+              title: 'Quick',
+              accent: 'selfie.',
+              copy: 'Confirms you are 18+ and real.',
+            };
+
   return (
     <PublicAuthShell>
       <PublicAuthHero
-        title="Create your"
-        accent="account."
-        copy="Pick a username and password."
+        title={assuranceHero.title}
+        accent={assuranceHero.accent}
+        copy={assuranceHero.copy}
       />
 
       <div className={`${publicPanelClass} max-h-[min(70dvh,720px)] overflow-y-auto lg:max-h-none lg:overflow-visible`}>
-        {inviteCode ? (
+        {inviteCode && !showAssurance ? (
           <div className={publicInviteChipClass}>
             <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-[#E0A14A]">
               Invite code
@@ -273,8 +297,10 @@ export const Register = () => {
         {showAssurance ? (
           <AdultAssuranceFlow
             fixtureAllowed={fixtureAllowed}
+            onPhaseChange={setAssurancePhase}
             onCancel={() => {
               setShowAssurance(false);
+              setAssurancePhase('intro');
               setError('');
             }}
             onComplete={(result) => {
@@ -285,6 +311,7 @@ export const Register = () => {
               if ('error' in result) {
                 setError(result.error);
                 setShowAssurance(false);
+                setAssurancePhase('intro');
                 return;
               }
               void completeRegistration(result.token);
@@ -339,8 +366,12 @@ export const Register = () => {
                 onChange={setField('dob')}
                 required
                 className={publicInputClass}
+                lang="en-GB"
+                data-testid="register-dob"
               />
-              <p className={helperClass}>You must be 18 or older.</p>
+              <p className={helperClass} data-testid="register-dob-format">
+                Use dd/mm/yyyy. You must be 18 or older.
+              </p>
             </div>
 
             <div className="flex flex-col gap-2.5">
@@ -477,7 +508,7 @@ export const Register = () => {
 
             {adultRequired ? (
               <p className={helperClass} data-testid="register-adult-assurance-note">
-                {ADULT_ASSURANCE_COPY.introBody}
+                {ADULT_ASSURANCE_COPY.registerHelper}
               </p>
             ) : null}
 
