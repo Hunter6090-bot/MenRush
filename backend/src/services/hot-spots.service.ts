@@ -4,13 +4,38 @@ import { premiumService } from './premium.service';
 /** Venue check-in pins expire after this many hours (documented product choice). */
 export const ACTIVE_CHECKIN_TTL_HOURS = 4;
 
-/** Public Cruise filters — commercial premises only (Legal RED outdoor/PSE excluded). */
+/** Public Cruise commercial filters (licensed premises). */
 export const COMMERCIAL_HOT_SPOT_CATEGORY_SLUGS = [
   'saunas',
   'nightlife',
   'bars',
   'cinema',
 ] as const;
+
+/**
+ * Batch 1 outdoor categories (Al Legal override 2026-09-12: seed + map pins only).
+ * Still non-commercial — commercial importer must keep rejecting these slugs.
+ */
+export const OUTDOOR_HOT_SPOT_CATEGORY_SLUGS = [
+  'parks-trails',
+  'open-spaces',
+  'parking',
+] as const;
+
+/** SQL predicate: commercial OR curated Batch 1 outdoor (source ops-curated). */
+export function isPublicHotSpotVisibilitySql(
+  categoryAlias = 'c',
+  spotAlias = 'hs',
+): string {
+  return `(
+          ${categoryAlias}.is_commercial = TRUE
+          OR (
+            ${spotAlias}.source = 'ops-curated'
+            AND ${spotAlias}.is_user_generated = FALSE
+            AND ${categoryAlias}.slug IN ('parks-trails', 'open-spaces', 'parking')
+          )
+        )`;
+}
 
 export type HotSpotCategory = {
   id: number;
@@ -103,6 +128,7 @@ export const hotSpotsService = {
       `SELECT id, slug, name, icon, description, is_commercial
          FROM hot_spot_categories
         WHERE is_commercial = TRUE
+           OR slug IN ('parks-trails', 'open-spaces', 'parking')
         ORDER BY sort_order ASC, name ASC`,
     );
     return res.rows;
@@ -166,7 +192,7 @@ export const hotSpotsService = {
          FROM hot_spots hs
          JOIN hot_spot_categories c ON c.id = hs.category_id
         WHERE hs.is_active = TRUE
-          AND c.is_commercial = TRUE
+          AND ${isPublicHotSpotVisibilitySql('c', 'hs')}
           AND ST_DWithin(
             ST_SetSRID(ST_MakePoint(hs.longitude, hs.latitude), 4326)::geography,
             ST_MakePoint($2, $1)::geography,
@@ -211,7 +237,8 @@ export const hotSpotsService = {
           ) AS my_checkin_anonymous
          FROM hot_spots hs
          JOIN hot_spot_categories c ON c.id = hs.category_id
-        WHERE hs.id = $1 AND hs.is_active = TRUE AND c.is_commercial = TRUE`,
+        WHERE hs.id = $1 AND hs.is_active = TRUE
+          AND ${isPublicHotSpotVisibilitySql('c', 'hs')}`,
       [spotId, userId, String(ACTIVE_CHECKIN_TTL_HOURS)],
     );
     if (!res.rows[0]) return null;
