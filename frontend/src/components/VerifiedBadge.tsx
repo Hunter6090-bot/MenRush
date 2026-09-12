@@ -15,7 +15,7 @@ export function VerifiedBadge({ size = 'sm', className = '', compact = false }: 
     <span className={`inline-flex shrink-0 ${className}`}>
       <button
         type="button"
-        aria-label="Verified — optional ID checked through Veriff (not the signup age gate)"
+        aria-label="Verified. Optional ID checked through Veriff. Not the signup age gate."
         aria-expanded={open}
         aria-controls={descriptionId}
         onClick={(event) => { event.stopPropagation(); setOpen(!open); }}
