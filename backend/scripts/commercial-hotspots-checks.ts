@@ -8,9 +8,15 @@ import path from 'path';
 import {
   ACTIVE_CHECKIN_TTL_HOURS,
   COMMERCIAL_HOT_SPOT_CATEGORY_SLUGS,
+  isPublicHotSpotVisibilitySql,
 } from '../src/services/hot-spots.service';
 
 assert.strictEqual(ACTIVE_CHECKIN_TTL_HOURS, 4);
+
+const publicSql = isPublicHotSpotVisibilitySql('c', 'hs');
+assert.match(publicSql, /is_commercial\s*=\s*TRUE/i);
+assert.doesNotMatch(publicSql, /ops-curated/);
+assert.doesNotMatch(publicSql, /parks-trails|open-spaces|parking/);
 
 const allowed = new Set(COMMERCIAL_HOT_SPOT_CATEGORY_SLUGS);
 assert.ok(allowed.has('saunas'));
@@ -144,6 +150,7 @@ for (const v of expandRaw.venues) {
 }
 
 console.log('✓ commercial category allow-list locked');
+console.log('✓ public visibility SQL is commercial-only (outdoor Batch 1 OFF map)');
 console.log('✓ RED outdoor/PSE slugs excluded');
 console.log('✓ GREEN filter-type map documented (9 types)');
 console.log(`✓ green expand JSON: ${expandRaw.venues.length} venues, 0 deferred, no AMBER/keep-list dupes`);

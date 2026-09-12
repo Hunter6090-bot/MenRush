@@ -1,44 +1,40 @@
-# Outdoor Hot Spots Batch 1 (Al Legal override)
+# Outdoor Hot Spots Batch 1 — PUBLIC OFF
 
-**Date:** 2026-09-12  
-**Scope:** Seed + map pins for 24 South Coast / IOW / New Forest outdoor places only.  
-**Override:** Al Zain explicitly overrode Legal RED for this Batch 1 only. Brand/Studio density claims remain held. Do not change Scene chips (Toilets / Car / Cruising). Do not add Tropics (already live as Tropics Day Spa). Do not scaffold the 1269 CSV in this workstream.
+**Date pulled off map:** 2026-09-12 (Al ORDER)  
+**Original seed:** 2026-09-12 (Al Legal override for Batch 1 only)
 
-## What shipped
+## Status (current)
+
+| Layer | State |
+| --- | --- |
+| Public Cruise map / list / get | **Commercial venues only** — outdoor Batch 1 not visible |
+| Production DB | Product set `is_active=false` for `source=ops-curated` AND `external_id LIKE 'ops-curated-batch1-2026-09:%'` |
+| Code guard | `isPublicHotSpotVisibilitySql` = `is_commercial = TRUE` only (no ops-curated outdoor path) |
+| Scene chips | Toilets / Car / Cruising stay **hidden** (unchanged) |
+| Soft data | Leave inactive rows; **do not DELETE** user/media data |
+| Re-seed | **Do NOT** re-run `hotspots:seed-outdoor` or re-activate Batch 1 |
+| CSV | **Do NOT** import the big outdoor CSV |
+
+## Historical artifacts (keep; do not re-apply for public map)
 
 | Artifact | Path |
 | --- | --- |
-| Migration (auto on deploy) | `database/migrations/057_outdoor_hotspots_batch1.sql` (+ `backend/database/migrations/` copy) |
+| Migration (already applied) | `database/migrations/057_outdoor_hotspots_batch1.sql` (+ `backend/database/migrations/` copy) |
 | Ops JSON | `backend/data/outdoor-hotspots.batch1-2026-09.json` |
-| Soft-refresh seed | `npm run hotspots:seed-outdoor` |
+| Seed script (refuse-by-default) | `npm run hotspots:seed-outdoor` — exits unless `--allow-reactivate` |
 | Checks | `npm run test:outdoor-hotspots-batch1` |
 
-Fields: `is_user_generated=false`, `source=ops-curated`, `external_id=ops-curated-batch1-2026-09:*`, category `parks-trails` / `open-spaces` / `parking`, description only `Public park` / `Woodland` / `Car park`.
-
-Coords from Nominatim/OSM named POIs (and Overpass for named parking / woods). Never invent lat/lng. Public toilets skipped.
+Fields on seeded rows: `is_user_generated=false`, `source=ops-curated`, `external_id=ops-curated-batch1-2026-09:*`, category `parks-trails` / `open-spaces` / `parking`, description only `Public park` / `Woodland` / `Car park`.
 
 ## Public map visibility
 
-Cruise list/get now returns commercial venues **or** active `ops-curated` outdoor rows in parks-trails / open-spaces / parking. Commercial importer (`hotspots:seed-commercial` / `hotspots:import`) still rejects outdoor RED.
+Cruise list/get returns **commercial venues only**. Outdoor Batch 1 is off the public map in code and deactivated in production DB.
 
-Brand face helper copy stays commercial-only (claims held).
-
-## Production apply path
-
-1. **Preferred:** merge to `main` → Railway backend deploy runs pending migrations on boot (`057_outdoor_hotspots_batch1.sql` auto-applies).
-2. **Soft-refresh without waiting for migrate** (idempotent):
-
-```bash
-cd backend
-npm run hotspots:seed-outdoor -- --file ./data/outdoor-hotspots.batch1-2026-09.json --dry-run
-npm run hotspots:seed-outdoor -- --file ./data/outdoor-hotspots.batch1-2026-09.json
-# or: railway run -s <backend-service> -- npm run hotspots:seed-outdoor -- --file ./data/outdoor-hotspots.batch1-2026-09.json
-```
-
-3. BOA90: Nearby Map → Hot Spots chip → pan Fareham / Southampton / Portsmouth / IOW / New Forest — Batch 1 pins present. Tropics still commercial sauna only.
+Brand face helper copy stays commercial-only. Commercial importer (`hotspots:seed-commercial` / `hotspots:import`) still rejects outdoor RED.
 
 ## Out of scope
 
-- 1269 CSV bulk insert (prep-only later)
+- Re-activating Batch 1 outdoor pins
+- 1269 CSV bulk insert
 - Studio / FAQ / marketing density claims
-- Scene filter chip changes
+- Scene filter chip changes (Toilets / Car / Cruising remain hidden)
