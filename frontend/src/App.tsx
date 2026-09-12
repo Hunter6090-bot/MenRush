@@ -19,7 +19,6 @@ import { savePostAuthRedirect } from './lib/profileLinks';
 import { prefetchAppRouteChunks } from './lib/routeChunks';
 import { warmTabListCaches } from './lib/tabListCache';
 import { readStoredToken } from './lib/authSession';
-import { ROUTER_V7_FUTURE } from './lib/routerFuture';
 
 /**
  * Named-export pages → lazy defaults. Keeps Mapbox / heavy screens out of the
@@ -425,7 +424,8 @@ function AppShell() {
 
 export default function App() {
   return (
-    <BrowserRouter future={ROUTER_V7_FUTURE}>
+    // v7: startTransition + relativeSplatPath are defaults (enabled on v6 via ROUTER_V7_FUTURE first).
+    <BrowserRouter>
       <AppShell />
     </BrowserRouter>
   );

@@ -47,7 +47,11 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+<<<<<<< HEAD
 | Outdoor Batch 1 OFF public map (Al ORDER) | this branch `cursor/hotspots-outdoor-batch1-off-2989` PR `#256` | — | Cursor cloud — Al ORDER: pull outdoor Batch 1 Hot Spots OFF map; commercial venues stay; `isPublicHotSpotVisibilitySql` commercial-only; Product already `is_active=false` for ops-curated-batch1-2026-09:*; soft leave rows (no DELETE); seed-outdoor refuses without --allow-reactivate; Scene chips Toilets/Car/Cruising stay hidden; no CSV; RR v7 separate PR; Product squash-merge; do not merge myself; do not ping Al |
+=======
+| React Router v7 upgrade (Al ORDER) — PR `#250` | this branch `cursor/react-router-v7-1ee2` | — | Cursor cloud — Al ORDER: RR 6.30→7 library mode; future flags on v6 then bump; React 19 untouched; rebase onto main+#254+#255; no outdoor Hot Spots mix; Product squash-merges after green smoke; do not self-merge; do not ping Al |
+>>>>>>> c315daa (chore(frontend): bump React Router to v7 library mode (cursor))
 | P0 no photos app-wide (vercel staging rewrite) | this branch `cursor/fix-prod-uploads-staging-rewrite-9942` PR `#255` | — | Cursor cloud — Al escalate: #97 pointed menrush.com vercel.json at `backend-staging-f3aa` so `/uploads` 404 while production volume still has files; restore production-d587 + menrush.com prefers Railway origin; Brand empty only when truly missing; media lock; rebased onto main+#254; BOA90 soft-refresh after deploy; Product squash-merge; do not merge myself; do not ping Al |
 | P0 map vertical stack (Cruise/people pins) | merged `#254` on main (`a86da98`) | — | Cursor cloud — Al P0: HotSpotPin root `position:relative` overrode Mapbox absolute → zoomed-out vertical column; remove override + CSS lock + mercator; Hot Spots inventory was 60 public (36 commercial + 24 outdoor); outdoor Batch 1 since pulled OFF map; Scene chips untouched; do not ping Al |
 | Adult Assurance signup gate (liveness + optional ID Verified tick) | merged `#97` on main (`536a261`) | — | Cursor cloud — Al MERGE WHEN READY; Brand final sign; Product squash-merge; mig 058–059; **NOTE:** #97 also flipped vercel.json → staging (fixed by photo P0 `#255`) |

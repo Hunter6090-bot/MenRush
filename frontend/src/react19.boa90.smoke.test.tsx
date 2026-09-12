@@ -1,12 +1,16 @@
 /**
- * React 19 upgrade smoke — BOA90 soft-refresh checklist:
+ * React Router v7 upgrade smoke — BOA90 soft-refresh checklist:
  * login, Nearby↔Matches↔Chat routing, match → open chat.
- * Router stays on react-router-dom v6.
+ * React stays on 19; Router is react-router-dom v7 (declarative BrowserRouter / library mode).
+ *
+ * Post-login: setAuth leaves Login with a token, so RR v7's startTransition-backed
+ * render takes the session `<Navigate to="/app">` path (same as production AppEntry).
+ * Tests must include `/app` → `/discover` like App.tsx.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Login } from './pages/Login';
 import { Matches } from './pages/Matches';
 import { useAuthStore } from './hooks/store';
@@ -58,7 +62,7 @@ function LocationProbe() {
   return <div data-testid="loc">{loc.pathname}</div>;
 }
 
-describe('React 19 BOA90 — login', () => {
+describe('React Router v7 BOA90 — login', () => {
   beforeEach(() => {
     clearAuthSession();
     useAuthStore.setState({ user: null, token: null });
@@ -70,7 +74,7 @@ describe('React 19 BOA90 — login', () => {
     useAuthStore.setState({ user: null, token: null });
   });
 
-  it('signs in and lands on /discover (Router v6 MemoryRouter)', async () => {
+  it('signs in and lands on /discover (via /app entry, Router v7)', async () => {
     const user = userEvent.setup();
     vi.mocked(authAPI.login).mockResolvedValue({
       data: {
@@ -89,6 +93,8 @@ describe('React 19 BOA90 — login', () => {
       <MemoryRouter initialEntries={['/login']}>
         <Routes>
           <Route path="/login" element={<Login />} />
+          {/* Mirrors App.tsx AppEntry → Nearby */}
+          <Route path="/app" element={<Navigate to="/discover" replace />} />
           <Route
             path="/discover"
             element={
@@ -115,7 +121,7 @@ describe('React 19 BOA90 — login', () => {
   });
 });
 
-describe('React 19 BOA90 — routing / bottom nav + deep links', () => {
+describe('React Router v7 BOA90 — routing / bottom nav + deep links', () => {
   it('exposes Nearby, Matches, and Chat as primary mobile tabs', () => {
     const mobile = getNavItems().filter((i) => i.mobileTab).map((i) => i.to);
     expect(mobile).toEqual(
@@ -126,7 +132,7 @@ describe('React 19 BOA90 — routing / bottom nav + deep links', () => {
     expect(mobile.indexOf('/conversations')).toBeLessThan(mobile.indexOf('/matches'));
   });
 
-  it('treats /messages/:id as Chat-active deep link (Router v6 path)', () => {
+  it('treats /messages/:id as Chat-active deep link (Router v7 path)', () => {
     expect(isNavActive('/messages/peer-42', '/conversations')).toBe(true);
     expect(isNavActive('/matches', '/matches')).toBe(true);
     expect(isNavActive('/discover', '/discover')).toBe(true);
@@ -134,7 +140,7 @@ describe('React 19 BOA90 — routing / bottom nav + deep links', () => {
   });
 });
 
-describe('React 19 BOA90 — match flow → open chat', () => {
+describe('React Router v7 BOA90 — match flow → open chat', () => {
   beforeEach(() => {
     __resetTabListCacheForTests();
     vi.mocked(usersAPI.getMatches).mockReset();
