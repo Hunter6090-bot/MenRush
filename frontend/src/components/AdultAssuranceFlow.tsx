@@ -198,10 +198,10 @@ export function AdultAssuranceFlow({ fixtureAllowed, onComplete, onCancel }: Pro
         setToken(fix.data.assurance_token);
         setPhase('liveness_ok');
         // Brief success beat, then upsell (skip upsell if fixture already did ID).
-        await new Promise((r) => setTimeout(r, 700));
+        await new Promise((r) => setTimeout(r, 1200));
         if (fixture === 'adult_with_id' || fix.data.id_verified) {
           setPhase('id_ok');
-          await new Promise((r) => setTimeout(r, 900));
+          await new Promise((r) => setTimeout(r, 2200));
           onComplete({ token: fix.data.assurance_token, idVerified: true });
           return;
         }
