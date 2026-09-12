@@ -4,11 +4,15 @@ import { SiteFooter } from '../components/SiteFooter';
 const faqs = [
   {
     q: 'Who is MenRush for?',
-    a: 'Adult gay, bi, trans, discreet and curious men who want real-time local discovery, chat and verified profiles.',
+    a: 'Adult gay, bi, trans, discreet and curious men who want real-time local discovery and chat. Signup needs a Veriff selfie to confirm you are 18+ (age gate). Optional ID adds a Verified tick. MenRush does not keep copies of your ID.',
   },
   {
     q: 'How do I get verified?',
-    a: 'Tap Get verified on your Profile to complete an ID check and live selfie with Veriff. Verification is free and optional. Your Verified badge appears after Veriff approves.',
+    a: 'Opt into ID during signup, or tap Get verified on Profile. Veriff checks your ID; MenRush does not keep copies of your ID. Verified means you opted into ID only. It is not the signup selfie age gate.',
+  },
+  {
+    q: 'What is the difference between age check and Verified?',
+    a: 'Age-passed means you completed the required Veriff selfie 18+ check. Verified means you also opted into an optional ID check. They are two different states. Not every member is ID-verified.',
   },
   {
     q: 'Why does location matter?',

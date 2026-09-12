@@ -42,6 +42,19 @@ export const RegisterSchema = z.object({
   promo_code: z.string().min(1).max(64).optional(),
   /** Optional friend referral — not an invite gate; fail closed if invalid. */
   referral_code: z.string().min(1).max(32).optional(),
+  /**
+   * One-time token from Veriff adult-assurance (liveness / age-estimation ≥ 18).
+   * Required when Veriff adult assurance is configured for signup.
+   * Optional ID for Verified tick is recorded on the same session — not a second token.
+   */
+  adult_assurance_token: z.string().min(16).max(128).optional(),
+});
+
+export const AdultAssuranceFixtureSchema = z.object({
+  sessionId: z.string().uuid(),
+  /** underage | adult (liveness-only) | adult_with_id | declined | failed. missing_dob → failed. */
+  outcome: z.enum(['adult', 'adult_with_id', 'underage', 'declined', 'failed', 'missing_dob']),
+  yearsOld: z.number().int().min(0).max(120).optional(),
 });
 
 export const LoginSchema = z.object({

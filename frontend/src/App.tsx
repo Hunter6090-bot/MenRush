@@ -39,6 +39,10 @@ const GetTheApp = lazyNamed(() => import('./pages/GetTheApp'), 'GetTheApp');
 const BetaAccess = lazyNamed(() => import('./pages/BetaAccess'), 'BetaAccess');
 const Login = lazyNamed(() => import('./pages/Login'), 'Login');
 const Register = lazyNamed(() => import('./pages/Register'), 'Register');
+const RegisterUnderage = lazyNamed(
+  () => import('./pages/RegisterUnderage'),
+  'RegisterUnderage',
+);
 const ForgotPassword = lazyNamed(() => import('./pages/ForgotPassword'), 'ForgotPassword');
 const ResetPassword = lazyNamed(() => import('./pages/ResetPassword'), 'ResetPassword');
 const CheckEmail = lazyNamed(() => import('./pages/CheckEmail'), 'CheckEmail');
@@ -253,6 +257,7 @@ function AppShell() {
           <Route path="/beta" element={<BetaAccess />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/register/underage" element={<RegisterUnderage />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/check-email" element={<CheckEmail />} />

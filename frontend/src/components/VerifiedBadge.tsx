@@ -15,7 +15,7 @@ export function VerifiedBadge({ size = 'sm', className = '', compact = false }: 
     <span className={`inline-flex shrink-0 ${className}`}>
       <button
         type="button"
-        aria-label="Verified — ID and live selfie checked through Veriff"
+        aria-label="Verified. Optional ID checked through Veriff. Not the signup age gate."
         aria-expanded={open}
         aria-controls={descriptionId}
         onClick={(event) => { event.stopPropagation(); setOpen(!open); }}
@@ -28,7 +28,7 @@ export function VerifiedBadge({ size = 'sm', className = '', compact = false }: 
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>
         {compact ? null : 'Verified'}
       </button>
-      {open ? createPortal(<span id={descriptionId} role="status" className="fixed bottom-24 left-1/2 z-[200] w-64 max-w-[90vw] -translate-x-1/2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] p-3 text-xs font-medium leading-5 text-[var(--cream)] shadow-lg">ID and live selfie verified through Veriff.</span>, document.body) : null}
+      {open ? createPortal(<span id={descriptionId} role="status" className="fixed bottom-24 left-1/2 z-[200] w-64 max-w-[90vw] -translate-x-1/2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] p-3 text-xs font-medium leading-5 text-[var(--cream)] shadow-lg">Optional ID checked through Veriff. Separate from the signup 18+ selfie age gate.</span>, document.body) : null}
     </span>
   );
 }

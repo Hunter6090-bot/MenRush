@@ -397,14 +397,41 @@ export const veriffService = {
   },
 
   async applyDecision(payload: {
-    verification?: { id?: string; status?: string; vendorData?: string | null;
-      code?: number | string | null; reason?: string | null; reasonCode?: number | string | null };
-  }): Promise<{ handled: boolean; userId?: string; decision?: string }> {
+    verification?: {
+      id?: string;
+      status?: string;
+      vendorData?: string | null;
+      code?: number | string | null;
+      reason?: string | null;
+      reasonCode?: number | string | null;
+      person?: { dateOfBirth?: string | null; yearOfBirth?: string | number | null } | null;
+      additionalVerifiedData?: { estimatedAge?: number | string | null } | Array<unknown> | null;
+    };
+  }): Promise<{
+    handled: boolean;
+    userId?: string;
+    decision?: string;
+    adultStatus?: string;
+    underage?: boolean;
+  }> {
     const verification = payload.verification;
     const sessionId = verification?.id?.trim();
     const decision = verification?.status?.toLowerCase().trim();
     const decisions = ['approved', 'declined', 'resubmission_requested', 'expired', 'abandoned', 'review'];
     if (!sessionId || !decision || !decisions.includes(decision)) return { handled: false };
+
+    // Pre-signup adult-assurance sessions (no user row) — liveness / age-estimation gate.
+    const { adultAssuranceService } = await import('./adult-assurance.service');
+    const adult = await adultAssuranceService.applyDecision(payload);
+    if (adult.handled) {
+      return {
+        handled: true,
+        decision,
+        adultStatus: adult.adultStatus,
+        underage: adult.adultStatus === 'underage',
+      };
+    }
+
     const session = await deps.query(
       `SELECT s.user_id, s.status FROM veriff_sessions s
          JOIN users u ON u.id = s.user_id AND u.verification_session_id = s.id::text
@@ -414,29 +441,88 @@ export const veriffService = {
     // Never attach unknown provider sessions by vendorData or overwrite a newer attempt.
     if (!row) return { handled: false };
     if (row.status === 'approved') return { handled: true, userId: row.user_id, decision: 'approved' };
-    const approved = decision === 'approved';
-    const status = approved ? 'verified' : decision === 'declined' ? 'rejected'
-      : decision === 'expired' || decision === 'abandoned' ? 'unverified' : 'pending';
-    const reason = decision === 'declined' ? 'Veriff did not approve this check.'
-      : decision === 'resubmission_requested' ? 'Continue your check with Veriff.' : null;
+
+    const { isAdultFromVeriffDecision } = await import('../lib/veriff-age');
+    const ageCheck = decision === 'approved' ? isAdultFromVeriffDecision(payload) : null;
+    // Identity badge still requires Veriff approved. Under-18 on document DOB must
+    // never award the badge or verified_age_18_plus. Missing DOB does not revoke identity.
+    const underageBlock =
+      decision === 'approved' &&
+      ageCheck !== null &&
+      !ageCheck.ok &&
+      ageCheck.reason === 'underage';
+    const approved = decision === 'approved' && !underageBlock;
+    const status = underageBlock
+      ? 'rejected'
+      : approved
+        ? 'verified'
+        : decision === 'declined'
+          ? 'rejected'
+          : decision === 'expired' || decision === 'abandoned'
+            ? 'unverified'
+            : 'pending';
+    const reason = underageBlock
+      ? 'MenRush is 18+ only.'
+      : decision === 'declined'
+        ? 'Veriff did not approve this check.'
+        : decision === 'resubmission_requested'
+          ? 'Continue your check with Veriff.'
+          : null;
+    const verifiedAge =
+      approved && ageCheck && ageCheck.ok
+        ? true
+        : underageBlock
+          ? false
+          : null;
+    const ageAssuranceStatus =
+      approved && ageCheck && ageCheck.ok
+        ? 'confirmed'
+        : underageBlock
+          ? 'failed'
+          : null;
+
     // One database statement: a failed user update must not leave an approved
     // session whose retry can no longer award the badge.
     const result = await deps.query(
       `WITH updated_session AS (
          UPDATE veriff_sessions SET status = $2, decision_code = $6, updated_at = NOW(),
            decided_at = CASE WHEN $2 IN ('approved', 'declined', 'expired', 'abandoned', 'review')
+                                  OR $7::boolean
                              THEN NOW() ELSE decided_at END
          WHERE id = $1 AND status <> 'approved' RETURNING id, user_id
        )
        UPDATE users u SET is_verified = $3, verification_status = $4,
               verification_provider = 'veriff',
               verified_at = CASE WHEN $3 THEN COALESCE(u.verified_at, NOW()) ELSE u.verified_at END,
-              rejection_reason = $5, updated_at = NOW()
+              rejection_reason = $5, updated_at = NOW(),
+              verified_age_18_plus = CASE
+                WHEN $8::boolean IS TRUE THEN TRUE
+                WHEN $8::boolean IS FALSE THEN FALSE
+                ELSE u.verified_age_18_plus
+              END,
+              age_assurance_status = CASE
+                WHEN $9::text IS NOT NULL THEN $9
+                ELSE u.age_assurance_status
+              END,
+              age_assured_at = CASE
+                WHEN $8::boolean IS TRUE THEN COALESCE(u.age_assured_at, NOW())
+                ELSE u.age_assured_at
+              END
          FROM updated_session s
         WHERE u.id = s.user_id AND u.verification_session_id = s.id::text
           AND NOT COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE)
         RETURNING u.id`,
-      [sessionId, decision, approved, status, reason, verification?.code != null ? String(verification.code) : null],
+      [
+        sessionId,
+        underageBlock ? 'declined' : decision,
+        approved,
+        status,
+        reason,
+        verification?.code != null ? String(verification.code) : null,
+        underageBlock,
+        verifiedAge,
+        ageAssuranceStatus,
+      ],
     );
     if (approved && result.rows.length) {
       try {
@@ -444,6 +530,13 @@ export const veriffService = {
         await referralService.onUserVerified(row.user_id);
       } catch (err) { console.error('[veriff] referral onUserVerified failed', err); }
     }
-    return result.rows.length ? { handled: true, userId: row.user_id, decision } : { handled: false };
+    return result.rows.length
+      ? {
+          handled: true,
+          userId: row.user_id,
+          decision: underageBlock ? 'declined' : decision,
+          ...(underageBlock ? { underage: true as const } : {}),
+        }
+      : { handled: false };
   },
 };

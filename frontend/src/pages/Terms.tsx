@@ -192,9 +192,15 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>1.4</Strong> We reserve the right to request age verification at any
-                  time and to suspend or terminate your account if we have reason to believe you
-                  do not meet the eligibility requirements.
+                  <Strong>1.4</Strong> Signup includes a required 18+ check via a Veriff live
+                  selfie (liveness / age estimation). That check is an age gate only. If it shows
+                  you are under 18 or fails, no MenRush account is created. You may optionally
+                  complete an ID check in the same flow for a Verified tick. Veriff checks your
+                  ID; MenRush does not keep copies of your ID document. The optional Verified
+                  tick is separate from the age gate and does not mean every member is
+                  ID-checked. We may also request further age checks later and may suspend or
+                  terminate an account if we have reason to believe you do not meet the
+                  eligibility requirements.
                 </>,
               )}
             </section>
@@ -235,9 +241,12 @@ export const Terms = () => {
               {sectionHeading(SECTIONS[2])}
               {para(
                 <>
-                  <Strong>3.1</Strong> The Verified badge is optional and free. Complete an ID check and live selfie
-                  with Veriff from your Profile to receive the badge after approval. Verification helps reduce
-                  fake profiles, underage access and platform abuse.
+                  <Strong>3.1</Strong> The Verified badge is optional and free. Complete an ID check
+                  (during signup or later from Profile) with Veriff to receive the badge after
+                  approval. Veriff checks your ID; MenRush does not keep copies of your ID
+                  document. The badge is not the signup 18+ selfie age gate in section 1.4, and
+                  it does not mean every member is identity-checked or that MenRush pre-moderates
+                  all user content.
                 </>,
               )}
               {para(
