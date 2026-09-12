@@ -116,7 +116,7 @@ router.get('/adult-assurance/required', (_req, res: Response) => {
 
 /**
  * POST /api/auth/adult-assurance/start
- * Creates a pre-account Veriff session. No user row is created.
+ * Creates a pre-account Veriff liveness / age-estimation session. No user row.
  */
 router.post('/adult-assurance/start', adultAssuranceLimiter, async (_req, res: Response) => {
   try {
@@ -131,6 +131,36 @@ router.post('/adult-assurance/start', adultAssuranceLimiter, async (_req, res: R
     }
     console.error('[adult-assurance] start error:', err);
     res.status(500).json({ error: 'adult_assurance_start_failed' });
+  }
+});
+
+/**
+ * POST /api/auth/adult-assurance/:sessionId/start-id
+ * Optional ID document after liveness passed — Verified tick on register.
+ */
+router.post('/adult-assurance/:sessionId/start-id', adultAssuranceLimiter, async (req, res: Response) => {
+  try {
+    const sessionId = String(req.params.sessionId || '').trim();
+    if (!/^[0-9a-f-]{36}$/i.test(sessionId)) {
+      return res.status(400).json({ error: 'invalid_session' });
+    }
+    const session = await adultAssuranceService.startIdSession(sessionId);
+    res.status(201).json(session);
+  } catch (err: any) {
+    if (err instanceof VeriffConfigError || err?.code === 'veriff_not_configured') {
+      return res.status(503).json({ error: 'veriff_not_configured' });
+    }
+    if (err?.message === 'session_not_found') {
+      return res.status(404).json({ error: 'session_not_found' });
+    }
+    if (err?.message === 'liveness_not_passed' || err?.message === 'already_id_verified') {
+      return res.status(409).json({ error: err.message });
+    }
+    if (err?.message === 'veriff_session_failed' || err?.message === 'veriff_session_malformed') {
+      return res.status(502).json({ error: err.message });
+    }
+    console.error('[adult-assurance] start-id error:', err);
+    res.status(500).json({ error: 'adult_assurance_start_id_failed' });
   }
 });
 

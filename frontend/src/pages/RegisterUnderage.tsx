@@ -1,7 +1,6 @@
 /**
- * Under-18 rejection after document date-of-birth fails the 18+ age gate.
- * Legal: hard-fail — no account row. Honest age-gate copy only — not ID-verified /
- * KYC / Verified badge / OSA compliance claims.
+ * Under-18 / fail rejection after signup age check.
+ * Hard-fail — no account. Factual copy only — not Verified / KYC / OSA claims.
  */
 import { Link } from 'react-router-dom';
 import {
@@ -20,19 +19,17 @@ export const RegisterUnderage = () => {
       <PublicAuthHero
         title="MenRush is"
         accent="18+ only."
-        copy="Your age check showed you are under 18. No account was created."
+        copy="Age check failed. No account was created."
       />
 
-      <div className={`${publicPanelClass} flex flex-col gap-5`}>
+      <div className={`${publicPanelClass} flex flex-col gap-5`} data-testid="register-underage">
         <p className="m-0 text-[15px] leading-[1.6] text-[var(--cream-muted)]">
-          This room is for adult men who want to meet nearby. Signup stops here when
-          the document date of birth is under 18. We do not keep a MenRush account
-          or profile for you — only the age-check session id needed for audit.
+          This room is for adult men nearby. If the check shows you are under 18, signup stops
+          here. We do not keep an account or profile for you.
         </p>
         <p className="m-0 text-[15px] leading-[1.6] text-[var(--cream-muted)]">
-          This is an 18+ age gate, not a Verified badge and not a full identity check.
-          If you are under 18, leave now. Do not try again with someone else&apos;s
-          document.
+          This is an 18+ gate, not a Verified tick. Do not retry with someone else&apos;s selfie
+          or ID.
         </p>
         <Link to="/coming-soon" className={`${publicPrimaryButtonClass} text-center no-underline`}>
           Back to MenRush

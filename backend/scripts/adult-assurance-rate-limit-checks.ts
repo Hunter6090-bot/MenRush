@@ -15,7 +15,10 @@ import rateLimit from 'express-rate-limit';
 process.env.NODE_ENV = 'production';
 
 const AUTH_ROUTE = path.join(__dirname, '../src/routes/auth.ts');
-const REGISTER_PAGE = path.join(__dirname, '../../frontend/src/pages/Register.tsx');
+const FLOW_PAGE = path.join(
+  __dirname,
+  '../../frontend/src/components/AdultAssuranceFlow.tsx',
+);
 
 async function listen(app: express.Express): Promise<{
   port: number;
@@ -70,11 +73,11 @@ async function postStatus(port: number, pathName: string): Promise<number> {
 
 async function main() {
   const authSrc = fs.readFileSync(AUTH_ROUTE, 'utf8');
-  const registerSrc = fs.readFileSync(REGISTER_PAGE, 'utf8');
+  const flowSrc = fs.readFileSync(FLOW_PAGE, 'utf8');
 
-  // Frontend poll budget the limiter must cover.
-  assert.match(registerSrc, /ADULT_POLL_MS\s*=\s*2000/);
-  assert.match(registerSrc, /ADULT_POLL_MAX_MS\s*=\s*120_000/);
+  // Frontend poll budget the limiter must cover (AdultAssuranceFlow).
+  assert.match(flowSrc, /ADULT_POLL_MS\s*=\s*2000/);
+  assert.match(flowSrc, /ADULT_POLL_MAX_MS\s*=\s*120_000/);
 
   // Wiring: status GET must use the dedicated poll limiter, not the mutation one.
   assert.match(authSrc, /adultAssuranceStatusPollLimiter/);
@@ -89,6 +92,10 @@ async function main() {
   assert.match(
     authSrc,
     /router\.post\(\s*'\/adult-assurance\/start'\s*,\s*adultAssuranceLimiter/,
+  );
+  assert.match(
+    authSrc,
+    /router\.post\(\s*'\/adult-assurance\/:sessionId\/start-id'\s*,\s*adultAssuranceLimiter/,
   );
   assert.match(
     authSrc,

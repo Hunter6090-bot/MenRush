@@ -210,7 +210,8 @@ export const authService = {
     }
 
     // Signup records DOB/age as self-attested for profile display. Adult assurance
-    // (verified_age_18_plus) requires a Veriff document DOB pass when configured.
+    // (verified_age_18_plus) requires a Veriff liveness / age-estimation pass when configured.
+    // Optional ID on the same flow may set is_verified (Verified tick) — never stores ID.
     const autoVerify = process.env.DEV_AUTO_VERIFY === 'true';
     const assuranceRequired = isAdultAssuranceRequiredAtSignup();
     const assuranceToken = data.adult_assurance_token?.trim();
@@ -300,19 +301,36 @@ export const authService = {
       // Redeem Veriff adult-assurance token after the user row exists so we can
       // attach redeemed_user_id. Fail → ROLLBACK (no underage / incomplete account).
       if (assuranceToken) {
-        await adultAssuranceService.redeemToken(assuranceToken, user!.id as string, client);
-        // Ensure flag is true even if INSERT defaults drift.
+        const redeemed = await adultAssuranceService.redeemToken(
+          assuranceToken,
+          user!.id as string,
+          client,
+        );
+        // Liveness pass → age flag. Optional ID on same session → Verified tick.
+        // Never persist ID images / DOB / document numbers from Veriff.
         await client.query(
           `UPDATE users
               SET verified_age_18_plus = TRUE,
                   age_assurance_status = 'confirmed',
                   age_assured_at = COALESCE(age_assured_at, NOW()),
+                  is_verified = CASE WHEN $2 THEN TRUE ELSE is_verified END,
+                  verification_status = CASE WHEN $2 THEN 'verified' ELSE verification_status END,
+                  verification_provider = CASE WHEN $2 THEN 'veriff' ELSE verification_provider END,
+                  verified_at = CASE WHEN $2 THEN COALESCE(verified_at, NOW()) ELSE verified_at END,
+                  verification_session_id = CASE
+                    WHEN $2 THEN COALESCE(verification_session_id, $3)
+                    ELSE verification_session_id
+                  END,
                   updated_at = NOW()
             WHERE id = $1`,
-          [user!.id],
+          [user!.id, redeemed.idVerified, redeemed.sessionId],
         );
         user!.verified_age_18_plus = true;
         user!.age_assurance_status = 'confirmed';
+        if (redeemed.idVerified) {
+          user!.is_verified = true;
+          user!.verification_status = 'verified';
+        }
       } else if (assuranceRequired) {
         throw new Error('Adult assurance is required. Complete the 18+ check and try again.');
       }

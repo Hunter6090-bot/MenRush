@@ -420,7 +420,7 @@ export const veriffService = {
     const decisions = ['approved', 'declined', 'resubmission_requested', 'expired', 'abandoned', 'review'];
     if (!sessionId || !decision || !decisions.includes(decision)) return { handled: false };
 
-    // Pre-signup adult-assurance sessions (no user row) — Veriff DOB → 18+ gate.
+    // Pre-signup adult-assurance sessions (no user row) — liveness / age-estimation gate.
     const { adultAssuranceService } = await import('./adult-assurance.service');
     const adult = await adultAssuranceService.applyDecision(payload);
     if (adult.handled) {

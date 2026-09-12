@@ -1,12 +1,13 @@
--- Adult assurance via Veriff document DOB at signup (UK 18+ lock).
--- verified_age_18_plus is set only after a Veriff decision proves age >= 18.
+-- Adult assurance via Veriff liveness / age-estimation at signup (UK 18+ lock).
+-- verified_age_18_plus is set after liveness pass (or later identity adult DOB).
 -- adult_assurance_sessions hold pre-account Veriff sessions — no DOB/PII stored.
+-- See also 058_adult_assurance_liveness_id.sql for optional ID → Verified tick.
 
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS verified_age_18_plus BOOLEAN NOT NULL DEFAULT FALSE;
 
 COMMENT ON COLUMN users.verified_age_18_plus IS
-  'True only after Veriff document DOB proves the member is 18+. Self-attested DOB never sets this.';
+  'True after Veriff liveness / age-estimation proves 18+ (or later identity DOB adult). Self-attested DOB never sets this. Not the Verified badge.';
 
 CREATE TABLE IF NOT EXISTS adult_assurance_sessions (
   id UUID PRIMARY KEY,
