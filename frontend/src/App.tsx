@@ -19,6 +19,7 @@ import { savePostAuthRedirect } from './lib/profileLinks';
 import { prefetchAppRouteChunks } from './lib/routeChunks';
 import { warmTabListCaches } from './lib/tabListCache';
 import { readStoredToken } from './lib/authSession';
+import { ROUTER_V7_FUTURE } from './lib/routerFuture';
 
 /**
  * Named-export pages → lazy defaults. Keeps Mapbox / heavy screens out of the
@@ -269,7 +270,10 @@ function AppShell() {
           <Route path="/safety" element={<Safety />} />
           <Route path="/guidelines" element={<CommunityGuidelines />} />
           <Route path="/help" element={<Help />} />
-          <Route path="/verify/*" element={<ProtectedRoute><Navigate to="/profile" replace /></ProtectedRoute>} />
+          {/* Split multi-segment splat for v7_relativeSplatPath (absolute Navigate — no relative link updates). */}
+          <Route path="/verify">
+            <Route path="*" element={<ProtectedRoute><Navigate to="/profile" replace /></ProtectedRoute>} />
+          </Route>
           <Route
             path="/premium"
             element={
@@ -421,7 +425,7 @@ function AppShell() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter future={ROUTER_V7_FUTURE}>
       <AppShell />
     </BrowserRouter>
   );
