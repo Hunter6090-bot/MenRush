@@ -332,6 +332,19 @@ function GridPhoto({
 }) {
   // Phone path: display API when live, else fetch+downscale — never leave blank tiles.
   const { src, phase } = useGridPhotoSrc(photoUrl, age);
+  const trimmed = photoUrl?.trim() || '';
+
+  // Real /uploads still loading — elevated pending tile (not Brand empty cutout).
+  if (phase === 'loading' && trimmed.startsWith('/uploads/')) {
+    return (
+      <div
+        className="h-full w-full bg-[var(--bg-elevated)]"
+        data-testid="nearby-photo-pending"
+        data-photo-phase={phase}
+        aria-hidden
+      />
+    );
+  }
 
   // Empty / missing / generic avatar slots → faded official medallion (Brand).
   // Real /uploads photos keep their bytes (media lock).
