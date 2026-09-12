@@ -90,6 +90,7 @@ export function createMapMarkerElement(
   const el = document.createElement('div');
   el.style.width = `${size}px`;
   el.style.height = `${size}px`;
+  // Do not set position on this root — Mapbox needs absolute (see mapMarkerPlacement.ts).
   // Canvas owns pan/pinch — markers must not capture touches (see mapMarkerHitTest).
   // Tap opens profile via map click hit-test in Discover, not DOM click here.
   el.style.touchAction = 'none';

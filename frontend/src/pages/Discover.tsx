@@ -283,6 +283,15 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
       user-select: none;
       -webkit-touch-callout: none;
     }
+    /* Geographic placement lock: Mapbox positions markers with transform on an
+       absolutely-positioned root. Never let app CSS/Tailwind override that to
+       relative/static — that stacks Cruise/people pins in a vertical column when
+       zoomed out (Al P0 / Mapbox #4048). */
+    .discover-map-surface .mapboxgl-marker {
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+    }
     /* While a finger is on the map, kill rubber-band / parent scroll steal
        (Android Chrome + iPhone — same parent-scroll fight on both). */
     html.discover-map-gesturing,
@@ -1289,6 +1298,8 @@ export const Discover = () => {
         style: mapboxStyleForTheme(resolvedThemeNow()),
         center: [startCenter[1], startCenter[0]],
         zoom: 14,
+        // Mercator only — globe at mid-zoom can drift HTML markers off lng/lat.
+        projection: 'mercator',
         attributionControl: false,
         interactive: true,
         dragPan: true,
