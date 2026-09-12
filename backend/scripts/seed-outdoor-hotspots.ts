@@ -1,17 +1,23 @@
 /**
- * Ops seed: curated outdoor Hot Spots (Batch 1 — HISTORICAL).
+ * Ops seed: curated outdoor Hot Spots.
  *
- * PUBLIC OFF (Al ORDER): outdoor Batch 1 is off the public map. Product deactivated
- * ops-curated-batch1-2026-09:* in production. Do NOT re-run this seed to re-activate.
- * This script refuses unless --allow-reactivate is passed (emergency only).
+ * Override batch (Al residual-risk 2026-09-12): Product may seed the South-first
+ * ~121 list with --allow-reactivate. Legal colour stays RED (not a sign-off).
+ * Soft-inactive Batch 1 (`ops-curated-batch1-2026-09:*`) stays inactive unless a
+ * row appears in the override JSON (name match may rewrite external_id + reactivate).
  *
- * Commercial importer rejects outdoor — use this script (or migration 057) only if Product
- * explicitly re-opens outdoor. Never invent lat/lng. Skip rows missing finite coordinates.
+ * Do NOT invent missing ~1100 CSV names. Do NOT run prod seed until Al greens
+ * South-first vs wait-for-full-CSV. Scene chips Toilets/Car/Cruising stay hidden.
+ *
+ * Never invent lat/lng. Skip rows missing finite coordinates.
  * Descriptions: Public park / Woodland / Car park only.
+ * Categories: parks-trails / open-spaces / parking.
+ * Reject toilet / cottage / PSE wording.
  *
- * Usage (blocked by default):
- *   npm run hotspots:seed-outdoor -- --file ./data/outdoor-hotspots.batch1-2026-09.json --dry-run
- *   npm run hotspots:seed-outdoor -- --file ./data/outdoor-hotspots.batch1-2026-09.json --allow-reactivate
+ * Usage:
+ *   npm run hotspots:seed-outdoor -- --file ./data/outdoor-hotspots.override-2026-09-12.json --dry-run
+ *   npm run hotspots:seed-outdoor -- --file ./data/outdoor-hotspots.override-2026-09-12.json --allow-reactivate
+ *   npm run hotspots:seed-outdoor -- --file ./data/outdoor-hotspots.override-2026-09-12.json --allow-reactivate --external-id-prefix ops-curated-override-2026-09-12
  */
 import fs from 'fs';
 import path from 'path';
@@ -20,9 +26,10 @@ import { OUTDOOR_HOT_SPOT_CATEGORY_SLUGS } from '../src/services/hot-spots.servi
 
 const ALLOWED = new Set<string>(OUTDOOR_HOT_SPOT_CATEGORY_SLUGS);
 const ALLOWED_DESCRIPTIONS = new Set(['Public park', 'Woodland', 'Car park']);
+const DEFAULT_EXTERNAL_ID_PREFIX = 'ops-curated-override-2026-09-12';
 
 const RED_REJECT =
-  /\bcottage\b|\bcottaging\b|glory\s*hole|truck\s*stop|cruising\s*area|nude\s*beach|public\s*toilet|\bpse\b|outdoor\s*play|known\s*cruising|\bsquirt\b|how-to|d-day museum.*toilet/i;
+  /\bcottage\b|\bcottaging\b|glory\s*hole|truck\s*stop|cruising\s*area|nude\s*beach|public\s*toilet|\btoilets?\b|\bpse\b|outdoor\s*play|known\s*cruising|\bsquirt\b|how-to|d-day museum.*toilet/i;
 
 type SpotRow = {
   name: string;
@@ -35,7 +42,13 @@ type SpotRow = {
   nation?: string | null;
 };
 
-type Args = { file: string; dryRun: boolean; source: string; allowReactivate: boolean };
+type Args = {
+  file: string;
+  dryRun: boolean;
+  source: string;
+  allowReactivate: boolean;
+  externalIdPrefix: string;
+};
 
 function parseArgs(argv: string[]): Args {
   const args = argv.slice(2);
@@ -43,6 +56,7 @@ function parseArgs(argv: string[]): Args {
   let dryRun = false;
   let source = 'ops-curated';
   let allowReactivate = false;
+  let externalIdPrefix = DEFAULT_EXTERNAL_ID_PREFIX;
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
     if (arg === '--file' || arg === '-f') {
@@ -50,6 +64,9 @@ function parseArgs(argv: string[]): Args {
       i += 1;
     } else if (arg === '--source') {
       source = args[i + 1] || source;
+      i += 1;
+    } else if (arg === '--external-id-prefix') {
+      externalIdPrefix = (args[i + 1] || externalIdPrefix).replace(/:$/, '');
       i += 1;
     } else if (arg === '--dry-run') {
       dryRun = true;
@@ -59,14 +76,20 @@ function parseArgs(argv: string[]): Args {
   }
   if (!file) {
     throw new Error(
-      'Missing --file <path>. Example: npm run hotspots:seed-outdoor -- --file ./data/outdoor-hotspots.batch1-2026-09.json --dry-run',
+      'Missing --file <path>. Example: npm run hotspots:seed-outdoor -- --file ./data/outdoor-hotspots.override-2026-09-12.json --dry-run',
     );
   }
-  return { file: path.resolve(file), dryRun, source, allowReactivate };
+  return {
+    file: path.resolve(file),
+    dryRun,
+    source,
+    allowReactivate,
+    externalIdPrefix,
+  };
 }
 
-function slugExternalId(name: string): string {
-  return `ops-curated-batch1-2026-09:${name
+function slugExternalId(name: string, prefix: string): string {
+  return `${prefix}:${name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
@@ -77,20 +100,32 @@ async function main() {
   const args = parseArgs(process.argv);
   if (!args.allowReactivate) {
     console.error(
-      'Refused: outdoor Batch 1 is PUBLIC OFF (Al ORDER). Do NOT re-run this seed to re-activate.\n' +
-        'Public map is commercial-only. Pass --allow-reactivate only if Product explicitly re-opens outdoor.',
+      'Refused: outdoor seed requires Product --allow-reactivate (Al residual-risk override).\n' +
+        'Batch 1 (`ops-curated-batch1-2026-09:*`) stays soft-inactive unless listed in the override file.\n' +
+        'Do NOT invent missing CSV rows. Pass --allow-reactivate only after Al greens South-first seed.',
     );
     process.exit(1);
   }
+
   const raw = JSON.parse(fs.readFileSync(args.file, 'utf8')) as {
     spots?: SpotRow[];
     venues?: SpotRow[];
-    _meta?: { skipped?: string[] };
+    _meta?: {
+      skipped?: string[];
+      external_id_prefix?: string;
+      batch?: string;
+    };
   };
   const spots = raw.spots || raw.venues || [];
   if (!Array.isArray(spots) || spots.length === 0) {
     throw new Error('JSON must contain non-empty spots[]');
   }
+
+  const prefix =
+    (raw._meta?.external_id_prefix || args.externalIdPrefix || DEFAULT_EXTERNAL_ID_PREFIX).replace(
+      /:$/,
+      '',
+    );
 
   const catRes = await pool.query<{ id: number; slug: string }>(
     `SELECT id, slug FROM hot_spot_categories WHERE slug = ANY($1::text[])`,
@@ -110,7 +145,7 @@ async function main() {
     const description = (spot.description || '').trim();
     const lat = spot.lat == null || spot.lat === '' ? NaN : Number(spot.lat);
     const lng = spot.lng == null || spot.lng === '' ? NaN : Number(spot.lng);
-    const externalId = (spot.external_id || '').trim() || slugExternalId(name);
+    const externalId = (spot.external_id || '').trim() || slugExternalId(name, prefix);
     const nation = (spot.nation || 'England').trim() || 'England';
 
     if (!name || !city) {
@@ -118,8 +153,8 @@ async function main() {
       skipped += 1;
       continue;
     }
-    if (RED_REJECT.test(name) || RED_REJECT.test(description)) {
-      failures.push(`${name}: RED text rejected`);
+    if (RED_REJECT.test(name) || RED_REJECT.test(description) || RED_REJECT.test(city)) {
+      failures.push(`${name}: RED text rejected (toilet/cottage/PSE/cruising)`);
       skipped += 1;
       continue;
     }
@@ -152,7 +187,7 @@ async function main() {
     }
 
     if (args.dryRun) {
-      console.log(`[dry-run] ${name} @ ${city} ${lat},${lng} (${category})`);
+      console.log(`[dry-run] ${name} @ ${city} ${lat},${lng} (${category}) ${externalId}`);
       inserted += 1;
       continue;
     }
@@ -177,6 +212,52 @@ async function main() {
            last_activity_at = NOW()
          WHERE id = $1`,
         [byExt.rows[0].id, categoryId, name, city, nation, description, lat, lng],
+      );
+      updated += 1;
+      continue;
+    }
+
+    // Also match soft-inactive Batch 1 rows by prior external_id slug tail / name+city
+    // so override can reactivate only names that appear in the new list.
+    const byLegacyExt = await pool.query(
+      `SELECT id FROM hot_spots
+        WHERE source = $1
+          AND (
+            external_id = $2
+            OR external_id = ('ops-curated-batch1-2026-09:' || split_part($2, ':', 2))
+          )
+        LIMIT 1`,
+      [args.source, externalId],
+    );
+    if (byLegacyExt.rows[0]) {
+      await pool.query(
+        `UPDATE hot_spots SET
+           category_id = $2,
+           name = $3,
+           city = $4,
+           nation = $5,
+           description = $6,
+           latitude = $7,
+           longitude = $8,
+           is_user_generated = FALSE,
+           is_active = TRUE,
+           source = $9,
+           external_id = $10,
+           verified_at = COALESCE(verified_at, NOW()),
+           last_activity_at = NOW()
+         WHERE id = $1`,
+        [
+          byLegacyExt.rows[0].id,
+          categoryId,
+          name,
+          city,
+          nation,
+          description,
+          lat,
+          lng,
+          args.source,
+          externalId,
+        ],
       );
       updated += 1;
       continue;
@@ -246,7 +327,7 @@ async function main() {
   }
 
   console.log(
-    `[hotspots:seed-outdoor] file=${args.file} dry_run=${args.dryRun} inserted=${inserted} updated=${updated} skipped=${skipped}`,
+    `[hotspots:seed-outdoor] file=${args.file} dry_run=${args.dryRun} prefix=${prefix} inserted=${inserted} updated=${updated} skipped=${skipped}`,
   );
   if (failures.length) {
     console.log('[hotspots:seed-outdoor] failures:');
