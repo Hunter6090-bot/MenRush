@@ -26,9 +26,10 @@ for (const slug of outdoor) {
 
 const sql = isPublicHotSpotVisibilitySql('c', 'hs');
 assert.match(sql, /is_commercial\s*=\s*TRUE/i);
-// Al ORDER: outdoor Batch 1 OFF public map — commercial only (no ops-curated outdoor path).
-assert.doesNotMatch(sql, /ops-curated/);
-assert.doesNotMatch(sql, /parks-trails|open-spaces|parking/);
+// Al residual-risk override: public map shows commercial OR active ops-curated outdoor.
+// Soft-inactive Batch 1 rows stay hidden via hs.is_active=TRUE at call sites.
+assert.match(sql, /ops-curated/);
+assert.match(sql, /parks-trails|open-spaces|parking/);
 
 const dataPath = path.join(__dirname, '../data/outdoor-hotspots.batch1-2026-09.json');
 const raw = JSON.parse(fs.readFileSync(dataPath, 'utf8')) as {
@@ -95,11 +96,11 @@ const seed = fs.readFileSync(seedPath, 'utf8');
 assert.match(seed, /Never invent lat\/lng/);
 assert.match(seed, /Public park/);
 assert.match(seed, /allow-reactivate/);
-assert.match(seed, /PUBLIC OFF|pulled OFF|Do NOT re-run/i);
+assert.match(seed, /Refused:|requires Product --allow-reactivate/i);
 
 console.log('✓ outdoor category allow-list locked (non-commercial)');
-console.log('✓ public visibility SQL is commercial-only (Batch 1 outdoor OFF map)');
+console.log('✓ public visibility SQL = commercial OR ops-curated outdoor (Batch 1 soft-inactive via is_active)');
 console.log(`✓ batch1 JSON: ${raw.spots.length} geocoded spots, 0 skips, no Tropics/toilets`);
 console.log('✓ migration 057 present with Batch 1 external_ids (historical; soft-inactive)');
-console.log('✓ seed-outdoor refuses re-activate without --allow-reactivate');
+console.log('✓ seed-outdoor refuses without --allow-reactivate');
 console.log('outdoor-hotspots-batch1-checks: ok');

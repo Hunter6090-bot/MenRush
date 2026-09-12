@@ -13,9 +13,11 @@ export const COMMERCIAL_HOT_SPOT_CATEGORY_SLUGS = [
 ] as const;
 
 /**
- * Outdoor categories (Batch 1 seed artifact). Not public on the map —
- * Al ORDER pulled Batch 1 outdoor OFF; public Cruise is commercial-only again.
+ * Outdoor categories (ops-curated parks/open-spaces/parking).
  * Commercial importer must keep rejecting these slugs.
+ * Public map: active commercial OR active ops-curated outdoor (Al residual-risk
+ * override 2026-09-12). Soft-inactive Batch 1 (`ops-curated-batch1-2026-09:*`)
+ * stays off until Product seeds/reactivates rows that appear in the override list.
  */
 export const OUTDOOR_HOT_SPOT_CATEGORY_SLUGS = [
   'parks-trails',
@@ -24,17 +26,23 @@ export const OUTDOOR_HOT_SPOT_CATEGORY_SLUGS = [
 ] as const;
 
 /**
- * SQL predicate for public Cruise list/get: commercial venues only.
- * Outdoor Batch 1 (`ops-curated` parks-trails/open-spaces/parking) stays off the map
- * even if DB rows remain (soft-inactive preferred; do not DELETE).
- * spotAlias kept for call-site compatibility; unused while visibility is commercial-only.
+ * SQL predicate for public Cruise list/get/check-in/comment:
+ * active commercial venues OR active ops-curated outdoor (non-UGC).
+ * Call sites already require `hs.is_active = TRUE`, so soft-inactive Batch 1
+ * rows remain hidden unless Product reactivates them via override seed.
  */
 export function isPublicHotSpotVisibilitySql(
   categoryAlias = 'c',
-  _spotAlias = 'hs',
+  spotAlias = 'hs',
 ): string {
-  void _spotAlias;
-  return `${categoryAlias}.is_commercial = TRUE`;
+  return `(
+          ${categoryAlias}.is_commercial = TRUE
+          OR (
+            ${spotAlias}.source = 'ops-curated'
+            AND ${spotAlias}.is_user_generated = FALSE
+            AND ${categoryAlias}.slug IN ('parks-trails', 'open-spaces', 'parking')
+          )
+        )`;
 }
 
 export type HotSpotCategory = {
