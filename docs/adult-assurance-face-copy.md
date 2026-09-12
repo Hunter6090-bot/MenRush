@@ -2,25 +2,27 @@
 
 Short strings in `AdultAssuranceFlow` / underage / Help. Sex/hookup app voice. No OSA. Not “all members ID-verified.” Verified = opted into ID only. Age-passed ≠ Verified. No em dashes.
 
-**Storage line (Legal):** “MenRush does not keep copies of your ID.” (or “Veriff checks your ID; we don’t store the document.”) Not absolute “we never store.”
+**Al preferred mock lock (2026-09-12 / #97):** Quick **selfie.** + You are **through.** screens. Brighter RandomBackground (opacity ~0.52, lightened gradient). BrandMark medallion only (no typed MENRUSH wordmark).
+
+**Storage face line (Al mock):** “MenRush never keeps copies of your ID.” Soft product claim (Veriff processes as processor). Docs may still say “does not keep” in Legal prose — face follows Al mock.
 
 **Capture:** Veriff-hosted only. CTA: Continue with Veriff / Add ID with Veriff.
 
 ## A — Intro (age gate)
-- **Title:** Quick selfie
-- **Body:** Confirms you are 18+ and real.
-- **How it works:** Veriff opens a short selfie check. Optional ID later for a Verified tick.
-- **Storage:** MenRush does not keep copies of your ID.
-- **Note:** This is the age gate only. Verified is separate and optional.
+- **Hero:** Quick **selfie.**
+- **Sub:** Confirms you're 18+. Takes about ten seconds.
+- **Card:** POWERED BY VERIFF / Optional ID later for a Verified tick / MenRush never keeps copies of your ID.
 - **CTA:** Continue with Veriff
+- **Link:** How it works (expands: Veriff selfie check; age gate only, Verified separate)
 
 ## B — Liveness
 - **Progress:** Opening Veriff…
 - **Success:** 18+ confirmed. Age check done.
 
 ## C — Optional ID upsell
-- **Title:** Want a Verified tick?
-- **Body:** Age check is done. Verified means optional ID only. MenRush does not keep copies of your ID.
+- **Hero:** You are **through.**
+- **Sub:** Selfie confirmed via Veriff.
+- **Card:** WANT A VERIFIED TICK? / Add ID with Veriff / MenRush never keeps copies of your ID.
 - **Yes:** Add ID with Veriff
 - **Skip:** Skip
 
@@ -34,7 +36,7 @@ Short strings in `AdultAssuranceFlow` / underage / Help. Sex/hookup app voice. N
 - Age gate only. Not a Verified tick. Not a government ID check at signup.
 
 ## Register helper
-Next: a Veriff selfie for 18+. Optional ID adds a Verified tick. MenRush does not keep copies of your ID.
+Next: a Veriff selfie for 18+. Optional ID adds a Verified tick. MenRush never keeps copies of your ID.
 
 ## Product states (FAQ)
 1. **Age-passed** — required Veriff selfie 18+ (`verified_age_18_plus`)

@@ -1,9 +1,13 @@
 /**
  * Under-18 / fail rejection after signup age check (liveness).
  * Hard-fail — no account. Age gate only — not Verified / KYC / OSA.
+ * Brighter RandomBackground (Al #97 lock). No fixed AUTH_BACKGROUNDS pin.
  */
 import { Link } from 'react-router-dom';
 import {
+  AUTH_ASSURANCE_BACKGROUND_OPACITY,
+  AUTH_ASSURANCE_BRIGHTNESS,
+  AUTH_ASSURANCE_GRADIENT,
   PublicAuthHero,
   PublicAuthShell,
 } from '../components/PublicAuthShell';
@@ -15,7 +19,11 @@ import {
 
 export const RegisterUnderage = () => {
   return (
-    <PublicAuthShell>
+    <PublicAuthShell
+      backgroundOpacity={AUTH_ASSURANCE_BACKGROUND_OPACITY}
+      backgroundBrightness={AUTH_ASSURANCE_BRIGHTNESS}
+      gradientOverlay={AUTH_ASSURANCE_GRADIENT}
+    >
       <PublicAuthHero
         title="MenRush is"
         accent="18+ only."

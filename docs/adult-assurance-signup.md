@@ -26,9 +26,9 @@ Do **not** say “all users are ID-verified.”
 
 | Screen | Copy |
 | --- | --- |
-| A Intro | **Quick selfie** — Confirms you are 18+ and real. How it works: Veriff selfie; optional ID later for Verified. MenRush does not keep copies of your ID. Age gate only. CTA: Continue with Veriff |
+| A Intro | **Quick selfie.** Confirms you're 18+. Takes about ten seconds. Card: Powered by Veriff / Optional ID later for a Verified tick / MenRush never keeps copies of your ID. CTA: Continue with Veriff. Link: How it works |
 | B Progress / success | Opening Veriff… / 18+ confirmed. Age check done. |
-| C Upsell | **Want a Verified tick?** Age check is done. Verified = optional ID. MenRush does not keep copies of your ID. Add ID with Veriff / Skip |
+| C Upsell | **You are through.** Selfie confirmed via Veriff. Card: Want a Verified tick? / Add ID with Veriff / MenRush never keeps copies of your ID. Add ID with Veriff / Skip |
 | D ID success | Verified tick earned. Separate from the age gate you already passed. |
 | E Fail | MenRush is 18+ only. Age check failed. No account was created. |
 

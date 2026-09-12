@@ -4,6 +4,9 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
 import {
+  AUTH_ASSURANCE_BACKGROUND_OPACITY,
+  AUTH_ASSURANCE_BRIGHTNESS,
+  AUTH_ASSURANCE_GRADIENT,
   PublicAuthHero,
   PublicAuthShell,
 } from '../components/PublicAuthShell';
@@ -279,24 +282,27 @@ export const Register = () => {
       ? { title: 'Create your', accent: 'account.', copy: 'Pick a username and password.' }
       : assurancePhase === 'upsell' || assurancePhase === 'id' || assurancePhase === 'id_ok'
         ? {
-            title: 'Want a',
-            accent: 'Verified tick?',
-            copy: 'Optional ID. Age check already done.',
+            title: ADULT_ASSURANCE_COPY.upsellHeroTitle,
+            accent: ADULT_ASSURANCE_COPY.upsellHeroAccent,
+            copy: ADULT_ASSURANCE_COPY.upsellHeroSub,
           }
-        : assurancePhase === 'liveness' || assurancePhase === 'liveness_ok'
-          ? {
-              title: 'Quick',
-              accent: 'selfie.',
-              copy: 'Veriff handles the check.',
-            }
-          : {
-              title: 'Quick',
-              accent: 'selfie.',
-              copy: 'Confirms you are 18+ and real.',
-            };
+        : {
+            title: ADULT_ASSURANCE_COPY.introHeroTitle,
+            accent: ADULT_ASSURANCE_COPY.introHeroAccent,
+            copy: ADULT_ASSURANCE_COPY.introHeroSub,
+          };
+
+  /** Age-check / upsell: brighter RandomBackground (Al lock). No fixed photo. */
+  const assuranceBg = showAssurance
+    ? {
+        backgroundOpacity: AUTH_ASSURANCE_BACKGROUND_OPACITY,
+        backgroundBrightness: AUTH_ASSURANCE_BRIGHTNESS,
+        gradientOverlay: AUTH_ASSURANCE_GRADIENT,
+      }
+    : {};
 
   return (
-    <PublicAuthShell>
+    <PublicAuthShell {...assuranceBg}>
       <div lang="en-GB" className="contents">
       <PublicAuthHero
         title={assuranceHero.title}
@@ -304,8 +310,32 @@ export const Register = () => {
         copy={assuranceHero.copy}
       />
 
+      {showAssurance ? (
+        <AdultAssuranceFlow
+          fixtureAllowed={fixtureAllowed}
+          onPhaseChange={setAssurancePhase}
+          onCancel={() => {
+            setShowAssurance(false);
+            setAssurancePhase('intro');
+            setError('');
+          }}
+          onComplete={(result) => {
+            if ('underage' in result) {
+              navigate('/register/underage', { replace: true });
+              return;
+            }
+            if ('error' in result) {
+              setError(result.error);
+              setShowAssurance(false);
+              setAssurancePhase('intro');
+              return;
+            }
+            void completeRegistration(result.token);
+          }}
+        />
+      ) : (
       <div className={`${publicPanelClass} max-h-[min(70dvh,720px)] overflow-y-auto lg:max-h-none lg:overflow-visible`}>
-        {inviteCode && !showAssurance ? (
+        {inviteCode ? (
           <div className={publicInviteChipClass}>
             <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-[#E0A14A]">
               Invite code
@@ -314,30 +344,6 @@ export const Register = () => {
           </div>
         ) : null}
 
-        {showAssurance ? (
-          <AdultAssuranceFlow
-            fixtureAllowed={fixtureAllowed}
-            onPhaseChange={setAssurancePhase}
-            onCancel={() => {
-              setShowAssurance(false);
-              setAssurancePhase('intro');
-              setError('');
-            }}
-            onComplete={(result) => {
-              if ('underage' in result) {
-                navigate('/register/underage', { replace: true });
-                return;
-              }
-              if ('error' in result) {
-                setError(result.error);
-                setShowAssurance(false);
-                setAssurancePhase('intro');
-                return;
-              }
-              void completeRegistration(result.token);
-            }}
-          />
-        ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             <div className="flex flex-col gap-2.5">
               <label className={publicLabelClass} htmlFor="register-username">
@@ -566,8 +572,8 @@ export const Register = () => {
               </Link>
             </p>
           </form>
-        )}
       </div>
+      )}
       </div>
     </PublicAuthShell>
   );

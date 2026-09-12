@@ -5,8 +5,8 @@
  *
  * Capture is Veriff-hosted (sessionUrl / SDK) only. No custom camera UI.
  * Legal: liveness = age gate only. Verified tick = optional ID. Not OSA / all-ID-verified.
- * Storage line: MenRush does not keep copies of your ID (Veriff processes as processor).
- * No em dashes in face copy.
+ * Face lock (Al preferred mock): Quick selfie. / You are through. No em dashes.
+ * Storage face line (Al mock): MenRush never keeps copies of your ID.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { authAPI } from '../api/client';
@@ -15,26 +15,34 @@ import { VerifiedBadge } from './VerifiedBadge';
 import { launchVeriffInContext, type VeriffFrameHandle } from '../lib/veriff';
 import {
   publicErrorClass,
+  publicInfoBoxClass,
   publicMutedCopyClass,
   publicPrimaryButtonClass,
   publicSecondaryButtonClass,
 } from '../lib/publicStyles';
 
-/** Short face strings for Product / Al / Brand / Legal skim. */
+/** Short face strings for Product / Al / Brand / Legal skim. Al mock lock 2026-09-12. */
 export const ADULT_ASSURANCE_COPY = {
-  introTitle: 'Quick selfie',
-  introBody: 'Confirms you are 18+ and real.',
+  /** Hero left (PublicAuthHero title) */
+  introHeroTitle: 'Quick',
+  introHeroAccent: 'selfie.',
+  /** Period not em dash (Brand / social house style). */
+  introHeroSub: "Confirms you're 18+. Takes about ten seconds.",
+  introCardEyebrow: 'Powered by Veriff',
+  introCardBody: 'Optional ID later for a Verified tick',
+  introNoIdCopies: 'MenRush never keeps copies of your ID.',
   introHowTitle: 'How it works',
-  introBullet1: 'Veriff opens a short selfie check.',
-  introBullet2: 'Optional ID later for a Verified tick.',
-  introNoIdCopies: 'MenRush does not keep copies of your ID.',
-  introAgeNote: 'This is the age gate only. Verified is separate and optional.',
+  introHowBullet1: 'Veriff opens a short selfie check.',
+  introHowBullet2: 'This is the age gate only. Verified is separate and optional.',
   introCta: 'Continue with Veriff',
   livenessProgress: 'Opening Veriff…',
   livenessSuccess: '18+ confirmed. Age check done.',
-  upsellTitle: 'Want a Verified tick?',
-  upsellBody:
-    'Age check is done. Verified means optional ID only. MenRush does not keep copies of your ID.',
+  /** Upsell hero */
+  upsellHeroTitle: 'You are',
+  upsellHeroAccent: 'through.',
+  upsellHeroSub: 'Selfie confirmed via Veriff.',
+  upsellCardEyebrow: 'Want a Verified tick?',
+  upsellCardBody: 'Add ID with Veriff',
   upsellYes: 'Add ID with Veriff',
   upsellSkip: 'Skip',
   idProgress: 'Opening Veriff for ID…',
@@ -46,7 +54,12 @@ export const ADULT_ASSURANCE_COPY = {
   timeout: 'Age check timed out. Try again.',
   /** Register form helper (before gate opens). */
   registerHelper:
-    'Next: a Veriff selfie for 18+. Optional ID adds a Verified tick. MenRush does not keep copies of your ID.',
+    'Next: a Veriff selfie for 18+. Optional ID adds a Verified tick. MenRush never keeps copies of your ID.',
+  /** @deprecated kept for any leftover imports — prefer hero keys */
+  introTitle: 'Quick selfie',
+  introBody: "Confirms you're 18+. Takes about ten seconds.",
+  upsellTitle: 'You are through.',
+  upsellBody: 'Selfie confirmed via Veriff.',
 } as const;
 
 const ADULT_POLL_MS = 2000;
@@ -140,6 +153,29 @@ async function pollId(
   return { ok: false, idVerified: false, error: ADULT_ASSURANCE_COPY.timeout };
 }
 
+function AssuranceInfoCard({
+  eyebrow,
+  body,
+  footer,
+}: {
+  eyebrow: string;
+  body: string;
+  footer: string;
+}) {
+  return (
+    <div
+      className={`${publicInfoBoxClass} flex flex-col gap-2.5 text-center`}
+      data-testid="adult-assurance-info-card"
+    >
+      <p className="m-0 text-[12px] font-extrabold uppercase tracking-[0.12em] text-[#E0A14A]">
+        {eyebrow}
+      </p>
+      <p className="m-0 text-[17px] font-bold leading-snug text-[#F0E0C0]">{body}</p>
+      <p className="m-0 text-[13px] leading-[1.5] text-[#A89070]">{footer}</p>
+    </div>
+  );
+}
+
 export function AdultAssuranceFlow({
   fixtureAllowed,
   onComplete,
@@ -150,6 +186,7 @@ export function AdultAssuranceFlow({
   const [error, setError] = useState('');
   const [token, setToken] = useState<string | null>(null);
   const [livenessSessionId, setLivenessSessionId] = useState<string | null>(null);
+  const [howOpen, setHowOpen] = useState(false);
   const frameRef = useRef<VeriffFrameHandle | null>(null);
   const cancelRef = useRef({ cancelled: false });
 
@@ -297,36 +334,25 @@ export function AdultAssuranceFlow({
 
   return (
     <div
-      className="flex flex-col gap-5"
+      className="mt-[34px] flex flex-col gap-5"
       data-testid="adult-assurance-flow"
       data-phase={phase}
     >
       {phase === 'intro' ? (
         <>
-          <h2
-            className="m-0 text-[22px] font-extrabold tracking-tight text-[#F0E0C0]"
-            data-testid="adult-assurance-intro-title"
-          >
-            {ADULT_ASSURANCE_COPY.introTitle}
-          </h2>
-          <p className={`${publicMutedCopyClass} m-0`} data-testid="adult-assurance-intro-body">
-            {ADULT_ASSURANCE_COPY.introBody}
-          </p>
-          <div className="flex flex-col gap-2" data-testid="adult-assurance-how">
-            <p className="m-0 text-[13px] font-extrabold uppercase tracking-[0.08em] text-[#E0A14A]">
-              {ADULT_ASSURANCE_COPY.introHowTitle}
-            </p>
-            <ul className="m-0 list-disc space-y-1.5 pl-5 text-[15px] leading-[1.55] text-[#A89070]">
-              <li>{ADULT_ASSURANCE_COPY.introBullet1}</li>
-              <li>{ADULT_ASSURANCE_COPY.introBullet2}</li>
-            </ul>
-            <p className={`${publicMutedCopyClass} m-0`} data-testid="adult-assurance-no-id-copies">
-              {ADULT_ASSURANCE_COPY.introNoIdCopies}
-            </p>
-            <p className={`${publicMutedCopyClass} m-0`} data-testid="adult-assurance-age-note">
-              {ADULT_ASSURANCE_COPY.introAgeNote}
-            </p>
-          </div>
+          <AssuranceInfoCard
+            eyebrow={ADULT_ASSURANCE_COPY.introCardEyebrow}
+            body={ADULT_ASSURANCE_COPY.introCardBody}
+            footer={ADULT_ASSURANCE_COPY.introNoIdCopies}
+          />
+          {howOpen ? (
+            <div className="flex flex-col gap-2" data-testid="adult-assurance-how">
+              <ul className="m-0 list-disc space-y-1.5 pl-5 text-[15px] leading-[1.55] text-[#A89070]">
+                <li>{ADULT_ASSURANCE_COPY.introHowBullet1}</li>
+                <li>{ADULT_ASSURANCE_COPY.introHowBullet2}</li>
+              </ul>
+            </div>
+          ) : null}
           {error ? <p className={publicErrorClass}>{error}</p> : null}
           <button
             type="button"
@@ -336,7 +362,20 @@ export function AdultAssuranceFlow({
           >
             {ADULT_ASSURANCE_COPY.introCta}
           </button>
-          <button type="button" className={publicSecondaryButtonClass} onClick={handleCancel}>
+          <button
+            type="button"
+            className="w-full text-center text-[15px] font-bold text-[#C4832A] transition-colors hover:text-[#E0A14A]"
+            onClick={() => setHowOpen((v) => !v)}
+            data-testid="adult-assurance-how-link"
+            aria-expanded={howOpen}
+          >
+            {ADULT_ASSURANCE_COPY.introHowTitle}
+          </button>
+          <button
+            type="button"
+            className="w-full text-center text-[15px] font-semibold text-[#A89070] transition-colors hover:text-[#C4832A]"
+            onClick={handleCancel}
+          >
             Back
           </button>
         </>
@@ -359,15 +398,11 @@ export function AdultAssuranceFlow({
 
       {phase === 'upsell' ? (
         <>
-          <h2
-            className="m-0 text-[22px] font-extrabold tracking-tight text-[#F0E0C0]"
-            data-testid="adult-assurance-upsell-title"
-          >
-            {ADULT_ASSURANCE_COPY.upsellTitle}
-          </h2>
-          <p className={`${publicMutedCopyClass} m-0`} data-testid="adult-assurance-upsell-body">
-            {ADULT_ASSURANCE_COPY.upsellBody}
-          </p>
+          <AssuranceInfoCard
+            eyebrow={ADULT_ASSURANCE_COPY.upsellCardEyebrow}
+            body={ADULT_ASSURANCE_COPY.upsellCardBody}
+            footer={ADULT_ASSURANCE_COPY.introNoIdCopies}
+          />
           {error ? <p className={publicErrorClass}>{error}</p> : null}
           <button
             type="button"
