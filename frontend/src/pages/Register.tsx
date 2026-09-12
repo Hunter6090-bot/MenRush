@@ -278,6 +278,7 @@ export const Register = () => {
 
   return (
     <PublicAuthShell>
+      <div lang="en-GB" className="contents">
       <PublicAuthHero
         title={assuranceHero.title}
         accent={assuranceHero.accent}
@@ -537,6 +538,7 @@ export const Register = () => {
             </p>
           </form>
         )}
+      </div>
       </div>
     </PublicAuthShell>
   );
