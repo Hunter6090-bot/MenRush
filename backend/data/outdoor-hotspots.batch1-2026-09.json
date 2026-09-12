@@ -1,0 +1,252 @@
+{
+  "_meta": {
+    "batch": "Batch 1 outdoor Hot Spots (2026-09-12)",
+    "legal": "Al Zain override of Legal RED for Batch 1 seed/map pins only. Brand/Studio density claims still held. No Scene chip changes. No Tropics (already live commercial).",
+    "copy": "Descriptions must be exactly Public park / Woodland / Car park. No Squirt, cruising, PSE, or toilet how-to.",
+    "geocode": "Nominatim OpenStreetMap and Overpass named POIs only. Never invent lat/lng. Public toilets skipped.",
+    "skipped": [],
+    "source": "ops-curated"
+  },
+  "spots": [
+    {
+      "name": "Whiteley Parkway Woodland",
+      "city": "Fareham",
+      "category": "parks-trails",
+      "description": "Woodland",
+      "lat": 50.8899825,
+      "lng": -1.2410111,
+      "external_id": "ops-curated-batch1-2026-09:whiteley-parkway-woodland",
+      "geocode_note": "OSM relation Whiteley Pastures (natural=wood) at Whiteley Parkway area"
+    },
+    {
+      "name": "Kites Croft",
+      "city": "Fareham",
+      "category": "parks-trails",
+      "description": "Woodland",
+      "lat": 50.8576398,
+      "lng": -1.2489733,
+      "external_id": "ops-curated-batch1-2026-09:kites-croft",
+      "geocode_note": "OSM relation Kite's Croft (natural=wood), Fareham"
+    },
+    {
+      "name": "Botley Woods",
+      "city": "Fareham",
+      "category": "parks-trails",
+      "description": "Woodland",
+      "lat": 50.8841506,
+      "lng": -1.2222867,
+      "external_id": "ops-curated-batch1-2026-09:botley-woods",
+      "geocode_note": "Nominatim Botley Wood natural/wood"
+    },
+    {
+      "name": "Botley Road",
+      "city": "Southampton",
+      "category": "open-spaces",
+      "description": "Public park",
+      "lat": 50.9016632,
+      "lng": -1.3208246,
+      "external_id": "ops-curated-batch1-2026-09:botley-road",
+      "geocode_note": "Nominatim Botley Road, Hedge End / Bursledon"
+    },
+    {
+      "name": "Thatchers Copse",
+      "city": "Fareham",
+      "category": "parks-trails",
+      "description": "Woodland",
+      "lat": 50.828658,
+      "lng": -1.2491656,
+      "external_id": "ops-curated-batch1-2026-09:thatchers-copse",
+      "geocode_note": "Nominatim Thatcher's Copse natural/wood, Titchfield"
+    },
+    {
+      "name": "Miller's Pond",
+      "city": "Southampton",
+      "category": "open-spaces",
+      "description": "Public park",
+      "lat": 50.8966234,
+      "lng": -1.3611664,
+      "external_id": "ops-curated-batch1-2026-09:millers-pond",
+      "geocode_note": "Nominatim Miller's Pond, Sholing"
+    },
+    {
+      "name": "Southampton Common",
+      "city": "Southampton",
+      "category": "open-spaces",
+      "description": "Public park",
+      "lat": 50.9283066,
+      "lng": -1.4103651,
+      "external_id": "ops-curated-batch1-2026-09:southampton-common",
+      "geocode_note": "Nominatim Southampton Common leisure/park; idempotent with prior curated row"
+    },
+    {
+      "name": "Mountbatten Way Footpath",
+      "city": "Southampton",
+      "category": "open-spaces",
+      "description": "Public park",
+      "lat": 50.9068363,
+      "lng": -1.4171782,
+      "external_id": "ops-curated-batch1-2026-09:mountbatten-way-footpath",
+      "geocode_note": "Nominatim Mountbatten Way, Southampton"
+    },
+    {
+      "name": "Fort Widley",
+      "city": "Portsmouth",
+      "category": "open-spaces",
+      "description": "Public park",
+      "lat": 50.8543946,
+      "lng": -1.0683243,
+      "external_id": "ops-curated-batch1-2026-09:fort-widley",
+      "geocode_note": "Nominatim Fort Widley historic/fort"
+    },
+    {
+      "name": "Hilsea Lines",
+      "city": "Portsmouth",
+      "category": "open-spaces",
+      "description": "Public park",
+      "lat": 50.8322367,
+      "lng": -1.053074,
+      "external_id": "ops-curated-batch1-2026-09:hilsea-lines",
+      "geocode_note": "Nominatim Hilsea Lines; idempotent with prior curated row"
+    },
+    {
+      "name": "Billys lake car park",
+      "city": "Waterlooville",
+      "category": "parking",
+      "description": "Car park",
+      "lat": 50.8961194,
+      "lng": -1.0441858,
+      "external_id": "ops-curated-batch1-2026-09:billys-lake-car-park",
+      "geocode_note": "Nominatim Billy's Lake, Denmead (named water body anchoring the car park)"
+    },
+    {
+      "name": "Eastney Beach Huts",
+      "city": "Portsmouth",
+      "category": "open-spaces",
+      "description": "Public park",
+      "lat": 50.7865721,
+      "lng": -1.0331823,
+      "external_id": "ops-curated-batch1-2026-09:eastney-beach-huts",
+      "geocode_note": "Nominatim Eastney Beach natural/beach; toilets amenity explicitly skipped"
+    },
+    {
+      "name": "Rock Gardens",
+      "city": "Portsmouth",
+      "category": "parks-trails",
+      "description": "Public park",
+      "lat": 50.778863,
+      "lng": -1.083239,
+      "external_id": "ops-curated-batch1-2026-09:rock-gardens",
+      "geocode_note": "Nominatim Southsea Rock Gardens leisure/garden"
+    },
+    {
+      "name": "Southsea Golf Social Club Carpark & Woods",
+      "city": "Portsmouth",
+      "category": "parking",
+      "description": "Car park",
+      "lat": 50.8147654,
+      "lng": -1.0452395,
+      "external_id": "ops-curated-batch1-2026-09:southsea-golf-carpark-woods",
+      "geocode_note": "OSM parking amenity beside Great Salterns Golf Course / Portsmouth Golf Centre"
+    },
+    {
+      "name": "Firestone copse",
+      "city": "Ryde",
+      "category": "parks-trails",
+      "description": "Woodland",
+      "lat": 50.7168647,
+      "lng": -1.2113032,
+      "external_id": "ops-curated-batch1-2026-09:firestone-copse",
+      "geocode_note": "Nominatim Firestone Copse natural/wood, Isle of Wight"
+    },
+    {
+      "name": "Parkhurst Forest",
+      "city": "Newport",
+      "category": "parks-trails",
+      "description": "Woodland",
+      "lat": 50.7170413,
+      "lng": -1.3325544,
+      "external_id": "ops-curated-batch1-2026-09:parkhurst-forest",
+      "geocode_note": "Nominatim Parkhurst Forest landuse/forest"
+    },
+    {
+      "name": "St. Catherine's Hill",
+      "city": "Winchester",
+      "category": "open-spaces",
+      "description": "Public park",
+      "lat": 51.0463148,
+      "lng": -1.3107596,
+      "external_id": "ops-curated-batch1-2026-09:st-catherines-hill",
+      "geocode_note": "Nominatim St. Catherine's Hill natural/peak; may match prior curated row"
+    },
+    {
+      "name": "Whiteshute Ridge",
+      "city": "Winchester",
+      "category": "open-spaces",
+      "description": "Public park",
+      "lat": 51.0468352,
+      "lng": -1.3332291,
+      "external_id": "ops-curated-batch1-2026-09:whiteshute-ridge",
+      "geocode_note": "Nominatim Whiteshute Ridge natural/grassland"
+    },
+    {
+      "name": "Havant Thicket",
+      "city": "Havant",
+      "category": "parks-trails",
+      "description": "Woodland",
+      "lat": 50.8914944,
+      "lng": -0.9848104,
+      "external_id": "ops-curated-batch1-2026-09:havant-thicket",
+      "geocode_note": "Nominatim Havant Thicket natural/wood"
+    },
+    {
+      "name": "Sarum Road Woods",
+      "city": "Winchester",
+      "category": "parks-trails",
+      "description": "Woodland",
+      "lat": 51.0600652,
+      "lng": -1.3443905,
+      "external_id": "ops-curated-batch1-2026-09:sarum-road-woods",
+      "geocode_note": "OSM natural=wood polygon on Sarum Road, Sleepers' Hill, Winchester"
+    },
+    {
+      "name": "St Georges Down",
+      "city": "Newport",
+      "category": "open-spaces",
+      "description": "Public park",
+      "lat": 50.6766741,
+      "lng": -1.2632784,
+      "external_id": "ops-curated-batch1-2026-09:st-georges-down",
+      "geocode_note": "Nominatim St George's Down natural/peak, Isle of Wight"
+    },
+    {
+      "name": "A337 Cadnam To Lyndhurst Road at Shave Wood",
+      "city": "Lyndhurst",
+      "category": "parks-trails",
+      "description": "Woodland",
+      "lat": 50.9096735,
+      "lng": -1.5865635,
+      "external_id": "ops-curated-batch1-2026-09:shave-wood-a337",
+      "geocode_note": "Nominatim Shave Wood natural/wood, New Forest (A337 Cadnam–Lyndhurst)"
+    },
+    {
+      "name": "Culver Downs",
+      "city": "Sandown",
+      "category": "open-spaces",
+      "description": "Public park",
+      "lat": 50.6663459,
+      "lng": -1.1007973,
+      "external_id": "ops-curated-batch1-2026-09:culver-downs",
+      "geocode_note": "Nominatim Culver Down Battery on Culver Down, Isle of Wight"
+    },
+    {
+      "name": "Milkham Car Park",
+      "city": "Ringwood",
+      "category": "parking",
+      "description": "Car park",
+      "lat": 50.8909039,
+      "lng": -1.6929424,
+      "external_id": "ops-curated-batch1-2026-09:milkham-car-park",
+      "geocode_note": "OSM way amenity=parking name=Milkham (Forestry England), New Forest"
+    }
+  ]
+}
