@@ -16,8 +16,12 @@ describe('isNearbyPlaceholderFace', () => {
     expect(isNearbyPlaceholderFace(null, undefined)).toBe(true);
   });
 
-  it('treats loading / fallback / generic avatars as placeholders', () => {
-    expect(isNearbyPlaceholderFace('/uploads/x.jpg', 'loading')).toBe(true);
+  it('does not treat a loading /uploads photo as Brand empty (media lock)', () => {
+    expect(isNearbyPlaceholderFace('/uploads/x.jpg', 'loading')).toBe(false);
+  });
+
+  it('treats loading without a real upload, fallback, and generic avatars as placeholders', () => {
+    expect(isNearbyPlaceholderFace(undefined, 'loading')).toBe(true);
     expect(isNearbyPlaceholderFace(undefined, 'fallback')).toBe(true);
     expect(isNearbyPlaceholderFace('/avatars/generic/02.svg', 'ready')).toBe(true);
   });

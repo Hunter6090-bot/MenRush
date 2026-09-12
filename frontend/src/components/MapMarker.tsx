@@ -65,6 +65,17 @@ function MapPhoto({
   size: number;
 }) {
   const { src, phase } = useGridPhotoSrc(photoUrl, age);
+  const trimmed = photoUrl?.trim() || '';
+  if (phase === 'loading' && trimmed.startsWith('/uploads/')) {
+    return (
+      <div
+        className="h-full w-full rounded-full bg-[var(--bg-elevated)]"
+        data-testid="map-marker-photo-pending"
+        data-photo-phase={phase}
+        aria-hidden
+      />
+    );
+  }
   if (isNearbyPlaceholderFace(photoUrl, phase) || !src) {
     // Faded official medallion — same empty face as Nearby Grid (Brand).
     return <FadedBrandFace variant="pin" size={size} label={name} />;

@@ -26,8 +26,10 @@ export function isNearbyPlaceholderFace(
   photoUrl?: string | null,
   phase?: GridPhotoPhase,
 ): boolean {
-  if (phase === 'loading' || phase === 'empty' || phase === 'fallback') return true;
   const trimmed = photoUrl?.trim() || '';
+  // Real user media still loading — not an empty Brand face (media lock).
+  if (phase === 'loading' && trimmed.startsWith('/uploads/')) return false;
+  if (phase === 'loading' || phase === 'empty' || phase === 'fallback') return true;
   if (!trimmed) return true;
   // Profile-setup generic SVGs and other /avatars/* are placeholders, not user media.
   if (trimmed.startsWith('/avatars/')) return true;
