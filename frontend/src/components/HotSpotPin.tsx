@@ -166,6 +166,15 @@ export function HotSpotPin({ spot, size = 48 }: HotSpotPinProps) {
   );
 }
 
+/**
+ * Build the DOM node Mapbox mounts as a Marker.
+ *
+ * Critical: do NOT set `position` on this root. Mapbox GL requires
+ * `.mapboxgl-marker { position: absolute }` so pins stay at true lng/lat.
+ * `position: relative` on the marker root overrides that and forces pins into
+ * document-flow vertical stacks when zoomed out (Mapbox #4048 / #7258).
+ * Absolute children (badge, Cruise label) live on the inner `.hotspot-pin`.
+ */
 export function createHotSpotPinElement(
   spot: HotSpotPinData,
   _onTap: () => void,
@@ -175,7 +184,6 @@ export function createHotSpotPinElement(
   const occupied = spot.live_count_exact > 0;
   el.style.width = `${Math.max(size, occupied ? 104 : 72)}px`;
   el.style.height = `${size + 28}px`;
-  el.style.position = 'relative';
   el.style.cursor = 'pointer';
   el.style.zIndex = occupied ? '3' : '2';
   el.style.display = 'flex';

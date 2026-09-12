@@ -72,6 +72,7 @@ export const HotSpots = () => {
       style: mapboxStyleForTheme(resolvedThemeNow()),
       center: [lng, lat],
       zoom: 11,
+      projection: 'mercator',
       attributionControl: false,
     });
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');

@@ -53,6 +53,21 @@ describe('hitTestMapPins', () => {
       ])?.id,
     ).toBe('b');
   });
+
+  it('prefers overlap at true coordinates over any screen-space fan', () => {
+    // Two pins at the same projected pixel must both remain hittable by proximity —
+    // we never relocate them into a vertical column for hit-testing.
+    const map = fakeMap({
+      '-0.1,51.5': { x: 150, y: 200 },
+      '-0.11,51.51': { x: 150, y: 200 },
+    });
+    const hit = hitTestMapPins(map, { x: 150, y: 200 }, [
+      { kind: 'hotspot', id: 'a', lng: -0.1, lat: 51.5, radiusPx: 40 },
+      { kind: 'person', id: 'b', lng: -0.11, lat: 51.51, radiusPx: 28 },
+    ]);
+    expect(hit).not.toBeNull();
+    expect(hit!.distancePx).toBe(0);
+  });
 });
 
 describe('pin hit radii', () => {

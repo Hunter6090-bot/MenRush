@@ -83,6 +83,16 @@ select {
   touch-action: none;
 }
 
+/* Mapbox HTML markers must stay absolutely positioned at true lng/lat.
+   Overriding to relative/static stacks pins in a vertical column when zoomed out. */
+.discover-map-surface .mapboxgl-marker,
+.hotspots-map-surface .mapboxgl-marker,
+[data-testid='hotspots-map'] .mapboxgl-marker {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+}
+
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus {
