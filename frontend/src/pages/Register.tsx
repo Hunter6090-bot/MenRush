@@ -32,26 +32,21 @@ import {
   publicPanelClass,
   publicPrimaryButtonClass,
 } from '../lib/publicStyles';
+import {
+  ageFromDateOfBirth,
+  formatUkDobInput,
+  parseUkDateOfBirth,
+} from '../lib/age';
 
 interface FormState {
   displayName: string;
   email: string;
+  /** Display value in en-GB `dd/mm/yyyy` (not ISO). */
   dob: string;
   password: string;
   ageConsent: boolean;
   idConsent: boolean;
   legalConsent: boolean;
-}
-
-function calcAge(dob: string): number | null {
-  if (!dob) return null;
-  const d = new Date(dob);
-  if (isNaN(d.getTime())) return null;
-  const today = new Date();
-  let age = today.getFullYear() - d.getFullYear();
-  const m = today.getMonth() - d.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
-  return age;
 }
 
 function passwordScore(pw: string): 0 | 1 | 2 | 3 {
@@ -165,14 +160,34 @@ export const Register = () => {
       }) as FormState);
     };
 
+  const onDobChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setError('');
+    setForm((prev) => ({ ...prev, dob: formatUkDobInput(e.target.value) }));
+  };
+
   const helperClass = 'text-[13px] leading-[1.55] text-[var(--cream-muted)]';
 
-  const age = useMemo(() => calcAge(form.dob), [form.dob]);
+  const dobIso = useMemo(() => parseUkDateOfBirth(form.dob), [form.dob]);
+  const age = useMemo(
+    () => (dobIso ? ageFromDateOfBirth(dobIso) : null),
+    [dobIso],
+  );
   const pwScore = useMemo(() => passwordScore(form.password), [form.password]);
 
   const completeRegistration = async (adultToken?: string) => {
     setLoading(true);
     try {
+      const isoDob = parseUkDateOfBirth(form.dob);
+      const nextAge = isoDob ? ageFromDateOfBirth(isoDob) : null;
+      if (!isoDob || nextAge == null || nextAge < 18) {
+        setError(
+          !isoDob
+            ? 'Enter your date of birth as dd/mm/yyyy.'
+            : 'You must be 18 or older to sign up.',
+        );
+        setLoading(false);
+        return;
+      }
       const trimmedPromo = promoCode.trim();
       const trimmedReferral = referralCode.trim();
       if (trimmedPromo) {
@@ -181,8 +196,8 @@ export const Register = () => {
       const res = await authAPI.register({
         name: form.displayName,
         email: form.email,
-        age: age ?? 0,
-        date_of_birth: form.dob,
+        age: nextAge,
+        date_of_birth: isoDob,
         password: form.password,
         ...(inviteCode ? { invite_code: inviteCode } : {}),
         ...(trimmedPromo ? { promo_code: trimmedPromo } : {}),
@@ -219,6 +234,10 @@ export const Register = () => {
 
     if (!/^[A-Za-z0-9_-]{2,24}$/.test(form.displayName)) {
       setError('Display name must be 2–24 chars: letters, numbers, _ or -.');
+      return;
+    }
+    if (!dobIso) {
+      setError('Enter your date of birth as dd/mm/yyyy.');
       return;
     }
     if (age == null || age < 18) {
@@ -362,16 +381,26 @@ export const Register = () => {
               </label>
               <input
                 id="register-dob"
-                type="date"
+                type="text"
+                inputMode="numeric"
+                autoComplete="bday"
+                placeholder="dd/mm/yyyy"
                 value={form.dob}
-                onChange={setField('dob')}
+                onChange={onDobChange}
                 required
+                maxLength={10}
+                pattern="\d{1,2}/\d{1,2}/\d{4}"
+                title="Enter date as dd/mm/yyyy"
+                aria-describedby="register-dob-format"
                 className={publicInputClass}
-                lang="en-GB"
                 data-testid="register-dob"
               />
-              <p className={helperClass} data-testid="register-dob-format">
-                Use dd/mm/yyyy. You must be 18 or older.
+              <p
+                id="register-dob-format"
+                className={helperClass}
+                data-testid="register-dob-format"
+              >
+                Format: dd/mm/yyyy. You must be 18 or older.
               </p>
             </div>
 
