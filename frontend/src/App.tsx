@@ -269,10 +269,8 @@ function AppShell() {
           <Route path="/safety" element={<Safety />} />
           <Route path="/guidelines" element={<CommunityGuidelines />} />
           <Route path="/help" element={<Help />} />
-          {/* Split multi-segment splat for v7_relativeSplatPath (absolute Navigate — no relative link updates). */}
-          <Route path="/verify">
-            <Route path="*" element={<ProtectedRoute><Navigate to="/profile" replace /></ProtectedRoute>} />
-          </Route>
+          {/* Absolute Navigate only — no relative links under this splat, so keep path+/splat. */}
+          <Route path="/verify/*" element={<ProtectedRoute><Navigate to="/profile" replace /></ProtectedRoute>} />
           <Route
             path="/premium"
             element={
