@@ -1,5 +1,7 @@
 /**
- * MenRush brand mark — static two-profile bronze medallion (master: brand/menrush-logo.png).
+ * MenRush brand mark — official bronze two-profile medallion only
+ * (master: public/brand/menrush-logo.png → BRAND_MEDALLION).
+ * Never invent a mark, never draw MENRUSH as type, never CSS letter-in-circle.
  */
 import { BRAND_MEDALLION, BRAND_MEDALLION_SMALL } from '../lib/brand';
 
@@ -34,7 +36,7 @@ export function BrandMark({ size = 'lg', className = '' }: BrandMarkProps) {
       <img
         src={sizes.src}
         alt="MenRush"
-        className={`${sizes.box} rounded-full object-cover`}
+        className={`${sizes.box} object-contain`}
         draggable={false}
       />
     </div>
