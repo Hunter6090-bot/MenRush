@@ -19,7 +19,7 @@ import {
 } from '../src/media-store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const LOGO = 'https://menrush.com/menrush-logo.png';
+const LOGO = 'https://menrush.com/brand/medallion-transparent.png';
 const DRAFT_ID = '__test_owner_photo_https__';
 
 function assert(cond, msg) {

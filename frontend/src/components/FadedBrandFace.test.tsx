@@ -41,8 +41,8 @@ describe('FadedBrandFace', () => {
     const img = face.querySelector('img');
     expect(img).not.toBeNull();
     expect(BRAND_MEDALLION_CUTOUT).toBe('/brand/medallion-transparent.png');
+    expect(BRAND_MEDALLION).toBe('/brand/medallion-transparent.png');
     expect(img!.getAttribute('src')).toBe('/brand/medallion-transparent.png');
-    expect(img!.getAttribute('src')).not.toBe(BRAND_MEDALLION);
     expect(img!.style.opacity).toBe(String(FADED_BRAND_FACE_OPACITY_TILE));
     expect(FADED_BRAND_FACE_OPACITY_TILE).toBeGreaterThan(0.42);
     expect(img!.className).toMatch(/object-cover/);
