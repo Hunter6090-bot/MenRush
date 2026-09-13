@@ -83,6 +83,10 @@ import {
   shouldShowHotSpotLabel,
 } from '../lib/mapPinOverlap';
 import { HOT_SPOTS_CHIP_LABEL, HOT_SPOTS_MAP_BANNER } from '../lib/cruiseCopy';
+import {
+  dismissHotSpotsMapBanner,
+  isHotSpotsMapBannerDismissed,
+} from '../lib/hotSpotsMapBanner';
 
 /** Map panel: swipe up to hide, swipe down to show, expand for large map. */
 type MapPanelMode = 'hidden' | 'default' | 'expanded';
@@ -118,7 +122,8 @@ const mapChromeBtnClass =
 
 /**
  * Shared map chrome — one control cluster per corner.
- * TL: radius · TR: layers + expand · BL: Chat FAB (dock) · BR: Mapbox zoom+locate.
+ * TL: labelled search-radius stepper · TR: layers + expand · BL: Chat FAB (dock).
+ * BR: Mapbox locate (+ zoom on desktop only; phone uses pinch).
  * Nearby/live count lives in the list pill only (no map status card).
  */
 function MapFloatingChrome({
@@ -144,6 +149,9 @@ function MapFloatingChrome({
   onTogglePeopleLayer: () => void;
   onToggleHotSpotsLayer: () => void;
 }) {
+  // One-time Legal quiet-face dismiss — same localStorage pattern as match coach.
+  const [mapBannerDismissed, setMapBannerDismissed] = useState(isHotSpotsMapBannerDismissed);
+
   return (
     <>
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 p-3">
@@ -210,22 +218,40 @@ function MapFloatingChrome({
           ) : null}
         </div>
       </div>
-      {hotSpotsLayerOn ? (
+      {hotSpotsLayerOn && !mapBannerDismissed ? (
         <div
           className="pointer-events-none absolute inset-x-0 top-14 z-10 flex justify-center px-3"
           data-testid="hotspots-map-helper"
         >
-          <p
-            className="max-w-sm rounded-lg border px-2.5 py-1 text-center text-[9px] font-semibold leading-snug tracking-wide"
+          <div
+            className="pointer-events-auto relative max-w-sm rounded-lg border py-1 pl-2.5 pr-6"
             style={{
               background: 'rgba(13,10,6,0.82)',
-              color: 'rgba(240,224,192,0.82)',
               borderColor: 'rgba(196,131,42,0.28)',
             }}
-            data-testid="hotspots-map-helper-copy"
+            role="status"
           >
-            {HOT_SPOTS_MAP_BANNER}
-          </p>
+            <p
+              className="text-center text-[9px] font-semibold leading-snug tracking-wide"
+              style={{ color: 'rgba(240,224,192,0.82)' }}
+              data-testid="hotspots-map-helper-copy"
+            >
+              {HOT_SPOTS_MAP_BANNER}
+            </p>
+            <button
+              type="button"
+              data-testid="hotspots-map-helper-dismiss"
+              aria-label="Dismiss map disclaimer"
+              title="Dismiss"
+              onClick={() => {
+                setMapBannerDismissed(true);
+                dismissHotSpotsMapBanner();
+              }}
+              className="absolute -right-0.5 -top-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[15px] leading-none text-[rgba(240,224,192,0.85)] transition-colors hover:bg-[rgba(196,131,42,0.18)] hover:text-[rgba(240,224,192,1)]"
+            >
+              ×
+            </button>
+          </div>
         </div>
       ) : null}
     </>
@@ -306,7 +332,7 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
     .discover-map-surface .mapboxgl-canvas.mapboxgl-interactive:active {
       cursor: grabbing;
     }
-    /* BR cluster only: Mapbox zoom + geolocate. Chat lives BL — never overlaps. */
+    /* BR cluster: Mapbox geolocate (+ zoom on desktop). Chat lives BL — never overlaps. */
     .discover-map-surface .mapboxgl-ctrl-bottom-right {
       bottom: 12px;
       right: 12px;
@@ -325,6 +351,17 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
     .discover-map-surface .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-group,
     .discover-map-surface .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-geolocate {
       box-shadow: 0 2px 8px rgba(0,0,0,0.28);
+    }
+    /* Al LOCK: phone pinch is enough — hide Mapbox ± zoom below lg; keep geolocate.
+       CSS (not init-time matchMedia) so resize/orientation never leaves orphan ±. */
+    @media (max-width: 1023px) {
+      .discover-map-surface .mapboxgl-ctrl-zoom-in,
+      .discover-map-surface .mapboxgl-ctrl-zoom-out {
+        display: none !important;
+      }
+      .discover-map-surface .mapboxgl-ctrl-group:has(.mapboxgl-ctrl-zoom-in) {
+        display: none !important;
+      }
     }
     .discover-map-surface[data-map-mode='expanded'] .mapboxgl-ctrl-bottom-right,
     .discover-map-surface[data-map-expanded='1'] .mapboxgl-ctrl-bottom-right {
@@ -1326,6 +1363,8 @@ export const Discover = () => {
         cooperativeGestures: false,
       });
       map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
+      // Always register Mapbox ±; CSS hides it below lg so phone pinch is enough
+      // and desktop→mobile resize does not leave orphan zoom chrome.
       map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right');
       const geolocate = new mapboxgl.GeolocateControl({
         positionOptions: { enableHighAccuracy: true, maximumAge: 15_000 },

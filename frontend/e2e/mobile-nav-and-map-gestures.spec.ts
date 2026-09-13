@@ -619,3 +619,62 @@ test('Grid Map toggle state survives expand shrink', async ({ browser }) => {
 
   await ctx.close();
 });
+
+// Al LOCK (fold into #261): top −/+ is search radius (not zoom); phone has no Mapbox ±.
+test('mobile map: labelled radius stepper, no Mapbox zoom ±, Legal disclaimer dismisses', async ({
+  browser,
+}) => {
+  const ctx = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+    geolocation: { latitude: 51.063, longitude: -1.308 },
+    permissions: ['geolocation'],
+  });
+  await authenticate(ctx, alice);
+  await ctx.addInitScript(() => {
+    localStorage.removeItem('menrush_hotspots_map_banner_dismissed');
+  });
+  const page = await ctx.newPage();
+  await page.goto('/discover');
+
+  const mapToggle = page.getByTestId('nearby-map-grid-toggle');
+  await expect(mapToggle).toBeVisible({ timeout: 20_000 });
+  if ((await mapToggle.innerText()).trim().toLowerCase() === 'map') {
+    await mapToggle.click();
+  }
+
+  const panel = page.getByTestId('discover-map-panel');
+  await expect(panel).toBeVisible({ timeout: 20_000 });
+
+  // Top −/+ = ProximitySlider search radius (pill may say "All" at max).
+  const radius = page.getByTestId('proximity-slider');
+  await expect(radius).toBeVisible();
+  await expect(radius).toContainText(/radius/i);
+  await expect(radius.getByLabel('Decrease search radius')).toBeVisible();
+  await expect(radius.getByLabel('Increase search radius')).toBeVisible();
+  await expect(page.getByTestId('map-radius-pill')).toBeVisible();
+
+  // Phone: Mapbox zoom ± removed (pinch enough). Geolocate may remain.
+  await expect(panel.locator('.mapboxgl-ctrl-zoom-in')).toHaveCount(0);
+  await expect(panel.locator('.mapboxgl-ctrl-zoom-out')).toHaveCount(0);
+
+  const hotSpotsToggle = page.getByTestId('layer-toggle-hotspots');
+  await expect(hotSpotsToggle).toBeVisible();
+  if ((await hotSpotsToggle.getAttribute('aria-pressed')) !== 'true') {
+    await hotSpotsToggle.click();
+  }
+
+  const helper = page.getByTestId('hotspots-map-helper');
+  await expect(helper).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('hotspots-map-helper-copy')).toHaveText(
+    'Map spots include independent venues and outdoor locations. 18+ only. Follow the law and any venue rules. MenRush does not run these places. No illegal activity. Consent first.',
+  );
+  await page.getByTestId('hotspots-map-helper-dismiss').click();
+  await expect(helper).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('menrush_hotspots_map_banner_dismissed'))).toBe(
+    '1',
+  );
+
+  await ctx.close();
+});
