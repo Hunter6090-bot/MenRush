@@ -333,10 +333,16 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
       right: 12px;
     }
     .discover-map-surface .mapboxgl-ctrl-bottom-left {
-      bottom: 12px;
-      left: 56px; /* clear Chat FAB on BL */
+      bottom: 8px;
+      left: 8px;
       z-index: 2;
-      max-width: calc(100% - 180px);
+      max-width: calc(100% - 120px);
+      /* Stay under Chat FAB (bottom-12 left-3) — never fight BL chrome. */
+      transform: translateY(0);
+    }
+    .discover-map-surface .mapboxgl-ctrl-attrib {
+      margin: 0 !important;
+      opacity: 0.75;
     }
     /* Height handle: only the chip captures input — never a full-width veil. */
     .discover-map-drag-handle {
