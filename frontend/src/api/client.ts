@@ -683,6 +683,10 @@ export const profileMetaAPI = {
     apiClient.get<{ enabled: boolean }>('/profile-meta/live-location-sharing'),
   setLiveLocationSharing: (enabled: boolean) =>
     apiClient.post<{ enabled: boolean }>('/profile-meta/live-location-sharing', { enabled }),
+  getMapPinFuzz: () =>
+    apiClient.get<{ map_pin_fuzz_m: number }>('/profile-meta/map-pin-fuzz'),
+  setMapPinFuzz: (map_pin_fuzz_m: number) =>
+    apiClient.post<{ map_pin_fuzz_m: number }>('/profile-meta/map-pin-fuzz', { map_pin_fuzz_m }),
 };
 
 // ── Albums / My Photos ────────────────────────────────────────────────────

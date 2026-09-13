@@ -14,7 +14,7 @@ Shared root cause on both platforms (not iOS-only): HTML markers above the GL ca
 | Self pin | Own face; tap → `/profile` |
 | Hot Spots / Cruise | Layer toggle, occupied vs empty pin, in-map sheet |
 | Live | Online presence count — never radius label |
-| Radius | Dashed circle + ProximitySlider |
+| Radius | Dashed circle + list "All" miles dropdown (search radius); map Discretion slider = pin fuzz |
 | Shell | Grid↔Map, expand/shrink, no parent rubber-band |
 
 ## Candidates

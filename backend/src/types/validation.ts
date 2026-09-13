@@ -287,6 +287,11 @@ export const LiveLocationSharingSchema = z.object({
   enabled: z.boolean(),
 });
 
+/** Max map-pin offset meters (discretion / location randomization). */
+export const MapPinFuzzSchema = z.object({
+  map_pin_fuzz_m: z.number().int().min(80).max(800),
+});
+
 export const PHOTO_VISIBILITIES = ['public', 'view_once', 'private'] as const;
 
 export const CreateAlbumSchema = z.object({

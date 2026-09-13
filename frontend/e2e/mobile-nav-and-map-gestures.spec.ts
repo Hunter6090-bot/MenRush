@@ -647,13 +647,13 @@ test('mobile map: labelled radius stepper, no Mapbox zoom ±, Legal disclaimer d
   const panel = page.getByTestId('discover-map-panel');
   await expect(panel).toBeVisible({ timeout: 20_000 });
 
-  // Top −/+ = ProximitySlider search radius (pill may say "All" at max).
-  const radius = page.getByTestId('proximity-slider');
-  await expect(radius).toBeVisible();
-  await expect(radius).toContainText(/radius/i);
-  await expect(radius.getByLabel('Decrease search radius')).toBeVisible();
-  await expect(radius.getByLabel('Increase search radius')).toBeVisible();
-  await expect(page.getByTestId('map-radius-pill')).toBeVisible();
+  // Top chrome = Discretion (pin randomization). Search radius = list "All" dropdown only.
+  const discretion = page.getByTestId('map-discretion-slider');
+  await expect(discretion).toBeVisible();
+  await expect(discretion).toContainText(/discretion/i);
+  await expect(page.getByTestId('map-discretion-range')).toBeVisible();
+  await expect(page.getByTestId('map-discretion-pill')).toBeVisible();
+  await expect(page.getByTestId('proximity-slider')).toHaveCount(0);
 
   // Phone: Mapbox zoom ± removed (pinch enough). Geolocate may remain.
   await expect(panel.locator('.mapboxgl-ctrl-zoom-in')).toHaveCount(0);
