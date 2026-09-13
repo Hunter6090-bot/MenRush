@@ -951,7 +951,8 @@ export const userService = {
   async getMatches(userId: string) {
     const result = await query(
       `SELECT
-        u.id, u.name, u.age, u.bio, u.photo_url, COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified, u.authenticity_status,
+        u.id, u.name, u.age, u.bio, u.photo_url, u.map_photo_url,
+        COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified, u.authenticity_status,
         p.online, p.last_seen,
         msg.message as last_message,
         msg.created_at as last_message_at,
@@ -976,7 +977,18 @@ export const userService = {
        ORDER BY p.online DESC, COALESCE(msg.created_at, p.last_seen) DESC`,
       [userId]
     );
-    return result.rows;
+    // Same face URL as Nearby thumbs: Map photo when set, else main (media lock).
+    return result.rows.map((row: Record<string, unknown>) => {
+      const { map_photo_url: mapPhoto, ...publicRow } = row;
+      return {
+        ...publicRow,
+        photo_url:
+          discoveryPhotoUrl(
+            mapPhoto as string | null | undefined,
+            publicRow.photo_url as string | null | undefined,
+          ) ?? publicRow.photo_url,
+      };
+    });
   },
 
   /** Outbound like targets — hydrate Match CTA after reload (ids only). */
@@ -999,7 +1011,8 @@ export const userService = {
   async getReceivedLikes(userId: string) {
     const result = await query(
       `SELECT
-         u.id, u.name, u.age, u.bio, u.photo_url, COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified, u.authenticity_status,
+         u.id, u.name, u.age, u.bio, u.photo_url, u.map_photo_url,
+         COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified, u.authenticity_status,
          p.online, p.last_seen,
          l.created_at AS liked_at
        FROM likes l
@@ -1019,7 +1032,18 @@ export const userService = {
        LIMIT 100`,
       [userId],
     );
-    return result.rows;
+    // Align with Nearby thumbs so map-only faces are not empty on Matches.
+    return result.rows.map((row: Record<string, unknown>) => {
+      const { map_photo_url: mapPhoto, ...publicRow } = row;
+      return {
+        ...publicRow,
+        photo_url:
+          discoveryPhotoUrl(
+            mapPhoto as string | null | undefined,
+            publicRow.photo_url as string | null | undefined,
+          ) ?? publicRow.photo_url,
+      };
+    });
   },
 
   async getReceivedLikesSummary(userId: string) {
@@ -1047,7 +1071,7 @@ export const userService = {
     let preview: Array<{ id: string; name: string; age: number; photo_url: string | null }> = [];
     if (count > 0) {
       const previewResult = await query(
-        `SELECT u.id, u.name, u.age, u.photo_url
+        `SELECT u.id, u.name, u.age, u.photo_url, u.map_photo_url
          FROM likes l
          JOIN users u ON u.id = l.liker_id
          WHERE l.liked_id = $1
@@ -1064,7 +1088,21 @@ export const userService = {
          LIMIT 3`,
         [userId],
       );
-      preview = previewResult.rows;
+      preview = previewResult.rows.map(
+        (row: {
+          id: string;
+          name: string;
+          age: number;
+          photo_url: string | null;
+          map_photo_url?: string | null;
+        }) => {
+          const { map_photo_url: mapPhoto, ...publicRow } = row;
+          return {
+            ...publicRow,
+            photo_url: discoveryPhotoUrl(mapPhoto, publicRow.photo_url) ?? publicRow.photo_url,
+          };
+        },
+      );
     }
 
     return { count, is_premium: isPremium, preview };
