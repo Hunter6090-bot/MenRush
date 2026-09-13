@@ -352,9 +352,14 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
     .discover-map-surface .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-geolocate {
       box-shadow: 0 2px 8px rgba(0,0,0,0.28);
     }
-    /* Al LOCK: phone pinch is enough — hide Mapbox ± zoom on mobile; keep locate. */
+    /* Al LOCK: phone pinch is enough — hide Mapbox ± zoom below lg; keep geolocate.
+       CSS (not init-time matchMedia) so resize/orientation never leaves orphan ±. */
     @media (max-width: 1023px) {
-      .discover-map-surface .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-group:has(.mapboxgl-ctrl-zoom-in) {
+      .discover-map-surface .mapboxgl-ctrl-zoom-in,
+      .discover-map-surface .mapboxgl-ctrl-zoom-out {
+        display: none !important;
+      }
+      .discover-map-surface .mapboxgl-ctrl-group:has(.mapboxgl-ctrl-zoom-in) {
         display: none !important;
       }
     }
@@ -1358,12 +1363,9 @@ export const Discover = () => {
         cooperativeGestures: false,
       });
       map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
-      // Al LOCK: phone pinch zoom is enough — Mapbox ± only on desktop (lg+).
-      const showDesktopZoom =
-        typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
-      if (showDesktopZoom) {
-        map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right');
-      }
+      // Always register Mapbox ±; CSS hides it below lg so phone pinch is enough
+      // and desktop→mobile resize does not leave orphan zoom chrome.
+      map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right');
       const geolocate = new mapboxgl.GeolocateControl({
         positionOptions: { enableHighAccuracy: true, maximumAge: 15_000 },
         trackUserLocation: false,
