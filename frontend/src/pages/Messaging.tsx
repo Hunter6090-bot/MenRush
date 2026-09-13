@@ -6,7 +6,6 @@ import { useSocket } from '../hooks/useSocket';
 import { useAuthStore, useCallStore, useUnreadStore } from '../hooks/store';
 import { UserAvatar } from '../components/UserAvatar';
 import { StatusBadge } from '../components/StatusBadge';
-import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
 import { PulseRing } from '../components/PulseRing';
 import { getPhotoUrl } from '../components/UserAvatar';
 import { FEATURES } from '../lib/featureFlags';
@@ -28,6 +27,7 @@ import { parseLocationPayload } from '../lib/locationMessage';
 import { profilePathForUser } from '../lib/profileLinks';
 import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 import { SoftBlurMedia, shouldBlurMedia } from '../components/SoftBlurMedia';
+import { ChatBubbleFace } from '../components/ChatBubbleFace';
 import { compressChatImageFile } from '../lib/imageUpload';
 import { armOverlayBack } from '../lib/overlayBack';
 import { CHAT_IMAGE_VIEWER_FRAME } from '../lib/chatImageViewerFrame';
@@ -3018,20 +3018,11 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                         className="block"
                         data-testid={`chat-bubble-avatar-${otherId}`}
                       >
-                        {otherUser?.photo_url ? (
-                          <div
-                            className="h-7 w-7 overflow-hidden rounded-full"
-                            style={{ border: '1px solid var(--border-default)', flexShrink: 0 }}
-                          >
-                            <img
-                              src={otherUser.photo_url}
-                              alt={otherUser.name}
-                              className="h-full w-full object-cover"
-                            />
-                          </div>
-                        ) : (
-                          <SilhouetteAvatar size={28} variant="chat" />
-                        )}
+                        <ChatBubbleFace
+                          userId={otherId}
+                          name={otherUser?.name}
+                          photoUrl={otherUser?.photo_url}
+                        />
                       </ProfilePhotoLink>
                     ) : null}
                   </div>
