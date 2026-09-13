@@ -83,6 +83,10 @@ import {
   shouldShowHotSpotLabel,
 } from '../lib/mapPinOverlap';
 import { HOT_SPOTS_CHIP_LABEL, HOT_SPOTS_MAP_BANNER } from '../lib/cruiseCopy';
+import {
+  dismissHotSpotsMapBanner,
+  isHotSpotsMapBannerDismissed,
+} from '../lib/hotSpotsMapBanner';
 
 /** Map panel: swipe up to hide, swipe down to show, expand for large map. */
 type MapPanelMode = 'hidden' | 'default' | 'expanded';
@@ -144,6 +148,9 @@ function MapFloatingChrome({
   onTogglePeopleLayer: () => void;
   onToggleHotSpotsLayer: () => void;
 }) {
+  // One-time Legal quiet-face dismiss — same localStorage pattern as match coach.
+  const [mapBannerDismissed, setMapBannerDismissed] = useState(isHotSpotsMapBannerDismissed);
+
   return (
     <>
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 p-3">
@@ -210,22 +217,40 @@ function MapFloatingChrome({
           ) : null}
         </div>
       </div>
-      {hotSpotsLayerOn ? (
+      {hotSpotsLayerOn && !mapBannerDismissed ? (
         <div
           className="pointer-events-none absolute inset-x-0 top-14 z-10 flex justify-center px-3"
           data-testid="hotspots-map-helper"
         >
-          <p
-            className="max-w-sm rounded-lg border px-2.5 py-1 text-center text-[9px] font-semibold leading-snug tracking-wide"
+          <div
+            className="pointer-events-auto relative max-w-sm rounded-lg border py-1 pl-2.5 pr-6"
             style={{
               background: 'rgba(13,10,6,0.82)',
-              color: 'rgba(240,224,192,0.82)',
               borderColor: 'rgba(196,131,42,0.28)',
             }}
-            data-testid="hotspots-map-helper-copy"
+            role="status"
           >
-            {HOT_SPOTS_MAP_BANNER}
-          </p>
+            <p
+              className="text-center text-[9px] font-semibold leading-snug tracking-wide"
+              style={{ color: 'rgba(240,224,192,0.82)' }}
+              data-testid="hotspots-map-helper-copy"
+            >
+              {HOT_SPOTS_MAP_BANNER}
+            </p>
+            <button
+              type="button"
+              data-testid="hotspots-map-helper-dismiss"
+              aria-label="Dismiss map disclaimer"
+              title="Dismiss"
+              onClick={() => {
+                setMapBannerDismissed(true);
+                dismissHotSpotsMapBanner();
+              }}
+              className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded text-[13px] leading-none text-[rgba(240,224,192,0.65)] transition-colors hover:text-[rgba(240,224,192,0.95)]"
+            >
+              ×
+            </button>
+          </div>
         </div>
       ) : null}
     </>

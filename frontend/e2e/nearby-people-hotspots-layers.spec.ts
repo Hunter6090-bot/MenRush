@@ -492,3 +492,54 @@ test('Free sees rounded 5+ Hot Spot count; Premium sees the exact count', async 
     await api.dispose();
   }
 });
+
+// Al order (post-#259): Legal quiet-face map disclaimer is dismissible once read,
+// persisted via localStorage so it does not nag every visit. Wording locked.
+const LEGAL_MAP_FACE =
+  'Map spots include independent venues and outdoor locations. 18+ only. Follow the law and any venue rules. MenRush does not run these places. No illegal activity. Consent first.';
+
+test('Hot Spots map Legal disclaimer dismisses with X and stays dismissed', async ({ browser }) => {
+  const ctx = await browser.newContext({ geolocation: FIXTURE_GEO, permissions: ['geolocation'] });
+  await authenticate(ctx, alice);
+  await ctx.addInitScript(() => {
+    localStorage.removeItem('menrush_hotspots_map_banner_dismissed');
+  });
+  const page = await ctx.newPage();
+  await page.goto('/discover');
+
+  const mapToggle = page.getByTestId('nearby-map-grid-toggle');
+  if (await mapToggle.isVisible().catch(() => false)) {
+    const label = await mapToggle.getAttribute('aria-label');
+    if (label && /Show Map/i.test(label)) {
+      await mapToggle.click();
+    }
+  }
+
+  const hotSpotsToggle = page.getByTestId('layer-toggle-hotspots');
+  await expect(hotSpotsToggle).toBeVisible({ timeout: 20_000 });
+  if ((await hotSpotsToggle.getAttribute('aria-pressed')) !== 'true') {
+    await hotSpotsToggle.click();
+  }
+
+  const helper = page.getByTestId('hotspots-map-helper');
+  await expect(helper).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('hotspots-map-helper-copy')).toHaveText(LEGAL_MAP_FACE);
+
+  await page.getByTestId('hotspots-map-helper-dismiss').click();
+  await expect(helper).toHaveCount(0);
+
+  const stored = await page.evaluate(() => localStorage.getItem('menrush_hotspots_map_banner_dismissed'));
+  expect(stored).toBe('1');
+
+  await page.reload();
+  if (await mapToggle.isVisible().catch(() => false)) {
+    const label = await mapToggle.getAttribute('aria-label');
+    if (label && /Show Map/i.test(label)) {
+      await mapToggle.click();
+    }
+  }
+  await expect(page.getByTestId('layer-toggle-hotspots')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('hotspots-map-helper')).toHaveCount(0);
+
+  await ctx.close();
+});
