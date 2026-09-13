@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { NearbyUser } from "./ProfileCard";
-import { SilhouetteAvatar } from "./SilhouetteAvatar";
 import { FadedBrandFace } from "./FadedBrandFace";
 import { PulsingAvatar } from "./PulsingAvatar";
 import { useResolvingPhotoSrc } from "./UserAvatar";
@@ -281,8 +280,11 @@ export function ProfileDrawer({
                 />
               </button>
             ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <SilhouetteAvatar size={148} variant="card" />
+              <div
+                className="h-full w-full"
+                data-testid={`drawer-hero-placeholder-${user.id}`}
+              >
+                <FadedBrandFace variant="tile" label={user.name} />
               </div>
             )}
             <div

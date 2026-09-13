@@ -86,6 +86,10 @@ const ProfileDrawerPreview = lazyNamed(
   () => import('./pages/ProfileDrawerPreview'),
   'ProfileDrawerPreview',
 );
+const EmptyFacesPreview = lazyNamed(
+  () => import('./pages/EmptyFacesPreview'),
+  'EmptyFacesPreview',
+);
 
 function RouteFallback() {
   return (
@@ -405,6 +409,7 @@ function AppShell() {
               <Route path="/dev/room-temp-gate" element={<RoomTempIdentityGatePreview />} />
               <Route path="/dev/room-inroom-dm" element={<RoomInRoomDmPreview />} />
               <Route path="/dev/profile-sheet" element={<ProfileDrawerPreview />} />
+              <Route path="/dev/empty-faces" element={<EmptyFacesPreview />} />
             </>
           ) : null}
           <Route path="*" element={<NotFound />} />

@@ -9,7 +9,7 @@ import {
 } from '../components/PublicAuthShell';
 import { UserAvatar } from '../components/UserAvatar';
 import { PulseRing } from '../components/PulseRing';
-import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
+import { FadedBrandFace } from '../components/FadedBrandFace';
 import {
   isGenericAvatarUrl,
   resolveGenericAvatarUrl,
@@ -473,7 +473,12 @@ export const ProfileSetup: React.FC = () => {
               />
 
               {photoChoice === 'generic' && !photoUrl && !genericPreviewUrl ? (
-                <SilhouetteAvatar size={96} variant="card" className="ring-4 ring-[rgba(240,224,192,0.2)]" />
+                <FadedBrandFace
+                  variant="profile"
+                  size={96}
+                  label={user?.name ?? 'You'}
+                  className="ring-4 ring-[rgba(240,224,192,0.2)]"
+                />
               ) : photoChoice === 'generic' ? (
                 <UserAvatar
                   name={user?.name ?? 'You'}

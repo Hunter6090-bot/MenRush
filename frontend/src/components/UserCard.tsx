@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SilhouetteAvatar } from './SilhouetteAvatar';
+import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
 import { DistancePill } from './DistancePill';
 import { StatusBadge } from './StatusBadge';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
@@ -32,12 +32,12 @@ export const UserCard: React.FC<UserCardProps> = ({ user }) => {
         className="relative block h-56 bg-gradient-to-br from-nn-elevated to-nn-card"
         data-testid={`user-card-photo-${user.id}`}
       >
-        {user.photo_url ? (
-          <img src={user.photo_url} alt={user.name} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <SilhouetteAvatar size={120} variant="card" />
+        {isNearbyPlaceholderFace(user.photo_url) ? (
+          <div className="h-full w-full" data-testid={`user-card-photo-placeholder-${user.id}`}>
+            <FadedBrandFace variant="tile" label={user.name} />
           </div>
+        ) : (
+          <img src={user.photo_url} alt={user.name} className="w-full h-full object-cover" />
         )}
         <div className="pointer-events-none absolute top-3 right-3">
           <StatusBadge online={user.online} lastSeen={user.last_seen} size="xs" />

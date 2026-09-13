@@ -6,7 +6,7 @@ import { formatRelativeTime } from '../lib/notifications';
 import { ROUTE_LABELS } from '../lib/routeLabels';
 import { CommunityPostComments } from './CommunityPostComments';
 import { PulseRing } from './PulseRing';
-import { SilhouetteAvatar } from './SilhouetteAvatar';
+import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
 import { useResolvingPhotoSrc } from './UserAvatar';
 
 const MAX_CHARS = 280;
@@ -21,7 +21,7 @@ type CommunityFeedProps = {
 
 function PostAvatar({ name, photoUrl }: { name: string; photoUrl: string | null }) {
   const { src, onError } = useResolvingPhotoSrc(photoUrl);
-  if (src) {
+  if (src && !isNearbyPlaceholderFace(photoUrl)) {
     return (
       <img
         src={src}
@@ -33,8 +33,7 @@ function PostAvatar({ name, photoUrl }: { name: string; photoUrl: string | null 
   }
   return (
     <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full ring-1 ring-[rgba(196,131,42,0.35)]">
-      <SilhouetteAvatar size={40} variant="card" className="!h-10 !w-10" />
-      <span className="sr-only">{name}</span>
+      <FadedBrandFace variant="profile" size={40} label={name} />
     </div>
   );
 }
