@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { IconMatches } from '../components/icons';
-import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
+import { FadedBrandFace, isNearbyPlaceholderFace } from '../components/FadedBrandFace';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { useGridPhotoSrc, clearGridPhotoQueue } from '../lib/nearbyPhotoSrc';
 import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
@@ -43,6 +43,60 @@ function formatLikedAgo(iso?: string): string | null {
   return `Liked you ${days}d ago`;
 }
 
+/**
+ * Same empty-mark + upload pending path as Nearby Grid (`NearbyProfileGrid`).
+ * Never SilhouetteAvatar / gold stub — faded `/brand/medallion-transparent.png` only.
+ */
+function MatchGridPhoto({
+  name,
+  age,
+  photoUrl,
+}: {
+  name: string;
+  photoUrl?: string | null;
+  age?: number;
+}) {
+  const { src, phase } = useGridPhotoSrc(photoUrl ?? undefined, age);
+  const trimmed = photoUrl?.trim() || '';
+
+  // Real /uploads still loading — elevated pending tile (not Brand empty cutout).
+  if (phase === 'loading' && trimmed.startsWith('/uploads/')) {
+    return (
+      <div
+        className="h-full w-full bg-[var(--bg-elevated)]"
+        data-testid="match-grid-photo-pending"
+        data-photo-phase={phase}
+        aria-hidden
+      />
+    );
+  }
+
+  // Empty / missing / generic avatar slots → faded official medallion (Brand).
+  // Real /uploads photos keep their bytes (media lock).
+  if (isNearbyPlaceholderFace(photoUrl, phase) || !src) {
+    return (
+      <div
+        className="h-full w-full"
+        data-testid="match-photo-placeholder"
+        data-photo-phase={phase}
+      >
+        <FadedBrandFace variant="tile" label={name} />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={name}
+      className="h-full w-full object-cover"
+      decoding="async"
+      data-testid="match-grid-photo"
+      data-photo-phase={phase}
+    />
+  );
+}
+
 function PersonGridCard({
   person,
   subtitle,
@@ -63,59 +117,45 @@ function PersonGridCard({
   /** Dedicated Message control — photo always opens profile. */
   onMessage?: () => void;
 }) {
-  const { src: photo, phase } = useGridPhotoSrc(person.photo_url ?? undefined, person.age);
   return (
     <div
       data-testid={testId}
       className="group relative overflow-hidden rounded-xl border border-[rgba(196,131,42,0.35)] bg-nn-card text-left shadow-card transition-all hover:-translate-y-[3px] hover:border-[rgba(196,131,42,0.4)] md:rounded-2xl"
     >
-      <ProfilePhotoLink
-        userId={person.id}
-        name={person.name}
-        className="block"
-        data-testid={testId ? `${testId}-photo` : `match-photo-${person.id}`}
-      >
-        <div className="relative aspect-[3/3.6] w-full bg-[var(--bg-elevated)]">
-          {/*
-            Progressive media: name/chrome paint immediately. Photo fills when
-            ready — never gate the card on full image decode.
-          */}
-          {photo && phase !== 'loading' ? (
-            <img
-              src={photo}
-              alt={person.name}
-              className="h-full w-full object-cover"
-              decoding="async"
-              data-testid="match-grid-photo"
-              data-photo-phase={phase}
+      <div className="relative">
+        <ProfilePhotoLink
+          userId={person.id}
+          name={person.name}
+          className="block"
+          data-testid={testId ? `${testId}-photo` : `match-photo-${person.id}`}
+        >
+          <div className="relative aspect-[3/3.6] w-full bg-[var(--bg-elevated)]">
+            {/*
+              Progressive media: name/chrome paint immediately. Photo fills when
+              ready — never gate the card on full image decode.
+            */}
+            <MatchGridPhoto
+              name={person.name}
+              photoUrl={person.photo_url}
+              age={person.age}
             />
-          ) : (
-            <div
-              className="flex h-full items-center justify-center"
-              data-testid="match-grid-photo-pending"
-              data-photo-phase={phase}
-              aria-hidden
-            >
-              <SilhouetteAvatar size={56} variant="card" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent pl-1.5 pr-9 pb-1.5 pt-8 md:pl-3 md:pr-10 md:pb-2.5 md:pt-10">
+              <div className="flex items-center gap-0.5 md:gap-1.5">
+                <span
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full md:h-2 md:w-2 ${person.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
+                />
+                <span className="truncate text-[11px] font-bold leading-tight text-[#FFF6E6] md:text-[12px] lg:text-[13px]">
+                  {person.name} {person.age}
+                </span>
+              </div>
+              <p className="mt-0.5 truncate text-[9px] font-semibold text-[var(--cream)] md:text-xs">{subtitle}</p>
             </div>
-          )}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent px-1.5 pb-1.5 pt-8 md:px-3 md:pb-2.5 md:pt-10">
-            <div className="flex items-center gap-0.5 md:gap-1.5">
-              <span
-                className={`h-1.5 w-1.5 shrink-0 rounded-full md:h-2 md:w-2 ${person.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
-              />
-              <span className="truncate text-[11px] font-bold leading-tight text-[#FFF6E6] md:text-[12px] lg:text-[13px]">
-                {person.name} {person.age}
-              </span>
-              {person.is_verified ? (
-                <VerifiedBadge size="sm" />
-
-              ) : null}
-            </div>
-            <p className="mt-0.5 truncate text-[9px] font-semibold text-[var(--cream)] md:text-xs">{subtitle}</p>
           </div>
-        </div>
-      </ProfilePhotoLink>
+        </ProfilePhotoLink>
+        {person.is_verified ? (
+          <VerifiedBadge compact className="absolute bottom-1.5 right-1.5 z-10" />
+        ) : null}
+      </div>
       {onMessage ? (
         <div className="border-t border-[var(--border-default)] p-1 md:p-1.5">
           <button
