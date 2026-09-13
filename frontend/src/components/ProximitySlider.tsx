@@ -48,7 +48,7 @@ export function ProximitySlider({
   };
 
   const controls = (
-    <div className={`flex items-center ${isMap ? 'gap-1.5' : 'gap-2'}`}>
+    <div className={`flex items-center ${isMap ? 'gap-1' : 'gap-2'}`}>
       <button
         type="button"
         aria-label="Decrease search radius"
@@ -75,6 +75,14 @@ export function ProximitySlider({
           className="proximity-range min-w-0 flex-1"
         />
       )}
+      {isMap ? (
+        <span
+          className={`rounded-full border px-2.5 py-1.5 text-[11px] font-extrabold tabular-nums tracking-wide ${mapChip}`}
+          data-testid="map-radius-pill"
+        >
+          {radiusLabel}
+        </span>
+      ) : null}
       <button
         type="button"
         aria-label="Increase search radius"
@@ -86,24 +94,22 @@ export function ProximitySlider({
       >
         +
       </button>
-      {isMap ? (
-        <span
-          className={`rounded-full border px-2.5 py-1.5 text-[11px] font-extrabold tabular-nums tracking-wide ${mapChip}`}
-          data-testid="map-radius-pill"
-        >
-          {radiusLabel}
-        </span>
-      ) : null}
     </div>
   );
 
   if (isMap) {
+    // Quiet face: labelled radius stepper — not bare ± that reads as Mapbox zoom.
+    // "All" on the pill = max search radius (100 mi), not a layer filter.
     return (
       <div
-        className={`flex items-center gap-1.5 rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_88%,transparent)] p-1.5 shadow-lg backdrop-blur-md ${className}`}
+        className={`flex items-center gap-1 rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_88%,transparent)] p-1.5 shadow-lg backdrop-blur-md ${className}`}
         data-testid="proximity-slider"
         aria-label={`Search radius ${radiusLabel}`}
+        title="Search radius"
       >
+        <span className="pl-1.5 pr-0.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-[#3D2B0E]/90">
+          Radius
+        </span>
         {controls}
       </div>
     );

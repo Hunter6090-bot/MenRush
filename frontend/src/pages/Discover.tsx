@@ -122,7 +122,8 @@ const mapChromeBtnClass =
 
 /**
  * Shared map chrome — one control cluster per corner.
- * TL: radius · TR: layers + expand · BL: Chat FAB (dock) · BR: Mapbox zoom+locate.
+ * TL: labelled search-radius stepper · TR: layers + expand · BL: Chat FAB (dock).
+ * BR: Mapbox locate (+ zoom on desktop only; phone uses pinch).
  * Nearby/live count lives in the list pill only (no map status card).
  */
 function MapFloatingChrome({
@@ -246,7 +247,7 @@ function MapFloatingChrome({
                 setMapBannerDismissed(true);
                 dismissHotSpotsMapBanner();
               }}
-              className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded text-[13px] leading-none text-[rgba(240,224,192,0.65)] transition-colors hover:text-[rgba(240,224,192,0.95)]"
+              className="absolute -right-0.5 -top-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[15px] leading-none text-[rgba(240,224,192,0.85)] transition-colors hover:bg-[rgba(196,131,42,0.18)] hover:text-[rgba(240,224,192,1)]"
             >
               ×
             </button>
@@ -331,7 +332,7 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
     .discover-map-surface .mapboxgl-canvas.mapboxgl-interactive:active {
       cursor: grabbing;
     }
-    /* BR cluster only: Mapbox zoom + geolocate. Chat lives BL — never overlaps. */
+    /* BR cluster: Mapbox geolocate (+ zoom on desktop). Chat lives BL — never overlaps. */
     .discover-map-surface .mapboxgl-ctrl-bottom-right {
       bottom: 12px;
       right: 12px;
@@ -350,6 +351,12 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
     .discover-map-surface .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-group,
     .discover-map-surface .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-geolocate {
       box-shadow: 0 2px 8px rgba(0,0,0,0.28);
+    }
+    /* Al LOCK: phone pinch is enough — hide Mapbox ± zoom on mobile; keep locate. */
+    @media (max-width: 1023px) {
+      .discover-map-surface .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-group:has(.mapboxgl-ctrl-zoom-in) {
+        display: none !important;
+      }
     }
     .discover-map-surface[data-map-mode='expanded'] .mapboxgl-ctrl-bottom-right,
     .discover-map-surface[data-map-expanded='1'] .mapboxgl-ctrl-bottom-right {
@@ -1351,7 +1358,12 @@ export const Discover = () => {
         cooperativeGestures: false,
       });
       map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
-      map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right');
+      // Al LOCK: phone pinch zoom is enough — Mapbox ± only on desktop (lg+).
+      const showDesktopZoom =
+        typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
+      if (showDesktopZoom) {
+        map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right');
+      }
       const geolocate = new mapboxgl.GeolocateControl({
         positionOptions: { enableHighAccuracy: true, maximumAge: 15_000 },
         trackUserLocation: false,
