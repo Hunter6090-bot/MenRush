@@ -76,7 +76,7 @@ import {
 import { mapboxStyleForTheme, resolvedThemeNow, THEME_CHANGED_EVENT } from '../lib/mapTheme';
 import { readLayerVisible, writeLayerVisible } from '../lib/discoveryLayers';
 import { useIsDesktopLayout } from '../hooks/useMediaQuery';
-import { ProximitySlider } from '../components/ProximitySlider';
+import { MapDiscretionSlider } from '../components/MapDiscretionSlider';
 import { IconMapExpand, IconDiscover, IconHotSpots } from '../components/icons';
 import {
   mapPinZIndex,
@@ -87,6 +87,12 @@ import {
   dismissHotSpotsMapBanner,
   isHotSpotsMapBannerDismissed,
 } from '../lib/hotSpotsMapBanner';
+import {
+  formatFuzzPrivacyNote,
+  MAP_PIN_FUZZ_DEFAULT_M,
+  nearestMapPinFuzzStep,
+  privateMapPointAround,
+} from '../lib/mapPinFuzz';
 
 /** Map panel: swipe up to hide, swipe down to show, expand for large map. */
 type MapPanelMode = 'hidden' | 'default' | 'expanded';
@@ -122,15 +128,16 @@ const mapChromeBtnClass =
 
 /**
  * Shared map chrome — one control cluster per corner.
- * TL: labelled search-radius stepper · TR: layers + expand · BL: Chat FAB (dock).
+ * TL: Discretion (pin randomization) · TR: layers + expand · BL: Chat FAB (dock).
  * BR: Mapbox locate (+ zoom on desktop only; phone uses pinch).
+ * Search radius lives only in the list "All" miles dropdown (not duplicated here).
  * Nearby/live count lives in the list pill only (no map status card).
  */
 function MapFloatingChrome({
   expanded,
-  radiusKm,
+  mapPinFuzzM,
+  onMapPinFuzzChange,
   onToggleExpand,
-  onRadiusChange,
   showHide = false,
   onHide,
   peopleLayerOn,
@@ -139,9 +146,9 @@ function MapFloatingChrome({
   onToggleHotSpotsLayer,
 }: {
   expanded: boolean;
-  radiusKm: number;
+  mapPinFuzzM: number;
+  onMapPinFuzzChange: (meters: number) => void;
   onToggleExpand: () => void;
-  onRadiusChange: (km: number) => void;
   showHide?: boolean;
   onHide?: () => void;
   peopleLayerOn: boolean;
@@ -157,7 +164,7 @@ function MapFloatingChrome({
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 p-3">
         {!expanded ? (
           <div className="pointer-events-auto" data-map-chrome-corner="top-left">
-            <ProximitySlider value={radiusKm} onChange={onRadiusChange} variant="map" />
+            <MapDiscretionSlider valueM={mapPinFuzzM} onChange={onMapPinFuzzChange} />
           </div>
         ) : (
           <span />
@@ -515,6 +522,8 @@ export const Discover = () => {
     }
     return DEFAULT_RADIUS_KM;
   });
+  /** How far others see your pin — profiles.map_pin_fuzz_m (not search radius). */
+  const [mapPinFuzzM, setMapPinFuzzM] = useState<number>(MAP_PIN_FUZZ_DEFAULT_M);
   const [nearbyView, setNearbyView] = useState<NearbyView>(() => readNearbyView());
   const [nearbySort, setNearbySort] = useState<NearbySortMode>(() => readNearbySort());
   const handleNearbySortChange = useCallback((next: NearbySortMode) => {
@@ -659,6 +668,10 @@ export const Discover = () => {
     profileMetaAPI
       .getMood()
       .then((res) => setMood(res.data.mood ?? null))
+      .catch(() => {});
+    profileMetaAPI
+      .getMapPinFuzz()
+      .then((res) => setMapPinFuzzM(nearestMapPinFuzzStep(res.data.map_pin_fuzz_m)))
       .catch(() => {});
     // Hydrate Match CTA after reload — outbound likes + mutual matches (separate).
     // Also warm the shared Matches tab cache so /matches is never a cold start from Nearby.
@@ -805,7 +818,7 @@ export const Discover = () => {
       }
 
       if (mapRef.current) {
-        selfMarkerRef.current?.setLngLat([longitude, latitude]);
+        // Self pin position is owned by the discretion-fuzz effect (what others see).
         if (shouldRecenter) {
           if (options?.force || recoveringFromFallback) {
             userMovedMapRef.current = false;
@@ -1083,6 +1096,14 @@ export const Discover = () => {
     },
     [lat, lng, discoveryFilters, fetchNearbyUsers],
   );
+
+  const handleMapPinFuzzChange = useCallback((next: number) => {
+    const snapped = nearestMapPinFuzzStep(next);
+    setMapPinFuzzM(snapped);
+    void profileMetaAPI.setMapPinFuzz(snapped).catch(() => {
+      /* keep optimistic UI; next hydrate corrects */
+    });
+  }, []);
 
   /**
    * Expand search radius — was stepping one tiny mile tier (felt broken).
@@ -1717,8 +1738,16 @@ export const Discover = () => {
 
   useEffect(() => {
     if (!mapLoaded || lat == null || lng == null) return;
-    selfMarkerRef.current?.setLngLat([lng, lat]);
-  }, [mapLoaded, lat, lng]);
+    let cancelled = false;
+    const seed = `map:${authUser?.id ?? 'self'}`;
+    void privateMapPointAround(lat, lng, seed, mapPinFuzzM).then((point) => {
+      if (cancelled) return;
+      selfMarkerRef.current?.setLngLat([point.lng, point.lat]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mapLoaded, lat, lng, mapPinFuzzM, authUser?.id]);
 
   useEffect(() => {
     const root = selfRootRef.current;
@@ -2137,9 +2166,9 @@ export const Discover = () => {
           />
           <MapFloatingChrome
             expanded={desktopMapExpanded}
-            radiusKm={radius}
+            mapPinFuzzM={mapPinFuzzM}
+            onMapPinFuzzChange={handleMapPinFuzzChange}
             onToggleExpand={toggleDesktopMapExpanded}
-            onRadiusChange={handleRadiusChange}
             peopleLayerOn={peopleLayerOn}
             hotSpotsLayerOn={hotSpotsLayerOn}
             onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
@@ -2156,7 +2185,7 @@ export const Discover = () => {
               }}
               data-testid="map-privacy-note"
             >
-              Pins ~100–300 m for privacy
+              {formatFuzzPrivacyNote(mapPinFuzzM)}
             </p>
           ) : null}
         </div>
@@ -2281,11 +2310,11 @@ export const Discover = () => {
           {mapPanelMode !== 'hidden' ? (
             <MapFloatingChrome
               expanded={mapPanelMode === 'expanded'}
-              radiusKm={radius}
+              mapPinFuzzM={mapPinFuzzM}
+              onMapPinFuzzChange={handleMapPinFuzzChange}
               onToggleExpand={() =>
                 setMapPanel(mapPanelMode === 'expanded' ? 'default' : 'expanded')
               }
-              onRadiusChange={handleRadiusChange}
               showHide
               onHide={() => setMapPanel('hidden')}
               peopleLayerOn={peopleLayerOn}
@@ -2309,7 +2338,7 @@ export const Discover = () => {
               }}
               data-testid="map-privacy-note"
             >
-              Pins ~100–300 m for privacy
+              {formatFuzzPrivacyNote(mapPinFuzzM)}
             </p>
           ) : null}
 

@@ -1,7 +1,10 @@
-import crypto from 'crypto';
 import { query } from '../db';
 import { defaultGenericAvatarUrl } from '../lib/genericAvatar';
 import { discoveryPhotoUrl } from '../lib/discoveryPhoto';
+import {
+  MAP_PIN_FUZZ_DEFAULT_M,
+  privateMapPointAround,
+} from '../lib/mapPinFuzz';
 import { accessControl } from '../security/access';
 import { ProfileInput } from '../types/validation';
 import { ageFromDateOfBirth, AGE_FILTER_MIN } from '../lib/age';
@@ -11,27 +14,6 @@ import {
   planVisitorLocationUpdate,
   type VisitorProfileState,
 } from '../lib/visitorFreshFace';
-
-/**
- * Privacy fuzz for map pins: keep people near where they actually are, with a
- * small deterministic offset so exact home/street is not public.
- *
- * Previous logic placed people on a RANDOM bearing at bucketed distance from
- * the viewer — that put pins in the sea and far from known real locations.
- */
-function privateMapPointAround(realLat: number, realLng: number, seed: string) {
-  const hash = crypto.createHash('sha256').update(seed).digest();
-  // 80–320 m — enough to stop doorstep triangulation, small enough to stay on land.
-  const meters = 80 + (hash.readUInt16BE(0) % 241);
-  const bearing = ((hash.readUInt16BE(2) % 360) * Math.PI) / 180;
-  const dLat = (meters / 1000 / 111) * Math.cos(bearing);
-  const longitudeScale = Math.max(Math.cos((realLat * Math.PI) / 180), 0.2);
-  const dLng = (meters / 1000 / (111 * longitudeScale)) * Math.sin(bearing);
-  return {
-    lat: Number((realLat + dLat).toFixed(6)),
-    lng: Number((realLng + dLng).toFixed(6)),
-  };
-}
 
 const includeE2eFixtures = () =>
   process.env.INCLUDE_E2E_FIXTURES === 'true' || process.env.INCLUDE_E2E_FIXTURES === '1';
@@ -114,6 +96,7 @@ export const userService = {
         END AS mood,
         p.lat AS real_lat,
         p.lng AS real_lng,
+        COALESCE(p.map_pin_fuzz_m, ${MAP_PIN_FUZZ_DEFAULT_M}) AS map_pin_fuzz_m,
         ST_Distance(p.location, ST_MakePoint($2, $1)::geography) as distance_m
       FROM users u
       JOIN profiles p ON u.id = p.user_id
@@ -214,6 +197,7 @@ export const userService = {
 
       const realLat = Number(row.real_lat);
       const realLng = Number(row.real_lng);
+      const fuzzMaxM = Number(row.map_pin_fuzz_m);
       const mapPoint =
         Number.isFinite(realLat) && Number.isFinite(realLng)
           ? privateMapPointAround(
@@ -221,11 +205,19 @@ export const userService = {
               realLng,
               // Seed without viewer position so pin is stable for everyone viewing this person.
               `map:${row.id}`,
+              Number.isFinite(fuzzMaxM) ? fuzzMaxM : MAP_PIN_FUZZ_DEFAULT_M,
             )
           : { lat: originLat, lng: originLng };
 
-      // Do not leak exact GPS in the API payload — only the fuzzed map pin.
-      const { real_lat: _rl, real_lng: _rg, map_photo_url: mapPhoto, ...publicRow } = row;
+      // Do not leak exact GPS or the subject's fuzz setting in the API payload —
+      // only the fuzzed map pin.
+      const {
+        real_lat: _rl,
+        real_lng: _rg,
+        map_photo_url: mapPhoto,
+        map_pin_fuzz_m: _fuzz,
+        ...publicRow
+      } = row;
 
       // Account age only — ISO string for Nearby NEW treatment (not exact GPS).
       const createdRaw = row.created_at;
