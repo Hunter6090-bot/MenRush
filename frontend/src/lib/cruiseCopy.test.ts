@@ -4,6 +4,8 @@ import {
   HOT_SPOTS_FACE,
   HOT_SPOTS_FACE_REQUIRED_LINES,
   HOT_SPOTS_HELPER,
+  HOT_SPOTS_MAP_BANNER,
+  HOT_SPOTS_MAP_BANNER_REQUIRED,
   HOT_SPOTS_PAGE_BLURB,
   HOT_SPOTS_RULES,
 } from './cruiseCopy';
@@ -21,8 +23,16 @@ describe('cruiseCopy Brand face', () => {
     expect(HOT_SPOTS_CONSENT).toBe('Meet in public · Consent first');
   });
 
-  it('avoids dating-coded and RED outdoor copy', () => {
-    const blob = `${HOT_SPOTS_FACE} ${HOT_SPOTS_PAGE_BLURB}`.toLowerCase();
+  it('map banner is short and outdoor-live factual (#258)', () => {
+    for (const line of HOT_SPOTS_MAP_BANNER_REQUIRED) {
+      expect(HOT_SPOTS_MAP_BANNER).toContain(line);
+    }
+    expect(HOT_SPOTS_MAP_BANNER.toLowerCase()).not.toContain('commercial venues only');
+    expect(HOT_SPOTS_MAP_BANNER.length).toBeLessThan(HOT_SPOTS_FACE.length);
+  });
+
+  it('avoids dating-coded and RED outdoor tip copy', () => {
+    const blob = `${HOT_SPOTS_FACE} ${HOT_SPOTS_PAGE_BLURB} ${HOT_SPOTS_MAP_BANNER}`.toLowerCase();
     for (const banned of ['cottage', 'cottaging', 'glory hole', 'truck stop', 'dating', 'soulmate']) {
       expect(blob).not.toContain(banned);
     }

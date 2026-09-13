@@ -45,6 +45,23 @@ describe('HotSpotPin', () => {
     expect(screen.getByTestId('cruise-ship-icon')).toBeInTheDocument();
   });
 
+
+  it('hides name label when showLabel is false (zoomed-out piles)', () => {
+    render(
+      <HotSpotPin
+        spot={{
+          id: 'spot-3',
+          name: 'Heaven',
+          live_count_exact: 6,
+          live_count: '5+',
+        }}
+        showLabel={false}
+      />,
+    );
+    expect(screen.getByTestId('hotspot-pin-solid')).toBeInTheDocument();
+    expect(screen.queryByTestId('hotspot-pin-name')).not.toBeInTheDocument();
+  });
+
   it('keeps Mapbox marker root free of position:relative (no zoomed-out vertical stack)', async () => {
     const { element, root } = createHotSpotPinElement(
       { id: 'spot-geo', name: 'Geo Lock', live_count_exact: 0, live_count: 0 },

@@ -186,17 +186,15 @@ test('map Live status uses online count, not radius label', async ({ browser }) 
     await mapToggle.click();
   }
 
-  const status = page.getByTestId('map-live-status');
+  // Brand Grid-first: Map chrome no longer duplicates the nearby/live count.
+  // Assert the single list pill (not a floating map status card over pins).
+  const status = page.getByTestId('nearby-counts');
   await expect(status).toBeVisible({ timeout: 20_000 });
-  await expect(status).toHaveAttribute('data-nearby-count', '2');
-  await expect(status).toHaveAttribute('data-live-count', '0');
-  const liveLine = page.getByTestId('map-live-line');
-  await expect(liveLine).toContainText(/None live now/i);
+  await expect(status).toContainText(/2 men nearby/i);
+  const liveLine = page.getByTestId('nearby-live-count');
+  await expect(liveLine).toContainText(/none live/i);
   await expect(liveLine).not.toContainText(/Live · All/i);
-  await expect(liveLine).not.toContainText(/Live · 2/i);
-
-  const gridLive = page.getByTestId('nearby-live-count');
-  await expect(gridLive).toContainText(/none live/i);
+  await expect(page.getByTestId('map-live-status')).toHaveCount(0);
 
   await ctx.close();
 });
