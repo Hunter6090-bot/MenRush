@@ -82,7 +82,7 @@ import {
   mapPinZIndex,
   shouldShowHotSpotLabel,
 } from '../lib/mapPinOverlap';
-import { HOT_SPOTS_CHIP_LABEL, HOT_SPOTS_CONSENT, HOT_SPOTS_MAP_BANNER } from '../lib/cruiseCopy';
+import { HOT_SPOTS_CHIP_LABEL, HOT_SPOTS_MAP_BANNER } from '../lib/cruiseCopy';
 
 /** Map panel: swipe up to hide, swipe down to show, expand for large map. */
 type MapPanelMode = 'hidden' | 'default' | 'expanded';
@@ -225,7 +225,6 @@ function MapFloatingChrome({
             data-testid="hotspots-map-helper-copy"
           >
             {HOT_SPOTS_MAP_BANNER}
-            <span className="mt-0.5 block opacity-85">{HOT_SPOTS_CONSENT}</span>
           </p>
         </div>
       ) : null}
