@@ -172,7 +172,8 @@ export function DiscoverChatDock({
         aria-label="Open map chat"
         title="Map chat"
         onClick={() => onOpenChange(true)}
-        className="pointer-events-auto absolute bottom-20 right-3 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-[rgba(196,131,42,0.5)] bg-[rgba(15,10,6,0.82)] text-[#E0A14A] shadow-[0_8px_28px_rgba(0,0,0,0.5)] backdrop-blur-md transition-transform active:scale-95"
+        className="pointer-events-auto absolute bottom-12 left-3 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-[rgba(196,131,42,0.5)] bg-[rgba(15,10,6,0.82)] text-[#E0A14A] shadow-[0_8px_28px_rgba(0,0,0,0.5)] backdrop-blur-md transition-transform active:scale-95"
+        data-map-chrome-corner="bottom-left"
       >
         <ChatBubbleIcon className="h-5 w-5" />
         {hasNewMsg && (
@@ -185,7 +186,8 @@ export function DiscoverChatDock({
   return (
     <div
       data-testid="discover-chat-dock"
-      className="pointer-events-auto absolute bottom-4 right-3 z-30 flex w-[min(100%-1.5rem,340px)] flex-col overflow-hidden rounded-2xl border border-[rgba(196,131,42,0.35)] shadow-[0_16px_48px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+      className="pointer-events-auto absolute bottom-12 left-3 z-30 flex w-[min(100%-5.5rem,340px)] flex-col overflow-hidden rounded-2xl border border-[rgba(196,131,42,0.35)] shadow-[0_16px_48px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+      data-map-chrome-corner="bottom-left"
       style={{
         background: 'rgba(13,10,6,0.82)',
         maxHeight: '56vh',

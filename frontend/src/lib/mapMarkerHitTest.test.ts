@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   hitTestMapPins,
+  cycleHitTestMapPins,
   peoplePinHitRadiusPx,
   hotSpotPinHitRadiusPx,
   markMarkerCanvasPassThrough,
@@ -87,5 +88,27 @@ describe('markMarkerCanvasPassThrough', () => {
     expect(el.dataset.mapCanvasPassThrough).toBe('1');
     expect(el.style.pointerEvents).toBe('none');
     expect(child.style.pointerEvents).toBe('none');
+  });
+});
+
+describe('cycleHitTestMapPins', () => {
+  it('cycles through a same-pixel pile without relocating pins', () => {
+    const map = fakeMap({
+      '-0.1,51.5': { x: 150, y: 200 },
+      '-0.11,51.51': { x: 150, y: 200 },
+      '-0.12,51.52': { x: 150, y: 200 },
+    });
+    const candidates = [
+      { kind: 'hotspot' as const, id: 'a', lng: -0.1, lat: 51.5, radiusPx: 40 },
+      { kind: 'person' as const, id: 'b', lng: -0.11, lat: 51.51, radiusPx: 28 },
+      { kind: 'person' as const, id: 'c', lng: -0.12, lat: 51.52, radiusPx: 28 },
+    ];
+    const first = cycleHitTestMapPins(map, { x: 150, y: 200 }, candidates, null);
+    expect(first).not.toBeNull();
+    const second = cycleHitTestMapPins(map, { x: 150, y: 200 }, candidates, first!.id);
+    expect(second).not.toBeNull();
+    expect(second!.id).not.toBe(first!.id);
+    const third = cycleHitTestMapPins(map, { x: 150, y: 200 }, candidates, second!.id);
+    expect(third!.id).not.toBe(second!.id);
   });
 });

@@ -57,7 +57,7 @@ import {
 import type mapboxgl from 'mapbox-gl';
 import { loadMapbox, getLoadedMapbox } from '../lib/mapboxLazy';
 import {
-  hitTestMapPins,
+  cycleHitTestMapPins,
   markMarkerCanvasPassThrough,
   peoplePinHitRadiusPx,
   hotSpotPinHitRadiusPx,
@@ -78,8 +78,11 @@ import { readLayerVisible, writeLayerVisible } from '../lib/discoveryLayers';
 import { useIsDesktopLayout } from '../hooks/useMediaQuery';
 import { ProximitySlider } from '../components/ProximitySlider';
 import { IconMapExpand, IconDiscover, IconHotSpots } from '../components/icons';
-import { HOT_SPOTS_CHIP_LABEL, HOT_SPOTS_CONSENT, HOT_SPOTS_FACE } from '../lib/cruiseCopy';
-import { MapLiveStatus } from '../components/MapLiveStatus';
+import {
+  mapPinZIndex,
+  shouldShowHotSpotLabel,
+} from '../lib/mapPinOverlap';
+import { HOT_SPOTS_CHIP_LABEL, HOT_SPOTS_MAP_BANNER } from '../lib/cruiseCopy';
 
 /** Map panel: swipe up to hide, swipe down to show, expand for large map. */
 type MapPanelMode = 'hidden' | 'default' | 'expanded';
@@ -113,37 +116,29 @@ function desktopMapHeightCss(expanded: boolean): string {
 const mapChromeBtnClass =
   'flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] text-[#3D2B0E] shadow-md backdrop-blur-md transition-transform active:scale-95';
 
-const mapStatusCardClass =
-  'pointer-events-none absolute bottom-3 left-3 z-10 flex max-w-[min(72vw,280px)] items-center gap-2.5 rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[color-mix(in_srgb,#FFF8F0_94%,transparent)] px-3.5 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.18)] backdrop-blur-md';
-
-/** Shared NordVPN-style map chrome — identical on desktop and mobile. */
+/**
+ * Shared map chrome — one control cluster per corner.
+ * TL: radius · TR: layers + expand · BL: Chat FAB (dock) · BR: Mapbox zoom+locate.
+ * Nearby/live count lives in the list pill only (no map status card).
+ */
 function MapFloatingChrome({
   expanded,
-  nearbyCount,
-  liveCount,
   radiusKm,
   onToggleExpand,
   onRadiusChange,
-  onExpandRadius,
   showHide = false,
   onHide,
-  statusBottomClass = 'bottom-3',
   peopleLayerOn,
   hotSpotsLayerOn,
   onTogglePeopleLayer,
   onToggleHotSpotsLayer,
 }: {
   expanded: boolean;
-  nearbyCount: number;
-  /** Actually online now (presence) — never the radius/filter headcount. */
-  liveCount: number;
   radiusKm: number;
   onToggleExpand: () => void;
   onRadiusChange: (km: number) => void;
-  onExpandRadius: () => void;
   showHide?: boolean;
   onHide?: () => void;
-  statusBottomClass?: string;
   peopleLayerOn: boolean;
   hotSpotsLayerOn: boolean;
   onTogglePeopleLayer: () => void;
@@ -153,13 +148,16 @@ function MapFloatingChrome({
     <>
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 p-3">
         {!expanded ? (
-          <div className="pointer-events-auto">
+          <div className="pointer-events-auto" data-map-chrome-corner="top-left">
             <ProximitySlider value={radiusKm} onChange={onRadiusChange} variant="map" />
           </div>
         ) : (
           <span />
         )}
-        <div className="pointer-events-auto flex items-center gap-1.5">
+        <div
+          className="pointer-events-auto flex items-center gap-1.5"
+          data-map-chrome-corner="top-right"
+        >
           {/* #67: compact independent People / Cruise (Hot Spots) layer control. */}
           <button
             type="button"
@@ -218,26 +216,18 @@ function MapFloatingChrome({
           data-testid="hotspots-map-helper"
         >
           <p
-            className="max-w-lg rounded-xl border px-3 py-1.5 text-center text-[10px] font-semibold leading-snug"
+            className="max-w-sm rounded-lg border px-2.5 py-1 text-center text-[9px] font-semibold leading-snug tracking-wide"
             style={{
-              background: 'rgba(13,10,6,0.88)',
-              color: 'rgba(240,224,192,0.88)',
-              borderColor: 'rgba(196,131,42,0.35)',
+              background: 'rgba(13,10,6,0.82)',
+              color: 'rgba(240,224,192,0.82)',
+              borderColor: 'rgba(196,131,42,0.28)',
             }}
             data-testid="hotspots-map-helper-copy"
           >
-            {HOT_SPOTS_FACE}
-            <span className="mt-0.5 block opacity-90">{HOT_SPOTS_CONSENT}</span>
+            {HOT_SPOTS_MAP_BANNER}
           </p>
         </div>
       ) : null}
-      <MapLiveStatus
-        nearbyCount={nearbyCount}
-        liveCount={liveCount}
-        radiusKm={radiusKm}
-        onExpandRadius={onExpandRadius}
-        className={`${mapStatusCardClass} ${statusBottomClass}`}
-      />
     </>
   );
 }
@@ -316,11 +306,25 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
     .discover-map-surface .mapboxgl-canvas.mapboxgl-interactive:active {
       cursor: grabbing;
     }
-    /* Keep Mapbox zoom/geolocate clear of floating chrome (Pulse FAB / tab bar). */
+    /* BR cluster only: Mapbox zoom + geolocate. Chat lives BL — never overlaps. */
     .discover-map-surface .mapboxgl-ctrl-bottom-right {
       bottom: 12px;
       right: 12px;
-      z-index: 2;
+      z-index: 5;
+      display: flex;
+      flex-direction: column-reverse;
+      align-items: flex-end;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .discover-map-surface .mapboxgl-ctrl-bottom-right > * {
+      pointer-events: auto;
+      margin: 0 !important;
+    }
+    /* Single visual stack: zoom group then locate (no orphan under Chat). */
+    .discover-map-surface .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-group,
+    .discover-map-surface .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-geolocate {
+      box-shadow: 0 2px 8px rgba(0,0,0,0.28);
     }
     .discover-map-surface[data-map-mode='expanded'] .mapboxgl-ctrl-bottom-right,
     .discover-map-surface[data-map-expanded='1'] .mapboxgl-ctrl-bottom-right {
@@ -328,10 +332,16 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
       right: 12px;
     }
     .discover-map-surface .mapboxgl-ctrl-bottom-left {
-      bottom: 12px;
-      left: 12px;
+      bottom: 8px;
+      left: 8px;
       z-index: 2;
-      max-width: calc(100% - 160px);
+      max-width: calc(100% - 120px);
+      /* Stay under Chat FAB (bottom-12 left-3) — never fight BL chrome. */
+      transform: translateY(0);
+    }
+    .discover-map-surface .mapboxgl-ctrl-attrib {
+      margin: 0 !important;
+      opacity: 0.75;
     }
     /* Height handle: only the chip captures input — never a full-width veil. */
     .discover-map-drag-handle {
@@ -563,6 +573,9 @@ export const Discover = () => {
     Map<string, { marker: mapboxgl.Marker; root: Root; spot: HotSpotDTO }>
   >(new Map());
   const selfMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  /** Cycle through overlap piles on repeated taps (true lng/lat — no spiderfy). */
+  const lastPinHitIdRef = useRef<string | null>(null);
+  const [mapZoom, setMapZoom] = useState(12);
   const selfDotRef = useRef<HTMLDivElement | null>(null);
   const selfRootRef = useRef<Root | null>(null);
   const [hotSpots, setHotSpots] = useState<HotSpotDTO[]>([]);
@@ -1341,7 +1354,12 @@ export const Discover = () => {
         if (!map) return;
         assertMapGestures(map);
         resizeMap?.();
+        setMapZoom(map.getZoom());
         setMapLoaded(true);
+      });
+      map.on('zoomend', () => {
+        if (!map) return;
+        setMapZoom(map.getZoom());
       });
       guardPinch = (e: TouchEvent) => {
         if (e.touches.length >= 2) e.preventDefault();
@@ -1513,6 +1531,7 @@ export const Discover = () => {
           const el = existing.marker.getElement();
           el.style.width = `${markerSize}px`;
           el.style.height = `${markerSize}px`;
+          el.style.zIndex = String(mapPinZIndex('person'));
           // React re-render can restore pointer-events on <img> — re-lock pass-through.
           markMarkerCanvasPassThrough(el);
         }
@@ -1533,6 +1552,7 @@ export const Discover = () => {
         .setLngLat(lngLat)
         .addTo(map);
       markMarkerCanvasPassThrough(element);
+      element.style.zIndex = String(mapPinZIndex('person'));
 
       markersRef.current.set(user.id, { marker, root, user });
     });
@@ -1574,6 +1594,7 @@ export const Discover = () => {
     if (!map || !mapLoaded) return;
 
     const visibleIds = new Set<string>();
+    const showLabel = shouldShowHotSpotLabel(mapZoom);
 
     if (hotSpotsLayerOn) hotSpots.forEach((spot) => {
       if (!Number.isFinite(spot.latitude) || !Number.isFinite(spot.longitude)) return;
@@ -1587,24 +1608,35 @@ export const Discover = () => {
         live_count_exact: spot.live_count_exact,
         live_count: spot.live_count,
       };
+      const occupied = spot.live_count_exact > 0;
 
       if (existing) {
         const prevLat = Number(existing.spot.latitude);
         const prevLng = Number(existing.spot.longitude);
         if (prevLat !== spot.latitude || prevLng !== spot.longitude) {
+          // Keep true lng/lat — never spiderfy into a vertical column (#254).
           existing.marker.setLngLat(lngLat);
         }
         const prevOccupied = existing.spot.live_count_exact > 0;
-        const nextOccupied = spot.live_count_exact > 0;
+        const nextOccupied = occupied;
+        const el = existing.marker.getElement();
+        const labelChanged = el.dataset.showLabel !== (showLabel ? '1' : '0');
         if (
           prevOccupied !== nextOccupied ||
           existing.spot.live_count_exact !== spot.live_count_exact ||
           existing.spot.live_count !== spot.live_count ||
           existing.spot.name !== spot.name ||
-          existing.spot.category_icon !== spot.category_icon
+          existing.spot.category_icon !== spot.category_icon ||
+          labelChanged
         ) {
-          existing.root.render(<HotSpotPin spot={pinData} size={52} />);
-          markMarkerCanvasPassThrough(existing.marker.getElement());
+          existing.root.render(<HotSpotPin spot={pinData} size={52} showLabel={showLabel} />);
+          const labelPad = showLabel ? 28 : 4;
+          const widthPad = showLabel ? (occupied ? 104 : 72) : 52;
+          el.style.width = `${Math.max(52, widthPad)}px`;
+          el.style.height = `${52 + labelPad}px`;
+          el.dataset.showLabel = showLabel ? '1' : '0';
+          el.style.zIndex = String(mapPinZIndex('hotspot', occupied));
+          markMarkerCanvasPassThrough(el);
         }
         existing.spot = spot;
         return;
@@ -1615,10 +1647,13 @@ export const Discover = () => {
         pinData,
         () => setSelectedHotSpot(spot),
         52,
+        showLabel,
       );
       const mapboxgl = getLoadedMapbox();
       if (!mapboxgl) return;
       markMarkerCanvasPassThrough(element);
+      element.dataset.showLabel = showLabel ? '1' : '0';
+      element.style.zIndex = String(mapPinZIndex('hotspot', occupied));
       const marker = new mapboxgl.Marker({ element, anchor: 'center' })
         .setLngLat(lngLat)
         .addTo(map);
@@ -1632,7 +1667,7 @@ export const Discover = () => {
       setTimeout(() => root.unmount(), 0);
       hotSpotMarkersRef.current.delete(spotId);
     });
-  }, [hotSpots, mapLoaded, hotSpotsLayerOn]);
+  }, [hotSpots, mapLoaded, hotSpotsLayerOn, mapZoom]);
 
   // Keep the open sheet's data fresh as hotSpots re-polls (mirrors selectedUser above).
   useEffect(() => {
@@ -1722,8 +1757,12 @@ export const Discover = () => {
         });
       });
 
-      const hit = hitTestMapPins(map, e.point, candidates);
-      if (!hit) return;
+      const hit = cycleHitTestMapPins(map, e.point, candidates, lastPinHitIdRef.current);
+      if (!hit) {
+        lastPinHitIdRef.current = null;
+        return;
+      }
+      lastPinHitIdRef.current = hit.id;
 
       if (hit.kind === 'self') {
         navigate('/profile');
@@ -2059,12 +2098,9 @@ export const Discover = () => {
           />
           <MapFloatingChrome
             expanded={desktopMapExpanded}
-            nearbyCount={nearbyCount}
-            liveCount={liveCount}
             radiusKm={radius}
             onToggleExpand={toggleDesktopMapExpanded}
             onRadiusChange={handleRadiusChange}
-            onExpandRadius={handleRadiusCycle}
             peopleLayerOn={peopleLayerOn}
             hotSpotsLayerOn={hotSpotsLayerOn}
             onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
@@ -2073,15 +2109,15 @@ export const Discover = () => {
           <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
           {!needsLocationGate && !tokenMissing ? (
             <p
-              className="pointer-events-none absolute bottom-2 left-1/2 z-[4] max-w-[90%] -translate-x-1/2 rounded-full px-3 py-1 text-center text-[10px] font-medium leading-snug"
+              className="pointer-events-none absolute top-[4.75rem] left-1/2 z-[4] max-w-[min(70%,240px)] -translate-x-1/2 rounded-full px-2.5 py-0.5 text-center text-[9px] font-medium leading-snug"
               style={{
-                background: 'rgba(13,10,6,0.72)',
-                color: 'rgba(240,224,192,0.72)',
-                border: '1px solid rgba(196,131,42,0.22)',
+                background: 'rgba(13,10,6,0.55)',
+                color: 'rgba(240,224,192,0.65)',
+                border: '1px solid rgba(196,131,42,0.18)',
               }}
               data-testid="map-privacy-note"
             >
-              Map pins are approximate (~100–300 m) for privacy
+              Pins ~100–300 m for privacy
             </p>
           ) : null}
         </div>
@@ -2206,17 +2242,13 @@ export const Discover = () => {
           {mapPanelMode !== 'hidden' ? (
             <MapFloatingChrome
               expanded={mapPanelMode === 'expanded'}
-              nearbyCount={nearbyCount}
-              liveCount={liveCount}
               radiusKm={radius}
               onToggleExpand={() =>
                 setMapPanel(mapPanelMode === 'expanded' ? 'default' : 'expanded')
               }
               onRadiusChange={handleRadiusChange}
-              onExpandRadius={handleRadiusCycle}
               showHide
               onHide={() => setMapPanel('hidden')}
-              statusBottomClass={mapPanelMode === 'expanded' ? 'bottom-4' : 'bottom-8'}
               peopleLayerOn={peopleLayerOn}
               hotSpotsLayerOn={hotSpotsLayerOn}
               onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
@@ -2229,16 +2261,16 @@ export const Discover = () => {
 
           {mapPanelMode !== 'hidden' && !needsLocationGate && !tokenMissing ? (
             <p
-              className="pointer-events-none absolute left-1/2 z-[4] max-w-[92%] -translate-x-1/2 rounded-full px-3 py-1 text-center text-[10px] font-medium leading-snug"
+              className="pointer-events-none absolute left-1/2 z-[4] max-w-[min(70%,220px)] -translate-x-1/2 rounded-full px-2.5 py-0.5 text-center text-[9px] font-medium leading-snug"
               style={{
-                bottom: mapPanelMode === 'expanded' ? 16 : 36,
-                background: 'rgba(13,10,6,0.72)',
-                color: 'rgba(240,224,192,0.72)',
-                border: '1px solid rgba(196,131,42,0.22)',
+                top: hotSpotsLayerOn ? '4.75rem' : '3.25rem',
+                background: 'rgba(13,10,6,0.55)',
+                color: 'rgba(240,224,192,0.65)',
+                border: '1px solid rgba(196,131,42,0.18)',
               }}
               data-testid="map-privacy-note"
             >
-              Pins approximate (~100–300 m) for privacy
+              Pins ~100–300 m for privacy
             </p>
           ) : null}
 

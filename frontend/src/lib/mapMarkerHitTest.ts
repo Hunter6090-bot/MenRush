@@ -8,6 +8,7 @@
  * Contract:
  * - Markers: pointer-events: none (including descendants)
  * - Taps: map click → project lng/lat → nearest pin within a hit radius
+ * - Overlap piles: keep true lng/lat (no spiderfy); cycle taps through the stack
  */
 
 export type ScreenPoint = { x: number; y: number };
@@ -30,6 +31,29 @@ export type HitResult<TKind extends string> = HitCandidate<TKind> & {
 };
 
 /**
+ * All candidates whose projected screen position is within its hit radius of
+ * `point`, nearest first. Pins stay at true lng/lat — no screen-space fan.
+ */
+export function listHitTestMapPins<TKind extends string>(
+  map: MapProjectable,
+  point: ScreenPoint,
+  candidates: Array<HitCandidate<TKind>>,
+): Array<HitResult<TKind>> {
+  const hits: Array<HitResult<TKind>> = [];
+
+  for (const c of candidates) {
+    if (!Number.isFinite(c.lng) || !Number.isFinite(c.lat) || c.radiusPx <= 0) continue;
+    const projected = map.project([c.lng, c.lat]);
+    const distancePx = Math.hypot(projected.x - point.x, projected.y - point.y);
+    if (distancePx > c.radiusPx) continue;
+    hits.push({ ...c, distancePx });
+  }
+
+  hits.sort((a, b) => a.distancePx - b.distancePx || a.id.localeCompare(b.id));
+  return hits;
+}
+
+/**
  * Nearest candidate whose projected screen position is within its hit radius
  * of `point`. Prefer closer pins when several overlap.
  */
@@ -38,19 +62,36 @@ export function hitTestMapPins<TKind extends string>(
   point: ScreenPoint,
   candidates: Array<HitCandidate<TKind>>,
 ): HitResult<TKind> | null {
-  let best: HitResult<TKind> | null = null;
+  const hits = listHitTestMapPins(map, point, candidates);
+  return hits[0] ?? null;
+}
 
-  for (const c of candidates) {
-    if (!Number.isFinite(c.lng) || !Number.isFinite(c.lat) || c.radiusPx <= 0) continue;
-    const projected = map.project([c.lng, c.lat]);
-    const distancePx = Math.hypot(projected.x - point.x, projected.y - point.y);
-    if (distancePx > c.radiusPx) continue;
-    if (!best || distancePx < best.distancePx) {
-      best = { ...c, distancePx };
-    }
-  }
+/**
+ * When several pins share nearly the same screen pixel (overlap pile), cycle
+ * through them on repeated taps so none are permanently buried. Still uses
+ * true lng/lat projection — never relocates markers (Al #254 lock).
+ */
+export function cycleHitTestMapPins<TKind extends string>(
+  map: MapProjectable,
+  point: ScreenPoint,
+  candidates: Array<HitCandidate<TKind>>,
+  lastHitId: string | null,
+  /** Pins within this many px of the nearest hit's projected center count as one pile. */
+  stackTolerancePx = 18,
+): HitResult<TKind> | null {
+  const hits = listHitTestMapPins(map, point, candidates);
+  if (hits.length === 0) return null;
+  const nearest = hits[0];
+  const nearestProj = map.project([nearest.lng, nearest.lat]);
+  const pile = hits.filter((h) => {
+    const p = map.project([h.lng, h.lat]);
+    return Math.hypot(p.x - nearestProj.x, p.y - nearestProj.y) <= stackTolerancePx;
+  });
 
-  return best;
+  if (pile.length <= 1) return nearest;
+
+  const lastIdx = lastHitId ? pile.findIndex((h) => h.id === lastHitId) : -1;
+  return pile[(lastIdx + 1) % pile.length] ?? nearest;
 }
 
 /** People face pins — pulsing markers are slightly larger. */
@@ -59,11 +100,11 @@ export function peoplePinHitRadiusPx(isPulsing: boolean): number {
 }
 
 /**
- * Cruise / Hot Spot HTML pins include label + padding; use a generous radius so
- * taps still open the sheet while gestures pass through to the canvas.
+ * Cruise / Hot Spot HTML pins — keep hit radius tight so people under/near
+ * Cruise pins stay tappable (labels are zoom-gated separately).
  */
 export function hotSpotPinHitRadiusPx(occupied: boolean): number {
-  return occupied ? 48 : 40;
+  return occupied ? 36 : 30;
 }
 
 export function selfPinHitRadiusPx(isPulsing: boolean): number {

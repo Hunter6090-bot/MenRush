@@ -6,8 +6,9 @@ Brand face on the Nearby Map:
 | --- | --- |
 | Pin label | **Cruise** (cruise-ship icon) |
 | Map chip | **Hot Spots** (same cruise-ship icon). No extra tab. |
-| Helper / sheet / page | Commercial venues only. Saunas and gay venues. 18+ only. Follow the venue's rules. MenRush does not run these places. No illegal activity. |
-| Consent cue | Meet in public · Consent first |
+| Helper / sheet / page / map banner | **Legal RED quiet face (Brand soft-OK, #258 outdoor live):** Map spots include independent venues and outdoor locations. 18+ only. Follow the law and any venue rules. MenRush does not run these places. No illegal activity. Consent first. |
+| Consent cue | Folded into Legal face (`Consent first.`). Do **not** append "Meet in public" while outdoor pins are live. |
+| Banned live face | Any "Commercial venues only" / commercial-only-only claim while outdoor layer shows — false under Al override #258. No cruising soft-sell. |
 | Check-in | Existing Check in / Check in anonymously / Check out (4h TTL) |
 
 Spot layer ≠ live-user layer. Active / check-in counts only when real check-ins exist.
@@ -123,7 +124,7 @@ Never wipe or rewrite real user photos, covers, or albums when touching Cruise /
 ## BOA90 test plan
 
 1. Nearby Map → Hot Spots chip (cruise-ship icon) toggles the spot layer independently of People.
-2. Helper text shows commercial-only + venue rules when the layer is on.
+2. Helper / map banner shows Legal quiet face (independent venues + outdoor locations) — never "Commercial venues only" while outdoor pins are live (#258).
 3. Cruise pin label visible on empty pins; occupied pins show venue name + real check-in count only.
 4. Open sheet → Check in / anonymous / Check out still works (4h TTL).
 5. No PSE / park / outdoor categories in filters or seed.
