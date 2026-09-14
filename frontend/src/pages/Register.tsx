@@ -488,7 +488,7 @@ export const Register = () => {
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center justify-between gap-3">
                 <label className={publicLabelClass} htmlFor="register-promo-code">
-                  Pride promo (optional)
+                  Promo code (optional)
                 </label>
                 {promoCode ? (
                   <button
@@ -507,14 +507,14 @@ export const Register = () => {
                 value={promoCode}
                 onChange={(e) => onPromoChange(e.target.value)}
                 placeholder="If you have one"
-                aria-label="Pride promo code"
+                aria-label="Promo code"
                 autoComplete="off"
                 spellCheck={false}
                 className={`${publicInputClass} font-mono tracking-[0.08em]`}
                 data-testid="register-promo-input"
               />
               <p className={helperClass} data-testid="register-pride-note">
-                Optional Pride promo if you have one.
+                Optional. If you have one.
               </p>
             </div>
 
@@ -551,7 +551,7 @@ export const Register = () => {
             {error ? <p className={publicErrorClass}>{error}</p> : null}
 
             <p className={helperClass} data-testid="register-gift-note">
-              Sign up before 1 October 2026 and you get 30 days of Premium free. A Pride promo
+              Sign up before 1 October 2026 and you get 30 days of Premium free. A promo
               replaces that gift and does not stack.
             </p>
 
