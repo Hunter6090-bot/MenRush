@@ -362,6 +362,7 @@ export const Register = () => {
                 pattern="[A-Za-z0-9_-]{2,24}"
                 className={publicInputClass}
                 autoComplete="username"
+                data-testid="register-username-input"
               />
             </div>
 
