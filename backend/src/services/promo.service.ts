@@ -88,19 +88,44 @@ export const SHARED_PRIDE_SCHEDULED_LAUNCH = new Date('2026-10-01T00:00:00Z');
 export const SHARED_PRIDE_MONTHS_FREE = 3;
 
 /**
- * Fest contact promo BSF26 (Al P0). Exact code match after trim + uppercase.
- * Enter/join through end of 5 October 2026 UK inclusive.
- * UK on that date is BST (UTC+1): 5 Oct 23:59:59 BST = 2026-10-05T22:59:59Z.
- * Reuses Pride 3-month Premium clock (launch-start if booked before open).
- * Does not stack with Pride. Replaces the 30-day waitlist gift (same as Pride vs Terms 7.2).
+ * Fest contact promo BSF26 (Al P0 / Legal soft glance).
+ * Promoter (docs only): Bronze Apps UK Limited t/a MenRush.
+ *
+ * Locked:
+ * - Exact code `BSF26` (trim + uppercase; no BSF 26 / BSF-26)
+ * - Claim-by: end of 5 October 2026 Europe/London inclusive
+ *   (BST that day = UTC+1 → 23:59:59 London = 2026-10-05T22:59:59Z)
+ * - No stack with Pride; replaces 30-day waitlist gift; reject double-claim
+ * - 18+ / adult-assurance age-gate still applies at register (#97)
+ * - One account / one per person (email_hash + user_id unique on campaign)
+ *
+ * CLOCK OPEN — pending Al lock. Do not invent Al's choice.
+ * See BSF26_PREMIUM_START_MODE below (flip after Al locks).
  */
 export const SHARED_BSF26_DISPLAY_CODE = 'BSF26';
 export const SHARED_BSF26_NORMALIZED = 'BSF26';
 export const SHARED_BSF26_CAMPAIGN = 'bsf26_public';
 export const SHARED_BSF26_MONTHS_FREE = 3;
+/** Claim-by: end of day 5 Oct 2026 Europe/London (inclusive). */
 export const SHARED_BSF26_ENTER_BY = new Date('2026-10-05T22:59:59Z');
 export const SHARED_BSF26_EXPIRED_MESSAGE =
   'This promo expired on 5 October 2026.';
+
+/**
+ * BSF26 Premium start clock — PENDING Al lock (Legal soft glance).
+ * Product HOLDs merge until Al locks. Flip this constant only after Al locks.
+ *
+ * Legal options:
+ * - `from_launch`  = Option A — always start at MenRush launch (1 Oct / MENRUSH_LAUNCH_AT)
+ * - `from_redeem`  = Option B — always start at redeem day
+ * - `pride_mirror` = same hybrid Pride uses in `pridePremiumWindow`:
+ *     before launch → start at launch; on/after launch → start at redeem
+ *
+ * INTERIM DEFAULT: `pride_mirror` — Pride's rule is clear in code; Al has not
+ * chosen A vs B yet. This is not Al's locked choice.
+ */
+export type Bsf26PremiumStartMode = 'pride_mirror' | 'from_launch' | 'from_redeem';
+export const BSF26_PREMIUM_START_MODE: Bsf26PremiumStartMode = 'pride_mirror';
 
 export function isPrideInviteIssueOpen(now = new Date()): boolean {
   const t = now.getTime();
@@ -108,7 +133,7 @@ export function isPrideInviteIssueOpen(now = new Date()): boolean {
 }
 
 /**
- * Premium window for 3-month promo grants (Pride + BSF26 — same mechanics).
+ * Premium window for Pride grants (Legal-locked).
  * Booked before launch → starts at launch (on-time 1 Oct → 1 Jan; if launch slips, end moves).
  * First entered after open → starts at that redeem date (3 months from then).
  */
@@ -121,8 +146,34 @@ export function pridePremiumWindow(
   return { premiumStart, premiumEnd: premiumEndFromLaunch(premiumStart, months) };
 }
 
-/** Alias — BSF26 and Pride share the same 3-month launch-clocked window. */
-export const promoPremiumWindow = pridePremiumWindow;
+/**
+ * BSF26 Premium window — respects BSF26_PREMIUM_START_MODE (Al clock pending).
+ * Pass `mode` in tests to prove Option A / B / pride_mirror without flipping the default.
+ */
+export function bsf26PremiumWindow(
+  months = SHARED_BSF26_MONTHS_FREE,
+  now = new Date(),
+  mode: Bsf26PremiumStartMode = BSF26_PREMIUM_START_MODE,
+): { premiumStart: Date; premiumEnd: Date } {
+  const launch = getMenRushLaunchDate();
+  let premiumStart: Date;
+  switch (mode) {
+    case 'from_launch':
+      // Option A — always from launch
+      premiumStart = new Date(launch);
+      break;
+    case 'from_redeem':
+      // Option B — always from redeem day
+      premiumStart = new Date(now);
+      break;
+    case 'pride_mirror':
+    default:
+      // Interim default: mirror Pride hybrid (not Al's locked choice)
+      premiumStart = now.getTime() >= launch.getTime() ? new Date(now) : new Date(launch);
+      break;
+  }
+  return { premiumStart, premiumEnd: premiumEndFromLaunch(premiumStart, months) };
+}
 
 export function normalizeSharedPromoCode(raw: string): string {
   return raw.trim().toUpperCase().replace(/\s+/g, '');
@@ -330,13 +381,37 @@ export const promoService = {
     return { premiumStart, premiumUntil: premiumEnd };
   },
 
-  /** Alias — BSF26 reuses Pride 3-month grant mechanics. */
+  /** Alias kept for callers; Pride path uses applyPridePremiumGrant. */
   async applyPromoPremiumGrant(
     userId: string,
     monthsFree: number,
     client?: PoolClient,
   ): Promise<{ premiumStart: Date; premiumUntil: Date }> {
     return this.applyPridePremiumGrant(userId, monthsFree, client);
+  },
+
+  /**
+   * Apply BSF26 Premium using BSF26_PREMIUM_START_MODE (Al clock pending).
+   * Separate from Pride grant so Option A/B can flip without touching Pride.
+   */
+  async applyBsf26PremiumGrant(
+    userId: string,
+    monthsFree: number,
+    client?: PoolClient,
+  ): Promise<{ premiumStart: Date; premiumUntil: Date }> {
+    const db: Queryable = client ?? pool;
+    const { premiumStart, premiumEnd } = bsf26PremiumWindow(monthsFree);
+    await db.query(
+      `UPDATE users
+       SET is_premium = TRUE,
+           premium_tier = 'premium',
+           premium_starts_at = $2,
+           premium_until = $3,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [userId, premiumStart, premiumEnd],
+    );
+    return { premiumStart, premiumUntil: premiumEnd };
   },
 
   /**
@@ -486,8 +561,9 @@ export const promoService = {
 
   /**
    * Validate fest contact code BSF26 (exact match).
-   * Enter/join through end of 5 October 2026 UK.
+   * Claim-by: end of 5 October 2026 Europe/London inclusive.
    * One per email. Does not stack with Pride. Replaces 30-day waitlist gift.
+   * Premium start follows BSF26_PREMIUM_START_MODE (Al clock pending).
    */
   async validateSharedBsf26(
     code: string,
@@ -515,7 +591,7 @@ export const promoService = {
       return { valid: false, reason: 'already_redeemed' };
     }
 
-    const { premiumStart, premiumEnd } = promoPremiumWindow(SHARED_BSF26_MONTHS_FREE);
+    const { premiumStart, premiumEnd } = bsf26PremiumWindow(SHARED_BSF26_MONTHS_FREE);
     return {
       valid: true,
       monthsFree: SHARED_BSF26_MONTHS_FREE,
@@ -526,8 +602,9 @@ export const promoService = {
   },
 
   /**
-   * Redeem BSF26 for a new user. Reuses Pride 3-month Premium clock.
-   * Replaces Terms 7.2 waitlist gift. Does not stack with Pride.
+   * Redeem BSF26 for a new user.
+   * Replaces Terms 7.2 waitlist gift. Does not stack with Pride. Rejects double-claim.
+   * Start clock: BSF26_PREMIUM_START_MODE (pending Al lock).
    */
   async redeemSharedBsf26(
     code: string,
@@ -568,7 +645,7 @@ export const promoService = {
       throw err;
     }
 
-    const { premiumUntil } = await this.applyPromoPremiumGrant(
+    const { premiumUntil } = await this.applyBsf26PremiumGrant(
       userId,
       validation.monthsFree,
       client,

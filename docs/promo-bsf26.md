@@ -1,54 +1,62 @@
 # Promo BSF26 (fest contact)
 
-Quiet ops note. No marketing face. Al P0 for a fest contact.
+Quiet ops note. No marketing face. Al P0 / Legal soft glance.
 
-## Rules (locked)
+Promoter (docs only): **Bronze Apps UK Limited t/a MenRush**.
+
+## Legal soft glance — LOCKED
 
 | Rule | Detail |
 | --- | --- |
 | Code | `BSF26` exact (trim + uppercase). No `BSF 26` / `BSF-26`. |
-| Grant | 3 months Premium — **same clock as Pride** (`pridePremiumWindow` / `applyPridePremiumGrant`) |
-| Window | Join/redeem from now through **end of 5 October 2026 UK** inclusive |
-| Timezone | UK on that date is BST (UTC+1). Cutoff stored as `2026-10-05T22:59:59Z` (= 23:59:59 BST). |
-| Stacking vs Pride | **Does not stack.** One 3-month promo path per email (Pride public / invite / personal **or** BSF26). |
-| Stacking vs 30-day gift | **Same as Pride vs Terms 7.2:** BSF26 **replaces** the 30-day waitlist gift. Not added on top. |
-| Eligibility | 18+, one account / email, exact code at register |
+| Claim-by | **5 October 2026 Europe/London end of day inclusive** → `2026-10-05T22:59:59Z` (BST that day) |
+| Stacking vs Pride | **No stack.** Reject if any Pride path exists. |
+| vs 30-day gift | **Replaces** Terms 7.2 waitlist gift (same as Pride). Not added on top. |
+| Double-claim | Rejected (`shared_promo_redemptions` unique on email_hash + user_id per campaign) |
+| 18+ | Adult-assurance age-gate still applies at register (**#97**) |
+| One account | One per person / email |
 
 Legal face: Terms **§7.8**. Pride §7.7 notes BSF26 cannot be combined.
 
-## What Pride did (and what we reused)
+## CLOCK OPEN — pending Al lock (Product HOLD merge)
+
+Al has **not** locked when the 3 months start. Do not invent Al's choice.
+
+| Mode | Meaning | Config value |
+| --- | --- | --- |
+| Option A | Always from MenRush launch (1 Oct / `MENRUSH_LAUNCH_AT`) | `from_launch` |
+| Option B | Always from redeem day | `from_redeem` |
+| Pride hybrid (interim) | Before launch → launch; on/after launch → redeem | `pride_mirror` |
+
+**Interim default in code: `pride_mirror`** (`BSF26_PREMIUM_START_MODE` in `promo.service.ts`).
+
+Why: Pride's start rule is clear in `pridePremiumWindow`. Legal offered A vs B; until Al locks, we default to the Pride hybrid and keep A/B one-line flips. This is **not** Al's locked choice.
+
+After Al locks: set `BSF26_PREMIUM_START_MODE` to `from_launch` or `from_redeem`, update Terms §7.8, re-run `npm run test:bsf26`.
+
+## What Pride did (reuse / separation)
 
 Pride public code `PRIDE 3MONTH FREE`:
 
-1. Validate at register (`validateSharedPride`)
-2. Insert `shared_promo_redemptions` (campaign + email_hash unique)
-3. Apply Premium via `applyPridePremiumGrant` → `premium_starts_at` / `premium_until` from `pridePremiumWindow` (launch if before open; else redeem date + 3 calendar months)
-4. Skip `grantWaitlistGift` when a Pride path applied
+1. Validate at register
+2. Insert `shared_promo_redemptions`
+3. Apply Premium via `applyPridePremiumGrant` → `pridePremiumWindow`
+4. Skip `grantWaitlistGift`
 
-BSF26 reuses steps 2–4 with campaign `bsf26_public` and `redeemSharedBsf26`. Cross-checks Pride paths so the two cannot stack.
+BSF26 reuses redemption table + grant shape, but applies via **`applyBsf26PremiumGrant` → `bsf26PremiumWindow(mode)`** so the clock can flip without touching Pride.
 
 ## Smoke-test (BOA90 / owner account path)
 
-Product tests on BOA90 before wide claim. Suggested path after deploy:
+Product tests on BOA90 before wide claim. After deploy:
 
 1. Soft-refresh BOA90 app / staging.
-2. Open register with `?promo=BSF26` (or type `BSF26` in the promo field). Quiet face — no landing marketing required.
-3. Create a **fresh** 18+ test email (not an email that already redeemed Pride or BSF26).
-4. Complete adult assurance if required on that environment.
-5. After signup, check Premium: `is_premium`, `premium_starts_at`, `premium_until` ≈ 3 months from launch (or from redeem if after 1 Oct). Confirm **no** extra 30-day waitlist gift stacked.
-6. Negative checks:
-   - Same email + BSF26 again → already used / cannot stack
-   - Email with Pride path + BSF26 → stack blocked
-   - `BSF 26` / `BSF-26` → not valid (exact match)
-   - After `2026-10-05T22:59:59Z` → expired message
-7. Referral field with `BSF26` → rejected (use promo field)
-
-Owner always-Premium accounts (BOA90) keep lifetime Premium; use a disposable test account for grant shape, or inspect `shared_promo_redemptions` for campaign `bsf26_public`.
+2. Register with `?promo=BSF26` (or type `BSF26`) on a **fresh** 18+ email. Complete adult assurance if required (#97).
+3. Confirm Premium: `premium_starts_at` / `premium_until` match **current** `BSF26_PREMIUM_START_MODE` (interim = Pride hybrid). Confirm **no** stacked 30-day gift.
+4. Negatives: double-claim; Pride path + BSF26; `BSF 26` / `BSF-26`; after claim-by; referral field with `BSF26`.
 
 ## Code map
 
-- `backend/src/services/promo.service.ts` — constants, validate/redeem
-- `backend/src/services/auth.service.ts` — register branch (BSF26 before waitlist gift)
-- `backend/src/services/referral.service.ts` — foreign-code reject
-- `frontend/src/pages/Terms.tsx` — §7.8
+- `BSF26_PREMIUM_START_MODE` / `bsf26PremiumWindow` / `applyBsf26PremiumGrant` — `backend/src/services/promo.service.ts`
+- Register branch — `backend/src/services/auth.service.ts`
+- Terms §7.8 — `frontend/src/pages/Terms.tsx`
 - Checks: `npm run test:bsf26` from `backend/`

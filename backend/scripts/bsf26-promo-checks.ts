@@ -5,6 +5,8 @@
  */
 import assert from 'assert';
 import {
+  BSF26_PREMIUM_START_MODE,
+  bsf26PremiumWindow,
   isBsf26EnterOpen,
   isSharedBsf26Code,
   isSharedPrideCode,
@@ -41,8 +43,8 @@ test('BSF26 exact match only (trim + uppercase; no space/hyphen variants)', () =
   assert.strictEqual(SHARED_BSF26_MONTHS_FREE, 3);
 });
 
-test('BSF26 enter window through end of 5 Oct 2026 UK (BST → UTC)', () => {
-  // End of 5 Oct 2026 BST = 2026-10-05T22:59:59Z
+test('BSF26 claim-by: end of 5 Oct 2026 Europe/London inclusive', () => {
+  // Europe/London that day is BST (UTC+1): 23:59:59 London = 2026-10-05T22:59:59Z
   assert.strictEqual(SHARED_BSF26_ENTER_BY.toISOString(), '2026-10-05T22:59:59.000Z');
   assert.strictEqual(isBsf26EnterOpen(new Date('2026-10-05T22:59:59Z')), true);
   assert.strictEqual(isBsf26EnterOpen(new Date('2026-10-05T23:00:00Z')), false);
@@ -50,16 +52,39 @@ test('BSF26 enter window through end of 5 Oct 2026 UK (BST → UTC)', () => {
   assert.match(SHARED_BSF26_EXPIRED_MESSAGE, /5 October 2026/);
 });
 
-test('BSF26 reuses Pride 3-month Premium clock', () => {
-  const beforeLaunch = pridePremiumWindow(3, new Date('2026-09-20T12:00:00Z'));
-  assert.strictEqual(beforeLaunch.premiumStart.toISOString().startsWith('2026-10-01'), true);
+test('BSF26 clock interim default is pride_mirror (Al not locked); modes flip cleanly', () => {
+  // Do not invent Al's choice — default must stay pride_mirror until Al locks.
+  assert.strictEqual(BSF26_PREMIUM_START_MODE, 'pride_mirror');
+
+  const beforeLaunch = new Date('2026-09-20T12:00:00Z');
+  const afterLaunch = new Date('2026-10-03T15:00:00Z');
+
+  // pride_mirror matches Pride hybrid
+  const prideBefore = pridePremiumWindow(3, beforeLaunch);
+  const mirrorBefore = bsf26PremiumWindow(3, beforeLaunch, 'pride_mirror');
+  assert.strictEqual(mirrorBefore.premiumStart.toISOString(), prideBefore.premiumStart.toISOString());
+  assert.strictEqual(mirrorBefore.premiumEnd.toISOString(), prideBefore.premiumEnd.toISOString());
+
+  const prideAfter = pridePremiumWindow(3, afterLaunch);
+  const mirrorAfter = bsf26PremiumWindow(3, afterLaunch, 'pride_mirror');
+  assert.strictEqual(mirrorAfter.premiumStart.toISOString(), prideAfter.premiumStart.toISOString());
+
+  // Option A: from_launch — always launch, even post-1-Oct
+  const optA = bsf26PremiumWindow(3, afterLaunch, 'from_launch');
+  assert.strictEqual(optA.premiumStart.toISOString().startsWith('2026-10-01'), true);
+  assert.notStrictEqual(optA.premiumStart.toISOString(), afterLaunch.toISOString());
+
+  // Option B: from_redeem — always redeem day
+  const optB = bsf26PremiumWindow(3, afterLaunch, 'from_redeem');
+  assert.strictEqual(optB.premiumStart.toISOString(), afterLaunch.toISOString());
   assert.strictEqual(
-    beforeLaunch.premiumEnd.toISOString(),
-    premiumEndFromLaunch(beforeLaunch.premiumStart, 3).toISOString(),
+    optB.premiumEnd.toISOString(),
+    premiumEndFromLaunch(afterLaunch, 3).toISOString(),
   );
 
-  const afterLaunch = pridePremiumWindow(3, new Date('2026-10-03T15:00:00Z'));
-  assert.strictEqual(afterLaunch.premiumStart.toISOString().startsWith('2026-10-03'), true);
+  // Default export path uses pride_mirror
+  const defaultWin = bsf26PremiumWindow(3, beforeLaunch);
+  assert.strictEqual(defaultWin.premiumStart.toISOString().startsWith('2026-10-01'), true);
 });
 
 test('BSF26 is not Pride; referral field rejects it as foreign', () => {

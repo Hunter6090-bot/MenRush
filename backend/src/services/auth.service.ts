@@ -383,7 +383,8 @@ export const authService = {
           client,
         );
       } else if (usingSharedBsf26) {
-        // BSF26: 3 months Premium (Pride clock). Replaces waitlist gift. No Pride stack.
+        // BSF26: 3 months Premium. Start clock = BSF26_PREMIUM_START_MODE (Al pending).
+        // Replaces waitlist gift. No Pride stack. Double-claim rejected in redeem.
         await promoService.redeemSharedBsf26(promoCode!, data.email, user!.id as string, client);
       } else if (usingSharedPride) {
         await promoService.redeemSharedPride(promoCode!, data.email, user!.id as string, client);
