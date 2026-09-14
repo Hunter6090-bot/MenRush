@@ -77,6 +77,8 @@ async function main() {
   assert.notStrictEqual(codeA, codeB);
   assert.strictEqual(normalizeReferralCode(' mrabc12345 '), 'MRABC12345');
   assert.strictEqual(classifyForeignCode('PRIDE 3MONTH FREE'), 'pride');
+  assert.strictEqual(classifyForeignCode('BSF26'), 'bsf26');
+  assert.strictEqual(classifyForeignCode('bsf26'), 'bsf26');
   assert.strictEqual(classifyForeignCode('MENRUSH-ABCD-EFGH'), 'invite');
   assert.strictEqual(classifyForeignCode('MRK7N2P9QX'), null);
 

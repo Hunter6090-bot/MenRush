@@ -87,13 +87,28 @@ export const PRIDE_INVITE_ISSUE_CLOSES = new Date('2026-08-31T22:59:59Z');
 export const SHARED_PRIDE_SCHEDULED_LAUNCH = new Date('2026-10-01T00:00:00Z');
 export const SHARED_PRIDE_MONTHS_FREE = 3;
 
+/**
+ * Fest contact promo BSF26 (Al P0). Exact code match after trim + uppercase.
+ * Enter/join through end of 5 October 2026 UK inclusive.
+ * UK on that date is BST (UTC+1): 5 Oct 23:59:59 BST = 2026-10-05T22:59:59Z.
+ * Reuses Pride 3-month Premium clock (launch-start if booked before open).
+ * Does not stack with Pride. Replaces the 30-day waitlist gift (same as Pride vs Terms 7.2).
+ */
+export const SHARED_BSF26_DISPLAY_CODE = 'BSF26';
+export const SHARED_BSF26_NORMALIZED = 'BSF26';
+export const SHARED_BSF26_CAMPAIGN = 'bsf26_public';
+export const SHARED_BSF26_MONTHS_FREE = 3;
+export const SHARED_BSF26_ENTER_BY = new Date('2026-10-05T22:59:59Z');
+export const SHARED_BSF26_EXPIRED_MESSAGE =
+  'This promo expired on 5 October 2026.';
+
 export function isPrideInviteIssueOpen(now = new Date()): boolean {
   const t = now.getTime();
   return t >= PRIDE_INVITE_ISSUE_OPENS.getTime() && t <= PRIDE_INVITE_ISSUE_CLOSES.getTime();
 }
 
 /**
- * Premium window for Pride grants (Legal-locked).
+ * Premium window for 3-month promo grants (Pride + BSF26 — same mechanics).
  * Booked before launch → starts at launch (on-time 1 Oct → 1 Jan; if launch slips, end moves).
  * First entered after open → starts at that redeem date (3 months from then).
  */
@@ -105,6 +120,9 @@ export function pridePremiumWindow(
   const premiumStart = now.getTime() >= launch.getTime() ? now : launch;
   return { premiumStart, premiumEnd: premiumEndFromLaunch(premiumStart, months) };
 }
+
+/** Alias — BSF26 and Pride share the same 3-month launch-clocked window. */
+export const promoPremiumWindow = pridePremiumWindow;
 
 export function normalizeSharedPromoCode(raw: string): string {
   return raw.trim().toUpperCase().replace(/\s+/g, '');
@@ -138,6 +156,18 @@ export function personalPrideExpiredMessage(expiresAt?: Date | null): string {
 
 export function isSharedPrideCode(raw: string): boolean {
   return normalizeSharedPromoCode(raw) === SHARED_PRIDE_NORMALIZED;
+}
+
+/**
+ * Exact match for BSF26 after trim + uppercase.
+ * Rejects spaced / hyphenated variants (BSF 26, BSF-26).
+ */
+export function isSharedBsf26Code(raw: string): boolean {
+  return raw.trim().toUpperCase() === SHARED_BSF26_NORMALIZED;
+}
+
+export function isBsf26EnterOpen(now = new Date()): boolean {
+  return now.getTime() <= SHARED_BSF26_ENTER_BY.getTime();
 }
 
 /** Actual open date: MENRUSH_LAUNCH_AT env, else 1 October 2026. */
@@ -181,7 +211,14 @@ export type SharedPrideValidateResult =
   | { valid: true; monthsFree: number; campaign: string; premiumStart: Date; premiumEnd: Date }
   | {
       valid: false;
-      reason: 'not_found' | 'already_redeemed' | 'expired' | 'other_pride_path';
+      reason: 'not_found' | 'already_redeemed' | 'expired' | 'other_pride_path' | 'other_promo_path';
+    };
+
+export type SharedBsf26ValidateResult =
+  | { valid: true; monthsFree: number; campaign: string; premiumStart: Date; premiumEnd: Date }
+  | {
+      valid: false;
+      reason: 'not_found' | 'already_redeemed' | 'expired' | 'other_promo_path';
     };
 
 export const promoService = {
@@ -220,6 +257,18 @@ export const promoService = {
     return result.rows.length > 0;
   },
 
+  /** True if this email already redeemed BSF26 (one account, no re-use). */
+  async emailHasBsf26Redeem(email: string): Promise<boolean> {
+    const emailHash = hashEmail(email);
+    const result = await query(
+      `SELECT 1 FROM shared_promo_redemptions
+       WHERE campaign = $1 AND email_hash = $2
+       LIMIT 1`,
+      [SHARED_BSF26_CAMPAIGN, emailHash],
+    );
+    return result.rows.length > 0;
+  },
+
   /** Outstanding unused Pride-flagged invite for this email. */
   async emailHasPendingPrideInvite(email: string): Promise<boolean> {
     const normalised = email.trim().toLowerCase();
@@ -248,8 +297,18 @@ export const promoService = {
   },
 
   /**
-   * Book / apply Pride Premium. Sets premium_starts_at so entitlement is not
-   * usable before launch (or before first redeem after open). No second entry later.
+   * Any 3-month promo already claimed or outstanding (Pride or BSF26 — no stack).
+   */
+  async emailHasAnyThreeMonthPromo(email: string): Promise<boolean> {
+    if (await this.emailHasAnyPridePath(email)) return true;
+    if (await this.emailHasBsf26Redeem(email)) return true;
+    return false;
+  },
+
+  /**
+   * Book / apply 3-month Premium (Pride + BSF26 share this clock).
+   * Sets premium_starts_at so entitlement is not usable before launch
+   * (or before first redeem after open). No second entry later.
    */
   async applyPridePremiumGrant(
     userId: string,
@@ -271,6 +330,15 @@ export const promoService = {
     return { premiumStart, premiumUntil: premiumEnd };
   },
 
+  /** Alias — BSF26 reuses Pride 3-month grant mechanics. */
+  async applyPromoPremiumGrant(
+    userId: string,
+    monthsFree: number,
+    client?: PoolClient,
+  ): Promise<{ premiumStart: Date; premiumUntil: Date }> {
+    return this.applyPridePremiumGrant(userId, monthsFree, client);
+  },
+
   /**
    * Record Pride-flagged invite redemption + book Premium.
    */
@@ -283,13 +351,9 @@ export const promoService = {
     const db: Queryable = client ?? pool;
     const emailHash = hashEmail(email);
 
-    if (
-      (await this.emailHasPublicPrideRedeem(email)) ||
-      (await this.emailHasBrightonPrideClaim(email)) ||
-      (await this.emailHasPrideInviteRedeem(email))
-    ) {
+    if (await this.emailHasAnyThreeMonthPromo(email)) {
       throw new Error(
-        'This email already has a Pride Premium grant. The code cannot be stacked.',
+        'This email already has a 3-month Premium grant. The code cannot be stacked.',
       );
     }
 
@@ -317,7 +381,7 @@ export const promoService = {
   /**
    * Validate the printed public Pride QR code (PRIDE 3MONTH FREE).
    * Spaces ignored. One per email. Enter-by 5 September 2026.
-   * Blocks if this email already has another Pride path (no stacking).
+   * Blocks if this email already has another Pride path or BSF26 (no stacking).
    */
   async validateSharedPride(
     code: string,
@@ -338,6 +402,9 @@ export const promoService = {
     }
     if (await this.emailHasPendingPrideInvite(email)) {
       return { valid: false, reason: 'other_pride_path' };
+    }
+    if (await this.emailHasBsf26Redeem(email)) {
+      return { valid: false, reason: 'other_promo_path' };
     }
 
     const emailHash = hashEmail(email);
@@ -364,7 +431,7 @@ export const promoService = {
   /**
    * Redeem printed public Pride code for a new user.
    * Premium: 3 calendar months from actual launch (or first redeem after open).
-   * Does not stack with Pride invite or Brighton personal code.
+   * Does not stack with Pride invite, Brighton personal code, or BSF26.
    */
   async redeemSharedPride(
     code: string,
@@ -375,9 +442,9 @@ export const promoService = {
     const db: Queryable = client ?? pool;
     const validation = await this.validateSharedPride(code, email);
     if (!validation.valid) {
-      if (validation.reason === 'other_pride_path') {
+      if (validation.reason === 'other_pride_path' || validation.reason === 'other_promo_path') {
         throw new Error(
-          'This email already has a Pride Premium grant. The code cannot be stacked.',
+          'This email already has a 3-month Premium grant. The code cannot be stacked.',
         );
       }
       if (validation.reason === 'expired') {
@@ -416,6 +483,103 @@ export const promoService = {
       premiumUntil,
     };
   },
+
+  /**
+   * Validate fest contact code BSF26 (exact match).
+   * Enter/join through end of 5 October 2026 UK.
+   * One per email. Does not stack with Pride. Replaces 30-day waitlist gift.
+   */
+  async validateSharedBsf26(
+    code: string,
+    email: string,
+  ): Promise<SharedBsf26ValidateResult> {
+    if (!isSharedBsf26Code(code)) {
+      return { valid: false, reason: 'not_found' };
+    }
+    if (!isBsf26EnterOpen()) {
+      return { valid: false, reason: 'expired' };
+    }
+
+    if (await this.emailHasAnyPridePath(email)) {
+      return { valid: false, reason: 'other_promo_path' };
+    }
+
+    const emailHash = hashEmail(email);
+    const existing = await query(
+      `SELECT 1 FROM shared_promo_redemptions
+       WHERE campaign = $1 AND email_hash = $2
+       LIMIT 1`,
+      [SHARED_BSF26_CAMPAIGN, emailHash],
+    );
+    if (existing.rows.length > 0) {
+      return { valid: false, reason: 'already_redeemed' };
+    }
+
+    const { premiumStart, premiumEnd } = promoPremiumWindow(SHARED_BSF26_MONTHS_FREE);
+    return {
+      valid: true,
+      monthsFree: SHARED_BSF26_MONTHS_FREE,
+      campaign: SHARED_BSF26_CAMPAIGN,
+      premiumStart,
+      premiumEnd,
+    };
+  },
+
+  /**
+   * Redeem BSF26 for a new user. Reuses Pride 3-month Premium clock.
+   * Replaces Terms 7.2 waitlist gift. Does not stack with Pride.
+   */
+  async redeemSharedBsf26(
+    code: string,
+    email: string,
+    userId: string,
+    client?: PoolClient,
+  ): Promise<{ monthsFree: number; premiumUntil: Date }> {
+    const db: Queryable = client ?? pool;
+    const validation = await this.validateSharedBsf26(code, email);
+    if (!validation.valid) {
+      if (validation.reason === 'other_promo_path') {
+        throw new Error(
+          'This email already has a Pride Premium grant. Codes cannot be stacked.',
+        );
+      }
+      if (validation.reason === 'expired') {
+        throw new Error(SHARED_BSF26_EXPIRED_MESSAGE);
+      }
+      if (validation.reason === 'already_redeemed') {
+        throw new Error('This promo has already been used for this email.');
+      }
+      throw new Error('This promo code is not valid.');
+    }
+
+    const emailHash = hashEmail(email);
+    try {
+      await db.query(
+        `INSERT INTO shared_promo_redemptions
+           (campaign, code_normalized, user_id, email_hash)
+         VALUES ($1, $2, $3, $4)`,
+        [SHARED_BSF26_CAMPAIGN, SHARED_BSF26_NORMALIZED, userId, emailHash],
+      );
+    } catch (err: unknown) {
+      const pg = err as { code?: string };
+      if (pg.code === '23505') {
+        throw new Error('This promo has already been used for this email.');
+      }
+      throw err;
+    }
+
+    const { premiumUntil } = await this.applyPromoPremiumGrant(
+      userId,
+      validation.monthsFree,
+      client,
+    );
+
+    return {
+      monthsFree: validation.monthsFree,
+      premiumUntil,
+    };
+  },
+
   /**
    * Issue a promo code for the given email + campaign.
    *
@@ -533,7 +697,7 @@ export const promoService = {
   /**
    * Redeem an already-issued personal Pride code (e.g. PRIDE-XXXX-XXXX) at register.
    * Applies Premium for months_free calendar months from actual launch.
-   * Blocks stack with public PRIDE 3MONTH FREE. Redeem-by follows promo_codes.expires_at
+   * Blocks stack with public PRIDE 3MONTH FREE and BSF26. Redeem-by follows promo_codes.expires_at
    * (31 Oct 2026 for brightonpride26 after migration 037).
    */
   async redeemPersonalPride(
@@ -543,7 +707,7 @@ export const promoService = {
     client?: PoolClient,
   ): Promise<{ monthsFree: number; premiumUntil: Date }> {
     const db: Queryable = client ?? pool;
-    if (isSharedPrideCode(code)) {
+    if (isSharedPrideCode(code) || isSharedBsf26Code(code)) {
       throw new Error('This promo code is not valid.');
     }
 
@@ -570,6 +734,11 @@ export const promoService = {
     if (await this.emailHasPrideInviteRedeem(email)) {
       throw new Error(
         'This email already has a Pride Premium grant. The code cannot be stacked.',
+      );
+    }
+    if (await this.emailHasBsf26Redeem(email)) {
+      throw new Error(
+        'This email already has a BSF26 Premium grant. Codes cannot be stacked.',
       );
     }
 

@@ -33,9 +33,11 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { inviteCodeService } from './invite-code.service';
 import {
+  isSharedBsf26Code,
   isSharedPrideCode,
   personalPrideExpiredMessage,
   promoService,
+  SHARED_BSF26_EXPIRED_MESSAGE,
   SHARED_PRIDE_EXPIRED_MESSAGE,
 } from './promo.service';
 import { assertPrideInviteEmailMatch } from './prideInvite.service';
@@ -139,8 +141,13 @@ export const authService = {
     const inviteCode = data.invite_code?.trim();
     const promoCode = data.promo_code?.trim();
     const referralCodeRaw = data.referral_code?.trim();
+    const usingSharedBsf26 = !!(promoCode && isSharedBsf26Code(promoCode));
     const usingSharedPride = !!(promoCode && isSharedPrideCode(promoCode));
-    const usingPersonalPride = !!(promoCode && !isSharedPrideCode(promoCode));
+    const usingPersonalPride = !!(
+      promoCode &&
+      !isSharedPrideCode(promoCode) &&
+      !isSharedBsf26Code(promoCode)
+    );
 
     // Resolve referral before INSERT — invalid codes fail closed (no user row).
     let resolvedReferrer: { referrerId: string; code: string } | null = null;
@@ -153,7 +160,7 @@ export const authService = {
       prideInviteMonths = await inviteCodeService.getPrideMonths(inviteCode);
       if (prideInviteMonths) {
         await assertPrideInviteEmailMatch(inviteCode, data.email);
-        if (usingSharedPride || usingPersonalPride) {
+        if (usingSharedPride || usingPersonalPride || usingSharedBsf26) {
           throw new Error(
             'This Pride invite already books Premium. Clear the promo code field — do not stack.',
           );
@@ -161,7 +168,23 @@ export const authService = {
       }
     }
 
-    if (usingSharedPride) {
+    if (usingSharedBsf26) {
+      const bsfCheck = await promoService.validateSharedBsf26(promoCode!, data.email);
+      if (!bsfCheck.valid) {
+        if (bsfCheck.reason === 'expired') {
+          throw new Error(SHARED_BSF26_EXPIRED_MESSAGE);
+        }
+        if (bsfCheck.reason === 'already_redeemed') {
+          throw new Error('This promo has already been used for this email.');
+        }
+        if (bsfCheck.reason === 'other_promo_path') {
+          throw new Error(
+            'This email already has a Pride Premium grant. Codes cannot be stacked.',
+          );
+        }
+        throw new Error('This promo code is not valid.');
+      }
+    } else if (usingSharedPride) {
       const prideCheck = await promoService.validateSharedPride(promoCode!, data.email);
       if (!prideCheck.valid) {
         if (prideCheck.reason === 'expired') {
@@ -173,6 +196,11 @@ export const authService = {
         if (prideCheck.reason === 'other_pride_path') {
           throw new Error(
             'This email already has a Pride path. Enter that invite or personal code instead — do not stack with PRIDE 3MONTH FREE.',
+          );
+        }
+        if (prideCheck.reason === 'other_promo_path') {
+          throw new Error(
+            'This email already has a BSF26 Premium grant. Codes cannot be stacked.',
           );
         }
         throw new Error('This promo code is not valid.');
@@ -193,10 +221,11 @@ export const authService = {
       }
       if (
         (await promoService.emailHasPublicPrideRedeem(data.email)) ||
-        (await promoService.emailHasPrideInviteRedeem(data.email))
+        (await promoService.emailHasPrideInviteRedeem(data.email)) ||
+        (await promoService.emailHasBsf26Redeem(data.email))
       ) {
         throw new Error(
-          'This email already has a Pride Premium grant. The code cannot be stacked.',
+          'This email already has a 3-month Premium grant. The code cannot be stacked.',
         );
       }
     }
@@ -353,13 +382,16 @@ export const authService = {
           prideInviteMonths,
           client,
         );
+      } else if (usingSharedBsf26) {
+        // BSF26: 3 months Premium (Pride clock). Replaces waitlist gift. No Pride stack.
+        await promoService.redeemSharedBsf26(promoCode!, data.email, user!.id as string, client);
       } else if (usingSharedPride) {
         await promoService.redeemSharedPride(promoCode!, data.email, user!.id as string, client);
       } else if (usingPersonalPride) {
         await promoService.redeemPersonalPride(promoCode!, data.email, user!.id as string, client);
       } else {
         // Terms 7.2 waitlist gift: 30 days Premium before 1 Oct 2026 UK.
-        // Pride replaces this gift — do not stack.
+        // Pride / BSF26 replace this gift — do not stack.
         await premiumService.grantWaitlistGift(user!.id as string, client);
       }
 

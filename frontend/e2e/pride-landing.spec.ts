@@ -135,6 +135,8 @@ test.describe('Pride promotion landing', () => {
     await expect(body).toContainText(/1 October 2026/i);
     await expect(body).toContainText(/1 January 2027/i);
     await expect(body).toContainText(/If launch slips/i);
+    await expect(body).toContainText(/7\.8/i);
+    await expect(body).toContainText('BSF26');
     await expect(body).not.toContainText(/Brighton/i);
     await expect(body).not.toContainText(/London · Manchester · Birmingham/i);
 
