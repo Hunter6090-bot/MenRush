@@ -383,7 +383,7 @@ export const authService = {
           client,
         );
       } else if (usingSharedBsf26) {
-        // BSF26: 3 months Premium. Start clock = BSF26_PREMIUM_START_MODE (Al pending).
+        // BSF26 = BearScotsFest 2026 only (not a general promo). Clock = BSF26_PREMIUM_START_MODE (Al pending).
         // Replaces waitlist gift. No Pride stack. Double-claim rejected in redeem.
         await promoService.redeemSharedBsf26(promoCode!, data.email, user!.id as string, client);
       } else if (usingSharedPride) {

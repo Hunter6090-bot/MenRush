@@ -1,5 +1,6 @@
 /**
- * BSF26 fest-contact promo checks (pure surface — no DB writes).
+ * BSF26 BearScotsFest 2026-only promo checks (pure surface — no DB writes).
+ * Not a general-purpose promo. Rugby club codes are out of scope here.
  *
  * Run from backend/: npm run test:bsf26
  */
@@ -29,7 +30,7 @@ function test(name: string, run: Test['run']) {
   tests.push({ name, run });
 }
 
-test('BSF26 exact match only (trim + uppercase; no space/hyphen variants)', () => {
+test('BSF26 exact match only — BearScotsFest 2026 code (no space/hyphen variants)', () => {
   assert.strictEqual(isSharedBsf26Code(SHARED_BSF26_DISPLAY_CODE), true);
   assert.strictEqual(isSharedBsf26Code('bsf26'), true);
   assert.strictEqual(isSharedBsf26Code(' BSF26 '), true);

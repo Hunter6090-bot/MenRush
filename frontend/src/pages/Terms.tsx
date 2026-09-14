@@ -444,15 +444,16 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>7.8</Strong> Promo code{' '}
-                  <span className="font-mono tracking-wide">BSF26</span>. Exact code match at
-                  register. Valid to claim through end of 5 October 2026 Europe/London time.
-                  Grants 3 months of Premium. One grant per person / email. 18+ only (age-gate
-                  applies). Does not stack with Pride (clause 7.7). Replaces the 30-day waitlist
-                  Premium gift in clause 7.2. It does not add to that gift. Double-claim rejected.
-                  You will not be billed for this offer. Promoter: Bronze Apps UK Limited trading
-                  as MenRush. Duration start clock: pending Al lock. Until locked, interim start
-                  mirrors clause 7.7 (from launch if booked before open; otherwise from redeem).
+                  <Strong>7.8</Strong> BearScotsFest 2026 promo code{' '}
+                  <span className="font-mono tracking-wide">BSF26</span> only. Not a
+                  general-purpose promo code. Exact code match at register. Valid to claim
+                  through end of 5 October 2026 Europe/London time. Grants 3 months of Premium.
+                  One grant per person / email. 18+ only (age-gate applies). Does not stack with
+                  Pride (clause 7.7). Replaces the 30-day waitlist Premium gift in clause 7.2. It
+                  does not add to that gift. Double-claim rejected. You will not be billed for this
+                  offer. Promoter: Bronze Apps UK Limited trading as MenRush. Duration start clock:
+                  pending Al lock. Until locked, interim start mirrors clause 7.7 (from launch if
+                  booked before open; otherwise from redeem).
                 </>,
               )}
             </section>

@@ -137,6 +137,8 @@ test.describe('Pride promotion landing', () => {
     await expect(body).toContainText(/If launch slips/i);
     await expect(body).toContainText(/7\.8/i);
     await expect(body).toContainText('BSF26');
+    await expect(body).toContainText(/BearScotsFest 2026/i);
+    await expect(body).toContainText(/Not a general-purpose promo/i);
     await expect(body).toContainText(/Europe\/London/i);
     await expect(body).toContainText(/pending Al lock/i);
     await expect(body).toContainText(/Bronze Apps UK Limited/i);

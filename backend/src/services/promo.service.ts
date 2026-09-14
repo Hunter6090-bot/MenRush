@@ -88,7 +88,10 @@ export const SHARED_PRIDE_SCHEDULED_LAUNCH = new Date('2026-10-01T00:00:00Z');
 export const SHARED_PRIDE_MONTHS_FREE = 3;
 
 /**
- * Fest contact promo BSF26 (Al P0 / Legal soft glance).
+ * BearScotsFest 2026 ONLY — code BSF26 (Al P0 / Legal soft glance).
+ * Not a general-purpose promo. Rugby club codes are separate later work
+ * (one code per club = club name Title Case with spaces; same 3mo stack) —
+ * do not invent rugby codes here.
  * Promoter (docs only): Bronze Apps UK Limited t/a MenRush.
  *
  * Locked:
@@ -112,7 +115,7 @@ export const SHARED_BSF26_EXPIRED_MESSAGE =
   'This promo expired on 5 October 2026.';
 
 /**
- * BSF26 Premium start clock — PENDING Al lock (Legal soft glance).
+ * BSF26 (BearScotsFest 2026 only) Premium start clock — PENDING Al lock.
  * Product HOLDs merge until Al locks. Flip this constant only after Al locks.
  *
  * Legal options:
@@ -210,7 +213,7 @@ export function isSharedPrideCode(raw: string): boolean {
 }
 
 /**
- * Exact match for BSF26 after trim + uppercase.
+ * Exact match for BearScotsFest 2026 code BSF26 after trim + uppercase.
  * Rejects spaced / hyphenated variants (BSF 26, BSF-26).
  */
 export function isSharedBsf26Code(raw: string): boolean {
@@ -560,7 +563,7 @@ export const promoService = {
   },
 
   /**
-   * Validate fest contact code BSF26 (exact match).
+   * Validate BearScotsFest 2026 code BSF26 (exact match). Not a general promo.
    * Claim-by: end of 5 October 2026 Europe/London inclusive.
    * One per email. Does not stack with Pride. Replaces 30-day waitlist gift.
    * Premium start follows BSF26_PREMIUM_START_MODE (Al clock pending).
@@ -602,7 +605,7 @@ export const promoService = {
   },
 
   /**
-   * Redeem BSF26 for a new user.
+   * Redeem BSF26 (BearScotsFest 2026 only) for a new user.
    * Replaces Terms 7.2 waitlist gift. Does not stack with Pride. Rejects double-claim.
    * Start clock: BSF26_PREMIUM_START_MODE (pending Al lock).
    */
