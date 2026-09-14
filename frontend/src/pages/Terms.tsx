@@ -451,9 +451,11 @@ export const Terms = () => {
                   One grant per person / email. 18+ only (age-gate applies). Does not stack with
                   Pride (clause 7.7). Replaces the 30-day waitlist Premium gift in clause 7.2. It
                   does not add to that gift. Double-claim rejected. You will not be billed for this
-                  offer. Promoter: Bronze Apps UK Limited trading as MenRush. Duration start clock:
-                  pending Al lock. Until locked, interim start mirrors clause 7.7 (from launch if
-                  booked before open; otherwise from redeem).
+                  offer. Promoter: Bronze Apps UK Limited trading as MenRush. Duration: if you
+                  join or redeem before 1 October 2026 Europe/London, Premium starts 1 October
+                  2026. If you join or redeem on 1 October, Premium starts that day. If you join
+                  or redeem on 2, 3, 4 or 5 October Europe/London, the 3 months start that calendar
+                  day.
                 </>,
               )}
             </section>

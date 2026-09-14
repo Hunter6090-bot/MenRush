@@ -10,7 +10,7 @@ Promoter (docs only): **Bronze Apps UK Limited t/a MenRush**.
 
 Rugby club codes are **separate later work**: one code per club = club name Title Case with spaces; same 3-month Premium stack rules. Do **not** add rugby codes in this PR.
 
-## Legal soft glance — LOCKED
+## Legal — LOCKED
 
 | Rule | Detail |
 | --- | --- |
@@ -24,21 +24,15 @@ Rugby club codes are **separate later work**: one code per club = club name Titl
 
 Legal face: Terms **§7.8** (names BearScotsFest 2026). Pride §7.7 notes BSF26 cannot be combined.
 
-## CLOCK OPEN — pending Al lock (Product HOLD merge)
+## Al CLOCK LOCK (baked)
 
-Al has **not** locked when the 3 months start. Do not invent Al's choice.
+| Redeem (Europe/London calendar day) | Premium starts |
+| --- | --- |
+| Before 1 Oct 2026 | **1 Oct 2026** London |
+| On 1 Oct 2026 | **1 Oct 2026** London |
+| On 2, 3, 4, or 5 Oct 2026 | **That calendar day** London |
 
-| Mode | Meaning | Config value |
-| --- | --- | --- |
-| Option A | Always from MenRush launch (1 Oct / `MENRUSH_LAUNCH_AT`) | `from_launch` |
-| Option B | Always from redeem day | `from_redeem` |
-| Pride hybrid (interim) | Before launch → launch; on/after launch → redeem | `pride_mirror` |
-
-**Interim default in code: `pride_mirror`** (`BSF26_PREMIUM_START_MODE` in `promo.service.ts`).
-
-Why: Pride's start rule is clear in `pridePremiumWindow`. Legal offered A vs B; until Al locks, we default to the Pride hybrid and keep A/B one-line flips. This is **not** Al's locked choice.
-
-After Al locks: set `BSF26_PREMIUM_START_MODE` to `from_launch` or `from_redeem`, update Terms §7.8, re-run `npm run test:bsf26`.
+Implemented in `bsf26PremiumWindow` / `startOfEuropeLondonDay` — no flip env; this is Al’s lock.
 
 ## What Pride did (reuse / separation)
 
@@ -49,20 +43,20 @@ Pride public code `PRIDE 3MONTH FREE`:
 3. Apply Premium via `applyPridePremiumGrant` → `pridePremiumWindow`
 4. Skip `grantWaitlistGift`
 
-BSF26 reuses redemption table + grant shape, but applies via **`applyBsf26PremiumGrant` → `bsf26PremiumWindow(mode)`** so the clock can flip without touching Pride.
+BSF26 reuses redemption table + grant shape, but applies via **`applyBsf26PremiumGrant` → `bsf26PremiumWindow`** (Al London calendar lock).
 
 ## Smoke-test (BOA90 / owner account path)
 
-Product tests on BOA90 before wide claim. After deploy:
+Product tests on BOA90 before merge. After deploy:
 
 1. Soft-refresh BOA90 app / staging.
 2. Register with `?promo=BSF26` (or type `BSF26`) on a **fresh** 18+ email. Complete adult assurance if required (#97).
-3. Confirm Premium: `premium_starts_at` / `premium_until` match **current** `BSF26_PREMIUM_START_MODE` (interim = Pride hybrid). Confirm **no** stacked 30-day gift.
+3. Confirm Premium: before 1 Oct → `premium_starts_at` = 1 Oct London midnight; on 2–5 Oct → that London day. Confirm **no** stacked 30-day gift.
 4. Negatives: double-claim; Pride path + BSF26; `BSF 26` / `BSF-26`; after claim-by; referral field with `BSF26`.
 
 ## Code map
 
-- `BSF26_PREMIUM_START_MODE` / `bsf26PremiumWindow` / `applyBsf26PremiumGrant` — `backend/src/services/promo.service.ts`
+- `bsf26PremiumWindow` / `applyBsf26PremiumGrant` — `backend/src/services/promo.service.ts`
 - Register branch — `backend/src/services/auth.service.ts`
 - Terms §7.8 — `frontend/src/pages/Terms.tsx`
 - Checks: `npm run test:bsf26` from `backend/`

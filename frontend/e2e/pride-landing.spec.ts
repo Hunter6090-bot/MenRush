@@ -140,7 +140,9 @@ test.describe('Pride promotion landing', () => {
     await expect(body).toContainText(/BearScotsFest 2026/i);
     await expect(body).toContainText(/Not a general-purpose promo/i);
     await expect(body).toContainText(/Europe\/London/i);
-    await expect(body).toContainText(/pending Al lock/i);
+    await expect(body).toContainText(/if you join or redeem before 1 October 2026/i);
+    await expect(body).toContainText(/2, 3, 4 or 5 October/i);
+    await expect(body).not.toContainText(/pending Al lock/i);
     await expect(body).toContainText(/Bronze Apps UK Limited/i);
     await expect(body).not.toContainText(/Brighton/i);
     await expect(body).not.toContainText(/London · Manchester · Birmingham/i);

@@ -102,8 +102,10 @@ export const SHARED_PRIDE_MONTHS_FREE = 3;
  * - 18+ / adult-assurance age-gate still applies at register (#97)
  * - One account / one per person (email_hash + user_id unique on campaign)
  *
- * CLOCK OPEN — pending Al lock. Do not invent Al's choice.
- * See BSF26_PREMIUM_START_MODE below (flip after Al locks).
+ * Al CLOCK LOCK (baked — not pending):
+ * - Redeem before 1 Oct 2026 Europe/London → Premium starts 1 Oct 2026 London
+ * - Redeem on 1 Oct London → starts 1 Oct London
+ * - Redeem on 2–5 Oct London → 3 months start that London calendar day
  */
 export const SHARED_BSF26_DISPLAY_CODE = 'BSF26';
 export const SHARED_BSF26_NORMALIZED = 'BSF26';
@@ -113,22 +115,9 @@ export const SHARED_BSF26_MONTHS_FREE = 3;
 export const SHARED_BSF26_ENTER_BY = new Date('2026-10-05T22:59:59Z');
 export const SHARED_BSF26_EXPIRED_MESSAGE =
   'This promo expired on 5 October 2026.';
-
-/**
- * BSF26 (BearScotsFest 2026 only) Premium start clock — PENDING Al lock.
- * Product HOLDs merge until Al locks. Flip this constant only after Al locks.
- *
- * Legal options:
- * - `from_launch`  = Option A — always start at MenRush launch (1 Oct / MENRUSH_LAUNCH_AT)
- * - `from_redeem`  = Option B — always start at redeem day
- * - `pride_mirror` = same hybrid Pride uses in `pridePremiumWindow`:
- *     before launch → start at launch; on/after launch → start at redeem
- *
- * INTERIM DEFAULT: `pride_mirror` — Pride's rule is clear in code; Al has not
- * chosen A vs B yet. This is not Al's locked choice.
- */
-export type Bsf26PremiumStartMode = 'pride_mirror' | 'from_launch' | 'from_redeem';
-export const BSF26_PREMIUM_START_MODE: Bsf26PremiumStartMode = 'pride_mirror';
+/** Al lock: Premium start boundary calendar day (Europe/London). */
+export const BSF26_LAUNCH_YMD_LONDON = '2026-10-01';
+const EUROPE_LONDON = 'Europe/London';
 
 export function isPrideInviteIssueOpen(now = new Date()): boolean {
   const t = now.getTime();
@@ -149,32 +138,40 @@ export function pridePremiumWindow(
   return { premiumStart, premiumEnd: premiumEndFromLaunch(premiumStart, months) };
 }
 
+/** YYYY-MM-DD for an instant in Europe/London. */
+export function europeLondonYmd(d: Date): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: EUROPE_LONDON,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
 /**
- * BSF26 Premium window — respects BSF26_PREMIUM_START_MODE (Al clock pending).
- * Pass `mode` in tests to prove Option A / B / pride_mirror without flipping the default.
+ * Start of a Europe/London calendar day as a UTC Date.
+ * Claim window (1–5 Oct 2026) is BST (UTC+1); midnight London = previous day 23:00Z.
+ */
+export function startOfEuropeLondonDay(ymd: string): Date {
+  // Oct 2026 claim window is BST. Explicit offset matches Al's Europe/London calendar lock.
+  return new Date(`${ymd}T00:00:00+01:00`);
+}
+
+/**
+ * BSF26 Premium window — Al CLOCK LOCK (BearScotsFest 2026).
+ * Before 1 Oct London → start 1 Oct London; on/after 1 Oct → start that London calendar day.
  */
 export function bsf26PremiumWindow(
   months = SHARED_BSF26_MONTHS_FREE,
   now = new Date(),
-  mode: Bsf26PremiumStartMode = BSF26_PREMIUM_START_MODE,
 ): { premiumStart: Date; premiumEnd: Date } {
-  const launch = getMenRushLaunchDate();
-  let premiumStart: Date;
-  switch (mode) {
-    case 'from_launch':
-      // Option A — always from launch
-      premiumStart = new Date(launch);
-      break;
-    case 'from_redeem':
-      // Option B — always from redeem day
-      premiumStart = new Date(now);
-      break;
-    case 'pride_mirror':
-    default:
-      // Interim default: mirror Pride hybrid (not Al's locked choice)
-      premiumStart = now.getTime() >= launch.getTime() ? new Date(now) : new Date(launch);
-      break;
-  }
+  const redeemYmd = europeLondonYmd(now);
+  const startYmd =
+    redeemYmd < BSF26_LAUNCH_YMD_LONDON ? BSF26_LAUNCH_YMD_LONDON : redeemYmd;
+  const premiumStart = startOfEuropeLondonDay(startYmd);
   return { premiumStart, premiumEnd: premiumEndFromLaunch(premiumStart, months) };
 }
 
@@ -394,8 +391,8 @@ export const promoService = {
   },
 
   /**
-   * Apply BSF26 Premium using BSF26_PREMIUM_START_MODE (Al clock pending).
-   * Separate from Pride grant so Option A/B can flip without touching Pride.
+   * Apply BSF26 Premium using Al CLOCK LOCK (Europe/London calendar days).
+   * Separate from Pride grant so BSF26 calendar rule stays fest-specific.
    */
   async applyBsf26PremiumGrant(
     userId: string,
@@ -566,7 +563,7 @@ export const promoService = {
    * Validate BearScotsFest 2026 code BSF26 (exact match). Not a general promo.
    * Claim-by: end of 5 October 2026 Europe/London inclusive.
    * One per email. Does not stack with Pride. Replaces 30-day waitlist gift.
-   * Premium start follows BSF26_PREMIUM_START_MODE (Al clock pending).
+   * Premium start follows Al CLOCK LOCK (bsf26PremiumWindow).
    */
   async validateSharedBsf26(
     code: string,
@@ -607,7 +604,7 @@ export const promoService = {
   /**
    * Redeem BSF26 (BearScotsFest 2026 only) for a new user.
    * Replaces Terms 7.2 waitlist gift. Does not stack with Pride. Rejects double-claim.
-   * Start clock: BSF26_PREMIUM_START_MODE (pending Al lock).
+   * Start clock: Al LOCK via bsf26PremiumWindow (Europe/London calendar days).
    */
   async redeemSharedBsf26(
     code: string,
