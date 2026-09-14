@@ -444,18 +444,17 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>7.8</Strong> BearScotsFest 2026 promo code{' '}
-                  <span className="font-mono tracking-wide">BSF26</span> only. Not a
-                  general-purpose promo code. Exact code match at register. Valid to claim
-                  through end of 5 October 2026 Europe/London time. Grants 3 months of Premium.
-                  One grant per person / email. 18+ only (age-gate applies). Does not stack with
+                  <Strong>7.8</Strong> BearScotsFest 2026 promotional offer. The code{' '}
+                  <span className="font-mono tracking-wide">BSF26</span> is for BearScotsFest
+                  2026 only. It is not a general-purpose promo code. Exact code match at register.
+                  Claim through end of 5 October 2026 Europe/London inclusive. Redeeming a valid
+                  code grants 3 months of Premium. Duration: if redeemed before 1 October 2026
+                  Europe/London, Premium starts 1 October 2026. If redeemed on 1 October, Premium
+                  starts 1 October. If redeemed on 2, 3, 4 or 5 October Europe/London, Premium
+                  starts that calendar day. One grant per person. No stacking. Does not stack with
                   Pride (clause 7.7). Replaces the 30-day waitlist Premium gift in clause 7.2. It
-                  does not add to that gift. Double-claim rejected. You will not be billed for this
-                  offer. Promoter: Bronze Apps UK Limited trading as MenRush. Duration: if you
-                  join or redeem before 1 October 2026 Europe/London, Premium starts 1 October
-                  2026. If you join or redeem on 1 October, Premium starts that day. If you join
-                  or redeem on 2, 3, 4 or 5 October Europe/London, the 3 months start that calendar
-                  day.
+                  does not add to that gift. 18+ only. You will not be billed for this offer.
+                  Promoter: Bronze Apps UK Limited trading as MenRush.
                 </>,
               )}
             </section>
