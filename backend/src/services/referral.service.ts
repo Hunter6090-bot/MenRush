@@ -126,7 +126,7 @@ export const referralService = {
   ): Promise<{ referrerId: string; code: string }> {
     const foreign = classifyForeignCode(referralCodeRaw);
     if (foreign === 'pride') {
-      throw new Error('That looks like a Pride promo — use the Pride promo field instead.');
+      throw new Error('That looks like a Pride promo — use the promo field instead.');
     }
     if (foreign === 'bsf26') {
       throw new Error('That looks like a promo code — use the promo field instead.');
