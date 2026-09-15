@@ -23,8 +23,67 @@ export function ageFromDateOfBirth(dob: string, asOf: Date = new Date()): number
   return age;
 }
 
+/** UK face month labels (value = calendar month 1–12). */
+export const UK_DOB_MONTHS: ReadonlyArray<{ value: number; label: string }> = [
+  { value: 1, label: 'Jan' },
+  { value: 2, label: 'Feb' },
+  { value: 3, label: 'Mar' },
+  { value: 4, label: 'Apr' },
+  { value: 5, label: 'May' },
+  { value: 6, label: 'Jun' },
+  { value: 7, label: 'Jul' },
+  { value: 8, label: 'Aug' },
+  { value: 9, label: 'Sep' },
+  { value: 10, label: 'Oct' },
+  { value: 11, label: 'Nov' },
+  { value: 12, label: 'Dec' },
+];
+
+/** Youngest allowed birth year for 18+ signup (local civil date). */
+export function maxAdultDobYear(asOf: Date = new Date()): number {
+  return asOf.getFullYear() - 18;
+}
+
+const DOB_YEAR_MIN = 1900;
+
+/** Years for DOB select: newest adult year first down to 1900. */
+export function dobYearOptions(asOf: Date = new Date()): number[] {
+  const max = maxAdultDobYear(asOf);
+  const years: number[] = [];
+  for (let y = max; y >= DOB_YEAR_MIN; y -= 1) years.push(y);
+  return years;
+}
+
+/** Days in month; if year omitted, use 29 for Feb (leap-safe upper bound). */
+export function daysInCalendarMonth(month: number, year?: number): number {
+  if (month < 1 || month > 12) return 0;
+  if (month === 2) {
+    if (year == null || !Number.isFinite(year)) return 29;
+    const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    return leap ? 29 : 28;
+  }
+  return [4, 6, 9, 11].includes(month) ? 30 : 31;
+}
+
+/**
+ * Compose Day/Month/Year selects → ISO `YYYY-MM-DD`.
+ * UK order semantics (day, month, year). Rejects invalid calendar dates.
+ */
+export function composeIsoDateOfBirth(
+  day: number | string,
+  month: number | string,
+  year: number | string,
+): string | null {
+  const d = typeof day === 'string' ? Number(day) : day;
+  const m = typeof month === 'string' ? Number(month) : month;
+  const y = typeof year === 'string' ? Number(year) : year;
+  if (!Number.isInteger(d) || !Number.isInteger(m) || !Number.isInteger(y)) return null;
+  return toValidatedIso(d, m, y);
+}
+
 /**
  * Normalize DOB typing/paste to en-GB `dd/mm/yyyy`.
+ * Kept for non-Register surfaces; Register uses Day/Month/Year selects.
  * - Digit-only input gets `/` auto-inserted.
  * - `/`, `-`, and `.` are accepted as separators and normalized to `/`.
  * - Full ISO `YYYY-MM-DD` autofill/paste is converted to UK display order.
@@ -86,7 +145,7 @@ export function parseUkDateOfBirth(input: string): string | null {
 function toValidatedIso(day: number, month: number, year: number): string | null {
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
   const thisYear = new Date().getFullYear();
-  if (year < 1900 || year > thisYear) return null;
+  if (year < DOB_YEAR_MIN || year > thisYear) return null;
   const birth = new Date(year, month - 1, day);
   if (
     birth.getFullYear() !== year ||
