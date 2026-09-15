@@ -273,22 +273,31 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
   s.textContent = `
     .mapboxgl-popup-content { background: transparent !important; border: none !important; padding: 0 !important; box-shadow: none !important; }
     .mapboxgl-popup-tip { display: none !important; }
-    .mapboxgl-map,
-    .mapboxgl-canvas-container,
-    .mapboxgl-canvas {
+    .mapboxgl-map {
       width: 100% !important;
       height: 100% !important;
     }
+    .mapboxgl-canvas-container {
+      width: 100% !important;
+      height: 100% !important;
+    }
+    /* Do not override canvas.style.width / canvas.style.height with 100% !important.
+       Mapbox GL computes canvas.width = dpr * clientWidth and sets canvas.style.width = clientWidth px.
+       Overriding canvas with 100% distorts the WebGL aspect ratio and tile rendering,
+       causing stretched textures and stripe/glitch artifacts across device pixel ratios. */
     /* Keep pan / pinch / wheel on the map — parent scroll must not steal gestures.
        Mapbox sets touch-action via .mapboxgl-touch-* classes; force none so phone
        web never falls back to pan-x/pan-y (which blocks JS pinch). */
     .discover-map-surface,
     .discover-map-surface .mapboxgl-map,
     .discover-map-surface .mapboxgl-canvas-container,
-    .discover-map-surface .mapboxgl-canvas,
     .discover-map-host {
       touch-action: none !important;
       overscroll-behavior: contain;
+      pointer-events: auto !important;
+    }
+    .discover-map-surface .mapboxgl-canvas {
+      touch-action: none !important;
       pointer-events: auto !important;
     }
     .discover-map-host {

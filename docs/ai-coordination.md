@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| P0 Nearby map broken Mapbox tiles fix (canvas CSS sizing) | this branch `cursor/fix-nearby-map-mapbox-tiles-cc13` | — | Cursor cloud — P0 LIVE fix: drop .mapboxgl-canvas width:100%!important / height:100%!important CSS override in Discover.tsx and globals.css; Mapbox GL computes devicePixelRatio-scaled buffer and sets inline pixel style; CSS 100% was stretching/distorting the WebGL viewport causing vertical bands/glitches; Discretion slider, disclaimer ×, locate, pins intact; draft PR; Product merges on CI green |
 | P0 Register DOB selects + typed dash path (Al / BOA90) | this branch `cursor/iphone-dob-separators-0fd5` PR `#267` | — | Cursor cloud — Al lock: Day/Month/Year selects (default mobile) + Type date instead (dd/mm with `/` `-` `.`); ISO compose; invalid blocked; quiet face; Product merge on CI green |
 | P1 soft tidy Register promo label (post-#265 BSF26) | this branch `cursor/register-promo-neutral-copy-440c` | — | Cursor cloud — QC follow-on #265: Register/ComingSoon Pride-only promo field → neutral Promo code; quiet face (no BSF26 blast); ?promo= prefill kept; grant/Terms untouched; draft; do not merge |
 | P0 promo BSF26 — BearScotsFest 2026 only (3mo Premium) | merged `#265` on main (`dddbd31`) | — | Cursor cloud — Al CLOCK LOCK baked; fest-only; claim-by end 5 Oct London; no Pride stack; replaces 30d; quiet face |
