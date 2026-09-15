@@ -42,6 +42,8 @@ import {
   composeIsoDateOfBirth,
   daysInCalendarMonth,
   dobYearOptions,
+  formatUkDobInput,
+  parseUkDateOfBirth,
 } from '../lib/age';
 
 interface FormState {
@@ -51,6 +53,8 @@ interface FormState {
   dobDay: string;
   dobMonth: string;
   dobYear: string;
+  /** Typed UK `dd/mm/yyyy` path (accepts `/` `-` `.`). */
+  dobText: string;
   password: string;
   ageConsent: boolean;
   idConsent: boolean;
@@ -92,11 +96,14 @@ export const Register = () => {
     dobDay: '',
     dobMonth: '',
     dobYear: '',
+    dobText: '',
     password: '',
     ageConsent: false,
     idConsent: false,
     legalConsent: false,
   });
+  /** Selects = easy mobile path; text = dash/slash/digit entry. */
+  const [dobMode, setDobMode] = useState<'select' | 'text'>('select');
   const yearOptions = useMemo(() => dobYearOptions(), []);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -200,6 +207,16 @@ export const Register = () => {
       });
     };
 
+  const onDobTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setError('');
+    setForm((prev) => ({ ...prev, dobText: formatUkDobInput(e.target.value) }));
+  };
+
+  const switchDobMode = (next: 'select' | 'text') => {
+    setError('');
+    setDobMode(next);
+  };
+
   const helperClass = 'text-[13px] leading-[1.55] text-[var(--cream-muted)]';
 
   const dayOptions = useMemo(() => {
@@ -215,10 +232,10 @@ export const Register = () => {
     return Array.from({ length: count }, (_, i) => i + 1);
   }, [form.dobMonth, form.dobYear]);
 
-  const dobIso = useMemo(
-    () => composeIsoDateOfBirth(form.dobDay, form.dobMonth, form.dobYear),
-    [form.dobDay, form.dobMonth, form.dobYear],
-  );
+  const dobIso = useMemo(() => {
+    if (dobMode === 'text') return parseUkDateOfBirth(form.dobText);
+    return composeIsoDateOfBirth(form.dobDay, form.dobMonth, form.dobYear);
+  }, [dobMode, form.dobText, form.dobDay, form.dobMonth, form.dobYear]);
   const age = useMemo(
     () => (dobIso ? ageFromDateOfBirth(dobIso) : null),
     [dobIso],
@@ -228,12 +245,17 @@ export const Register = () => {
   const completeRegistration = async (adultToken?: string) => {
     setLoading(true);
     try {
-      const isoDob = composeIsoDateOfBirth(form.dobDay, form.dobMonth, form.dobYear);
+      const isoDob =
+        dobMode === 'text'
+          ? parseUkDateOfBirth(form.dobText)
+          : composeIsoDateOfBirth(form.dobDay, form.dobMonth, form.dobYear);
       const nextAge = isoDob ? ageFromDateOfBirth(isoDob) : null;
       if (!isoDob || nextAge == null || nextAge < 18) {
         setError(
           !isoDob
-            ? 'Select your date of birth.'
+            ? dobMode === 'text'
+              ? 'Enter your date of birth as dd/mm/yyyy.'
+              : 'Select your date of birth.'
             : 'You must be 18 or older to sign up.',
         );
         setLoading(false);
@@ -288,7 +310,11 @@ export const Register = () => {
       return;
     }
     if (!dobIso) {
-      setError('Select your date of birth.');
+      setError(
+        dobMode === 'text'
+          ? 'Enter your date of birth as dd/mm/yyyy.'
+          : 'Select your date of birth.',
+      );
       return;
     }
     if (age == null || age < 18) {
@@ -434,80 +460,102 @@ export const Register = () => {
               <span className={publicLabelClass} id="register-dob-label">
                 Date of birth
               </span>
-              <div
-                className="grid grid-cols-3 gap-2"
-                role="group"
-                aria-labelledby="register-dob-label"
-                aria-describedby="register-dob-format"
-                data-testid="register-dob"
-              >
-                <div className="min-w-0">
-                  <label className="sr-only" htmlFor="register-dob-day">
-                    Day
-                  </label>
-                  <select
-                    id="register-dob-day"
-                    name="bday-day"
-                    autoComplete="bday-day"
-                    required
-                    value={form.dobDay}
-                    onChange={onDobPartChange('dobDay')}
-                    className={dobSelectClass}
-                    data-testid="register-dob-day"
-                  >
-                    <option value="">Day</option>
-                    {dayOptions.map((d) => (
-                      <option key={d} value={String(d)}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
+              {dobMode === 'select' ? (
+                <div
+                  className="grid grid-cols-3 gap-2"
+                  role="group"
+                  aria-labelledby="register-dob-label"
+                  aria-describedby="register-dob-format"
+                  data-testid="register-dob"
+                >
+                  <div className="min-w-0">
+                    <label className="sr-only" htmlFor="register-dob-day">
+                      Day
+                    </label>
+                    <select
+                      id="register-dob-day"
+                      name="bday-day"
+                      autoComplete="bday-day"
+                      required
+                      value={form.dobDay}
+                      onChange={onDobPartChange('dobDay')}
+                      className={dobSelectClass}
+                      data-testid="register-dob-day"
+                    >
+                      <option value="">Day</option>
+                      {dayOptions.map((d) => (
+                        <option key={d} value={String(d)}>
+                          {d}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="min-w-0">
+                    <label className="sr-only" htmlFor="register-dob-month">
+                      Month
+                    </label>
+                    <select
+                      id="register-dob-month"
+                      name="bday-month"
+                      autoComplete="bday-month"
+                      required
+                      value={form.dobMonth}
+                      onChange={onDobPartChange('dobMonth')}
+                      className={dobSelectClass}
+                      data-testid="register-dob-month"
+                    >
+                      <option value="">Month</option>
+                      {UK_DOB_MONTHS.map((m) => (
+                        <option key={m.value} value={String(m.value)}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="min-w-0">
+                    <label className="sr-only" htmlFor="register-dob-year">
+                      Year
+                    </label>
+                    <select
+                      id="register-dob-year"
+                      name="bday-year"
+                      autoComplete="bday-year"
+                      required
+                      value={form.dobYear}
+                      onChange={onDobPartChange('dobYear')}
+                      className={dobSelectClass}
+                      data-testid="register-dob-year"
+                    >
+                      <option value="">Year</option>
+                      {yearOptions.map((y) => (
+                        <option key={y} value={String(y)}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <label className="sr-only" htmlFor="register-dob-month">
-                    Month
-                  </label>
-                  <select
-                    id="register-dob-month"
-                    name="bday-month"
-                    autoComplete="bday-month"
-                    required
-                    value={form.dobMonth}
-                    onChange={onDobPartChange('dobMonth')}
-                    className={dobSelectClass}
-                    data-testid="register-dob-month"
-                  >
-                    <option value="">Month</option>
-                    {UK_DOB_MONTHS.map((m) => (
-                      <option key={m.value} value={String(m.value)}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="min-w-0">
-                  <label className="sr-only" htmlFor="register-dob-year">
-                    Year
-                  </label>
-                  <select
-                    id="register-dob-year"
-                    name="bday-year"
-                    autoComplete="bday-year"
-                    required
-                    value={form.dobYear}
-                    onChange={onDobPartChange('dobYear')}
-                    className={dobSelectClass}
-                    data-testid="register-dob-year"
-                  >
-                    <option value="">Year</option>
-                    {yearOptions.map((y) => (
-                      <option key={y} value={String(y)}>
-                        {y}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              ) : (
+                <input
+                  id="register-dob-text"
+                  type="text"
+                  inputMode="text"
+                  autoComplete="bday"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  placeholder="dd/mm/yyyy"
+                  value={form.dobText}
+                  onChange={onDobTextChange}
+                  required
+                  maxLength={10}
+                  aria-labelledby="register-dob-label"
+                  aria-describedby="register-dob-format"
+                  className={publicInputClass}
+                  data-testid="register-dob-text"
+                  lang="en-GB"
+                />
+              )}
               <p
                 id="register-dob-format"
                 className={helperClass}
@@ -515,6 +563,14 @@ export const Register = () => {
               >
                 You must be 18 or older.
               </p>
+              <button
+                type="button"
+                className="self-start text-[13px] font-semibold text-[var(--cream-muted)] underline-offset-2 hover:text-[#C4832A] hover:underline"
+                onClick={() => switchDobMode(dobMode === 'select' ? 'text' : 'select')}
+                data-testid="register-dob-mode-toggle"
+              >
+                {dobMode === 'select' ? 'Type date instead' : 'Use day / month / year'}
+              </button>
             </div>
 
             <div className="flex flex-col gap-2.5">
