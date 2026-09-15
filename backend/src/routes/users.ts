@@ -236,7 +236,14 @@ router.get('/profile/:id', verifiedMiddleware, async (req: AuthRequest, res: Res
   try {
     const viewerId = req.userId!;
     const targetId = req.params.id;
-    const user = await userService.getPublicProfile(viewerId, targetId);
+    const queryLat = typeof req.query.lat === 'string' ? Number.parseFloat(req.query.lat) : NaN;
+    const queryLng = typeof req.query.lng === 'string' ? Number.parseFloat(req.query.lng) : NaN;
+    const clientLocation =
+      Number.isFinite(queryLat) && Number.isFinite(queryLng)
+        ? { lat: queryLat, lng: queryLng }
+        : undefined;
+
+    const user = await userService.getPublicProfile(viewerId, targetId, clientLocation);
     if (!user) {
       return res.status(404).json({ error: 'User not found', code: 'user_not_found' });
     }

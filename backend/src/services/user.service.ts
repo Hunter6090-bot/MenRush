@@ -379,8 +379,17 @@ export const userService = {
     return row;
   },
 
-  async getPublicProfile(viewerId: string, targetId: string) {
+  async getPublicProfile(
+    viewerId: string,
+    targetId: string,
+    clientLocation?: { lat: number; lng: number },
+  ) {
     await accessControl.assertProfileView(viewerId, targetId);
+
+    if (clientLocation) {
+      await this.updateLocation(viewerId, clientLocation.lat, clientLocation.lng);
+    }
+
     const result = await query(
       `SELECT
         u.id, u.name,
@@ -407,13 +416,55 @@ export const userService = {
         EXISTS (
           SELECT 1 FROM likes l
           WHERE l.liker_id = $2 AND l.liked_id = $1
-        ) AS is_liked
+        ) AS is_liked,
+        CASE
+          WHEN $1 = $2 THEN NULL
+          WHEN vp.is_visible = true AND vp.location IS NOT NULL
+               AND p.is_visible = true AND p.location IS NOT NULL
+               AND p.is_ghost = false
+          THEN ST_Distance(p.location, vp.location)
+          ELSE NULL
+        END AS distance_m
        FROM users u
        LEFT JOIN profiles p ON p.user_id = u.id
+       LEFT JOIN profiles vp ON vp.user_id = $2
        WHERE u.id = $1`,
       [targetId, viewerId],
     );
-    return result.rows[0];
+
+    const row = result.rows[0];
+    if (!row) return row;
+
+    let distance_km: string | null = null;
+    let distance_label: string | null = null;
+
+    if (row.distance_m != null && Number.isFinite(Number(row.distance_m))) {
+      const km = Number(row.distance_m) / 1000;
+      let bucketed: number;
+      let label: string;
+      if (km < 0.3) {
+        bucketed = 0.2;
+        label = '< 300 m';
+      } else if (km < 1) {
+        bucketed = Math.round(km * 10) / 10;
+        label = `${Math.round(bucketed * 1000)} m`;
+      } else if (km < 5) {
+        bucketed = Math.round(km * 2) / 2;
+        label = `${bucketed.toFixed(1)} km`;
+      } else {
+        bucketed = Math.round(km);
+        label = `${bucketed} km`;
+      }
+      distance_km = bucketed.toFixed(2);
+      distance_label = label;
+    }
+
+    const { distance_m: _dm, ...publicRow } = row;
+    return {
+      ...publicRow,
+      distance_km,
+      distance_label,
+    };
   },
 
   async getDisplayName(userId: string) {

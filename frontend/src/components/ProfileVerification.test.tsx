@@ -55,7 +55,7 @@ describe('Profile verification flow', () => {
     expect(mocks.submit).toHaveBeenCalledTimes(1);
     expect(mocks.setVerified).not.toHaveBeenCalledWith('verified', true);
     mocks.status.mockResolvedValue(response('approved')); fireEvent(window, new Event('focus'));
-    expect(await screen.findByRole('button', { name: /Verified —/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Verified/ })).toBeInTheDocument();
     expect(screen.queryByText('Checking your verification')).not.toBeInTheDocument();
   });
   it.each(['resubmission_requested', 'expired', 'abandoned', 'declined'])('offers action for %s', async (state) => {
