@@ -354,8 +354,112 @@ async function main() {
     'optional ID session vendorData must link to parent liveness session',
   );
 
+  // -------------------------------------------------------------
+  // Verify ADULT_ASSURANCE_SIGNUP_REQUIRED=false end-to-end:
+  // 1. isAdultAssuranceRequiredAtSignup() is false
+  // 2. authService.register succeeds without adult_assurance_token
+  // 3. authService.register maps SQL 23505 to 'Email already exists'
+  // 4. When required is true, missing token is blocked
+  // -------------------------------------------------------------
+  process.env.ADULT_ASSURANCE_SIGNUP_REQUIRED = 'false';
+  assert.equal(isAdultAssuranceRequiredAtSignup(), false);
+
+  const mockClient = {
+    query: async (sql: string, params: any[] = []) => {
+      if (/BEGIN|COMMIT|ROLLBACK/i.test(sql)) {
+        return { rows: [] };
+      }
+      if (/SELECT 1 FROM users WHERE referral_code/i.test(sql)) {
+        return { rows: [] };
+      }
+      if (/SELECT.*FROM users WHERE email/i.test(sql)) {
+        return { rows: [] };
+      }
+      if (/INSERT INTO users/i.test(sql)) {
+        if (params[1] === 'duplicate@example.com') {
+          const err = new Error('duplicate key value violates unique constraint "users_email_key"');
+          (err as any).code = '23505';
+          throw err;
+        }
+        return {
+          rows: [
+            {
+              id: params[0],
+              email: params[1],
+              name: params[3],
+              age: params[4],
+              date_of_birth: params[5],
+              photo_url: params[6],
+              is_verified: false,
+              verification_status: 'unverified',
+              age_assurance_status: params[9],
+              authenticity_status: 'unverified',
+              referral_code: params[8],
+              email_confirmed: false,
+              verified_age_18_plus: params[11],
+            },
+          ],
+        };
+      }
+      return { rows: [] };
+    },
+    release: () => {},
+  };
+  db.default.connect = async () => mockClient;
+  db.default.query = mockClient.query;
+
+  const { authService } = await import('../src/services/auth.service');
+
+  // Register with required=false and no token succeeds
+  const regResult = await authService.register({
+    email: 'newuser@example.com',
+    name: 'NewUser',
+    age: 25,
+    date_of_birth: '2001-01-01',
+    password: 'Password123!@#',
+  });
+  assert.ok(regResult);
+  assert.equal(regResult.user.email, 'newuser@example.com');
+  assert.equal(regResult.user.verified_age_18_plus, false);
+
+  // Register with duplicate email throws 'Email already exists'
+  await assert.rejects(
+    async () => {
+      await authService.register({
+        email: 'duplicate@example.com',
+        name: 'DupUser',
+        age: 25,
+        date_of_birth: '2001-01-01',
+        password: 'Password123!@#',
+      });
+    },
+    (err: any) => {
+      assert.equal(err.message, 'Email already exists');
+      return true;
+    },
+  );
+
+  // When required=true, missing token is blocked
+  process.env.ADULT_ASSURANCE_SIGNUP_REQUIRED = 'true';
+  assert.equal(isAdultAssuranceRequiredAtSignup(), true);
+  await assert.rejects(
+    async () => {
+      await authService.register({
+        email: 'anothertest@example.com',
+        name: 'AnotherUser',
+        age: 25,
+        date_of_birth: '2001-01-01',
+        password: 'Password123!@#',
+      });
+    },
+    (err: any) => {
+      assert.match(err.message, /Adult assurance is required/);
+      return true;
+    },
+  );
+
   console.log(
-    'Adult assurance checks passed: liveness underage, adult liveness-only, adult+ID, failed fixture, production ban, veriff route, selfie payload.',
+    'Adult assurance checks passed: liveness underage, adult liveness-only, adult+ID, failed fixture, production ban, veriff route, selfie payload, required=false signup & duplicate email error handling.',
   );
 }
 

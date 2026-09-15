@@ -31,6 +31,7 @@ export function clearPersistedVeriffSessionUrl(): void {
 export function launchVeriffInContext(
   sessionUrl: string,
   handlers: {
+    onStarted?: () => void;
     onSubmitted: () => void;
     onCanceled: () => void;
   },
@@ -45,6 +46,10 @@ export function launchVeriffInContext(
     },
     onEvent: (msg) => {
       if (completed) return;
+      if (msg === MESSAGES.STARTED) {
+        handlers.onStarted?.();
+        return;
+      }
       if (msg === MESSAGES.SUBMITTED || msg === MESSAGES.FINISHED) {
         completed = true;
         clearPersistedVeriffSessionUrl();
