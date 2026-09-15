@@ -4,6 +4,7 @@ import { VerifiedBadge } from './VerifiedBadge';
 import { NewJoinerBadge } from './NewJoinerBadge';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { formatActiveStatus, formatDistanceMiles, getTribeTag } from '../lib/discoveryFormat';
+import { getDistanceLabel } from '../lib/discovery';
 import { isFreshFaceNearby } from '../lib/newJoiner';
 import {
   PROFILE_TILE_GRID_CLASS,
@@ -229,7 +230,8 @@ const NearbyGridCard = memo(function NearbyGridCard({
   onSelect?: (user: NearbyUser) => void;
   onMatch?: (user: NearbyUser) => void | Promise<void>;
 }) {
-  const meta = `${formatDistanceMiles(user)} · ${getTribeTag(user)} · ${formatActiveStatus(user)}`;
+  const distLabel = getDistanceLabel(user);
+  const meta = `${distLabel} · ${getTribeTag(user)} · ${formatActiveStatus(user)}`;
   const matchState = matchInterestState({ liked, mutual });
   const matchDisabled = matchCtaDisabled(matchState, matching);
 
@@ -259,7 +261,20 @@ const NearbyGridCard = memo(function NearbyGridCard({
             <GridCardFace user={user} meta={meta} />
           </ProfilePhotoLink>
         )}
-        {isFreshFaceNearby(user) ? <NewJoinerBadge /> : null}
+        {distLabel ? (
+          <div className="pointer-events-none absolute top-1.5 right-1.5 z-10 md:top-2 md:right-2">
+            <span
+              data-testid={`nearby-grid-distance-${user.id}`}
+              className="inline-flex items-center gap-1 rounded-full border border-nn-border bg-black/60 px-2 py-0.5 text-[9px] font-semibold tracking-wide text-[var(--cream)]/90 backdrop-blur-md shadow-sm md:text-[10px]"
+            >
+              <PinIcon className="h-2.5 w-2.5 shrink-0 text-[#C4832A]" />
+              {distLabel}
+            </span>
+          </div>
+        ) : null}
+        {isFreshFaceNearby(user) ? (
+          <NewJoinerBadge className={distLabel ? 'max-w-[calc(100%-4.5rem)] truncate' : ''} />
+        ) : null}
         {user.is_verified ? <VerifiedBadge compact className="absolute bottom-1.5 right-1.5 z-10" /> : null}
       </div>
       {onMatch ? (
@@ -367,3 +382,12 @@ function GridPhoto({
     />
   );
 }
+
+function PinIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z" />
+    </svg>
+  );
+}
+

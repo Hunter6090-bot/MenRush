@@ -30,4 +30,14 @@ describe('Profile distance formatting', () => {
     // When distance in km is 0.4 (approx 400 m), imperial returns 0.2 mi
     expect(formatDistanceFromKm(0.4, 'imperial')).toBe('0.2 mi');
   });
+
+  it('formats distance in miles for Nearby GRID cards using getDistanceLabel', () => {
+    expect(getDistanceLabel({ distance_km: 0.35 })).toBe('0.2 mi');
+    expect(getDistanceLabel({ distance_km: 1.93 })).toBe('1.2 mi');
+    expect(getDistanceLabel({ distance_km: '2.5' })).toBe('1.6 mi');
+    expect(getDistanceLabel({ distance_km: undefined })).toBe('Nearby');
+    expect(getDistanceLabel({ distance_km: null })).toBe('Nearby');
+    expect(getDistanceLabel({ distance_km: 0 })).toBe('Nearby');
+  });
 });
+
