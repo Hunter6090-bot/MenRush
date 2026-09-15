@@ -15,6 +15,7 @@ import {
   AdultAssuranceFlow,
   ADULT_ASSURANCE_COPY,
 } from '../components/AdultAssuranceFlow';
+import { registerErrorMessage } from '../lib/authErrors';
 import {
   readStoredInviteCode,
   storeInviteCode,
@@ -106,6 +107,8 @@ export const Register = () => {
   const [dobMode, setDobMode] = useState<'select' | 'text'>('select');
   const yearOptions = useMemo(() => dobYearOptions(), []);
   const [error, setError] = useState('');
+  const [isDuplicateEmail, setIsDuplicateEmail] = useState(false);
+  const [assuranceSkipped, setAssuranceSkipped] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showAssurance, setShowAssurance] = useState(false);
   const [assurancePhase, setAssurancePhase] = useState<
@@ -116,6 +119,11 @@ export const Register = () => {
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
   const token = useAuthStore((s) => s.token);
+
+  const clearError = () => {
+    setError('');
+    setIsDuplicateEmail(false);
+  };
 
   useEffect(() => {
     if (inviteFromQuery) {
@@ -159,19 +167,19 @@ export const Register = () => {
   }
 
   const onPromoChange = (value: string) => {
-    setError('');
+    clearError();
     setPromoCode(value);
   };
 
   const clearPromo = () => {
-    setError('');
+    clearError();
     setPromoCode('');
     clearStoredPridePromoCode();
   };
 
   const setField = <K extends keyof FormState>(field: K) =>
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      setError('');
+      clearError();
       setForm((prev) => ({
         ...prev,
         [field]:
@@ -184,7 +192,7 @@ export const Register = () => {
   const onDobPartChange =
     (part: 'dobDay' | 'dobMonth' | 'dobYear') =>
     (e: React.ChangeEvent<HTMLSelectElement>) => {
-      setError('');
+      clearError();
       const value = e.target.value;
       setForm((prev) => {
         const next = { ...prev, [part]: value };
@@ -208,12 +216,12 @@ export const Register = () => {
     };
 
   const onDobTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setError('');
+    clearError();
     setForm((prev) => ({ ...prev, dobText: formatUkDobInput(e.target.value) }));
   };
 
   const switchDobMode = (next: 'select' | 'text') => {
-    setError('');
+    clearError();
     setDobMode(next);
   };
 
@@ -293,8 +301,9 @@ export const Register = () => {
         { replace: true },
       );
     } catch (err: any) {
-      const msg = err?.message || err.response?.data?.error || 'Registration failed. Please try again.';
-      setError(typeof msg === 'string' ? msg : 'Registration failed. Please try again.');
+      const { message, isDuplicateEmail: dup } = registerErrorMessage(err);
+      setError(message);
+      setIsDuplicateEmail(Boolean(dup));
       setShowAssurance(false);
     } finally {
       setLoading(false);
@@ -303,7 +312,7 @@ export const Register = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    clearError();
 
     if (!/^[A-Za-z0-9_-]{2,24}$/.test(form.displayName)) {
       setError('Display name must be 2–24 chars: letters, numbers, _ or -.');
@@ -334,7 +343,7 @@ export const Register = () => {
       return;
     }
 
-    if (adultRequired) {
+    if (adultRequired && !assuranceSkipped) {
       setShowAssurance(true);
       return;
     }
@@ -387,19 +396,34 @@ export const Register = () => {
       {showAssurance ? (
         <AdultAssuranceFlow
           fixtureAllowed={fixtureAllowed}
+          required={adultRequired}
           onPhaseChange={setAssurancePhase}
           onCancel={() => {
             setShowAssurance(false);
             setAssurancePhase('intro');
-            setError('');
+            clearError();
+          }}
+          onSkip={() => {
+            setShowAssurance(false);
+            setAssurancePhase('intro');
+            setAssuranceSkipped(true);
+            void completeRegistration();
           }}
           onComplete={(result) => {
+            if ('skip' in result) {
+              setShowAssurance(false);
+              setAssurancePhase('intro');
+              setAssuranceSkipped(true);
+              void completeRegistration();
+              return;
+            }
             if ('underage' in result) {
               navigate('/register/underage', { replace: true });
               return;
             }
             if ('error' in result) {
               setError(result.error);
+              setIsDuplicateEmail(false);
               setShowAssurance(false);
               setAssurancePhase('intro');
               return;
@@ -705,13 +729,34 @@ export const Register = () => {
               </p>
             </div>
 
-            {adultRequired ? (
+            {adultRequired && !assuranceSkipped ? (
               <p className={helperClass} data-testid="register-adult-assurance-note">
                 {ADULT_ASSURANCE_COPY.registerHelper}
               </p>
             ) : null}
 
-            {error ? <p className={publicErrorClass}>{error}</p> : null}
+            {error ? (
+              <div className="flex flex-col gap-1.5" role="alert" data-testid="register-error-container">
+                <p className={publicErrorClass} data-testid="register-error">
+                  {error}
+                </p>
+                {isDuplicateEmail ? (
+                  <p
+                    className="text-[13px] leading-[1.55] text-[var(--cream-muted)]"
+                    data-testid="register-duplicate-email-help"
+                  >
+                    <Link to="/login" className={publicLinkClass}>
+                      Sign in
+                    </Link>{' '}
+                    or{' '}
+                    <Link to="/forgot-password" className={publicLinkClass}>
+                      reset your password
+                    </Link>
+                    .
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
 
             <p className={helperClass} data-testid="register-gift-note">
               Sign up before 1 October 2026 and you get 30 days of Premium free. A promo
