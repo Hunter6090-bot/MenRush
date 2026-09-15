@@ -1,0 +1,26 @@
+import { describe, expect, it } from 'vitest';
+import { formatDistanceFromKm, resolveDistanceUnitSystem } from './localeUnits';
+import { getDistanceLabel } from './discovery';
+
+describe('Profile distance formatting', () => {
+  it('formats imperial units (UK/US)', () => {
+    expect(formatDistanceFromKm(0.1, 'imperial')).toBe('< 0.2 mi');
+    expect(formatDistanceFromKm(1.60934, 'imperial')).toBe('1.0 mi');
+    expect(formatDistanceFromKm(3.2, 'imperial')).toBe('2.0 mi');
+    expect(formatDistanceFromKm(45, 'imperial')).toBe('28 mi');
+  });
+
+  it('formats metric units', () => {
+    expect(formatDistanceFromKm(0.2, 'metric')).toBe('< 300 m');
+    expect(formatDistanceFromKm(0.5, 'metric')).toBe('500 m');
+    expect(formatDistanceFromKm(1.5, 'metric')).toBe('1.5 km');
+    expect(formatDistanceFromKm(12, 'metric')).toBe('12 km');
+  });
+
+  it('handles edge cases consistently with Nearby', () => {
+    expect(formatDistanceFromKm(0, 'imperial')).toBe('Nearby');
+    expect(formatDistanceFromKm(-1, 'imperial')).toBe('Nearby');
+    expect(getDistanceLabel({ distance_km: 0 })).toBe('Nearby');
+    expect(getDistanceLabel({ distance_km: 1.6 })).toBe(formatDistanceFromKm(1.6));
+  });
+});

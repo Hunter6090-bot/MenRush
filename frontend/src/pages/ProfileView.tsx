@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { usersAPI } from '../api/client';
-import { useAuthStore } from '../hooks/store';
+import { useAuthStore, useLocationStore } from '../hooks/store';
 import { Layout } from '../components/Layout';
 import { UserAvatar, getPhotoUrl } from '../components/UserAvatar';
 import { FadedBrandFace, isNearbyPlaceholderFace } from '../components/FadedBrandFace';
@@ -9,9 +9,11 @@ import { CoverBanner, normalizeCoverFrame } from '../components/CoverBanner';
 import { ProfilePhotoViewer } from '../components/ProfilePhotoViewer';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { StatusBadge } from '../components/StatusBadge';
+import { DistancePill } from '../components/DistancePill';
 import { ProfileAlbumsSection } from '../components/ProfileAlbumsSection';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 import { formatHeight, formatWeight } from '../lib/age';
+import { formatDistanceFromKm } from '../lib/localeUnits';
 import {
   matchCtaAriaLabel,
   matchCtaDisabled,
@@ -33,6 +35,10 @@ interface ViewableUser {
   cover_position_x?: number;
   cover_position_y?: number;
   cover_zoom?: number;
+  /** Bucketed distance in km for locale formatting on the client. */
+  distance_km?: string | number | null;
+  /** Approximate distance label (privacy-bucketed). */
+  distance_label?: string | null;
   interests?: string[];
   height_cm?: number | null;
   weight_kg?: number | null;
@@ -72,7 +78,7 @@ export function normalizeInterests(raw: unknown): string[] {
   return raw.filter((tag): tag is string => typeof tag === 'string' && tag.length > 0);
 }
 
-function normalizeProfilePayload(raw: unknown): ViewableUser | null {
+export function normalizeProfilePayload(raw: unknown): ViewableUser | null {
   if (!raw || typeof raw !== 'object') return null;
   const data = raw as Record<string, unknown>;
   if (typeof data.id !== 'string' || typeof data.name !== 'string' || !data.name.trim()) {
@@ -90,6 +96,8 @@ export const ProfileView = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const authUserId = useAuthStore((s) => s.user?.id);
+  const locationLat = useLocationStore((s) => s.lat);
+  const locationLng = useLocationStore((s) => s.lng);
   const [user, setUser] = useState<ViewableUser | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -116,7 +124,7 @@ export const ProfileView = () => {
 
     setLoading(true);
     usersAPI
-      .getProfile(id)
+      .getProfile(id, { lat: locationLat, lng: locationLng })
       .then((r) => {
         const data = normalizeProfilePayload(r.data);
         if (!data) {
@@ -134,7 +142,7 @@ export const ProfileView = () => {
         setError(profileErrorMessage(err));
       })
       .finally(() => setLoading(false));
-  }, [id, authUserId, navigate]);
+  }, [id, authUserId, navigate, locationLat, locationLng]);
 
   const flash = useCallback((msg: string, tone: 'success' | 'error' = 'success') => {
     setSafetyNotice({ msg, tone });
@@ -239,6 +247,16 @@ export const ProfileView = () => {
   const matchState = matchInterestState({ liked, mutual });
   const coverSrc = user.cover_url ? getPhotoUrl(user.cover_url) : undefined;
   const photoSrc = user.photo_url ? getPhotoUrl(user.photo_url) : undefined;
+  const distanceKmVal =
+    user.distance_km != null && user.distance_km !== ''
+      ? parseFloat(String(user.distance_km))
+      : null;
+  const distLabel =
+    distanceKmVal != null && Number.isFinite(distanceKmVal)
+      ? formatDistanceFromKm(distanceKmVal)
+      : user.distance_label != null && user.distance_label.trim() !== ''
+        ? user.distance_label
+        : null;
 
   return (
     <Layout>
@@ -339,9 +357,18 @@ export const ProfileView = () => {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-bold text-[var(--cream)]">{user.name}</h2>{user.is_verified ? <VerifiedBadge /> : null}</div>
-            {typeof user.age === 'number' && (
-              <p className="text-[var(--cream-muted)] text-sm mt-0.5">Age {user.age}</p>
-            )}
+            <div className="flex flex-wrap items-center gap-2 text-sm mt-0.5">
+              {typeof user.age === 'number' && (
+                <span className="text-[var(--cream-muted)]">Age {user.age}</span>
+              )}
+              {distLabel && (
+                <DistancePill
+                  km={distanceKmVal ?? 0}
+                  label={distLabel}
+                  className="bg-black/40 text-[var(--cream)]/90"
+                />
+              )}
+            </div>
             {(user.height_cm != null ||
               user.weight_kg != null ||
               user.relationship_status ||

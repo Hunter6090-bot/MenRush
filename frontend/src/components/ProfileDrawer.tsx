@@ -157,8 +157,16 @@ export function ProfileDrawer({
 
   if (!user) return null;
 
-  const distance = parseFloat(String(user.distance_km));
-  const distLabel = getDistanceLabel(user);
+  const distance =
+    user.distance_km != null && user.distance_km !== ""
+      ? parseFloat(String(user.distance_km))
+      : null;
+  const distLabel =
+    distance != null && Number.isFinite(distance)
+      ? getDistanceLabel(user)
+      : user.distance_label != null && user.distance_label.trim() !== ""
+        ? user.distance_label
+        : null;
   const isPulsing = isUserPulsing(user);
   const dragging = dragVh != null;
   const matchState = matchInterestState({ liked, mutual });
@@ -301,7 +309,7 @@ export function ProfileDrawer({
               ) : user.online ? (
                 <StatusBadge online lastSeen={user.last_seen} size="xs" />
               ) : null}
-              <DistancePill km={distance} label={distLabel} />
+              {distLabel && <DistancePill km={distance ?? 0} label={distLabel} />}
             </div>
           </div>
 
@@ -364,7 +372,8 @@ export function ProfileDrawer({
             {(user as { is_verified?: boolean }).is_verified ? <VerifiedBadge /> : null}
           </div>
           <p className="text-sm font-medium text-[var(--cream-soft)] leading-snug">
-            {user.online ? "Active now" : "Offline"} · {distLabel} away
+            {user.online ? "Active now" : "Offline"}
+            {distLabel ? ` · ${distLabel} away` : ""}
           </p>
 
           {user.headline && (

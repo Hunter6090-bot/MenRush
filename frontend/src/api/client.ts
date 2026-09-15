@@ -233,7 +233,13 @@ export const usersAPI = {
         mood: filters?.mood,
       },
     }),
-  getProfile: (id: string) => apiClient.get(`/users/profile/${id}`),
+  getProfile: (id: string, coords?: { lat?: number | null; lng?: number | null }) =>
+    apiClient.get(`/users/profile/${id}`, {
+      params:
+        coords?.lat != null && coords?.lng != null
+          ? { lat: coords.lat, lng: coords.lng }
+          : undefined,
+    }),
   searchProfiles: (q: string) =>
     apiClient.get<Array<{ id: string; name: string; age?: number; photo_url?: string; bio?: string; headline?: string }>>(
       '/users/search',

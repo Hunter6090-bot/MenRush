@@ -55,7 +55,8 @@ describe('ProfileDrawer grid sheet layout', () => {
     expect(hero).toContainElement(avatar);
 
     // Empty photo → Brand faded face (same size 72, profile crop)
-    const brandFace = screen.getByTestId('faded-brand-face');
+    const brandFace = avatar.querySelector('[data-testid="faded-brand-face"]') as HTMLElement;
+    expect(brandFace).toBeTruthy();
     expect(avatar).toContainElement(brandFace);
     expect(brandFace.getAttribute('data-faded-variant')).toBe('profile');
     expect(brandFace).toHaveStyle({ width: '72px', height: '72px' });
@@ -136,6 +137,27 @@ describe('ProfileDrawer grid sheet layout', () => {
     const btn = screen.getByTestId('drawer-open-chat');
     expect(btn).toHaveTextContent('Matched with Graham');
     expect(btn).not.toBeDisabled();
+  });
+
+  it('omits distance gracefully when unknown/null/empty', () => {
+    const noDistanceUser: NearbyUser = {
+      ...graham,
+      distance_km: '',
+      distance_label: undefined,
+    };
+    render(
+      <MemoryRouter>
+        <ProfileDrawer
+          user={noDistanceUser}
+          liked={false}
+          onClose={vi.fn()}
+          onLike={vi.fn()}
+          onPass={vi.fn()}
+          onMessage={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText(/away/i)).not.toBeInTheDocument();
   });
 
   it('exposes enlarge hooks on cover and avatar when photos exist', () => {
