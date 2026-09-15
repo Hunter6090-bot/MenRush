@@ -75,6 +75,8 @@ export default defineConfig({
       // Node built-in test runner files (npm run test:unit)
       'src/lib/notificationToasts.test.ts',
       'src/lib/profileLinks.test.ts',
+      'src/lib/profileTileGrid.test.ts',
+      'src/lib/nearbyGridFirst.test.ts',
     ],
   },
 });

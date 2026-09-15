@@ -78,7 +78,9 @@ select {
 .discover-map-host,
 .hotspots-map-surface,
 [data-testid='hotspots-map'] .mapboxgl-map,
-[data-testid='hotspots-map'] .mapboxgl-canvas-container,
+[data-testid='hotspots-map'] .mapboxgl-canvas-container {
+  touch-action: none;
+}
 [data-testid='hotspots-map'] .mapboxgl-canvas {
   touch-action: none;
 }
