@@ -23,4 +23,11 @@ describe('Profile distance formatting', () => {
     expect(getDistanceLabel({ distance_km: 0 })).toBe('Nearby');
     expect(getDistanceLabel({ distance_km: 1.6 })).toBe(formatDistanceFromKm(1.6));
   });
+
+  it('respects UK imperial distance formatting from km', () => {
+    // When distance in km is 2.5, formatDistanceFromKm in imperial returns 1.6 mi
+    expect(formatDistanceFromKm(2.5, 'imperial')).toBe('1.6 mi');
+    // When distance in km is 0.4 (approx 400 m), imperial returns 0.2 mi
+    expect(formatDistanceFromKm(0.4, 'imperial')).toBe('0.2 mi');
+  });
 });

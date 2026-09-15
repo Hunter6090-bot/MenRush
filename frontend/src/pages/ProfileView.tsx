@@ -250,7 +250,9 @@ export const ProfileView = () => {
   const distanceKmVal =
     user.distance_km != null && user.distance_km !== ''
       ? parseFloat(String(user.distance_km))
-      : null;
+      : user.distance_label != null && user.distance_label.trim() !== ''
+        ? parseFloat(user.distance_label.replace(/[^0-9.]/g, ''))
+        : null;
   const distLabel =
     distanceKmVal != null && Number.isFinite(distanceKmVal)
       ? formatDistanceFromKm(distanceKmVal)

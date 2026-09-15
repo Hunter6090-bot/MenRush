@@ -157,13 +157,16 @@ export function ProfileDrawer({
 
   if (!user) return null;
 
-  const distance =
+  const parsedDistance =
     user.distance_km != null && user.distance_km !== ""
       ? parseFloat(String(user.distance_km))
-      : null;
+      : user.distance_label != null && user.distance_label.trim() !== ""
+        ? parseFloat(user.distance_label.replace(/[^0-9.]/g, ""))
+        : null;
+  const distance = Number.isFinite(parsedDistance) ? parsedDistance : null;
   const distLabel =
-    distance != null && Number.isFinite(distance)
-      ? getDistanceLabel(user)
+    distance != null
+      ? getDistanceLabel({ ...user, distance_km: distance })
       : user.distance_label != null && user.distance_label.trim() !== ""
         ? user.distance_label
         : null;
