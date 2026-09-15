@@ -288,8 +288,74 @@ async function main() {
   assert.equal(viaVeriff.userId, undefined, 'under-18 must not attach a user id');
   assert.equal(rows[adultSession.sessionId].status, 'underage');
 
+  // Verify startSession payload vs startIdSession payload when Veriff is configured:
+  // - startSession must be selfie-only and NEVER request document or document types
+  // - startIdSession is the optional ID path
+  const fetchBodies: { url: string; method: string; body: any }[] = [];
+  __setAdultAssuranceDepsForTests({
+    fetch: async (url: any, init: any) => {
+      const parsedBody = init?.body ? JSON.parse(String(init.body)) : null;
+      fetchBodies.push({ url: String(url), method: init?.method || 'GET', body: parsedBody });
+      if (init?.method === 'POST') {
+        return new Response(
+          JSON.stringify({
+            verification: {
+              id: 'veriff-live-session-1',
+              url: 'https://station.veriff.com/v/test-url',
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response(JSON.stringify({ status: 'ok' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+  });
+
+  const liveLiveness = await adultAssuranceService.startSession();
+  assert.equal(liveLiveness.sessionId, 'veriff-live-session-1');
+  assert.equal(liveLiveness.sessionUrl, 'https://station.veriff.com/v/test-url');
+
+  const livenessCreateReq = fetchBodies.find(
+    (b) => b.method === 'POST' && b.url.includes('/sessions'),
+  );
+  assert.ok(livenessCreateReq, 'startSession must make a POST /sessions request');
+  const livenessVerification = livenessCreateReq.body?.verification;
+  assert.ok(livenessVerification, 'verification object must be present');
+  assert.equal(
+    livenessVerification.document,
+    undefined,
+    'liveness startSession payload MUST NOT include document object or request document types',
+  );
+  assert.deepEqual(
+    livenessVerification.features,
+    ['selfid'],
+    'liveness startSession payload must specify selfid feature',
+  );
+
+  // Mark liveness session as passed so optional ID can be started
+  rows['veriff-live-session-1'].status = 'passed';
+  const idSessionResult = await adultAssuranceService.startIdSession('veriff-live-session-1');
+  assert.ok(idSessionResult.sessionId);
+  const idCreateReq = fetchBodies.filter(
+    (b) => b.method === 'POST' && b.url.includes('/sessions'),
+  )[1];
+  assert.ok(idCreateReq, 'startIdSession must make a POST /sessions request');
+  assert.equal(
+    idCreateReq.body?.verification?.features,
+    undefined,
+    'optional ID session must not restrict to selfid-only',
+  );
+  assert.equal(
+    idCreateReq.body?.verification?.vendorData,
+    'adult-id:veriff-live-session-1',
+    'optional ID session vendorData must link to parent liveness session',
+  );
+
   console.log(
-    'Adult assurance checks passed: liveness underage, adult liveness-only, adult+ID, failed fixture, production ban, veriff route.',
+    'Adult assurance checks passed: liveness underage, adult liveness-only, adult+ID, failed fixture, production ban, veriff route, selfie payload.',
   );
 }
 

@@ -163,6 +163,7 @@ export const adultAssuranceService = {
 
     const base = veriffLivenessApiBase();
     const key = veriffLivenessApiKey();
+    const livenessVendorData = `adult:${uuidv4()}`;
     const res = await deps.fetch(`${base}/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-AUTH-CLIENT': key },
@@ -170,7 +171,8 @@ export const adultAssuranceService = {
       body: JSON.stringify({
         verification: {
           callback: `${frontendBase()}/register`,
-          vendorData: 'adult:pending',
+          vendorData: livenessVendorData,
+          features: ['selfid'],
         },
       }),
     });

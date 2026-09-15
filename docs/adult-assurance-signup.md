@@ -46,6 +46,14 @@ Source of truth in UI: `frontend/src/components/AdultAssuranceFlow.tsx` → `ADU
 | `ADULT_ASSURANCE_STAGING_FIXTURE` | Escape when Railway staging has `NODE_ENV=production` |
 | `RAILWAY_ENVIRONMENT` / `RAILWAY_ENVIRONMENT_NAME` | If name contains `staging`/`stage`, fixtures allowed |
 
+### Veriff Station configuration for 18+ liveness / age-estimation
+
+Veriff integration types in Station:
+- An **Identity Verification (IDV)** integration (Document + Selfie) enforces document checks (passport / driving licence / ID card) inside Veriff's hosted flow.
+- A **Biometric Liveness** or **Age Estimation** integration in Veriff Station configures the session flow to capture only a selfie without requesting an ID document.
+- When `VERIFF_AGE_ESTIMATION_API_KEY` (and optionally `VERIFF_AGE_ESTIMATION_API_BASE`) are unset, `startSession()` falls back to `VERIFF_API_KEY`. If `VERIFF_API_KEY` is an IDV integration, Veriff will force document upload unless an Age Estimation integration key is provisioned.
+- In Station: create an **Age Estimation** (or Biometric Liveness) integration, obtain its API key (and shared secret if separate), and configure `VERIFF_AGE_ESTIMATION_API_KEY` in Railway environment settings. `startSession()` will automatically use this key while `startIdSession()` continues using `VERIFF_API_KEY`. In addition, `startSession()` sends `features: ['selfid']` on session creation and omits any `document` payload.
+
 ## API
 
 - `GET /api/auth/adult-assurance/required`
