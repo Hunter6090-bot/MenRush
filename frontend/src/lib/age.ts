@@ -24,11 +24,26 @@ export function ageFromDateOfBirth(dob: string, asOf: Date = new Date()): number
 }
 
 /**
- * Normalize DOB typing to en-GB `dd/mm/yyyy`.
- * Digit-only input gets slashes inserted; slash-separated paste keeps day/month/year order.
+ * Normalize DOB typing/paste to en-GB `dd/mm/yyyy`.
+ * - Digit-only input gets `/` auto-inserted.
+ * - `/`, `-`, and `.` are accepted as separators and normalized to `/`.
+ * - Full ISO `YYYY-MM-DD` autofill/paste is converted to UK display order.
+ * Never treats UK entry as US mm/dd.
  */
 export function formatUkDobInput(raw: string): string {
-  const cleaned = raw.replace(/[^\d/]/g, '');
+  const trimmed = raw.trim();
+  // Browser / password-manager autofill often pastes ISO with hyphens.
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (iso) {
+    return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  }
+
+  // Accept UK separators (- . /), collapse runs, drop other junk.
+  const cleaned = trimmed
+    .replace(/[-.]/g, '/')
+    .replace(/[^\d/]/g, '')
+    .replace(/\/+/g, '/');
+
   if (cleaned.includes('/')) {
     const parts = cleaned.split('/').slice(0, 3);
     const d = (parts[0] ?? '').slice(0, 2);
@@ -38,6 +53,7 @@ export function formatUkDobInput(raw: string): string {
     if (parts.length === 2) return `${d}/${m}`;
     return `${d}/${m}/${y}`;
   }
+
   const digits = cleaned.slice(0, 8);
   if (digits.length <= 2) return digits;
   if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
@@ -45,16 +61,29 @@ export function formatUkDobInput(raw: string): string {
 }
 
 /**
- * Parse UK `dd/mm/yyyy` (1–2 digit day/month allowed) → ISO `YYYY-MM-DD`.
+ * Parse UK `dd/mm/yyyy` (also `-` / `.` separators; 1–2 digit day/month) → ISO `YYYY-MM-DD`.
  * Rejects invalid calendar dates and out-of-range years. Never treats input as mm/dd.
  */
 export function parseUkDateOfBirth(input: string): string | null {
   const trimmed = input.trim();
-  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(trimmed);
+  const isoDirect = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (isoDirect) {
+    // Already ISO from autofill — validate as calendar date, keep as ISO.
+    const year = Number(isoDirect[1]);
+    const month = Number(isoDirect[2]);
+    const day = Number(isoDirect[3]);
+    return toValidatedIso(day, month, year);
+  }
+
+  const match = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(trimmed);
   if (!match) return null;
   const day = Number(match[1]);
   const month = Number(match[2]);
   const year = Number(match[3]);
+  return toValidatedIso(day, month, year);
+}
+
+function toValidatedIso(day: number, month: number, year: number): string | null {
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
   const thisYear = new Date().getFullYear();
   if (year < 1900 || year > thisYear) return null;

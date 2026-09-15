@@ -165,7 +165,22 @@ export const Register = () => {
 
   const onDobChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setError('');
-    setForm((prev) => ({ ...prev, dob: formatUkDobInput(e.target.value) }));
+    const input = e.target;
+    const raw = input.value;
+    const caret = input.selectionStart ?? raw.length;
+    const formatted = formatUkDobInput(raw);
+    setForm((prev) => ({ ...prev, dob: formatted }));
+    // iOS WebKit drops keystrokes when a controlled mask inserts `/` and the
+    // caret jumps; restore it after paint so digit auto-slash stays reliable.
+    const nextCaret = Math.max(0, Math.min(formatted.length, caret + (formatted.length - raw.length)));
+    requestAnimationFrame(() => {
+      if (document.activeElement !== input) return;
+      try {
+        input.setSelectionRange(nextCaret, nextCaret);
+      } catch {
+        /* ignore selection errors on non-text inputs */
+      }
+    });
   };
 
   const helperClass = 'text-[13px] leading-[1.55] text-[var(--cream-muted)]';
@@ -389,18 +404,25 @@ export const Register = () => {
               <input
                 id="register-dob"
                 type="text"
-                inputMode="numeric"
+                /* text (not numeric): iPhone number pad has no / or -; users
+                   must be able to type or paste UK separators. Digits still
+                   auto-format via formatUkDobInput. */
+                inputMode="text"
+                enterKeyHint="done"
                 autoComplete="bday"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
                 placeholder="dd/mm/yyyy"
                 value={form.dob}
                 onChange={onDobChange}
                 required
                 maxLength={10}
-                pattern="\d{1,2}/\d{1,2}/\d{4}"
                 title="Enter date as dd/mm/yyyy"
                 aria-describedby="register-dob-format"
                 className={publicInputClass}
                 data-testid="register-dob"
+                lang="en-GB"
               />
               <p
                 id="register-dob-format"

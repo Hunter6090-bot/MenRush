@@ -47,6 +47,7 @@ style(icons): heritage set (claude)
 
 | Area | Remote (`origin/mvp-complete`) | Local only (uncommitted) | Owner / notes |
 | --- | --- | --- | --- |
+| P0 iPhone Register DOB separators (Al / BOA90) | this branch `cursor/iphone-dob-separators-0fd5` | — | Cursor cloud — Al P0: iPhone cannot enter DOB with dashes; accept `-`/`.` → normalize `/`; drop numeric keypad + HTML pattern; caret restore for auto-slash; ISO autofill→UK; unit tests; Profile stays type=date; quiet face; draft; do not merge |
 | P1 soft tidy Register promo label (post-#265 BSF26) | this branch `cursor/register-promo-neutral-copy-440c` | — | Cursor cloud — QC follow-on #265: Register/ComingSoon Pride-only promo field → neutral Promo code; quiet face (no BSF26 blast); ?promo= prefill kept; grant/Terms untouched; draft; do not merge |
 | P0 promo BSF26 — BearScotsFest 2026 only (3mo Premium) | merged `#265` on main (`dddbd31`) | — | Cursor cloud — Al CLOCK LOCK baked; fest-only; claim-by end 5 Oct London; no Pride stack; replaces 30d; quiet face |
 | Unify leftover empty gold stubs → FadedBrandFace (post-#263 QC) | this branch `cursor/unify-empty-faded-brand-face-e5df` | — | Cursor cloud — QC follow-on #263: ProfileCard + chat bubbles (+ drawer hero, UserCard, Community, ProfileSetup) SilhouetteAvatar→FadedBrandFace medallion-transparent; no prod SilhouetteAvatar call sites left (component deprecated); media lock; quiet face; draft; do not merge |
