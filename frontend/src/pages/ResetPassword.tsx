@@ -44,9 +44,9 @@ export const ResetPassword = () => {
   };
 
   return (
-    <div className="relative flex min-h-dvh flex-col overflow-hidden">
-      <RandomBackground />
-      <div className="absolute inset-0 bg-black/60" />
+    <div className="relative flex min-h-dvh flex-col overflow-hidden text-[#F0E0C0]">
+      <RandomBackground opacity={0.65} brightness={1.05} />
+      <div className="absolute inset-0 bg-gradient-to-b from-[#0D0A06]/35 via-[#0D0A06]/50 to-[#0D0A06]/75" />
 
       <div className="relative z-10 mx-auto flex min-h-0 flex-1 w-full max-w-lg items-center px-5 py-8 sm:px-8">
         <section className="w-full">
@@ -54,14 +54,14 @@ export const ResetPassword = () => {
             <BrandMark size="md" showWordmark />
           </Link>
 
-          <h1 className="mr-page-heading mt-6">
+          <h1 className="mr-page-heading mt-6 drop-shadow-[0_2px_8px_rgba(0,0,0,0.75)]">
             Choose a new password
           </h1>
-          <p className="mr-copy mt-3">
+          <p className="mr-copy mt-3 drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]">
             Enter a new password for your MenRush account.
           </p>
 
-          <div className="mt-8">
+          <div className="mt-8 rounded-[24px] border border-[rgba(240,224,192,0.35)] bg-[#1E1508]/92 p-6 backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.6)] sm:p-8">
             {error && (
               <div className="mb-4 rounded-2xl border border-[#A45E18]/30 bg-[#A45E18]/12 px-4 py-3 text-sm text-[#F0E0C0]/90">
                 {error}

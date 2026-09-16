@@ -8,19 +8,23 @@ import { BrandMark } from './BrandMark';
 import { RandomBackground } from './RandomBackground';
 import { SiteFooter } from './SiteFooter';
 
-/** Default auth overlay — darker; photo less visible. */
+/** Default auth overlay — lighter scrim so photo is clearly visible while keeping text readable. */
 const AUTH_GRADIENT =
-  'linear-gradient(180deg, rgba(13,10,6,.6) 0%, rgba(13,10,6,.85) 60%, rgba(13,10,6,.97) 100%)';
+  'linear-gradient(180deg, rgba(13,10,6,.28) 0%, rgba(13,10,6,.45) 55%, rgba(13,10,6,.75) 100%)';
 
 /**
  * Age-check / upsell / underage (#97 Al lock) — lighter scrim so RandomBackground
  * photo detail reads clearly behind the card.
  */
 export const AUTH_ASSURANCE_GRADIENT =
-  'linear-gradient(180deg, rgba(13,10,6,.32) 0%, rgba(13,10,6,.48) 50%, rgba(13,10,6,.72) 100%)';
+  'linear-gradient(180deg, rgba(13,10,6,.22) 0%, rgba(13,10,6,.38) 50%, rgba(13,10,6,.65) 100%)';
+
+/** Default clear photo settings for auth screens (Al 2026-09-16). */
+export const AUTH_BACKGROUND_OPACITY = 0.65;
+export const AUTH_BACKGROUND_BRIGHTNESS = 1.05;
 
 /** Brighter random photo for assurance screens (Al 2026-09-12). */
-export const AUTH_ASSURANCE_BACKGROUND_OPACITY = 0.52;
+export const AUTH_ASSURANCE_BACKGROUND_OPACITY = 0.68;
 export const AUTH_ASSURANCE_BRIGHTNESS = 1.08;
 
 /** Fixed photos for verify / profile-setup flows (not the public random pool). */
@@ -50,8 +54,8 @@ type PublicAuthShellProps = {
 
 export function PublicAuthShell({
   backgroundImage,
-  backgroundOpacity = 0.3,
-  backgroundBrightness,
+  backgroundOpacity = AUTH_BACKGROUND_OPACITY,
+  backgroundBrightness = AUTH_BACKGROUND_BRIGHTNESS,
   gradientOverlay = AUTH_GRADIENT,
   homeTo = '/coming-soon',
   children,
@@ -110,7 +114,7 @@ export function PublicAuthHero({
       <h1 className="mr-auth-heading text-balance">
         {title} <span className="mr-auth-accent">{accent}</span>
       </h1>
-      <p className="mt-[22px] max-w-[480px] text-[17px] leading-[1.6] text-[var(--cream-muted)]">{copy}</p>
+      <p className="mt-[22px] max-w-[480px] text-[17px] leading-[1.6] text-[#F0E0C0]/90 drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]">{copy}</p>
     </>
   );
 }
