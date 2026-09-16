@@ -1,9 +1,9 @@
+import { ageEstimationConfig, isAgeEstimationConfigured } from './veriff-age-integration';
 import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { query as defaultQuery } from '../db';
 import {
   isVeriffConfigured,
-  signVeriffHmac,
   VeriffConfigError,
 } from './veriff.service';
 import {
@@ -16,17 +16,6 @@ import {
 
 const VERIFF_API_BASE =
   (process.env.VERIFF_API_BASE || 'https://stationapi.veriff.com/v1').replace(/\/$/, '');
-
-/** Optional Age Estimation / biometric base URL (selfie-only). Falls back to VERIFF_API_BASE. */
-function veriffLivenessApiBase(): string {
-  const ageBase = (process.env.VERIFF_AGE_ESTIMATION_API_BASE || '').trim().replace(/\/$/, '');
-  return ageBase || VERIFF_API_BASE;
-}
-
-function veriffLivenessApiKey(): string {
-  const ageKey = (process.env.VERIFF_AGE_ESTIMATION_API_KEY || '').trim();
-  return ageKey || apiKey();
-}
 
 const TOKEN_TTL_MS = 30 * 60 * 1000;
 
@@ -89,9 +78,11 @@ export function isAdultAssuranceTestFixtureAllowed(): boolean {
  * unless explicitly disabled (local / CI without keys).
  */
 export function isAdultAssuranceRequiredAtSignup(): boolean {
+  // Production signup always requires the age check, independent of the optional ID badge.
+  if (process.env.NODE_ENV === 'production') return true;
   if (process.env.ADULT_ASSURANCE_SIGNUP_REQUIRED === 'false') return false;
   if (process.env.ADULT_ASSURANCE_SIGNUP_REQUIRED === 'true') return true;
-  return isVeriffConfigured();
+  return isAgeEstimationConfigured();
 }
 
 function hashToken(raw: string): string {
@@ -148,7 +139,7 @@ export const adultAssuranceService = {
    * No ID document required on this path.
    */
   async startSession(): Promise<{ sessionId: string; sessionUrl: string }> {
-    if (!isVeriffConfigured() && isAdultAssuranceTestFixtureAllowed()) {
+    if (!isAgeEstimationConfigured() && isAdultAssuranceTestFixtureAllowed()) {
       const sessionId = uuidv4();
       const sessionUrl = `https://magic.veriff.me/v/${sessionId}?fixture=1&kind=liveness`;
       await deps.query(
@@ -159,10 +150,9 @@ export const adultAssuranceService = {
       return { sessionId, sessionUrl };
     }
 
-    if (!isVeriffConfigured()) throw new VeriffConfigError();
+    if (!isAgeEstimationConfigured()) throw new Error('age_estimation_not_configured');
 
-    const base = veriffLivenessApiBase();
-    const key = veriffLivenessApiKey();
+    const { base, key } = ageEstimationConfig();
     const livenessVendorData = `adult:${uuidv4()}`;
     const res = await deps.fetch(`${base}/sessions`, {
       method: 'POST',
@@ -172,7 +162,6 @@ export const adultAssuranceService = {
         verification: {
           callback: `${frontendBase()}/register`,
           vendorData: livenessVendorData,
-          features: ['selfid'],
         },
       }),
     });
@@ -182,25 +171,7 @@ export const adultAssuranceService = {
     const sessionUrl = json.verification?.url;
     if (!sessionId || !sessionUrl) throw new Error('veriff_session_malformed');
 
-    try {
-      const patchBody = JSON.stringify({
-        verification: { vendorData: `adult:${sessionId}` },
-      });
-      const patchSig = signVeriffHmac(patchBody);
-      await deps.fetch(`${base}/sessions/${encodeURIComponent(sessionId)}`, {
-        method: 'PATCH',
-        signal: AbortSignal.timeout(10000),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-AUTH-CLIENT': key,
-          'X-HMAC-SIGNATURE': patchSig,
-        },
-        body: patchBody,
-      });
-    } catch (err) {
-      console.warn('[adult-assurance] vendorData patch failed (non-fatal)', err);
-    }
-
+    // Route decisions by the stored session id; no extra PATCH or IDV credentials.
     await deps.query(
       `INSERT INTO adult_assurance_sessions (id, session_url, status, check_kind, created_at, updated_at)
        VALUES ($1, $2, 'created', 'liveness', NOW(), NOW())`,
@@ -317,6 +288,7 @@ export const adultAssuranceService = {
         code?: number | string | null;
       };
     },
+    expectedKind?: 'liveness' | 'id',
   ): Promise<{
     handled: boolean;
     decision?: string;
@@ -345,7 +317,7 @@ export const adultAssuranceService = {
       [sessionId],
     );
     const row = existing.rows[0];
-    if (!row) return { handled: false };
+    if (!row || (expectedKind && row.check_kind !== expectedKind)) return { handled: false };
 
     // Optional ID document session (Verified tick).
     if (row.check_kind === 'id') {
@@ -388,8 +360,16 @@ export const adultAssuranceService = {
       return { handled: true, decision, adultStatus: nextStatus };
     }
 
-    // Approved liveness — underage if estimate/DOB says so; else pass (no DOB required).
+    // Approval alone proves neither age nor adulthood. Require the age result.
     const ageCheck = isAdultFromLivenessDecision(payload);
+    if (!ageCheck.ok && ageCheck.reason !== 'underage') {
+      await deps.query(
+        `UPDATE adult_assurance_sessions SET status = 'failed', updated_at = NOW(), decided_at = NOW()
+         WHERE id = $1 AND status NOT IN ('passed', 'underage')`,
+        [sessionId],
+      );
+      return { handled: true, decision, adultStatus: 'failed' };
+    }
     if (!ageCheck.ok && ageCheck.reason === 'underage') {
       await deps.query(
         `UPDATE adult_assurance_sessions
@@ -494,7 +474,14 @@ export const adultAssuranceService = {
           WHERE id = $1 AND status <> 'passed'`,
         [sessionId, verification?.code != null ? String(verification.code) : null],
       );
-      // Parent liveness already passed; do not revoke age gate — just no Verified tick.
+      // A document proving underage overrides the earlier estimate before signup.
+      await deps.query(
+        `UPDATE adult_assurance_sessions
+            SET status = 'underage', assurance_token_hash = NULL, token_expires_at = NULL,
+                id_verified = FALSE, updated_at = NOW(), decided_at = NOW()
+          WHERE id = $1 AND redeemed_at IS NULL`,
+        [parentId],
+      );
       return { handled: true, decision, adultStatus: 'underage', idVerified: false };
     }
 

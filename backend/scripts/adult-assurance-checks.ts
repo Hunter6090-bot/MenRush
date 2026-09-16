@@ -43,8 +43,8 @@ async function main() {
   assert.equal(isAdultFromLivenessDecision({
     verification: { additionalVerifiedData: { estimatedAge: 25 } },
   }).ok, true);
-  // Approved with no age signal → pass (portal threshold / liveness).
-  assert.equal(isAdultFromLivenessDecision({ verification: {} }).ok, true);
+  // Approval without age evidence must not grant adult access.
+  assert.equal(isAdultFromLivenessDecision({ verification: {} }).ok, false);
   assert.equal(isAdultFromVeriffDecision({
     verification: { person: { dateOfBirth: fixtureDateOfBirthYearsAgo(ADULT_AGE_MINIMUM - 1) } },
   }).reason, 'underage');
@@ -123,7 +123,7 @@ async function main() {
       }
       if (/UPDATE adult_assurance_sessions/i.test(sql) && /SET status = 'underage'/i.test(sql)) {
         const id = params[0];
-        if (rows[id] && rows[id].status !== 'passed' && rows[id].status !== 'underage') {
+        if (rows[id] && (/redeemed_at IS NULL/i.test(sql) || (rows[id].status !== 'passed' && rows[id].status !== 'underage'))) {
           rows[id].status = 'underage';
           rows[id].assurance_token_hash = null;
           rows[id].token_expires_at = null;
@@ -193,6 +193,15 @@ async function main() {
   assert.equal(underResult.assurance_token, undefined);
   assert.equal(rows[under.sessionId].status, 'underage');
 
+  const noAge = await adultAssuranceService.startSession();
+  const noAgeResult = await adultAssuranceService.applyDecision({verification: {id: noAge.sessionId, status: 'approved'}}, 'liveness');
+  assert.equal(noAgeResult.adultStatus, 'failed');
+  assert.equal(noAgeResult.assuranceToken, undefined);
+  const wrongIntegration = await adultAssuranceService.startSession();
+  const wrongResult = await adultAssuranceService.applyDecision({verification: {id: wrongIntegration.sessionId, status: 'approved', additionalVerifiedData: {estimatedAge: 25}}}, 'id');
+  assert.equal(wrongResult.handled, false);
+  assert.equal(rows[wrongIntegration.sessionId].status, 'created');
+
   // Adult liveness-only: passed + token; id_verified false.
   const adult = await adultAssuranceService.startSession();
   const adultResult = await adultAssuranceService.applyTestFixture({
@@ -255,6 +264,13 @@ async function main() {
   if (prevStagingFlag === undefined) delete process.env.ADULT_ASSURANCE_STAGING_FIXTURE;
   else process.env.ADULT_ASSURANCE_STAGING_FIXTURE = prevStagingFlag;
 
+  const conflicting = await adultAssuranceService.startSession();
+  await adultAssuranceService.applyTestFixture({sessionId: conflicting.sessionId, outcome: 'adult'});
+  const conflictingId = await adultAssuranceService.startIdSession(conflicting.sessionId);
+  await adultAssuranceService.applyDecision({verification: {id: conflictingId.sessionId, status: 'approved', person: {dateOfBirth: fixtureDateOfBirthYearsAgo(16)}}}, 'id');
+  assert.equal(rows[conflicting.sessionId].status, 'underage');
+  assert.equal(rows[conflicting.sessionId].assurance_token_hash, null);
+
   // veriff.applyDecision routes adult underage without creating users.
   process.env.VERIFF_API_KEY = '';
   process.env.VERIFF_SHARED_SECRET = '';
@@ -283,10 +299,10 @@ async function main() {
       additionalVerifiedData: { estimatedAge: 16 },
     },
   });
-  assert.equal(viaVeriff.handled, true);
-  assert.equal(viaVeriff.underage, true);
+  assert.equal(viaVeriff.handled, false, 'ID integration cannot decide an age session');
+  assert.equal(viaVeriff.underage, undefined);
   assert.equal(viaVeriff.userId, undefined, 'under-18 must not attach a user id');
-  assert.equal(rows[adultSession.sessionId].status, 'underage');
+  assert.equal(rows[adultSession.sessionId].status, 'created');
 
   // Verify startSession payload vs startIdSession payload when Veriff is configured:
   // - startSession must be selfie-only and NEVER request document or document types
@@ -314,6 +330,8 @@ async function main() {
     },
   });
 
+  process.env.VERIFF_AGE_ESTIMATION_API_KEY = 'test-age-key';
+  process.env.VERIFF_AGE_ESTIMATION_SHARED_SECRET = 'test-age-secret';
   const liveLiveness = await adultAssuranceService.startSession();
   assert.equal(liveLiveness.sessionId, 'veriff-live-session-1');
   assert.equal(liveLiveness.sessionUrl, 'https://station.veriff.com/v/test-url');
@@ -331,8 +349,8 @@ async function main() {
   );
   assert.deepEqual(
     livenessVerification.features,
-    ['selfid'],
-    'liveness startSession payload must specify selfid feature',
+    undefined,
+    'Age Estimation integration controls capture; no undocumented feature override',
   );
 
   // Mark liveness session as passed so optional ID can be started
@@ -353,6 +371,21 @@ async function main() {
     'adult-id:veriff-live-session-1',
     'optional ID session vendorData must link to parent liveness session',
   );
+
+  const { isAgeEstimationConfigured, signAgeEstimation, verifyAgeEstimationWebhook } = await import('../src/services/veriff-age-integration');
+  assert.equal(isAgeEstimationConfigured(), true);
+  const raw = Buffer.from('{"verification":{"id":"test"}}');
+  const signature = signAgeEstimation(raw);
+  assert.equal(verifyAgeEstimationWebhook(raw, signature, 'test-age-key'), true);
+  assert.equal(verifyAgeEstimationWebhook(raw, signature, 'test-api-key'), false);
+  assert.equal(verifyAgeEstimationWebhook(Buffer.from('{}'), signature, 'test-age-key'), false);
+  process.env.VERIFF_AGE_ESTIMATION_API_KEY = 'test-api-key';
+  assert.equal(isAgeEstimationConfigured(), false, 'ID integration must not be reused as age estimation');
+  process.env.VERIFF_AGE_ESTIMATION_API_KEY = 'test-age-key';
+  process.env.NODE_ENV = 'production';
+  process.env.ADULT_ASSURANCE_SIGNUP_REQUIRED = 'false';
+  assert.equal(isAdultAssuranceRequiredAtSignup(), true, 'production cannot bypass age assurance');
+  process.env.NODE_ENV = 'test';
 
   // -------------------------------------------------------------
   // Verify ADULT_ASSURANCE_SIGNUP_REQUIRED=false end-to-end:
