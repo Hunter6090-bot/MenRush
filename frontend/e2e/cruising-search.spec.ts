@@ -18,7 +18,7 @@ test.describe('Cruising Search Phase 1', () => {
 
     expect(
       mapToCruisingCategory({
-        name: "Hog's Back A31 Layby",
+        name: 'A31 Hog’s Back Rest Lay-by',
         description: 'Car park',
         category_slug: 'parking',
       }),
@@ -51,18 +51,18 @@ test.describe('Cruising Search Phase 1', () => {
   });
 
   test('getDirectionsUrl generates valid coordinates link', () => {
-    const hogsUrl = getDirectionsUrl(51.22603, -0.67367, "Hog's Back A31 Layby");
-    expect(hogsUrl).toContain('51.22603');
-    expect(hogsUrl).toContain('-0.67367');
+    const hogsUrl = getDirectionsUrl(51.2260632, -0.6727582, 'A31 Hog’s Back Rest Lay-by');
+    expect(hogsUrl).toContain('51.2260632');
+    expect(hogsUrl).toContain('-0.6727582');
 
-    const wisleyUrl = getDirectionsUrl(51.31800, -0.45800, 'Ockham Common');
-    expect(wisleyUrl).toContain('51.318');
-    expect(wisleyUrl).toContain('-0.458');
+    const wisleyUrl = getDirectionsUrl(51.3171538, -0.453855, 'Wisley (Ockham Common)');
+    expect(wisleyUrl).toContain('51.3171538');
+    expect(wisleyUrl).toContain('-0.453855');
   });
 
   test('isValidCoordinateSpot rejects spots with missing or invalid coordinates', () => {
-    expect(isValidCoordinateSpot({ latitude: 51.22603, longitude: -0.67367 })).toBe(true);
-    expect(isValidCoordinateSpot({ latitude: 51.31836, longitude: -0.47316 })).toBe(true);
+    expect(isValidCoordinateSpot({ latitude: 51.2260632, longitude: -0.6727582 })).toBe(true);
+    expect(isValidCoordinateSpot({ latitude: 51.3171538, longitude: -0.453855 })).toBe(true);
     expect(isValidCoordinateSpot({ latitude: 0, longitude: 0 })).toBe(false);
     expect(isValidCoordinateSpot({ latitude: null as any, longitude: -0.5 })).toBe(false);
   });

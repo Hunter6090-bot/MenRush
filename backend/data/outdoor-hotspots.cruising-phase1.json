@@ -1,32 +1,32 @@
 {
   "_meta": {
     "batch": "cruising-phase1-2026-09",
-    "description": "Cruising outdoor Hot Spots - Hog's Back (Surrey / Guildford A31 layby) and Ockham Common (Wisley / A3 outdoor cruising area)",
-    "legal": "No cafe or RHS endorsement implied. Pure outdoor woodland and layby cruising spots. No toilets.",
+    "description": "Cruising outdoor Hot Spots - A31 Hog’s Back Rest Lay-by (Guildford) and Wisley (Ockham Common)",
+    "legal": "Confirmed coordinates from Product. Never label as Hog's Back Cafe or RHS Wisley / Wisley Gardens. Pure outdoor cruising areas.",
     "source": "ops-curated"
   },
   "spots": [
     {
-      "name": "Hog's Back A31 Layby",
+      "name": "A31 Hog’s Back Rest Lay-by",
       "city": "Guildford",
       "category": "parking",
       "description": "Car park",
-      "lat": 51.22603,
-      "lng": -0.67367,
-      "external_id": "ops-curated-cruising:hogs-back-a31-layby",
+      "lat": 51.2260632,
+      "lng": -0.6727582,
+      "external_id": "ops-curated-cruising:a31-hogs-back-rest-layby",
       "nation": "England",
       "geocode_note": "A31 westbound layby / woods outdoor stretch along Hog's Back between Puttenham and Seale"
     },
     {
-      "name": "Ockham Common",
+      "name": "Wisley (Ockham Common)",
       "city": "Wisley",
       "category": "parks-trails",
       "description": "Woodland",
-      "lat": 51.31800,
-      "lng": -0.45800,
-      "external_id": "ops-curated-cruising:ockham-common",
+      "lat": 51.3171538,
+      "lng": -0.4538550,
+      "external_id": "ops-curated-cruising:wisley-ockham-common",
       "nation": "England",
-      "geocode_note": "Ockham Common near A3/M25 junction outdoor cruising area"
+      "geocode_note": "Ockham Common / A3 outdoor cruising area"
     }
   ]
 }

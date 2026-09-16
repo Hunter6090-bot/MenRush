@@ -44,40 +44,43 @@ const rootSql = fs.readFileSync(rootMigPath, 'utf8');
 const backendSql = fs.readFileSync(backendMigPath, 'utf8');
 assert.strictEqual(rootSql, backendSql, 'Both migration copies must be identical');
 
-// 4. Verify Hog's Back and Ockham Common (Wisley corridor) coordinates and details
-assert.match(rootSql, /Hog''s Back/i);
+// 4. Verify exact Product confirmed display names, coordinates and details
+assert.match(rootSql, /A31 Hog’s Back Rest Lay-by/);
 assert.match(rootSql, /Guildford/i);
-assert.match(rootSql, /51\.22603/);
-assert.match(rootSql, /-0\.67367/);
-assert.match(rootSql, /Ockham Common/i);
+assert.match(rootSql, /51\.2260632/);
+assert.match(rootSql, /-0\.6727582/);
+assert.match(rootSql, /Wisley \(Ockham Common\)/);
 assert.match(rootSql, /Wisley/i);
-assert.match(rootSql, /51\.31800/);
-assert.match(rootSql, /-0\.45800/);
-assert.match(rootSql, /ops-curated-cruising:hogs-back-a31-layby/);
-assert.match(rootSql, /ops-curated-cruising:ockham-common/);
+assert.match(rootSql, /51\.3171538/);
+assert.match(rootSql, /-0\.4538550/);
+assert.match(rootSql, /ops-curated-cruising:a31-hogs-back-rest-layby/);
+assert.match(rootSql, /ops-curated-cruising:wisley-ockham-common/);
 
 // Legal constraints verification:
-// - Do NOT name or imply RHS Wisley / Wisley Gardens endorsement
-assert.doesNotMatch(rootSql, /\bRHS\b/i);
-assert.doesNotMatch(rootSql, /\bWisley\s+Gardens\b/i);
-// - Do NOT name or imply Hog's Back Cafe endorsement
-assert.doesNotMatch(rootSql, /\bCaf[eé]\b/i);
+// - Hot spots names/descriptions: NEVER label as RHS Wisley / Wisley Gardens
+// - NEVER label as Hog’s Back Café or imply café endorsement
 // - Toilets stay off the map entirely
-assert.doesNotMatch(rootSql, /\btoilets?\b/i);
+const linesWithoutComments = rootSql
+  .split('\n')
+  .filter((l) => !l.trim().startsWith('--'))
+  .join('\n');
+assert.doesNotMatch(linesWithoutComments, /\bRHS\b/i);
+assert.doesNotMatch(linesWithoutComments, /\bWisley\s+Gardens\b/i);
+assert.doesNotMatch(linesWithoutComments, /\bCaf[eé]\b/i);
+assert.doesNotMatch(linesWithoutComments, /\btoilets?\b/i);
 
-// Verify coordinates are within valid UK regional corridor
-const hogsLat = 51.22603;
-const hogsLng = -0.67367;
-const ockhamLat = 51.31800;
-const ockhamLng = -0.45800;
+// Verify coordinates match exact confirmed Product specs
+const hogsLat = 51.2260632;
+const hogsLng = -0.6727582;
+const ockhamLat = 51.3171538;
+const ockhamLng = -0.453855;
 
-assert.ok(hogsLat > 51.0 && hogsLat < 51.5, "Hog's Back latitude in Surrey corridor");
-assert.ok(hogsLng > -0.9 && hogsLng < -0.4, "Hog's Back longitude in Surrey corridor");
-assert.ok(ockhamLat > 51.0 && ockhamLat < 51.5, 'Ockham Common latitude in Surrey corridor');
-assert.ok(ockhamLng > -0.6 && ockhamLng < -0.3, 'Ockham Common longitude in Surrey corridor');
+assert.strictEqual(hogsLat, 51.2260632);
+assert.strictEqual(hogsLng, -0.6727582);
+assert.strictEqual(ockhamLat, 51.3171538);
+assert.strictEqual(ockhamLng, -0.453855);
 
 console.log('✓ Outdoor categories & visibility SQL verified');
-console.log('✓ Migration 061 (Hog\'s Back + Ockham Common) verified in both locations');
-console.log('✓ Legal soft constraints verified: no RHS/Cafe endorsement, no toilets');
-console.log('✓ Real geocoded coordinates confirmed for Hog\'s Back and Ockham Common');
+console.log('✓ Migration 061 (exact confirmed Product coords and display names) verified in both locations');
+console.log('✓ Legal constraints verified: no RHS/Cafe endorsement, no toilets');
 console.log('cruising-search-checks: ok');

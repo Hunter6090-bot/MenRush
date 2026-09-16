@@ -6,11 +6,11 @@ import { CruisingSearchBar } from './CruisingSearchBar';
 
 const mockSpot: HotSpotDTO = {
   id: 'spot-hogs-back',
-  name: "Hog's Back A31 Layby",
+  name: 'A31 Hog’s Back Rest Lay-by',
   city: 'Guildford',
   description: 'Car park',
-  latitude: 51.22603,
-  longitude: -0.67367,
+  latitude: 51.2260632,
+  longitude: -0.6727582,
   category_id: 3,
   category_slug: 'parking',
   category_name: 'Parking',
@@ -28,7 +28,7 @@ describe('CruisingSpotCard', () => {
   it('renders spot name, category, distance, and honest activity placeholder', () => {
     render(<CruisingSpotCard spot={mockSpot} />);
 
-    expect(screen.getByTestId('cruising-spot-name')).toHaveTextContent("Hog's Back A31 Layby");
+    expect(screen.getByTestId('cruising-spot-name')).toHaveTextContent('A31 Hog’s Back Rest Lay-by');
     expect(screen.getByTestId('cruising-category-badge')).toHaveTextContent('Layby');
     // In UK locale formatDistanceFromKm converts km to miles (2.6 mi)
     expect(screen.getByTestId('cruising-distance')).toHaveTextContent(/2\.6\s*mi|4\.2\s*km/);
@@ -41,8 +41,8 @@ describe('CruisingSpotCard', () => {
     const directionsLink = screen.getByTestId('cruising-get-directions');
     expect(directionsLink).toBeInTheDocument();
     const href = directionsLink.getAttribute('href');
-    expect(href).toContain('51.22603');
-    expect(href).toContain('-0.67367');
+    expect(href).toContain('51.2260632');
+    expect(href).toContain('-0.6727582');
   });
 
   it('renders map thumbnail element for the spot', () => {

@@ -17,11 +17,11 @@ vi.mock('../api/client', async () => {
 const mockCruisingSpots: HotSpotDTO[] = [
   {
     id: 'spot-ockham',
-    name: 'Ockham Common',
+    name: 'Wisley (Ockham Common)',
     city: 'Wisley',
     description: 'Woodland',
-    latitude: 51.318,
-    longitude: -0.458,
+    latitude: 51.3171538,
+    longitude: -0.453855,
     category_id: 1,
     category_slug: 'parks-trails',
     category_name: 'Parks & Trails',
@@ -34,11 +34,11 @@ const mockCruisingSpots: HotSpotDTO[] = [
   },
   {
     id: 'spot-hogs-back',
-    name: "Hog's Back A31 Layby",
+    name: 'A31 Hog’s Back Rest Lay-by',
     city: 'Guildford',
     description: 'Car park',
-    latitude: 51.22603,
-    longitude: -0.67367,
+    latitude: 51.2260632,
+    longitude: -0.6727582,
     category_id: 2,
     category_slug: 'parking',
     category_name: 'Parking',
@@ -134,10 +134,10 @@ describe('CruisingSearchSheet', () => {
     );
 
     const input = screen.getByTestId('cruising-search-input');
-    fireEvent.change(input, { target: { value: "Hog's Back" } });
+    fireEvent.change(input, { target: { value: 'Hog’s Back' } });
 
     await waitFor(() => {
-      expect(hotSpotsAPI.searchCruising).toHaveBeenCalledWith(51.3, -0.5, "Hog's Back");
+      expect(hotSpotsAPI.searchCruising).toHaveBeenCalledWith(51.3, -0.5, 'Hog’s Back');
     });
   });
 

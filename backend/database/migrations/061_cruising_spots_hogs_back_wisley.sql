@@ -1,8 +1,9 @@
--- Migration 061: Add Hog's Back (A31 lay-by / woods outdoor stretch, Guildford corridor)
--- and Ockham Common (A3 outdoor cruising area, Surrey).
--- Known cruising locations with real verified coordinates.
--- Categories: parking ('parking') and parks-trails ('parks-trails').
--- Legal: Pure outdoor woodland and layby only. No commercial venue endorsement.
+-- Migration 061: Add A31 Hog’s Back Rest Lay-by (Guildford area)
+-- and Wisley (Ockham Common) (Surrey).
+-- Confirmed seed coords from Product:
+-- 1) "A31 Hog’s Back Rest Lay-by", lat 51.2260632, lng -0.6727582, parking / layby
+-- 2) "Wisley (Ockham Common)", lat 51.3171538, lng -0.4538550, parks-trails / woods / common
+-- Legal: Pure outdoor woodland and layby only. Never imply commercial/gardens endorsement.
 
 INSERT INTO hot_spots (
   category_id, name, city, nation, description,
@@ -25,19 +26,30 @@ SELECT
   NOW()
 FROM hot_spot_categories c
 JOIN (VALUES
-  ('parking', 'Hog''s Back A31 Layby', 'Guildford', 'Car park',
-   51.22603, -0.67367, 'ops-curated-cruising:hogs-back-a31-layby'),
-  ('parks-trails', 'Ockham Common', 'Wisley', 'Woodland',
-   51.31800, -0.45800, 'ops-curated-cruising:ockham-common')
+  ('parking', 'A31 Hog’s Back Rest Lay-by', 'Guildford', 'Car park',
+   51.2260632, -0.6727582, 'ops-curated-cruising:a31-hogs-back-rest-layby'),
+  ('parks-trails', 'Wisley (Ockham Common)', 'Wisley', 'Woodland',
+   51.3171538, -0.4538550, 'ops-curated-cruising:wisley-ockham-common')
 ) AS v(cat_slug, name, city, description, lat, lng, external_id)
   ON c.slug = v.cat_slug
 WHERE NOT EXISTS (
   SELECT 1 FROM hot_spots hs
    WHERE hs.source = 'ops-curated'
-     AND (hs.external_id = v.external_id OR lower(hs.name) = lower(v.name))
+     AND (
+       hs.external_id = v.external_id
+       OR lower(hs.name) = lower(v.name)
+       OR (v.name = 'A31 Hog’s Back Rest Lay-by' AND (
+         lower(hs.name) LIKE '%hog%back%'
+         OR hs.external_id = 'ops-curated-cruising:hogs-back-a31-layby'
+       ))
+       OR (v.name = 'Wisley (Ockham Common)' AND (
+         lower(hs.name) IN ('wisley common', 'ockham common', 'wisley (ockham common)')
+         OR hs.external_id IN ('ops-curated-cruising:wisley-common', 'ops-curated-cruising:ockham-common')
+       ))
+     )
 );
 
--- Ensure active and updated if row exists (including any legacy Wisley Common row)
+-- Ensure active and updated if row exists under canonical or prior alias names
 UPDATE hot_spots hs
    SET category_id = c.id,
        name = v.name,
@@ -50,15 +62,22 @@ UPDATE hot_spots hs
        is_active = TRUE
   FROM hot_spot_categories c
   JOIN (VALUES
-  ('parking', 'Hog''s Back A31 Layby', 'Guildford', 'Car park',
-   51.22603, -0.67367, 'ops-curated-cruising:hogs-back-a31-layby'),
-  ('parks-trails', 'Ockham Common', 'Wisley', 'Woodland',
-   51.31800, -0.45800, 'ops-curated-cruising:ockham-common')
+  ('parking', 'A31 Hog’s Back Rest Lay-by', 'Guildford', 'Car park',
+   51.2260632, -0.6727582, 'ops-curated-cruising:a31-hogs-back-rest-layby'),
+  ('parks-trails', 'Wisley (Ockham Common)', 'Wisley', 'Woodland',
+   51.3171538, -0.4538550, 'ops-curated-cruising:wisley-ockham-common')
   ) AS v(cat_slug, name, city, description, lat, lng, external_id)
     ON c.slug = v.cat_slug
  WHERE hs.source = 'ops-curated'
    AND (
      hs.external_id = v.external_id
      OR lower(hs.name) = lower(v.name)
-     OR (v.name = 'Ockham Common' AND (hs.external_id = 'ops-curated-cruising:wisley-common' OR lower(hs.name) = 'wisley common'))
+     OR (v.name = 'A31 Hog’s Back Rest Lay-by' AND (
+       lower(hs.name) LIKE '%hog%back%'
+       OR hs.external_id = 'ops-curated-cruising:hogs-back-a31-layby'
+     ))
+     OR (v.name = 'Wisley (Ockham Common)' AND (
+       lower(hs.name) IN ('wisley common', 'ockham common', 'wisley (ockham common)')
+       OR hs.external_id IN ('ops-curated-cruising:wisley-common', 'ops-curated-cruising:ockham-common')
+     ))
    );

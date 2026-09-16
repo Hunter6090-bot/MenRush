@@ -12,7 +12,7 @@ describe('Cruising Search Phase 1 helpers', () => {
     it('maps woodland and forest spots to "woods"', () => {
       expect(
         mapToCruisingCategory({
-          name: 'Ockham Common',
+          name: 'Wisley (Ockham Common)',
           description: 'Woodland',
           category_slug: 'parks-trails',
         }),
@@ -46,7 +46,7 @@ describe('Cruising Search Phase 1 helpers', () => {
     it('maps parking and laybys to "layby"', () => {
       expect(
         mapToCruisingCategory({
-          name: "Hog's Back A31 Layby",
+          name: 'A31 Hog’s Back Rest Lay-by',
           description: 'Car park',
           category_slug: 'parking',
         }),
@@ -161,9 +161,9 @@ describe('Cruising Search Phase 1 helpers', () => {
 
   describe('getDirectionsUrl', () => {
     it('returns valid directions URL with lat/lng', () => {
-      const url = getDirectionsUrl(51.22603, -0.67367, "Hog's Back A31 Layby");
-      expect(url).toContain('51.22603');
-      expect(url).toContain('-0.67367');
+      const url = getDirectionsUrl(51.2260632, -0.6727582, 'A31 Hog’s Back Rest Lay-by');
+      expect(url).toContain('51.2260632');
+      expect(url).toContain('-0.6727582');
       expect(url.startsWith('https://')).toBe(true);
     });
   });
