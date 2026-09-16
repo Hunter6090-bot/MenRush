@@ -2,6 +2,11 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { BrandMark } from '../components/BrandMark';
+import {
+  AUTH_BACKGROUND_OPACITY,
+  AUTH_BACKGROUND_BRIGHTNESS,
+  AUTH_GRADIENT,
+} from '../components/PublicAuthShell';
 import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
 import { SiteFooter } from '../components/SiteFooter';
@@ -63,8 +68,8 @@ export const ForgotPassword = () => {
 
   return (
     <div className="relative flex min-h-dvh flex-col overflow-hidden text-[#F0E0C0]">
-      <RandomBackground opacity={0.65} brightness={1.05} />
-      <div className="absolute inset-0 bg-gradient-to-b from-[#0D0A06]/35 via-[#0D0A06]/50 to-[#0D0A06]/75" />
+      <RandomBackground opacity={AUTH_BACKGROUND_OPACITY} brightness={AUTH_BACKGROUND_BRIGHTNESS} />
+      <div className="absolute inset-0" style={{ background: AUTH_GRADIENT }} aria-hidden />
 
       <div className="relative z-10 mx-auto flex min-h-0 flex-1 w-full max-w-lg items-center px-5 py-8 sm:px-8">
         <section className="w-full">
@@ -77,7 +82,7 @@ export const ForgotPassword = () => {
             Enter the email on your account and we&apos;ll send a reset link if it&apos;s registered.
           </p>
 
-          <div className="mt-8 rounded-[24px] border border-[rgba(240,224,192,0.35)] bg-[#1E1508]/92 p-6 backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.6)] sm:p-8">
+          <div className="mt-8 rounded-[24px] border border-[rgba(240,224,192,0.35)] bg-[#1E1508]/96 p-6 backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.6)] sm:p-8">
             {error ? (
               <div
                 role="alert"

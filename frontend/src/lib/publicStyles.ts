@@ -7,7 +7,7 @@ export const publicNavLinkSecondary = publicNavLinkPrimary;
 
 /** Auth/marketing card — Brand card #1E1508 on night #0D0A06 with clear scrim and subtle shadow. */
 export const publicPanelClass =
-  'mt-[34px] flex flex-col gap-5 rounded-[24px] border border-[rgba(240,224,192,0.35)] bg-[#1E1508]/92 backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.6)] px-6 py-7';
+  'mt-[34px] flex flex-col gap-5 rounded-[24px] border border-[rgba(240,224,192,0.35)] bg-[#1E1508]/96 backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.6)] px-6 py-7';
 
 export const publicInputClass =
   'w-full rounded-full border-0 bg-[#F5EBD8] px-6 py-[18px] text-base text-[#2A1C0A] placeholder:text-[#8B6B42]/70 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/40 disabled:opacity-50';
