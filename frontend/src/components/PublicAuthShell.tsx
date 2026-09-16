@@ -9,23 +9,23 @@ import { RandomBackground } from './RandomBackground';
 import { SiteFooter } from './SiteFooter';
 
 /** Default auth overlay — lighter scrim so photo is clearly visible while keeping text readable. */
-const AUTH_GRADIENT =
-  'linear-gradient(180deg, rgba(13,10,6,.28) 0%, rgba(13,10,6,.45) 55%, rgba(13,10,6,.75) 100%)';
+export const AUTH_GRADIENT =
+  'linear-gradient(180deg, rgba(13,10,6,.08) 0%, rgba(13,10,6,.22) 50%, rgba(13,10,6,.52) 100%)';
 
 /**
  * Age-check / upsell / underage (#97 Al lock) — lighter scrim so RandomBackground
  * photo detail reads clearly behind the card.
  */
 export const AUTH_ASSURANCE_GRADIENT =
-  'linear-gradient(180deg, rgba(13,10,6,.22) 0%, rgba(13,10,6,.38) 50%, rgba(13,10,6,.65) 100%)';
+  'linear-gradient(180deg, rgba(13,10,6,.06) 0%, rgba(13,10,6,.18) 50%, rgba(13,10,6,.48) 100%)';
 
 /** Default clear photo settings for auth screens (Al 2026-09-16). */
-export const AUTH_BACKGROUND_OPACITY = 0.65;
-export const AUTH_BACKGROUND_BRIGHTNESS = 1.05;
+export const AUTH_BACKGROUND_OPACITY = 0.95;
+export const AUTH_BACKGROUND_BRIGHTNESS = 1.20;
 
 /** Brighter random photo for assurance screens (Al 2026-09-12). */
-export const AUTH_ASSURANCE_BACKGROUND_OPACITY = 0.68;
-export const AUTH_ASSURANCE_BRIGHTNESS = 1.08;
+export const AUTH_ASSURANCE_BACKGROUND_OPACITY = 0.95;
+export const AUTH_ASSURANCE_BRIGHTNESS = 1.22;
 
 /** Fixed photos for verify / profile-setup flows (not the public random pool). */
 export const AUTH_BACKGROUNDS = {
