@@ -7,6 +7,8 @@ import {
   AUTH_ASSURANCE_BACKGROUND_OPACITY,
   AUTH_ASSURANCE_BRIGHTNESS,
   AUTH_ASSURANCE_GRADIENT,
+  AUTH_BACKGROUND_OPACITY,
+  AUTH_BACKGROUND_BRIGHTNESS,
   PublicAuthHero,
   PublicAuthShell,
 } from '../components/PublicAuthShell';
@@ -382,7 +384,10 @@ export const Register = () => {
         backgroundBrightness: AUTH_ASSURANCE_BRIGHTNESS,
         gradientOverlay: AUTH_ASSURANCE_GRADIENT,
       }
-    : {};
+    : {
+        backgroundOpacity: AUTH_BACKGROUND_OPACITY,
+        backgroundBrightness: AUTH_BACKGROUND_BRIGHTNESS,
+      };
 
   return (
     <PublicAuthShell {...assuranceBg}>
