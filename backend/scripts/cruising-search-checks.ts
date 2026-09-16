@@ -80,7 +80,80 @@ assert.strictEqual(hogsLng, -0.6727582);
 assert.strictEqual(ockhamLat, 51.3171538);
 assert.strictEqual(ockhamLng, -0.453855);
 
+// 5. Verify migration 061 sets last_activity_at = NULL on insert (never NOW())
+assert.match(rootSql, /NOW\(\),\s*NULL/);
+assert.doesNotMatch(rootSql, /NOW\(\),\s*NOW\(\)/);
+
+// 6. Verify migration 062 exists in both locations and ensures last_activity_at is NULL
+const rootMig062Path = path.join(
+  __dirname,
+  '../../database/migrations/062_cruising_spots_null_last_activity.sql',
+);
+const backendMig062Path = path.join(
+  __dirname,
+  '../database/migrations/062_cruising_spots_null_last_activity.sql',
+);
+
+assert.ok(fs.existsSync(rootMig062Path), '062 migration must exist in database/migrations');
+assert.ok(fs.existsSync(backendMig062Path), '062 migration must exist in backend/database/migrations');
+
+const root062Sql = fs.readFileSync(rootMig062Path, 'utf8');
+const backend062Sql = fs.readFileSync(backendMig062Path, 'utf8');
+assert.strictEqual(root062Sql, backend062Sql, 'Both 062 migration copies must be identical');
+
+assert.match(root062Sql, /ops-curated-cruising:a31-hogs-back-rest-layby/);
+assert.match(root062Sql, /ops-curated-cruising:wisley-ockham-common/);
+assert.match(root062Sql, /A31 Hog’s Back Rest Lay-by/);
+assert.match(root062Sql, /Wisley \(Ockham Common\)/);
+assert.match(root062Sql, /SET\s+last_activity_at\s*=\s*NULL/i);
+
+const linesWithoutComments062 = root062Sql
+  .split('\n')
+  .filter((l) => !l.trim().startsWith('--'))
+  .join('\n');
+assert.doesNotMatch(linesWithoutComments062, /\bRHS\b/i);
+assert.doesNotMatch(linesWithoutComments062, /\bWisley\s+Gardens\b/i);
+assert.doesNotMatch(linesWithoutComments062, /\bCaf[eé]\b/i);
+assert.doesNotMatch(linesWithoutComments062, /\btoilets?\b/i);
+
+// 7. Verify seed JSON (backend/data/outdoor-hotspots.cruising-phase1.json)
+const cruisingJsonPath = path.join(
+  __dirname,
+  '../data/outdoor-hotspots.cruising-phase1.json',
+);
+assert.ok(fs.existsSync(cruisingJsonPath), 'cruising-phase1.json must exist');
+const cruisingJson = JSON.parse(fs.readFileSync(cruisingJsonPath, 'utf8')) as {
+  spots: Array<{
+    name: string;
+    external_id: string;
+    last_activity_at?: string | null;
+  }>;
+};
+assert.strictEqual(cruisingJson.spots.length, 2);
+for (const spot of cruisingJson.spots) {
+  assert.strictEqual(
+    spot.last_activity_at,
+    null,
+    `cruising seed spot ${spot.name} must have last_activity_at: null`,
+  );
+  assert.ok(
+    spot.name === 'A31 Hog’s Back Rest Lay-by' || spot.name === 'Wisley (Ockham Common)',
+    `unexpected cruising spot name: ${spot.name}`,
+  );
+}
+
+// 8. Verify seed script (backend/scripts/seed-outdoor-hotspots.ts) guards last_activity_at
+const seedScriptPath = path.join(__dirname, 'seed-outdoor-hotspots.ts');
+const seedScriptCode = fs.readFileSync(seedScriptPath, 'utf8');
+// Insertion must NOT stamp NOW() for last_activity_at
+assert.doesNotMatch(seedScriptCode, /NOW\(\),\s*NOW\(\)/, 'seed script must not insert NOW(), NOW()');
+assert.match(seedScriptCode, /initialLastActivity/, 'seed script must compute initialLastActivity for inserts');
+assert.match(seedScriptCode, /isCruisingPin/, 'seed script must explicitly guard cruising pins');
+
 console.log('✓ Outdoor categories & visibility SQL verified');
-console.log('✓ Migration 061 (exact confirmed Product coords and display names) verified in both locations');
+console.log('✓ Migration 061 (exact confirmed Product coords and display names, NULL last_activity_at) verified in both locations');
+console.log('✓ Migration 062 (NULLs last_activity_at for Hog’s Back and Wisley) verified in both locations');
+console.log('✓ Cruising seed JSON verified: last_activity_at is null, names exact');
+console.log('✓ Seed script guard verified: no default NOW() on insert or update without real check-ins');
 console.log('✓ Legal constraints verified: no RHS/Cafe endorsement, no toilets');
 console.log('cruising-search-checks: ok');

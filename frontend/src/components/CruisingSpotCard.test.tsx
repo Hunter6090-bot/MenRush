@@ -35,6 +35,41 @@ describe('CruisingSpotCard', () => {
     expect(screen.getByTestId('cruising-last-active')).toHaveTextContent('No recent check-ins');
   });
 
+  it('honestly displays "No recent check-ins" when last_activity_at is null with zero check-ins (Wisley and Hog’s Back)', () => {
+    const wisleySpot: HotSpotDTO = {
+      id: 'spot-wisley',
+      name: 'Wisley (Ockham Common)',
+      city: 'Wisley',
+      description: 'Woodland',
+      latitude: 51.3171538,
+      longitude: -0.453855,
+      category_id: 1,
+      category_slug: 'parks-trails',
+      category_name: 'Parks & Trails',
+      category_icon: '🌲',
+      distance_km: 1.5,
+      live_count: '—',
+      live_count_exact: 0,
+      is_checked_in: false,
+      my_checkin_anonymous: null,
+      checkin_ttl_hours: 4,
+      has_active_checkins: false,
+      last_activity_at: null,
+    };
+
+    render(<CruisingSpotCard spot={wisleySpot} />);
+
+    const lastActiveElem = screen.getByTestId('cruising-last-active');
+    expect(lastActiveElem).toHaveTextContent('No recent check-ins');
+    expect(lastActiveElem).not.toHaveTextContent(/Active\s+\d+m\s+ago/i);
+    expect(lastActiveElem).not.toHaveTextContent(/Active\s+now/i);
+
+    // Indicator dot must remain muted, not active green
+    const dot = lastActiveElem.querySelector('span[aria-hidden="true"]');
+    expect(dot).toHaveClass('bg-[rgba(240,224,192,0.35)]');
+    expect(dot).not.toHaveClass('bg-[#3D7A2E]');
+  });
+
   it('provides a working "Get directions" link to maps with correct coordinates', () => {
     render(<CruisingSpotCard spot={mockSpot} />);
 

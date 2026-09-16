@@ -40,6 +40,7 @@ type SpotRow = {
   lng?: number | string | null;
   external_id?: string | null;
   nation?: string | null;
+  last_activity_at?: string | null;
 };
 
 type Args = {
@@ -192,11 +193,30 @@ async function main() {
       continue;
     }
 
+    const isCruisingPin =
+      externalId.startsWith('ops-curated-cruising:') ||
+      name === 'A31 Hog’s Back Rest Lay-by' ||
+      name === 'Wisley (Ockham Common)' ||
+      /hog.*back/i.test(name) ||
+      /wisley.*common|ockham.*common/i.test(name);
+
     const byExt = await pool.query(
-      `SELECT id FROM hot_spots WHERE source = $1 AND external_id = $2`,
+      `SELECT hs.id, hs.last_activity_at, MAX(c.checked_in_at) AS latest_checkin
+         FROM hot_spots hs
+         LEFT JOIN hot_spot_checkins c ON c.spot_id = hs.id
+        WHERE hs.source = $1 AND hs.external_id = $2
+        GROUP BY hs.id, hs.last_activity_at`,
       [args.source, externalId],
     );
     if (byExt.rows[0]) {
+      const existing = byExt.rows[0];
+      const targetLastActivity =
+        spot.last_activity_at !== undefined
+          ? spot.last_activity_at ? new Date(spot.last_activity_at) : null
+          : existing.latest_checkin
+            ? new Date(existing.latest_checkin)
+            : isCruisingPin ? null : existing.last_activity_at;
+
       await pool.query(
         `UPDATE hot_spots SET
            category_id = $2,
@@ -209,9 +229,9 @@ async function main() {
            is_user_generated = FALSE,
            is_active = TRUE,
            verified_at = COALESCE(verified_at, NOW()),
-           last_activity_at = NOW()
+           last_activity_at = $9
          WHERE id = $1`,
-        [byExt.rows[0].id, categoryId, name, city, nation, description, lat, lng],
+        [byExt.rows[0].id, categoryId, name, city, nation, description, lat, lng, targetLastActivity],
       );
       updated += 1;
       continue;
@@ -220,16 +240,27 @@ async function main() {
     // Also match soft-inactive Batch 1 rows by prior external_id slug tail / name+city
     // so override can reactivate only names that appear in the new list.
     const byLegacyExt = await pool.query(
-      `SELECT id FROM hot_spots
-        WHERE source = $1
+      `SELECT hs.id, hs.last_activity_at, MAX(c.checked_in_at) AS latest_checkin
+         FROM hot_spots hs
+         LEFT JOIN hot_spot_checkins c ON c.spot_id = hs.id
+        WHERE hs.source = $1
           AND (
-            external_id = $2
-            OR external_id = ('ops-curated-batch1-2026-09:' || split_part($2, ':', 2))
+            hs.external_id = $2
+            OR hs.external_id = ('ops-curated-batch1-2026-09:' || split_part($2, ':', 2))
           )
+        GROUP BY hs.id, hs.last_activity_at
         LIMIT 1`,
       [args.source, externalId],
     );
     if (byLegacyExt.rows[0]) {
+      const existing = byLegacyExt.rows[0];
+      const targetLastActivity =
+        spot.last_activity_at !== undefined
+          ? spot.last_activity_at ? new Date(spot.last_activity_at) : null
+          : existing.latest_checkin
+            ? new Date(existing.latest_checkin)
+            : isCruisingPin ? null : existing.last_activity_at;
+
       await pool.query(
         `UPDATE hot_spots SET
            category_id = $2,
@@ -244,7 +275,7 @@ async function main() {
            source = $9,
            external_id = $10,
            verified_at = COALESCE(verified_at, NOW()),
-           last_activity_at = NOW()
+           last_activity_at = $11
          WHERE id = $1`,
         [
           byLegacyExt.rows[0].id,
@@ -257,6 +288,7 @@ async function main() {
           lng,
           args.source,
           externalId,
+          targetLastActivity,
         ],
       );
       updated += 1;
@@ -264,20 +296,31 @@ async function main() {
     }
 
     const byName = await pool.query(
-      `SELECT id FROM hot_spots
-        WHERE is_user_generated = FALSE
-          AND lower(city) = lower($1)
+      `SELECT hs.id, hs.last_activity_at, MAX(c.checked_in_at) AS latest_checkin
+         FROM hot_spots hs
+         LEFT JOIN hot_spot_checkins c ON c.spot_id = hs.id
+        WHERE hs.is_user_generated = FALSE
+          AND lower(hs.city) = lower($1)
           AND (
-            lower(name) = lower($2)
+            lower(hs.name) = lower($2)
             OR (
               lower($2) IN ('st. catherine''s hill', 'st catherine''s hill')
-              AND lower(name) IN ('st. catherine''s hill', 'st catherine''s hill')
+              AND lower(hs.name) IN ('st. catherine''s hill', 'st catherine''s hill')
             )
           )
+        GROUP BY hs.id, hs.last_activity_at
         LIMIT 1`,
       [city, name],
     );
     if (byName.rows[0]) {
+      const existing = byName.rows[0];
+      const targetLastActivity =
+        spot.last_activity_at !== undefined
+          ? spot.last_activity_at ? new Date(spot.last_activity_at) : null
+          : existing.latest_checkin
+            ? new Date(existing.latest_checkin)
+            : isCruisingPin ? null : existing.last_activity_at;
+
       await pool.query(
         `UPDATE hot_spots SET
            category_id = $2,
@@ -292,7 +335,7 @@ async function main() {
            source = $9,
            external_id = $10,
            verified_at = COALESCE(verified_at, NOW()),
-           last_activity_at = NOW()
+           last_activity_at = $11
          WHERE id = $1`,
         [
           byName.rows[0].id,
@@ -305,11 +348,18 @@ async function main() {
           lng,
           args.source,
           externalId,
+          targetLastActivity,
         ],
       );
       updated += 1;
       continue;
     }
+
+    // For new outdoor seed rows, never default last_activity_at to NOW().
+    // Leave NULL unless a real check-in happened or an explicit non-null timestamp was specified in JSON.
+    const initialLastActivity = spot.last_activity_at
+      ? new Date(spot.last_activity_at)
+      : null;
 
     await pool.query(
       `INSERT INTO hot_spots (
@@ -319,9 +369,9 @@ async function main() {
        ) VALUES (
          $1, $2, $3, $4, $5,
          $6, $7, FALSE, TRUE, $8, $9,
-         NOW(), NOW()
+         NOW(), $10
        )`,
-      [categoryId, name, city, nation, description, lat, lng, args.source, externalId],
+      [categoryId, name, city, nation, description, lat, lng, args.source, externalId, initialLastActivity],
     );
     inserted += 1;
   }
