@@ -23,7 +23,7 @@ SELECT
   'ops-curated',
   v.external_id,
   NOW(),
-  NOW()
+  NULL
 FROM hot_spot_categories c
 JOIN (VALUES
   ('parking', 'A31 Hog’s Back Rest Lay-by', 'Guildford', 'Car park',

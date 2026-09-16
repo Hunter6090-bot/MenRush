@@ -15,6 +15,7 @@
       "lng": -0.6727582,
       "external_id": "ops-curated-cruising:a31-hogs-back-rest-layby",
       "nation": "England",
+      "last_activity_at": null,
       "geocode_note": "A31 westbound layby / woods outdoor stretch along Hog's Back between Puttenham and Seale"
     },
     {
@@ -26,6 +27,7 @@
       "lng": -0.4538550,
       "external_id": "ops-curated-cruising:wisley-ockham-common",
       "nation": "England",
+      "last_activity_at": null,
       "geocode_note": "Ockham Common / A3 outdoor cruising area"
     }
   ]
