@@ -3,6 +3,7 @@ import type { HotSpotDTO } from '../api/client';
 import { IconClose } from './icons';
 import { formatDistanceFromKm } from '../lib/localeUnits';
 import { HOT_SPOTS_FACE } from '../lib/cruiseCopy';
+import { getDirectionsUrl } from '../lib/cruising';
 
 interface HotSpotSheetProps {
   spot: HotSpotDTO | null;
@@ -91,6 +92,33 @@ export function HotSpotSheet({ spot, isPremium, acting, error, onClose, onCheckI
         <p className="mt-1 text-[11px] text-[var(--cream-muted)]">
           Check-ins expire after {spot.checkin_ttl_hours ?? 4} hours.
         </p>
+
+        {Number.isFinite(spot.latitude) && Number.isFinite(spot.longitude) ? (
+          <div className="mt-3">
+            <a
+              href={getDirectionsUrl(spot.latitude, spot.longitude, spot.name)}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="hotspot-sheet-directions"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-[var(--border-default)] bg-black/25 py-2 text-[12px] font-bold text-[var(--cream-soft)] transition-colors hover:border-[var(--copper)]/50 hover:text-[var(--cream)]"
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <polygon points="3 11 22 2 13 21 11 13 3 11" />
+              </svg>
+              Get directions
+            </a>
+          </div>
+        ) : null}
 
         {error ? <p className="mt-3 text-[13px] font-semibold text-[#D96A52]">{error}</p> : null}
 

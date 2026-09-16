@@ -36,14 +36,26 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       lat: parseFloat(String(req.query.lat)),
       lng: parseFloat(String(req.query.lng)),
     });
-    const radius = req.query.radiusKm ? parseFloat(String(req.query.radiusKm)) : 50;
+    const radius = req.query.radiusKm ? parseFloat(String(req.query.radiusKm)) : undefined;
     const category = typeof req.query.category === 'string' ? req.query.category : undefined;
+    const outdoorOnly = req.query.outdoor === 'true' || req.query.outdoorOnly === 'true';
+    const q = typeof req.query.q === 'string' ? req.query.q : undefined;
+    const sort =
+      req.query.sort === 'closest' ? 'closest' : req.query.sort === 'live' ? 'live' : undefined;
+    const limit = req.query.limit
+      ? Math.min(Math.max(parseInt(String(req.query.limit), 10), 1), 100)
+      : undefined;
+
     const spots = await hotSpotsService.listNearby({
       userId: req.userId!,
       lat: location.lat,
       lng: location.lng,
-      radiusKm: Math.min(Math.max(radius, 1), 100),
+      radiusKm: radius ? Math.min(Math.max(radius, 1), 500) : undefined,
       categorySlug: category,
+      outdoorOnly,
+      query: q,
+      sortBy: sort ?? (outdoorOnly ? 'closest' : 'live'),
+      limit,
     });
     res.json({
       spots,

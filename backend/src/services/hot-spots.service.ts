@@ -78,6 +78,7 @@ export type HotSpotRow = {
   venue_type: string | null;
   source_url: string | null;
   verified_at: string | null;
+  last_activity_at: string | null;
 };
 
 function formatLiveCount(exact: number, isPremium: boolean): number | string {
@@ -111,6 +112,7 @@ function mapSpotRow(row: Record<string, unknown>, isPremium: boolean): HotSpotRo
     venue_type: (row.venue_type as string | null) ?? null,
     source_url: (row.source_url as string | null) ?? null,
     verified_at: row.verified_at != null ? String(row.verified_at) : null,
+    last_activity_at: row.last_activity_at != null ? new Date(row.last_activity_at as string | Date).toISOString() : null,
   };
 }
 
@@ -126,6 +128,7 @@ const SPOT_SELECT_COLS = `
           hs.venue_type,
           hs.source_url,
           hs.verified_at,
+          hs.last_activity_at,
           c.slug AS category_slug,
           c.name AS category_name,
           c.icon AS category_icon`;
@@ -148,25 +151,78 @@ export const hotSpotsService = {
     lng: number;
     radiusKm?: number;
     categorySlug?: string;
+    outdoorOnly?: boolean;
+    query?: string;
+    sortBy?: 'live' | 'closest';
     limit?: number;
   }): Promise<HotSpotRow[]> {
-    const radiusMeters = (opts.radiusKm ?? 50) * 1000;
     const limit = opts.limit ?? 40;
     const isPremium = await premiumService.isPremium(opts.userId);
 
     const values: unknown[] = [
       opts.lat,
       opts.lng,
-      radiusMeters,
-      limit,
       opts.userId,
       String(ACTIVE_CHECKIN_TTL_HOURS),
     ];
+
     let categoryFilter = '';
     if (opts.categorySlug) {
       values.push(opts.categorySlug);
       categoryFilter = ` AND c.slug = $${values.length}`;
+    } else if (opts.outdoorOnly) {
+      values.push([...OUTDOOR_HOT_SPOT_CATEGORY_SLUGS]);
+      categoryFilter = ` AND c.slug = ANY($${values.length})`;
     }
+
+    let searchFilter = '';
+    const hasQuery = Boolean(opts.query && opts.query.trim());
+    if (hasQuery) {
+      values.push(`%${opts.query!.trim().toLowerCase()}%`);
+      const qIdx = values.length;
+      searchFilter = ` AND (
+        lower(hs.name) LIKE $${qIdx}
+        OR lower(COALESCE(hs.city, '')) LIKE $${qIdx}
+        OR lower(COALESCE(hs.description, '')) LIKE $${qIdx}
+        OR lower(c.name) LIKE $${qIdx}
+      )`;
+    }
+
+    let distanceFilter = '';
+    if (opts.radiusKm) {
+      values.push(opts.radiusKm * 1000);
+      distanceFilter = ` AND ST_DWithin(
+        ST_SetSRID(ST_MakePoint(hs.longitude, hs.latitude), 4326)::geography,
+        ST_MakePoint($2, $1)::geography,
+        $${values.length}
+      )`;
+    } else if (!hasQuery) {
+      const defaultRadiusM = (opts.outdoorOnly ? 100 : 50) * 1000;
+      values.push(defaultRadiusM);
+      distanceFilter = ` AND ST_DWithin(
+        ST_SetSRID(ST_MakePoint(hs.longitude, hs.latitude), 4326)::geography,
+        ST_MakePoint($2, $1)::geography,
+        $${values.length}
+      )`;
+    }
+
+    // Only spots with real valid coords (finite, non-zero, within range)
+    const validCoordsFilter = `
+      AND hs.latitude IS NOT NULL
+      AND hs.longitude IS NOT NULL
+      AND hs.latitude != 0
+      AND hs.longitude != 0
+      AND hs.latitude BETWEEN -90 AND 90
+      AND hs.longitude BETWEEN -180 AND 180
+    `;
+
+    values.push(limit);
+    const limitIdx = values.length;
+
+    const orderSql =
+      opts.sortBy === 'closest' || hasQuery
+        ? `ORDER BY distance_km ASC NULLS LAST, hs.name ASC`
+        : `ORDER BY live_count_exact DESC, distance_km ASC NULLS LAST, hs.name ASC`;
 
     const res = await query(
       `SELECT
@@ -180,35 +236,33 @@ export const hotSpotsService = {
               FROM hot_spot_checkins ci
              WHERE ci.spot_id = hs.id
                AND ci.checked_out_at IS NULL
-               AND ci.checked_in_at > NOW() - ($6 || ' hours')::interval
+               AND ci.checked_in_at > NOW() - ($4 || ' hours')::interval
           ) AS live_count_exact,
           EXISTS (
             SELECT 1 FROM hot_spot_checkins mine
              WHERE mine.spot_id = hs.id
-               AND mine.user_id = $5
+               AND mine.user_id = $3
                AND mine.checked_out_at IS NULL
-               AND mine.checked_in_at > NOW() - ($6 || ' hours')::interval
+               AND mine.checked_in_at > NOW() - ($4 || ' hours')::interval
           ) AS is_checked_in,
           (
             SELECT mine.is_anonymous FROM hot_spot_checkins mine
              WHERE mine.spot_id = hs.id
-               AND mine.user_id = $5
+               AND mine.user_id = $3
                AND mine.checked_out_at IS NULL
-               AND mine.checked_in_at > NOW() - ($6 || ' hours')::interval
+               AND mine.checked_in_at > NOW() - ($4 || ' hours')::interval
              LIMIT 1
           ) AS my_checkin_anonymous
          FROM hot_spots hs
          JOIN hot_spot_categories c ON c.id = hs.category_id
         WHERE hs.is_active = TRUE
           AND ${isPublicHotSpotVisibilitySql('c', 'hs')}
-          AND ST_DWithin(
-            ST_SetSRID(ST_MakePoint(hs.longitude, hs.latitude), 4326)::geography,
-            ST_MakePoint($2, $1)::geography,
-            $3
-          )
+          ${validCoordsFilter}
+          ${distanceFilter}
           ${categoryFilter}
-        ORDER BY live_count_exact DESC, distance_km ASC NULLS LAST, hs.name ASC
-        LIMIT $4`,
+          ${searchFilter}
+        ${orderSql}
+        LIMIT $${limitIdx}`,
       values,
     );
 

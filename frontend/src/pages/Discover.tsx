@@ -20,6 +20,8 @@ import {
 import { nearbyRosterFingerprint } from '../lib/nearbyRoster';
 import { ProfileDrawer } from '../components/ProfileDrawer';
 import { HotSpotSheet } from '../components/HotSpotSheet';
+import { CruisingSearchBar } from '../components/CruisingSearchBar';
+import { CruisingSearchSheet } from '../components/CruisingSearchSheet';
 import { createMapMarkerElement, MapMarker } from '../components/MapMarker';
 import { createHotSpotPinElement, HotSpotPin } from '../components/HotSpotPin';
 
@@ -144,6 +146,7 @@ function MapFloatingChrome({
   hotSpotsLayerOn,
   onTogglePeopleLayer,
   onToggleHotSpotsLayer,
+  onOpenCruisingSearch,
 }: {
   expanded: boolean;
   mapPinFuzzM: number;
@@ -155,6 +158,7 @@ function MapFloatingChrome({
   hotSpotsLayerOn: boolean;
   onTogglePeopleLayer: () => void;
   onToggleHotSpotsLayer: () => void;
+  onOpenCruisingSearch?: () => void;
 }) {
   // One-time Legal quiet-face dismiss — same localStorage pattern as match coach.
   const [mapBannerDismissed, setMapBannerDismissed] = useState(isHotSpotsMapBannerDismissed);
@@ -225,9 +229,16 @@ function MapFloatingChrome({
           ) : null}
         </div>
       </div>
+      {onOpenCruisingSearch ? (
+        <div className="pointer-events-none absolute inset-x-0 top-14 z-10 flex justify-center px-3">
+          <div className="pointer-events-auto">
+            <CruisingSearchBar onOpen={onOpenCruisingSearch} />
+          </div>
+        </div>
+      ) : null}
       {hotSpotsLayerOn && !mapBannerDismissed ? (
         <div
-          className="pointer-events-none absolute inset-x-0 top-14 z-10 flex justify-center px-3"
+          className="pointer-events-none absolute inset-x-0 top-24 z-10 flex justify-center px-3"
           data-testid="hotspots-map-helper"
         >
           <div
@@ -646,10 +657,29 @@ export const Discover = () => {
     writeLayerVisible('hotSpots', visible);
   }, []);
   const [selectedHotSpot, setSelectedHotSpot] = useState<HotSpotDTO | null>(null);
+  const [cruisingSearchOpen, setCruisingSearchOpen] = useState(false);
   const [hotSpotActing, setHotSpotActing] = useState(false);
   const [hotSpotActionError, setHotSpotActionError] = useState('');
   const navigate = useNavigate();
   const isDesktopLayout = useIsDesktopLayout();
+
+  const handleCruisingSpotSelect = useCallback(
+    (spot: HotSpotDTO) => {
+      setSelectedHotSpot(spot);
+      if (!hotSpotsLayerOn) {
+        setHotSpotsLayerOn(true);
+      }
+      const map = mapRef.current;
+      if (map && Number.isFinite(spot.latitude) && Number.isFinite(spot.longitude)) {
+        map.flyTo({
+          center: [spot.longitude, spot.latitude],
+          zoom: Math.max(map.getZoom(), 13),
+          essential: true,
+        });
+      }
+    },
+    [hotSpotsLayerOn, setHotSpotsLayerOn],
+  );
 
   const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
   const tokenMissing = !mapboxToken || mapboxToken === '__SET_ME__';
@@ -2182,6 +2212,7 @@ export const Discover = () => {
             hotSpotsLayerOn={hotSpotsLayerOn}
             onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
             onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
+            onOpenCruisingSearch={() => setCruisingSearchOpen(true)}
           />
           <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
           {!needsLocationGate && !tokenMissing ? (
@@ -2330,6 +2361,7 @@ export const Discover = () => {
               hotSpotsLayerOn={hotSpotsLayerOn}
               onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
               onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
+              onOpenCruisingSearch={() => setCruisingSearchOpen(true)}
             />
           ) : null}
           {mapPanelMode !== 'hidden' ? (
@@ -2560,6 +2592,14 @@ export const Discover = () => {
           setHotSpotActionError('');
         }}
         onCheckIn={handleHotSpotCheckIn}
+      />
+
+      <CruisingSearchSheet
+        open={cruisingSearchOpen}
+        onClose={() => setCruisingSearchOpen(false)}
+        lat={lat}
+        lng={lng}
+        onSelectSpot={handleCruisingSpotSelect}
       />
     </Layout>
   );
