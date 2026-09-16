@@ -12,7 +12,7 @@ describe('Cruising Search Phase 1 helpers', () => {
     it('maps woodland and forest spots to "woods"', () => {
       expect(
         mapToCruisingCategory({
-          name: 'Wisley Common',
+          name: 'Ockham Common',
           description: 'Woodland',
           category_slug: 'parks-trails',
         }),

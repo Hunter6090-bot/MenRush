@@ -16,12 +16,12 @@ vi.mock('../api/client', async () => {
 
 const mockCruisingSpots: HotSpotDTO[] = [
   {
-    id: 'spot-wisley',
-    name: 'Wisley Common',
+    id: 'spot-ockham',
+    name: 'Ockham Common',
     city: 'Wisley',
     description: 'Woodland',
-    latitude: 51.31836,
-    longitude: -0.47316,
+    latitude: 51.318,
+    longitude: -0.458,
     category_id: 1,
     category_slug: 'parks-trails',
     category_name: 'Parks & Trails',
@@ -87,16 +87,16 @@ describe('CruisingSearchSheet', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId('cruising-spot-card-spot-wisley')).toBeInTheDocument();
+      expect(screen.getByTestId('cruising-spot-card-spot-ockham')).toBeInTheDocument();
       expect(screen.getByTestId('cruising-spot-card-spot-hogs-back')).toBeInTheDocument();
     });
 
     // Ghost Spot Without Coords has lat=0, lng=0 -> must be excluded
     expect(screen.queryByTestId('cruising-spot-card-spot-invalid')).not.toBeInTheDocument();
 
-    // Verify ordering: Wisley (1.5 km) appears before Hog's Back (8.4 km)
+    // Verify ordering: Ockham Common (1.5 km) appears before Hog's Back (8.4 km)
     const cards = screen.getAllByTestId(/cruising-spot-card-/);
-    expect(cards[0]).toHaveAttribute('data-testid', 'cruising-spot-card-spot-wisley');
+    expect(cards[0]).toHaveAttribute('data-testid', 'cruising-spot-card-spot-ockham');
     expect(cards[1]).toHaveAttribute('data-testid', 'cruising-spot-card-spot-hogs-back');
   });
 
@@ -111,15 +111,15 @@ describe('CruisingSearchSheet', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId('cruising-spot-card-spot-wisley')).toBeInTheDocument();
+      expect(screen.getByTestId('cruising-spot-card-spot-ockham')).toBeInTheDocument();
     });
 
     // Click "Layby" tab
     const laybyTab = screen.getByRole('tab', { name: /Layby/i });
     fireEvent.click(laybyTab);
 
-    // Wisley is "Woods", so it should be filtered out; Hog's Back is "Layby", so it remains
-    expect(screen.queryByTestId('cruising-spot-card-spot-wisley')).not.toBeInTheDocument();
+    // Ockham Common is "Woods", so it should be filtered out; Hog's Back is "Layby", so it remains
+    expect(screen.queryByTestId('cruising-spot-card-spot-ockham')).not.toBeInTheDocument();
     expect(screen.getByTestId('cruising-spot-card-spot-hogs-back')).toBeInTheDocument();
   });
 

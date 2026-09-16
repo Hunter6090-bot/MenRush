@@ -10,7 +10,7 @@ test.describe('Cruising Search Phase 1', () => {
   test('category mapping covers outdoor types correctly', () => {
     expect(
       mapToCruisingCategory({
-        name: 'Wisley Common',
+        name: 'Ockham Common',
         description: 'Woodland',
         category_slug: 'parks-trails',
       }),
@@ -55,9 +55,9 @@ test.describe('Cruising Search Phase 1', () => {
     expect(hogsUrl).toContain('51.22603');
     expect(hogsUrl).toContain('-0.67367');
 
-    const wisleyUrl = getDirectionsUrl(51.31836, -0.47316, 'Wisley Common');
-    expect(wisleyUrl).toContain('51.31836');
-    expect(wisleyUrl).toContain('-0.47316');
+    const wisleyUrl = getDirectionsUrl(51.31800, -0.45800, 'Ockham Common');
+    expect(wisleyUrl).toContain('51.318');
+    expect(wisleyUrl).toContain('-0.458');
   });
 
   test('isValidCoordinateSpot rejects spots with missing or invalid coordinates', () => {

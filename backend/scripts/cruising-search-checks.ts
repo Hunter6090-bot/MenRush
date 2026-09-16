@@ -44,29 +44,40 @@ const rootSql = fs.readFileSync(rootMigPath, 'utf8');
 const backendSql = fs.readFileSync(backendMigPath, 'utf8');
 assert.strictEqual(rootSql, backendSql, 'Both migration copies must be identical');
 
-// 4. Verify Hog's Back and Wisley coordinates and details
+// 4. Verify Hog's Back and Ockham Common (Wisley corridor) coordinates and details
 assert.match(rootSql, /Hog''s Back/i);
 assert.match(rootSql, /Guildford/i);
 assert.match(rootSql, /51\.22603/);
 assert.match(rootSql, /-0\.67367/);
-assert.match(rootSql, /Wisley Common/i);
-assert.match(rootSql, /51\.31836/);
-assert.match(rootSql, /-0\.47316/);
+assert.match(rootSql, /Ockham Common/i);
+assert.match(rootSql, /Wisley/i);
+assert.match(rootSql, /51\.31800/);
+assert.match(rootSql, /-0\.45800/);
 assert.match(rootSql, /ops-curated-cruising:hogs-back-a31-layby/);
-assert.match(rootSql, /ops-curated-cruising:wisley-common/);
+assert.match(rootSql, /ops-curated-cruising:ockham-common/);
+
+// Legal constraints verification:
+// - Do NOT name or imply RHS Wisley / Wisley Gardens endorsement
+assert.doesNotMatch(rootSql, /\bRHS\b/i);
+assert.doesNotMatch(rootSql, /\bWisley\s+Gardens\b/i);
+// - Do NOT name or imply Hog's Back Cafe endorsement
+assert.doesNotMatch(rootSql, /\bCaf[eé]\b/i);
+// - Toilets stay off the map entirely
+assert.doesNotMatch(rootSql, /\btoilets?\b/i);
 
 // Verify coordinates are within valid UK regional corridor
 const hogsLat = 51.22603;
 const hogsLng = -0.67367;
-const wisleyLat = 51.31836;
-const wisleyLng = -0.47316;
+const ockhamLat = 51.31800;
+const ockhamLng = -0.45800;
 
 assert.ok(hogsLat > 51.0 && hogsLat < 51.5, "Hog's Back latitude in Surrey corridor");
 assert.ok(hogsLng > -0.9 && hogsLng < -0.4, "Hog's Back longitude in Surrey corridor");
-assert.ok(wisleyLat > 51.0 && wisleyLat < 51.5, 'Wisley latitude in Surrey corridor');
-assert.ok(wisleyLng > -0.6 && wisleyLng < -0.3, 'Wisley longitude in Surrey corridor');
+assert.ok(ockhamLat > 51.0 && ockhamLat < 51.5, 'Ockham Common latitude in Surrey corridor');
+assert.ok(ockhamLng > -0.6 && ockhamLng < -0.3, 'Ockham Common longitude in Surrey corridor');
 
 console.log('✓ Outdoor categories & visibility SQL verified');
-console.log('✓ Migration 061 (Hog\'s Back + Wisley) verified in both locations');
-console.log('✓ Real geocoded coordinates confirmed for Hog\'s Back and Wisley');
+console.log('✓ Migration 061 (Hog\'s Back + Ockham Common) verified in both locations');
+console.log('✓ Legal soft constraints verified: no RHS/Cafe endorsement, no toilets');
+console.log('✓ Real geocoded coordinates confirmed for Hog\'s Back and Ockham Common');
 console.log('cruising-search-checks: ok');
