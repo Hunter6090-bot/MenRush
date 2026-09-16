@@ -858,14 +858,46 @@ export interface HotSpotDTO {
   venue_type?: string | null;
   source_url?: string | null;
   verified_at?: string | null;
+  last_activity_at?: string | null;
 }
 
 export const hotSpotsAPI = {
   listCategories: () =>
     apiClient.get<{ categories: HotSpotCategoryDTO[] }>('/hot-spots/categories'),
-  listNearby: (lat: number, lng: number, radiusKm?: number, category?: string) =>
+  listNearby: (
+    lat: number,
+    lng: number,
+    radiusKm?: number,
+    category?: string,
+    options?: { outdoor?: boolean; q?: string; sort?: 'closest' | 'live'; limit?: number },
+  ) =>
     apiClient.get<{ spots: HotSpotDTO[] }>('/hot-spots', {
-      params: { lat, lng, radiusKm, category },
+      params: {
+        lat,
+        lng,
+        radiusKm,
+        category,
+        outdoor: options?.outdoor,
+        q: options?.q,
+        sort: options?.sort,
+        limit: options?.limit,
+      },
+    }),
+  searchCruising: (
+    lat: number,
+    lng: number,
+    query?: string,
+    radiusKm?: number,
+  ) =>
+    apiClient.get<{ spots: HotSpotDTO[] }>('/hot-spots', {
+      params: {
+        lat,
+        lng,
+        outdoor: true,
+        sort: 'closest',
+        q: query?.trim() || undefined,
+        radiusKm: radiusKm || (query?.trim() ? undefined : 100),
+      },
     }),
   getSpot: (id: string) => apiClient.get<{ spot: HotSpotDTO }>(`/hot-spots/${id}`),
   checkIn: (id: string, anonymous = false) =>

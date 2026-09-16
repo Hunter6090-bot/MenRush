@@ -7,8 +7,11 @@ import { hotSpotsAPI, type HotSpotCategoryDTO, type HotSpotDTO } from '../api/cl
 import { Layout } from '../components/Layout';
 import { PulseRing } from '../components/PulseRing';
 import { HotSpotPin, createHotSpotPinElement } from '../components/HotSpotPin';
+import { CruisingSearchBar } from '../components/CruisingSearchBar';
+import { CruisingSearchSheet } from '../components/CruisingSearchSheet';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { formatDistanceFromKm } from '../lib/localeUnits';
+import { getDirectionsUrl } from '../lib/cruising';
 import { mapboxStyleForTheme, resolvedThemeNow, THEME_CHANGED_EVENT } from '../lib/mapTheme';
 import { HOT_SPOTS_PAGE_BLURB } from '../lib/cruiseCopy';
 
@@ -22,6 +25,7 @@ export const HotSpots = () => {
   const [actingId, setActingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [cruisingSearchOpen, setCruisingSearchOpen] = useState(false);
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -197,6 +201,10 @@ export const HotSpots = () => {
           </div>
         ) : null}
 
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <CruisingSearchBar onOpen={() => setCruisingSearchOpen(true)} />
+        </div>
+
         <div className="mb-5 flex flex-wrap gap-1.5">
           <button
             type="button"
@@ -309,6 +317,26 @@ export const HotSpots = () => {
                 ) : null}
 
                 <div className="mt-auto flex flex-col gap-2 pt-2">
+                  <a
+                    href={getDirectionsUrl(spot.latitude, spot.longitude, spot.name)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-full border border-[var(--border-default)] bg-black/25 py-2 text-[12px] font-bold text-[var(--cream-soft)] transition-colors hover:border-[var(--copper)]/50 hover:text-[var(--cream)]"
+                  >
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polygon points="3 11 22 2 13 21 11 13 3 11" />
+                    </svg>
+                    Get directions
+                  </a>
                   {spot.is_checked_in ? (
                     <button
                       type="button"
@@ -353,6 +381,24 @@ export const HotSpots = () => {
             .
           </p>
         ) : null}
+
+        <CruisingSearchSheet
+          open={cruisingSearchOpen}
+          onClose={() => setCruisingSearchOpen(false)}
+          lat={lat}
+          lng={lng}
+          onSelectSpot={(selected) => {
+            setSelectedId(selected.id);
+            const map = mapRef.current;
+            if (map && Number.isFinite(selected.latitude) && Number.isFinite(selected.longitude)) {
+              map.flyTo({
+                center: [selected.longitude, selected.latitude],
+                zoom: 13,
+                essential: true,
+              });
+            }
+          }}
+        />
       </div>
     </Layout>
   );
