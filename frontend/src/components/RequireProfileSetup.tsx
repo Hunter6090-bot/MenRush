@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { usersAPI } from '../api/client';
 import { PulseRing } from './PulseRing';
@@ -22,7 +22,7 @@ function isExemptPath(pathname: string): boolean {
  * Hard gate for photo/bio/looking/tags only.
  * Missing GPS is NOT incomplete profile — Discover handles location in-place.
  */
-export function RequireProfileSetup({ children }: { children: JSX.Element }) {
+export function RequireProfileSetup({ children }: { children: ReactElement }) {
   const location = useLocation();
   const [ready, setReady] = useState(false);
   const [complete, setComplete] = useState(true);

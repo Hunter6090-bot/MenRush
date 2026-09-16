@@ -33,15 +33,21 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { inviteCodeService } from './invite-code.service';
 import {
+  isSharedBsf26Code,
   isSharedPrideCode,
   personalPrideExpiredMessage,
   promoService,
+  SHARED_BSF26_EXPIRED_MESSAGE,
   SHARED_PRIDE_EXPIRED_MESSAGE,
 } from './promo.service';
 import { assertPrideInviteEmailMatch } from './prideInvite.service';
 import { ageFromDateOfBirth } from '../lib/age';
 import { premiumService } from './premium.service';
 import { referralService } from './referral.service';
+import {
+  adultAssuranceService,
+  isAdultAssuranceRequiredAtSignup,
+} from './adult-assurance.service';
 
 const EMAIL_NOT_CONFIRMED_MESSAGE =
   'Confirm your email before signing in. Check your inbox for the link.';
@@ -135,8 +141,13 @@ export const authService = {
     const inviteCode = data.invite_code?.trim();
     const promoCode = data.promo_code?.trim();
     const referralCodeRaw = data.referral_code?.trim();
+    const usingSharedBsf26 = !!(promoCode && isSharedBsf26Code(promoCode));
     const usingSharedPride = !!(promoCode && isSharedPrideCode(promoCode));
-    const usingPersonalPride = !!(promoCode && !isSharedPrideCode(promoCode));
+    const usingPersonalPride = !!(
+      promoCode &&
+      !isSharedPrideCode(promoCode) &&
+      !isSharedBsf26Code(promoCode)
+    );
 
     // Resolve referral before INSERT — invalid codes fail closed (no user row).
     let resolvedReferrer: { referrerId: string; code: string } | null = null;
@@ -149,7 +160,7 @@ export const authService = {
       prideInviteMonths = await inviteCodeService.getPrideMonths(inviteCode);
       if (prideInviteMonths) {
         await assertPrideInviteEmailMatch(inviteCode, data.email);
-        if (usingSharedPride || usingPersonalPride) {
+        if (usingSharedPride || usingPersonalPride || usingSharedBsf26) {
           throw new Error(
             'This Pride invite already books Premium. Clear the promo code field — do not stack.',
           );
@@ -157,7 +168,23 @@ export const authService = {
       }
     }
 
-    if (usingSharedPride) {
+    if (usingSharedBsf26) {
+      const bsfCheck = await promoService.validateSharedBsf26(promoCode!, data.email);
+      if (!bsfCheck.valid) {
+        if (bsfCheck.reason === 'expired') {
+          throw new Error(SHARED_BSF26_EXPIRED_MESSAGE);
+        }
+        if (bsfCheck.reason === 'already_redeemed') {
+          throw new Error('This promo has already been used for this email.');
+        }
+        if (bsfCheck.reason === 'other_promo_path') {
+          throw new Error(
+            'This email already has a Pride Premium grant. Codes cannot be stacked.',
+          );
+        }
+        throw new Error('This promo code is not valid.');
+      }
+    } else if (usingSharedPride) {
       const prideCheck = await promoService.validateSharedPride(promoCode!, data.email);
       if (!prideCheck.valid) {
         if (prideCheck.reason === 'expired') {
@@ -169,6 +196,11 @@ export const authService = {
         if (prideCheck.reason === 'other_pride_path') {
           throw new Error(
             'This email already has a Pride path. Enter that invite or personal code instead — do not stack with PRIDE 3MONTH FREE.',
+          );
+        }
+        if (prideCheck.reason === 'other_promo_path') {
+          throw new Error(
+            'This email already has a BSF26 Premium grant. Codes cannot be stacked.',
           );
         }
         throw new Error('This promo code is not valid.');
@@ -189,10 +221,11 @@ export const authService = {
       }
       if (
         (await promoService.emailHasPublicPrideRedeem(data.email)) ||
-        (await promoService.emailHasPrideInviteRedeem(data.email))
+        (await promoService.emailHasPrideInviteRedeem(data.email)) ||
+        (await promoService.emailHasBsf26Redeem(data.email))
       ) {
         throw new Error(
-          'This email already has a Pride Premium grant. The code cannot be stacked.',
+          'This email already has a 3-month Premium grant. The code cannot be stacked.',
         );
       }
     }
@@ -205,10 +238,15 @@ export const authService = {
       }
     }
 
-    // Signup records DOB/age as self-attested only. Government-ID verification is
-    // optional and must never be treated as the access gate. DEV_AUTO_VERIFY is
-    // retained only for local identity-flow fixtures.
+    // Signup records DOB/age as self-attested for profile display. Adult assurance
+    // (verified_age_18_plus) requires a Veriff liveness / age-estimation pass when configured.
+    // Optional ID on the same flow may set is_verified (Verified tick) — never stores ID.
     const autoVerify = process.env.DEV_AUTO_VERIFY === 'true';
+    const assuranceRequired = isAdultAssuranceRequiredAtSignup();
+    const assuranceToken = data.adult_assurance_token?.trim();
+    if (assuranceRequired && !assuranceToken) {
+      throw new Error('Adult assurance is required. Complete the 18+ check and try again.');
+    }
 
     let age = data.age;
     let dateOfBirth: string | null = data.date_of_birth ?? null;
@@ -263,10 +301,14 @@ export const authService = {
         `INSERT INTO users (
            id, email, password_hash, name, age, date_of_birth, photo_url,
            is_verified, verification_status, age_assurance_status, referral_code,
-           email_confirmed
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'self_attested', $10, FALSE)
+           email_confirmed, verified_age_18_plus, age_assured_at
+         ) VALUES (
+           $1, $2, $3, $4, $5, $6, $7, $8, $9,
+           $11, $10, FALSE, $12,
+           CASE WHEN $12 THEN NOW() ELSE NULL END
+         )
          RETURNING id, email, name, age, date_of_birth, photo_url, COALESCE(is_verified AND verification_provider = 'veriff', FALSE) AS is_verified, verification_status,
-                   age_assurance_status, authenticity_status, referral_code, email_confirmed`,
+                   age_assurance_status, authenticity_status, referral_code, email_confirmed, verified_age_18_plus`,
         [
           id,
           data.email,
@@ -278,10 +320,49 @@ export const authService = {
           autoVerify,
           autoVerify ? 'verified' : 'unverified',
           newReferralCode,
+          assuranceToken ? 'confirmed' : 'self_attested',
+          Boolean(assuranceToken),
         ],
       );
 
       user = result.rows[0];
+
+      // Redeem Veriff adult-assurance token after the user row exists so we can
+      // attach redeemed_user_id. Fail → ROLLBACK (no underage / incomplete account).
+      if (assuranceToken) {
+        const redeemed = await adultAssuranceService.redeemToken(
+          assuranceToken,
+          user!.id as string,
+          client,
+        );
+        // Liveness pass → age flag. Optional ID on same session → Verified tick.
+        // Never persist ID images / DOB / document numbers from Veriff.
+        await client.query(
+          `UPDATE users
+              SET verified_age_18_plus = TRUE,
+                  age_assurance_status = 'confirmed',
+                  age_assured_at = COALESCE(age_assured_at, NOW()),
+                  is_verified = CASE WHEN $2 THEN TRUE ELSE is_verified END,
+                  verification_status = CASE WHEN $2 THEN 'verified' ELSE verification_status END,
+                  verification_provider = CASE WHEN $2 THEN 'veriff' ELSE verification_provider END,
+                  verified_at = CASE WHEN $2 THEN COALESCE(verified_at, NOW()) ELSE verified_at END,
+                  verification_session_id = CASE
+                    WHEN $2 THEN COALESCE(verification_session_id, $3)
+                    ELSE verification_session_id
+                  END,
+                  updated_at = NOW()
+            WHERE id = $1`,
+          [user!.id, redeemed.idVerified, redeemed.sessionId],
+        );
+        user!.verified_age_18_plus = true;
+        user!.age_assurance_status = 'confirmed';
+        if (redeemed.idVerified) {
+          user!.is_verified = true;
+          user!.verification_status = 'verified';
+        }
+      } else if (assuranceRequired) {
+        throw new Error('Adult assurance is required. Complete the 18+ check and try again.');
+      }
 
       if (resolvedReferrer) {
         await referralService.attachAtSignup(resolvedReferrer.referrerId, user!.id as string, client);
@@ -301,13 +382,17 @@ export const authService = {
           prideInviteMonths,
           client,
         );
+      } else if (usingSharedBsf26) {
+        // BSF26 = BearScotsFest 2026 only. Al CLOCK LOCK via bsf26PremiumWindow (London calendar).
+        // Replaces waitlist gift. No Pride stack. Double-claim rejected in redeem.
+        await promoService.redeemSharedBsf26(promoCode!, data.email, user!.id as string, client);
       } else if (usingSharedPride) {
         await promoService.redeemSharedPride(promoCode!, data.email, user!.id as string, client);
       } else if (usingPersonalPride) {
         await promoService.redeemPersonalPride(promoCode!, data.email, user!.id as string, client);
       } else {
         // Terms 7.2 waitlist gift: 30 days Premium before 1 Oct 2026 UK.
-        // Pride replaces this gift — do not stack.
+        // Pride / BSF26 replace this gift — do not stack.
         await premiumService.grantWaitlistGift(user!.id as string, client);
       }
 

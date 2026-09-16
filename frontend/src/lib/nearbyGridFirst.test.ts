@@ -20,6 +20,20 @@ describe('Nearby Grid-first Brand lock', () => {
     assert.match(src, /'Grid'/);
   });
 
+  it('Nearest/Latest sort labels stay Brand-safe (no dating-coded words)', () => {
+    const toggle = readFileSync(join(root, 'components/NearbySortToggle.tsx'), 'utf8');
+    const sortLib = readFileSync(join(root, 'lib/nearbySort.ts'), 'utf8');
+    // Assert on the exported label map + default — ignore prose comments.
+    const labelsBlock = sortLib.match(/NEARBY_SORT_LABELS[\s\S]*?};/);
+    assert.ok(labelsBlock);
+    assert.doesNotMatch(labelsBlock[0], /\bDate\b|\bDating\b|\bFriends\b|\bRomantic\b/i);
+    assert.match(labelsBlock[0], /Nearest/);
+    assert.match(labelsBlock[0], /Latest/);
+    assert.match(sortLib, /DEFAULT_NEARBY_SORT:\s*NearbySortMode\s*=\s*'nearest'/);
+    assert.match(toggle, /nearby-sort-toggle/);
+    assert.match(toggle, /NEARBY_SORT_LABELS/);
+  });
+
   it('Layout discover mark has no MENRUSH type wordmark', () => {
     const src = readFileSync(join(root, 'components/Layout.tsx'), 'utf8');
     assert.doesNotMatch(src, />\s*MENRUSH\s*</);

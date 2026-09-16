@@ -2,10 +2,12 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallba
 import { createRoot, type Root } from 'react-dom/client';
 import { useNavigate } from 'react-router-dom';
 import { EventDTO, HotSpotDTO, Mood, hotSpotsAPI, profileMetaAPI, pulseAPI, usersAPI } from '../api/client';
+import { readCachedMatches, refreshMatches } from '../lib/tabListCache';
 import { useLocationStore, useAuthStore } from '../hooks/store';
 import { NearbyUser } from '../components/ProfileCard';
 import { Layout } from '../components/Layout';
 import { PulseFab } from '../components/PulseFab';
+import { DiscoverChatDock, readDockOpen } from '../components/DiscoverChatDock';
 import { MoodPicker } from '../components/MoodPicker';
 import {
   DEFAULT_RADIUS_KM,
@@ -15,6 +17,7 @@ import {
   normalizeRadiusKm,
   radiusStepOptionsKm,
 } from '../lib/discoveryFormat';
+import { nearbyRosterFingerprint } from '../lib/nearbyRoster';
 import { ProfileDrawer } from '../components/ProfileDrawer';
 import { HotSpotSheet } from '../components/HotSpotSheet';
 import { createMapMarkerElement, MapMarker } from '../components/MapMarker';
@@ -26,6 +29,7 @@ import { DiscoveryFilterPanel } from '../components/DiscoveryFilterPanel';
 import { MoreFiltersDrawer } from '../components/MoreFiltersDrawer';
 import { NearbyProfileGrid } from '../components/NearbyProfileGrid';
 import { NearbyMapGridToggle, readNearbyView, writeNearbyView, type NearbyView } from '../components/NearbyMapGridToggle';
+import { NearbySortToggle } from '../components/NearbySortToggle';
 import { DiscoveryShellPublisher } from '../context/DiscoveryShellContext';
 import type { ProfileSetupSnapshot } from '../lib/profileSetup';
 import { discoveryPhotoUrl } from '../lib/discoveryPhoto';
@@ -43,9 +47,23 @@ import {
 } from '../lib/discoveryFilters';
 import { EventsRail } from '../components/EventsRail';
 import { countLiveOnline, isUserPulsing, distanceMeters } from '../lib/discovery';
+import { isFreshFaceNearby } from '../lib/newJoiner';
+import {
+  readNearbySort,
+  sortNearbyUsers,
+  writeNearbySort,
+  type NearbySortMode,
+} from '../lib/nearbySort';
 import type mapboxgl from 'mapbox-gl';
 import { loadMapbox, getLoadedMapbox } from '../lib/mapboxLazy';
-import { wireHtmlMarkerMapGestures } from '../lib/mapMarkerGestures';
+import {
+  cycleHitTestMapPins,
+  markMarkerCanvasPassThrough,
+  peoplePinHitRadiusPx,
+  hotSpotPinHitRadiusPx,
+  selfPinHitRadiusPx,
+  type HitCandidate,
+} from '../lib/mapMarkerHitTest';
 import {
   discoveryResultBucket,
   trackEventOnce,
@@ -58,10 +76,23 @@ import {
 import { mapboxStyleForTheme, resolvedThemeNow, THEME_CHANGED_EVENT } from '../lib/mapTheme';
 import { readLayerVisible, writeLayerVisible } from '../lib/discoveryLayers';
 import { useIsDesktopLayout } from '../hooks/useMediaQuery';
-import { ProximitySlider } from '../components/ProximitySlider';
+import { MapDiscretionSlider } from '../components/MapDiscretionSlider';
 import { IconMapExpand, IconDiscover, IconHotSpots } from '../components/icons';
-import { HOT_SPOTS_CHIP_LABEL, HOT_SPOTS_CONSENT, HOT_SPOTS_FACE } from '../lib/cruiseCopy';
-import { MapLiveStatus } from '../components/MapLiveStatus';
+import {
+  mapPinZIndex,
+  shouldShowHotSpotLabel,
+} from '../lib/mapPinOverlap';
+import { HOT_SPOTS_CHIP_LABEL, HOT_SPOTS_MAP_BANNER } from '../lib/cruiseCopy';
+import {
+  dismissHotSpotsMapBanner,
+  isHotSpotsMapBannerDismissed,
+} from '../lib/hotSpotsMapBanner';
+import {
+  formatFuzzPrivacyNote,
+  MAP_PIN_FUZZ_DEFAULT_M,
+  nearestMapPinFuzzStep,
+  privateMapPointAround,
+} from '../lib/mapPinFuzz';
 
 /** Map panel: swipe up to hide, swipe down to show, expand for large map. */
 type MapPanelMode = 'hidden' | 'default' | 'expanded';
@@ -95,53 +126,53 @@ function desktopMapHeightCss(expanded: boolean): string {
 const mapChromeBtnClass =
   'flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] text-[#3D2B0E] shadow-md backdrop-blur-md transition-transform active:scale-95';
 
-const mapStatusCardClass =
-  'pointer-events-none absolute bottom-3 left-3 z-10 flex max-w-[min(72vw,280px)] items-center gap-2.5 rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[color-mix(in_srgb,#FFF8F0_94%,transparent)] px-3.5 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.18)] backdrop-blur-md';
-
-/** Shared NordVPN-style map chrome — identical on desktop and mobile. */
+/**
+ * Shared map chrome — one control cluster per corner.
+ * TL: Discretion (pin randomization) · TR: layers + expand · BL: Chat FAB (dock).
+ * BR: Mapbox locate (+ zoom on desktop only; phone uses pinch).
+ * Search radius lives only in the list "All" miles dropdown (not duplicated here).
+ * Nearby/live count lives in the list pill only (no map status card).
+ */
 function MapFloatingChrome({
   expanded,
-  nearbyCount,
-  liveCount,
-  radiusKm,
+  mapPinFuzzM,
+  onMapPinFuzzChange,
   onToggleExpand,
-  onRadiusChange,
-  onExpandRadius,
   showHide = false,
   onHide,
-  statusBottomClass = 'bottom-3',
   peopleLayerOn,
   hotSpotsLayerOn,
   onTogglePeopleLayer,
   onToggleHotSpotsLayer,
 }: {
   expanded: boolean;
-  nearbyCount: number;
-  /** Actually online now (presence) — never the radius/filter headcount. */
-  liveCount: number;
-  radiusKm: number;
+  mapPinFuzzM: number;
+  onMapPinFuzzChange: (meters: number) => void;
   onToggleExpand: () => void;
-  onRadiusChange: (km: number) => void;
-  onExpandRadius: () => void;
   showHide?: boolean;
   onHide?: () => void;
-  statusBottomClass?: string;
   peopleLayerOn: boolean;
   hotSpotsLayerOn: boolean;
   onTogglePeopleLayer: () => void;
   onToggleHotSpotsLayer: () => void;
 }) {
+  // One-time Legal quiet-face dismiss — same localStorage pattern as match coach.
+  const [mapBannerDismissed, setMapBannerDismissed] = useState(isHotSpotsMapBannerDismissed);
+
   return (
     <>
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 p-3">
         {!expanded ? (
-          <div className="pointer-events-auto">
-            <ProximitySlider value={radiusKm} onChange={onRadiusChange} variant="map" />
+          <div className="pointer-events-auto" data-map-chrome-corner="top-left">
+            <MapDiscretionSlider valueM={mapPinFuzzM} onChange={onMapPinFuzzChange} />
           </div>
         ) : (
           <span />
         )}
-        <div className="pointer-events-auto flex items-center gap-1.5">
+        <div
+          className="pointer-events-auto flex items-center gap-1.5"
+          data-map-chrome-corner="top-right"
+        >
           {/* #67: compact independent People / Cruise (Hot Spots) layer control. */}
           <button
             type="button"
@@ -194,32 +225,42 @@ function MapFloatingChrome({
           ) : null}
         </div>
       </div>
-      {hotSpotsLayerOn ? (
+      {hotSpotsLayerOn && !mapBannerDismissed ? (
         <div
           className="pointer-events-none absolute inset-x-0 top-14 z-10 flex justify-center px-3"
           data-testid="hotspots-map-helper"
         >
-          <p
-            className="max-w-lg rounded-xl border px-3 py-1.5 text-center text-[10px] font-semibold leading-snug"
+          <div
+            className="pointer-events-auto relative max-w-sm rounded-lg border py-1 pl-2.5 pr-6"
             style={{
-              background: 'rgba(13,10,6,0.88)',
-              color: 'rgba(240,224,192,0.88)',
-              borderColor: 'rgba(196,131,42,0.35)',
+              background: 'rgba(13,10,6,0.82)',
+              borderColor: 'rgba(196,131,42,0.28)',
             }}
-            data-testid="hotspots-map-helper-copy"
+            role="status"
           >
-            {HOT_SPOTS_FACE}
-            <span className="mt-0.5 block opacity-90">{HOT_SPOTS_CONSENT}</span>
-          </p>
+            <p
+              className="text-center text-[9px] font-semibold leading-snug tracking-wide"
+              style={{ color: 'rgba(240,224,192,0.82)' }}
+              data-testid="hotspots-map-helper-copy"
+            >
+              {HOT_SPOTS_MAP_BANNER}
+            </p>
+            <button
+              type="button"
+              data-testid="hotspots-map-helper-dismiss"
+              aria-label="Dismiss map disclaimer"
+              title="Dismiss"
+              onClick={() => {
+                setMapBannerDismissed(true);
+                dismissHotSpotsMapBanner();
+              }}
+              className="absolute -right-0.5 -top-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[15px] leading-none text-[rgba(240,224,192,0.85)] transition-colors hover:bg-[rgba(196,131,42,0.18)] hover:text-[rgba(240,224,192,1)]"
+            >
+              ×
+            </button>
+          </div>
         </div>
       ) : null}
-      <MapLiveStatus
-        nearbyCount={nearbyCount}
-        liveCount={liveCount}
-        radiusKm={radiusKm}
-        onExpandRadius={onExpandRadius}
-        className={`${mapStatusCardClass} ${statusBottomClass}`}
-      />
     </>
   );
 }
@@ -232,35 +273,59 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
   s.textContent = `
     .mapboxgl-popup-content { background: transparent !important; border: none !important; padding: 0 !important; box-shadow: none !important; }
     .mapboxgl-popup-tip { display: none !important; }
-    .mapboxgl-map,
-    .mapboxgl-canvas-container,
-    .mapboxgl-canvas {
+    .mapboxgl-map {
       width: 100% !important;
       height: 100% !important;
     }
+    .mapboxgl-canvas-container {
+      width: 100% !important;
+      height: 100% !important;
+    }
+    /* Do not override canvas.style.width / canvas.style.height with 100% !important.
+       Mapbox GL computes canvas.width = dpr * clientWidth and sets canvas.style.width = clientWidth px.
+       Overriding canvas with 100% distorts the WebGL aspect ratio and tile rendering,
+       causing stretched textures and stripe/glitch artifacts across device pixel ratios. */
     /* Keep pan / pinch / wheel on the map — parent scroll must not steal gestures.
        Mapbox sets touch-action via .mapboxgl-touch-* classes; force none so phone
        web never falls back to pan-x/pan-y (which blocks JS pinch). */
     .discover-map-surface,
     .discover-map-surface .mapboxgl-map,
     .discover-map-surface .mapboxgl-canvas-container,
-    .discover-map-surface .mapboxgl-canvas,
     .discover-map-host {
       touch-action: none !important;
       overscroll-behavior: contain;
       pointer-events: auto !important;
     }
+    .discover-map-surface .mapboxgl-canvas {
+      touch-action: none !important;
+      pointer-events: auto !important;
+    }
     .discover-map-host {
       z-index: 0;
     }
-    /* Markers stay tappable; drag/pinch are forwarded in mapMarkerGestures.ts. */
-    .discover-map-surface .mapboxgl-marker {
+    /* Soft continuous pan/pinch: HTML pins must NEVER capture touches.
+       Descendants can re-enable pointer-events even when the parent is none —
+       force the whole subtree off so the GL canvas owns drag/pinch + inertia.
+       Taps open profiles via map click hit-test (mapMarkerHitTest.ts). */
+    .discover-map-surface .mapboxgl-marker,
+    .discover-map-surface .mapboxgl-marker * {
+      pointer-events: none !important;
       touch-action: none !important;
       -webkit-user-select: none;
       user-select: none;
       -webkit-touch-callout: none;
     }
-    /* While a finger is on the map, kill iOS rubber-band / parent scroll steal. */
+    /* Geographic placement lock: Mapbox positions markers with transform on an
+       absolutely-positioned root. Never let app CSS/Tailwind override that to
+       relative/static — that stacks Cruise/people pins in a vertical column when
+       zoomed out (Al P0 / Mapbox #4048). */
+    .discover-map-surface .mapboxgl-marker {
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+    }
+    /* While a finger is on the map, kill rubber-band / parent scroll steal
+       (Android Chrome + iPhone — same parent-scroll fight on both). */
     html.discover-map-gesturing,
     html.discover-map-gesturing body {
       overscroll-behavior: none;
@@ -283,11 +348,36 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
     .discover-map-surface .mapboxgl-canvas.mapboxgl-interactive:active {
       cursor: grabbing;
     }
-    /* Keep Mapbox zoom/geolocate clear of floating chrome (Pulse FAB / tab bar). */
+    /* BR cluster: Mapbox geolocate (+ zoom on desktop). Chat lives BL — never overlaps. */
     .discover-map-surface .mapboxgl-ctrl-bottom-right {
       bottom: 12px;
       right: 12px;
-      z-index: 2;
+      z-index: 5;
+      display: flex;
+      flex-direction: column-reverse;
+      align-items: flex-end;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .discover-map-surface .mapboxgl-ctrl-bottom-right > * {
+      pointer-events: auto;
+      margin: 0 !important;
+    }
+    /* Single visual stack: zoom group then locate (no orphan under Chat). */
+    .discover-map-surface .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-group,
+    .discover-map-surface .mapboxgl-ctrl-bottom-right .mapboxgl-ctrl-geolocate {
+      box-shadow: 0 2px 8px rgba(0,0,0,0.28);
+    }
+    /* Al LOCK: phone pinch is enough — hide Mapbox ± zoom below lg; keep geolocate.
+       CSS (not init-time matchMedia) so resize/orientation never leaves orphan ±. */
+    @media (max-width: 1023px) {
+      .discover-map-surface .mapboxgl-ctrl-zoom-in,
+      .discover-map-surface .mapboxgl-ctrl-zoom-out {
+        display: none !important;
+      }
+      .discover-map-surface .mapboxgl-ctrl-group:has(.mapboxgl-ctrl-zoom-in) {
+        display: none !important;
+      }
     }
     .discover-map-surface[data-map-mode='expanded'] .mapboxgl-ctrl-bottom-right,
     .discover-map-surface[data-map-expanded='1'] .mapboxgl-ctrl-bottom-right {
@@ -295,10 +385,16 @@ if (typeof document !== 'undefined' && !document.getElementById(INJECT_ID)) {
       right: 12px;
     }
     .discover-map-surface .mapboxgl-ctrl-bottom-left {
-      bottom: 12px;
-      left: 12px;
+      bottom: 8px;
+      left: 8px;
       z-index: 2;
-      max-width: calc(100% - 160px);
+      max-width: calc(100% - 120px);
+      /* Stay under Chat FAB (bottom-12 left-3) — never fight BL chrome. */
+      transform: translateY(0);
+    }
+    .discover-map-surface .mapboxgl-ctrl-attrib {
+      margin: 0 !important;
+      opacity: 0.75;
     }
     /* Height handle: only the chip captures input — never a full-width veil. */
     .discover-map-drag-handle {
@@ -353,6 +449,8 @@ const BROWSER_GPS_DENIED_NOTICE =
  * Pinch zoom must stay enabled on phone web; disableRotation keeps pinch as zoom-only
  * (rotation fighting the gesture feels like "pinch does nothing" on small screens).
  * Never call while the map is mid-pan/zoom — re-enable resets inertia and feels sticky.
+ *
+ * dragPan options tune phone inertia (Android Chrome + iPhone) toward soft continuous.
  */
 function assertMapGestures(map: mapboxgl.Map) {
   try {
@@ -360,7 +458,18 @@ function assertMapGestures(map: mapboxgl.Map) {
   } catch {
     /* map mid-teardown */
   }
-  map.dragPan.enable();
+  // Soft continuous phone pan — slightly lower deceleration than Mapbox defaults
+  // so a flick keeps rolling on Android and iPhone (HTML pins no longer steal).
+  try {
+    map.dragPan.enable({
+      linearity: 0.35,
+      easing: (t: number) => t * (2 - t),
+      maxSpeed: 1600,
+      deceleration: 2200,
+    });
+  } catch {
+    map.dragPan.enable();
+  }
   map.scrollZoom.enable();
   map.touchZoomRotate.enable();
   map.touchZoomRotate.disableRotation();
@@ -380,7 +489,7 @@ function assertMapGestures(map: mapboxgl.Map) {
   }
 }
 
-/** Lock document overscroll while a touch is active on the map surface (iOS PWA). */
+/** Lock document overscroll while a touch is active on the map surface (phone web). */
 function bindMapOverscrollLock(surface: HTMLElement): () => void {
   const start = () => document.documentElement.classList.add('discover-map-gesturing');
   const end = () => document.documentElement.classList.remove('discover-map-gesturing');
@@ -422,7 +531,14 @@ export const Discover = () => {
     }
     return DEFAULT_RADIUS_KM;
   });
+  /** How far others see your pin — profiles.map_pin_fuzz_m (not search radius). */
+  const [mapPinFuzzM, setMapPinFuzzM] = useState<number>(MAP_PIN_FUZZ_DEFAULT_M);
   const [nearbyView, setNearbyView] = useState<NearbyView>(() => readNearbyView());
+  const [nearbySort, setNearbySort] = useState<NearbySortMode>(() => readNearbySort());
+  const handleNearbySortChange = useCallback((next: NearbySortMode) => {
+    setNearbySort(next);
+    writeNearbySort(next);
+  }, []);
   const [mapPanelMode, setMapPanelMode] = useState<MapPanelMode>(() => {
     // Keep Grid/Map surface and map panel height in sync on first paint.
     if (readNearbyView() === 'grid') return 'hidden';
@@ -438,6 +554,7 @@ export const Discover = () => {
     return saved === 'hidden' ? 'default' : saved;
   });
   const [desktopMapExpanded, setDesktopMapExpanded] = useState(readDesktopMapExpanded);
+  const [chatDockOpen, setChatDockOpen] = useState(readDockOpen);
   const mapDragRef = useRef<{ startY: number; mode: MapPanelMode } | null>(null);
   const [discoveryFilters, setDiscoveryFilters] = useState<DiscoveryFilterState>(DEFAULT_DISCOVERY_FILTERS);
   const [pulseUntil, setPulseUntil] = useState<Date | null>(null);
@@ -446,7 +563,10 @@ export const Discover = () => {
   const [pulseError, setPulseError] = useState('');
   const [pulseOpenRequestId, setPulseOpenRequestId] = useState(0);
   const [selectedUser, setSelectedUser] = useState<NearbyUser | null>(null);
-  const { lat, lng, setLocation } = useLocationStore();
+  // Selectors — avoid re-rendering Discover on unrelated store writes.
+  const lat = useLocationStore((s) => s.lat);
+  const lng = useLocationStore((s) => s.lng);
+  const setLocation = useLocationStore((s) => s.setLocation);
   /** Seed from last known pin so returning to Nearby never jumps to a fake city. */
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(() =>
     lat != null && lng != null ? [lat, lng] : null,
@@ -494,6 +614,13 @@ export const Discover = () => {
   const fallbackTimerRef = useRef<number | null>(null);
   const usingFallbackLocationRef = useRef(false);
   const hasLiveGpsRef = useRef(false);
+  /** Stabilize GPS watch — do not recreate applyLiveGps when mapCenter/filters change. */
+  const mapCenterRef = useRef(mapCenter);
+  mapCenterRef.current = mapCenter;
+  const radiusRef = useRef(radius);
+  radiusRef.current = radius;
+  const discoveryFiltersRef = useRef(discoveryFilters);
+  discoveryFiltersRef.current = discoveryFilters;
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<Map<string, { marker: mapboxgl.Marker; root: Root; user: NearbyUser }>>(new Map());
@@ -501,6 +628,9 @@ export const Discover = () => {
     Map<string, { marker: mapboxgl.Marker; root: Root; spot: HotSpotDTO }>
   >(new Map());
   const selfMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  /** Cycle through overlap piles on repeated taps (true lng/lat — no spiderfy). */
+  const lastPinHitIdRef = useRef<string | null>(null);
+  const [mapZoom, setMapZoom] = useState(12);
   const selfDotRef = useRef<HTMLDivElement | null>(null);
   const selfRootRef = useRef<Root | null>(null);
   const [hotSpots, setHotSpots] = useState<HotSpotDTO[]>([]);
@@ -548,14 +678,19 @@ export const Discover = () => {
       .getMood()
       .then((res) => setMood(res.data.mood ?? null))
       .catch(() => {});
+    profileMetaAPI
+      .getMapPinFuzz()
+      .then((res) => setMapPinFuzzM(nearestMapPinFuzzStep(res.data.map_pin_fuzz_m)))
+      .catch(() => {});
     // Hydrate Match CTA after reload — outbound likes + mutual matches (separate).
+    // Also warm the shared Matches tab cache so /matches is never a cold start from Nearby.
     Promise.all([
       usersAPI.getSentLikes().catch(() => ({ data: { ids: [] as string[] } })),
-      usersAPI.getMatches().catch(() => ({ data: [] as Array<{ id: string }> })),
+      refreshMatches().catch(() => readCachedMatches() ?? { matches: [], likes: [] }),
     ])
-      .then(([sentRes, matchesRes]) => {
+      .then(([sentRes, matchesSnap]) => {
         const sent = sentRes.data?.ids ?? [];
-        const mutual = (matchesRes.data ?? []).map((m: { id: string }) => m.id).filter(Boolean);
+        const mutual = (matchesSnap.matches ?? []).map((m) => m.id).filter(Boolean);
         setMatchedUsers((prev) => new Set([...prev, ...mutual]));
         const likedIds = [...sent, ...mutual];
         if (likedIds.length > 0) {
@@ -590,7 +725,10 @@ export const Discover = () => {
         // getNearby already persists lat/lng — skip a redundant updateLocation RTT.
         const apiFilters = buildNearbyApiFilters(filters);
         const res = await usersAPI.getNearby(latitude, longitude, r, apiFilters);
-        setUsers(res.data);
+        // Skip identical polls — new array refs were redrawing Grid + remounting marker work.
+        setUsers((prev) =>
+          nearbyRosterFingerprint(prev) === nearbyRosterFingerprint(res.data) ? prev : res.data,
+        );
         // Cold density: count men outside current radius so Expand is intentional.
         if (res.data.length === 0 && r < MAX_RADIUS_KM - 0.5) {
           try {
@@ -671,23 +809,25 @@ export const Discover = () => {
       hasLiveGpsRef.current = true;
       clearLocationPrompts(latitude, longitude);
 
+      // Store gates sub-15m jitter; self marker still tracks every tick below.
       setLocation(latitude, longitude);
 
+      const currentCenter = mapCenterRef.current;
       const farFromPin =
-        mapCenter != null &&
-        distanceMeters(mapCenter[0], mapCenter[1], latitude, longitude) >= MAP_PAN_MIN_METERS;
+        currentCenter != null &&
+        distanceMeters(currentCenter[0], currentCenter[1], latitude, longitude) >= MAP_PAN_MIN_METERS;
       // Never steal the camera after the user has navigated the map themselves.
       const shouldRecenter =
         recoveringFromFallback ||
         options?.force ||
         (!userMovedMapRef.current && (!mapRef.current || farFromPin));
 
-      if (!mapCenter || shouldRecenter) {
+      if (!currentCenter || shouldRecenter) {
         setMapCenter([latitude, longitude]);
       }
 
       if (mapRef.current) {
-        selfMarkerRef.current?.setLngLat([longitude, latitude]);
+        // Self pin position is owned by the discretion-fuzz effect (what others see).
         if (shouldRecenter) {
           if (options?.force || recoveringFromFallback) {
             userMovedMapRef.current = false;
@@ -714,9 +854,15 @@ export const Discover = () => {
       const isBackground = lastFetch != null && !recoveringFromFallback;
       hasFetchedRef.current = true;
       lastGpsFetchRef.current = { lat: latitude, lng: longitude, at: now };
-      fetchNearbyUsers(latitude, longitude, radius, discoveryFilters, { background: isBackground });
+      fetchNearbyUsers(
+        latitude,
+        longitude,
+        radiusRef.current,
+        discoveryFiltersRef.current,
+        { background: isBackground },
+      );
     },
-    [clearLocationPrompts, fetchNearbyUsers, mapCenter, radius, setLocation, discoveryFilters],
+    [clearLocationPrompts, fetchNearbyUsers, setLocation],
   );
 
   // Customer-facing "enable location" — persist pin even if Nearby fetch fails.
@@ -841,12 +987,13 @@ export const Discover = () => {
 
   useEffect(() => {
     if (!pulseUntil) return;
-    const id = window.setInterval(() => {
-      if (pulseUntil.getTime() <= Date.now()) {
-        setPulseUntil(null);
-      }
-    }, 1000);
-    return () => window.clearInterval(id);
+    const ms = Math.max(250, pulseUntil.getTime() - Date.now());
+    const id = window.setTimeout(() => {
+      setPulseUntil((current) =>
+        current && current.getTime() <= Date.now() ? null : current,
+      );
+    }, ms);
+    return () => window.clearTimeout(id);
   }, [pulseUntil]);
 
   useEffect(() => {
@@ -959,6 +1106,14 @@ export const Discover = () => {
     [lat, lng, discoveryFilters, fetchNearbyUsers],
   );
 
+  const handleMapPinFuzzChange = useCallback((next: number) => {
+    const snapped = nearestMapPinFuzzStep(next);
+    setMapPinFuzzM(snapped);
+    void profileMetaAPI.setMapPinFuzz(snapped).catch(() => {
+      /* keep optimistic UI; next hydrate corrects */
+    });
+  }, []);
+
   /**
    * Expand search radius — was stepping one tiny mile tier (felt broken).
    * If we already know men exist farther out, jump to max. Otherwise big steps.
@@ -1066,7 +1221,7 @@ export const Discover = () => {
     };
   }, [mapPanelMode, desktopMapExpanded, isDesktopLayout, mapLoaded]);
 
-  // iOS/PWA: while touching the map surface, suppress document rubber-band.
+  // Phone web (Android + iPhone): while touching the map, suppress document rubber-band.
   useEffect(() => {
     if (!mapLoaded) return;
     const surfaces = document.querySelectorAll<HTMLElement>('.discover-map-surface');
@@ -1223,6 +1378,8 @@ export const Discover = () => {
         style: mapboxStyleForTheme(resolvedThemeNow()),
         center: [startCenter[1], startCenter[0]],
         zoom: 14,
+        // Mercator only — globe at mid-zoom can drift HTML markers off lng/lat.
+        projection: 'mercator',
         attributionControl: false,
         interactive: true,
         dragPan: true,
@@ -1236,6 +1393,8 @@ export const Discover = () => {
         cooperativeGestures: false,
       });
       map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
+      // Always register Mapbox ±; CSS hides it below lg so phone pinch is enough
+      // and desktop→mobile resize does not leave orphan zoom chrome.
       map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right');
       const geolocate = new mapboxgl.GeolocateControl({
         positionOptions: { enableHighAccuracy: true, maximumAge: 15_000 },
@@ -1264,7 +1423,12 @@ export const Discover = () => {
         if (!map) return;
         assertMapGestures(map);
         resizeMap?.();
+        setMapZoom(map.getZoom());
         setMapLoaded(true);
+      });
+      map.on('zoomend', () => {
+        if (!map) return;
+        setMapZoom(map.getZoom());
       });
       guardPinch = (e: TouchEvent) => {
         if (e.touches.length >= 2) e.preventDefault();
@@ -1296,30 +1460,16 @@ export const Discover = () => {
         />,
       );
       selfEl.style.cursor = 'pointer';
-      selfEl.style.touchAction = 'none';
+      markMarkerCanvasPassThrough(selfEl);
       selfEl.setAttribute('aria-label', 'Open your profile');
-      const selfSuppressClick = { current: false };
-      selfEl.addEventListener('click', (e) => {
-        if (selfSuppressClick.current) {
-          e.preventDefault();
-          e.stopPropagation();
-          selfSuppressClick.current = false;
-          return;
-        }
-        e.stopPropagation();
-        navigate('/profile');
-      });
       selfMarkerRef.current = new mapboxgl.Marker({ element: selfEl })
         .setLngLat([startCenter[1], startCenter[0]])
         .addTo(map);
-      wireHtmlMarkerMapGestures(selfEl, map, {
-        onNavigate: () => {
-          userMovedMapRef.current = true;
-        },
-        suppressClickRef: selfSuppressClick,
-      });
+      markMarkerCanvasPassThrough(selfEl);
 
       mapRef.current = map;
+      // E2E / BOA90 tooling: read center+zoom after touch pan across pins.
+      (window as unknown as { __menrushDiscoverMap?: mapboxgl.Map }).__menrushDiscoverMap = map;
     })();
 
     return () => {
@@ -1343,6 +1493,11 @@ export const Discover = () => {
         live.remove();
       }
       mapRef.current = null;
+      try {
+        delete (window as unknown as { __menrushDiscoverMap?: mapboxgl.Map }).__menrushDiscoverMap;
+      } catch {
+        /* ignore */
+      }
       selfMarkerRef.current = null;
       selfDotRef.current = null;
       const root = selfRootRef.current;
@@ -1378,14 +1533,11 @@ export const Discover = () => {
     return () => window.removeEventListener(THEME_CHANGED_EVENT, onThemeChanged);
   }, []);
 
-  const sortedUsers = useMemo(() => {
-    return [...users].sort((a, b) => {
-      const ap = isUserPulsing(a) ? 1 : 0;
-      const bp = isUserPulsing(b) ? 1 : 0;
-      if (ap !== bp) return bp - ap;
-      return parseFloat(String(a.distance_km)) - parseFloat(String(b.distance_km));
-    });
-  }, [users]);
+  // Explicit Nearest (distance-first) vs Latest (fresh faces / newest first).
+  const sortedUsers = useMemo(
+    () => sortNearbyUsers(users, nearbySort),
+    [users, nearbySort],
+  );
 
   const displayUsers = useMemo(
     () => applyDiscoveryClientFilters(sortedUsers, discoveryFilters),
@@ -1401,6 +1553,7 @@ export const Discover = () => {
 
     const visibleIds = new Set<string>();
     // Reuse the memoized filtered roster — do not re-run client filters on every paint.
+    // Roster identity is gated in fetchNearbyUsers via nearbyRosterFingerprint.
     const mapUsers = displayUsers;
 
     // People layer off: leave visibleIds empty so the cleanup loop below removes every
@@ -1409,6 +1562,7 @@ export const Discover = () => {
       if (user.lat == null || user.lng == null) return;
       visibleIds.add(user.id);
       const isPulsing = isUserPulsing(user);
+      const isNew = isFreshFaceNearby(user);
       const markerUser = {
         id: user.id,
         name: user.name,
@@ -1416,6 +1570,7 @@ export const Discover = () => {
         age: user.age,
         isPulsing,
         isVerified: !!(user as any).is_verified,
+        isNew,
       };
       const lngLat: [number, number] = [Number(user.lng), Number(user.lat)];
       const existing = markersRef.current.get(user.id);
@@ -1437,19 +1592,23 @@ export const Discover = () => {
           prev.name !== user.name ||
           prev.photo_url !== user.photo_url ||
           isUserPulsing(prev) !== isPulsing ||
-          !!(prev as any).is_verified !== !!(user as any).is_verified;
+          !!(prev as any).is_verified !== !!(user as any).is_verified ||
+          isFreshFaceNearby(prev) !== isNew;
         if (visualChanged) {
           const markerSize = isPulsing ? 52 : 44;
           existing.root.render(<MapMarker user={markerUser} size={markerSize} />);
           const el = existing.marker.getElement();
           el.style.width = `${markerSize}px`;
           el.style.height = `${markerSize}px`;
+          el.style.zIndex = String(mapPinZIndex('person'));
+          // React re-render can restore pointer-events on <img> — re-lock pass-through.
+          markMarkerCanvasPassThrough(el);
         }
         existing.user = user;
         return;
       }
 
-      const { element, root, suppressClickRef } = createMapMarkerElement(
+      const { element, root } = createMapMarkerElement(
         markerUser,
         () => setSelectedUser(user),
         isPulsing ? 52 : 44,
@@ -1457,15 +1616,12 @@ export const Discover = () => {
 
       const mapboxgl = getLoadedMapbox();
       if (!mapboxgl) return;
+      markMarkerCanvasPassThrough(element);
       const marker = new mapboxgl.Marker({ element })
         .setLngLat(lngLat)
         .addTo(map);
-      wireHtmlMarkerMapGestures(element, map, {
-        onNavigate: () => {
-          userMovedMapRef.current = true;
-        },
-        suppressClickRef,
-      });
+      markMarkerCanvasPassThrough(element);
+      element.style.zIndex = String(mapPinZIndex('person'));
 
       markersRef.current.set(user.id, { marker, root, user });
     });
@@ -1507,6 +1663,7 @@ export const Discover = () => {
     if (!map || !mapLoaded) return;
 
     const visibleIds = new Set<string>();
+    const showLabel = shouldShowHotSpotLabel(mapZoom);
 
     if (hotSpotsLayerOn) hotSpots.forEach((spot) => {
       if (!Number.isFinite(spot.latitude) || !Number.isFinite(spot.longitude)) return;
@@ -1520,43 +1677,56 @@ export const Discover = () => {
         live_count_exact: spot.live_count_exact,
         live_count: spot.live_count,
       };
+      const occupied = spot.live_count_exact > 0;
 
       if (existing) {
-        existing.marker.setLngLat(lngLat);
+        const prevLat = Number(existing.spot.latitude);
+        const prevLng = Number(existing.spot.longitude);
+        if (prevLat !== spot.latitude || prevLng !== spot.longitude) {
+          // Keep true lng/lat — never spiderfy into a vertical column (#254).
+          existing.marker.setLngLat(lngLat);
+        }
         const prevOccupied = existing.spot.live_count_exact > 0;
-        const nextOccupied = spot.live_count_exact > 0;
+        const nextOccupied = occupied;
+        const el = existing.marker.getElement();
+        const labelChanged = el.dataset.showLabel !== (showLabel ? '1' : '0');
         if (
           prevOccupied !== nextOccupied ||
           existing.spot.live_count_exact !== spot.live_count_exact ||
           existing.spot.live_count !== spot.live_count ||
           existing.spot.name !== spot.name ||
-          existing.spot.category_icon !== spot.category_icon
+          existing.spot.category_icon !== spot.category_icon ||
+          labelChanged
         ) {
-          existing.root.render(<HotSpotPin spot={pinData} size={52} />);
+          existing.root.render(<HotSpotPin spot={pinData} size={52} showLabel={showLabel} />);
+          const labelPad = showLabel ? 28 : 4;
+          const widthPad = showLabel ? (occupied ? 104 : 72) : 52;
+          el.style.width = `${Math.max(52, widthPad)}px`;
+          el.style.height = `${52 + labelPad}px`;
+          el.dataset.showLabel = showLabel ? '1' : '0';
+          el.style.zIndex = String(mapPinZIndex('hotspot', occupied));
+          markMarkerCanvasPassThrough(el);
         }
         existing.spot = spot;
         return;
       }
 
       // Opens the in-map sheet (no navigation away) — see #67 acceptance criteria.
-      const { element, root, suppressClickRef } = createHotSpotPinElement(
+      const { element, root } = createHotSpotPinElement(
         pinData,
         () => setSelectedHotSpot(spot),
         52,
+        showLabel,
       );
       const mapboxgl = getLoadedMapbox();
       if (!mapboxgl) return;
+      markMarkerCanvasPassThrough(element);
+      element.dataset.showLabel = showLabel ? '1' : '0';
+      element.style.zIndex = String(mapPinZIndex('hotspot', occupied));
       const marker = new mapboxgl.Marker({ element, anchor: 'center' })
         .setLngLat(lngLat)
         .addTo(map);
-      // Hot Spot hit boxes are large (label + pad) — must forward pan/pinch or the
-      // map feels dead wherever Cruise pins cluster.
-      wireHtmlMarkerMapGestures(element, map, {
-        onNavigate: () => {
-          userMovedMapRef.current = true;
-        },
-        suppressClickRef,
-      });
+      markMarkerCanvasPassThrough(element);
       hotSpotMarkersRef.current.set(spot.id, { marker, root, spot });
     });
 
@@ -1566,7 +1736,7 @@ export const Discover = () => {
       setTimeout(() => root.unmount(), 0);
       hotSpotMarkersRef.current.delete(spotId);
     });
-  }, [hotSpots, mapLoaded, hotSpotsLayerOn]);
+  }, [hotSpots, mapLoaded, hotSpotsLayerOn, mapZoom]);
 
   // Keep the open sheet's data fresh as hotSpots re-polls (mirrors selectedUser above).
   useEffect(() => {
@@ -1577,8 +1747,16 @@ export const Discover = () => {
 
   useEffect(() => {
     if (!mapLoaded || lat == null || lng == null) return;
-    selfMarkerRef.current?.setLngLat([lng, lat]);
-  }, [mapLoaded, lat, lng]);
+    let cancelled = false;
+    const seed = `map:${authUser?.id ?? 'self'}`;
+    void privateMapPointAround(lat, lng, seed, mapPinFuzzM).then((point) => {
+      if (cancelled) return;
+      selfMarkerRef.current?.setLngLat([point.lng, point.lat]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mapLoaded, lat, lng, mapPinFuzzM, authUser?.id]);
 
   useEffect(() => {
     const root = selfRootRef.current;
@@ -1602,6 +1780,7 @@ export const Discover = () => {
         size={size}
       />,
     );
+    if (el) markMarkerCanvasPassThrough(el);
   }, [
     mapLoaded,
     pulseUntil,
@@ -1611,6 +1790,77 @@ export const Discover = () => {
     authUser?.map_photo_url,
     authUser?.age,
   ]);
+
+  // Pins are pointer-events:none so the canvas owns soft continuous pan/pinch.
+  // Taps land on the map → hit-test projected pin positions (people / Cruise / self).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+
+    const onClick = (e: mapboxgl.MapMouseEvent) => {
+      type PinKind = 'self' | 'person' | 'hotspot';
+      const candidates: Array<HitCandidate<PinKind>> = [];
+
+      const selfMarker = selfMarkerRef.current;
+      if (selfMarker) {
+        const ll = selfMarker.getLngLat();
+        candidates.push({
+          kind: 'self',
+          id: 'self',
+          lng: ll.lng,
+          lat: ll.lat,
+          radiusPx: selfPinHitRadiusPx(!!pulseUntil),
+        });
+      }
+
+      markersRef.current.forEach(({ user }, id) => {
+        if (user.lat == null || user.lng == null) return;
+        candidates.push({
+          kind: 'person',
+          id,
+          lng: Number(user.lng),
+          lat: Number(user.lat),
+          radiusPx: peoplePinHitRadiusPx(isUserPulsing(user)),
+        });
+      });
+
+      hotSpotMarkersRef.current.forEach(({ spot }, id) => {
+        candidates.push({
+          kind: 'hotspot',
+          id,
+          lng: spot.longitude,
+          lat: spot.latitude,
+          radiusPx: hotSpotPinHitRadiusPx(spot.live_count_exact > 0),
+        });
+      });
+
+      const hit = cycleHitTestMapPins(map, e.point, candidates, lastPinHitIdRef.current);
+      if (!hit) {
+        lastPinHitIdRef.current = null;
+        return;
+      }
+      lastPinHitIdRef.current = hit.id;
+
+      if (hit.kind === 'self') {
+        navigate('/profile');
+        return;
+      }
+      if (hit.kind === 'person') {
+        const entry = markersRef.current.get(hit.id);
+        if (entry) setSelectedUser(entry.user);
+        return;
+      }
+      if (hit.kind === 'hotspot') {
+        const entry = hotSpotMarkersRef.current.get(hit.id);
+        if (entry) setSelectedHotSpot(entry.spot);
+      }
+    };
+
+    map.on('click', onClick);
+    return () => {
+      map.off('click', onClick);
+    };
+  }, [mapLoaded, pulseUntil, navigate]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1682,7 +1932,7 @@ export const Discover = () => {
       {/* Contain Discover in the viewport so body scroll cannot steal phone pinch-zoom.
           Match Rooms/Conversations: explicit shell height — h-full alone does not resolve
           inside Layout's flex + overflow page-enter, which left expanded map ~minHeight. */}
-      <div className="flex h-[calc(100dvh-var(--mobile-header-height)-var(--mobile-tab-bar-height))] min-h-0 flex-col overflow-hidden overscroll-none lg:h-full">
+      <div className="flex h-[calc(100dvh-var(--mobile-header-height)-var(--mobile-tab-bar-height))] min-h-0 min-w-0 max-w-full flex-col overflow-x-clip overflow-hidden overscroll-none lg:h-full" data-testid="discover-shell">
       {!mobileMapExpanded ? (
       <div className="shrink-0">
       <>
@@ -1886,6 +2136,7 @@ export const Discover = () => {
                 : `${nearbyCount} ${nearbyCount === 1 ? 'man' : 'men'} nearby`}
           </h2>
           <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
+          <NearbySortToggle mode={nearbySort} onChange={handleNearbySortChange} />
           <NearbyMapGridToggle view={nearbyView} onChange={setNearbySurface} />
         </div>
         {nearbyView === 'grid' && !needsLocationGate ? (
@@ -1924,28 +2175,26 @@ export const Discover = () => {
           />
           <MapFloatingChrome
             expanded={desktopMapExpanded}
-            nearbyCount={nearbyCount}
-            liveCount={liveCount}
-            radiusKm={radius}
+            mapPinFuzzM={mapPinFuzzM}
+            onMapPinFuzzChange={handleMapPinFuzzChange}
             onToggleExpand={toggleDesktopMapExpanded}
-            onRadiusChange={handleRadiusChange}
-            onExpandRadius={handleRadiusCycle}
             peopleLayerOn={peopleLayerOn}
             hotSpotsLayerOn={hotSpotsLayerOn}
             onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
             onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
           />
+          <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
           {!needsLocationGate && !tokenMissing ? (
             <p
-              className="pointer-events-none absolute bottom-2 left-1/2 z-[4] max-w-[90%] -translate-x-1/2 rounded-full px-3 py-1 text-center text-[10px] font-medium leading-snug"
+              className="pointer-events-none absolute top-[4.75rem] left-1/2 z-[4] max-w-[min(70%,240px)] -translate-x-1/2 rounded-full px-2.5 py-0.5 text-center text-[9px] font-medium leading-snug"
               style={{
-                background: 'rgba(13,10,6,0.72)',
-                color: 'rgba(240,224,192,0.72)',
-                border: '1px solid rgba(196,131,42,0.22)',
+                background: 'rgba(13,10,6,0.55)',
+                color: 'rgba(240,224,192,0.65)',
+                border: '1px solid rgba(196,131,42,0.18)',
               }}
               data-testid="map-privacy-note"
             >
-              Map pins are approximate (~100–300 m) for privacy
+              {formatFuzzPrivacyNote(mapPinFuzzM)}
             </p>
           ) : null}
         </div>
@@ -2070,36 +2319,35 @@ export const Discover = () => {
           {mapPanelMode !== 'hidden' ? (
             <MapFloatingChrome
               expanded={mapPanelMode === 'expanded'}
-              nearbyCount={nearbyCount}
-              liveCount={liveCount}
-              radiusKm={radius}
+              mapPinFuzzM={mapPinFuzzM}
+              onMapPinFuzzChange={handleMapPinFuzzChange}
               onToggleExpand={() =>
                 setMapPanel(mapPanelMode === 'expanded' ? 'default' : 'expanded')
               }
-              onRadiusChange={handleRadiusChange}
-              onExpandRadius={handleRadiusCycle}
               showHide
               onHide={() => setMapPanel('hidden')}
-              statusBottomClass={mapPanelMode === 'expanded' ? 'bottom-4' : 'bottom-8'}
               peopleLayerOn={peopleLayerOn}
               hotSpotsLayerOn={hotSpotsLayerOn}
               onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
               onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
             />
           ) : null}
+          {mapPanelMode !== 'hidden' ? (
+            <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
+          ) : null}
 
           {mapPanelMode !== 'hidden' && !needsLocationGate && !tokenMissing ? (
             <p
-              className="pointer-events-none absolute left-1/2 z-[4] max-w-[92%] -translate-x-1/2 rounded-full px-3 py-1 text-center text-[10px] font-medium leading-snug"
+              className="pointer-events-none absolute left-1/2 z-[4] max-w-[min(70%,220px)] -translate-x-1/2 rounded-full px-2.5 py-0.5 text-center text-[9px] font-medium leading-snug"
               style={{
-                bottom: mapPanelMode === 'expanded' ? 16 : 36,
-                background: 'rgba(13,10,6,0.72)',
-                color: 'rgba(240,224,192,0.72)',
-                border: '1px solid rgba(196,131,42,0.22)',
+                top: hotSpotsLayerOn ? '4.75rem' : '3.25rem',
+                background: 'rgba(13,10,6,0.55)',
+                color: 'rgba(240,224,192,0.65)',
+                border: '1px solid rgba(196,131,42,0.18)',
               }}
               data-testid="map-privacy-note"
             >
-              Pins approximate (~100–300 m) for privacy
+              {formatFuzzPrivacyNote(mapPinFuzzM)}
             </p>
           ) : null}
 
@@ -2173,7 +2421,8 @@ export const Discover = () => {
                 </p>
               </div>
               <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
+                <NearbySortToggle mode={nearbySort} onChange={handleNearbySortChange} />
                 <NearbyMapGridToggle view={nearbyView} onChange={setNearbySurface} />
               </div>
             </div>

@@ -23,20 +23,22 @@ describe('nearbyPhotoSrc grid pipeline', () => {
     );
   });
 
-  it('skips display API after 404 probe and serves downscaled blob', async () => {
+  it('skips display API after 404 probe and walks upload candidates', async () => {
     vi.stubGlobal('window', {
-      location: { origin: 'https://menrush.com' },
+      location: { origin: 'https://menrush.com', hostname: 'menrush.com' },
       setTimeout,
       clearTimeout,
     });
 
     const jpegHeader = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
-    // Minimal valid-enough blob; createImageBitmap may fail in jsdom — we still
-    // assert display probe is marked false and enqueue resolves without hanging.
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('/api/media/display')) {
         return new Response('not found', { status: 404, headers: { 'content-type': 'text/html' } });
+      }
+      // Same-origin rewrite 404 (staging-drift regression); Railway production wins.
+      if (url.startsWith('https://menrush.com/uploads/')) {
+        return new Response('nope', { status: 404, headers: { 'content-type': 'application/json' } });
       }
       if (url.includes('/uploads/')) {
         return new Response(jpegHeader, {
@@ -48,7 +50,6 @@ describe('nearbyPhotoSrc grid pipeline', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    // createImageBitmap often unavailable / failing in vitest — stub a tiny canvas path.
     vi.stubGlobal(
       'createImageBitmap',
       vi.fn(async () => {
@@ -58,10 +59,8 @@ describe('nearbyPhotoSrc grid pipeline', () => {
 
     const result = await __gridPhotoTest.enqueueGridPhoto('/uploads/profiles/huge.jpg');
     expect(__gridPhotoTest.getDisplayApiOk()).toBe(false);
-    // Downscale may fail without canvas bitmap — null is ok (UI falls back to generic).
-    // Critical: we must not keep retrying display forever.
-    expect(fetchMock.mock.calls.filter((c) => String(c[0]).includes('/api/media/display')).length).toBe(
-      1,
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('backend-production-d587'))).toBe(
+      true,
     );
     expect(result === null || typeof result === 'string').toBe(true);
   });

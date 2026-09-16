@@ -1431,12 +1431,13 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             onKeyDown={handleKeyDown}
             placeholder="Message the room…"
             autoComplete="off"
-            className="flex-1 text-sm px-5 py-3 rounded-full focus:outline-none transition-all duration-200"
+            className="min-w-0 flex-1 px-5 py-3 text-[16px] rounded-full focus:outline-none transition-all duration-200"
             style={{
               background: 'var(--bg-card)',
               border: '1px solid var(--border-default)',
               color: 'var(--cream)',
               caretColor: '#C4832A',
+              fontSize: '16px',
             }}
             onFocus={(e) => {
               e.currentTarget.style.border = '1px solid rgba(196,131,42,0.5)';

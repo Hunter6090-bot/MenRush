@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ComponentType, type ReactNode } from 'react';
+import { lazy, Suspense, type ComponentType, type ReactElement, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { RequireProfileSetup } from './components/RequireProfileSetup';
@@ -17,6 +17,7 @@ import { ToastNotifications } from './components/ToastNotifications';
 import { InstallPrompt } from './components/InstallPrompt';
 import { savePostAuthRedirect } from './lib/profileLinks';
 import { prefetchAppRouteChunks } from './lib/routeChunks';
+import { warmTabListCaches } from './lib/tabListCache';
 import { readStoredToken } from './lib/authSession';
 
 /**
@@ -38,6 +39,10 @@ const GetTheApp = lazyNamed(() => import('./pages/GetTheApp'), 'GetTheApp');
 const BetaAccess = lazyNamed(() => import('./pages/BetaAccess'), 'BetaAccess');
 const Login = lazyNamed(() => import('./pages/Login'), 'Login');
 const Register = lazyNamed(() => import('./pages/Register'), 'Register');
+const RegisterUnderage = lazyNamed(
+  () => import('./pages/RegisterUnderage'),
+  'RegisterUnderage',
+);
 const ForgotPassword = lazyNamed(() => import('./pages/ForgotPassword'), 'ForgotPassword');
 const ResetPassword = lazyNamed(() => import('./pages/ResetPassword'), 'ResetPassword');
 const CheckEmail = lazyNamed(() => import('./pages/CheckEmail'), 'CheckEmail');
@@ -81,6 +86,10 @@ const ProfileDrawerPreview = lazyNamed(
   () => import('./pages/ProfileDrawerPreview'),
   'ProfileDrawerPreview',
 );
+const EmptyFacesPreview = lazyNamed(
+  () => import('./pages/EmptyFacesPreview'),
+  'EmptyFacesPreview',
+);
 
 function RouteFallback() {
   return (
@@ -100,7 +109,7 @@ function LazyRoute({ children }: { children: ReactNode }) {
   return <Suspense fallback={<RouteFallback />}>{children}</Suspense>;
 }
 
-function ProtectedRoute({ children }: { children: JSX.Element }) {
+function ProtectedRoute({ children }: { children: ReactElement }) {
   const token = useAuthStore((s) => s.token);
   const location = useLocation();
   if (!token) {
@@ -116,7 +125,7 @@ function RequireVerified({
   children,
   allowIncompleteProfile = false,
 }: {
-  children: JSX.Element;
+  children: ReactElement;
   allowIncompleteProfile?: boolean;
 }) {
   const token = useAuthStore((s) => s.token);
@@ -179,6 +188,7 @@ function AppEntry() {
 
 function AppShell() {
   const token = useAuthStore((s) => s.token);
+  const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const rehydrateAuth = useAuthStore((s) => s.rehydrateAuth);
 
@@ -218,7 +228,9 @@ function AppShell() {
   useEffect(() => {
     if (!token) return;
     prefetchAppRouteChunks();
-  }, [token]);
+    // Warm Matches + Chat inbox so bottom-nav tabs paint from cache (SWR).
+    warmTabListCaches(user?.id);
+  }, [token, user?.id]);
 
   usePushNotifications(!!token);
   usePushDeepLink(!!token);
@@ -249,6 +261,7 @@ function AppShell() {
           <Route path="/beta" element={<BetaAccess />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/register/underage" element={<RegisterUnderage />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/check-email" element={<CheckEmail />} />
@@ -260,6 +273,7 @@ function AppShell() {
           <Route path="/safety" element={<Safety />} />
           <Route path="/guidelines" element={<CommunityGuidelines />} />
           <Route path="/help" element={<Help />} />
+          {/* Absolute Navigate only — no relative links under this splat, so keep path+/splat. */}
           <Route path="/verify/*" element={<ProtectedRoute><Navigate to="/profile" replace /></ProtectedRoute>} />
           <Route
             path="/premium"
@@ -395,6 +409,7 @@ function AppShell() {
               <Route path="/dev/room-temp-gate" element={<RoomTempIdentityGatePreview />} />
               <Route path="/dev/room-inroom-dm" element={<RoomInRoomDmPreview />} />
               <Route path="/dev/profile-sheet" element={<ProfileDrawerPreview />} />
+              <Route path="/dev/empty-faces" element={<EmptyFacesPreview />} />
             </>
           ) : null}
           <Route path="*" element={<NotFound />} />
@@ -412,6 +427,7 @@ function AppShell() {
 
 export default function App() {
   return (
+    // v7: startTransition + relativeSplatPath are defaults (enabled on v6 via ROUTER_V7_FUTURE first).
     <BrowserRouter>
       <AppShell />
     </BrowserRouter>

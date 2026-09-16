@@ -1,10 +1,11 @@
-
 name: CI
 
 on:
   pull_request:
     branches:
       - main
+      # Land rate-limit / age-gate fixes into open #97 without retargeting to main.
+      - cursor/adult-assurance-enforcement-fac3
   workflow_dispatch:
 
 permissions:
@@ -35,6 +36,30 @@ jobs:
       - name: Build
         run: npm run build
 
+  backend-adult-assurance:
+    name: Adult assurance + Veriff checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Adult assurance checks
+        run: npm run test:adult-assurance
+      - name: Adult assurance status-poll rate limit
+        run: npm run test:adult-assurance-rate-limit
+      - name: Veriff checks
+        run: npm run test:veriff
+
   frontend-build:
     name: Frontend build
     runs-on: ubuntu-latest
@@ -54,4 +79,3 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
-

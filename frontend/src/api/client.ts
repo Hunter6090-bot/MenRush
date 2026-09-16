@@ -46,6 +46,7 @@ apiClient.interceptors.request.use((config) => {
 const AUTH_CHALLENGE_PATHS = [
   '/auth/login',
   '/auth/register',
+  '/auth/adult-assurance',
   '/auth/2fa/verify',
   '/auth/forgot-password',
   '/auth/reset-password',
@@ -94,6 +95,38 @@ export const authAPI = {
       user?: import('../lib/authSession').StoredAuthUser;
       token?: string;
     }>('/auth/register', data),
+  /** Signup 18+ liveness gate. Optional ID → Verified tick (same flow). */
+  adultAssuranceRequired: () =>
+    apiClient.get<{ required: boolean; available?: boolean; fixtureAllowed: boolean }>('/auth/adult-assurance/required'),
+  startAdultAssurance: () =>
+    apiClient.post<{ sessionId: string; sessionUrl: string }>('/auth/adult-assurance/start'),
+  startAdultAssuranceId: (sessionId: string) =>
+    apiClient.post<{ sessionId: string; sessionUrl: string }>(
+      `/auth/adult-assurance/${sessionId}/start-id`,
+    ),
+  adultAssuranceStatus: (sessionId: string) =>
+    apiClient.get<{
+      sessionId: string;
+      status: string;
+      assurance_token?: string;
+      underage?: boolean;
+      id_verified?: boolean;
+      id_status?: string | null;
+    }>(`/auth/adult-assurance/${sessionId}`),
+  markAdultAssuranceSubmitted: (sessionId: string) =>
+    apiClient.post(`/auth/adult-assurance/${sessionId}/submitted`),
+  /** Non-prod BOA90 / CI fixture only — never in production. */
+  adultAssuranceFixture: (data: {
+    sessionId: string;
+    outcome: 'adult' | 'adult_with_id' | 'underage' | 'declined' | 'failed' | 'missing_dob';
+    yearsOld?: number;
+  }) =>
+    apiClient.post<{
+      handled: boolean;
+      adultStatus?: string;
+      assurance_token?: string;
+      id_verified?: boolean;
+    }>('/auth/adult-assurance/fixture', data),
   login: (data: { email: string; password: string; deviceTrustToken?: string }) =>
     apiClient.post('/auth/login', data),
   logout: (refreshToken?: string | null) =>
@@ -200,7 +233,13 @@ export const usersAPI = {
         mood: filters?.mood,
       },
     }),
-  getProfile: (id: string) => apiClient.get(`/users/profile/${id}`),
+  getProfile: (id: string, coords?: { lat?: number | null; lng?: number | null }) =>
+    apiClient.get(`/users/profile/${id}`, {
+      params:
+        coords?.lat != null && coords?.lng != null
+          ? { lat: coords.lat, lng: coords.lng }
+          : undefined,
+    }),
   searchProfiles: (q: string) =>
     apiClient.get<Array<{ id: string; name: string; age?: number; photo_url?: string; bio?: string; headline?: string }>>(
       '/users/search',
@@ -437,8 +476,19 @@ export const messagesAPI = {
     ),
   sendLocation: (receiver_id: string, lat: number, lng: number) =>
     apiClient.post<MessageDTO>('/messages/location', { receiver_id, lat, lng }),
-  getConversation: (otherId: string) =>
-    apiClient.get<MessageDTO[]>(`/messages/conversation/${otherId}`),
+  getConversation: (otherId: string, opts?: { before?: string; limit?: number }) =>
+    apiClient.get<MessageDTO[]>(`/messages/conversation/${otherId}`, {
+      params: {
+        ...(opts?.before ? { before: opts.before } : {}),
+        ...(opts?.limit != null ? { limit: opts.limit } : {}),
+      },
+    }),
+  /** Fresh signed media URL for video/audio/image open + retry (avoids expired cache grants). */
+  getMediaUrl: (messageId: string) =>
+    apiClient.get<{ url: string; mime_type: string; media_type: string | null }>(
+      `/messages/${messageId}/media-url`,
+      { timeout: 15_000 },
+    ),
   getConversations: () => apiClient.get('/messages/conversations'),
   getUnreadSummary: () =>
     apiClient.get<{ total: number; bySender: Record<string, number> }>('/messages/unread'),
@@ -458,8 +508,8 @@ export const messagesAPI = {
         ? file.name
         : `${opts.kind}-${Date.now()}.${extensionForMediaMime(upload.type, opts.kind)}`;
     fd.append('media', upload, filename);
+    // Do not set Content-Type: axios must add the multipart boundary itself.
     return apiClient.post<MessageDTO>('/messages/media', fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       // Android→iPhone multi‑MB uploads were timing out / retrying (~50s then ~20s).
       timeout: 180_000,
     });
@@ -574,6 +624,26 @@ export const roomsAPI = {
     apiClient.delete(`/rooms/${roomId}/temp-identity`),
 };
 
+// ── Map feed (Sniffies-style location chat on Discover map) ─────────────────
+export interface MapFeedMessage {
+  id: string;
+  display_name: string;
+  photo_url?: string | null;
+  message: string;
+  created_at: string;
+  /** Distance bucket label e.g. "< 500m" */
+  distance_label?: string;
+}
+
+export const mapFeedAPI = {
+  list: (lat?: number, lng?: number, limit = 20) =>
+    apiClient.get<{ messages: MapFeedMessage[] }>('/map-feed', {
+      params: { lat, lng, limit },
+    }),
+  post: (data: { message: string; lat?: number; lng?: number; display_name?: string }) =>
+    apiClient.post<MapFeedMessage>('/map-feed', data),
+};
+
 export type ContactSubmitPayload = {
   name: string;
   email: string;
@@ -619,6 +689,10 @@ export const profileMetaAPI = {
     apiClient.get<{ enabled: boolean }>('/profile-meta/live-location-sharing'),
   setLiveLocationSharing: (enabled: boolean) =>
     apiClient.post<{ enabled: boolean }>('/profile-meta/live-location-sharing', { enabled }),
+  getMapPinFuzz: () =>
+    apiClient.get<{ map_pin_fuzz_m: number }>('/profile-meta/map-pin-fuzz'),
+  setMapPinFuzz: (map_pin_fuzz_m: number) =>
+    apiClient.post<{ map_pin_fuzz_m: number }>('/profile-meta/map-pin-fuzz', { map_pin_fuzz_m }),
 };
 
 // ── Albums / My Photos ────────────────────────────────────────────────────

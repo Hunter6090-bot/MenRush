@@ -54,6 +54,13 @@ describe('ProfileDrawer grid sheet layout', () => {
     const avatar = screen.getByTestId('drawer-avatar-graham-1');
     expect(hero).toContainElement(avatar);
 
+    // Empty photo → Brand faded face (same size 72, profile crop)
+    const brandFace = avatar.querySelector('[data-testid="faded-brand-face"]') as HTMLElement;
+    expect(brandFace).toBeTruthy();
+    expect(avatar).toContainElement(brandFace);
+    expect(brandFace.getAttribute('data-faded-variant')).toBe('profile');
+    expect(brandFace).toHaveStyle({ width: '72px', height: '72px' });
+
     // Avatar must not live under an overflow-y-auto/scroll ancestor — that
     // bisected faces on phone when paired with -mt-* overlap.
     let node: HTMLElement | null = avatar.parentElement;
@@ -130,6 +137,27 @@ describe('ProfileDrawer grid sheet layout', () => {
     const btn = screen.getByTestId('drawer-open-chat');
     expect(btn).toHaveTextContent('Matched with Graham');
     expect(btn).not.toBeDisabled();
+  });
+
+  it('omits distance gracefully when unknown/null/empty', () => {
+    const noDistanceUser: NearbyUser = {
+      ...graham,
+      distance_km: '',
+      distance_label: undefined,
+    };
+    render(
+      <MemoryRouter>
+        <ProfileDrawer
+          user={noDistanceUser}
+          liked={false}
+          onClose={vi.fn()}
+          onLike={vi.fn()}
+          onPass={vi.fn()}
+          onMessage={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText(/away/i)).not.toBeInTheDocument();
   });
 
   it('exposes enlarge hooks on cover and avatar when photos exist', () => {

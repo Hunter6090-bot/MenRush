@@ -6,8 +6,12 @@ import {
   readAuthSnapshot,
   type StoredAuthUser,
 } from '../lib/authSession';
+import { distanceMeters } from '../lib/discovery';
 import { syncLocaleCoords } from '../lib/localeUnits';
 import { applyLiveUpsert } from '../lib/notificationToasts';
+
+/** Ignore GPS jitter so Discover/Chat subscribers are not redrawn every watch tick. */
+const LOCATION_STORE_MIN_METERS = 15;
 
 type User = StoredAuthUser;
 
@@ -159,10 +163,19 @@ if (initialLocation.lat != null && initialLocation.lng != null) {
   syncLocaleCoords(initialLocation.lat, initialLocation.lng);
 }
 
-export const useLocationStore = create<LocationState>((set) => ({
+export const useLocationStore = create<LocationState>((set, get) => ({
   lat: initialLocation.lat,
   lng: initialLocation.lng,
   setLocation: (lat, lng) => {
+    const prev = get();
+    if (
+      prev.lat != null &&
+      prev.lng != null &&
+      distanceMeters(prev.lat, prev.lng, lat, lng) < LOCATION_STORE_MIN_METERS
+    ) {
+      // Keep last pin; Discover still moves the self marker imperatively on GPS ticks.
+      return;
+    }
     syncLocaleCoords(lat, lng);
     try {
       localStorage.setItem(

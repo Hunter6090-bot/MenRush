@@ -3,8 +3,10 @@ import { useLocation } from 'react-router-dom';
 import { pickPageBackground } from '../lib/menrushBackgrounds';
 
 type RandomBackgroundProps = {
-  /** Optional opacity override (e.g. auth shell uses ~0.3). */
+  /** Optional opacity override (e.g. auth shell ~0.3; assurance ~0.52). */
   opacity?: number;
+  /** CSS brightness multiplier (default 0.95; assurance screens ~1.05–1.1). */
+  brightness?: number;
   className?: string;
   style?: CSSProperties;
 };
@@ -23,6 +25,7 @@ export function RandomBackground(props: RandomBackgroundProps) {
 
 function RandomBackgroundVisit({
   opacity,
+  brightness = 0.95,
   className = 'absolute inset-0 bg-cover bg-center bg-no-repeat',
   style,
 }: RandomBackgroundProps) {
@@ -34,7 +37,7 @@ function RandomBackgroundVisit({
       className={className}
       style={{
         backgroundImage: `url(${src})`,
-        filter: 'saturate(1.05) brightness(0.95)',
+        filter: `saturate(1.05) brightness(${brightness})`,
         ...(opacity !== undefined ? { opacity } : {}),
         ...style,
       }}

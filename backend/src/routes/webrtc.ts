@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
-import { getIceServers } from '../services/webrtc.service';
+import { getIceServersAsync } from '../services/webrtc.service';
 
 const router = Router();
 
@@ -9,8 +9,18 @@ const router = Router();
 // when the ICE fetch raced verification state.
 router.use(authMiddleware);
 
-router.get('/ice-servers', (_req: AuthRequest, res: Response) => {
-  res.json({ iceServers: getIceServers() });
+router.get('/ice-servers', async (_req: AuthRequest, res: Response) => {
+  try {
+    const iceServers = await getIceServersAsync();
+    const hasTurn = iceServers.some((s) => {
+      const u = Array.isArray(s.urls) ? s.urls.join(',') : String(s.urls || '');
+      return /turns?:/i.test(u) && Boolean(s.username || s.credential);
+    });
+    res.json({ iceServers, turn: hasTurn ? 'ok' : 'missing' });
+  } catch (err) {
+    console.error('[webrtc] ice-servers error', err);
+    res.status(500).json({ error: 'ice_servers_unavailable' });
+  }
 });
 
 export default router;

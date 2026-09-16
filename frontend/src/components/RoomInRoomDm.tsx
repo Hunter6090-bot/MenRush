@@ -160,12 +160,13 @@ export const RoomInRoomDm: React.FC<Props> = ({
           autoComplete="off"
           maxLength={2000}
           data-testid="room-inroom-dm-input"
-          className="min-w-0 flex-1 rounded-full px-4 py-2 text-sm focus:outline-none"
+          className="min-w-0 flex-1 rounded-full px-4 py-2 text-[16px] focus:outline-none"
           style={{
             background: 'var(--bg-primary)',
             border: '1px solid var(--border-default)',
             color: 'var(--cream)',
             caretColor: '#C4832A',
+            fontSize: '16px',
           }}
         />
         <button

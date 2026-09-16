@@ -112,7 +112,7 @@ describe('roomLetterAvatar', () => {
 describe('resolveTempPhotoSrc', () => {
   it('passes through blob and brand paths', () => {
     expect(resolveTempPhotoSrc('blob:http://localhost/abc')).toBe('blob:http://localhost/abc');
-    expect(resolveTempPhotoSrc('/brand/medallion-380.png')).toBe('/brand/medallion-380.png');
+    expect(resolveTempPhotoSrc('/brand/medallion-transparent.png')).toBe('/brand/medallion-transparent.png');
   });
 });
 

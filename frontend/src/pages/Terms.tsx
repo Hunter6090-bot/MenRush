@@ -192,9 +192,15 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>1.4</Strong> We reserve the right to request age verification at any
-                  time and to suspend or terminate your account if we have reason to believe you
-                  do not meet the eligibility requirements.
+                  <Strong>1.4</Strong> Signup includes a required 18+ check via a Veriff live
+                  selfie (liveness / age estimation). That check is an age gate only. If it shows
+                  you are under 18 or fails, no MenRush account is created. You may optionally
+                  complete an ID check in the same flow for a Verified tick. Veriff checks your
+                  ID; MenRush does not keep copies of your ID document. The optional Verified
+                  tick is separate from the age gate and does not mean every member is
+                  ID-checked. We may also request further age checks later and may suspend or
+                  terminate an account if we have reason to believe you do not meet the
+                  eligibility requirements.
                 </>,
               )}
             </section>
@@ -235,9 +241,12 @@ export const Terms = () => {
               {sectionHeading(SECTIONS[2])}
               {para(
                 <>
-                  <Strong>3.1</Strong> The Verified badge is optional and free. Complete an ID check and live selfie
-                  with Veriff from your Profile to receive the badge after approval. Verification helps reduce
-                  fake profiles, underage access and platform abuse.
+                  <Strong>3.1</Strong> The Verified badge is optional and free. Complete an ID check
+                  (during signup or later from Profile) with Veriff to receive the badge after
+                  approval. Veriff checks your ID; MenRush does not keep copies of your ID
+                  document. The badge is not the signup 18+ selfie age gate in section 1.4, and
+                  it does not mean every member is identity-checked or that MenRush pre-moderates
+                  all user content.
                 </>,
               )}
               {para(
@@ -424,11 +433,28 @@ export const Terms = () => {
                   at register by 5 September 2026. A personal code from an earlier email still works
                   at register by 31 October 2026. Redeeming a valid Pride code grants 3 months of
                   Premium from launch. One grant per person. No stacking. Pride replaces the 30-day
-                  waitlist Premium gift in clause 7.2. It does not add to that gift. 18+ only.
-                  UK-first. You will not be billed for this offer. MenRush is not a sponsor of
+                  waitlist Premium gift in clause 7.2. It does not add to that gift. Cannot be
+                  combined with the{' '}
+                  <span className="font-mono tracking-wide">BSF26</span> promo in clause 7.8. 18+
+                  only. UK-first. You will not be billed for this offer. MenRush is not a sponsor of
                   Southampton Pride or Manchester Village Pride. Duration: if booked before launch,
                   Premium starts at launch. On-time open 1 October 2026 ends 1 January 2027. If
                   launch slips, 3 months from the actual open date.
+                </>,
+              )}
+              {para(
+                <>
+                  <Strong>7.8</Strong> BearScotsFest 2026 promotional offer. The code{' '}
+                  <span className="font-mono tracking-wide">BSF26</span> is for BearScotsFest
+                  2026 only. It is not a general-purpose promo code. Exact code match at register.
+                  Claim through end of 5 October 2026 Europe/London inclusive. Redeeming a valid
+                  code grants 3 months of Premium. Duration: if redeemed before 1 October 2026
+                  Europe/London, Premium starts 1 October 2026. If redeemed on 1 October, Premium
+                  starts 1 October. If redeemed on 2, 3, 4 or 5 October Europe/London, Premium
+                  starts that calendar day. One grant per person. No stacking. Does not stack with
+                  Pride (clause 7.7). Replaces the 30-day waitlist Premium gift in clause 7.2. It
+                  does not add to that gift. 18+ only. You will not be billed for this offer.
+                  Promoter: Bronze Apps UK Limited trading as MenRush.
                 </>,
               )}
             </section>

@@ -1,15 +1,10 @@
 /**
- * MenRush — SilhouetteAvatar
+ * MenRush — SilhouetteAvatar (DEPRECATED)
  *
- * The fallback avatar shown when a user hasn't uploaded a profile photo.
- * Replaces the embarrassing "single letter on copper card" avatars.
+ * Gold copper bust stub. Do NOT use for empty/missing profile photos.
+ * Empty faces must use `FadedBrandFace` → `/brand/medallion-transparent.png`.
  *
- * Three variants based on context:
- *  - "card"  — for nearby user cards in lists
- *  - "map"   — for map markers (smaller, sharper)
- *  - "chat"  — for the chat header (medium)
- *
- * Renders an SVG bust silhouette in copper bas-relief on a graduated copper background.
+ * Kept only so accidental imports fail loudly in review — no production call sites.
  */
 
 interface SilhouetteAvatarProps {
@@ -18,6 +13,7 @@ interface SilhouetteAvatarProps {
   className?: string;
 }
 
+/** @deprecated Use FadedBrandFace (cutout). Gold stub is retired. */
 export function SilhouetteAvatar({
   size = 56,
   variant = "card",
@@ -32,6 +28,8 @@ export function SilhouetteAvatar({
         background: "radial-gradient(circle at 30% 30%, var(--copper-dark), var(--bg-card) 75%)",
         boxShadow: "inset 0 0 12px rgba(0,0,0,0.5), inset 0 1px 0 var(--copper-glow)",
       }}
+      data-testid="silhouette-avatar-deprecated"
+      data-deprecated="gold-stub"
     >
       <svg
         width={size * 0.7}
@@ -50,8 +48,7 @@ export function SilhouetteAvatar({
 }
 
 /**
- * Optional: a profile-facing variant (faces left or right, like the medallion)
- * Use this on Discover map for visual interest — alternate left/right per user.
+ * @deprecated Use FadedBrandFace (cutout). Gold stub is retired.
  */
 export function SilhouetteProfileAvatar({
   size = 56,
@@ -71,6 +68,8 @@ export function SilhouetteProfileAvatar({
         background: "radial-gradient(circle at 30% 30%, var(--copper-dark), var(--bg-card) 75%)",
         boxShadow: "inset 0 0 12px rgba(0,0,0,0.5), inset 0 1px 0 var(--copper-glow)",
       }}
+      data-testid="silhouette-profile-avatar-deprecated"
+      data-deprecated="gold-stub"
     >
       <svg
         width={size * 0.75}

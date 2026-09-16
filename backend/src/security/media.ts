@@ -21,10 +21,15 @@ function requireMediaSecret(): string {
   return secret;
 }
 
+/** Default grant lifetime for chat media bytes. Kept long enough that open-thread
+ * polls no longer need to thrash `<video src>` every few seconds; VideoBubble
+ * still refreshes the grant on tap / retry. */
+export const MEDIA_ACCESS_TTL_SECONDS = 6 * 60 * 60;
+
 export function signMediaAccess(
   resource: string,
   viewerId: string,
-  ttlSeconds: number = 300,
+  ttlSeconds: number = MEDIA_ACCESS_TTL_SECONDS,
 ): string {
   const grant: MediaGrant = {
     resource,

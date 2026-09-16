@@ -5,8 +5,9 @@ export const publicNavLinkPrimary =
 
 export const publicNavLinkSecondary = publicNavLinkPrimary;
 
+/** Auth/marketing card — Brand card #1E1508 on night #0D0A06. */
 export const publicPanelClass =
-  'mt-[34px] flex flex-col gap-5 rounded-[24px] border border-[rgba(240,224,192,0.35)] bg-[rgba(13,10,6,0.45)] px-6 py-7';
+  'mt-[34px] flex flex-col gap-5 rounded-[24px] border border-[rgba(240,224,192,0.35)] bg-[#1E1508] px-6 py-7';
 
 export const publicInputClass =
   'w-full rounded-full border-0 bg-[#F5EBD8] px-6 py-[18px] text-base text-[#2A1C0A] placeholder:text-[#8B6B42]/70 focus:outline-none focus:ring-2 focus:ring-[#C4832A]/40 disabled:opacity-50';
@@ -33,14 +34,14 @@ export const publicInviteChipClass =
 export const publicHeroLogoClass = 'h-28 sm:h-32';
 
 export const publicSecondaryButtonClass =
-  'flex w-full items-center justify-center gap-2 rounded-full border border-[rgba(240,224,192,0.35)] bg-[rgba(13,10,6,0.45)] px-6 py-[17px] text-[17px] font-bold text-[#F0E0C0] transition-colors hover:border-[rgba(196,131,42,0.6)] disabled:opacity-50';
+  'flex w-full items-center justify-center gap-2 rounded-full border border-[rgba(240,224,192,0.35)] bg-[#1E1508] px-6 py-[17px] text-[17px] font-bold text-[#F0E0C0] transition-colors hover:border-[#E0A14A] hover:text-[#E0A14A] disabled:opacity-50';
 
 export const publicSelectClass =
   'w-full rounded-full border-0 bg-[#F5EBD8] px-6 py-[18px] text-base text-[#2A1C0A] focus:outline-none focus:ring-2 focus:ring-[#C4832A]/40';
 
 /** Dark select for in-app verify document steps (WebApp.dc.html doc flow). */
 export const publicDarkSelectClass =
-  'w-full rounded-xl border border-[#3D2B0E] bg-[#1E1508] px-4 py-3.5 text-[15px] text-[#F0E0C0] focus:outline-none focus:ring-2 focus:ring-[#C4832A]/40';
+  'w-full rounded-xl border border-[#3D2B0E] bg-[#1E1508] px-4 py-3.5 text-[16px] text-[#F0E0C0] focus:outline-none focus:ring-2 focus:ring-[#C4832A]/40';
 
 export const publicInfoBoxClass =
   'rounded-[18px] border border-[rgba(240,224,192,0.2)] bg-[rgba(13,10,6,0.35)] px-5 py-4';

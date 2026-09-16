@@ -16,6 +16,7 @@ import {
   signMediaAccess,
   verifyMediaAccess,
 } from '../src/security/media';
+import { isAllowedOrigin, isMenRushVercelHost } from '../src/security/cors';
 
 type Test = { name: string; run: () => void | Promise<void> };
 const tests: Test[] = [];
@@ -139,7 +140,8 @@ test('uploads use allowlisted MIME types, generated extensions, and magic bytes'
   assert.equal(normalizeUploadMime('video/webm;codecs=vp8,opus'), 'video/webm');
   assert.equal(allowedUpload('video/webm;codecs=vp8,opus', 'message'), true);
   assert.equal(allowedUpload('video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'message'), true);
-  assert.equal(allowedUpload('video/quicktime', 'message'), false);
+  // iPhone often reports QuickTime — canonicalised to video/mp4 for media messages.
+  assert.equal(allowedUpload('video/quicktime', 'message'), true);
   assert.equal(allowedUpload('text/plain', 'message'), false);
 
   const generated = safeUploadFilename('profile', 'user-1', 'image/jpeg');
@@ -221,10 +223,23 @@ test('source guards preserve location, push, socket, and media privacy boundarie
   assert.equal(users.includes('ROUND(p.lat::numeric'), false);
   assert.match(users, /getNearbyUsers\(\s*userId:\s*string,\s*radiusKm/s);
   assert.match(messages, /router\.get\('\/:messageId\/media'/);
-  assert.match(messages, /messageService\.forViewer\(message,\s*receiver_id\)/);
+  assert.match(messages, /messageService\s*\.\s*forViewer\(\s*message,\s*receiver_id\s*\)/);
   assert.match(messages, /X-MenRush-Media-Clear/);
   assert.match(albums, /router\.get\('\/media\/:photoId'/);
   assert.match(albums, /X-MenRush-Media-Clear/);
+});
+
+test('CORS allows menrush.com and both Vercel project aliases', () => {
+  assert.equal(isAllowedOrigin(undefined), true);
+  assert.equal(isAllowedOrigin('https://menrush.com'), true);
+  assert.equal(isAllowedOrigin('https://www.menrush.com'), true);
+  assert.equal(isAllowedOrigin('https://menrush-4s6xpobzl-hunter6090-bots-projects.vercel.app'), true);
+  assert.equal(isAllowedOrigin('https://men-rush-jcu1vw5lv-men-ruch-vercel.vercel.app'), true);
+  assert.equal(isAllowedOrigin('https://men-rush.vercel.app'), true);
+  assert.equal(isAllowedOrigin('https://men-rush-git-main-men-ruch-vercel.vercel.app'), true);
+  assert.equal(isMenRushVercelHost('men-rush-jcu1vw5lv-men-ruch-vercel.vercel.app'), true);
+  assert.equal(isMenRushVercelHost('evil-app.vercel.app'), false);
+  assert.equal(isAllowedOrigin('https://evil-app.vercel.app'), false);
 });
 
 async function main() {

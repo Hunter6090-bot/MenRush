@@ -129,6 +129,23 @@ CREATE TABLE IF NOT EXISTS room_messages (
 CREATE INDEX IF NOT EXISTS idx_room_members_room ON room_members(room_id);
 CREATE INDEX IF NOT EXISTS idx_room_members_user ON room_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_room_messages_room ON room_messages(room_id);
+
+-- Ephemeral Discover map chat (Sniffies-style nearby feed)
+CREATE TABLE IF NOT EXISTS map_feed_messages (
+  id UUID PRIMARY KEY,
+  sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message TEXT NOT NULL CHECK (char_length(trim(message)) BETWEEN 1 AND 280),
+  location GEOGRAPHY(POINT, 4326) NOT NULL,
+  lat DOUBLE PRECISION NOT NULL,
+  lng DOUBLE PRECISION NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_map_feed_messages_location
+  ON map_feed_messages USING GIST (location);
+
+CREATE INDEX IF NOT EXISTS idx_map_feed_messages_created
+  ON map_feed_messages (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_room_messages_created ON room_messages(room_id, created_at);
 
 CREATE TABLE IF NOT EXISTS push_subscriptions (

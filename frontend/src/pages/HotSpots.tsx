@@ -10,7 +10,7 @@ import { HotSpotPin, createHotSpotPinElement } from '../components/HotSpotPin';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { formatDistanceFromKm } from '../lib/localeUnits';
 import { mapboxStyleForTheme, resolvedThemeNow, THEME_CHANGED_EVENT } from '../lib/mapTheme';
-import { HOT_SPOTS_CONSENT, HOT_SPOTS_PAGE_BLURB } from '../lib/cruiseCopy';
+import { HOT_SPOTS_PAGE_BLURB } from '../lib/cruiseCopy';
 
 export const HotSpots = () => {
   const { lat, lng } = useLocationStore();
@@ -72,6 +72,7 @@ export const HotSpots = () => {
       style: mapboxStyleForTheme(resolvedThemeNow()),
       center: [lng, lat],
       zoom: 11,
+      projection: 'mercator',
       attributionControl: false,
     });
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-left');
@@ -169,7 +170,7 @@ export const HotSpots = () => {
 
   return (
     <Layout>
-      <div className="mx-auto max-w-6xl px-6 py-6">
+      <div className="mx-auto min-w-0 max-w-6xl overflow-x-clip px-4 py-6 sm:px-6" data-testid="hotspots-shell">
         <div className="mb-4 flex flex-wrap items-baseline gap-3">
           <h1 className="flex-1 text-2xl font-extrabold text-[var(--cream)]">Cruise</h1>
           <Link
@@ -182,14 +183,11 @@ export const HotSpots = () => {
         <p className="mb-5 max-w-2xl text-sm leading-relaxed text-[var(--cream-muted)]" data-testid="hotspots-page-brand-face">
           {HOT_SPOTS_PAGE_BLURB} Free members see rounded check-in counts. Premium shows exact numbers.
         </p>
-        <p className="mb-5 text-[12px] font-semibold text-[var(--cream-muted)]" data-testid="hotspots-page-consent">
-          {HOT_SPOTS_CONSENT}
-        </p>
 
         {lat != null && lng != null && !tokenMissing ? (
           <div
-            className="relative mb-5 overflow-hidden rounded-2xl border border-[rgba(196,131,42,0.35)]"
-            style={{ height: 'min(42vh, 360px)' }}
+            className="hotspots-map-surface relative mb-5 min-w-0 max-w-full overflow-hidden rounded-2xl border border-[rgba(196,131,42,0.35)]"
+            style={{ height: 'min(42vh, 360px)', touchAction: 'none' }}
             data-testid="hotspots-map"
           >
             <div ref={mapContainerRef} className="absolute inset-0 h-full w-full" />
@@ -252,7 +250,6 @@ export const HotSpots = () => {
                 Nearby map
               </Link>
             </div>
-            <p className="mt-4 text-[11px] text-[var(--cream-muted)]">{HOT_SPOTS_CONSENT}</p>
           </div>
         ) : loading ? (
           <div className="flex justify-center py-20">

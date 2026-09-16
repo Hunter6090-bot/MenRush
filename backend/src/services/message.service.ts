@@ -343,23 +343,50 @@ export const messageService = {
     return { forSender, forReceiver, receiverId: row.receiver_id as string };
   },
 
-  async getConversation(userId: string, otherId: string, limit: number = 50) {
+  async getConversation(
+    userId: string,
+    otherId: string,
+    limit: number = 50,
+    before?: string,
+  ) {
     await accessControl.assertInteraction(userId, otherId, { requireMatch: true });
+
+    const values: unknown[] = [userId, otherId];
+    let cursorClause = '';
+    if (before) {
+      const cursorResult = await query(
+        `SELECT created_at FROM messages WHERE id = $1
+           AND ((sender_id = $2 AND receiver_id = $3) OR (sender_id = $3 AND receiver_id = $2))`,
+        [before, userId, otherId],
+      );
+      if (cursorResult.rows.length > 0) {
+        values.push(cursorResult.rows[0].created_at);
+        cursorClause = `AND created_at < $${values.length}`;
+      }
+    }
+    values.push(limit);
+    const limitParam = `$${values.length}`;
+
     const result = await query(
       `SELECT ${MESSAGE_COLUMNS}
        FROM messages
-       WHERE (sender_id = $1 AND receiver_id = $2)
-          OR (sender_id = $2 AND receiver_id = $1)
+       WHERE ((sender_id = $1 AND receiver_id = $2)
+          OR (sender_id = $2 AND receiver_id = $1))
+         ${cursorClause}
        ORDER BY created_at DESC
-       LIMIT $3`,
-      [userId, otherId, limit]
+       LIMIT ${limitParam}`,
+      values,
     );
 
-    await query(
-      `UPDATE messages SET read = true
-       WHERE receiver_id = $1 AND sender_id = $2 AND read = false`,
-      [userId, otherId],
-    );
+    // Only mark read on the live (newest) page — older history fetches must not
+    // clear unread as a side effect of scroll-back.
+    if (!before) {
+      await query(
+        `UPDATE messages SET read = true
+         WHERE receiver_id = $1 AND sender_id = $2 AND read = false`,
+        [userId, otherId],
+      );
+    }
 
     const viewerIsPremium = await resolveViewerPremium(userId);
     return result.rows

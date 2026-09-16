@@ -135,6 +135,23 @@ test.describe('Pride promotion landing', () => {
     await expect(body).toContainText(/1 October 2026/i);
     await expect(body).toContainText(/1 January 2027/i);
     await expect(body).toContainText(/If launch slips/i);
+    await expect(body).toContainText(/7\.8/i);
+    await expect(body).toContainText('BSF26');
+    await expect(body).toContainText(/BearScotsFest 2026/i);
+    await expect(body).toContainText(/not a general-purpose promo/i);
+    await expect(body).toContainText(/Claim through end of 5 October 2026 Europe\/London inclusive/i);
+    await expect(body).toContainText(/if redeemed before 1 October 2026/i);
+    await expect(body).toContainText(/If redeemed on 1 October, Premium starts 1 October/i);
+    await expect(body).toContainText(/2, 3, 4 or 5 October Europe\/London/i);
+    await expect(body).toContainText(/One grant per person/i);
+    await expect(body).toContainText(/No stacking/i);
+    await expect(body).toContainText(/clause 7\.2/i);
+    await expect(body).toContainText(/18\+ only/i);
+    await expect(body).toContainText(/Bronze Apps UK Limited/i);
+    // Brand polish: public Terms must not name Al / pending lock / owner.
+    await expect(body).not.toContainText(/pending Al/i);
+    await expect(body).not.toContainText(/Al lock/i);
+    await expect(body).not.toContainText(/\bAl\b/);
     await expect(body).not.toContainText(/Brighton/i);
     await expect(body).not.toContainText(/London · Manchester · Birmingham/i);
 

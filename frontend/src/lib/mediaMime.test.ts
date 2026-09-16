@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   baseMediaMime,
   blobForUpload,
+  canonicalMediaMime,
   extensionForMediaMime,
   pickVideoRecorderMime,
+  sniffVideoMime,
 } from './mediaMime';
 
 describe('baseMediaMime', () => {
@@ -21,6 +23,13 @@ describe('baseMediaMime', () => {
     expect(baseMediaMime(undefined)).toBe('');
     expect(baseMediaMime(null)).toBe('');
     expect(baseMediaMime('')).toBe('');
+  });
+});
+
+describe('canonicalMediaMime', () => {
+  it('maps QuickTime / 3GPP to video/mp4', () => {
+    expect(canonicalMediaMime('video/quicktime')).toBe('video/mp4');
+    expect(canonicalMediaMime('video/3gpp')).toBe('video/mp4');
   });
 });
 
@@ -48,9 +57,24 @@ describe('extensionForMediaMime', () => {
   });
 
   it('falls back by kind when mime is missing', () => {
-    expect(extensionForMediaMime('', 'video')).toBe('mp4');
+    expect(extensionForMediaMime('', 'video')).toBe('webm');
     expect(extensionForMediaMime('', 'audio')).toBe('webm');
     expect(extensionForMediaMime('', 'image')).toBe('jpg');
+  });
+});
+
+describe('sniffVideoMime', () => {
+  it('detects WebM EBML header', () => {
+    expect(sniffVideoMime(new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0, 0, 0, 0]))).toBe('video/webm');
+  });
+
+  it('detects MP4 ftyp box', () => {
+    const bytes = new Uint8Array(12);
+    bytes[4] = 'f'.charCodeAt(0);
+    bytes[5] = 't'.charCodeAt(0);
+    bytes[6] = 'y'.charCodeAt(0);
+    bytes[7] = 'p'.charCodeAt(0);
+    expect(sniffVideoMime(bytes)).toBe('video/mp4');
   });
 });
 

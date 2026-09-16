@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { usersAPI } from '../api/client';
 import { useAuthStore, useNotificationStore, useUnreadStore } from '../hooks/store';
 import { UserAvatar } from './UserAvatar';
 import { mobileBackFallback, shouldShowMobileBack } from '../lib/mobileBack';
@@ -16,6 +15,7 @@ import { LocationPresenceStrip } from './LocationPresenceStrip';
 import { ProfileDepthStrip } from './ProfileDepthStrip';
 import { ThemeToggle } from './ThemeToggle';
 import { PushAlertBanner } from './PushAlertBanner';
+import { readCachedMatches, refreshMatches } from '../lib/tabListCache';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -60,18 +60,22 @@ function LayoutInner({ children }: LayoutProps) {
   const [sidebarExpanded, setSidebarExpanded] = useState(readSidebarExpanded);
   const { state: discoveryShell } = useDiscoveryShell();
 
-  // Badge count only — do not refetch on every mobile tab change (that was a
-  // page-to-page API waterfall on phones). Refresh on mount + focus/visibility.
+  // Badge count — seed from warm Matches cache, then SWR refresh on mount/focus.
+  // Shares refreshMatches() with Matches page so the tab is never a cold start.
   useEffect(() => {
     let cancelled = false;
+    const cached = readCachedMatches();
+    if (cached) setMatchCount(cached.matches.length);
     const refresh = () => {
-      usersAPI
-        .getMatches()
-        .then((res) => {
-          if (!cancelled) setMatchCount(res.data?.length ?? 0);
+      refreshMatches()
+        .then((snap) => {
+          if (!cancelled) setMatchCount(snap.matches.length);
         })
         .catch(() => {
-          if (!cancelled) setMatchCount(0);
+          if (!cancelled) {
+            const fallback = readCachedMatches();
+            setMatchCount(fallback?.matches.length ?? 0);
+          }
         });
     };
     refresh();
@@ -126,9 +130,10 @@ function LayoutInner({ children }: LayoutProps) {
 
   return (
     <div
-      className="min-h-dvh min-w-0 max-w-full overflow-x-clip bg-[var(--bg-primary)] lg:grid lg:grid-cols-[var(--desktop-sidebar-width)_minmax(0,1fr)]"
-      style={{ ['--desktop-sidebar-width' as string]: sidebarWidth }}
+      className="h-dvh max-h-dvh min-w-0 max-w-full overflow-x-clip overflow-y-hidden bg-[var(--bg-primary)] lg:grid lg:grid-cols-[var(--desktop-sidebar-width)_minmax(0,1fr)]"
+      style={{ ['--desktop-sidebar-width' as string]: sidebarWidth, touchAction: 'manipulation' }}
       data-sidebar={sidebarExpanded ? 'expanded' : 'collapsed'}
+      data-testid="app-shell"
     >
       <aside
         className={`hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:border-r lg:border-[var(--border-default)] lg:bg-nn-bg lg:py-5 transition-[width] duration-300 ease-[var(--ease-out)] ${
@@ -230,8 +235,11 @@ function LayoutInner({ children }: LayoutProps) {
         </div>
       </aside>
 
-      <div className="flex min-h-dvh min-w-0 max-w-full flex-col overflow-x-clip lg:col-start-2">
-        <header className="lg:hidden fixed top-0 left-0 right-0 z-50 max-w-full border-b border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-primary)_92%,transparent)] backdrop-blur-xl pt-[env(safe-area-inset-top,0px)]">
+      <div className="flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-x-clip overflow-y-hidden lg:col-start-2">
+        <header
+          className="lg:hidden fixed top-0 left-0 right-0 z-50 max-w-full overflow-x-clip border-b border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-primary)_92%,transparent)] backdrop-blur-xl pt-[env(safe-area-inset-top,0px)]"
+          style={{ touchAction: 'manipulation' }}
+        >
           <div className="flex h-[3.25rem] min-w-0 items-center gap-1 px-2 sm:gap-2 sm:px-3">
             <div className="w-10 shrink-0">
               {showMobileBack ? (
@@ -329,15 +337,22 @@ function LayoutInner({ children }: LayoutProps) {
         </div>
 
         {/*
-          Flex column + overflow containment: banners (e.g. PushAlertBanner) must not
-          inflate past the viewport and reintroduce page scroll that fights Mapbox
-          pan/pinch on Nearby. Page content scrolls inside page-enter when needed.
+          Viewport-locked shell (h-dvh on app-shell): page-enter is the only vertical
+          scrollport. min-h-dvh alone let flex children grow with content, so
+          overflow-y-auto never engaged; overscroll-y-contain then blocked document
+          scroll chaining — Settings/Profile felt capped at the viewport. Keep
+          overflow-hidden on main so banners cannot inflate past the shell and fight
+          Mapbox pan/pinch on Nearby (#224). Chat keeps its own thread scroller (#231).
         */}
-        <main className="flex min-h-0 flex-1 flex-col overflow-hidden max-lg:pt-[var(--mobile-header-height)] max-lg:pb-[var(--mobile-tab-bar-height)] lg:pb-0">
+        <main className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-x-clip overflow-hidden max-lg:pt-[var(--mobile-header-height)] max-lg:pb-[var(--mobile-tab-bar-height)] lg:pb-0">
           <LocationPresenceStrip />
           <ProfileDepthStrip />
           <PushAlertBanner />
-          <div className="page-enter min-h-0 min-w-0 flex-1 overflow-x-clip overflow-y-auto overscroll-y-contain">
+          <div
+            className="page-enter min-h-0 min-w-0 max-w-full flex-1 overflow-x-clip overflow-y-auto overscroll-y-contain"
+            style={{ touchAction: 'manipulation' }}
+            data-testid="page-enter"
+          >
             {children}
           </div>
         </main>
@@ -345,6 +360,7 @@ function LayoutInner({ children }: LayoutProps) {
         <nav
           className="lg:hidden fixed bottom-0 left-0 right-0 z-50 max-w-full overflow-x-clip px-3 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] pt-2"
           aria-label="Primary"
+          style={{ touchAction: 'manipulation' }}
         >
           <div
             className={`flex min-w-0 max-w-full items-stretch overflow-x-clip rounded-[1.35rem] border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--bg-elevated)_95%,transparent)] shadow-[var(--shadow-lg)] backdrop-blur-xl ${

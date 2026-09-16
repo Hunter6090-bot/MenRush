@@ -190,11 +190,12 @@ export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalP
                 placeholder="e.g. Weekend crew"
                 required
                 maxLength={60}
-                className="w-full text-sm px-4 py-3 rounded-xl focus:outline-none"
+                className="w-full text-[16px] px-4 py-3 rounded-xl focus:outline-none"
                 style={{
                   background: 'var(--bg-primary)',
                   border: '1px solid var(--border-default)',
                   color: 'var(--cream)',
+                  fontSize: '16px',
                 }}
               />
             </div>
@@ -207,11 +208,12 @@ export function CreateGroupModal({ open, onClose, onCreated }: CreateGroupModalP
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
                 maxLength={200}
-                className="w-full text-sm px-4 py-3 rounded-xl resize-none focus:outline-none"
+                className="w-full text-[16px] px-4 py-3 rounded-xl resize-none focus:outline-none"
                 style={{
                   background: 'var(--bg-primary)',
                   border: '1px solid var(--border-default)',
                   color: 'var(--cream)',
+                  fontSize: '16px',
                 }}
               />
             </div>

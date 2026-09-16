@@ -1,41 +1,23 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { usersAPI } from '../api/client';
 import { Layout } from '../components/Layout';
 import { IconMatches } from '../components/icons';
-import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
+import { FadedBrandFace, isNearbyPlaceholderFace } from '../components/FadedBrandFace';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { useGridPhotoSrc, clearGridPhotoQueue } from '../lib/nearbyPhotoSrc';
 import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 import { PROFILE_TILE_GRID_CLASS } from '../lib/profileTileGrid';
+import {
+  readCachedMatches,
+  refreshMatches,
+  type MatchesPerson,
+} from '../lib/tabListCache';
 
-interface Match {
-  id: string;
-  name: string;
-  age: number;
-  bio?: string;
-  photo_url?: string;
-  online: boolean;
-  last_seen?: string;
-  last_message?: string;
-  last_message_at?: string;
-  matched_at?: string;
-  is_verified?: boolean;
-  authenticity_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
-}
+type Match = MatchesPerson;
+type ReceivedLike = MatchesPerson;
 
-interface ReceivedLike {
-  id: string;
-  name: string;
-  age: number;
-  bio?: string;
-  photo_url?: string | null;
-  online?: boolean;
-  last_seen?: string;
-  liked_at?: string;
-  is_verified?: boolean;
-  authenticity_status?: 'unverified' | 'pending' | 'verified' | 'rejected';
-}
+/** Max time to keep cold-start skeletons if the network hangs. */
+const COLD_SKELETON_MS = 4500;
 
 function formatMatchedAgo(iso?: string): string | null {
   if (!iso) return null;
@@ -61,6 +43,60 @@ function formatLikedAgo(iso?: string): string | null {
   return `Liked you ${days}d ago`;
 }
 
+/**
+ * Same empty-mark + upload pending path as Nearby Grid (`NearbyProfileGrid`).
+ * Never SilhouetteAvatar / gold stub — faded `/brand/medallion-transparent.png` only.
+ */
+function MatchGridPhoto({
+  name,
+  age,
+  photoUrl,
+}: {
+  name: string;
+  photoUrl?: string | null;
+  age?: number;
+}) {
+  const { src, phase } = useGridPhotoSrc(photoUrl ?? undefined, age);
+  const trimmed = photoUrl?.trim() || '';
+
+  // Real /uploads still loading — elevated pending tile (not Brand empty cutout).
+  if (phase === 'loading' && trimmed.startsWith('/uploads/')) {
+    return (
+      <div
+        className="h-full w-full bg-[var(--bg-elevated)]"
+        data-testid="match-grid-photo-pending"
+        data-photo-phase={phase}
+        aria-hidden
+      />
+    );
+  }
+
+  // Empty / missing / generic avatar slots → faded official medallion (Brand).
+  // Real /uploads photos keep their bytes (media lock).
+  if (isNearbyPlaceholderFace(photoUrl, phase) || !src) {
+    return (
+      <div
+        className="h-full w-full"
+        data-testid="match-photo-placeholder"
+        data-photo-phase={phase}
+      >
+        <FadedBrandFace variant="tile" label={name} />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={name}
+      className="h-full w-full object-cover"
+      decoding="async"
+      data-testid="match-grid-photo"
+      data-photo-phase={phase}
+    />
+  );
+}
+
 function PersonGridCard({
   person,
   subtitle,
@@ -81,50 +117,45 @@ function PersonGridCard({
   /** Dedicated Message control — photo always opens profile. */
   onMessage?: () => void;
 }) {
-  const { src: photo, phase } = useGridPhotoSrc(person.photo_url ?? undefined, person.age);
   return (
     <div
       data-testid={testId}
       className="group relative overflow-hidden rounded-xl border border-[rgba(196,131,42,0.35)] bg-nn-card text-left shadow-card transition-all hover:-translate-y-[3px] hover:border-[rgba(196,131,42,0.4)] md:rounded-2xl"
     >
-      <ProfilePhotoLink
-        userId={person.id}
-        name={person.name}
-        className="block"
-        data-testid={testId ? `${testId}-photo` : `match-photo-${person.id}`}
-      >
-        <div className="relative aspect-[3/3.6] w-full bg-[var(--bg-elevated)]">
-          {photo && phase !== 'loading' ? (
-            <img
-              src={photo}
-              alt={person.name}
-              className="h-full w-full object-cover"
-              decoding="async"
-              data-testid="match-grid-photo"
-              data-photo-phase={phase}
+      <div className="relative">
+        <ProfilePhotoLink
+          userId={person.id}
+          name={person.name}
+          className="block"
+          data-testid={testId ? `${testId}-photo` : `match-photo-${person.id}`}
+        >
+          <div className="relative aspect-[3/3.6] w-full bg-[var(--bg-elevated)]">
+            {/*
+              Progressive media: name/chrome paint immediately. Photo fills when
+              ready — never gate the card on full image decode.
+            */}
+            <MatchGridPhoto
+              name={person.name}
+              photoUrl={person.photo_url}
+              age={person.age}
             />
-          ) : (
-            <div className="flex h-full items-center justify-center">
-              <SilhouetteAvatar size={56} variant="card" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent pl-1.5 pr-9 pb-1.5 pt-8 md:pl-3 md:pr-10 md:pb-2.5 md:pt-10">
+              <div className="flex items-center gap-0.5 md:gap-1.5">
+                <span
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full md:h-2 md:w-2 ${person.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
+                />
+                <span className="truncate text-[11px] font-bold leading-tight text-[#FFF6E6] md:text-[12px] lg:text-[13px]">
+                  {person.name} {person.age}
+                </span>
+              </div>
+              <p className="mt-0.5 truncate text-[9px] font-semibold text-[var(--cream)] md:text-xs">{subtitle}</p>
             </div>
-          )}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent px-1.5 pb-1.5 pt-8 md:px-3 md:pb-2.5 md:pt-10">
-            <div className="flex items-center gap-0.5 md:gap-1.5">
-              <span
-                className={`h-1.5 w-1.5 shrink-0 rounded-full md:h-2 md:w-2 ${person.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
-              />
-              <span className="truncate text-[11px] font-bold leading-tight text-[#FFF6E6] md:text-[12px] lg:text-[13px]">
-                {person.name} {person.age}
-              </span>
-              {person.is_verified ? (
-                <VerifiedBadge size="sm" />
-
-              ) : null}
-            </div>
-            <p className="mt-0.5 truncate text-[9px] font-semibold text-[var(--cream)] md:text-xs">{subtitle}</p>
           </div>
-        </div>
-      </ProfilePhotoLink>
+        </ProfilePhotoLink>
+        {person.is_verified ? (
+          <VerifiedBadge compact className="absolute bottom-1.5 right-1.5 z-10" />
+        ) : null}
+      </div>
       {onMessage ? (
         <div className="border-t border-[var(--border-default)] p-1 md:p-1.5">
           <button
@@ -141,39 +172,76 @@ function PersonGridCard({
   );
 }
 
+function readInitialMatches(): {
+  matches: Match[];
+  likes: ReceivedLike[];
+  hasCache: boolean;
+} {
+  const cached = readCachedMatches();
+  if (!cached) return { matches: [], likes: [], hasCache: false };
+  return { matches: cached.matches, likes: cached.likes, hasCache: true };
+}
+
 export const Matches = () => {
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [receivedLikes, setReceivedLikes] = useState<ReceivedLike[]>([]);
-  const [loading, setLoading] = useState(true);
+  const initial = readInitialMatches();
+  const [matches, setMatches] = useState<Match[]>(() => initial.matches);
+  const [receivedLikes, setReceivedLikes] = useState<ReceivedLike[]>(() => initial.likes);
+  // Skeleton only on true cold start — never when last-known rows exist.
+  const [loading, setLoading] = useState(() => !initial.hasCache);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const hungRef = useRef(false);
+
+  const applySnapshot = useCallback(
+    (snap: { matches: MatchesPerson[]; likes: MatchesPerson[] }) => {
+      setMatches(snap.matches);
+      setReceivedLikes(snap.likes);
+      setError('');
+      setLoading(false);
+    },
+    [],
+  );
 
   const fetchMatches = useCallback(async () => {
     // Paint mutual matches as soon as that API returns — do not wait on likes
     // (iPhone was sitting on a full-page skeleton for 25–30s while photos/likes lagged).
+    // Shared refreshMatches() also writes the warm cache for tab remounts.
     try {
-      const matchesRes = await usersAPI.getMatches();
-      setMatches(matchesRes.data ?? []);
-      setError('');
+      const snap = await refreshMatches();
+      applySnapshot(snap);
     } catch {
+      const cached = readCachedMatches();
+      if (cached) {
+        applySnapshot(cached);
+        return;
+      }
       setError('Could not load matches.');
-    } finally {
       setLoading(false);
     }
-
-    try {
-      const likesRes = await usersAPI.getReceivedLikes();
-      setReceivedLikes(Array.isArray(likesRes.data) ? likesRes.data : []);
-    } catch {
-      setReceivedLikes([]);
-    }
-  }, []);
+  }, [applySnapshot]);
 
   useEffect(() => {
     // Drop Discover's pending multi‑MB photo jobs so Matches tiles get the queue.
     clearGridPhotoQueue();
     void fetchMatches();
   }, [fetchMatches]);
+
+  // Cold start hang: do not leave blank placeholders forever.
+  useEffect(() => {
+    if (!loading) return;
+    const id = window.setTimeout(() => {
+      if (hungRef.current) return;
+      hungRef.current = true;
+      const cached = readCachedMatches();
+      if (cached && (cached.matches.length > 0 || cached.likes.length > 0)) {
+        applySnapshot(cached);
+        return;
+      }
+      setLoading(false);
+      setError((prev) => prev || 'Could not load matches.');
+    }, COLD_SKELETON_MS);
+    return () => window.clearTimeout(id);
+  }, [loading, applySnapshot]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -186,7 +254,7 @@ export const Matches = () => {
 
   return (
     <Layout>
-      <div className="mx-auto max-w-6xl px-4 py-4 pb-12 sm:px-6 sm:py-6">
+      <div className="mx-auto min-w-0 max-w-6xl overflow-x-clip px-4 py-4 pb-12 sm:px-6 sm:py-6" data-testid="matches-shell">
         <div className="mb-6">
           <h1 className="text-2xl font-extrabold text-[var(--cream)] lg:text-[28px]">Matches</h1>
           <p className="mt-1 text-sm text-[var(--cream-muted)]">
@@ -195,7 +263,7 @@ export const Matches = () => {
         </div>
 
         {loading ? (
-          <div className={PROFILE_TILE_GRID_CLASS}>
+          <div className={PROFILE_TILE_GRID_CLASS} data-testid="matches-skeleton">
             {[...Array(6)].map((_, i) => (
               <div
                 key={i}
@@ -203,9 +271,21 @@ export const Matches = () => {
               />
             ))}
           </div>
-        ) : error ? (
-          <div className="py-12 text-center">
+        ) : error && isEmpty ? (
+          <div className="py-12 text-center" data-testid="matches-error">
             <p className="text-sm text-[var(--cream-muted)]">{error}</p>
+            <button
+              type="button"
+              onClick={() => {
+                setLoading(true);
+                setError('');
+                hungRef.current = false;
+                void fetchMatches();
+              }}
+              className="mt-4 rounded-full border border-[rgba(196,131,42,0.5)] px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A]"
+            >
+              Try again
+            </button>
           </div>
         ) : isEmpty ? (
           <div
@@ -236,7 +316,7 @@ export const Matches = () => {
             </div>
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-8" data-testid="matches-list">
             {receivedLikes.length > 0 ? (
               <section data-testid="likes-you-section" aria-labelledby="likes-you-heading">
                 <div className="mb-3 flex items-baseline justify-between gap-3">

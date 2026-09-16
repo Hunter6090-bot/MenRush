@@ -60,28 +60,143 @@ export function requestChatRefresh(otherId?: string | null) {
   );
 }
 
-/**
- * Merge a socket/API message into the open thread without duplicates.
- * Used so a late refetch or a double-delivered socket event does not fork the list.
- */
-export function appendUniqueMessage<T extends { id?: string }>(prev: T[], incoming: T): T[] {
-  if (incoming.id && prev.some((m) => m.id === incoming.id)) return prev;
-  return [...prev, incoming];
+/** Matches `messageService.getConversation` default LIMIT (newest page). */
+export const CONVERSATION_PAGE_SIZE = 50;
+
+/** Parse message created_at for ordering; null when missing/invalid. */
+export function messageTimeMs(m: { created_at?: string | null }): number | null {
+  if (!m.created_at) return null;
+  const t = Date.parse(m.created_at);
+  return Number.isFinite(t) ? t : null;
 }
 
 /**
- * Prefer API rows when refreshing; keep optimistic/local-only rows that the
- * server has not returned yet (no id match).
+ * Stable chronological order for 1:1 chat rows.
+ * Missing timestamps sort last (in-flight / optimistic); id breaks ties.
  */
-export function mergeConversationRows<T extends { id?: string }>(
+export function sortMessagesChronologically<T extends { id?: string; created_at?: string | null }>(
+  rows: T[],
+): T[] {
+  return [...rows].sort((a, b) => {
+    const ta = messageTimeMs(a);
+    const tb = messageTimeMs(b);
+    if (ta == null && tb == null) {
+      const aid = a.id ?? '';
+      const bid = b.id ?? '';
+      return aid < bid ? -1 : aid > bid ? 1 : 0;
+    }
+    if (ta == null) return 1;
+    if (tb == null) return -1;
+    if (ta !== tb) return ta - tb;
+    const aid = a.id ?? '';
+    const bid = b.id ?? '';
+    return aid < bid ? -1 : aid > bid ? 1 : 0;
+  });
+}
+
+/**
+ * Merge a socket/API message into the open thread without duplicates.
+ * Used so a late refetch or a double-delivered socket event does not fork the list.
+ * Inserts by created_at so out-of-order socket events cannot stick at the end.
+ */
+export function appendUniqueMessage<T extends { id?: string; created_at?: string | null }>(
+  prev: T[],
+  incoming: T,
+): T[] {
+  if (incoming.id && prev.some((m) => m.id === incoming.id)) return prev;
+  return sortMessagesChronologically([...prev, incoming]);
+}
+
+/**
+ * Prefer API rows when refreshing an open thread.
+ *
+ * Critical: getConversation returns only the newest LIMIT page. Rows that slid
+ * out of that window still sit in React state with real ids — the old merge
+ * treated them as "local-only" and appended them after the server page, so
+ * earlier messages suddenly jumped to the bottom on the next poll/reconnect.
+ *
+ * Fix: union by id (server wins), keep true no-id optimistic rows, sort by
+ * created_at. Rows older than the polled page stay above it (scroll-back /
+ * previously painted history) — never re-appended at the bottom. Soft-cap the
+ * open-thread buffer so a long-lived poll does not grow forever.
+ */
+export function mergeConversationRows<T extends { id?: string; created_at?: string | null }>(
   current: T[],
   fromServer: T[],
+  opts?: { windowSize?: number; maxBuffered?: number },
 ): T[] {
   if (!Array.isArray(fromServer)) return current;
-  if (!Array.isArray(current) || current.length === 0) return fromServer;
-  const serverIds = new Set(fromServer.map((m) => m.id).filter(Boolean) as string[]);
-  const localsOnly = current.filter((m) => !m.id || !serverIds.has(m.id));
-  return [...fromServer, ...localsOnly];
+  if (!Array.isArray(current) || current.length === 0) {
+    return sortMessagesChronologically(fromServer);
+  }
+
+  const byId = new Map<string, T>();
+  const pendingNoId: T[] = [];
+
+  for (const m of current) {
+    if (m.id) byId.set(m.id, m);
+    else pendingNoId.push(m);
+  }
+  // Server is source of truth for known ids (media_url, view counts, etc.).
+  for (const m of fromServer) {
+    if (m.id) byId.set(m.id, m);
+    else pendingNoId.push(m);
+  }
+
+  const dated = sortMessagesChronologically([...byId.values()]);
+  // Keep scroll-back history above the live page; only trim the oldest tail
+  // when the open buffer is huge. Default live page size stays the floor.
+  const liveFloor = opts?.windowSize ?? Math.max(fromServer.length, CONVERSATION_PAGE_SIZE);
+  const maxBuffered = opts?.maxBuffered ?? Math.max(liveFloor * 4, 200);
+  const trimmed =
+    dated.length > maxBuffered ? dated.slice(dated.length - maxBuffered) : dated;
+
+  if (pendingNoId.length === 0) return trimmed;
+  // Optimistic rows without ids stay after the dated window (sending UX).
+  return [...trimmed, ...pendingNoId];
+}
+
+/**
+ * Prepend an older page into the open thread without dropping the live tip.
+ * Server/older rows win on id collision; result stays chronological.
+ */
+export function prependOlderMessages<T extends { id?: string; created_at?: string | null }>(
+  current: T[],
+  olderPage: T[],
+): T[] {
+  if (!Array.isArray(olderPage) || olderPage.length === 0) return current;
+  if (!Array.isArray(current) || current.length === 0) {
+    return sortMessagesChronologically(olderPage);
+  }
+  const byId = new Map<string, T>();
+  const pendingNoId: T[] = [];
+  for (const m of olderPage) {
+    if (m.id) byId.set(m.id, m);
+    else pendingNoId.push(m);
+  }
+  for (const m of current) {
+    if (m.id) {
+      if (!byId.has(m.id)) byId.set(m.id, m);
+    } else {
+      pendingNoId.push(m);
+    }
+  }
+  const dated = sortMessagesChronologically([...byId.values()]);
+  return pendingNoId.length === 0 ? dated : [...dated, ...pendingNoId];
+}
+
+/**
+ * Strip signed `?access=` (and any other query) so poll re-grants do not look
+ * like content changes. Including the rotating token in fingerprints forced
+ * open-thread polls to remount every media bubble every ~2.5s — chat video
+ * `<video src>` restarted forever and never reached loadedmetadata (black
+ * player, duration `--:--`).
+ */
+export function mediaUrlPath(url?: string | null): string {
+  if (!url) return '';
+  const raw = String(url).trim();
+  if (!raw) return '';
+  return raw.split('?', 1)[0] || '';
 }
 
 /** Stable fingerprint so open-thread polls do not re-render/scroll when unchanged. */
@@ -92,7 +207,7 @@ export function conversationFingerprint(
   return rows
     .map(
       (m) =>
-        `${m.id ?? ''}\u0001${m.media_url ?? ''}\u0001${m.message ?? ''}\u0001${m.view_count ?? ''}`,
+        `${m.id ?? ''}\u0001${mediaUrlPath(m.media_url)}\u0001${m.message ?? ''}\u0001${m.view_count ?? ''}`,
     )
     .join('\u0002');
 }

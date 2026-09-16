@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useResolvingPhotoSrc } from './UserAvatar';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { StatusBadge } from './StatusBadge';
-import { SilhouetteAvatar } from './SilhouetteAvatar';
+import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
 import { IconMatches } from './icons';
 import { usersAPI } from '../api/client';
 import { VerifiedBadge } from './VerifiedBadge';
@@ -41,6 +41,15 @@ export interface NearbyUser {
   pulse_expires_at?: string | null;
   /** Active mood (auto-expires after 6h server-side; null when unset/expired). */
   mood?: import('../api/client').Mood | null;
+  /**
+   * Account created_at (ISO) from `/users/nearby` — account age only for NEW badge.
+   * Not exact GPS; privacy-safe.
+   */
+  created_at?: string;
+  /** Active visitor fresh-face boost (left home area; TTL not expired). */
+  is_visitor?: boolean;
+  /** ISO expiry for visitor boost — null when not visiting. */
+  visitor_expires_at?: string | null;
 }
 
 interface ProfileCardProps {
@@ -66,6 +75,8 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
     user.photo_url,
     user.age,
   );
+  // Empty / missing / /avatars/* → faded cutout (same as Grid + Matches). Never gold stub.
+  const showBrandEmpty = isNearbyPlaceholderFace(user.photo_url) || !fullPhotoUrl;
   const isPulsing = isUserPulsing(user);
 
   useEffect(() => {
@@ -140,17 +151,20 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           className="absolute inset-0 z-0 block"
           data-testid={`profile-card-photo-${user.id}`}
         >
-          {fullPhotoUrl ? (
+          {showBrandEmpty ? (
+            <div
+              className="h-full w-full"
+              data-testid={`profile-card-photo-placeholder-${user.id}`}
+            >
+              <FadedBrandFace variant="tile" label={user.name} />
+            </div>
+          ) : (
             <img
               src={fullPhotoUrl}
               alt={user.name}
               className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
               onError={onPhotoError}
             />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center">
-              <SilhouetteAvatar size={120} variant="card" />
-            </div>
           )}
         </ProfilePhotoLink>
 

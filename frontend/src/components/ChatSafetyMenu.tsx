@@ -237,7 +237,7 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
               maxLength={1000}
               rows={3}
               placeholder="Anything else we should know?"
-              className="mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm resize-none bg-[var(--bg-primary)] border border-[var(--border-default)] text-[var(--cream)] focus:outline-none focus:ring-2 focus:ring-[var(--copper)]/50"
+              className="mt-1.5 w-full rounded-xl px-3 py-2.5 text-[16px] resize-none bg-[var(--bg-primary)] border border-[var(--border-default)] text-[var(--cream)] focus:outline-none focus:ring-2 focus:ring-[var(--copper)]/50"
             />
           </label>
         </SafetyModal>

@@ -4,6 +4,7 @@ import { usersAPI, profileMetaAPI, Mood, MOOD_LABELS } from '../api/client';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { Layout } from '../components/Layout';
 import { UserAvatar } from '../components/UserAvatar';
+import { FadedBrandFace, isNearbyPlaceholderFace } from '../components/FadedBrandFace';
 import { StatusBadge } from '../components/StatusBadge';
 import { PulseRing } from '../components/PulseRing';
 import { MoodPicker } from '../components/MoodPicker';
@@ -595,7 +596,7 @@ export const Profile = () => {
   };
 
   const inputClass =
-    'w-full bg-[var(--bg-card)]/60 border border-[var(--border-default)] text-[var(--cream)] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all';
+    'w-full bg-[var(--bg-card)]/60 border border-[var(--border-default)] text-[var(--cream)] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-[16px] focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all';
 
   if (!profile) {
     return (
@@ -636,7 +637,7 @@ export const Profile = () => {
         </div>
       )}
 
-      <div className="mx-auto max-w-xl space-y-4 px-4 py-4 pb-28 lg:max-w-6xl lg:space-y-8 lg:px-8 lg:py-8 lg:pb-12">
+      <div className="mx-auto min-w-0 max-w-xl space-y-4 overflow-x-clip px-4 py-4 pb-28 lg:max-w-6xl lg:space-y-8 lg:px-8 lg:py-8 lg:pb-12">
         <input
           ref={photoInputRef}
           type="file"
@@ -757,14 +758,24 @@ export const Profile = () => {
                     uploading ? 'pointer-events-none opacity-70' : ''
                   }`}
                 >
-                  <UserAvatar
-                    name={profile.name}
-                    photoUrl={profile.photo_url}
-                    online={profile.online}
-                    size="xl"
-                    showStatus={false}
-                    className="ring-4 ring-[var(--bg-card)] transition-opacity group-hover:opacity-90"
-                  />
+                  {isNearbyPlaceholderFace(profile.photo_url) ? (
+                    <span
+                      className="relative inline-flex shrink-0 overflow-hidden rounded-full ring-4 ring-[var(--bg-card)] transition-opacity group-hover:opacity-90"
+                      style={{ width: 96, height: 96 }}
+                      data-testid="profile-empty-brand-face"
+                    >
+                      <FadedBrandFace variant="profile" size={96} label={profile.name} />
+                    </span>
+                  ) : (
+                    <UserAvatar
+                      name={profile.name}
+                      photoUrl={profile.photo_url}
+                      online={profile.online}
+                      size="xl"
+                      showStatus={false}
+                      className="ring-4 ring-[var(--bg-card)] transition-opacity group-hover:opacity-90"
+                    />
+                  )}
                   <span className="absolute inset-0 rounded-full bg-black/0 transition-colors group-hover:bg-black/20" />
                   <span className="absolute bottom-1 right-1 flex h-9 w-9 items-center justify-center rounded-full border-2 border-[var(--bg-card)] bg-[#C4832A] text-[var(--nn-on-copper)] shadow-lg transition-transform group-hover:scale-105">
                     {uploading ? (
@@ -809,7 +820,7 @@ export const Profile = () => {
           <div className="grid grid-cols-[280px_1fr] gap-8">
             <div className="space-y-3">
               <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]">
-                {getPhotoUrl(photoUrl) ? (
+                {getPhotoUrl(photoUrl) && !isNearbyPlaceholderFace(photoUrl) ? (
                   <img
                     src={getPhotoUrl(photoUrl)!}
                     alt={profile.name}
@@ -817,7 +828,7 @@ export const Profile = () => {
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center">
-                    <UserAvatar name={profile.name} photoUrl={profile.photo_url} size="xl" showStatus={false} />
+                    <FadedBrandFace variant="profile" size={96} label={profile.name} />
                   </div>
                 )}
                 <button
@@ -854,25 +865,6 @@ export const Profile = () => {
                   {uploadingCover ? '…' : coverUrl ? 'Cover' : '+ Cover'}
                 </button>
               </div>
-              {isGenericAvatarUrl(photoUrl) ? (
-                <div
-                  className="rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-3 py-3"
-                  data-testid="photo-upgrade-nudge"
-                >
-                  <p className="text-[12px] font-extrabold text-[var(--cream)]">Upgrade from a shared avatar</p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-[var(--cream-muted)]">
-                    Real photos get more matches. Upload a clear face or upper-body shot.
-                  </p>
-                  <button
-                    type="button"
-                    disabled={uploading}
-                    onClick={() => photoInputRef.current?.click()}
-                    className="mt-2 rounded-full bg-[#C4832A] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#1A0E03] hover:bg-[#E0A14A] disabled:opacity-60"
-                  >
-                    {uploading ? 'Uploading…' : 'Add real photo'}
-                  </button>
-                </div>
-              ) : null}
             </div>
 
             <div className="space-y-4">
@@ -996,14 +988,24 @@ export const Profile = () => {
                     uploading ? 'pointer-events-none opacity-70' : ''
                   }`}
                 >
-                  <UserAvatar
-                    name={profile.name}
-                    photoUrl={profile.photo_url}
-                    online={profile.online}
-                    size="xl"
-                    showStatus={false}
-                    className="ring-4 ring-[var(--bg-card)] transition-opacity group-hover:opacity-90 group-active:opacity-80"
-                  />
+                  {isNearbyPlaceholderFace(profile.photo_url) ? (
+                    <span
+                      className="relative inline-flex shrink-0 overflow-hidden rounded-full ring-4 ring-[var(--bg-card)] transition-opacity group-hover:opacity-90 group-active:opacity-80"
+                      style={{ width: 96, height: 96 }}
+                      data-testid="profile-empty-brand-face-mobile"
+                    >
+                      <FadedBrandFace variant="profile" size={96} label={profile.name} />
+                    </span>
+                  ) : (
+                    <UserAvatar
+                      name={profile.name}
+                      photoUrl={profile.photo_url}
+                      online={profile.online}
+                      size="xl"
+                      showStatus={false}
+                      className="ring-4 ring-[var(--bg-card)] transition-opacity group-hover:opacity-90 group-active:opacity-80"
+                    />
+                  )}
                   <span className="absolute inset-0 rounded-full bg-black/0 transition-colors group-hover:bg-black/20 group-active:bg-black/30" />
                   <span className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-[var(--bg-card)] bg-[#C4832A] text-[var(--nn-on-copper)] shadow-lg transition-transform group-hover:scale-105 group-active:scale-95">
                     {uploading ? (
@@ -1037,25 +1039,6 @@ export const Profile = () => {
                 : 'Age hidden on your public profile'}
             </p>
             <ProfileVerification verification={verification} />
-            {isGenericAvatarUrl(photoUrl) ? (
-              <div
-                className="mt-3 rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-3 py-3 lg:hidden"
-                data-testid="photo-upgrade-nudge-mobile"
-              >
-                <p className="text-[12px] font-extrabold text-[var(--cream)]">Upgrade from a shared avatar</p>
-                <p className="mt-1 text-[11px] leading-relaxed text-[var(--cream-muted)]">
-                  Real photos get more matches. Clear face or upper body.
-                </p>
-                <button
-                  type="button"
-                  disabled={uploading}
-                  onClick={() => photoInputRef.current?.click()}
-                  className="mt-2 rounded-full bg-[#C4832A] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#1A0E03] disabled:opacity-60"
-                >
-                  {uploading ? 'Uploading…' : 'Add real photo'}
-                </button>
-              </div>
-            ) : null}
           </div>
         </div>
 
@@ -1228,7 +1211,7 @@ export const Profile = () => {
                 placeholder="Tell people about yourself…"
                 rows={3}
                 maxLength={500}
-                className={`w-full bg-[var(--bg-card)]/60 border border-[var(--border-default)] text-[var(--cream)] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all resize-none ${
+                className={`w-full bg-[var(--bg-card)]/60 border border-[var(--border-default)] text-[var(--cream)] placeholder:text-[var(--cream-muted)]/50 rounded-xl px-4 py-3 text-[16px] focus:outline-none focus:ring-2 focus:ring-[#C4832A]/50 transition-all resize-none ${
                   isEssentialMissing('bio') ? ESSENTIAL_INPUT_HIGHLIGHT : ''
                 }`}
                 data-testid="profile-field-bio"

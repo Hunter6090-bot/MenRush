@@ -90,6 +90,8 @@ export function VideoCallModal() {
 
   const [remoteAudioBlocked, setRemoteAudioBlocked] = useState(false);
   const [remoteFramesReady, setRemoteFramesReady] = useState(false);
+  /** Probe only — 'generic' until Legal/Brand drop cleared Trim; never claim Trim in UI copy. */
+  const [incomingRingSource, setIncomingRingSource] = useState<'generic' | 'asset'>('generic');
   const [pip, setPip] = useState<PipState>(() => defaultPipPosition(PIP_DEFAULT.w, PIP_DEFAULT.h));
   const dragRef = useRef<{
     mode: 'move' | 'resize';
@@ -213,7 +215,10 @@ export function VideoCallModal() {
   useEffect(() => {
     if (!desiredTone) return;
     const player = createCallTone(desiredTone);
-    void player.start();
+    void player.start().then(() => {
+      const src = player.getSource();
+      if (src === 'asset' || src === 'generic') setIncomingRingSource(src);
+    });
     return () => player.stop();
   }, [desiredTone]);
 
@@ -409,7 +414,13 @@ export function VideoCallModal() {
         className="fixed inset-0 z-[200] flex items-center justify-center px-6"
         style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(16px)' }}
       >
-        <span data-testid="call-tone" data-tone="incoming" className="sr-only" aria-hidden="true" />
+        <span
+          data-testid="call-tone"
+          data-tone="incoming"
+          data-source={incomingRingSource}
+          className="sr-only"
+          aria-hidden="true"
+        />
         <div
           className="flex w-full max-w-xs animate-scale-up flex-col items-center gap-6 rounded-3xl p-8"
           style={{
