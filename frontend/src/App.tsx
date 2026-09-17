@@ -71,6 +71,7 @@ const RoomsRoute = lazyNamed(() => import('./components/RoomsRoute'), 'RoomsRout
 const Premium = lazyNamed(() => import('./pages/Premium'), 'Premium');
 const Events = lazyNamed(() => import('./pages/Events'), 'Events');
 const HotSpots = lazyNamed(() => import('./pages/HotSpots'), 'HotSpots');
+const AdminVenueClaims = lazyNamed(() => import('./pages/AdminVenueClaims'), 'AdminVenueClaims');
 const Settings = lazyNamed(() => import('./pages/Settings'), 'Settings');
 const Notifications = lazyNamed(() => import('./pages/Notifications'), 'Notifications');
 const VideoCallModal = lazyNamed(() => import('./components/VideoCallModal'), 'VideoCallModal');
@@ -322,6 +323,14 @@ function AppShell() {
               <RequireVerified>
                 <HotSpots />
               </RequireVerified>
+            }
+          />
+          <Route
+            path="/admin/venue-claims"
+            element={
+              <ProtectedRoute>
+                <AdminVenueClaims />
+              </ProtectedRoute>
             }
           />
           <Route

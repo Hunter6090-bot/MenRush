@@ -49,6 +49,10 @@ interface NearbyProfileGridProps {
   radiusLabel?: string;
   /** Count of men at max radius when current radius is empty. */
   beyondRadiusCount?: number;
+  /** When true, more pages can be loaded. */
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 /**
@@ -73,6 +77,9 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
   onOpenHotSpots,
   radiusLabel,
   beyondRadiusCount = 0,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
 }: NearbyProfileGridProps) {
   useEffect(() => {
     clearGridPhotoQueue();
@@ -196,22 +203,37 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
 
   // Phone: 3 cols (Brand lock). Tablet md+: denser auto-fill so iPad is not two giant squares.
   return (
-    <div
-      className={PROFILE_TILE_GRID_CLASS}
-      data-testid="nearby-profile-grid"
-    >
-      {users.map((user) => (
-        <NearbyGridCard
-          key={user.id}
-          user={user}
-          liked={likedUserIds?.has(user.id) ?? false}
-          mutual={mutualUserIds?.has(user.id) ?? false}
-          matching={matchingUserId === user.id}
-          onSelect={onSelect}
-          onMatch={onMatch}
-        />
-      ))}
-    </div>
+    <>
+      <div
+        className={PROFILE_TILE_GRID_CLASS}
+        data-testid="nearby-profile-grid"
+      >
+        {users.map((user) => (
+          <NearbyGridCard
+            key={user.id}
+            user={user}
+            liked={likedUserIds?.has(user.id) ?? false}
+            mutual={mutualUserIds?.has(user.id) ?? false}
+            matching={matchingUserId === user.id}
+            onSelect={onSelect}
+            onMatch={onMatch}
+          />
+        ))}
+      </div>
+      {hasMore && onLoadMore ? (
+        <div className="mt-4 flex justify-center py-3" data-testid="nearby-load-more-container">
+          <button
+            type="button"
+            onClick={onLoadMore}
+            disabled={loadingMore}
+            data-testid="nearby-load-more"
+            className="inline-flex items-center gap-2 rounded-full border border-[var(--copper)]/60 bg-[var(--bg-elevated)]/90 px-6 py-2.5 text-[12px] font-extrabold uppercase tracking-wider text-[var(--cream)] shadow-md transition-all hover:border-[var(--copper)] hover:bg-[var(--copper)]/20 active:scale-[0.98] disabled:opacity-50"
+          >
+            {loadingMore ? 'Loading more men…' : 'Load more men'}
+          </button>
+        </div>
+      ) : null}
+    </>
   );
 });
 

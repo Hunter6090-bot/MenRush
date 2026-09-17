@@ -522,9 +522,39 @@ const MAP_PAN_MIN_METERS = 50;
 /** Min movement before re-querying nearby users on GPS drift. */
 const NEARBY_REFETCH_MIN_METERS = 80;
 
+function unpackNearbyResponse(data: unknown, headers?: Record<string, any>): {
+  users: NearbyUser[];
+  total: number;
+  hasMore: boolean;
+  page: number;
+} {
+  if (Array.isArray(data)) {
+    const totalFromHeader = Number(headers?.['x-total-count']);
+    return {
+      users: data,
+      total: Number.isFinite(totalFromHeader) && totalFromHeader >= data.length ? totalFromHeader : data.length,
+      hasMore: false,
+      page: 1,
+    };
+  }
+  if (data && typeof data === 'object' && Array.isArray((data as any).users)) {
+    const obj = data as any;
+    const users = obj.users as NearbyUser[];
+    const total = typeof obj.total === 'number' ? obj.total : users.length;
+    const hasMore = typeof obj.has_more === 'boolean' ? obj.has_more : false;
+    const page = typeof obj.page === 'number' ? obj.page : 1;
+    return { users, total, hasMore, page };
+  }
+  return { users: [], total: 0, hasMore: false, page: 1 };
+}
+
 export const Discover = () => {
   const authUser = useAuthStore((s) => s.user);
   const [users, setUsers] = useState<NearbyUser[]>([]);
+  const [totalNearbyCount, setTotalNearbyCount] = useState<number>(0);
+  const [nearbyPage, setNearbyPage] = useState<number>(1);
+  const [hasMoreNearby, setHasMoreNearby] = useState<boolean>(false);
+  const [loadingMoreNearby, setLoadingMoreNearby] = useState<boolean>(false);
   const [likedUsers, setLikedUsers] = useState<Set<string>>(new Set());
   /** Mutual only — messaging requires match both ways. */
   const [matchedUsers, setMatchedUsers] = useState<Set<string>>(new Set());
@@ -748,22 +778,56 @@ export const Discover = () => {
       longitude: number,
       r: number,
       filters: DiscoveryFilterState,
-      options?: { background?: boolean },
+      options?: { background?: boolean; page?: number; append?: boolean },
     ) => {
-      if (!options?.background) setLoading(true);
+      const isAppend = Boolean(options?.append);
+      const targetPage = options?.page ?? (isAppend ? 2 : 1);
+      if (isAppend) {
+        setLoadingMoreNearby(true);
+      } else if (!options?.background) {
+        setLoading(true);
+      }
       try {
         // getNearby already persists lat/lng — skip a redundant updateLocation RTT.
-        const apiFilters = buildNearbyApiFilters(filters);
+        const apiFilters = {
+          ...buildNearbyApiFilters(filters),
+          page: targetPage,
+        };
         const res = await usersAPI.getNearby(latitude, longitude, r, apiFilters);
-        // Skip identical polls — new array refs were redrawing Grid + remounting marker work.
-        setUsers((prev) =>
-          nearbyRosterFingerprint(prev) === nearbyRosterFingerprint(res.data) ? prev : res.data,
-        );
+        const { users: incomingUsers, total: incomingTotal, hasMore: incomingHasMore, page: incomingPage } =
+          unpackNearbyResponse(res.data, (res as any).headers);
+
+        setTotalNearbyCount(incomingTotal);
+        setHasMoreNearby(incomingHasMore);
+        setNearbyPage(incomingPage);
+
+        if (isAppend) {
+          setUsers((prev) => {
+            const existingIds = new Set(prev.map((u) => u.id));
+            const newItems = incomingUsers.filter((u) => !existingIds.has(u.id));
+            return newItems.length > 0 ? [...prev, ...newItems] : prev;
+          });
+        } else {
+          setUsers((prev) => {
+            if (prev.length <= incomingUsers.length) {
+              return nearbyRosterFingerprint(prev) === nearbyRosterFingerprint(incomingUsers) ? prev : incomingUsers;
+            }
+            // Preserve accumulated pages on background refresh while updating page 1 items in place
+            const incomingMap = new Map(incomingUsers.map((u) => [u.id, u]));
+            const updated = prev.map((u) => incomingMap.get(u.id) ?? u);
+            const prevIds = new Set(prev.map((u) => u.id));
+            const newItems = incomingUsers.filter((u) => !prevIds.has(u.id));
+            const merged = newItems.length > 0 ? [...newItems, ...updated] : updated;
+            return nearbyRosterFingerprint(prev) === nearbyRosterFingerprint(merged) ? prev : merged;
+          });
+        }
+
         // Cold density: count men outside current radius so Expand is intentional.
-        if (res.data.length === 0 && r < MAX_RADIUS_KM - 0.5) {
+        if (incomingTotal === 0 && r < MAX_RADIUS_KM - 0.5) {
           try {
             const wider = await usersAPI.getNearby(latitude, longitude, MAX_RADIUS_KM, apiFilters);
-            setBeyondRadiusCount(wider.data?.length ?? 0);
+            const unpackedWider = unpackNearbyResponse(wider.data, (wider as any).headers);
+            setBeyondRadiusCount(unpackedWider.total);
           } catch {
             setBeyondRadiusCount(0);
           }
@@ -772,26 +836,41 @@ export const Discover = () => {
         }
         trackEventOnce(
           'first_discovery_load',
-          { outcome: 'succeeded', result_bucket: discoveryResultBucket(res.data.length) },
+          { outcome: 'succeeded', result_bucket: discoveryResultBucket(incomingTotal) },
           'first_discovery_load',
         );
         setError('');
       } catch {
-        setBeyondRadiusCount(0);
-        trackEventOnce(
-          'first_discovery_load',
-          { outcome: 'failed', result_bucket: 'unknown' },
-          'first_discovery_load',
-        );
-        setError('Could not load nearby users.');
+        if (!isAppend) {
+          setBeyondRadiusCount(0);
+          trackEventOnce(
+            'first_discovery_load',
+            { outcome: 'failed', result_bucket: 'unknown' },
+            'first_discovery_load',
+          );
+          setError('Could not load nearby users.');
+        }
       } finally {
-        setLoading(false);
+        if (isAppend) {
+          setLoadingMoreNearby(false);
+        } else {
+          setLoading(false);
+        }
         // Allow Mapbox after the list request settles (success or fail).
         setMapInitAllowed(true);
       }
     },
     [],
   );
+
+  const handleLoadMore = useCallback(() => {
+    if (loading || loadingMoreNearby || !hasMoreNearby || lat == null || lng == null) return;
+    const nextPage = nearbyPage + 1;
+    void fetchNearbyUsers(lat, lng, radius, discoveryFilters, {
+      page: nextPage,
+      append: true,
+    });
+  }, [loading, loadingMoreNearby, hasMoreNearby, lat, lng, radius, discoveryFilters, nearbyPage, fetchNearbyUsers]);
 
   // Safety: if Nearby never runs (no GPS), still allow map after a short idle.
   useEffect(() => {
@@ -1573,9 +1652,42 @@ export const Discover = () => {
     () => applyDiscoveryClientFilters(sortedUsers, discoveryFilters),
     [sortedUsers, discoveryFilters],
   );
-  const nearbyCount = displayUsers.length;
+  const nearbyCount = totalNearbyCount > 0 ? Math.max(totalNearbyCount, displayUsers.length) : displayUsers.length;
   /** Online-now presence among the filtered nearby roster — never radius "All". */
   const liveCount = useMemo(() => countLiveOnline(displayUsers), [displayUsers]);
+
+  // Requirement 4: Map pins accumulate all pages so the map is not stuck at first page only.
+  useEffect(() => {
+    if (!hasMoreNearby || loading || loadingMoreNearby) return;
+    if (lat == null || lng == null) return;
+    const isMapActive = isDesktopLayout
+      ? nearbyView === 'map' || desktopMapExpanded
+      : mapPanelMode !== 'hidden';
+    if (!isMapActive) return;
+
+    const timer = window.setTimeout(() => {
+      void fetchNearbyUsers(lat, lng, radius, discoveryFilters, {
+        page: nearbyPage + 1,
+        append: true,
+        background: true,
+      });
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [
+    hasMoreNearby,
+    loading,
+    loadingMoreNearby,
+    lat,
+    lng,
+    radius,
+    discoveryFilters,
+    nearbyPage,
+    isDesktopLayout,
+    nearbyView,
+    desktopMapExpanded,
+    mapPanelMode,
+    fetchNearbyUsers,
+  ]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -2235,6 +2347,8 @@ export const Discover = () => {
             <div data-testid="discover-nearby-panel">
               <div
                 data-testid="nearby-counts"
+                data-nearby-count={nearbyCount}
+                data-live-count={liveCount}
                 className="mb-3 inline-flex min-h-[36px] items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
               >
                 <p className="text-[11px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
@@ -2269,6 +2383,9 @@ export const Discover = () => {
               <NearbyProfileGrid
                 users={displayUsers}
                 loading={loading}
+                hasMore={hasMoreNearby}
+                loadingMore={loadingMoreNearby}
+                onLoadMore={handleLoadMore}
                 onSelect={setSelectedUser}
                 onMatch={handleLike}
                 likedUserIds={likedUsers}
@@ -2421,6 +2538,8 @@ export const Discover = () => {
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <div
                 data-testid="nearby-counts"
+                data-nearby-count={nearbyCount}
+                data-live-count={liveCount}
                 className="inline-flex min-h-[36px] max-w-full items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
               >
                 <p className="text-[11px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
@@ -2514,6 +2633,9 @@ export const Discover = () => {
                 <NearbyProfileGrid
                   users={displayUsers}
                   loading={loading}
+                  hasMore={hasMoreNearby}
+                  loadingMore={loadingMoreNearby}
+                  onLoadMore={handleLoadMore}
                   onSelect={setSelectedUser}
                   onMatch={handleLike}
                   likedUserIds={likedUsers}
@@ -2578,6 +2700,7 @@ export const Discover = () => {
         onBlocked={() => {
           if (!selectedUser) return;
           setUsers((prev) => prev.filter((u) => u.id !== selectedUser.id));
+          setTotalNearbyCount((prev) => Math.max(0, prev - 1));
           setSelectedUser(null);
         }}
       />

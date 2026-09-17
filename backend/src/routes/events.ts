@@ -23,7 +23,7 @@ const EventCheckInSchema = z.object({
 
 router.get('/nearby', async (req: AuthRequest, res: Response) => {
   try {
-    const { lat, lng, radius, limit } = req.query;
+    const { lat, lng, radius, limit, days } = req.query;
     const location = LocationSchema.parse({
       lat: parseFloat(lat as string),
       lng: parseFloat(lng as string),
@@ -32,7 +32,8 @@ router.get('/nearby', async (req: AuthRequest, res: Response) => {
       lat: location.lat,
       lng: location.lng,
       radiusKm: radius ? parseFloat(radius as string) : 25,
-      limit: limit ? parseInt(limit as string) : 20,
+      limit: limit ? parseInt(limit as string) : 50,
+      daysAhead: days ? parseInt(days as string, 10) : 30,
     });
     res.json(events);
   } catch (error: any) {

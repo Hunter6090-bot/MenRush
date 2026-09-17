@@ -184,6 +184,14 @@ export const betaAPI = {
   validateInvite: (data: { code: string }) => apiClient.post('/beta/validate-invite', data),
 };
 
+export interface NearbyRosterResponse<T = any> {
+  users: T[];
+  total: number;
+  page: number;
+  limit: number;
+  has_more: boolean;
+}
+
 export const usersAPI = {
   getMe: () => apiClient.get('/users/me'),
   getReferrals: () =>
@@ -216,11 +224,17 @@ export const usersAPI = {
       maxAge?: number;
       interests?: string[];
       onlyPulse?: boolean;
+      online?: boolean;
+      verified?: boolean;
+      new?: boolean;
       lookingFor?: string;
       mood?: string;
+      page?: number;
+      limit?: number;
+      offset?: number;
     }
   ) =>
-    apiClient.get('/users/nearby', {
+    apiClient.get<NearbyRosterResponse | any[]>('/users/nearby', {
       params: {
         lat,
         lng,
@@ -229,8 +243,14 @@ export const usersAPI = {
         maxAge: filters?.maxAge,
         interests: filters?.interests?.join(','),
         onlyPulse: filters?.onlyPulse ? 'true' : undefined,
+        online: filters?.online ? 'true' : undefined,
+        verified: filters?.verified ? 'true' : undefined,
+        new: filters?.new ? 'true' : undefined,
         lookingFor: filters?.lookingFor,
         mood: filters?.mood,
+        page: filters?.page,
+        limit: filters?.limit,
+        offset: filters?.offset,
       },
     }),
   getProfile: (id: string, coords?: { lat?: number | null; lng?: number | null }) =>
@@ -813,6 +833,12 @@ export interface EventDTO {
   member_count: number;
   distance_m: number | null;
   is_live: boolean;
+  spot_id?: string | null;
+  venue_claim_id?: string | null;
+  is_venue_managed?: boolean;
+  status?: string;
+  managed_label?: string | null;
+  ticket_url?: string | null;
 }
 
 export const eventsAPI = {
@@ -859,6 +885,105 @@ export interface HotSpotDTO {
   source_url?: string | null;
   verified_at?: string | null;
   last_activity_at?: string | null;
+  claimed_by_user_id?: string | null;
+  claim_status?: string;
+  is_calendar_managed?: boolean;
+  can_manage_calendar?: boolean;
+}
+
+export interface VenueClaimDTO {
+  id: string;
+  spot_id: string;
+  user_id: string;
+  status: 'pending' | 'approved' | 'rejected' | 'disputed' | 'frozen';
+  venue_role: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone: string | null;
+  website_or_social_proof: string | null;
+  attestation_agreed: boolean;
+  attestation_text: string;
+  attested_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_notes: string | null;
+  dispute_reason: string | null;
+  disputed_at: string | null;
+  frozen_reason: string | null;
+  frozen_at: string | null;
+  domain_email: string | null;
+  domain_email_verified: boolean;
+  phone_otp: string | null;
+  phone_otp_verified: boolean;
+  companies_house_num: string | null;
+  companies_house_verified: boolean;
+  created_at: string;
+  updated_at: string;
+  spot_name?: string;
+  spot_city?: string | null;
+  applicant_name?: string;
+  applicant_email?: string;
+}
+
+export interface SubmitVenueClaimPayload {
+  venue_role: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone?: string | null;
+  website_or_social_proof?: string | null;
+  attestation_agreed: true;
+  attestation_text: string;
+  domain_email?: string | null;
+  phone_otp?: string | null;
+  companies_house_num?: string | null;
+}
+
+export interface DisputeVenueClaimPayload {
+  dispute_reason: string;
+}
+
+export interface VenueCalendarEventDTO {
+  id: string;
+  spot_id: string;
+  venue_claim_id: string;
+  name: string;
+  description: string | null;
+  venue_name: string | null;
+  starts_at: string;
+  ends_at: string | null;
+  lat: number;
+  lng: number;
+  status: 'published' | 'cancelled' | 'draft';
+  is_venue_managed: boolean;
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
+  ticket_url: string | null;
+  member_count: number;
+  distance_m: number | null;
+  is_live: boolean;
+  created_at: string;
+  updated_at: string;
+  managed_label: 'Calendar managed by venue';
+}
+
+export interface VenueCalendarEventCreatePayload {
+  name: string;
+  description?: string | null;
+  starts_at: string;
+  ends_at?: string | null;
+  ticket_url?: string | null;
+}
+
+export interface VenueCalendarEventUpdatePayload {
+  name?: string;
+  description?: string | null;
+  starts_at?: string;
+  ends_at?: string | null;
+  ticket_url?: string | null;
+}
+
+export interface VenueCalendarEventCancelPayload {
+  cancellation_reason?: string | null;
 }
 
 export const hotSpotsAPI = {
@@ -908,6 +1033,92 @@ export const hotSpotsAPI = {
       : apiClient.post<{ ok: boolean }>('/hot-spots/check-out'),
   getMyCheckIn: () =>
     apiClient.get<{ check_in: unknown | null }>('/hot-spots/me/check-in'),
+
+  // ── Venue Claims & Calendar ──
+  getClaim: (spotId: string) =>
+    apiClient.get<{
+      claim_status: string;
+      is_claimed: boolean;
+      is_calendar_managed: boolean;
+      my_claim?: VenueClaimDTO | null;
+    }>(`/hot-spots/${spotId}/claim`),
+  submitClaim: (spotId: string, data: SubmitVenueClaimPayload) =>
+    apiClient.post<{ ok: boolean; claim: VenueClaimDTO; message: string }>(
+      `/hot-spots/${spotId}/claim`,
+      data,
+    ),
+  disputeClaim: (spotId: string, data: DisputeVenueClaimPayload) =>
+    apiClient.post<{ ok: boolean; claim: VenueClaimDTO; message: string }>(
+      `/hot-spots/${spotId}/claim/dispute`,
+      data,
+    ),
+  listMyClaims: () =>
+    apiClient.get<{ claims: VenueClaimDTO[] }>('/hot-spots/my/claims'),
+  listVenueEvents: (spotId: string) =>
+    apiClient.get<{
+      events: VenueCalendarEventDTO[];
+      venue_name: string;
+      is_claimed: boolean;
+      can_manage: boolean;
+      managed_label: string;
+    }>(`/hot-spots/${spotId}/events`),
+  createVenueEvent: (spotId: string, data: VenueCalendarEventCreatePayload) =>
+    apiClient.post<{ ok: boolean; event: VenueCalendarEventDTO }>(
+      `/hot-spots/${spotId}/events`,
+      data,
+    ),
+  updateVenueEvent: (
+    spotId: string,
+    eventId: string,
+    data: VenueCalendarEventUpdatePayload,
+  ) =>
+    apiClient.patch<{ ok: boolean; event: VenueCalendarEventDTO }>(
+      `/hot-spots/${spotId}/events/${eventId}`,
+      data,
+    ),
+  cancelVenueEvent: (
+    spotId: string,
+    eventId: string,
+    data: VenueCalendarEventCancelPayload,
+  ) =>
+    apiClient.post<{ ok: boolean; event: VenueCalendarEventDTO }>(
+      `/hot-spots/${spotId}/events/${eventId}/cancel`,
+      data,
+    ),
+};
+
+export const adminVenueAPI = {
+  listPendingClaims: (adminToken: string) =>
+    apiClient.get<{ claims: VenueClaimDTO[] }>('/admin/venue-claims/pending', {
+      headers: { 'x-admin-token': adminToken },
+    }),
+  listAllClaims: (adminToken: string, status?: string) =>
+    apiClient.get<{ claims: VenueClaimDTO[] }>('/admin/venue-claims', {
+      params: { status },
+      headers: { 'x-admin-token': adminToken },
+    }),
+  approveClaim: (claimId: string, adminToken: string, notes?: string) =>
+    apiClient.post<{ ok: boolean; claim: VenueClaimDTO }>(
+      `/admin/venue-claims/${claimId}/approve`,
+      { notes },
+      { headers: { 'x-admin-token': adminToken } },
+    ),
+  rejectClaim: (claimId: string, adminToken: string, notes?: string) =>
+    apiClient.post<{ ok: boolean; claim: VenueClaimDTO }>(
+      `/admin/venue-claims/${claimId}/reject`,
+      { notes },
+      { headers: { 'x-admin-token': adminToken } },
+    ),
+  freezeClaim: (
+    claimId: string,
+    adminToken: string,
+    data: { frozen_reason: string; ban_user?: boolean },
+  ) =>
+    apiClient.post<{ ok: boolean; claim: VenueClaimDTO }>(
+      `/admin/venue-claims/${claimId}/freeze`,
+      data,
+      { headers: { 'x-admin-token': adminToken } },
+    ),
 };
 
 /** Community Space — short local text posts (≤280). Free for all. */

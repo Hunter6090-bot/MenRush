@@ -23,6 +23,16 @@ describe('MapLiveStatus', () => {
     expect(screen.getByTestId('map-live-status')).toHaveAttribute('data-live-count', '3');
   });
 
+  it('shows honest count exceeding 50 when more users are in range without capping', () => {
+    render(
+      <MapLiveStatus nearbyCount={142} liveCount={18} radiusKm={25} onExpandRadius={() => {}} />,
+    );
+    expect(screen.getByTestId('map-live-status')).toHaveAttribute('data-nearby-count', '142');
+    expect(screen.getByTestId('map-live-status')).toHaveAttribute('data-live-count', '18');
+    expect(screen.getByText('142 nearby')).toBeInTheDocument();
+    expect(screen.getByTestId('map-live-line')).toHaveTextContent('Live · 18');
+  });
+
   it('offers Expand radius when nearby is empty and not already at max', () => {
     const onExpand = vi.fn();
     render(

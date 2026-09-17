@@ -155,6 +155,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
   } | null>(null);
   const [dmMessages, setDmMessages] = useState<InRoomDmMessage[]>([]);
   const [dmNotice, setDmNotice] = useState<string | null>(null);
+  const [cameraMenuOpen, setCameraMenuOpen] = useState(false);
 
   const {
     participants,
@@ -171,6 +172,9 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     toggleMic,
     stopCamera,
     photoUrl,
+    videoDevices,
+    currentCameraId,
+    switchCameraDevice,
   } = useRoomVideo({ roomId, userId: user?.id, enabled: identityReady && !!roomId });
 
   const leaveRoomSurface = useCallback(() => {
@@ -933,15 +937,63 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
         >
           {micMuted ? <MicOffIcon className="w-5 h-5" /> : <MicIcon className="w-5 h-5" />}
         </button>
-        <button
-          type="button"
-          onClick={toggleCamera}
-          aria-label={cameraOn ? 'Turn camera off' : 'Turn camera on'}
-          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[var(--border-default)]/50 active:scale-95"
-          style={{ color: cameraOn ? '#C4832A' : '#EF4444' }}
-        >
-          <CamIcon className="w-5 h-5" />
-        </button>
+        <div className="relative flex items-center">
+          <button
+            type="button"
+            onClick={toggleCamera}
+            aria-label={cameraOn ? 'Turn camera off' : 'Turn camera on'}
+            className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[var(--border-default)]/50 active:scale-95"
+            style={{ color: cameraOn ? '#C4832A' : '#EF4444' }}
+          >
+            <CamIcon className="w-5 h-5" />
+          </button>
+          {videoDevices.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setCameraMenuOpen((v) => !v)}
+                aria-label="Select camera"
+                title="Select camera"
+                data-testid="room-camera-select-button"
+                className="flex-shrink-0 -ml-2 w-4 h-9 flex items-center justify-center text-[var(--cream-muted)] hover:text-[var(--cream)] transition-colors"
+              >
+                <ChevronDownIcon className="w-3 h-3" />
+              </button>
+              {cameraMenuOpen && (
+                <div
+                  className="absolute left-0 top-11 z-50 min-w-[200px] max-w-xs rounded-xl border p-1 shadow-2xl animate-scale-up"
+                  style={{
+                    background: 'var(--bg-card)',
+                    borderColor: 'var(--border-default)',
+                  }}
+                  data-testid="room-camera-dropdown"
+                >
+                  <p className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[#A89070]">
+                    Select camera
+                  </p>
+                  {videoDevices.map((d, i) => {
+                    const active = d.deviceId === currentCameraId;
+                    return (
+                      <button
+                        key={d.deviceId || i}
+                        type="button"
+                        onClick={() => {
+                          void switchCameraDevice(d.deviceId);
+                          setCameraMenuOpen(false);
+                        }}
+                        className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs transition-colors hover:bg-[var(--border-default)]/50"
+                        style={{ color: active ? '#C4832A' : 'var(--cream)' }}
+                      >
+                        <span className="truncate">{d.label || `Camera ${i + 1}`}</span>
+                        {active && <span className="ml-1.5 shrink-0 text-[#C4832A]">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </div>
         <button
           type="button"
           onClick={() => setChatOpen((v) => !v)}
@@ -1042,6 +1094,27 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                 style={{ color: 'var(--cream)', borderColor: 'var(--border-default)', background: 'rgba(196,131,42,0.08)' }}
               >
                 {settingsNotice}
+              </div>
+            )}
+
+            {videoDevices.length > 1 && (
+              <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border-default)' }}>
+                <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: '#6B5035' }}>
+                  Camera
+                </p>
+                <select
+                  value={currentCameraId}
+                  onChange={(e) => void switchCameraDevice(e.target.value)}
+                  className="w-full rounded-lg bg-[var(--bg-primary)] px-2.5 py-2 text-xs text-[var(--cream)] border border-[var(--border-default)] focus:outline-none focus:border-[#C4832A]"
+                  aria-label="Select camera"
+                  data-testid="room-camera-select-settings"
+                >
+                  {videoDevices.map((device, idx) => (
+                    <option key={device.deviceId || idx} value={device.deviceId}>
+                      {device.label || `Camera ${idx + 1}`}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
 
@@ -1601,5 +1674,11 @@ const MicOffIcon = ({ className }: { className?: string }) => (
 const CamIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M4 8h8a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4a2 2 0 012-2z" />
+  </svg>
+);
+
+const ChevronDownIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
   </svg>
 );
