@@ -185,7 +185,7 @@ export function CruisingSearchSheet({
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by spot name, city, woods, layby…"
+              placeholder="Search by spot name, city, woods, layby, sauna…"
               data-testid="cruising-search-input"
               className="w-full rounded-full border border-[var(--border-default)] bg-[#14120E] py-2 pl-9 pr-9 text-sm text-[var(--cream)] placeholder-[var(--cream-muted)] focus:border-[var(--copper)] focus:outline-none focus:ring-1 focus:ring-[var(--copper)]"
             />
@@ -201,7 +201,7 @@ export function CruisingSearchSheet({
             ) : null}
           </div>
 
-          {/* Category filter pills: All | Woods | Beach | Layby | Park */}
+          {/* Category filter pills: All | Woods | Beach | Layby | Park | Sauna */}
           <div
             className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar"
             role="tablist"
@@ -268,7 +268,7 @@ export function CruisingSearchSheet({
               className="flex flex-col items-center justify-center py-16 text-center"
             >
               <span className="text-3xl" aria-hidden="true">
-                🌲
+                {selectedCategory !== 'all' ? CRUISING_CATEGORY_META[selectedCategory].icon : '🌲'}
               </span>
               <p className="mt-2 text-sm font-bold text-[var(--cream)]">
                 No spots found

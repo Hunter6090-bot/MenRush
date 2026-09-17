@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import {
   OUTDOOR_HOT_SPOT_CATEGORY_SLUGS,
+  CRUISING_HOT_SPOT_CATEGORY_SLUGS,
   isPublicHotSpotVisibilitySql,
 } from '../src/services/hot-spots.service';
 
@@ -15,6 +16,13 @@ const outdoor = new Set<string>(OUTDOOR_HOT_SPOT_CATEGORY_SLUGS);
 assert.ok(outdoor.has('parks-trails'), 'parks-trails must be an outdoor category');
 assert.ok(outdoor.has('open-spaces'), 'open-spaces must be an outdoor category');
 assert.ok(outdoor.has('parking'), 'parking must be an outdoor category');
+
+// 1b. Verify cruising categories include outdoor categories + licensed saunas
+const cruising = new Set<string>(CRUISING_HOT_SPOT_CATEGORY_SLUGS);
+assert.ok(cruising.has('saunas'), 'saunas must be in cruising categories');
+assert.ok(cruising.has('parks-trails'), 'parks-trails must be in cruising categories');
+assert.ok(cruising.has('open-spaces'), 'open-spaces must be in cruising categories');
+assert.ok(cruising.has('parking'), 'parking must be in cruising categories');
 
 // 2. Verify visibility SQL allows ops-curated outdoor spots
 const visibilitySql = isPublicHotSpotVisibilitySql('c', 'hs');

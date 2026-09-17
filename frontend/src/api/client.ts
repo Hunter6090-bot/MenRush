@@ -1018,7 +1018,7 @@ export const hotSpotsAPI = {
       params: {
         lat,
         lng,
-        outdoor: true,
+        cruising: true,
         sort: 'closest',
         q: query?.trim() || undefined,
         radiusKm: radiusKm || (query?.trim() ? undefined : 100),

@@ -55,7 +55,8 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     });
     const radius = req.query.radiusKm ? parseFloat(String(req.query.radiusKm)) : undefined;
     const category = typeof req.query.category === 'string' ? req.query.category : undefined;
-    const outdoorOnly = req.query.outdoor === 'true' || req.query.outdoorOnly === 'true';
+    const cruisingOnly = req.query.cruising === 'true';
+    const outdoorOnly = !cruisingOnly && (req.query.outdoor === 'true' || req.query.outdoorOnly === 'true');
     const q = typeof req.query.q === 'string' ? req.query.q : undefined;
     const sort =
       req.query.sort === 'closest' ? 'closest' : req.query.sort === 'live' ? 'live' : undefined;
@@ -70,8 +71,9 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       radiusKm: radius ? Math.min(Math.max(radius, 1), 500) : undefined,
       categorySlug: category,
       outdoorOnly,
+      cruisingOnly,
       query: q,
-      sortBy: sort ?? (outdoorOnly ? 'closest' : 'live'),
+      sortBy: sort ?? (outdoorOnly || cruisingOnly ? 'closest' : 'live'),
       limit,
     });
     res.json({

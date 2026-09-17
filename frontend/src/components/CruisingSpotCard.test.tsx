@@ -93,6 +93,34 @@ describe('CruisingSpotCard', () => {
     fireEvent.click(viewBtn);
     expect(onSelect).toHaveBeenCalledWith(mockSpot);
   });
+
+  it('renders a commercial sauna spot with Sauna category badge and icon', () => {
+    const saunaSpot: HotSpotDTO = {
+      id: 'spot-sweatbox',
+      name: 'Sweatbox Sauna',
+      city: 'London',
+      description: 'Central London sauna & wellness',
+      latitude: 51.5132,
+      longitude: -0.1391,
+      category_id: 4,
+      category_slug: 'saunas',
+      category_name: 'Saunas & spas',
+      category_icon: '🧖',
+      distance_km: 1.2,
+      live_count: '—',
+      live_count_exact: 0,
+      is_checked_in: false,
+      my_checkin_anonymous: null,
+      checkin_ttl_hours: 4,
+      has_active_checkins: false,
+    };
+
+    render(<CruisingSpotCard spot={saunaSpot} />);
+
+    expect(screen.getByTestId('cruising-spot-name')).toHaveTextContent('Sweatbox Sauna');
+    expect(screen.getByTestId('cruising-category-badge')).toHaveTextContent('Sauna');
+    expect(screen.getByTestId('cruising-category-badge')).toHaveTextContent('🧖');
+  });
 });
 
 describe('CruisingSearchBar', () => {
