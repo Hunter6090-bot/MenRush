@@ -259,7 +259,7 @@ export function CruisingSearchSheet({
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <PulseRing size={32} label="Finding spots" />
               <p className="mt-3 text-xs font-semibold text-[var(--cream-muted)]">
-                Locating nearby outdoor spots…
+                Locating nearby spots…
               </p>
             </div>
           ) : filteredSpots.length === 0 && !loading ? (

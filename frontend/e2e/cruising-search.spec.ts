@@ -56,6 +56,15 @@ test.describe('Cruising Search Phase 1', () => {
         venue_type: 'bathhouse',
       }),
     ).toBe('sauna');
+
+    expect(
+      mapToCruisingCategory({
+        name: 'Tropics Day Spa',
+        city: 'Portsmouth',
+        category_slug: 'saunas',
+        venue_type: 'sauna',
+      }),
+    ).toBe('sauna');
   });
 
   test('formatLastActiveTime shows honest placeholder when no checkins', () => {

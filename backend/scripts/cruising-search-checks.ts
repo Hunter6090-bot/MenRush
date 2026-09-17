@@ -24,6 +24,20 @@ assert.ok(cruising.has('parks-trails'), 'parks-trails must be in cruising catego
 assert.ok(cruising.has('open-spaces'), 'open-spaces must be in cruising categories');
 assert.ok(cruising.has('parking'), 'parking must be in cruising categories');
 
+// 1c. Verify Tropics Portsmouth is seeded as a commercial sauna in migration 053
+const mig053Path = path.join(
+  __dirname,
+  '../../database/migrations/053_commercial_green_venues_expand.sql',
+);
+if (fs.existsSync(mig053Path)) {
+  const mig053Sql = fs.readFileSync(mig053Path, 'utf8');
+  assert.match(mig053Sql, /Tropics Day Spa/, 'Tropics Day Spa must be seeded in 053');
+  assert.match(mig053Sql, /Portsmouth/, 'Tropics Day Spa must be located in Portsmouth');
+  assert.match(mig053Sql, /green-2026-09:tropics-portsmouth/, 'Tropics Day Spa external_id must match');
+  assert.match(mig053Sql, /50\.8035933/, 'Tropics Day Spa latitude must match');
+  assert.match(mig053Sql, /-1\.0881303/, 'Tropics Day Spa longitude must match');
+}
+
 // 2. Verify visibility SQL allows ops-curated outdoor spots
 const visibilitySql = isPublicHotSpotVisibilitySql('c', 'hs');
 assert.match(visibilitySql, /c\.is_commercial\s*=\s*TRUE/i);

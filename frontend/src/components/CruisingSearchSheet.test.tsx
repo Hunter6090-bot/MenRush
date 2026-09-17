@@ -67,6 +67,23 @@ const mockCruisingSpots: HotSpotDTO[] = [
     my_checkin_anonymous: null,
   },
   {
+    id: 'spot-tropics',
+    name: 'Tropics Day Spa',
+    city: 'Portsmouth',
+    description: 'Portsmouth sauna & spa',
+    latitude: 50.8035933,
+    longitude: -1.0881303,
+    category_id: 4,
+    category_slug: 'saunas',
+    category_name: 'Saunas & spas',
+    category_icon: '🧖',
+    distance_km: 12.3,
+    live_count: '—',
+    live_count_exact: 0,
+    is_checked_in: false,
+    my_checkin_anonymous: null,
+  },
+  {
     id: 'spot-invalid',
     name: 'Ghost Spot Without Coords',
     city: 'Nowhere',
@@ -159,8 +176,9 @@ describe('CruisingSearchSheet', () => {
     const saunaTab = screen.getByRole('tab', { name: /Sauna/i });
     fireEvent.click(saunaTab);
 
-    // Sweatbox Sauna remains; Ockham Common and Hog's Back are filtered out
+    // Sweatbox Sauna and Tropics Portsmouth remain; Ockham Common and Hog's Back are filtered out
     expect(screen.getByTestId('cruising-spot-card-spot-sweatbox')).toBeInTheDocument();
+    expect(screen.getByTestId('cruising-spot-card-spot-tropics')).toBeInTheDocument();
     expect(screen.queryByTestId('cruising-spot-card-spot-ockham')).not.toBeInTheDocument();
     expect(screen.queryByTestId('cruising-spot-card-spot-hogs-back')).not.toBeInTheDocument();
   });
