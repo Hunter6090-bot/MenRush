@@ -12,7 +12,7 @@ export const PREMIUM_PAID_PRICE = 6.99;
 /**
  * Waitlist gift cutoff: UK launch midnight 1 Oct 2026 (BST = UTC+1).
  * Anyone who registers before this gets 30 days Premium with no code.
- * Pride / BSF26 3-month grants replace this gift (do not stack).
+ * Pride / BSF26 / MR3FREE 3-month grants replace this gift (do not stack).
  */
 export const WAITLIST_GIFT_CUTOFF = new Date('2026-09-30T23:00:00Z');
 export const WAITLIST_GIFT_DAYS = 30;
@@ -154,7 +154,7 @@ export const premiumService = {
 
   /**
    * Immediate 30-day Premium for open signup before UK launch (Terms 7.2).
-   * Call only when no Pride / BSF26 path applied for this registration.
+   * Call only when no Pride / BSF26 / MR3FREE path applied for this registration.
    */
   async grantWaitlistGift(
     userId: string,

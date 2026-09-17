@@ -60,4 +60,20 @@ test.describe('Register promo field', () => {
 
     expect(network.expectNoSideEffects()).toEqual([]);
   });
+
+  test('?promo=MR3FREE prefills quietly without advertising the launch ad', async ({ page }) => {
+    const network = await guardAgainstSideEffects(page);
+    await page.goto('/register?promo=MR3FREE');
+
+    const promo = page.getByTestId('register-promo-input');
+    await expect(promo).toBeVisible();
+    await expect(promo).toHaveValue('MR3FREE');
+    await expect(page.getByText(/^Promo code \(optional\)$/)).toBeVisible();
+    await expect(page.getByTestId('register-pride-note')).toHaveText(/Optional\. If you have one\.?/i);
+    // Quiet face: prefill is fine; do not market the campaign on Register.
+    await expect(page.getByText(/MenRush launch/i)).toHaveCount(0);
+    await expect(page.getByText(/Pride promo/i)).toHaveCount(0);
+
+    expect(network.expectNoSideEffects()).toEqual([]);
+  });
 });
