@@ -5,10 +5,109 @@ import {
   getDirectionsUrl,
   getMapboxStaticThumbnailUrl,
   isValidCoordinateSpot,
+  CRUISING_CATEGORIES,
+  CRUISING_CATEGORY_META,
 } from './cruising';
 
 describe('Cruising Search Phase 1 helpers', () => {
+  it('includes sauna in CRUISING_CATEGORIES and metadata', () => {
+    expect(CRUISING_CATEGORIES).toContain('sauna');
+    expect(CRUISING_CATEGORY_META.sauna).toEqual({
+      label: 'Sauna',
+      icon: '🧖',
+      description: 'Licensed saunas, bathhouses and wellness venues',
+    });
+  });
+
   describe('mapToCruisingCategory', () => {
+    it('maps licensed saunas, bathhouses, and wellness venues to "sauna"', () => {
+      expect(
+        mapToCruisingCategory({
+          name: 'Sweatbox Sauna',
+          description: 'Central London sauna & wellness',
+          category_slug: 'saunas',
+        }),
+      ).toBe('sauna');
+
+      expect(
+        mapToCruisingCategory({
+          name: 'Pleasuredrome',
+          description: 'South London bathhouse',
+          category_slug: 'saunas',
+          venue_type: 'bathhouse',
+        }),
+      ).toBe('sauna');
+
+      expect(
+        mapToCruisingCategory({
+          name: 'The Locker Room',
+          category_slug: 'sauna',
+          venue_type: 'sauna',
+        }),
+      ).toBe('sauna');
+
+      expect(
+        mapToCruisingCategory({
+          name: 'Steam Complex',
+          description: 'Digbeth wellness club',
+          category_slug: 'saunas',
+        }),
+      ).toBe('sauna');
+
+      expect(
+        mapToCruisingCategory({
+          name: 'Covent Garden Health Spa',
+          venue_type: 'sauna',
+          category_slug: 'saunas',
+        }),
+      ).toBe('sauna');
+
+      // Priority over beach even if "Brighton" is in the name
+      expect(
+        mapToCruisingCategory({
+          name: 'Brighton Sauna',
+          description: 'Seafront-area sauna',
+          category_slug: 'saunas',
+        }),
+      ).toBe('sauna');
+
+      // Priority over park even if "Park" is in the name
+      expect(
+        mapToCruisingCategory({
+          name: 'Preston Park Sauna',
+          description: 'Wellness venue',
+          category_slug: 'saunas',
+        }),
+      ).toBe('sauna');
+
+      // Commercial sauna row with category_slug 'saunas'
+      expect(
+        mapToCruisingCategory({
+          name: 'BASE Sauna',
+          category_slug: 'saunas',
+          is_commercial: true,
+        }),
+      ).toBe('sauna');
+
+      // Category name "Saunas & spas"
+      expect(
+        mapToCruisingCategory({
+          name: 'Eden Health',
+          category_name: 'Saunas & spas',
+        }),
+      ).toBe('sauna');
+
+      // Tropics Portsmouth seeded commercial sauna
+      expect(
+        mapToCruisingCategory({
+          name: 'Tropics Day Spa',
+          city: 'Portsmouth',
+          category_slug: 'saunas',
+          venue_type: 'sauna',
+          is_commercial: true,
+        }),
+      ).toBe('sauna');
+    });
     it('maps woodland and forest spots to "woods"', () => {
       expect(
         mapToCruisingCategory({

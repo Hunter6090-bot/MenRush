@@ -39,6 +39,32 @@ test.describe('Cruising Search Phase 1', () => {
         category_slug: 'open-spaces',
       }),
     ).toBe('park');
+
+    expect(
+      mapToCruisingCategory({
+        name: 'Sweatbox Sauna',
+        description: 'Central London sauna & wellness',
+        category_slug: 'saunas',
+      }),
+    ).toBe('sauna');
+
+    expect(
+      mapToCruisingCategory({
+        name: 'Pleasuredrome',
+        description: 'South London bathhouse',
+        category_slug: 'saunas',
+        venue_type: 'bathhouse',
+      }),
+    ).toBe('sauna');
+
+    expect(
+      mapToCruisingCategory({
+        name: 'Tropics Day Spa',
+        city: 'Portsmouth',
+        category_slug: 'saunas',
+        venue_type: 'sauna',
+      }),
+    ).toBe('sauna');
   });
 
   test('formatLastActiveTime shows honest placeholder when no checkins', () => {

@@ -8,9 +8,15 @@
  */
 import type { HotSpotDTO } from '../api/client';
 
-export type CruisingCategory = 'woods' | 'beach' | 'layby' | 'park';
+export type CruisingCategory = 'woods' | 'beach' | 'layby' | 'park' | 'sauna';
 
-export const CRUISING_CATEGORIES: CruisingCategory[] = ['woods', 'beach', 'layby', 'park'];
+export const CRUISING_CATEGORIES: CruisingCategory[] = [
+  'woods',
+  'beach',
+  'layby',
+  'park',
+  'sauna',
+];
 
 export const CRUISING_CATEGORY_META: Record<
   CruisingCategory,
@@ -36,28 +42,47 @@ export const CRUISING_CATEGORY_META: Record<
     icon: '🌿',
     description: 'Parks, commons, heaths and open trails',
   },
+  sauna: {
+    label: 'Sauna',
+    icon: '🧖',
+    description: 'Licensed saunas, bathhouses and wellness venues',
+  },
 };
 
 /**
  * Sensibly map existing DB seed fields (category_slug, name, description)
- * to one of the 4 Phase 1 Cruising categories:
- * woods | beach | layby | park
+ * to one of the Cruising categories:
+ * woods | beach | layby | park | sauna
  */
 export function mapToCruisingCategory(spot: {
   category_slug?: string;
   category_name?: string;
   description?: string | null;
   name?: string;
+  venue_type?: string | null;
+  is_commercial?: boolean;
 }): CruisingCategory {
-  const text = `${spot.name ?? ''} ${spot.description ?? ''} ${spot.category_name ?? ''}`.toLowerCase();
+  const text = `${spot.name ?? ''} ${spot.description ?? ''} ${spot.category_name ?? ''} ${spot.venue_type ?? ''}`.toLowerCase();
   const slug = (spot.category_slug ?? '').toLowerCase();
+  const venueType = (spot.venue_type ?? '').toLowerCase();
 
-  // 1. Beach (coastal, dunes, sand, naturist shore)
+  // 1. Sauna (licensed saunas, bathhouses, wellness venues, spas)
+  if (
+    slug === 'saunas' ||
+    slug === 'sauna' ||
+    venueType === 'sauna' ||
+    venueType === 'bathhouse' ||
+    /\b(?:saunas?|bathhouses?|banya|steam\s*rooms?|steam\s*complex)\b/i.test(text)
+  ) {
+    return 'sauna';
+  }
+
+  // 2. Beach (coastal, dunes, sand, naturist shore)
   if (/\b(?:beach|beaches|coast|coastal|dunes?|shore|cove|naturist)\b/i.test(text)) {
     return 'beach';
   }
 
-  // 2. Layby (roadside laybys, pull-ins, truck stops, parking)
+  // 3. Layby (roadside laybys, pull-ins, truck stops, parking)
   if (
     /\b(?:layby|lay-by|pull-in|rest\s*layby|rest\s*stop|truck\s*stop)\b/i.test(text) ||
     slug === 'parking' ||
@@ -67,7 +92,7 @@ export function mapToCruisingCategory(spot: {
     return 'layby';
   }
 
-  // 3. Woods (woodland, copses, forests, thickets)
+  // 4. Woods (woodland, copses, forests, thickets)
   if (
     /\b(?:wood|woods|woodland|copse|copses|forest|forests|thicket|plantation|trees?|spinney|pinetum)\b/i.test(
       text,
@@ -77,7 +102,7 @@ export function mapToCruisingCategory(spot: {
     return 'woods';
   }
 
-  // 4. Park / Open space (public parks, commons, hills, ridges, heaths, downs)
+  // 5. Park / Open space (public parks, commons, hills, ridges, heaths, downs)
   if (
     /\b(?:park|parks|common|commons|heath|downs|hill|hills|ridge|meadow|gardens?|trail|recreation|open\s*space)\b/i.test(
       text,
@@ -90,6 +115,7 @@ export function mapToCruisingCategory(spot: {
   }
 
   // Fallbacks based on category slug
+  if (slug === 'saunas' || slug === 'sauna') return 'sauna';
   if (slug === 'parking') return 'layby';
   if (slug === 'parks-trails') return 'woods';
   return 'park';

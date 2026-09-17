@@ -26,6 +26,14 @@ export const OUTDOOR_HOT_SPOT_CATEGORY_SLUGS = [
 ] as const;
 
 /**
+ * Cruising categories (outdoor cruising spots + licensed commercial saunas).
+ */
+export const CRUISING_HOT_SPOT_CATEGORY_SLUGS = [
+  ...OUTDOOR_HOT_SPOT_CATEGORY_SLUGS,
+  'saunas',
+] as const;
+
+/**
  * SQL predicate for public Cruise list/get/check-in/comment:
  * active commercial venues OR active ops-curated outdoor (non-UGC).
  * Call sites already require `hs.is_active = TRUE`, so soft-inactive Batch 1
@@ -166,6 +174,7 @@ export const hotSpotsService = {
     radiusKm?: number;
     categorySlug?: string;
     outdoorOnly?: boolean;
+    cruisingOnly?: boolean;
     query?: string;
     sortBy?: 'live' | 'closest';
     limit?: number;
@@ -182,8 +191,12 @@ export const hotSpotsService = {
 
     let categoryFilter = '';
     if (opts.categorySlug) {
-      values.push(opts.categorySlug);
+      const slug = opts.categorySlug === 'sauna' ? 'saunas' : opts.categorySlug;
+      values.push(slug);
       categoryFilter = ` AND c.slug = $${values.length}`;
+    } else if (opts.cruisingOnly) {
+      values.push([...CRUISING_HOT_SPOT_CATEGORY_SLUGS]);
+      categoryFilter = ` AND c.slug = ANY($${values.length})`;
     } else if (opts.outdoorOnly) {
       values.push([...OUTDOOR_HOT_SPOT_CATEGORY_SLUGS]);
       categoryFilter = ` AND c.slug = ANY($${values.length})`;
@@ -211,7 +224,7 @@ export const hotSpotsService = {
         $${values.length}
       )`;
     } else if (!hasQuery) {
-      const defaultRadiusM = (opts.outdoorOnly ? 100 : 50) * 1000;
+      const defaultRadiusM = (opts.outdoorOnly || opts.cruisingOnly ? 100 : 50) * 1000;
       values.push(defaultRadiusM);
       distanceFilter = ` AND ST_DWithin(
         ST_SetSRID(ST_MakePoint(hs.longitude, hs.latitude), 4326)::geography,

@@ -50,6 +50,40 @@ const mockCruisingSpots: HotSpotDTO[] = [
     my_checkin_anonymous: null,
   },
   {
+    id: 'spot-sweatbox',
+    name: 'Sweatbox Sauna',
+    city: 'London',
+    description: 'Central London sauna & wellness',
+    latitude: 51.5132,
+    longitude: -0.1391,
+    category_id: 4,
+    category_slug: 'saunas',
+    category_name: 'Saunas & spas',
+    category_icon: '🧖',
+    distance_km: 9.5,
+    live_count: '—',
+    live_count_exact: 0,
+    is_checked_in: false,
+    my_checkin_anonymous: null,
+  },
+  {
+    id: 'spot-tropics',
+    name: 'Tropics Day Spa',
+    city: 'Portsmouth',
+    description: 'Portsmouth sauna & spa',
+    latitude: 50.8035933,
+    longitude: -1.0881303,
+    category_id: 4,
+    category_slug: 'saunas',
+    category_name: 'Saunas & spas',
+    category_icon: '🧖',
+    distance_km: 12.3,
+    live_count: '—',
+    live_count_exact: 0,
+    is_checked_in: false,
+    my_checkin_anonymous: null,
+  },
+  {
     id: 'spot-invalid',
     name: 'Ghost Spot Without Coords',
     city: 'Nowhere',
@@ -94,10 +128,11 @@ describe('CruisingSearchSheet', () => {
     // Ghost Spot Without Coords has lat=0, lng=0 -> must be excluded
     expect(screen.queryByTestId('cruising-spot-card-spot-invalid')).not.toBeInTheDocument();
 
-    // Verify ordering: Ockham Common (1.5 km) appears before Hog's Back (8.4 km)
+    // Verify ordering: Ockham Common (1.5 km) appears before Hog's Back (8.4 km) and Sweatbox (9.5 km)
     const cards = screen.getAllByTestId(/cruising-spot-card-/);
     expect(cards[0]).toHaveAttribute('data-testid', 'cruising-spot-card-spot-ockham');
     expect(cards[1]).toHaveAttribute('data-testid', 'cruising-spot-card-spot-hogs-back');
+    expect(cards[2]).toHaveAttribute('data-testid', 'cruising-spot-card-spot-sweatbox');
   });
 
   it('allows filtering by category (e.g. Layby or Woods)', async () => {
@@ -121,6 +156,31 @@ describe('CruisingSearchSheet', () => {
     // Ockham Common is "Woods", so it should be filtered out; Hog's Back is "Layby", so it remains
     expect(screen.queryByTestId('cruising-spot-card-spot-ockham')).not.toBeInTheDocument();
     expect(screen.getByTestId('cruising-spot-card-spot-hogs-back')).toBeInTheDocument();
+  });
+
+  it('allows filtering by Sauna category (showing commercial sauna Hot Spots)', async () => {
+    render(
+      <CruisingSearchSheet
+        open={true}
+        onClose={vi.fn()}
+        lat={51.3}
+        lng={-0.5}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('cruising-spot-card-spot-sweatbox')).toBeInTheDocument();
+    });
+
+    // Click "Sauna" tab
+    const saunaTab = screen.getByRole('tab', { name: /Sauna/i });
+    fireEvent.click(saunaTab);
+
+    // Sweatbox Sauna and Tropics Portsmouth remain; Ockham Common and Hog's Back are filtered out
+    expect(screen.getByTestId('cruising-spot-card-spot-sweatbox')).toBeInTheDocument();
+    expect(screen.getByTestId('cruising-spot-card-spot-tropics')).toBeInTheDocument();
+    expect(screen.queryByTestId('cruising-spot-card-spot-ockham')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('cruising-spot-card-spot-hogs-back')).not.toBeInTheDocument();
   });
 
   it('allows text searching in the search bar', async () => {
