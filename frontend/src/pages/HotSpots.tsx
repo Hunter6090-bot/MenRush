@@ -11,6 +11,7 @@ import { CruisingSearchBar } from '../components/CruisingSearchBar';
 import { CruisingSearchSheet } from '../components/CruisingSearchSheet';
 import { VenueClaimModal } from '../components/VenueClaimModal';
 import { VenueCalendarModal } from '../components/VenueCalendarModal';
+import { HotSpotReviewsModal } from '../components/HotSpotReviewsModal';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { formatDistanceFromKm } from '../lib/localeUnits';
 import { getDirectionsUrl } from '../lib/cruising';
@@ -27,6 +28,7 @@ export const HotSpots = () => {
   const [actingId, setActingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [reviewsSpot, setReviewsSpot] = useState<HotSpotDTO | null>(null);
   const [cruisingSearchOpen, setCruisingSearchOpen] = useState(false);
   const [claimModalSpot, setClaimModalSpot] = useState<HotSpotDTO | null>(null);
   const [calendarModalSpot, setCalendarModalSpot] = useState<HotSpotDTO | null>(null);
@@ -299,10 +301,13 @@ export const HotSpots = () => {
                       {spot.category_icon} {spot.category_name}
                     </p>
                     <h2 className="text-base font-bold text-[var(--cream)]">{spot.name}</h2>
-                    <p className="text-[13px] text-[var(--cream-muted)]">
-                      {spot.city ?? 'UK'}
-                      {spot.distance_km != null ? ` · ${formatDistanceFromKm(Number(spot.distance_km))}` : ''}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5 text-[13px] text-[var(--cream-muted)]">
+                      <span>{spot.city ?? 'UK'}</span>
+                      {spot.distance_km != null ? <span>· {formatDistanceFromKm(Number(spot.distance_km))}</span> : null}
+                      {spot.rating_avg != null && (spot.review_count ?? 0) > 0 ? (
+                        <span className="font-bold text-[#E0A14A]">· ★ {spot.rating_avg} ({spot.review_count})</span>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="rounded-full border border-[var(--border-default)] bg-[rgba(196,131,42,0.12)] px-3 py-1 text-center">
                     <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--cream-muted)]">
@@ -366,26 +371,42 @@ export const HotSpots = () => {
                     </button>
                   ) : null}
 
-                  <a
-                    href={getDirectionsUrl(spot.latitude, spot.longitude, spot.name)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-1.5 rounded-full border border-[var(--border-default)] bg-black/25 py-2 text-[12px] font-bold text-[var(--cream-soft)] transition-colors hover:border-[var(--copper)]/50 hover:text-[var(--cream)]"
-                  >
-                    <svg
-                      width="13"
-                      height="13"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                  <div className="flex gap-2">
+                    <a
+                      href={getDirectionsUrl(spot.latitude, spot.longitude, spot.name)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-[var(--border-default)] bg-black/25 py-2 text-[12px] font-bold text-[var(--cream-soft)] transition-colors hover:border-[var(--copper)]/50 hover:text-[var(--cream)]"
                     >
-                      <polygon points="3 11 22 2 13 21 11 13 3 11" />
-                    </svg>
-                    Get directions
-                  </a>
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <polygon points="3 11 22 2 13 21 11 13 3 11" />
+                      </svg>
+                      Get directions
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => setReviewsSpot(spot)}
+                      data-testid={`hotspot-card-reviews-${spot.id}`}
+                      className="inline-flex items-center justify-center gap-1 rounded-full border border-[var(--border-default)] bg-black/20 px-3.5 py-2 text-[12px] font-bold text-[var(--cream-soft)] transition-colors hover:border-[var(--copper)]/50 hover:text-[var(--cream)]"
+                    >
+                      <span>Reviews</span>
+                      {(spot.review_count ?? 0) > 0 ? (
+                        <span className="rounded-full bg-black/40 px-1.5 py-0.5 text-[10px] text-[#E0A14A]">
+                          {spot.review_count}
+                        </span>
+                      ) : null}
+                    </button>
+                  </div>
                   {spot.is_checked_in ? (
                     <button
                       type="button"
@@ -446,6 +467,18 @@ export const HotSpots = () => {
                 essential: true,
               });
             }
+          }}
+          onCheckIn={handleCheckIn}
+          onOpenReviews={(spot) => setReviewsSpot(spot)}
+          actingSpotId={actingId}
+        />
+
+        <HotSpotReviewsModal
+          spot={reviewsSpot}
+          open={Boolean(reviewsSpot)}
+          onClose={() => setReviewsSpot(null)}
+          onSpotUpdated={(updated) => {
+            setSpots((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
           }}
         />
 

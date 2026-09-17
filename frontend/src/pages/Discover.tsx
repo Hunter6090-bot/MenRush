@@ -20,6 +20,7 @@ import {
 import { nearbyRosterFingerprint } from '../lib/nearbyRoster';
 import { ProfileDrawer } from '../components/ProfileDrawer';
 import { HotSpotSheet } from '../components/HotSpotSheet';
+import { HotSpotReviewsModal } from '../components/HotSpotReviewsModal';
 import { CruisingSearchBar } from '../components/CruisingSearchBar';
 import { CruisingSearchSheet } from '../components/CruisingSearchSheet';
 import { createMapMarkerElement, MapMarker } from '../components/MapMarker';
@@ -687,8 +688,10 @@ export const Discover = () => {
     writeLayerVisible('hotSpots', visible);
   }, []);
   const [selectedHotSpot, setSelectedHotSpot] = useState<HotSpotDTO | null>(null);
+  const [reviewsSpot, setReviewsSpot] = useState<HotSpotDTO | null>(null);
   const [cruisingSearchOpen, setCruisingSearchOpen] = useState(false);
   const [hotSpotActing, setHotSpotActing] = useState(false);
+  const [actingCruisingSpotId, setActingCruisingSpotId] = useState<string | null>(null);
   const [hotSpotActionError, setHotSpotActionError] = useState('');
   const navigate = useNavigate();
   const isDesktopLayout = useIsDesktopLayout();
@@ -1387,12 +1390,30 @@ export const Discover = () => {
   const handleHotSpotCheckIn = useCallback(
     async (spot: HotSpotDTO, anonymous: boolean) => {
       setHotSpotActing(true);
+      setActingCruisingSpotId(spot.id);
       setHotSpotActionError('');
       try {
+        let updatedSpot: HotSpotDTO | undefined;
         if (spot.is_checked_in) {
           await hotSpotsAPI.checkOut(spot.id);
+          updatedSpot = {
+            ...spot,
+            is_checked_in: false,
+            live_count_exact: Math.max(0, spot.live_count_exact - 1),
+            has_active_checkins: Math.max(0, spot.live_count_exact - 1) > 0,
+          };
         } else {
-          await hotSpotsAPI.checkIn(spot.id, anonymous);
+          const res = await hotSpotsAPI.checkIn(spot.id, anonymous);
+          updatedSpot = res.data?.spot ?? {
+            ...spot,
+            is_checked_in: true,
+            my_checkin_anonymous: anonymous,
+            live_count_exact: spot.live_count_exact + 1,
+            has_active_checkins: true,
+          };
+        }
+        if (selectedHotSpot && selectedHotSpot.id === spot.id && updatedSpot) {
+          setSelectedHotSpot(updatedSpot);
         }
         if (lat != null && lng != null) {
           const res = await hotSpotsAPI.listNearby(lat, lng, Math.max(radius, 25));
@@ -1402,9 +1423,10 @@ export const Discover = () => {
         setHotSpotActionError('Check-in failed. Try again.');
       } finally {
         setHotSpotActing(false);
+        setActingCruisingSpotId(null);
       }
     },
-    [lat, lng, radius],
+    [lat, lng, radius, selectedHotSpot],
   );
 
   const handleLike = useCallback(
@@ -2715,6 +2737,7 @@ export const Discover = () => {
           setHotSpotActionError('');
         }}
         onCheckIn={handleHotSpotCheckIn}
+        onOpenReviews={(spot) => setReviewsSpot(spot)}
       />
 
       <CruisingSearchSheet
@@ -2723,6 +2746,21 @@ export const Discover = () => {
         lat={lat}
         lng={lng}
         onSelectSpot={handleCruisingSpotSelect}
+        onCheckIn={handleHotSpotCheckIn}
+        onOpenReviews={(spot) => setReviewsSpot(spot)}
+        actingSpotId={actingCruisingSpotId}
+      />
+
+      <HotSpotReviewsModal
+        spot={reviewsSpot}
+        open={Boolean(reviewsSpot)}
+        onClose={() => setReviewsSpot(null)}
+        onSpotUpdated={(updated) => {
+          if (selectedHotSpot && selectedHotSpot.id === updated.id) {
+            setSelectedHotSpot(updated);
+          }
+          setHotSpots((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+        }}
       />
     </Layout>
   );

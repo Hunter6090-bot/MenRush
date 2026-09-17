@@ -12,13 +12,22 @@ interface HotSpotSheetProps {
   error: string;
   onClose: () => void;
   onCheckIn: (spot: HotSpotDTO, anonymous: boolean) => void | Promise<void>;
+  onOpenReviews?: (spot: HotSpotDTO) => void;
 }
 
 /**
  * In-map Cruise details + check-in/out. Selecting a Cruise pin on Nearby opens
  * details and check-in without navigating away. Active/check-in counts only when real.
  */
-export function HotSpotSheet({ spot, isPremium, acting, error, onClose, onCheckIn }: HotSpotSheetProps) {
+export function HotSpotSheet({
+  spot,
+  isPremium,
+  acting,
+  error,
+  onClose,
+  onCheckIn,
+  onOpenReviews,
+}: HotSpotSheetProps) {
   if (!spot) return null;
 
   const active = Boolean(spot.has_active_checkins ?? spot.live_count_exact > 0);
@@ -52,11 +61,14 @@ export function HotSpotSheet({ spot, isPremium, acting, error, onClose, onCheckI
           {spot.category_icon} {spot.category_name}
         </p>
         <h2 className="text-lg font-bold text-[var(--cream)]">{spot.name}</h2>
-        <p className="mt-0.5 text-[13px] text-[var(--cream-muted)]">
-          {spot.city ?? 'UK'}
-          {spot.nation ? ` · ${spot.nation}` : ''}
-          {spot.distance_km != null ? ` · ${formatDistanceFromKm(Number(spot.distance_km))}` : ''}
-        </p>
+        <div className="flex flex-wrap items-center gap-1.5 mt-0.5 text-[13px] text-[var(--cream-muted)]">
+          <span>{spot.city ?? 'UK'}</span>
+          {spot.nation ? <span>· {spot.nation}</span> : null}
+          {spot.distance_km != null ? <span>· {formatDistanceFromKm(Number(spot.distance_km))}</span> : null}
+          {spot.rating_avg != null && (spot.review_count ?? 0) > 0 ? (
+            <span className="font-bold text-[#E0A14A]">· ★ {spot.rating_avg} ({spot.review_count})</span>
+          ) : null}
+        </div>
 
         <p
           className="mt-2 text-[11px] leading-relaxed text-[var(--cream-muted)]"
@@ -94,13 +106,13 @@ export function HotSpotSheet({ spot, isPremium, acting, error, onClose, onCheckI
         </p>
 
         {Number.isFinite(spot.latitude) && Number.isFinite(spot.longitude) ? (
-          <div className="mt-3">
+          <div className="mt-3 flex gap-2">
             <a
               href={getDirectionsUrl(spot.latitude, spot.longitude, spot.name)}
               target="_blank"
               rel="noopener noreferrer"
               data-testid="hotspot-sheet-directions"
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-[var(--border-default)] bg-black/25 py-2 text-[12px] font-bold text-[var(--cream-soft)] transition-colors hover:border-[var(--copper)]/50 hover:text-[var(--cream)]"
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-[var(--border-default)] bg-black/25 py-2 text-[12px] font-bold text-[var(--cream-soft)] transition-colors hover:border-[var(--copper)]/50 hover:text-[var(--cream)]"
             >
               <svg
                 width="13"
@@ -117,6 +129,22 @@ export function HotSpotSheet({ spot, isPremium, acting, error, onClose, onCheckI
               </svg>
               Get directions
             </a>
+
+            {onOpenReviews ? (
+              <button
+                type="button"
+                onClick={() => onOpenReviews(spot)}
+                data-testid="hotspot-sheet-reviews-btn"
+                className="inline-flex items-center justify-center gap-1 rounded-full border border-[var(--border-default)] bg-black/20 px-4 py-2 text-[12px] font-bold text-[var(--cream-soft)] transition-colors hover:border-[var(--copper)]/50 hover:text-[var(--cream)]"
+              >
+                <span>Reviews</span>
+                {(spot.review_count ?? 0) > 0 ? (
+                  <span className="rounded-full bg-black/40 px-1.5 py-0.5 text-[10px] text-[#E0A14A]">
+                    {spot.review_count}
+                  </span>
+                ) : null}
+              </button>
+            ) : null}
           </div>
         ) : null}
 

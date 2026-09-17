@@ -172,10 +172,32 @@ assert.doesNotMatch(seedScriptCode, /NOW\(\),\s*NOW\(\)/, 'seed script must not 
 assert.match(seedScriptCode, /initialLastActivity/, 'seed script must compute initialLastActivity for inserts');
 assert.match(seedScriptCode, /isCruisingPin/, 'seed script must explicitly guard cruising pins');
 
+// 9. Verify Phase 2: 2h outdoor checkin TTL and 065 hot_spot_reviews migration
+import { OUTDOOR_CHECKIN_TTL_HOURS } from '../src/services/hot-spots.service';
+assert.strictEqual(OUTDOOR_CHECKIN_TTL_HOURS, 2, 'Outdoor cruising checkin TTL must be 2 hours');
+
+const rootMig065Path = path.join(
+  __dirname,
+  '../../database/migrations/065_hot_spot_reviews.sql',
+);
+const backendMig065Path = path.join(
+  __dirname,
+  '../database/migrations/065_hot_spot_reviews.sql',
+);
+assert.ok(fs.existsSync(rootMig065Path), '065 migration must exist in database/migrations');
+assert.ok(fs.existsSync(backendMig065Path), '065 migration must exist in backend/database/migrations');
+const root065Sql = fs.readFileSync(rootMig065Path, 'utf8');
+const backend065Sql = fs.readFileSync(backendMig065Path, 'utf8');
+assert.strictEqual(root065Sql, backend065Sql, 'Both 065 migration copies must be identical');
+assert.match(root065Sql, /hot_spot_reviews/);
+assert.match(root065Sql, /rating SMALLINT NOT NULL CHECK \(rating >= 1 AND rating <= 5\)/);
+assert.match(root065Sql, /is_anonymous BOOLEAN NOT NULL DEFAULT TRUE/);
+
 console.log('✓ Outdoor categories & visibility SQL verified');
 console.log('✓ Migration 061 (exact confirmed Product coords and display names, NULL last_activity_at) verified in both locations');
 console.log('✓ Migration 062 (NULLs last_activity_at for Hog’s Back and Wisley) verified in both locations');
 console.log('✓ Cruising seed JSON verified: last_activity_at is null, names exact');
 console.log('✓ Seed script guard verified: no default NOW() on insert or update without real check-ins');
 console.log('✓ Legal constraints verified: no RHS/Cafe endorsement, no toilets');
+console.log('✓ Phase 2 2h checkin TTL and migration 065 hot_spot_reviews verified');
 console.log('cruising-search-checks: ok');

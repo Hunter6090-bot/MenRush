@@ -18,6 +18,9 @@ interface CruisingSearchSheetProps {
   lat: number | null;
   lng: number | null;
   onSelectSpot?: (spot: HotSpotDTO) => void;
+  onCheckIn?: (spot: HotSpotDTO, anonymous: boolean) => void | Promise<void>;
+  onOpenReviews?: (spot: HotSpotDTO) => void;
+  actingSpotId?: string | null;
   initialQuery?: string;
 }
 
@@ -27,6 +30,9 @@ export function CruisingSearchSheet({
   lat,
   lng,
   onSelectSpot,
+  onCheckIn,
+  onOpenReviews,
+  actingSpotId,
   initialQuery = '',
 }: CruisingSearchSheetProps) {
   const [query, setQuery] = useState(initialQuery);
@@ -305,6 +311,9 @@ export function CruisingSearchSheet({
                     onSelectSpot?.(selected);
                     onClose();
                   }}
+                  onCheckIn={onCheckIn}
+                  onOpenReviews={onOpenReviews}
+                  acting={actingSpotId === spot.id}
                 />
               ))}
             </>

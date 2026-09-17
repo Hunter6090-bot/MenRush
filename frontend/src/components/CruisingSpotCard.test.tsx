@@ -121,6 +121,51 @@ describe('CruisingSpotCard', () => {
     expect(screen.getByTestId('cruising-category-badge')).toHaveTextContent('Sauna');
     expect(screen.getByTestId('cruising-category-badge')).toHaveTextContent('🧖');
   });
+
+  it('provides an anonymous check-in button and triggers onCheckIn with anonymous=true', () => {
+    const onCheckIn = vi.fn();
+    render(<CruisingSpotCard spot={mockSpot} onCheckIn={onCheckIn} />);
+
+    const checkInBtn = screen.getByTestId(`cruising-checkin-anon-${mockSpot.id}`);
+    expect(checkInBtn).toHaveTextContent('Check in anonymously');
+    fireEvent.click(checkInBtn);
+    expect(onCheckIn).toHaveBeenCalledWith(mockSpot, true);
+  });
+
+  it('shows "Checked in (Leave)" when user is already checked in and allows checking out', () => {
+    const onCheckIn = vi.fn();
+    const checkedInSpot: HotSpotDTO = {
+      ...mockSpot,
+      is_checked_in: true,
+      my_checkin_anonymous: true,
+      has_active_checkins: true,
+      live_count_exact: 1,
+    };
+    render(<CruisingSpotCard spot={checkedInSpot} onCheckIn={onCheckIn} />);
+
+    const checkOutBtn = screen.getByTestId(`cruising-checkout-${mockSpot.id}`);
+    expect(checkOutBtn).toHaveTextContent(/Checked in/i);
+    fireEvent.click(checkOutBtn);
+    expect(onCheckIn).toHaveBeenCalledWith(checkedInSpot, false);
+  });
+
+  it('renders reviews button and triggers onOpenReviews', () => {
+    const onOpenReviews = vi.fn();
+    const ratedSpot: HotSpotDTO = {
+      ...mockSpot,
+      rating_avg: 4.8,
+      review_count: 5,
+    };
+    render(<CruisingSpotCard spot={ratedSpot} onOpenReviews={onOpenReviews} />);
+
+    expect(screen.getByTestId('cruising-card-rating')).toHaveTextContent('★ 4.8');
+    const reviewsBtn = screen.getByTestId(`cruising-reviews-btn-${mockSpot.id}`);
+    expect(reviewsBtn).toHaveTextContent('Reviews');
+    expect(reviewsBtn).toHaveTextContent('5');
+    fireEvent.click(reviewsBtn);
+    expect(onOpenReviews).toHaveBeenCalledWith(ratedSpot);
+  });
+  });
 });
 
 describe('CruisingSearchBar', () => {

@@ -37,6 +37,20 @@ const CheckInSchema = z.object({
   anonymous: z.boolean().optional().default(false),
 });
 
+const ReviewSchema = z.object({
+  rating: z.number().int().min(1, 'Rating must be between 1 and 5').max(5, 'Rating must be between 1 and 5'),
+  body: z.string().trim().min(1, 'Review must be 1–500 characters').max(500, 'Review must be 1–500 characters'),
+  anonymous: z.boolean().optional().default(true),
+});
+
+const reviewLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 15,
+  message: { error: 'Too many reviews submitted. Try again in a minute.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 router.get('/categories', async (_req: AuthRequest, res: Response) => {
   try {
     const categories = await hotSpotsService.listCategories();
@@ -148,6 +162,53 @@ router.post('/check-out', async (req: AuthRequest, res: Response) => {
     res.json({ ok: true });
   } catch (err: unknown) {
     res.status(400).json({ error: 'Check-out failed' });
+  }
+});
+
+router.get('/:id/reviews', async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await hotSpotsService.listReviews(req.params.id, req.userId);
+    res.json(result);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Could not load reviews';
+    const status = message === 'Spot not found' ? 404 : 500;
+    res.status(status).json({ error: message });
+  }
+});
+
+router.post('/:id/reviews', reviewLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const body = ReviewSchema.parse(req.body ?? {});
+    const result = await hotSpotsService.addOrUpdateReview(
+      req.userId!,
+      req.params.id,
+      body.rating,
+      body.body,
+      body.anonymous,
+    );
+    res.json({ ok: true, ...result });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Review submission failed';
+    const status = message === 'Spot not found' ? 404 : 400;
+    res.status(status).json({ error: message });
+  }
+});
+
+router.delete('/:id/reviews/me', async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await hotSpotsService.deleteReview(req.userId!, req.params.id);
+    res.json(result);
+  } catch (err: unknown) {
+    res.status(400).json({ error: 'Could not delete review' });
+  }
+});
+
+router.delete('/:id/reviews/:reviewId', async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await hotSpotsService.deleteReview(req.userId!, req.params.id, req.params.reviewId);
+    res.json(result);
+  } catch (err: unknown) {
+    res.status(400).json({ error: 'Could not delete review' });
   }
 });
 
@@ -279,6 +340,8 @@ router.post('/:id/events/:eventId/cancel', async (req: AuthRequest, res: Respons
     const message = err instanceof Error ? err.message : 'Failed to cancel venue event';
     const status = message.includes('Ops approval required') || message.includes('Not authorized') ? 403 : message === 'Event not found' ? 404 : 400;
     res.status(status).json({ error: message });
+  }
+});
   }
 });
 

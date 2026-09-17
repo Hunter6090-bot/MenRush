@@ -216,4 +216,31 @@ describe('CruisingSearchSheet', () => {
     fireEvent.click(closeBtn);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('delegates anonymous check-in and reviews requests from cards', async () => {
+    const onCheckIn = vi.fn();
+    const onOpenReviews = vi.fn();
+
+    render(
+      <CruisingSearchSheet
+        open={true}
+        onClose={vi.fn()}
+        lat={51.3}
+        lng={-0.5}
+        onCheckIn={onCheckIn}
+        onOpenReviews={onOpenReviews}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('cruising-checkin-anon-spot-ockham')).toBeInTheDocument();
+      expect(screen.getByTestId('cruising-reviews-btn-spot-ockham')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('cruising-checkin-anon-spot-ockham'));
+    expect(onCheckIn).toHaveBeenCalledWith(mockCruisingSpots[0], true);
+
+    fireEvent.click(screen.getByTestId('cruising-reviews-btn-spot-ockham'));
+    expect(onOpenReviews).toHaveBeenCalledWith(mockCruisingSpots[0]);
+  });
 });

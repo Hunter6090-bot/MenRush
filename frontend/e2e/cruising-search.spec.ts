@@ -92,4 +92,27 @@ test.describe('Cruising Search Phase 1', () => {
     expect(isValidCoordinateSpot({ latitude: 0, longitude: 0 })).toBe(false);
     expect(isValidCoordinateSpot({ latitude: null as any, longitude: -0.5 })).toBe(false);
   });
+
+  test('Phase 2: active check-in displays live signal and honest count', () => {
+    expect(
+      formatLastActiveTime({
+        has_active_checkins: true,
+        live_count_exact: 1,
+      }),
+    ).toBe('Active now');
+
+    expect(
+      formatLastActiveTime({
+        has_active_checkins: true,
+        live_count_exact: 3,
+      }),
+    ).toBe('3 checked in now');
+  });
+
+  test('Phase 2 regression guard: Get Directions generates maps link with coordinates', () => {
+    const link = getDirectionsUrl(51.2260632, -0.6727582, 'A31 Hog’s Back Rest Lay-by');
+    expect(link).toMatch(/^https:\/\/(maps\.apple\.com|www\.google\.com\/maps)/);
+    expect(link).toContain('51.2260632');
+    expect(link).toContain('-0.6727582');
+  });
 });

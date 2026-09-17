@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { HotSpotDTO } from '../api/client';
 import {
   mapToCruisingCategory,
@@ -11,14 +12,24 @@ import { CruisingSpotMapThumbnail } from './CruisingSpotMapThumbnail';
 interface CruisingSpotCardProps {
   spot: HotSpotDTO;
   onSelect?: (spot: HotSpotDTO) => void;
+  onCheckIn?: (spot: HotSpotDTO, anonymous: boolean) => void | Promise<void>;
+  onOpenReviews?: (spot: HotSpotDTO) => void;
+  acting?: boolean;
 }
 
-export function CruisingSpotCard({ spot, onSelect }: CruisingSpotCardProps) {
+export function CruisingSpotCard({
+  spot,
+  onSelect,
+  onCheckIn,
+  onOpenReviews,
+  acting = false,
+}: CruisingSpotCardProps) {
   const category = mapToCruisingCategory(spot);
   const categoryMeta = CRUISING_CATEGORY_META[category];
   const lastActive = formatLastActiveTime(spot);
   const isCurrentlyActive = Boolean(spot.has_active_checkins || spot.live_count_exact > 0);
   const directionsUrl = getDirectionsUrl(spot.latitude, spot.longitude, spot.name);
+  const ttlHours = spot.checkin_ttl_hours ?? 2;
 
   return (
     <article
@@ -56,6 +67,17 @@ export function CruisingSpotCard({ spot, onSelect }: CruisingSpotCardProps) {
           {spot.city ? (
             <span className="text-[11px] text-[var(--cream-muted)]">· {spot.city}</span>
           ) : null}
+
+          {/* Review rating badge if reviews exist */}
+          {spot.rating_avg != null && (spot.review_count ?? 0) > 0 ? (
+            <span
+              data-testid="cruising-card-rating"
+              className="inline-flex items-center gap-0.5 text-[11px] font-bold text-[#E0A14A]"
+            >
+              ★ {spot.rating_avg}
+              <span className="text-[10px] text-[var(--cream-muted)]">({spot.review_count})</span>
+            </span>
+          ) : null}
         </div>
 
         {/* Spot Name */}
@@ -75,21 +97,27 @@ export function CruisingSpotCard({ spot, onSelect }: CruisingSpotCardProps) {
 
         {/* Last Active Time status indicator */}
         <div
-          className="mt-2 flex items-center gap-1.5 text-xs font-medium"
+          className="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium"
           data-testid="cruising-last-active"
         >
-          <span
-            className={`inline-block h-2 w-2 rounded-full ${
-              isCurrentlyActive ? 'bg-[#3D7A2E] shadow-[0_0_6px_#3D7A2E]' : 'bg-[rgba(240,224,192,0.35)]'
-            }`}
-            aria-hidden="true"
-          />
-          <span
-            className={
-              isCurrentlyActive ? 'font-bold text-[#8FC773]' : 'text-[var(--cream-muted)]'
-            }
-          >
-            {lastActive}
+          <div className="flex items-center gap-1.5">
+            <span
+              className={`inline-block h-2 w-2 rounded-full ${
+                isCurrentlyActive ? 'bg-[#3D7A2E] shadow-[0_0_6px_#3D7A2E]' : 'bg-[rgba(240,224,192,0.35)]'
+              }`}
+              aria-hidden="true"
+            />
+            <span
+              className={
+                isCurrentlyActive ? 'font-bold text-[#8FC773]' : 'text-[var(--cream-muted)]'
+              }
+            >
+              {lastActive}
+            </span>
+          </div>
+
+          <span className="text-[10px] text-[var(--cream-muted)]">
+            · {ttlHours}h signal
           </span>
         </div>
 
@@ -120,6 +148,57 @@ export function CruisingSpotCard({ spot, onSelect }: CruisingSpotCardProps) {
             Get directions
           </a>
 
+          {/* Anonymous check-in / check-out button */}
+          {onCheckIn ? (
+            spot.is_checked_in ? (
+              <button
+                type="button"
+                disabled={acting}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onCheckIn(spot, false);
+                }}
+                data-testid={`cruising-checkout-${spot.id}`}
+                className="inline-flex items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[#C4832A]/10 px-3 py-1.5 text-xs font-bold text-[#E0A14A] transition-colors hover:bg-[#C4832A]/20"
+              >
+                {acting ? 'Updating…' : 'Checked in (Leave)'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={acting}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onCheckIn(spot, true);
+                }}
+                data-testid={`cruising-checkin-anon-${spot.id}`}
+                className="inline-flex items-center gap-1 rounded-full border border-[var(--border-default)] bg-black/25 px-3 py-1.5 text-xs font-bold text-[var(--cream)] transition-colors hover:border-[var(--copper)]/50 hover:bg-[#C4832A]/10"
+              >
+                {acting ? 'Checking in…' : 'Check in anonymously'}
+              </button>
+            )
+          ) : null}
+
+          {/* Reviews button (1–5 + short text) */}
+          {onOpenReviews ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenReviews(spot);
+              }}
+              data-testid={`cruising-reviews-btn-${spot.id}`}
+              className="inline-flex items-center gap-1 rounded-full border border-[var(--border-default)] bg-black/20 px-3 py-1.5 text-xs font-bold text-[var(--cream-soft)] transition-colors hover:border-[var(--copper)]/50 hover:text-[var(--cream)]"
+            >
+              <span>Reviews</span>
+              {(spot.review_count ?? 0) > 0 ? (
+                <span className="rounded-full bg-black/40 px-1.5 py-0.2 text-[10px] text-[#E0A14A]">
+                  {spot.review_count}
+                </span>
+              ) : null}
+            </button>
+          ) : null}
+
           {/* View on map (if onSelect handler provided) */}
           {onSelect ? (
             <button
@@ -145,9 +224,6 @@ export function CruisingSpotCard({ spot, onSelect }: CruisingSpotCardProps) {
               View on map
             </button>
           ) : null}
-
-          {/* Phase 2 TODO: Anonymous check-in ("Check in here", 2h expire, optional face opt-in) */}
-          {/* Phase 2 TODO: Reviews (1–5 + text, mod tools) */}
         </div>
       </div>
     </article>
