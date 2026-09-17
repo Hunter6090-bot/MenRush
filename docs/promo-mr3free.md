@@ -53,6 +53,6 @@ Implemented via `mr3FreePremiumWindow` / `applyMr3FreePremiumGrant`.
 - `mr3FreePremiumWindow` / `applyMr3FreePremiumGrant` / `validateSharedMr3Free` / `redeemSharedMr3Free` — `backend/src/services/promo.service.ts`
 - Register branch — `backend/src/services/auth.service.ts`
 - Referral classification — `backend/src/services/referral.service.ts`
-- Migration — `database/migrations/063_mr3free_launch_promo.sql` and `backend/database/migrations/063_mr3free_launch_promo.sql`
+- Migration — `database/migrations/064_mr3free_launch_promo.sql` and `backend/database/migrations/064_mr3free_launch_promo.sql`
 - Terms §7.9 — `frontend/src/pages/Terms.tsx`
 - Checks: `npm run test:mr3free` from `backend/`

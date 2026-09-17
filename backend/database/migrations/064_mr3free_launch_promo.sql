@@ -1,4 +1,4 @@
--- Migration 063: MenRush launch ad campaign promo code MR3FREE.
+-- Migration 064: MenRush launch ad campaign promo code MR3FREE.
 -- Code: MR3FREE (accept mr3free; case-insensitive, no spaces).
 -- Campaign: MenRush launch.
 -- Live from 17 September 2026 until 23:59 Europe/London on 5 October 2026.
