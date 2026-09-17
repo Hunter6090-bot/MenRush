@@ -99,7 +99,8 @@ async function main() {
     headers: auth,
   });
   assert(nearby.status === 200 || nearby.status === 400 || nearby.status === 403, `nearby ${nearby.status}`);
-  console.log('[smoke] nearby status', nearby.status, Array.isArray(nearby.body) ? `n=${nearby.body.length}` : '');
+  const nearbyCount = Array.isArray(nearby.body) ? nearby.body.length : (nearby.body?.users ? nearby.body.users.length : '');
+  console.log('[smoke] nearby status', nearby.status, nearbyCount !== '' ? `n=${nearbyCount}` : '');
 
   console.log('[smoke] PASS');
 }

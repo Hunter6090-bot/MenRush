@@ -315,6 +315,9 @@ export function buildNearbyApiFilters(state: DiscoveryFilterState) {
     minAge,
     maxAge,
     onlyPulse: state.status.includes('pulsing') || undefined,
+    online: state.status.includes('online') || undefined,
+    verified: state.status.includes('verified') || undefined,
+    new: state.status.includes('new') || undefined,
     mood: state.mood ? `%${state.mood}%` : undefined,
   };
 }

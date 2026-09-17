@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
@@ -61,5 +61,63 @@ describe('NearbyProfileGrid distance chips', () => {
 
     const distanceChip = screen.getByTestId('nearby-grid-distance-u3');
     expect(distanceChip.textContent).toContain('Nearby');
+  });
+});
+
+describe('NearbyProfileGrid pagination', () => {
+  it('renders "Load more men" button when hasMore is true', () => {
+    const user = mockUser({ id: 'u1', name: 'James' });
+    const onLoadMore = vi.fn();
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid
+          users={[user]}
+          loading={false}
+          hasMore={true}
+          onLoadMore={onLoadMore}
+        />
+      </MemoryRouter>,
+    );
+
+    const loadMoreBtn = screen.getByTestId('nearby-load-more');
+    expect(loadMoreBtn).toBeInTheDocument();
+    expect(loadMoreBtn).toHaveTextContent('Load more men');
+
+    loadMoreBtn.click();
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides "Load more men" button when hasMore is false', () => {
+    const user = mockUser({ id: 'u1', name: 'James' });
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid
+          users={[user]}
+          loading={false}
+          hasMore={false}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByTestId('nearby-load-more')).not.toBeInTheDocument();
+  });
+
+  it('shows loading indicator and disables button when loadingMore is true', () => {
+    const user = mockUser({ id: 'u1', name: 'James' });
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid
+          users={[user]}
+          loading={false}
+          hasMore={true}
+          loadingMore={true}
+          onLoadMore={() => {}}
+        />
+      </MemoryRouter>,
+    );
+
+    const loadMoreBtn = screen.getByTestId('nearby-load-more');
+    expect(loadMoreBtn).toBeDisabled();
+    expect(loadMoreBtn).toHaveTextContent('Loading more men…');
   });
 });
