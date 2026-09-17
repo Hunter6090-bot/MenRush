@@ -342,7 +342,5 @@ router.post('/:id/events/:eventId/cancel', async (req: AuthRequest, res: Respons
     res.status(status).json({ error: message });
   }
 });
-  }
-});
 
 export default router;
