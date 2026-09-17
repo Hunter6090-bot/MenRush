@@ -183,12 +183,82 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-export async function acquireLocalMedia(facingMode: CameraFacing = 'user'): Promise<MediaStream> {
+export const VIRTUAL_CAMERA_REGEX = /obs|virtual|snap\s*cam|droidcam|camo|iriun|manycam|epoccam/i;
+export const BUILTIN_CAMERA_REGEX = /facetime|built-in|integrated|internal|macbook|apple/i;
+
+export function pickPreferredDesktopCamera(devices: MediaDeviceInfo[]): MediaDeviceInfo | undefined {
+  const videoDevices = devices.filter((d) => d.kind === 'videoinput');
+  if (videoDevices.length === 0) return undefined;
+
+  // 1. Look for labeled built-in / FaceTime / MacBook cameras that are NOT virtual
+  const builtin = videoDevices.find(
+    (d) => d.label && BUILTIN_CAMERA_REGEX.test(d.label) && !VIRTUAL_CAMERA_REGEX.test(d.label),
+  );
+  if (builtin) return builtin;
+
+  // 2. Look for any non-virtual hardware camera (e.g. external USB webcam like Logitech)
+  const nonVirtual = videoDevices.find(
+    (d) => d.label && !VIRTUAL_CAMERA_REGEX.test(d.label),
+  );
+  if (nonVirtual) return nonVirtual;
+
+  // 3. Fallback to first device
+  return videoDevices[0];
+}
+
+export async function pickPreferredCameraDeviceId(
+  facingMode: CameraFacing = 'user',
+  preferredDeviceId?: string,
+): Promise<string | undefined> {
+  if (preferredDeviceId) return preferredDeviceId;
+  if (!navigator.mediaDevices?.enumerateDevices) return undefined;
+
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cams = devices.filter((d) => d.kind === 'videoinput');
+    if (cams.length === 0) return undefined;
+
+    if (isMobileCallDevice()) {
+      return pickDeviceIdForFacing(facingMode);
+    }
+
+    const preferred = pickPreferredDesktopCamera(cams);
+    return preferred?.deviceId || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function acquireLocalMedia(
+  facingMode: CameraFacing = 'user',
+  preferredDeviceId?: string,
+): Promise<MediaStream> {
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
     throw new Error('insecure_media_context');
   }
 
+  // On desktop or when deviceId specified: pick preferred device ID first (FaceTime / Built-in over OBS)
+  const targetDeviceId = await pickPreferredCameraDeviceId(facingMode, preferredDeviceId);
+
   const attempts: MediaStreamConstraints[] = [
+    ...(targetDeviceId
+      ? [
+          {
+            video: {
+              deviceId: { exact: targetDeviceId },
+              ...videoConstraintsForFacing(facingMode),
+            },
+            audio: { echoCancellation: true, noiseSuppression: true },
+          } as MediaStreamConstraints,
+          {
+            video: {
+              deviceId: { ideal: targetDeviceId },
+              ...videoConstraintsForFacing(facingMode),
+            },
+            audio: { echoCancellation: true, noiseSuppression: true },
+          } as MediaStreamConstraints,
+        ]
+      : []),
     {
       video: videoConstraintsForFacing(facingMode),
       audio: { echoCancellation: true, noiseSuppression: true },
@@ -200,7 +270,39 @@ export async function acquireLocalMedia(facingMode: CameraFacing = 'user'): Prom
   let lastError: unknown;
   for (const constraints of attempts) {
     try {
-      return await navigator.mediaDevices.getUserMedia(constraints);
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      // On desktop: if the initial acquisition defaulted to OBS/Virtual camera, and permissions
+      // are now granted, check if a built-in FaceTime / non-virtual camera is available and swap to it.
+      if (!isMobileCallDevice() && !preferredDeviceId && navigator.mediaDevices?.enumerateDevices) {
+        const activeVideoTrack = stream.getVideoTracks()[0];
+        if (activeVideoTrack && VIRTUAL_CAMERA_REGEX.test(activeVideoTrack.label || '')) {
+          try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const betterCam = pickPreferredDesktopCamera(devices);
+            if (
+              betterCam?.deviceId &&
+              betterCam.deviceId !== activeVideoTrack.getSettings()?.deviceId &&
+              !VIRTUAL_CAMERA_REGEX.test(betterCam.label || '')
+            ) {
+              const betterStream = await navigator.mediaDevices.getUserMedia({
+                video: { deviceId: { exact: betterCam.deviceId } },
+                audio: false,
+              });
+              const betterTrack = betterStream.getVideoTracks()[0];
+              if (betterTrack) {
+                stream.removeTrack(activeVideoTrack);
+                activeVideoTrack.stop();
+                stream.addTrack(betterTrack);
+              }
+            }
+          } catch {
+            /* keep initial stream if swap fails */
+          }
+        }
+      }
+
+      return stream;
     } catch (error) {
       lastError = error;
       const name = (error as { name?: string }).name;
