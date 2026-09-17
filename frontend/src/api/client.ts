@@ -889,6 +889,28 @@ export interface HotSpotDTO {
   claim_status?: string;
   is_calendar_managed?: boolean;
   can_manage_calendar?: boolean;
+  rating_avg?: number | null;
+  review_count?: number;
+}
+
+export interface HotSpotReviewDTO {
+  id: string;
+  spot_id: string;
+  user_id: string;
+  rating: number;
+  body: string;
+  is_anonymous: boolean;
+  created_at: string;
+  updated_at: string;
+  author_name: string;
+  author_photo_url: string | null;
+  is_mine: boolean;
+}
+
+export interface HotSpotReviewsResponseDTO {
+  reviews: HotSpotReviewDTO[];
+  rating_avg: number | null;
+  review_count: number;
 }
 
 export interface VenueClaimDTO {
@@ -1085,6 +1107,26 @@ export const hotSpotsAPI = {
       `/hot-spots/${spotId}/events/${eventId}/cancel`,
       data,
     ),
+  listReviews: (spotId: string) =>
+    apiClient.get<HotSpotReviewsResponseDTO>(`/hot-spots/${spotId}/reviews`),
+  submitReview: (
+    spotId: string,
+    rating: number,
+    body: string,
+    anonymous = true,
+  ) =>
+    apiClient.post<{ ok: boolean; review: HotSpotReviewDTO; spot: HotSpotDTO }>(
+      `/hot-spots/${spotId}/reviews`,
+      { rating, body, anonymous },
+    ),
+  deleteReview: (spotId: string, reviewId?: string) =>
+    reviewId
+      ? apiClient.delete<{ ok: boolean; spot: HotSpotDTO }>(
+          `/hot-spots/${spotId}/reviews/${reviewId}`,
+        )
+      : apiClient.delete<{ ok: boolean; spot: HotSpotDTO }>(
+          `/hot-spots/${spotId}/reviews/me`,
+        ),
 };
 
 export const adminVenueAPI = {
