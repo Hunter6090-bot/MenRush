@@ -37,12 +37,18 @@ function makeTrack(kind: 'audio' | 'video') {
 function makeStream() {
   const video = makeTrack('video');
   const audio = makeTrack('audio');
-  const tracks = [video, audio];
+  let tracks = [video, audio];
   return {
     stream: {
       getTracks: () => tracks,
-      getVideoTracks: () => [video],
-      getAudioTracks: () => [audio],
+      getVideoTracks: () => tracks.filter((t) => t.kind === 'video'),
+      getAudioTracks: () => tracks.filter((t) => t.kind === 'audio'),
+      removeTrack: vi.fn((t) => {
+        tracks = tracks.filter((x) => x !== t);
+      }),
+      addTrack: vi.fn((t) => {
+        tracks.push(t);
+      }),
     } as unknown as MediaStream,
     video,
     audio,
@@ -250,5 +256,52 @@ describe('useRoomVideo occupancy (live membership only)', () => {
     expect(result.current.cameraOn).toBe(false);
     expect(result.current.participants).toHaveLength(1);
     expect(result.current.participants[0].isLive).toBe(false);
+  });
+
+  it('applyPresenceSync clears pinnedId if the pinned user has left', async () => {
+    const { stream } = makeStream();
+    acquireLocalMedia.mockResolvedValue(stream);
+
+    const { result } = renderHook(() =>
+      useRoomVideo({ roomId: 'room-1', userId: 'self', enabled: true }),
+    );
+
+    act(() => {
+      result.current.setPinnedId('user-other');
+    });
+    expect(result.current.pinnedId).toBe('user-other');
+
+    act(() => {
+      // Presence sync arrives without user-other
+      result.current.applyPresenceSync([{ user_id: 'self', name: 'Self', photo_url: null }]);
+    });
+
+    expect(result.current.pinnedId).toBeNull();
+  });
+
+  it('switchCameraDevice acquires new track and replaces active track', async () => {
+    const { stream, video } = makeStream();
+    acquireLocalMedia.mockResolvedValue(stream);
+
+    const newVideoTrack = makeTrack('video');
+    const newStream = {
+      getVideoTracks: () => [newVideoTrack],
+      getTracks: () => [newVideoTrack],
+    } as unknown as MediaStream;
+
+    navigator.mediaDevices.getUserMedia = vi.fn(async () => newStream);
+
+    const { result } = renderHook(() =>
+      useRoomVideo({ roomId: 'room-1', userId: 'self', enabled: true }),
+    );
+
+    await waitFor(() => expect(result.current.cameraOn).toBe(true));
+
+    await act(async () => {
+      await result.current.switchCameraDevice('device-custom-cam');
+    });
+
+    expect(result.current.currentCameraId).toBe('device-custom-cam');
+    expect(video.stop).toHaveBeenCalled();
   });
 });
