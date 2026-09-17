@@ -165,7 +165,6 @@ describe('CruisingSpotCard', () => {
     fireEvent.click(reviewsBtn);
     expect(onOpenReviews).toHaveBeenCalledWith(ratedSpot);
   });
-  });
 });
 
 describe('CruisingSearchBar', () => {
