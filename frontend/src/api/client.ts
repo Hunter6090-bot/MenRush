@@ -184,6 +184,14 @@ export const betaAPI = {
   validateInvite: (data: { code: string }) => apiClient.post('/beta/validate-invite', data),
 };
 
+export interface NearbyRosterResponse<T = any> {
+  users: T[];
+  total: number;
+  page: number;
+  limit: number;
+  has_more: boolean;
+}
+
 export const usersAPI = {
   getMe: () => apiClient.get('/users/me'),
   getReferrals: () =>
@@ -216,11 +224,17 @@ export const usersAPI = {
       maxAge?: number;
       interests?: string[];
       onlyPulse?: boolean;
+      online?: boolean;
+      verified?: boolean;
+      new?: boolean;
       lookingFor?: string;
       mood?: string;
+      page?: number;
+      limit?: number;
+      offset?: number;
     }
   ) =>
-    apiClient.get('/users/nearby', {
+    apiClient.get<NearbyRosterResponse | any[]>('/users/nearby', {
       params: {
         lat,
         lng,
@@ -229,8 +243,14 @@ export const usersAPI = {
         maxAge: filters?.maxAge,
         interests: filters?.interests?.join(','),
         onlyPulse: filters?.onlyPulse ? 'true' : undefined,
+        online: filters?.online ? 'true' : undefined,
+        verified: filters?.verified ? 'true' : undefined,
+        new: filters?.new ? 'true' : undefined,
         lookingFor: filters?.lookingFor,
         mood: filters?.mood,
+        page: filters?.page,
+        limit: filters?.limit,
+        offset: filters?.offset,
       },
     }),
   getProfile: (id: string, coords?: { lat?: number | null; lng?: number | null }) =>
