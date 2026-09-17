@@ -19,6 +19,8 @@
     "test:outdoor-hotspots-batch1": "ts-node scripts/outdoor-hotspots-batch1-checks.ts",
     "test:outdoor-hotspots-override": "ts-node scripts/outdoor-hotspots-override-checks.ts",
     "test:cruising-search": "ts-node scripts/cruising-search-checks.ts",
+    "test:venue-calendar": "ts-node scripts/venue-calendar-tropics-test.ts",
+    "test:venue-calendar-http": "ts-node scripts/venue-calendar-http-test.ts",
     "invite:generate": "ts-node src/scripts/generate-invite-codes.ts",
     "invite:send-wave-2": "ts-node src/scripts/send-wave-2-invites.ts",
     "notify:id-verification-paused": "ts-node src/scripts/send-id-verification-paused.ts",

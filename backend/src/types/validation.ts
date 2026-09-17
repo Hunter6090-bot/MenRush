@@ -337,6 +337,61 @@ export type GrantAlbumInput = z.infer<typeof GrantAlbumSchema>;
 export type PhotoVisibility = z.infer<typeof PhotoVisibilitySchema>;
 export type MediaKind = (typeof MEDIA_KINDS)[number];
 export type MessageMediaKind = (typeof MESSAGE_MEDIA_KINDS)[number];
+
+// ── Venue Calendar & Claim Schemas ──────────────────────────────────────────
+
+export const SubmitVenueClaimSchema = z.object({
+  venue_role: z.string().trim().min(2, 'Venue role is required').max(80),
+  contact_name: z.string().trim().min(2, 'Contact name is required').max(120),
+  contact_email: z.string().trim().email('Valid contact email is required').max(255),
+  contact_phone: z.string().trim().max(40).optional().nullable(),
+  website_or_social_proof: z.string().trim().max(500).optional().nullable(),
+  attestation_agreed: z.literal(true, {
+    errorMap: () => ({ message: 'You must attest that you are an authorized representative of this venue.' }),
+  }),
+  attestation_text: z.string().trim().min(10, 'Attestation statement is required').max(1000),
+  // Dual-proof optional hooks for future verification layers
+  domain_email: z.string().trim().email().optional().nullable(),
+  phone_otp: z.string().trim().max(20).optional().nullable(),
+  companies_house_num: z.string().trim().max(30).optional().nullable(),
+});
+
+export const DisputeVenueClaimSchema = z.object({
+  dispute_reason: z.string().trim().min(10, 'Dispute reason is required').max(1000),
+});
+
+export const FreezeVenueClaimSchema = z.object({
+  frozen_reason: z.string().trim().min(5, 'Reason for freeze is required').max(500),
+  ban_user: z.boolean().optional().default(false),
+});
+
+export const VenueCalendarEventCreateSchema = z.object({
+  name: z.string().trim().min(2, 'Event name is required').max(100),
+  description: z.string().trim().max(1000).optional().nullable(),
+  starts_at: z.string().datetime({ message: 'Valid ISO start time required' }),
+  ends_at: z.string().datetime({ message: 'Valid ISO end time required' }).optional().nullable(),
+  ticket_url: z.string().url('Valid ticket URL').max(500).optional().nullable(),
+});
+
+export const VenueCalendarEventUpdateSchema = z.object({
+  name: z.string().trim().min(2, 'Event name is required').max(100).optional(),
+  description: z.string().trim().max(1000).optional().nullable(),
+  starts_at: z.string().datetime({ message: 'Valid ISO start time required' }).optional(),
+  ends_at: z.string().datetime({ message: 'Valid ISO end time required' }).optional().nullable(),
+  ticket_url: z.string().url('Valid ticket URL').max(500).optional().nullable(),
+});
+
+export const VenueCalendarEventCancelSchema = z.object({
+  cancellation_reason: z.string().trim().max(500).optional().nullable(),
+});
+
+export type SubmitVenueClaimInput = z.infer<typeof SubmitVenueClaimSchema>;
+export type DisputeVenueClaimInput = z.infer<typeof DisputeVenueClaimSchema>;
+export type FreezeVenueClaimInput = z.infer<typeof FreezeVenueClaimSchema>;
+export type VenueCalendarEventCreateInput = z.infer<typeof VenueCalendarEventCreateSchema>;
+export type VenueCalendarEventUpdateInput = z.infer<typeof VenueCalendarEventUpdateSchema>;
+export type VenueCalendarEventCancelInput = z.infer<typeof VenueCalendarEventCancelSchema>;
+
 export type LocationMessageInput = z.infer<typeof LocationMessageSchema>;
 export type MediaMessageFormInput = z.infer<typeof MediaMessageFormSchema>;
 export type AlbumMediaMessageInput = z.infer<typeof AlbumMediaMessageSchema>;

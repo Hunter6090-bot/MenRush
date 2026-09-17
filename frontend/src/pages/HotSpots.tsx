@@ -9,6 +9,8 @@ import { PulseRing } from '../components/PulseRing';
 import { HotSpotPin, createHotSpotPinElement } from '../components/HotSpotPin';
 import { CruisingSearchBar } from '../components/CruisingSearchBar';
 import { CruisingSearchSheet } from '../components/CruisingSearchSheet';
+import { VenueClaimModal } from '../components/VenueClaimModal';
+import { VenueCalendarModal } from '../components/VenueCalendarModal';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { formatDistanceFromKm } from '../lib/localeUnits';
 import { getDirectionsUrl } from '../lib/cruising';
@@ -26,6 +28,8 @@ export const HotSpots = () => {
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [cruisingSearchOpen, setCruisingSearchOpen] = useState(false);
+  const [claimModalSpot, setClaimModalSpot] = useState<HotSpotDTO | null>(null);
+  const [calendarModalSpot, setCalendarModalSpot] = useState<HotSpotDTO | null>(null);
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -316,7 +320,52 @@ export const HotSpots = () => {
                   </p>
                 ) : null}
 
+                {/* Venue claim / calendar quiet face */}
+                {['saunas', 'nightlife', 'bars', 'cinema'].includes(spot.category_slug) || spot.venue_type ? (
+                  <div className="mb-3">
+                    {spot.claim_status === 'approved' ? (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-full bg-[rgba(196,131,42,0.18)] px-2 py-0.5 text-[10px] font-extrabold text-[#E0A14A]">
+                          Venue claimed
+                        </span>
+                        <span className="rounded-full border border-[var(--border-default)] px-2 py-0.5 text-[10px] font-bold text-[var(--cream-muted)]">
+                          Calendar managed by venue
+                        </span>
+                      </div>
+                    ) : spot.claim_status === 'pending' ? (
+                      <span className="text-[11px] font-bold text-amber-400/80">
+                        Claim pending ops review
+                      </span>
+                    ) : spot.claim_status === 'disputed' || spot.claim_status === 'frozen' ? (
+                      <span className="text-[11px] font-bold text-red-400/80">
+                        Calendar under review
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        data-testid={`claim-venue-${spot.id}`}
+                        onClick={() => setClaimModalSpot(spot)}
+                        className="text-left text-[11px] font-bold text-[#C4832A] hover:text-[#E0A14A] hover:underline"
+                      >
+                        Claim venue calendar →
+                      </button>
+                    )}
+                  </div>
+                ) : null}
+
                 <div className="mt-auto flex flex-col gap-2 pt-2">
+                  {/* Venue calendar view action for commercial venues */}
+                  {['saunas', 'nightlife', 'bars', 'cinema'].includes(spot.category_slug) || spot.venue_type ? (
+                    <button
+                      type="button"
+                      data-testid={`venue-calendar-${spot.id}`}
+                      onClick={() => setCalendarModalSpot(spot)}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-full border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.08)] py-2 text-[12px] font-bold text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.15)]"
+                    >
+                      {spot.can_manage_calendar ? 'Manage venue calendar' : 'Venue calendar'}
+                    </button>
+                  ) : null}
+
                   <a
                     href={getDirectionsUrl(spot.latitude, spot.longitude, spot.name)}
                     target="_blank"
@@ -398,6 +447,21 @@ export const HotSpots = () => {
               });
             }
           }}
+        />
+
+        <VenueClaimModal
+          spot={claimModalSpot}
+          open={Boolean(claimModalSpot)}
+          onClose={() => setClaimModalSpot(null)}
+          onSuccess={() => {
+            void loadSpots();
+          }}
+        />
+
+        <VenueCalendarModal
+          spot={calendarModalSpot}
+          open={Boolean(calendarModalSpot)}
+          onClose={() => setCalendarModalSpot(null)}
         />
       </div>
     </Layout>

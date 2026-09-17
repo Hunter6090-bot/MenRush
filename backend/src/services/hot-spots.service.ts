@@ -79,6 +79,10 @@ export type HotSpotRow = {
   source_url: string | null;
   verified_at: string | null;
   last_activity_at: string | null;
+  claimed_by_user_id?: string | null;
+  claim_status?: string;
+  is_calendar_managed?: boolean;
+  can_manage_calendar?: boolean;
 };
 
 function formatLiveCount(exact: number, isPremium: boolean): number | string {
@@ -87,8 +91,11 @@ function formatLiveCount(exact: number, isPremium: boolean): number | string {
   return exact;
 }
 
-function mapSpotRow(row: Record<string, unknown>, isPremium: boolean): HotSpotRow {
+function mapSpotRow(row: Record<string, unknown>, isPremium: boolean, currentUserId?: string): HotSpotRow {
   const exact = Number(row.live_count_exact ?? 0);
+  const claimedBy = (row.claimed_by_user_id as string | null) ?? null;
+  const claimStatus = (row.claim_status as string | null) ?? 'unclaimed';
+  const isCalendarManaged = Boolean(row.is_calendar_managed);
   return {
     id: row.id as string,
     name: row.name as string,
@@ -113,6 +120,10 @@ function mapSpotRow(row: Record<string, unknown>, isPremium: boolean): HotSpotRo
     source_url: (row.source_url as string | null) ?? null,
     verified_at: row.verified_at != null ? String(row.verified_at) : null,
     last_activity_at: row.last_activity_at != null ? new Date(row.last_activity_at as string | Date).toISOString() : null,
+    claimed_by_user_id: claimedBy,
+    claim_status: claimStatus,
+    is_calendar_managed: isCalendarManaged,
+    can_manage_calendar: Boolean(currentUserId && claimedBy === currentUserId && claimStatus === 'approved'),
   };
 }
 
@@ -129,6 +140,9 @@ const SPOT_SELECT_COLS = `
           hs.source_url,
           hs.verified_at,
           hs.last_activity_at,
+          hs.claimed_by_user_id,
+          hs.claim_status,
+          hs.is_calendar_managed,
           c.slug AS category_slug,
           c.name AS category_name,
           c.icon AS category_icon`;
@@ -266,7 +280,7 @@ export const hotSpotsService = {
       values,
     );
 
-    return res.rows.map((row) => mapSpotRow(row, isPremium));
+    return res.rows.map((row) => mapSpotRow(row, isPremium, opts.userId));
   },
 
   async getSpot(userId: string, spotId: string): Promise<HotSpotRow | null> {
@@ -304,7 +318,7 @@ export const hotSpotsService = {
       [spotId, userId, String(ACTIVE_CHECKIN_TTL_HOURS)],
     );
     if (!res.rows[0]) return null;
-    return mapSpotRow(res.rows[0], isPremium);
+    return mapSpotRow(res.rows[0], isPremium, userId);
   },
 
   async checkIn(userId: string, spotId: string, anonymous: boolean) {
