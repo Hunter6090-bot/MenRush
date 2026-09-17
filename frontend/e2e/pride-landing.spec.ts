@@ -148,6 +148,10 @@ test.describe('Pride promotion landing', () => {
     await expect(body).toContainText(/clause 7\.2/i);
     await expect(body).toContainText(/18\+ only/i);
     await expect(body).toContainText(/Bronze Apps UK Limited/i);
+    await expect(body).toContainText(/7\.9/i);
+    await expect(body).toContainText('MR3FREE');
+    await expect(body).toContainText(/MenRush launch campaign/i);
+    await expect(body).toContainText(/unlocked from day one/i);
     // Brand polish: public Terms must not name Al / pending lock / owner.
     await expect(body).not.toContainText(/pending Al/i);
     await expect(body).not.toContainText(/Al lock/i);

@@ -79,6 +79,9 @@ async function main() {
   assert.strictEqual(classifyForeignCode('PRIDE 3MONTH FREE'), 'pride');
   assert.strictEqual(classifyForeignCode('BSF26'), 'bsf26');
   assert.strictEqual(classifyForeignCode('bsf26'), 'bsf26');
+  assert.strictEqual(classifyForeignCode('MR3FREE'), 'mr3free');
+  assert.strictEqual(classifyForeignCode('mr3free'), 'mr3free');
+  assert.strictEqual(classifyForeignCode(' mr3free '), 'mr3free');
   assert.strictEqual(classifyForeignCode('MENRUSH-ABCD-EFGH'), 'invite');
   assert.strictEqual(classifyForeignCode('MRK7N2P9QX'), null);
 

@@ -57,12 +57,12 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
 
   // Product lock 31 Aug 2026: open signup waitlist gift; a promo replaces it (no stack).
   // Do not say invite-only until open — hero is Sign up free / UK BETA OPEN.
-  // Quiet face: no BSF26 / BearScotsFest marketing blast on landing.
+  // Quiet face: no BSF26 / BearScotsFest / MR3FREE marketing blast on landing.
   await expect(page.getByText(/Sign up before 1 October 2026/i)).toBeVisible();
   await expect(page.getByText(/30 days of Premium/i)).toBeVisible();
   await expect(page.getByText(/A promo replaces that gift and does not stack/i)).toBeVisible();
   await expect(page.getByText(/Pride promo replaces/i)).toHaveCount(0);
-  await expect(page.getByText(/BSF26|BearScotsFest/i)).toHaveCount(0);
+  await expect(page.getByText(/BSF26|BearScotsFest|MR3FREE/i)).toHaveCount(0);
   await expect(page.getByText(/invite-only until/i)).toHaveCount(0);
   await expect(page.getByText(/Invite-only until then/i)).toHaveCount(0);
   // Brand: referrals live on register/profile only — never on the landing face.
@@ -188,7 +188,7 @@ test.describe('public design lock — auth pages', () => {
     );
     await expect(page.getByTestId('register-promo-input')).toHaveAttribute('aria-label', 'Promo code');
     await expect(page.getByTestId('register-pride-note')).toHaveText(/Optional\. If you have one\.?/i);
-    await expect(page.getByTestId('register-pride-note')).not.toContainText(/Pride|BSF26|BearScots/i);
+    await expect(page.getByTestId('register-pride-note')).not.toContainText(/Pride|BSF26|BearScots|MR3FREE/i);
     await expect(page.getByTestId('register-referral-input')).toBeVisible();
     await expect(page.getByTestId('register-referral-input')).toHaveAttribute(
       'placeholder',
@@ -202,7 +202,7 @@ test.describe('public design lock — auth pages', () => {
     const refBox = await page.getByTestId('register-referral-input').boundingBox();
     expect(promoBox && refBox && refBox.y > promoBox.y).toBeTruthy();
     await expect(page.getByText(/PRIDE 3MONTH FREE or PRIDE-XXXX/i)).toHaveCount(0);
-    await expect(page.getByText(/BSF26|BearScotsFest/i)).toHaveCount(0);
+    await expect(page.getByText(/BSF26|BearScotsFest|MR3FREE/i)).toHaveCount(0);
     await expect(page.getByTestId('register-gift-note')).toContainText(
       /A promo replaces that gift and does not stack/i,
     );

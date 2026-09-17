@@ -435,7 +435,8 @@ export const Terms = () => {
                   Premium from launch. One grant per person. No stacking. Pride replaces the 30-day
                   waitlist Premium gift in clause 7.2. It does not add to that gift. Cannot be
                   combined with the{' '}
-                  <span className="font-mono tracking-wide">BSF26</span> promo in clause 7.8. 18+
+                  <span className="font-mono tracking-wide">BSF26</span> promo in clause 7.8 or the{' '}
+                  <span className="font-mono tracking-wide">MR3FREE</span> promo in clause 7.9. 18+
                   only. UK-first. You will not be billed for this offer. MenRush is not a sponsor of
                   Southampton Pride or Manchester Village Pride. Duration: if booked before launch,
                   Premium starts at launch. On-time open 1 October 2026 ends 1 January 2027. If
@@ -452,9 +453,24 @@ export const Terms = () => {
                   Europe/London, Premium starts 1 October 2026. If redeemed on 1 October, Premium
                   starts 1 October. If redeemed on 2, 3, 4 or 5 October Europe/London, Premium
                   starts that calendar day. One grant per person. No stacking. Does not stack with
-                  Pride (clause 7.7). Replaces the 30-day waitlist Premium gift in clause 7.2. It
-                  does not add to that gift. 18+ only. You will not be billed for this offer.
-                  Promoter: Bronze Apps UK Limited trading as MenRush.
+                  Pride (clause 7.7) or MR3FREE (clause 7.9). Replaces the 30-day waitlist Premium
+                  gift in clause 7.2. It does not add to that gift. 18+ only. You will not be billed
+                  for this offer. Promoter: Bronze Apps UK Limited trading as MenRush.
+                </>,
+              )}
+              {para(
+                <>
+                  <Strong>7.9</Strong> MenRush launch promotional offer. The code{' '}
+                  <span className="font-mono tracking-wide">MR3FREE</span> is for the MenRush
+                  launch campaign. Exact code match at register (case-insensitive, no spaces). Live
+                  from 17 September 2026. Claim through end of 5 October 2026 Europe/London
+                  inclusive. Signups after 5 October 2026 with this code receive no promotional grant.
+                  Redeeming a valid code grants 3 months of Premium free, unlocked from day one
+                  (starting the registration calendar day). One grant per account. No stacking.
+                  Does not cancel 12-month beta promises. Does not wipe existing Premium. Does not
+                  stack with Pride (clause 7.7) or BSF26 (clause 7.8). Replaces the 30-day waitlist
+                  Premium gift in clause 7.2. It does not add to that gift. 18+ only. You will not
+                  be billed for this offer. Promoter: Bronze Apps UK Limited trading as MenRush.
                 </>,
               )}
             </section>

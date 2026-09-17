@@ -65,8 +65,11 @@ export function normalizeReferralCode(raw: string): string {
 /**
  * Reject codes that belong to other systems (fail closed at referral field).
  */
-export function classifyForeignCode(code: string): 'pride' | 'invite' | 'bsf26' | null {
+export function classifyForeignCode(code: string): 'pride' | 'invite' | 'bsf26' | 'mr3free' | null {
   const c = normalizeReferralCode(code);
+  if (c === 'MR3FREE') {
+    return 'mr3free';
+  }
   if (c === 'BSF26') {
     return 'bsf26';
   }
@@ -128,7 +131,7 @@ export const referralService = {
     if (foreign === 'pride') {
       throw new Error('That looks like a Pride promo — use the promo field instead.');
     }
-    if (foreign === 'bsf26') {
+    if (foreign === 'mr3free' || foreign === 'bsf26') {
       throw new Error('That looks like a promo code — use the promo field instead.');
     }
     if (foreign === 'invite') {
