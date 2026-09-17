@@ -46,10 +46,13 @@ describe('VenueClaimModal', () => {
     );
 
     expect(screen.getByText('Claim Tropics Day Spa')).toBeInTheDocument();
+    expect(screen.getByText('Claim this venue')).toBeInTheDocument();
     expect(screen.getByText(/Portsmouth/i)).toBeInTheDocument();
     expect(screen.getByText(new RegExp(LEGAL_ATTESTATION_STATEMENT, 'i'))).toBeInTheDocument();
 
     const text = document.body.textContent || '';
+    expect(text).not.toMatch(/official schedule/i);
+    expect(text).not.toMatch(/Operations Gate/i);
     expect(text).not.toMatch(/Verified Business/i);
     expect(text).not.toMatch(/Partner/i);
     expect(text).not.toMatch(/Sponsored/i);

@@ -89,7 +89,7 @@ export const VenueClaimModal: React.FC<VenueClaimModalProps> = ({
 
         <div className="mb-4">
           <p className="text-xs font-bold uppercase tracking-wider text-[#E0A14A]">
-            Venue Claim · Operations Gate
+            Claim this venue
           </p>
           <h2 id="venue-claim-title" className="mt-1 text-xl font-extrabold text-[var(--cream)]">
             Claim {spot.name}
@@ -119,7 +119,7 @@ export const VenueClaimModal: React.FC<VenueClaimModalProps> = ({
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <p className="text-xs leading-relaxed text-[var(--cream-muted)]">
-              Authorized representatives can claim this venue to publish official schedule events to
+              Authorized representatives can claim this venue to publish their schedule to
               the MenRush Events calendar. Ops human approval is required before publishing rights are granted.
             </p>
 
