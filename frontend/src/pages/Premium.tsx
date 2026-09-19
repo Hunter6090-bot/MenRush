@@ -46,13 +46,17 @@ export const Premium: React.FC = () => {
     try {
       const returnUrl = `${window.location.origin}/premium?status=return`;
       const res = await premiumAPI.subscribe('premium', returnUrl);
-      window.location.href = res.data.checkout_url;
+      if (res.data?.checkout_url) {
+        window.location.href = res.data.checkout_url;
+      } else {
+        setError('Card checkout is not live yet. Contact support@menrush.com for manual invoice activation.');
+      }
     } catch (err: any) {
       const code = err?.response?.data?.error;
       if (code === 'billing_not_configured') {
-        setError('Billing is not configured yet. Merchant credentials are pending approval.');
+        setError('In-app card checkout is not live yet. Contact support@menrush.com for manual invoice activation.');
       } else {
-        setError('Could not start checkout. Try again in a moment.');
+        setError('Card checkout is currently unavailable. Contact support@menrush.com for manual invoice activation.');
       }
       setCheckingOut(false);
     }
@@ -80,17 +84,22 @@ export const Premium: React.FC = () => {
           <p className="text-sm text-[var(--cream-muted)] text-center mb-6">
             {BETA_INVITE_REQUIRED
               ? 'Premium perks are included free during the private beta.'
-              : 'No swiping theatre. Pay once. Get the edge.'}
+              : 'Direct proximity edge. Full features, no swiping theatre.'}
           </p>
 
-          {BETA_INVITE_REQUIRED ? (
-            <div className="rounded-xl border border-[#C4832A]/40 bg-[#C4832A]/10 p-4 text-center mb-5">
-              <p className="text-[#C4832A] font-bold">Beta access includes Premium</p>
-              <p className="text-xs text-[var(--cream-muted)] mt-1">
-                Billing stays off until merchant approval. Enjoy the full feature set while we test.
-              </p>
-            </div>
-          ) : null}
+          <div className="rounded-xl border border-[#C4832A]/40 bg-[#C4832A]/10 p-4 text-center mb-5">
+            <p className="text-[#C4832A] font-bold">
+              {BETA_INVITE_REQUIRED ? 'Beta access includes Premium' : 'In-app card billing is being set up'}
+            </p>
+            <p className="text-xs text-[var(--cream-muted)] mt-1">
+              We are not taking card payments in-app yet while payment processing is under merchant review.
+              Need early activation? Contact{' '}
+              <a href="mailto:support@menrush.com" className="text-[#C4832A] underline hover:text-[#E0A040]">
+                support@menrush.com
+              </a>{' '}
+              for manual invoice.
+            </p>
+          </div>
 
           {isPremium ? (
             <div className="rounded-xl border border-[#C4832A]/40 bg-[#C4832A]/10 p-4 text-center mb-5">
@@ -133,7 +142,7 @@ export const Premium: React.FC = () => {
                   </div>
                   {checkingOut ? (
                     <p className="text-xs text-[#C4832A] mt-2 flex items-center gap-2">
-                      <PulseRing size={12} /> Redirecting to secure checkout…
+                      <PulseRing size={12} /> Checking billing availability…
                     </p>
                   ) : null}
                 </button>
@@ -146,7 +155,7 @@ export const Premium: React.FC = () => {
           ) : null}
 
           <p className="text-[10px] text-[#7A6A50] text-center mt-5 leading-relaxed">
-            Billing via Verotel / GayCharge PINK — dating-friendly processor. Card details never touch MenRush servers.
+            In-app card billing is being set up and is currently under merchant review. Manual invoices are processed directly by MenRush upon request.
           </p>
 
           <button

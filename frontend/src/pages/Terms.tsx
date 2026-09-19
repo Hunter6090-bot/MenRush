@@ -401,15 +401,19 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>7.3</Strong> After any free trial period, Premium subscriptions are
-                  billed on a recurring basis (monthly or annually) through our payment processor,
-                  Verotel.
+                  <Strong>7.3</Strong> After any free trial period, paid Premium subscriptions
+                  will be billed on a recurring basis through our designated payment processor once
+                  live payment processing is activated (under merchant review). In the interim,
+                  in-app card checkout is not live, and subscriptions or upgrades are processed via
+                  manual invoice by contacting support@menrush.com.
                 </>,
               )}
               {para(
                 <>
-                  <Strong>7.4</Strong> You authorise us to charge the payment method on file at
-                  the start of each billing period.
+                  <Strong>7.4</Strong> Where recurring billing is activated with a valid payment
+                  method on file, you authorise us to charge that payment method at the start of
+                  each billing period. For manual invoices, payment is due upon issuance prior to
+                  entitlement activation.
                 </>,
               )}
               {para(
