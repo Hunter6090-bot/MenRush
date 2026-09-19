@@ -110,9 +110,7 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
           {beyondRadiusCount > 0 ? (
             <>
               <span className="font-bold text-[#E0A14A]">
-                {beyondRadiusCount === 1
-                  ? '1 man is farther out'
-                  : `${beyondRadiusCount} men are farther out`}
+                Men are farther out
               </span>
               . Expand beyond
               {radiusLabel ? ` ${radiusLabel}` : ' this range'} to see them.

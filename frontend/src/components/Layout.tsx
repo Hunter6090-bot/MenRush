@@ -301,7 +301,7 @@ function LayoutInner({ children }: LayoutProps) {
           <ThemeToggle variant="header" className="text-nn-muted hover:text-nn-copper" />
           <div className="flex items-center gap-2 text-[13px] text-nn-muted">
             <span className="inline-flex h-2 w-2 rounded-full bg-nn-online" />
-            {discoveryShell.nearbyCount} in your radius
+            Men nearby
           </div>
           <button
             type="button"

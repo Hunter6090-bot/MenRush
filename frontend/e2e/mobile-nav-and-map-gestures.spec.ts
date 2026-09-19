@@ -190,7 +190,8 @@ test('map Live status uses online count, not radius label', async ({ browser }) 
   // Assert the single list pill (not a floating map status card over pins).
   const status = page.getByTestId('nearby-counts');
   await expect(status).toBeVisible({ timeout: 20_000 });
-  await expect(status).toContainText(/2 men nearby/i);
+  await expect(status).toContainText(/men nearby/i);
+  await expect(status).not.toContainText(/\d+\s+men\s+nearby/i);
   const liveLine = page.getByTestId('nearby-live-count');
   await expect(liveLine).toContainText(/none live/i);
   await expect(liveLine).not.toContainText(/Live · All/i);

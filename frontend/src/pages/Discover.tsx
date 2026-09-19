@@ -2297,7 +2297,7 @@ export const Discover = () => {
               ? 'Nearby'
               : nearbyCount === 0
                 ? 'Nearby'
-                : `${nearbyCount} ${nearbyCount === 1 ? 'man' : 'men'} nearby`}
+                : 'Men nearby'}
           </h2>
           <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
           <NearbySortToggle mode={nearbySort} onChange={handleNearbySortChange} />
@@ -2387,8 +2387,7 @@ export const Discover = () => {
                     </button>
                   ) : (
                     <>
-                      <span className="font-black text-[var(--copper)]">{nearbyCount}</span>
-                      {nearbyCount === 1 ? ' man nearby' : ' men nearby'}
+                      <span className="font-extrabold text-[var(--cream-soft)]">Men nearby</span>
                       {liveCount > 0 ? (
                         <span className="ml-1.5 font-semibold text-[#8FC773]" data-testid="nearby-live-count">
                           · {liveCount} live
@@ -2578,8 +2577,7 @@ export const Discover = () => {
                     </button>
                   ) : (
                     <>
-                      <span className="font-black text-[var(--copper)]">{nearbyCount}</span>
-                      {nearbyCount === 1 ? ' man nearby' : ' men nearby'}
+                      <span className="font-extrabold text-[var(--cream-soft)]">Men nearby</span>
                       {liveCount > 0 ? (
                         <span className="ml-1.5 font-semibold text-[#8FC773]" data-testid="nearby-live-count">
                           · {liveCount} live

@@ -120,4 +120,20 @@ describe('NearbyProfileGrid pagination', () => {
     expect(loadMoreBtn).toBeDisabled();
     expect(loadMoreBtn).toHaveTextContent('Loading more men…');
   });
+
+  it('renders neutral "Men are farther out" without revealing exact count when empty radius', () => {
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid
+          users={[]}
+          loading={false}
+          beyondRadiusCount={14}
+          radiusLabel="5 miles"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('Men are farther out')).toBeInTheDocument();
+    expect(screen.queryByText(/14/)).not.toBeInTheDocument();
+  });
 });
