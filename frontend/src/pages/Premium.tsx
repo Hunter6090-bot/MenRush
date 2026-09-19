@@ -25,7 +25,6 @@ export const Premium: React.FC = () => {
 
   const [plan, setPlan] = useState<PremiumPlan | null>(null);
   const [loading, setLoading] = useState(true);
-  const [checkingOut, setCheckingOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPremium, setIsPremium] = useState(Boolean(user?.is_premium));
 
@@ -39,28 +38,6 @@ export const Premium: React.FC = () => {
       .catch(() => setError('Could not load premium plans.'))
       .finally(() => setLoading(false));
   }, [setPremium]);
-
-  const handleUpgrade = async () => {
-    setError(null);
-    setCheckingOut(true);
-    try {
-      const returnUrl = `${window.location.origin}/premium?status=return`;
-      const res = await premiumAPI.subscribe('premium', returnUrl);
-      if (res.data?.checkout_url) {
-        window.location.href = res.data.checkout_url;
-      } else {
-        setError('Card checkout is not live yet. Contact support@menrush.com for manual invoice activation.');
-      }
-    } catch (err: any) {
-      const code = err?.response?.data?.error;
-      if (code === 'billing_not_configured') {
-        setError('In-app card checkout is not live yet. Contact support@menrush.com for manual invoice activation.');
-      } else {
-        setError('Card checkout is currently unavailable. Contact support@menrush.com for manual invoice activation.');
-      }
-      setCheckingOut(false);
-    }
-  };
 
   return (
     <div className="relative min-h-dvh overflow-hidden flex items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))]">
@@ -124,14 +101,9 @@ export const Premium: React.FC = () => {
               </ul>
 
               {plan && !BETA_INVITE_REQUIRED ? (
-                <button
-                  type="button"
-                  disabled={checkingOut || isPremium}
-                  onClick={handleUpgrade}
-                  className="w-full rounded-xl border border-[#C4832A]/50 bg-[#C4832A]/15 hover:bg-[#C4832A]/25 transition-colors p-4 disabled:opacity-60"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-left">
+                <div className="w-full rounded-xl border border-[#C4832A]/50 bg-[#C4832A]/10 p-5 text-left">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div>
                       <p className="font-bold text-[var(--cream)]">{plan.name}</p>
                       <p className="text-xs text-[var(--cream-muted)] mt-1">{plan.tagline}</p>
                     </div>
@@ -140,12 +112,18 @@ export const Premium: React.FC = () => {
                       <p className="text-[10px] text-[var(--cream-muted)]">/ {plan.period_days} days</p>
                     </div>
                   </div>
-                  {checkingOut ? (
-                    <p className="text-xs text-[#C4832A] mt-2 flex items-center gap-2">
-                      <PulseRing size={12} /> Checking billing availability…
-                    </p>
-                  ) : null}
-                </button>
+                  <div className="border-t border-[#C4832A]/20 pt-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <span className="text-xs text-[var(--cream-muted)]">
+                      Card checkout is under merchant review.
+                    </span>
+                    <a
+                      href="mailto:support@menrush.com?subject=MenRush%20Premium%20Invoice%20Request"
+                      className="inline-flex items-center justify-center rounded-lg bg-[#C4832A] px-3.5 py-2 text-xs font-bold text-[#0D0A06] hover:bg-[#D99A40] transition-colors shrink-0"
+                    >
+                      Request manual invoice
+                    </a>
+                  </div>
+                </div>
               ) : null}
             </>
           )}
