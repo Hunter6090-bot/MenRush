@@ -552,4 +552,118 @@ router.post('/venue-claims/:id/freeze', async (req: Request, res: Response) => {
   }
 });
 
+// ── Manual Premium Invoices (Ops / Admin Path) ──────────────────────────────
+
+/**
+ * GET /api/admin/premium/invoices
+ * Ops list all invoices (optional ?status=unpaid|paid|cancelled).
+ */
+router.get('/premium/invoices', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const { invoiceService } = await import('../services/invoice.service');
+    const limit = Math.min(parseInt(String(req.query.limit || '100'), 10) || 100, 500);
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const invoices = await invoiceService.listAllInvoices(limit, status);
+    return res.json({ ok: true, invoices });
+  } catch (err) {
+    console.error('[admin] invoices list error:', err);
+    return res.status(500).json({ error: 'invoices_list_failed' });
+  }
+});
+
+/**
+ * GET /api/admin/premium/invoices/:id
+ * Ops view single invoice by ID or invoice number.
+ */
+router.get('/premium/invoices/:id', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const { invoiceService } = await import('../services/invoice.service');
+    const invoice = await invoiceService.getInvoiceById(req.params.id);
+    if (!invoice) return res.status(404).json({ error: 'invoice_not_found' });
+    return res.json({ ok: true, invoice });
+  } catch (err) {
+    console.error('[admin] invoice view error:', err);
+    return res.status(500).json({ error: 'invoice_view_failed' });
+  }
+});
+
+/**
+ * POST /api/admin/premium/invoices
+ * Ops generate/create invoice for a user.
+ */
+router.post('/premium/invoices', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const { AdminCreateInvoiceSchema } = await import('../types/validation');
+  const parsed = AdminCreateInvoiceSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'validation_error', details: parsed.error.flatten() });
+  }
+
+  try {
+    const { invoiceService } = await import('../services/invoice.service');
+    const invoice = await invoiceService.createInvoice({
+      userId: parsed.data.user_id,
+      planTier: parsed.data.plan_tier,
+      planDays: parsed.data.plan_days,
+      amountPence: parsed.data.amount_pence,
+      notes: parsed.data.notes,
+      createdByAdminId: 'ops-admin',
+    });
+    return res.status(201).json({ ok: true, invoice });
+  } catch (err) {
+    console.error('[admin] create invoice error:', err);
+    return res.status(500).json({ error: 'create_invoice_failed' });
+  }
+});
+
+/**
+ * POST /api/admin/premium/invoices/:id/confirm-payment
+ * Ops mark invoice paid after real payment received (bank transfer / manual).
+ * Activates / extends Premium with entitlement stacking.
+ */
+router.post('/premium/invoices/:id/confirm-payment', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const { AdminConfirmInvoiceSchema } = await import('../types/validation');
+  const parsed = AdminConfirmInvoiceSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'validation_error', details: parsed.error.flatten() });
+  }
+
+  try {
+    const { invoiceService } = await import('../services/invoice.service');
+    const result = await invoiceService.confirmPayment(
+      req.params.id,
+      undefined,
+      parsed.data.notes,
+    );
+    return res.json({
+      ok: true,
+      invoice: result.invoice,
+      user_premium: result.userPremium,
+      already_paid: result.alreadyPaid ?? false,
+    });
+  } catch (err: any) {
+    console.error('[admin] confirm invoice error:', err);
+    return res.status(400).json({ error: err.message || 'confirm_invoice_failed' });
+  }
+});
+
+/**
+ * POST /api/admin/premium/invoices/:id/cancel
+ * Ops cancel an unpaid invoice.
+ */
+router.post('/premium/invoices/:id/cancel', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const { invoiceService } = await import('../services/invoice.service');
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason : undefined;
+    const cancelled = await invoiceService.cancelInvoice(req.params.id, reason);
+    return res.json({ ok: true, invoice: cancelled });
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message || 'cancel_invoice_failed' });
+  }
+});
+
 export default router;

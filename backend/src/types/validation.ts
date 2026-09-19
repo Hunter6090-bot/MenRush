@@ -91,6 +91,13 @@ export const ChangePasswordSchema = z
     path: ['new_password'],
   });
 
+export const SetPasswordSchema = z.object({
+  current_password: z.string().optional(),
+  new_password: z.string().min(8, 'New password must be at least 8 characters'),
+});
+
+export type SetPasswordInput = z.infer<typeof SetPasswordSchema>;
+
 export const ChangeEmailSchema = z.object({
   current_password: z.string().min(1, 'Current password is required'),
   new_email: normalizedEmail,
@@ -395,3 +402,29 @@ export type VenueCalendarEventCancelInput = z.infer<typeof VenueCalendarEventCan
 export type LocationMessageInput = z.infer<typeof LocationMessageSchema>;
 export type MediaMessageFormInput = z.infer<typeof MediaMessageFormSchema>;
 export type AlbumMediaMessageInput = z.infer<typeof AlbumMediaMessageSchema>;
+
+// ── Manual Premium Invoice Schemas ──────────────────────────────────────────
+
+export const CreateInvoiceSchema = z.object({
+  plan_tier: z.enum(['premium', 'premium_plus']).default('premium'),
+  plan_days: z.number().int().min(1).max(3650).default(30),
+  amount_pence: z.number().int().min(0).default(699),
+  notes: z.string().max(500).optional(),
+});
+
+export const AdminCreateInvoiceSchema = z.object({
+  user_id: z.string().uuid('Valid user UUID required'),
+  plan_tier: z.enum(['premium', 'premium_plus']).default('premium'),
+  plan_days: z.number().int().min(1).max(3650).default(30),
+  amount_pence: z.number().int().min(0).default(699),
+  notes: z.string().max(500).optional(),
+});
+
+export const AdminConfirmInvoiceSchema = z.object({
+  notes: z.string().max(500).optional(),
+});
+
+export type CreateInvoiceInput = z.infer<typeof CreateInvoiceSchema>;
+export type AdminCreateInvoiceInput = z.infer<typeof AdminCreateInvoiceSchema>;
+export type AdminConfirmInvoiceInput = z.infer<typeof AdminConfirmInvoiceSchema>;
+
