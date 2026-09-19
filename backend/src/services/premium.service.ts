@@ -1,12 +1,30 @@
 import type { PoolClient } from 'pg';
 import pool, { query } from '../db';
-import { ccbillService, CCBillTier } from './ccbill.service';
 import { isInviteRequired } from './invite-code.service';
 import { isAlwaysPremiumName } from '../lib/always-premium';
 
 type Queryable = PoolClient | typeof pool;
 
-/** Fallback when webhook body omits billed amount — matches locked CCBill price. */
+export type PaymentProcessor = 'verotel' | 'segpay';
+
+export type PaymentWebhookEvent = {
+  eventType: string;
+  userId: string | null;
+  subscriptionId: string | null;
+  customerId: string | null;
+  periodEnd: Date | null;
+  processor?: string;
+  raw: Record<string, string>;
+};
+
+export class BillingNotConfiguredError extends Error {
+  constructor(message = 'Billing is not configured') {
+    super(message);
+    this.name = 'BillingNotConfiguredError';
+  }
+}
+
+/** Fallback when webhook body omits billed amount — matches standard premium price. */
 export const PREMIUM_PAID_PRICE = 6.99;
 
 /**
@@ -220,7 +238,7 @@ export const premiumService = {
     return { premiumUntil, skippedLifetime: false };
   },
 
-  /** Parse billed amount from a CCBill-like webhook body; fallback to list price. */
+  /** Parse billed amount from a webhook body; fallback to list price. */
   extractPaymentAmount(raw: Record<string, string>): number {
     const keys = [
       'billedAmount',
@@ -281,15 +299,24 @@ export const premiumService = {
     return result.rows[0]?.count ?? 0;
   },
 
-  buildCheckoutUrl(userId: string, tier: CCBillTier, returnUrl?: string) {
-    return ccbillService.buildFlexFormUrl(userId, tier, returnUrl);
+  buildCheckoutUrl(_userId: string, _tier: PremiumTier, _returnUrl?: string): string {
+    // Verotel is active merchant under review; live checkout wiring disabled until approved.
+    throw new BillingNotConfiguredError();
   },
 
   getPlans() {
-    return ccbillService.getPlans();
+    return [
+      {
+        id: 'premium' as const,
+        name: 'MenRush Premium',
+        tagline: 'See who matched you. Boost. Ghost browse. No caps.',
+        price: '6.99',
+        period_days: 30,
+      },
+    ];
   },
 
-  async activateFromWebhook(event: ReturnType<typeof ccbillService.parseWebhook>) {
+  async activateFromWebhook(event: PaymentWebhookEvent) {
     if (!event.userId) {
       return { ok: false, reason: 'missing_user_id' };
     }
@@ -305,12 +332,14 @@ export const premiumService = {
       [event.userId],
     );
 
+    const processor = event.processor || 'verotel';
+
     await query(
       `INSERT INTO subscriptions (
          user_id, tier, status, processor,
          processor_subscription_id, processor_customer_id,
          current_period_start, current_period_end, metadata
-       ) VALUES ($1, $2, 'active', 'ccbill', $3, $4, NOW(), $5, $6::jsonb)`,
+       ) VALUES ($1, $2, 'active', $7, $3, $4, NOW(), $5, $6::jsonb)`,
       [
         event.userId,
         tier,
@@ -318,6 +347,7 @@ export const premiumService = {
         event.customerId,
         periodEnd,
         JSON.stringify(event.raw),
+        processor,
       ],
     );
 
@@ -337,7 +367,7 @@ export const premiumService = {
     return { ok: true, userId: event.userId, tier, periodEnd };
   },
 
-  async renewFromWebhook(event: ReturnType<typeof ccbillService.parseWebhook>) {
+  async renewFromWebhook(event: PaymentWebhookEvent) {
     if (!event.userId) return { ok: false, reason: 'missing_user_id' };
 
     const periodEnd =
@@ -377,7 +407,7 @@ export const premiumService = {
     return { ok: true, userId: event.userId, tier, periodEnd };
   },
 
-  async deactivateFromWebhook(event: ReturnType<typeof ccbillService.parseWebhook>) {
+  async deactivateFromWebhook(event: PaymentWebhookEvent) {
     if (!event.userId) return { ok: false, reason: 'missing_user_id' };
 
     // Never strip always-Premium owner accounts.
@@ -404,13 +434,42 @@ export const premiumService = {
   },
 
   async handleWebhook(body: Record<string, unknown>) {
-    if (!ccbillService.verifyWebhook(body)) {
-      const err = new Error('Invalid webhook signature');
-      (err as any).code = 'invalid_signature';
-      throw err;
+    const raw: Record<string, string> = {};
+    for (const [key, value] of Object.entries(body)) {
+      if (typeof value === 'string') raw[key] = value;
     }
 
-    const event = ccbillService.parseWebhook(body);
+    const eventType =
+      (typeof body.eventType === 'string' && body.eventType) ||
+      (typeof body.event_type === 'string' && body.event_type) ||
+      'unknown';
+
+    const userId =
+      (typeof body['X-userId'] === 'string' && body['X-userId']) ||
+      (typeof body.userId === 'string' && body.userId) ||
+      (typeof body.custom1 === 'string' && body.custom1) ||
+      null;
+
+    const subscriptionId =
+      (typeof body.subscriptionId === 'string' && body.subscriptionId) ||
+      (typeof body.subscription_id === 'string' && body.subscription_id) ||
+      null;
+
+    const customerId =
+      (typeof body.customerId === 'string' && body.customerId) ||
+      (typeof body.consumerId === 'string' && body.consumerId) ||
+      null;
+
+    const event: PaymentWebhookEvent = {
+      eventType,
+      userId,
+      subscriptionId,
+      customerId,
+      periodEnd: null,
+      processor: 'verotel',
+      raw,
+    };
+
     const type = event.eventType.toLowerCase();
 
     if (type.includes('newsale') || type.includes('new_sale')) {
