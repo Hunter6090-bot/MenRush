@@ -101,7 +101,6 @@ test.describe('Pride promotion landing', () => {
     await expect(page.getByText(/London \/ Birmingham \/ Manchester/i)).toHaveCount(0);
 
     await expect(page.getByText(/auto-renew/i)).toHaveCount(0);
-    await expect(page.getByText(/CCBill/i)).toHaveCount(0);
     await expect(page.getByText(/Path 1/i)).toHaveCount(0);
     await expect(page.getByText(/Path 2/i)).toHaveCount(0);
 

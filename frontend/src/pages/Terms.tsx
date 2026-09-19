@@ -403,7 +403,7 @@ export const Terms = () => {
                 <>
                   <Strong>7.3</Strong> After any free trial period, Premium subscriptions are
                   billed on a recurring basis (monthly or annually) through our payment processor,
-                  CCBill.
+                  Verotel.
                 </>,
               )}
               {para(

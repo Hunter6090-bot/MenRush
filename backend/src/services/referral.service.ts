@@ -1,7 +1,7 @@
 /**
  * Referral system — signup attribution, verified unlock, pending payouts.
  *
- * Does NOT: send money, call CCBill, invent device fingerprinting, or gate signup.
+ * Does NOT: send money, call external payment rails, invent device fingerprinting, or gate signup.
  */
 import crypto from 'crypto';
 import type { PoolClient } from 'pg';

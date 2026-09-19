@@ -49,8 +49,8 @@ export const Premium: React.FC = () => {
       window.location.href = res.data.checkout_url;
     } catch (err: any) {
       const code = err?.response?.data?.error;
-      if (code === 'ccbill_not_configured') {
-        setError('Billing is not configured yet. CCBill credentials are pending merchant approval.');
+      if (code === 'billing_not_configured') {
+        setError('Billing is not configured yet. Merchant credentials are pending approval.');
       } else {
         setError('Could not start checkout. Try again in a moment.');
       }
@@ -87,7 +87,7 @@ export const Premium: React.FC = () => {
             <div className="rounded-xl border border-[#C4832A]/40 bg-[#C4832A]/10 p-4 text-center mb-5">
               <p className="text-[#C4832A] font-bold">Beta access includes Premium</p>
               <p className="text-xs text-[var(--cream-muted)] mt-1">
-                Billing stays off until CCBill merchant approval. Enjoy the full feature set while we test.
+                Billing stays off until merchant approval. Enjoy the full feature set while we test.
               </p>
             </div>
           ) : null}
@@ -146,7 +146,7 @@ export const Premium: React.FC = () => {
           ) : null}
 
           <p className="text-[10px] text-[#7A6A50] text-center mt-5 leading-relaxed">
-            Billing via CCBill — dating-friendly processor. Card details never touch MenRush servers.
+            Billing via Verotel / GayCharge PINK — dating-friendly processor. Card details never touch MenRush servers.
           </p>
 
           <button

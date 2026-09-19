@@ -1,5 +1,5 @@
 -- 011_premium.sql
--- Premium subscriptions (CCBill / high-risk processors — not Stripe billing).
+-- Premium subscriptions (high-risk processors — not Stripe billing).
 -- Idempotent: safe to run multiple times.
 
 DO $$ BEGIN
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   tier VARCHAR(20) NOT NULL DEFAULT 'premium',
   status VARCHAR(20) NOT NULL DEFAULT 'active',
-  processor VARCHAR(30) NOT NULL DEFAULT 'ccbill',
+  processor VARCHAR(30) NOT NULL DEFAULT 'verotel',
   processor_subscription_id TEXT,
   processor_customer_id TEXT,
   current_period_start TIMESTAMPTZ,
