@@ -65,4 +65,24 @@ describe('Nearby Grid-first Brand lock', () => {
     const chatAt = src.indexOf("to: '/conversations'");
     assert.ok(discoverAt >= 0 && streamAt > discoverAt && chatAt > streamAt);
   });
+
+  it('hides exact nearby count digits in public app UI', () => {
+    const discover = readFileSync(join(root, 'pages/Discover.tsx'), 'utf8');
+    assert.doesNotMatch(discover, /\$\{nearbyCount\}\s+\$\{nearbyCount === 1/);
+    assert.doesNotMatch(discover, /\{nearbyCount\}\s*(?:man|men)\s+nearby/);
+    assert.doesNotMatch(discover, /<span[^>]*>\{nearbyCount\}<\/span>/);
+    assert.match(discover, /'Men nearby'/);
+
+    const mapStatus = readFileSync(join(root, 'components/MapLiveStatus.tsx'), 'utf8');
+    assert.doesNotMatch(mapStatus, /\{nearbyCount\}\s+nearby/);
+    assert.match(mapStatus, /Men nearby/);
+
+    const layout = readFileSync(join(root, 'components/Layout.tsx'), 'utf8');
+    assert.doesNotMatch(layout, /\{discoveryShell\.nearbyCount\}\s+in your radius/);
+    assert.match(layout, /Men nearby/);
+
+    const grid = readFileSync(join(root, 'components/NearbyProfileGrid.tsx'), 'utf8');
+    assert.doesNotMatch(grid, /\$\{beyondRadiusCount\}\s+men are farther out/);
+    assert.match(grid, /Men are farther out/);
+  });
 });

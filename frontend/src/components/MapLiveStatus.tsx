@@ -34,7 +34,7 @@ export function MapLiveStatus({
       />
       <div className="min-w-0">
         <p className="text-[13px] font-bold leading-tight text-[#1A1208]">
-          {nearbyCount} nearby
+          Men nearby
         </p>
         {liveCount > 0 ? (
           <p className="text-[11px] font-semibold text-[#3D7A2E]" data-testid="map-live-line">
