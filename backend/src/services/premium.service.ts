@@ -238,6 +238,103 @@ export const premiumService = {
     return { premiumUntil, skippedLifetime: false };
   },
 
+  /**
+   * Grant paid Premium from confirmed manual/bank invoice.
+   * Stacking rules:
+   * 1. Lifetime / always-Premium owners (BOA90, Bigbear25, HantsBear): preserve open-ended (null until).
+   * 2. Active future premium_until: extends from that date (base = currentUntil).
+   * 3. Beta/promo promises (e.g. 12 months) are never shortened.
+   * 4. Updates or creates an active subscription record (processor = 'manual_invoice').
+   */
+  async grantPaidInvoice(
+    userId: string,
+    planDays = 30,
+    planTier: PremiumTier = 'premium',
+    invoiceNumber?: string,
+    amountPence?: number,
+    client?: PoolClient,
+    now = new Date(),
+  ): Promise<{ premiumUntil: Date | null; skippedLifetime: boolean }> {
+    const db: Queryable = client ?? pool;
+    const row = await db.query(
+      `SELECT name, is_premium, premium_until, premium_starts_at
+       FROM users WHERE id = $1`,
+      [userId],
+    );
+    const user = row.rows[0];
+    if (!user) throw new Error('User not found');
+
+    const always = isAlwaysPremiumName(user.name);
+    const currentUntil = user.premium_until ? new Date(user.premium_until) : null;
+
+    if (always && Boolean(user.is_premium) && !currentUntil) {
+      return { premiumUntil: null, skippedLifetime: true };
+    }
+
+    const base = currentUntil && currentUntil.getTime() > now.getTime() ? currentUntil : now;
+    const candidateUntil = new Date(base.getTime() + planDays * 24 * 60 * 60 * 1000);
+
+    // Stacking guarantee: never shorten longer existing entitlement (e.g. 12-month beta promise)
+    const effectiveUntil =
+      currentUntil && currentUntil.getTime() > candidateUntil.getTime()
+        ? currentUntil
+        : candidateUntil;
+
+    const existingStarts = user.premium_starts_at ? new Date(user.premium_starts_at) : null;
+    const effectiveStart = existingStarts && existingStarts.getTime() < now.getTime() ? existingStarts : now;
+
+    await db.query(
+      `UPDATE users
+       SET is_premium = TRUE,
+           premium_tier = $2,
+           premium_starts_at = COALESCE(premium_starts_at, $3),
+           premium_until = $4,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [userId, planTier, effectiveStart, effectiveUntil],
+    );
+
+    // Update subscriptions table: deactivate previous active subscription and record new active manual_invoice
+    await db.query(
+      `UPDATE subscriptions
+       SET status = 'canceled', canceled_at = NOW(), updated_at = NOW()
+       WHERE user_id = $1 AND status = 'active'`,
+      [userId],
+    );
+
+    await db.query(
+      `INSERT INTO subscriptions (
+         user_id, tier, status, processor,
+         processor_subscription_id,
+         current_period_start, current_period_end, metadata
+       ) VALUES ($1, $2, 'active', 'manual_invoice', $3, $4, $5, $6::jsonb)`,
+      [
+        userId,
+        planTier,
+        invoiceNumber || null,
+        effectiveStart,
+        effectiveUntil,
+        JSON.stringify({
+          plan_days: planDays,
+          amount_pence: amountPence,
+          invoice_number: invoiceNumber,
+          source: 'manual_invoice',
+        }),
+      ],
+    );
+
+    if (amountPence && amountPence > 0) {
+      try {
+        const { referralService } = await import('./referral.service');
+        await referralService.onPaidUpgrade(userId, amountPence / 100);
+      } catch (err) {
+        console.error('[premium] referral paid-upgrade hook failed', err);
+      }
+    }
+
+    return { premiumUntil: effectiveUntil, skippedLifetime: false };
+  },
+
   /** Parse billed amount from a webhook body; fallback to list price. */
   extractPaymentAmount(raw: Record<string, string>): number {
     const keys = [

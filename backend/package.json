@@ -39,6 +39,7 @@
     "test:pride-one-path": "ts-node scripts/pride-one-path-checks.ts",
     "test:bsf26": "ts-node scripts/bsf26-promo-checks.ts",
     "test:mr3free": "ts-node scripts/mr3free-promo-checks.ts",
+    "test:manual-invoice": "ts-node scripts/manual-invoice-checks.ts",
     "test:open-signup": "ts-node scripts/open-signup-checks.ts",
     "test:email-confirm": "ts-node scripts/email-confirm-checks.ts",
     "test:referrals": "ts-node scripts/referral-checks.ts",

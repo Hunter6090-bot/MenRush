@@ -173,6 +173,9 @@ export const authAPI = {
   resetPassword: (data: { token: string; password: string }) => apiClient.post('/auth/reset-password', data),
   changePassword: (data: { current_password: string; new_password: string }) =>
     apiClient.post('/auth/change-password', data),
+  getPasswordStatus: () => apiClient.get<{ has_password: boolean }>('/auth/password-status'),
+  setPassword: (data: { current_password?: string; new_password: string }) =>
+    apiClient.post<{ ok: boolean; message: string; hasExistingPassword?: boolean }>('/auth/set-password', data),
   getAccount: () => apiClient.get<{ email: string }>('/auth/account'),
   changeEmail: (data: { current_password: string; new_email: string }) =>
     apiClient.post<{ ok: boolean; email: string; message: string }>('/auth/change-email', data),

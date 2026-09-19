@@ -11,6 +11,7 @@ import {
   ConfirmEmailSchema,
   ResendConfirmEmailSchema,
   ChangePasswordSchema,
+  SetPasswordSchema,
   ChangeEmailSchema,
   DeleteAccountSchema,
   TwoFactorCodeSchema,
@@ -309,6 +310,30 @@ router.post('/change-password', authMiddleware, authLimiter, async (req: AuthReq
     const msg = error?.message || 'Could not change password';
     const status =
       msg === 'Current password is incorrect' || msg === 'User not found' ? 401 : 400;
+    res.status(status).json({ error: msg });
+  }
+});
+
+router.get('/password-status', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const hasPassword = await authService.hasPassword(req.userId!);
+    res.json({ has_password: hasPassword });
+  } catch (error: any) {
+    res.status(500).json({ error: 'could_not_check_password_status' });
+  }
+});
+
+router.post('/set-password', authMiddleware, authLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const data = SetPasswordSchema.parse(req.body);
+    const result = await authService.setOrChangePassword(req.userId!, data);
+    res.json({ ok: true, message: 'Password updated.', hasExistingPassword: result.hasExistingPassword });
+  } catch (error: any) {
+    const msg = error?.message || 'Could not update password';
+    const status =
+      msg === 'Current password is incorrect' || msg === 'Current password is required' || msg === 'User not found'
+        ? 401
+        : 400;
     res.status(status).json({ error: msg });
   }
 });
