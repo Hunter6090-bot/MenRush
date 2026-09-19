@@ -1,4 +1,4 @@
--- 066_update_subscriptions_processor_default.sql
+-- 066_remove_ccbill_default.sql
 -- Update default processor on subscriptions to verotel (active merchant under review).
 
 DO $$ BEGIN
