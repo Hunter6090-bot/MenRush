@@ -17,7 +17,7 @@ function mockUser(overrides: Partial<NearbyUser> = {}): NearbyUser {
 }
 
 describe('NearbyProfileGrid card presentation', () => {
-  it('does NOT render top-right distance chip on grid profile card', () => {
+  it('does NOT render top-right distance/km chip on grid profile card', () => {
     const user = mockUser({ id: 'u1', name: 'James', distance_km: 1.93 });
     render(
       <MemoryRouter>
@@ -32,8 +32,8 @@ describe('NearbyProfileGrid card presentation', () => {
     expect(screen.getByText(/James/)).toBeInTheDocument();
   });
 
-  it('keeps name at top and looking-for at bottom', () => {
-    const user = mockUser({ id: 'u2', name: 'Alex', age: 28, looking_for: 'Chat & meet' });
+  it('keeps name at top and looking-for at bottom without top-right distance chip', () => {
+    const user = mockUser({ id: 'u2', name: 'Alex', age: 28, looking_for: 'Chat & meet', distance_km: 4.0 });
     render(
       <MemoryRouter>
         <NearbyProfileGrid
@@ -48,7 +48,7 @@ describe('NearbyProfileGrid card presentation', () => {
     expect(screen.getByText('Chat & meet')).toBeInTheDocument();
   });
 
-  it('renders match control with tooltip', () => {
+  it('renders one match-state control with tooltip', () => {
     const user = mockUser({ id: 'u3', name: 'Dave', distance_km: 0 });
     const onMatch = vi.fn();
     render(
