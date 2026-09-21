@@ -91,10 +91,10 @@ export const Premium: React.FC = () => {
             <p className="text-[#C4832A] font-bold">
               {BETA_INVITE_REQUIRED ? 'Beta access includes Premium' : 'In-app card billing is being set up'}
             </p>
-            <p className="text-xs text-[var(--cream-muted)] mt-1">
+            <p className="text-xs text-[#F0E0C0]/90 mt-1">
               We are not taking card payments in-app yet while payment processing is under merchant review.
               Need early activation? Contact{' '}
-              <a href="mailto:support@menrush.com" className="text-[#C4832A] underline hover:text-[#E0A040]">
+              <a href="mailto:support@menrush.com" className="text-[#C4832A] underline hover:text-[#E0A14A]">
                 support@menrush.com
               </a>{' '}
               for manual invoice.
@@ -104,7 +104,7 @@ export const Premium: React.FC = () => {
           {isPremium ? (
             <div className="rounded-xl border border-[#C4832A]/40 bg-[#C4832A]/10 p-4 text-center mb-5">
               <p className="text-[#C4832A] font-bold">You&apos;re Premium.</p>
-              <p className="text-xs text-[var(--cream-muted)] mt-1">Your perks are active.</p>
+              <p className="text-xs text-[#F0E0C0]/90 mt-1">Your perks are active.</p>
             </div>
           ) : null}
 
@@ -114,7 +114,7 @@ export const Premium: React.FC = () => {
             </div>
           ) : (
             <>
-              <ul className="space-y-2 mb-6 text-sm text-[#D4C4A8]">
+              <ul className="space-y-2 mb-6 text-sm text-[#F0E0C0]">
                 {FEATURES.map((f) => (
                   <li key={f} className="flex gap-2">
                     <span className="text-[#C4832A]">✓</span>
@@ -132,12 +132,12 @@ export const Premium: React.FC = () => {
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-left">
-                      <p className="font-bold text-[var(--cream)]">{plan.name}</p>
-                      <p className="text-xs text-[var(--cream-muted)] mt-1">{plan.tagline}</p>
+                      <p className="font-bold text-[#F0E0C0]">{plan.name}</p>
+                      <p className="text-xs text-[#F0E0C0]/80 mt-1">{plan.tagline}</p>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-lg font-black text-[#C4832A]">£{plan.price}</p>
-                      <p className="text-[10px] text-[var(--cream-muted)]">/ {plan.period_days} days</p>
+                      <p className="text-[10px] text-[#F0E0C0]/80">/ {plan.period_days} days</p>
                     </div>
                   </div>
                   {checkingOut ? (
@@ -154,14 +154,14 @@ export const Premium: React.FC = () => {
             <p className="text-sm text-red-400 text-center mt-4">{error}</p>
           ) : null}
 
-          <p className="text-[10px] text-[#7A6A50] text-center mt-5 leading-relaxed">
+          <p className="text-[10px] text-[#F0E0C0]/80 text-center mt-5 leading-relaxed">
             In-app card billing is being set up and is currently under merchant review. Manual invoices are processed directly by MenRush upon request.
           </p>
 
           <button
             type="button"
             onClick={() => navigate(isPremium ? '/discover' : '/profile')}
-            className="w-full mt-4 text-sm text-[var(--cream-muted)] hover:text-[#C4832A] transition-colors"
+            className="w-full mt-4 text-sm text-[#F0E0C0]/80 hover:text-[#C4832A] transition-colors"
           >
             {isPremium ? 'Back to Discover' : 'Not now'}
           </button>

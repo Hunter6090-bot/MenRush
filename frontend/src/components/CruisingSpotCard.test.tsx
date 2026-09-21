@@ -75,6 +75,7 @@ describe('CruisingSpotCard', () => {
 
     const directionsLink = screen.getByTestId('cruising-get-directions');
     expect(directionsLink).toBeInTheDocument();
+    expect(directionsLink).toHaveAttribute('title', 'Directions');
     const href = directionsLink.getAttribute('href');
     expect(href).toContain('51.2260632');
     expect(href).toContain('-0.6727582');
@@ -90,6 +91,7 @@ describe('CruisingSpotCard', () => {
     render(<CruisingSpotCard spot={mockSpot} onSelect={onSelect} />);
 
     const viewBtn = screen.getByTestId('cruising-view-on-map');
+    expect(viewBtn).toHaveAttribute('title', 'Map');
     fireEvent.click(viewBtn);
     expect(onSelect).toHaveBeenCalledWith(mockSpot);
   });
@@ -127,12 +129,12 @@ describe('CruisingSpotCard', () => {
     render(<CruisingSpotCard spot={mockSpot} onCheckIn={onCheckIn} />);
 
     const checkInBtn = screen.getByTestId(`cruising-checkin-anon-${mockSpot.id}`);
-    expect(checkInBtn).toHaveTextContent('Check in anonymously');
+    expect(checkInBtn).toHaveAttribute('title', 'Check in');
     fireEvent.click(checkInBtn);
     expect(onCheckIn).toHaveBeenCalledWith(mockSpot, true);
   });
 
-  it('shows "Checked in (Leave)" when user is already checked in and allows checking out', () => {
+  it('shows "Checked in" when user is already checked in and allows checking out', () => {
     const onCheckIn = vi.fn();
     const checkedInSpot: HotSpotDTO = {
       ...mockSpot,
@@ -144,7 +146,7 @@ describe('CruisingSpotCard', () => {
     render(<CruisingSpotCard spot={checkedInSpot} onCheckIn={onCheckIn} />);
 
     const checkOutBtn = screen.getByTestId(`cruising-checkout-${mockSpot.id}`);
-    expect(checkOutBtn).toHaveTextContent(/Checked in/i);
+    expect(checkOutBtn).toHaveAttribute('title', 'Checked in');
     fireEvent.click(checkOutBtn);
     expect(onCheckIn).toHaveBeenCalledWith(checkedInSpot, false);
   });
@@ -160,7 +162,7 @@ describe('CruisingSpotCard', () => {
 
     expect(screen.getByTestId('cruising-card-rating')).toHaveTextContent('★ 4.8');
     const reviewsBtn = screen.getByTestId(`cruising-reviews-btn-${mockSpot.id}`);
-    expect(reviewsBtn).toHaveTextContent('Reviews');
+    expect(reviewsBtn).toHaveAttribute('title', 'Reviews');
     expect(reviewsBtn).toHaveTextContent('5');
     fireEvent.click(reviewsBtn);
     expect(onOpenReviews).toHaveBeenCalledWith(ratedSpot);

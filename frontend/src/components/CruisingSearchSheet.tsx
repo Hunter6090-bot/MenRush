@@ -132,9 +132,9 @@ export function CruisingSearchSheet({
       />
 
       {/* Sheet panel */}
-      <div className="relative flex h-[85vh] max-h-[720px] w-full max-w-2xl flex-col rounded-t-3xl border border-[var(--border-default)] bg-[var(--bg-primary)] shadow-2xl lg:h-[80vh] lg:rounded-3xl">
+      <div className="relative flex h-[85vh] max-h-[720px] w-full max-w-2xl flex-col rounded-t-3xl border border-[#3D2B0E] bg-[#0D0A06] text-[#F0E0C0] shadow-2xl lg:h-[80vh] lg:rounded-3xl">
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-[var(--border-default)] px-4 py-3 sm:px-6">
+        <div className="flex shrink-0 items-center justify-between border-b border-[#3D2B0E] bg-[#0D0A06] px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#C4832A]/20 text-[#E0A14A]">
               <svg
@@ -151,7 +151,7 @@ export function CruisingSearchSheet({
                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
             </span>
-            <h2 className="text-base font-extrabold text-[var(--cream)]">
+            <h2 className="text-base font-extrabold text-[#F0E0C0]">
               Cruising Spots
             </h2>
           </div>
@@ -161,17 +161,17 @@ export function CruisingSearchSheet({
             onClick={onClose}
             aria-label="Close cruising search"
             data-testid="cruising-search-close"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--cream-muted)] transition-colors hover:bg-white/5 hover:text-[var(--cream)]"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-[#F0E0C0]/70 transition-colors hover:bg-white/5 hover:text-[#F0E0C0]"
           >
             <IconClose size={18} />
           </button>
         </div>
 
         {/* Search input & category pills */}
-        <div className="shrink-0 space-y-2.5 border-b border-[var(--border-default)]/60 bg-[var(--bg-elevated)]/60 px-4 py-3 sm:px-6">
+        <div className="shrink-0 space-y-2.5 border-b border-[#3D2B0E] bg-[#14120E] px-4 py-3 sm:px-6">
           {/* Search bar */}
           <div className="relative flex items-center">
-            <span className="pointer-events-none absolute left-3.5 text-[var(--cream-muted)]">
+            <span className="pointer-events-none absolute left-3.5 text-[#F0E0C0]/60">
               <svg
                 width="15"
                 height="15"
@@ -193,14 +193,14 @@ export function CruisingSearchSheet({
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search by spot name, city, woods, layby, sauna…"
               data-testid="cruising-search-input"
-              className="w-full rounded-full border border-[var(--border-default)] bg-[#14120E] py-2 pl-9 pr-9 text-sm text-[var(--cream)] placeholder-[var(--cream-muted)] focus:border-[var(--copper)] focus:outline-none focus:ring-1 focus:ring-[var(--copper)]"
+              className="w-full rounded-full border border-[#3D2B0E] bg-[#0D0A06] py-2 pl-9 pr-9 text-sm text-[#F0E0C0] placeholder-[#D4C4A8]/70 focus:border-[#C4832A] focus:outline-none focus:ring-1 focus:ring-[#C4832A]"
             />
             {query ? (
               <button
                 type="button"
                 onClick={() => setQuery('')}
                 aria-label="Clear search query"
-                className="absolute right-3 text-sm text-[var(--cream-muted)] hover:text-[var(--cream)]"
+                className="absolute right-3 text-sm text-[#F0E0C0]/70 hover:text-[#F0E0C0]"
               >
                 ×
               </button>
@@ -221,7 +221,7 @@ export function CruisingSearchSheet({
               className={`rounded-full px-3 py-1 font-bold whitespace-nowrap transition-colors ${
                 selectedCategory === 'all'
                   ? 'bg-[#C4832A] text-[#1A0E03]'
-                  : 'border border-[var(--border-default)] bg-black/20 text-[var(--cream-soft)] hover:border-[var(--copper)]/40'
+                  : 'border border-[#3D2B0E] bg-[#1E1508]/90 text-[#F0E0C0] hover:border-[#C4832A]/50'
               }`}
             >
               All spots
@@ -239,7 +239,7 @@ export function CruisingSearchSheet({
                   className={`inline-flex items-center gap-1 rounded-full px-3 py-1 font-bold whitespace-nowrap transition-colors ${
                     isSelected
                       ? 'bg-[#C4832A] text-[#1A0E03]'
-                      : 'border border-[var(--border-default)] bg-black/20 text-[var(--cream-soft)] hover:border-[var(--copper)]/40'
+                      : 'border border-[#3D2B0E] bg-[#1E1508]/90 text-[#F0E0C0] hover:border-[#C4832A]/50'
                   }`}
                 >
                   <span aria-hidden="true">{meta.icon}</span>
@@ -264,7 +264,7 @@ export function CruisingSearchSheet({
           {loading && spots.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <PulseRing size={32} label="Finding spots" />
-              <p className="mt-3 text-xs font-semibold text-[var(--cream-muted)]">
+              <p className="mt-3 text-xs font-semibold text-[#F0E0C0]/80">
                 Locating nearby spots…
               </p>
             </div>
@@ -276,10 +276,10 @@ export function CruisingSearchSheet({
               <span className="text-3xl" aria-hidden="true">
                 {selectedCategory !== 'all' ? CRUISING_CATEGORY_META[selectedCategory].icon : '🌲'}
               </span>
-              <p className="mt-2 text-sm font-bold text-[var(--cream)]">
+              <p className="mt-2 text-sm font-bold text-[#F0E0C0]">
                 No spots found
               </p>
-              <p className="mt-1 max-w-xs text-xs text-[var(--cream-muted)]">
+              <p className="mt-1 max-w-xs text-xs text-[#F0E0C0]/80">
                 {query
                   ? `No matches for "${query}". Try searching another name or category.`
                   : 'No cruising spots found nearby. Try expanding your search.'}
@@ -299,7 +299,7 @@ export function CruisingSearchSheet({
             </div>
           ) : (
             <>
-              <p className="text-[11px] font-bold text-[var(--cream-muted)]">
+              <p className="text-[11px] font-bold text-[#F0E0C0]/90">
                 {filteredSpots.length}{' '}
                 {filteredSpots.length === 1 ? 'spot' : 'spots'} nearby · closest first
               </p>
@@ -321,7 +321,7 @@ export function CruisingSearchSheet({
         </div>
 
         {/* Footer info note */}
-        <div className="shrink-0 border-t border-[var(--border-default)]/40 bg-[var(--bg-elevated)]/40 px-4 py-2 text-center text-[10px] text-[var(--cream-muted)] sm:px-6">
+        <div className="shrink-0 border-t border-[#3D2B0E] bg-[#0D0A06]/95 px-4 py-2.5 text-center text-[10px] text-[#F0E0C0]/80 sm:px-6">
           <span>Outdoor locations for consenting adults (18+). One tap to maps navigation.</span>
         </div>
       </div>

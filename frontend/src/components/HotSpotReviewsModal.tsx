@@ -121,14 +121,14 @@ export function HotSpotReviewsModal({
         className="absolute inset-0 bg-black/65 backdrop-blur-sm"
       />
 
-      <div className="relative flex h-[80vh] max-h-[640px] w-full max-w-lg flex-col rounded-t-3xl border border-[var(--border-default)] bg-[var(--bg-primary)] shadow-2xl lg:h-[75vh] lg:rounded-3xl">
+      <div className="relative flex h-[80vh] max-h-[640px] w-full max-w-lg flex-col rounded-t-3xl border border-[#3D2B0E] bg-[#0D0A06] text-[#F0E0C0] shadow-2xl lg:h-[75vh] lg:rounded-3xl">
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-[var(--border-default)] px-5 py-3.5">
+        <div className="flex shrink-0 items-center justify-between border-b border-[#3D2B0E] px-5 py-3.5">
           <div>
-            <h2 className="text-base font-extrabold text-[var(--cream)] leading-snug">
+            <h2 className="text-base font-extrabold text-[#F0E0C0] leading-snug">
               {spot.name}
             </h2>
-            <div className="flex items-center gap-2 text-xs text-[var(--cream-muted)] mt-0.5">
+            <div className="flex items-center gap-2 text-xs text-[#F0E0C0]/80 mt-0.5">
               <span>Reviews</span>
               {ratingAvg != null ? (
                 <span className="font-bold text-[#E0A14A]">★ {ratingAvg}</span>
@@ -142,7 +142,7 @@ export function HotSpotReviewsModal({
             onClick={onClose}
             aria-label="Close"
             data-testid="hotspot-reviews-close"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--cream-muted)] hover:text-[var(--cream)]"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-[#F0E0C0]/70 hover:text-[#F0E0C0]"
           >
             <IconClose size={18} />
           </button>
@@ -170,10 +170,10 @@ export function HotSpotReviewsModal({
             <form
               onSubmit={handleSubmit}
               data-testid="review-form"
-              className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-4 space-y-3"
+              className="rounded-2xl border border-[#3D2B0E] bg-[#1E1508] p-4 space-y-3"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-[var(--cream)]">Rate this spot</span>
+                <span className="text-xs font-bold text-[#F0E0C0]">Rate this spot</span>
                 {/* 1-5 Star Picker */}
                 <div className="flex items-center gap-1" role="radiogroup" aria-label="Rating">
                   {[1, 2, 3, 4, 5].map((star) => (
@@ -202,22 +202,22 @@ export function HotSpotReviewsModal({
                   rows={3}
                   required
                   data-testid="review-body-input"
-                  className="w-full rounded-xl border border-[var(--border-default)] bg-[#14120E] p-2.5 text-xs text-[var(--cream)] placeholder-[var(--cream-muted)] focus:border-[var(--copper)] focus:outline-none focus:ring-1 focus:ring-[var(--copper)]"
+                  className="w-full rounded-xl border border-[#3D2B0E] bg-[#0D0A06] p-2.5 text-xs text-[#F0E0C0] placeholder-[#D4C4A8]/70 focus:border-[#C4832A] focus:outline-none focus:ring-1 focus:ring-[#C4832A]"
                 />
-                <div className="mt-1 flex items-center justify-between text-[10px] text-[var(--cream-muted)]">
+                <div className="mt-1 flex items-center justify-between text-[10px] text-[#F0E0C0]/70">
                   <span>Keep it honest & respectful. No names or harassment.</span>
                   <span>{body.length}/500</span>
                 </div>
               </div>
 
               <div className="flex items-center justify-between pt-1">
-                <label className="flex items-center gap-1.5 text-xs text-[var(--cream-soft)] cursor-pointer">
+                <label className="flex items-center gap-1.5 text-xs text-[#F0E0C0] cursor-pointer">
                   <input
                     type="checkbox"
                     checked={isAnonymous}
                     onChange={(e) => setIsAnonymous(e.target.checked)}
                     data-testid="review-anonymous-checkbox"
-                    className="rounded border-[var(--border-default)] bg-[#14120E] text-[#C4832A] focus:ring-0"
+                    className="rounded border-[#3D2B0E] bg-[#0D0A06] text-[#C4832A] focus:ring-0"
                   />
                   <span>Post anonymously</span>
                 </label>
@@ -226,7 +226,7 @@ export function HotSpotReviewsModal({
                   <button
                     type="button"
                     onClick={() => setFormOpen(false)}
-                    className="rounded-full px-3 py-1.5 text-xs text-[var(--cream-muted)] hover:text-[var(--cream)]"
+                    className="rounded-full px-3 py-1.5 text-xs text-[#F0E0C0]/70 hover:text-[#F0E0C0]"
                   >
                     Cancel
                   </button>
@@ -251,8 +251,8 @@ export function HotSpotReviewsModal({
           ) : reviews.length === 0 ? (
             <div className="py-12 text-center" data-testid="reviews-empty">
               <span className="text-2xl" aria-hidden="true">★</span>
-              <p className="mt-2 text-xs font-bold text-[var(--cream)]">No reviews yet</p>
-              <p className="mt-0.5 text-[11px] text-[var(--cream-muted)]">
+              <p className="mt-2 text-xs font-bold text-[#F0E0C0]">No reviews yet</p>
+              <p className="mt-0.5 text-[11px] text-[#F0E0C0]/70">
                 Be the first to share an honest review of this spot.
               </p>
             </div>
@@ -262,7 +262,7 @@ export function HotSpotReviewsModal({
                 <div
                   key={rev.id}
                   data-testid={`review-card-${rev.id}`}
-                  className="rounded-xl border border-[var(--border-default)]/60 bg-[var(--bg-elevated)] p-3 shadow-sm"
+                  className="rounded-xl border border-[#3D2B0E] bg-[#1E1508] p-3 shadow-sm"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
@@ -270,12 +270,12 @@ export function HotSpotReviewsModal({
                         {'★'.repeat(rev.rating)}
                         <span className="text-[rgba(240,224,192,0.2)]">{'★'.repeat(5 - rev.rating)}</span>
                       </span>
-                      <span className="text-[11px] font-semibold text-[var(--cream-soft)]">
+                      <span className="text-[11px] font-semibold text-[#F0E0C0]">
                         · {rev.author_name}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-[var(--cream-muted)]">
+                      <span className="text-[10px] text-[#F0E0C0]/70">
                         {new Date(rev.created_at).toLocaleDateString(undefined, {
                           month: 'short',
                           day: 'numeric',
@@ -293,7 +293,7 @@ export function HotSpotReviewsModal({
                       ) : null}
                     </div>
                   </div>
-                  <p className="mt-1.5 text-xs leading-relaxed text-[var(--cream)] whitespace-pre-wrap">
+                  <p className="mt-1.5 text-xs leading-relaxed text-[#F0E0C0] whitespace-pre-wrap">
                     {rev.body}
                   </p>
                 </div>
@@ -303,7 +303,7 @@ export function HotSpotReviewsModal({
         </div>
 
         {/* Footer */}
-        <div className="shrink-0 border-t border-[var(--border-default)]/40 bg-[var(--bg-elevated)]/40 px-5 py-2.5 text-center text-[10px] text-[var(--cream-muted)]">
+        <div className="shrink-0 border-t border-[#3D2B0E] bg-[#0D0A06]/95 px-5 py-2.5 text-center text-[10px] text-[#F0E0C0]/70">
           <span>Consenting adults only (18+). Honest community feedback.</span>
         </div>
       </div>

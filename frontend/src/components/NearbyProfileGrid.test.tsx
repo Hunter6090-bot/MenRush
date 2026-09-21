@@ -16,8 +16,8 @@ function mockUser(overrides: Partial<NearbyUser> = {}): NearbyUser {
   };
 }
 
-describe('NearbyProfileGrid distance chips', () => {
-  it('renders distance chip in miles on grid profile card', () => {
+describe('NearbyProfileGrid card presentation', () => {
+  it('does NOT render top-right distance chip on grid profile card', () => {
     const user = mockUser({ id: 'u1', name: 'James', distance_km: 1.93 });
     render(
       <MemoryRouter>
@@ -28,13 +28,12 @@ describe('NearbyProfileGrid distance chips', () => {
       </MemoryRouter>,
     );
 
-    const distanceChip = screen.getByTestId('nearby-grid-distance-u1');
-    expect(distanceChip).toBeInTheDocument();
-    expect(distanceChip.textContent).toContain('1.2 mi');
+    expect(screen.queryByTestId('nearby-grid-distance-u1')).not.toBeInTheDocument();
+    expect(screen.getByText(/James/)).toBeInTheDocument();
   });
 
-  it('renders close distance as < 0.2 mi or 0.2 mi', () => {
-    const user = mockUser({ id: 'u2', name: 'Alex', distance_km: 0.1 });
+  it('keeps name at top and looking-for at bottom', () => {
+    const user = mockUser({ id: 'u2', name: 'Alex', age: 28, looking_for: 'Chat & dates' });
     render(
       <MemoryRouter>
         <NearbyProfileGrid
@@ -44,23 +43,28 @@ describe('NearbyProfileGrid distance chips', () => {
       </MemoryRouter>,
     );
 
-    const distanceChip = screen.getByTestId('nearby-grid-distance-u2');
-    expect(distanceChip.textContent).toContain('< 0.2 mi');
+    expect(screen.queryByTestId('nearby-grid-distance-u2')).not.toBeInTheDocument();
+    expect(screen.getByText('Alex 28')).toBeInTheDocument();
+    expect(screen.getByText('Chat & dates')).toBeInTheDocument();
   });
 
-  it('falls back to "Nearby" for 0 or missing distance without crashing', () => {
+  it('renders match control with tooltip', () => {
     const user = mockUser({ id: 'u3', name: 'Dave', distance_km: 0 });
+    const onMatch = vi.fn();
     render(
       <MemoryRouter>
         <NearbyProfileGrid
           users={[user]}
           loading={false}
+          onMatch={onMatch}
         />
       </MemoryRouter>,
     );
 
-    const distanceChip = screen.getByTestId('nearby-grid-distance-u3');
-    expect(distanceChip.textContent).toContain('Nearby');
+    expect(screen.queryByTestId('nearby-grid-distance-u3')).not.toBeInTheDocument();
+    const matchBtn = screen.getByTestId('grid-match-u3');
+    expect(matchBtn).toBeInTheDocument();
+    expect(matchBtn).toHaveAttribute('title', 'Match');
   });
 });
 
