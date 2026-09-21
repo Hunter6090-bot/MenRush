@@ -25,7 +25,7 @@ export function CruisingSpotMapThumbnail({
 
   return (
     <div
-      className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-[var(--border-default)] bg-[#14120E] sm:h-24 sm:w-24 ${className}`}
+      className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-[#3D2B0E] bg-[#14120E] sm:h-24 sm:w-24 ${className}`}
       data-testid="cruising-map-thumbnail"
       aria-hidden="true"
     >

@@ -49,7 +49,7 @@ export function CruisingSpotCard({
         <div className="flex flex-wrap items-center gap-1.5">
           <span
             data-testid="cruising-category-badge"
-            className="inline-flex items-center gap-1 rounded-full border border-[#C4832A]/40 bg-[#C4832A]/15 px-2.5 py-0.5 text-[11px] font-bold text-[#E0A14A]"
+            className="inline-flex items-center gap-1 rounded-full border border-[#C4832A]/50 bg-[#0D0A06]/92 px-2.5 py-0.5 text-[11px] font-bold text-[#F0E0C0]"
           >
             <span aria-hidden="true">{categoryMeta.icon}</span>
             <span>{categoryMeta.label}</span>
@@ -58,24 +58,26 @@ export function CruisingSpotCard({
           {spot.distance_km != null ? (
             <span
               data-testid="cruising-distance"
-              className="inline-flex items-center rounded-full border border-[#3D2B0E] bg-[#0D0A06]/90 px-2.5 py-0.5 text-[11px] font-semibold text-[#F0E0C0]"
+              className="inline-flex items-center rounded-full border border-[#3D2B0E] bg-[#0D0A06]/92 px-2.5 py-0.5 text-[11px] font-semibold text-[#F0E0C0]"
             >
               {formatDistanceFromKm(Number(spot.distance_km))}
             </span>
           ) : null}
 
           {spot.city ? (
-            <span className="text-[11px] font-medium text-[#F0E0C0]/90">· {spot.city}</span>
+            <span className="inline-flex items-center rounded-full border border-[#3D2B0E] bg-[#0D0A06]/92 px-2.5 py-0.5 text-[11px] font-semibold text-[#F0E0C0]">
+              {spot.city}
+            </span>
           ) : null}
 
           {/* Review rating badge if reviews exist */}
           {spot.rating_avg != null && (spot.review_count ?? 0) > 0 ? (
             <span
               data-testid="cruising-card-rating"
-              className="inline-flex items-center gap-0.5 text-[11px] font-bold text-[#E0A14A]"
+              className="inline-flex items-center gap-0.5 rounded-full border border-[#3D2B0E] bg-[#0D0A06]/92 px-2 py-0.5 text-[11px] font-bold text-[#E0A14A]"
             >
               ★ {spot.rating_avg}
-              <span className="text-[10px] text-[#F0E0C0]/75">({spot.review_count})</span>
+              <span className="text-[10px] text-[#F0E0C0]/80">({spot.review_count})</span>
             </span>
           ) : null}
         </div>
@@ -190,7 +192,7 @@ export function CruisingSpotCard({
                 title="Check in"
                 aria-label="Check in"
                 data-testid={`cruising-checkin-anon-${spot.id}`}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#3D2B0E] bg-[#0D0A06]/90 text-[#F0E0C0] transition-all hover:border-[#C4832A]/60 hover:text-[#E0A14A] active:scale-95 disabled:opacity-50"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#3D2B0E] bg-[#0D0A06]/92 text-[#F0E0C0] transition-all hover:border-[#C4832A]/60 hover:text-[#E0A14A] active:scale-95 disabled:opacity-50"
               >
                 <svg
                   width="15"
@@ -221,7 +223,7 @@ export function CruisingSpotCard({
               title="Reviews"
               aria-label="Reviews"
               data-testid={`cruising-reviews-btn-${spot.id}`}
-              className={`inline-flex h-9 items-center justify-center rounded-full border border-[#3D2B0E] bg-[#0D0A06]/90 text-[#F0E0C0] transition-all hover:border-[#C4832A]/60 hover:text-[#E0A14A] active:scale-95 ${
+              className={`inline-flex h-9 items-center justify-center rounded-full border border-[#3D2B0E] bg-[#0D0A06]/92 text-[#F0E0C0] transition-all hover:border-[#C4832A]/60 hover:text-[#E0A14A] active:scale-95 ${
                 (spot.review_count ?? 0) > 0 ? 'px-2.5 gap-1' : 'w-9'
               }`}
             >
@@ -252,7 +254,7 @@ export function CruisingSpotCard({
               title="Map"
               aria-label="Map"
               data-testid="cruising-view-on-map"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#3D2B0E] bg-[#0D0A06]/90 text-[#F0E0C0] transition-all hover:border-[#C4832A]/60 hover:text-[#E0A14A] active:scale-95"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#3D2B0E] bg-[#0D0A06]/92 text-[#F0E0C0] transition-all hover:border-[#C4832A]/60 hover:text-[#E0A14A] active:scale-95"
             >
               <svg
                 width="15"

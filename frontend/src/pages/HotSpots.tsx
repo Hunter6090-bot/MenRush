@@ -300,8 +300,8 @@ export const HotSpots = () => {
                     <p className="text-xs font-extrabold tracking-wide text-[#E0A14A]">
                       {spot.category_icon} {spot.category_name}
                     </p>
-                    <h2 className="text-base font-bold text-[var(--cream)]">{spot.name}</h2>
-                    <div className="flex flex-wrap items-center gap-1.5 text-[13px] text-[var(--cream-muted)]">
+                    <h2 className="text-base font-bold text-[#F0E0C0]">{spot.name}</h2>
+                    <div className="flex flex-wrap items-center gap-1.5 text-[13px] text-[#F0E0C0]/90">
                       <span>{spot.city ?? 'UK'}</span>
                       {spot.distance_km != null ? <span>· {formatDistanceFromKm(Number(spot.distance_km))}</span> : null}
                       {spot.rating_avg != null && (spot.review_count ?? 0) > 0 ? (
@@ -310,7 +310,7 @@ export const HotSpots = () => {
                     </div>
                   </div>
                   <div className="rounded-full border border-[var(--border-default)] bg-[rgba(196,131,42,0.12)] px-3 py-1 text-center">
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--cream-muted)]">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-[#F0E0C0]/80">
                       {spot.has_active_checkins || spot.live_count_exact > 0 ? 'Active' : 'Empty'}
                     </p>
                     <p className="text-lg font-extrabold text-[#E0A14A]">
@@ -320,7 +320,7 @@ export const HotSpots = () => {
                 </div>
 
                 {spot.description ? (
-                  <p className="mb-3 text-[13px] leading-relaxed text-[var(--cream-muted)]">
+                  <p className="mb-3 text-[13px] leading-relaxed text-[#F0E0C0]/85">
                     {spot.description}
                   </p>
                 ) : null}
@@ -333,7 +333,7 @@ export const HotSpots = () => {
                         <span className="rounded-full bg-[rgba(196,131,42,0.18)] px-2 py-0.5 text-[10px] font-extrabold text-[#E0A14A]">
                           Venue claimed
                         </span>
-                        <span className="rounded-full border border-[var(--border-default)] px-2 py-0.5 text-[10px] font-bold text-[var(--cream-muted)]">
+                        <span className="rounded-full border border-[var(--border-default)] px-2 py-0.5 text-[10px] font-bold text-[#F0E0C0]/80">
                           Calendar managed by venue
                         </span>
                       </div>
@@ -376,7 +376,9 @@ export const HotSpots = () => {
                       href={getDirectionsUrl(spot.latitude, spot.longitude, spot.name)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-[var(--border-default)] bg-black/25 py-2 text-[12px] font-bold text-[var(--cream-soft)] transition-colors hover:border-[var(--copper)]/50 hover:text-[var(--cream)]"
+                      title="Directions"
+                      aria-label="Directions"
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-[var(--border-default)] bg-[#0D0A06]/90 py-2 text-[12px] font-bold text-[#F0E0C0] transition-colors hover:border-[var(--copper)]/50 hover:text-[#E0A14A]"
                     >
                       <svg
                         width="13"
@@ -396,8 +398,10 @@ export const HotSpots = () => {
                     <button
                       type="button"
                       onClick={() => setReviewsSpot(spot)}
+                      title="Reviews"
+                      aria-label="Reviews"
                       data-testid={`hotspot-card-reviews-${spot.id}`}
-                      className="inline-flex items-center justify-center gap-1 rounded-full border border-[var(--border-default)] bg-black/20 px-3.5 py-2 text-[12px] font-bold text-[var(--cream-soft)] transition-colors hover:border-[var(--copper)]/50 hover:text-[var(--cream)]"
+                      className="inline-flex items-center justify-center gap-1 rounded-full border border-[var(--border-default)] bg-[#0D0A06]/90 px-3.5 py-2 text-[12px] font-bold text-[#F0E0C0] transition-colors hover:border-[var(--copper)]/50 hover:text-[#E0A14A]"
                     >
                       <span>Reviews</span>
                       {(spot.review_count ?? 0) > 0 ? (
