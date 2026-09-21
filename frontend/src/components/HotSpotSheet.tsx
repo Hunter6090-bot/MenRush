@@ -139,11 +139,23 @@ export function HotSpotSheet({
                 title="Reviews"
                 aria-label="Reviews"
                 data-testid="hotspot-sheet-reviews-btn"
-                className="inline-flex items-center justify-center gap-1 rounded-full border border-[#3D2B0E] bg-[#0D0A06]/90 px-4 py-2 text-[12px] font-bold text-[#F0E0C0] transition-colors hover:border-[#C4832A]/50 hover:text-[#E0A14A]"
+                className={`inline-flex items-center justify-center rounded-full border border-[#3D2B0E] bg-[#0D0A06]/92 py-2 text-[12px] font-bold text-[#F0E0C0] transition-colors hover:border-[#C4832A]/50 hover:text-[#E0A14A] active:scale-95 ${
+                  (spot.review_count ?? 0) > 0 ? 'px-3 gap-1' : 'px-3'
+                }`}
               >
-                <span>Reviews</span>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  stroke="currentColor"
+                  strokeWidth="1"
+                  aria-hidden="true"
+                >
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
                 {(spot.review_count ?? 0) > 0 ? (
-                  <span className="rounded-full bg-black/40 px-1.5 py-0.5 text-[10px] text-[#E0A14A]">
+                  <span className="text-[11px] font-bold text-[#E0A14A]">
                     {spot.review_count}
                   </span>
                 ) : null}

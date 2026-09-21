@@ -27,7 +27,7 @@ const mockSpot: HotSpotDTO = {
 };
 
 describe('HotSpotSheet', () => {
-  it('renders spot sheet with quiet face, directions link, and reviews button', () => {
+  it('renders spot sheet with quiet face, directions link, and reviews button with tooltip', () => {
     const onOpenReviews = vi.fn();
     render(
       <MemoryRouter>
@@ -49,11 +49,13 @@ describe('HotSpotSheet', () => {
 
     const dirLink = screen.getByTestId('hotspot-sheet-directions');
     expect(dirLink).toBeInTheDocument();
+    expect(dirLink).toHaveAttribute('title', 'Directions');
     expect(dirLink.getAttribute('href')).toContain('51.2260632');
     expect(dirLink.getAttribute('href')).toContain('-0.6727582');
 
     const revBtn = screen.getByTestId('hotspot-sheet-reviews-btn');
     expect(revBtn).toBeInTheDocument();
+    expect(revBtn).toHaveAttribute('title', 'Reviews');
     expect(revBtn).toHaveTextContent('3');
     fireEvent.click(revBtn);
     expect(onOpenReviews).toHaveBeenCalledWith(mockSpot);

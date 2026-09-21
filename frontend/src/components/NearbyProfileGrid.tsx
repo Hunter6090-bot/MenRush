@@ -3,7 +3,7 @@ import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
 import { VerifiedBadge } from './VerifiedBadge';
 import { NewJoinerBadge } from './NewJoinerBadge';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
-import { formatActiveStatus, formatDistanceMiles, getTribeTag } from '../lib/discoveryFormat';
+import { formatActiveStatus, getTribeTag } from '../lib/discoveryFormat';
 import { getDistanceLabel } from '../lib/discovery';
 import { isFreshFaceNearby } from '../lib/newJoiner';
 import {

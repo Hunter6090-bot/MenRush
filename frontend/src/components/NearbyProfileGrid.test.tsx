@@ -33,7 +33,7 @@ describe('NearbyProfileGrid card presentation', () => {
   });
 
   it('keeps name at top and looking-for at bottom', () => {
-    const user = mockUser({ id: 'u2', name: 'Alex', age: 28, looking_for: 'Chat & dates' });
+    const user = mockUser({ id: 'u2', name: 'Alex', age: 28, looking_for: 'Chat & meet' });
     render(
       <MemoryRouter>
         <NearbyProfileGrid
@@ -45,7 +45,7 @@ describe('NearbyProfileGrid card presentation', () => {
 
     expect(screen.queryByTestId('nearby-grid-distance-u2')).not.toBeInTheDocument();
     expect(screen.getByText('Alex 28')).toBeInTheDocument();
-    expect(screen.getByText('Chat & dates')).toBeInTheDocument();
+    expect(screen.getByText('Chat & meet')).toBeInTheDocument();
   });
 
   it('renders match control with tooltip', () => {
