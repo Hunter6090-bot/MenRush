@@ -31,7 +31,7 @@ describe('Profile distance formatting', () => {
     expect(formatDistanceFromKm(0.4, 'imperial')).toBe('0.2 mi');
   });
 
-  it('formats distance in miles for Nearby GRID cards using getDistanceLabel', () => {
+  it('formats distance in miles using getDistanceLabel', () => {
     expect(getDistanceLabel({ distance_km: 0.35 })).toBe('0.2 mi');
     expect(getDistanceLabel({ distance_km: 1.93 })).toBe('1.2 mi');
     expect(getDistanceLabel({ distance_km: '2.5' })).toBe('1.6 mi');

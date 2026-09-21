@@ -439,6 +439,7 @@ export const ProfileView = () => {
             <>
               <span
                 data-testid="profile-view-matched-status"
+                title="Matched"
                 className="flex-[1.2] min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide text-center border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] text-[var(--copper)]"
                 aria-label={matchCtaAriaLabel('mutual', user.name)}
               >
@@ -447,6 +448,7 @@ export const ProfileView = () => {
               <button
                 type="button"
                 onClick={handleMessage}
+                title="Chat"
                 data-testid="profile-view-message"
                 className="flex-[1.2] min-w-[6.5rem] py-3 rounded-xl font-black text-sm tracking-wide active:scale-[0.98] transition-all border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] text-[var(--copper)]"
               >
@@ -456,6 +458,8 @@ export const ProfileView = () => {
                 type="button"
                 disabled={unmatching}
                 onClick={() => void handleUnmatch()}
+                title="Not a match"
+                aria-label="Not a match"
                 data-testid="profile-view-unmatch"
                 className="flex-1 min-w-[5.5rem] py-3 rounded-xl font-bold text-sm transition-all border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] hover:border-[#c45a4a]/55 hover:text-[#e08a7a] disabled:opacity-60"
               >
@@ -469,6 +473,7 @@ export const ProfileView = () => {
                 disabled={matchCtaDisabled(matchState, matching)}
                 aria-disabled={matchCtaDisabled(matchState, matching)}
                 aria-label={matchCtaAriaLabel(matchState, user.name)}
+                title="Match"
                 onClick={() => void handleMatch()}
                 data-testid="profile-view-match"
                 className={`flex-[1.4] min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide transition-all ${
@@ -480,6 +485,7 @@ export const ProfileView = () => {
               <button
                 type="button"
                 onClick={handleMessage}
+                title="Chat"
                 data-testid="profile-view-message"
                 className="flex-1 min-w-[5.5rem] py-3 rounded-xl font-bold text-sm transition-all border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] hover:border-[var(--copper)]/40 hover:text-[var(--copper)]"
               >

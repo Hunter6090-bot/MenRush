@@ -148,7 +148,7 @@ function PersonGridCard({
                   {person.name} {person.age}
                 </span>
               </div>
-              <p className="mt-0.5 truncate text-[9px] font-semibold text-[var(--cream)] md:text-xs">{subtitle}</p>
+              <p className="mt-0.5 truncate text-[9px] font-semibold text-[#F0E0C0] md:text-xs">{subtitle}</p>
             </div>
           </div>
         </ProfilePhotoLink>
@@ -161,6 +161,8 @@ function PersonGridCard({
           <button
             type="button"
             onClick={onMessage}
+            title="Chat"
+            aria-label="Chat"
             data-testid={`match-message-${person.id}`}
             className="w-full rounded-lg border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] py-1.5 text-[10px] font-extrabold uppercase tracking-wide text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.28)] md:rounded-xl md:py-2 md:text-[11px]"
           >

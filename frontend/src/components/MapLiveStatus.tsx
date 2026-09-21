@@ -28,12 +28,12 @@ export function MapLiveStatus({
     >
       <span
         className={`inline-flex h-2.5 w-2.5 shrink-0 rounded-full ${
-          liveCount > 0 ? 'bg-[#3D7A2E]' : 'bg-[#8A7A62]'
+          liveCount > 0 ? 'bg-[#3D7A2E]' : 'bg-[var(--cream-muted)]/40'
         }`}
         aria-hidden
       />
       <div className="min-w-0">
-        <p className="text-[13px] font-bold leading-tight text-[#1A1208]">
+        <p className="text-[13px] font-bold leading-tight text-[var(--cream)]">
           Men nearby
         </p>
         {liveCount > 0 ? (
@@ -41,12 +41,12 @@ export function MapLiveStatus({
             Live · {liveCount}
           </p>
         ) : (
-          <p className="text-[11px] font-semibold text-[#6B5B45]" data-testid="map-live-line">
+          <p className="text-[11px] font-semibold text-[var(--cream-muted)]" data-testid="map-live-line">
             None live now
             {nearbyCount === 0 && radiusKm < MAX_RADIUS_KM - 0.5 ? (
               <button
                 type="button"
-                className="pointer-events-auto ml-1.5 font-extrabold text-[#B8732A] underline-offset-2 hover:underline"
+                className="pointer-events-auto ml-1.5 font-extrabold text-[var(--copper)] underline-offset-2 hover:underline"
                 onClick={onExpandRadius}
               >
                 Expand radius

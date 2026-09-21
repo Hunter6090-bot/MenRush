@@ -127,7 +127,7 @@ function desktopMapHeightCss(expanded: boolean): string {
 }
 
 const mapChromeBtnClass =
-  'flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] text-[#3D2B0E] shadow-md backdrop-blur-md transition-transform active:scale-95';
+  'flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(196,131,42,0.45)] bg-[#0D0A06]/92 text-[#F0E0C0] hover:border-[#C4832A] hover:text-[#E0A14A] shadow-md backdrop-blur-md transition-transform active:scale-95';
 
 /**
  * Shared map chrome — one control cluster per corner.
@@ -245,14 +245,13 @@ function MapFloatingChrome({
           <div
             className="pointer-events-auto relative max-w-sm rounded-lg border py-1 pl-2.5 pr-6"
             style={{
-              background: 'rgba(13,10,6,0.82)',
-              borderColor: 'rgba(196,131,42,0.28)',
+              background: 'rgba(13,10,6,0.92)',
+              borderColor: 'rgba(196,131,42,0.4)',
             }}
             role="status"
           >
             <p
-              className="text-center text-[9px] font-semibold leading-snug tracking-wide"
-              style={{ color: 'rgba(240,224,192,0.82)' }}
+              className="text-center text-[9px] font-semibold leading-snug tracking-wide text-[#F0E0C0]"
               data-testid="hotspots-map-helper-copy"
             >
               {HOT_SPOTS_MAP_BANNER}
@@ -266,7 +265,7 @@ function MapFloatingChrome({
                 setMapBannerDismissed(true);
                 dismissHotSpotsMapBanner();
               }}
-              className="absolute -right-0.5 -top-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[15px] leading-none text-[rgba(240,224,192,0.85)] transition-colors hover:bg-[rgba(196,131,42,0.18)] hover:text-[rgba(240,224,192,1)]"
+              className="absolute -right-0.5 -top-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[15px] leading-none text-[#F0E0C0] transition-colors hover:bg-[rgba(196,131,42,0.18)] hover:text-white"
             >
               ×
             </button>
@@ -2371,11 +2370,11 @@ export const Discover = () => {
                 data-testid="nearby-counts"
                 data-nearby-count={nearbyCount}
                 data-live-count={liveCount}
-                className="mb-3 inline-flex min-h-[36px] items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
+                className="mb-3 inline-flex min-h-[36px] items-center rounded-full border border-nn-border bg-nn-card px-3 py-1.5 shadow-md backdrop-blur-sm"
               >
-                <p className="text-[11px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
+                <p className="text-[11px] font-bold tracking-wide text-nn-text whitespace-nowrap">
                   {loading && nearbyCount === 0 ? (
-                    <span className="text-[var(--cream-muted)]">Scanning…</span>
+                    <span className="text-nn-muted">Scanning…</span>
                   ) : nearbyCount === 0 ? (
                     <button
                       type="button"
@@ -2387,13 +2386,13 @@ export const Discover = () => {
                     </button>
                   ) : (
                     <>
-                      <span className="font-extrabold text-[var(--cream-soft)]">Men nearby</span>
+                      <span className="font-extrabold text-nn-text">Men nearby</span>
                       {liveCount > 0 ? (
                         <span className="ml-1.5 font-semibold text-[#8FC773]" data-testid="nearby-live-count">
                           · {liveCount} live
                         </span>
                       ) : nearbyCount > 0 ? (
-                        <span className="ml-1.5 font-semibold text-[var(--cream-muted)]" data-testid="nearby-live-count">
+                        <span className="ml-1.5 font-semibold text-nn-muted" data-testid="nearby-live-count">
                           · none live
                         </span>
                       ) : null}
@@ -2511,9 +2510,9 @@ export const Discover = () => {
               className="pointer-events-none absolute left-1/2 z-[4] max-w-[min(70%,220px)] -translate-x-1/2 rounded-full px-2.5 py-0.5 text-center text-[9px] font-medium leading-snug"
               style={{
                 top: hotSpotsLayerOn ? '4.75rem' : '3.25rem',
-                background: 'rgba(13,10,6,0.55)',
-                color: 'rgba(240,224,192,0.65)',
-                border: '1px solid rgba(196,131,42,0.18)',
+                background: 'rgba(13,10,6,0.92)',
+                color: '#F0E0C0',
+                border: '1px solid rgba(196,131,42,0.4)',
               }}
               data-testid="map-privacy-note"
             >
@@ -2561,11 +2560,11 @@ export const Discover = () => {
                 data-testid="nearby-counts"
                 data-nearby-count={nearbyCount}
                 data-live-count={liveCount}
-                className="inline-flex min-h-[36px] max-w-full items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
+                className="inline-flex min-h-[36px] max-w-full items-center rounded-full border border-nn-border bg-nn-card px-3 py-1.5 shadow-md backdrop-blur-sm"
               >
-                <p className="text-[11px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
+                <p className="text-[11px] font-bold tracking-wide text-nn-text whitespace-nowrap">
                   {loading && nearbyCount === 0 ? (
-                    <span className="text-[var(--cream-muted)]">Scanning…</span>
+                    <span className="text-nn-muted">Scanning…</span>
                   ) : nearbyCount === 0 ? (
                     <button
                       type="button"
@@ -2577,13 +2576,13 @@ export const Discover = () => {
                     </button>
                   ) : (
                     <>
-                      <span className="font-extrabold text-[var(--cream-soft)]">Men nearby</span>
+                      <span className="font-extrabold text-nn-text">Men nearby</span>
                       {liveCount > 0 ? (
                         <span className="ml-1.5 font-semibold text-[#8FC773]" data-testid="nearby-live-count">
                           · {liveCount} live
                         </span>
                       ) : nearbyCount > 0 ? (
-                        <span className="ml-1.5 font-semibold text-[var(--cream-muted)]" data-testid="nearby-live-count">
+                        <span className="ml-1.5 font-semibold text-nn-muted" data-testid="nearby-live-count">
                           · none live
                         </span>
                       ) : null}

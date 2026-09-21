@@ -446,6 +446,7 @@ export function ProfileDrawer({
             {onPass && (
               <button
                 onClick={onPass}
+                title="Not a match"
                 className="flex-1 py-3 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream)] font-bold text-sm hover:text-[var(--copper)] hover:border-[var(--copper)] transition-colors"
               >
                 Pass
@@ -458,6 +459,7 @@ export function ProfileDrawer({
               aria-label={matchCtaAriaLabel(matchState, user.name, {
                 mutualOpensChat: true,
               })}
+              title={matchState === "mutual" ? "Chat" : "Match"}
               onClick={() => {
                 if (matchState === "mutual") onMessage();
                 else if (matchState === "none") void onLike();

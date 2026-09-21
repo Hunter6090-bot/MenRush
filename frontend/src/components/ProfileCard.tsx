@@ -4,7 +4,7 @@ import { useResolvingPhotoSrc } from './UserAvatar';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { StatusBadge } from './StatusBadge';
 import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
-import { IconMatches } from './icons';
+import { IconMatches, IconChat } from './icons';
 import { usersAPI } from '../api/client';
 import { VerifiedBadge } from './VerifiedBadge';
 import { MoodBadge } from './MoodPicker';
@@ -178,7 +178,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
 
         {/* Distance badge */}
         <div className="pointer-events-none absolute top-3 right-3 z-[2]">
-          <span className="flex items-center gap-1 bg-black/50 backdrop-blur-sm text-[var(--cream)]/80 text-xs font-medium px-2.5 py-1 rounded-full border border-[var(--border-default)]">
+          <span className="flex items-center gap-1 bg-[#0D0A06]/92 backdrop-blur-md text-[#F0E0C0] text-xs font-semibold px-2.5 py-1 rounded-full border border-[#3D2B0E]">
             <PinIcon className="w-3 h-3 text-[#C4832A]" />
             {distanceLabel}
           </span>
@@ -193,16 +193,17 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           disabled={matchDisabled}
           aria-disabled={matchDisabled}
           aria-label={matchCtaAriaLabel(matchState, user.name, { mutualOpensChat: true })}
+          title={matchState === 'mutual' ? 'Chat' : 'Match'}
           data-testid={`profile-card-match-${user.id}`}
           className={`absolute bottom-3 left-3 z-10 flex h-11 w-11 items-center justify-center rounded-full transition-all ${
             matchState === 'outgoing'
-              ? 'bg-[var(--bg-card)] text-[var(--cream-muted)] opacity-70 cursor-not-allowed border border-[var(--border-default)]'
+              ? 'bg-[#1E1508]/92 text-[#F0E0C0]/60 opacity-70 cursor-not-allowed border border-[#3D2B0E]'
               : matchState === 'mutual'
-                ? 'bg-nn-copper text-nn-on-copper shadow-glow-copper border border-nn-border'
-                : 'bg-black/50 backdrop-blur-sm text-nn-copper-bright hover:bg-nn-copper/20 hover:scale-110 border border-nn-border'
+                ? 'bg-[#C4832A]/20 text-[#E0A14A] shadow-glow-copper border border-[#C4832A]/60'
+                : 'bg-[#0D0A06]/92 backdrop-blur-md text-[#E0A14A] hover:bg-[#C4832A]/20 hover:scale-110 border border-[#3D2B0E]'
           }`}
         >
-          <IconMatches size={20} />
+          {matchState === 'mutual' ? <IconChat size={20} /> : <IconMatches size={20} />}
         </button>
       </div>
 
@@ -262,6 +263,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           disabled={matchDisabled}
           aria-disabled={matchDisabled}
           aria-label={matchCtaAriaLabel(matchState, user.name, { mutualOpensChat: true })}
+          title={matchState === 'mutual' ? 'Chat' : 'Match'}
           data-testid={`profile-card-match-cta-${user.id}`}
           onClick={
             matchState === 'mutual'

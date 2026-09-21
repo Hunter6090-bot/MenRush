@@ -94,7 +94,7 @@ export const Premium: React.FC = () => {
             <p className="text-xs text-[var(--cream-muted)] mt-1">
               We are not taking card payments in-app yet while payment processing is under merchant review.
               Need early activation? Contact{' '}
-              <a href="mailto:support@menrush.com" className="text-[#C4832A] underline hover:text-[#E0A040]">
+              <a href="mailto:support@menrush.com" className="text-[#C4832A] underline hover:text-[#E0A14A]">
                 support@menrush.com
               </a>{' '}
               for manual invoice.
@@ -114,7 +114,7 @@ export const Premium: React.FC = () => {
             </div>
           ) : (
             <>
-              <ul className="space-y-2 mb-6 text-sm text-[#D4C4A8]">
+              <ul className="space-y-2 mb-6 text-sm text-[var(--cream)]">
                 {FEATURES.map((f) => (
                   <li key={f} className="flex gap-2">
                     <span className="text-[#C4832A]">✓</span>
@@ -154,7 +154,7 @@ export const Premium: React.FC = () => {
             <p className="text-sm text-red-400 text-center mt-4">{error}</p>
           ) : null}
 
-          <p className="text-[10px] text-[#7A6A50] text-center mt-5 leading-relaxed">
+          <p className="text-[10px] text-[var(--cream-muted)] text-center mt-5 leading-relaxed">
             In-app card billing is being set up and is currently under merchant review. Manual invoices are processed directly by MenRush upon request.
           </p>
 

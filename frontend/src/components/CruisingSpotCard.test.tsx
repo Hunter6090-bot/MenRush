@@ -25,13 +25,26 @@ const mockSpot: HotSpotDTO = {
 };
 
 describe('CruisingSpotCard', () => {
-  it('renders spot name, category, distance, and honest activity placeholder', () => {
+  it('renders spot name, category, distance, city in cream-on-night chips, and honest activity placeholder', () => {
     render(<CruisingSpotCard spot={mockSpot} />);
 
     expect(screen.getByTestId('cruising-spot-name')).toHaveTextContent('A31 Hog’s Back Rest Lay-by');
-    expect(screen.getByTestId('cruising-category-badge')).toHaveTextContent('Layby');
+    const catBadge = screen.getByTestId('cruising-category-badge');
+    expect(catBadge).toHaveTextContent('Layby');
+    expect(catBadge).toHaveClass('bg-[#0D0A06]/92');
+    expect(catBadge).toHaveClass('text-[#F0E0C0]');
+
+    const distBadge = screen.getByTestId('cruising-distance');
+    expect(distBadge).toHaveClass('bg-[#0D0A06]/92');
+    expect(distBadge).toHaveClass('text-[#F0E0C0]');
     // In UK locale formatDistanceFromKm converts km to miles (2.6 mi)
-    expect(screen.getByTestId('cruising-distance')).toHaveTextContent(/2\.6\s*mi|4\.2\s*km/);
+    expect(distBadge).toHaveTextContent(/2\.6\s*mi|4\.2\s*km/);
+
+    const cityChip = screen.getByText('Guildford');
+    expect(cityChip).toBeInTheDocument();
+    expect(cityChip).toHaveClass('bg-[#0D0A06]/92');
+    expect(cityChip).toHaveClass('text-[#F0E0C0]');
+
     expect(screen.getByTestId('cruising-last-active')).toHaveTextContent('No recent check-ins');
   });
 
@@ -70,11 +83,12 @@ describe('CruisingSpotCard', () => {
     expect(dot).not.toHaveClass('bg-[#3D7A2E]');
   });
 
-  it('provides a working "Get directions" link to maps with correct coordinates', () => {
+  it('provides a working "Get directions" link to maps with correct coordinates and title', () => {
     render(<CruisingSpotCard spot={mockSpot} />);
 
     const directionsLink = screen.getByTestId('cruising-get-directions');
     expect(directionsLink).toBeInTheDocument();
+    expect(directionsLink).toHaveAttribute('title', 'Directions');
     const href = directionsLink.getAttribute('href');
     expect(href).toContain('51.2260632');
     expect(href).toContain('-0.6727582');
@@ -85,11 +99,12 @@ describe('CruisingSpotCard', () => {
     expect(screen.getByTestId('cruising-map-thumbnail')).toBeInTheDocument();
   });
 
-  it('calls onSelect when "View on map" is clicked', () => {
+  it('calls onSelect when "View on map" icon is clicked', () => {
     const onSelect = vi.fn();
     render(<CruisingSpotCard spot={mockSpot} onSelect={onSelect} />);
 
     const viewBtn = screen.getByTestId('cruising-view-on-map');
+    expect(viewBtn).toHaveAttribute('title', 'Map');
     fireEvent.click(viewBtn);
     expect(onSelect).toHaveBeenCalledWith(mockSpot);
   });
@@ -122,17 +137,17 @@ describe('CruisingSpotCard', () => {
     expect(screen.getByTestId('cruising-category-badge')).toHaveTextContent('🧖');
   });
 
-  it('provides an anonymous check-in button and triggers onCheckIn with anonymous=true', () => {
+  it('provides an anonymous check-in icon button and triggers onCheckIn with anonymous=true', () => {
     const onCheckIn = vi.fn();
     render(<CruisingSpotCard spot={mockSpot} onCheckIn={onCheckIn} />);
 
     const checkInBtn = screen.getByTestId(`cruising-checkin-anon-${mockSpot.id}`);
-    expect(checkInBtn).toHaveTextContent('Check in anonymously');
+    expect(checkInBtn).toHaveAttribute('title', 'Check in');
     fireEvent.click(checkInBtn);
     expect(onCheckIn).toHaveBeenCalledWith(mockSpot, true);
   });
 
-  it('shows "Checked in (Leave)" when user is already checked in and allows checking out', () => {
+  it('shows "Checked in" when user is already checked in and allows checking out', () => {
     const onCheckIn = vi.fn();
     const checkedInSpot: HotSpotDTO = {
       ...mockSpot,
@@ -144,12 +159,12 @@ describe('CruisingSpotCard', () => {
     render(<CruisingSpotCard spot={checkedInSpot} onCheckIn={onCheckIn} />);
 
     const checkOutBtn = screen.getByTestId(`cruising-checkout-${mockSpot.id}`);
-    expect(checkOutBtn).toHaveTextContent(/Checked in/i);
+    expect(checkOutBtn).toHaveAttribute('title', 'Checked in');
     fireEvent.click(checkOutBtn);
     expect(onCheckIn).toHaveBeenCalledWith(checkedInSpot, false);
   });
 
-  it('renders reviews button and triggers onOpenReviews', () => {
+  it('renders reviews icon button with rating count and triggers onOpenReviews', () => {
     const onOpenReviews = vi.fn();
     const ratedSpot: HotSpotDTO = {
       ...mockSpot,
@@ -160,7 +175,7 @@ describe('CruisingSpotCard', () => {
 
     expect(screen.getByTestId('cruising-card-rating')).toHaveTextContent('★ 4.8');
     const reviewsBtn = screen.getByTestId(`cruising-reviews-btn-${mockSpot.id}`);
-    expect(reviewsBtn).toHaveTextContent('Reviews');
+    expect(reviewsBtn).toHaveAttribute('title', 'Reviews');
     expect(reviewsBtn).toHaveTextContent('5');
     fireEvent.click(reviewsBtn);
     expect(onOpenReviews).toHaveBeenCalledWith(ratedSpot);
