@@ -459,7 +459,12 @@ export function ProfileDrawer({
                 {onUnmatch && (
                   <button
                     type="button"
-                    onClick={() => void onUnmatch()}
+                    onClick={() => {
+                      const confirmed = window.confirm(
+                        `Unmatch with ${user.name}? Chat locks again until you both match.`,
+                      );
+                      if (confirmed) void onUnmatch();
+                    }}
                     data-testid="drawer-unmatch"
                     title="Unmatch"
                     aria-label={`Unmatch with ${user.name}`}
@@ -469,6 +474,7 @@ export function ProfileDrawer({
                     <span>Unmatch</span>
                   </button>
                 )}
+
               </>
             ) : (
               <button

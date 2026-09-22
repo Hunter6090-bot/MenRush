@@ -2713,6 +2713,10 @@ export const Discover = () => {
         }}
         onUnmatch={async () => {
           if (!selectedUser) return;
+          const confirmed = window.confirm(
+            `Unmatch with ${selectedUser.name}? Chat locks again until you both match.`,
+          );
+          if (!confirmed) return;
           try {
             await usersAPI.unmatchUser(selectedUser.id);
             setMatchedUsers((prev) => {
@@ -2733,6 +2737,7 @@ export const Discover = () => {
             window.setTimeout(() => setSafetyNotice(null), 4000);
           }
         }}
+
         onMessage={() => {
           if (!selectedUser) return;
           navigate(`/messages/${selectedUser.id}`);

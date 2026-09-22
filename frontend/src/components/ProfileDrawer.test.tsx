@@ -120,6 +120,7 @@ describe('ProfileDrawer grid sheet layout', () => {
 
   it('shows Chat and Unmatch when mutual', () => {
     const onUnmatch = vi.fn();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(
       <MemoryRouter>
         <ProfileDrawer
@@ -139,9 +140,39 @@ describe('ProfileDrawer grid sheet layout', () => {
     const unmatchBtn = screen.getByTestId('drawer-unmatch');
     expect(unmatchBtn).toHaveTextContent('Unmatch');
     unmatchBtn.click();
+    expect(confirmSpy).toHaveBeenCalledWith(
+      'Unmatch with Graham? Chat locks again until you both match.',
+    );
     expect(onUnmatch).toHaveBeenCalledTimes(1);
+    confirmSpy.mockRestore();
   });
 
+
+
+  it('aborts unmatch when user cancels confirmation', () => {
+    const onUnmatch = vi.fn();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(
+      <MemoryRouter>
+        <ProfileDrawer
+          user={graham}
+          liked
+          mutual
+          onClose={vi.fn()}
+          onLike={vi.fn()}
+          onUnmatch={onUnmatch}
+          onMessage={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    const unmatchBtn = screen.getByTestId('drawer-unmatch');
+    unmatchBtn.click();
+    expect(confirmSpy).toHaveBeenCalledWith(
+      'Unmatch with Graham? Chat locks again until you both match.',
+    );
+    expect(onUnmatch).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
 
   it('omits distance gracefully when unknown/null/empty', () => {
     const noDistanceUser: NearbyUser = {
