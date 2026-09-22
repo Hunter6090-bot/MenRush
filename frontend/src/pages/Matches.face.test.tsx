@@ -129,4 +129,36 @@ describe('Matches face + Veriff tick', () => {
     expect(screen.queryByText('Verified')).toBeNull();
     expect(screen.getByTestId('match-grid-photo')).toBeTruthy();
   });
+
+  it('renders icon-driven Chat and Unmatch actions with aria labels', () => {
+    writeCachedMatches(
+      [
+        {
+          id: 'm-act-1',
+          name: 'Dave',
+          age: 40,
+          online: true,
+          matched_at: '2026-09-11T12:00:00Z',
+          photo_url: null,
+        },
+      ],
+      [],
+    );
+
+    render(
+      <MemoryRouter>
+        <Matches />
+      </MemoryRouter>,
+    );
+
+    const chatBtn = screen.getByTestId('match-message-m-act-1');
+    expect(chatBtn).toHaveAttribute('title', 'Chat');
+    expect(chatBtn).toHaveAttribute('aria-label', 'Chat with Dave');
+    expect(chatBtn).toHaveTextContent('Chat');
+
+    const unmatchBtn = screen.getByTestId('match-unmatch-m-act-1');
+    expect(unmatchBtn).toHaveAttribute('title', 'Unmatch');
+    expect(unmatchBtn).toHaveAttribute('aria-label', 'Unmatch with Dave');
+  });
 });
+

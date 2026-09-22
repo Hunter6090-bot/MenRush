@@ -35,7 +35,6 @@ function renderDrawer() {
         liked={false}
         onClose={vi.fn()}
         onLike={vi.fn()}
-        onPass={vi.fn()}
         onMessage={vi.fn()}
       />
     </MemoryRouter>,
@@ -85,7 +84,7 @@ describe('ProfileDrawer grid sheet layout', () => {
     expect(screen.getByTestId('drawer-looking-for')).toHaveTextContent(/casual/i);
     expect(screen.getByText('Bear')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /view full profile/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^pass$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^pass$/i })).toBeNull();
     expect(screen.getByTestId('drawer-match')).toBeInTheDocument();
     expect(screen.getByTestId('drawer-match')).toHaveTextContent(/^Match$/);
     expect(screen.getByText(/match is mutual interest/i)).toBeInTheDocument();
@@ -99,7 +98,7 @@ describe('ProfileDrawer grid sheet layout', () => {
     expect(photoBand!.textContent).toMatch(/28 mi/);
   });
 
-  it('shows muted Match (not Matched with) when one-way pending', () => {
+  it('shows muted Sent when one-way pending', () => {
     render(
       <MemoryRouter>
         <ProfileDrawer
@@ -108,19 +107,19 @@ describe('ProfileDrawer grid sheet layout', () => {
           mutual={false}
           onClose={vi.fn()}
           onLike={vi.fn()}
-          onPass={vi.fn()}
           onMessage={vi.fn()}
         />
       </MemoryRouter>,
     );
     const btn = screen.getByTestId('drawer-match');
-    expect(btn).toHaveTextContent(/^Match$/);
+    expect(btn).toHaveTextContent(/^Sent$/);
     expect(btn).toBeDisabled();
     expect(btn).not.toHaveTextContent(/Matched/i);
     expect(btn.className).toMatch(/cream-muted|opacity-70|cursor-not-allowed/);
   });
 
-  it('shows Matched with {name} only when mutual', () => {
+  it('shows Chat and Unmatch when mutual', () => {
+    const onUnmatch = vi.fn();
     render(
       <MemoryRouter>
         <ProfileDrawer
@@ -129,15 +128,20 @@ describe('ProfileDrawer grid sheet layout', () => {
           mutual
           onClose={vi.fn()}
           onLike={vi.fn()}
-          onPass={vi.fn()}
+          onUnmatch={onUnmatch}
           onMessage={vi.fn()}
         />
       </MemoryRouter>,
     );
     const btn = screen.getByTestId('drawer-open-chat');
-    expect(btn).toHaveTextContent('Matched with Graham');
+    expect(btn).toHaveTextContent('Chat');
     expect(btn).not.toBeDisabled();
+    const unmatchBtn = screen.getByTestId('drawer-unmatch');
+    expect(unmatchBtn).toHaveTextContent('Unmatch');
+    unmatchBtn.click();
+    expect(onUnmatch).toHaveBeenCalledTimes(1);
   });
+
 
   it('omits distance gracefully when unknown/null/empty', () => {
     const noDistanceUser: NearbyUser = {
@@ -152,7 +156,6 @@ describe('ProfileDrawer grid sheet layout', () => {
           liked={false}
           onClose={vi.fn()}
           onLike={vi.fn()}
-          onPass={vi.fn()}
           onMessage={vi.fn()}
         />
       </MemoryRouter>,
@@ -173,7 +176,6 @@ describe('ProfileDrawer grid sheet layout', () => {
           liked={false}
           onClose={vi.fn()}
           onLike={vi.fn()}
-          onPass={vi.fn()}
           onMessage={vi.fn()}
         />
       </MemoryRouter>,

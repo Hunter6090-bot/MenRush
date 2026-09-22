@@ -127,7 +127,7 @@ function desktopMapHeightCss(expanded: boolean): string {
 }
 
 const mapChromeBtnClass =
-  'flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] text-[#3D2B0E] shadow-md backdrop-blur-md transition-transform active:scale-95';
+  'flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] text-[#3D2B0E] shadow-md backdrop-blur-md transition-transform active:scale-95 touch-manipulation pointer-events-auto';
 
 /**
  * Shared map chrome — one control cluster per corner.
@@ -210,10 +210,11 @@ function MapFloatingChrome({
             data-testid="map-expand-toggle"
             aria-label={expanded ? 'Shrink map' : 'Expand map'}
             title={expanded ? 'Shrink map' : 'Expand map'}
-            className={mapChromeBtnClass}
+            className={`${mapChromeBtnClass} z-20 cursor-pointer`}
           >
             <IconMapExpand size={18} collapse={expanded} />
           </button>
+
           {showHide && !expanded && onHide ? (
             <button
               type="button"
@@ -2057,7 +2058,7 @@ export const Discover = () => {
   // the map past the viewport, which reintroduces page-level scroll that fights the
   // map's own pan/pinch handling. Hide them while expanded, restore on shrink.
   const mobileMapExpanded =
-    !isDesktopLayout && mapPanelMode === 'expanded' && !needsLocationGate && mapCenter != null;
+    !isDesktopLayout && mapPanelMode === 'expanded';
   /** Fullscreen/enlarged map: keep Pulse FAB off the Mapbox zoom/geolocate cluster. */
   const hidePulseFab = isDesktopLayout || mobileMapExpanded || desktopMapExpanded;
 
@@ -2535,19 +2536,21 @@ export const Discover = () => {
                 aria-valuenow={mapPanelMode === 'default' ? 1 : 2}
                 tabIndex={0}
                 data-testid="map-drag-handle"
+                onClick={() => setMapPanel('expanded')}
                 onPointerDown={onMapHandlePointerDown}
                 onPointerUp={onMapHandlePointerUp}
                 onPointerCancel={() => {
                   mapDragRef.current = null;
                 }}
-                className="flex cursor-grab touch-none flex-col items-center px-6 pb-2.5 pt-3 active:cursor-grabbing"
+                className="flex cursor-grab touch-none flex-col items-center px-8 py-3.5 min-h-[44px] active:cursor-grabbing"
                 style={{ touchAction: 'none' }}
               >
                 {/* var(--cream) inverts with theme (light text on dark map, dark text on light map) — stays visible on either basemap. */}
-                <span className="h-1.5 w-10 rounded-full bg-[var(--cream)]/85 shadow-sm" />
+                <span className="h-1.5 w-12 rounded-full bg-[var(--cream)]/85 shadow-sm" />
               </div>
             </div>
           ) : null}
+
         </div>
 
         {/* When map hidden: show bar to pull it back */}
@@ -2708,15 +2711,37 @@ export const Discover = () => {
           if (!selectedUser) return;
           await handleLike(selectedUser);
         }}
+        onUnmatch={async () => {
+          if (!selectedUser) return;
+          try {
+            await usersAPI.unmatchUser(selectedUser.id);
+            setMatchedUsers((prev) => {
+              const next = new Set(prev);
+              next.delete(selectedUser.id);
+              return next;
+            });
+            setLikedUsers((prev) => {
+              const next = new Set(prev);
+              next.delete(selectedUser.id);
+              return next;
+            });
+            setSafetyNotice({ msg: `Unmatched with ${selectedUser.name}.`, tone: 'success' });
+            window.setTimeout(() => setSafetyNotice(null), 4000);
+            setSelectedUser(null);
+          } catch {
+            setSafetyNotice({ msg: 'Could not unmatch. Try again.', tone: 'error' });
+            window.setTimeout(() => setSafetyNotice(null), 4000);
+          }
+        }}
         onMessage={() => {
           if (!selectedUser) return;
           navigate(`/messages/${selectedUser.id}`);
         }}
-        onPass={() => setSelectedUser(null)}
         onSafetyNotice={(msg, tone) => {
           setSafetyNotice({ msg, tone: tone ?? 'success' });
           window.setTimeout(() => setSafetyNotice(null), 4000);
         }}
+
         onBlocked={() => {
           if (!selectedUser) return;
           setUsers((prev) => prev.filter((u) => u.id !== selectedUser.id));

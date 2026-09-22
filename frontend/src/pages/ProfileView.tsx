@@ -12,6 +12,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { DistancePill } from '../components/DistancePill';
 import { ProfileAlbumsSection } from '../components/ProfileAlbumsSection';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
+import { IconMatches, IconChat, IconUnmatch } from '../components/icons';
 import { formatHeight, formatWeight } from '../lib/age';
 import { formatDistanceFromKm } from '../lib/localeUnits';
 import {
@@ -210,10 +211,6 @@ export const ProfileView = () => {
       setUnmatching(false);
     }
   }, [user, unmatching, mutual, flash]);
-
-  const handlePass = useCallback(() => {
-    navigate(-1);
-  }, [navigate]);
 
   if (loading) {
     return (
@@ -427,39 +424,41 @@ export const ProfileView = () => {
 
         <ProfileAlbumsSection ownerId={user.id} ownerName={user.name} />
 
-        <div className="flex min-w-0 max-w-full flex-wrap gap-2 overflow-x-clip">
-          <button
-            type="button"
-            onClick={handlePass}
-            className="flex-1 min-w-[5.5rem] py-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] font-bold text-sm hover:border-[var(--copper)] hover:text-[var(--copper)] transition-all"
+        {mutual ? (
+          <div
+            data-testid="profile-view-matched-status"
+            className="flex items-center justify-center gap-1.5 rounded-full border border-[var(--copper)]/35 bg-[rgba(196,131,42,0.12)] px-3.5 py-1.5 text-xs font-bold text-[#E0A14A]"
           >
-            Pass
-          </button>
+            <IconMatches size={16} />
+            <span>Matched with {user.name}</span>
+          </div>
+        ) : null}
+
+        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 overflow-x-clip">
           {mutual ? (
             <>
-              <span
-                data-testid="profile-view-matched-status"
-                className="flex-[1.2] min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide text-center border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] text-[var(--copper)]"
-                aria-label={matchCtaAriaLabel('mutual', user.name)}
-              >
-                {matchCtaLabel('mutual', user.name)}
-              </span>
               <button
                 type="button"
                 onClick={handleMessage}
                 data-testid="profile-view-message"
-                className="flex-[1.2] min-w-[6.5rem] py-3 rounded-xl font-black text-sm tracking-wide active:scale-[0.98] transition-all border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] text-[var(--copper)]"
+                title="Chat"
+                aria-label={`Chat with ${user.name}`}
+                className="flex-1 min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide active:scale-[0.98] transition-all border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] text-[var(--copper)] flex items-center justify-center gap-2 hover:bg-[rgba(196,131,42,0.28)]"
               >
-                Open chat
+                <IconChat size={20} />
+                <span>Chat</span>
               </button>
               <button
                 type="button"
                 disabled={unmatching}
                 onClick={() => void handleUnmatch()}
                 data-testid="profile-view-unmatch"
-                className="flex-1 min-w-[5.5rem] py-3 rounded-xl font-bold text-sm transition-all border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] hover:border-[#c45a4a]/55 hover:text-[#e08a7a] disabled:opacity-60"
+                title="Unmatch"
+                aria-label={`Unmatch with ${user.name}`}
+                className="flex-1 min-w-[7rem] py-3 rounded-xl font-bold text-sm transition-all border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] hover:border-[#c45a4a]/55 hover:text-[#e08a7a] disabled:opacity-60 flex items-center justify-center gap-2"
               >
-                {unmatching ? 'Unmatching…' : 'Unmatch'}
+                <IconUnmatch size={20} />
+                <span>{unmatching ? 'Unmatching…' : 'Unmatch'}</span>
               </button>
             </>
           ) : (
@@ -469,25 +468,31 @@ export const ProfileView = () => {
                 disabled={matchCtaDisabled(matchState, matching)}
                 aria-disabled={matchCtaDisabled(matchState, matching)}
                 aria-label={matchCtaAriaLabel(matchState, user.name)}
+                title={matching ? 'Sending…' : matchState === 'outgoing' ? 'Sent' : 'Match'}
                 onClick={() => void handleMatch()}
                 data-testid="profile-view-match"
-                className={`flex-[1.4] min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide transition-all ${
+                className={`flex-1 min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 ${
                   matchState === 'none' ? 'uppercase active:scale-[0.98]' : ''
                 } ${matchCtaToneClasses(matchState)}`}
               >
-                {matchCtaLabel(matchState, user.name, { sending: matching })}
+                <IconMatches size={20} />
+                <span>{matching ? 'Sending…' : matchState === 'outgoing' ? 'Sent' : 'Match'}</span>
               </button>
               <button
                 type="button"
                 onClick={handleMessage}
                 data-testid="profile-view-message"
-                className="flex-1 min-w-[5.5rem] py-3 rounded-xl font-bold text-sm transition-all border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] hover:border-[var(--copper)]/40 hover:text-[var(--copper)]"
+                title="Chat"
+                aria-label={`Chat with ${user.name}`}
+                className="flex-1 min-w-[7rem] py-3 rounded-xl font-bold text-sm transition-all border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] hover:border-[var(--copper)]/40 hover:text-[var(--copper)] flex items-center justify-center gap-2"
               >
-                Message
+                <IconChat size={20} />
+                <span>Chat</span>
               </button>
             </>
           )}
         </div>
+
         <p className="text-center text-[11px] text-[var(--cream-muted)]">
           Match is mutual interest · Chat unlocks when he matches back · Report anytime
         </p>
