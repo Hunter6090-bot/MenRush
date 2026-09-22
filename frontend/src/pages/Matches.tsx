@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
-import { IconMatches } from '../components/icons';
+import { IconMatches, IconChat, IconUnmatch } from '../components/icons';
 import { FadedBrandFace, isNearbyPlaceholderFace } from '../components/FadedBrandFace';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { useGridPhotoSrc, clearGridPhotoQueue } from '../lib/nearbyPhotoSrc';
@@ -10,8 +10,10 @@ import { PROFILE_TILE_GRID_CLASS } from '../lib/profileTileGrid';
 import {
   readCachedMatches,
   refreshMatches,
+  writeCachedMatches,
   type MatchesPerson,
 } from '../lib/tabListCache';
+import { usersAPI } from '../api/client';
 
 type Match = MatchesPerson;
 type ReceivedLike = MatchesPerson;
@@ -102,6 +104,8 @@ function PersonGridCard({
   subtitle,
   testId,
   onMessage,
+  onUnmatch,
+  unmatching = false,
 }: {
   person: {
     id: string;
@@ -116,6 +120,8 @@ function PersonGridCard({
   testId?: string;
   /** Dedicated Message control — photo always opens profile. */
   onMessage?: () => void;
+  onUnmatch?: () => void;
+  unmatching?: boolean;
 }) {
   return (
     <div
@@ -157,20 +163,37 @@ function PersonGridCard({
         ) : null}
       </div>
       {onMessage ? (
-        <div className="border-t border-[var(--border-default)] p-1 md:p-1.5">
+        <div className="flex items-center gap-1 border-t border-[var(--border-default)] p-1 md:p-1.5">
           <button
             type="button"
             onClick={onMessage}
+            title="Chat"
+            aria-label={`Chat with ${person.name}`}
             data-testid={`match-message-${person.id}`}
-            className="w-full rounded-lg border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] py-1.5 text-[10px] font-extrabold uppercase tracking-wide text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.28)] md:rounded-xl md:py-2 md:text-[11px]"
+            className="flex-1 flex items-center justify-center gap-1 rounded-lg border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] py-1.5 text-[10px] font-extrabold tracking-wide text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.28)] md:rounded-xl md:py-2 md:text-[11px]"
           >
-            Message
+            <IconChat size={14} />
+            <span>Chat</span>
           </button>
+          {onUnmatch ? (
+            <button
+              type="button"
+              disabled={unmatching}
+              onClick={onUnmatch}
+              title="Unmatch"
+              aria-label={`Unmatch with ${person.name}`}
+              data-testid={`match-unmatch-${person.id}`}
+              className="flex items-center justify-center rounded-lg border border-[var(--border-default)] bg-[var(--bg-card)] px-2.5 py-1.5 text-[10px] font-bold text-[var(--cream-muted)] transition-colors hover:border-[#c45a4a]/55 hover:text-[#e08a7a] disabled:opacity-50 md:rounded-xl md:py-2 md:text-[11px]"
+            >
+              <IconUnmatch size={14} />
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>
   );
 }
+
 
 function readInitialMatches(): {
   matches: Match[];
@@ -189,6 +212,7 @@ export const Matches = () => {
   // Skeleton only on true cold start — never when last-known rows exist.
   const [loading, setLoading] = useState(() => !initial.hasCache);
   const [error, setError] = useState('');
+  const [unmatchingId, setUnmatchingId] = useState<string | null>(null);
   const navigate = useNavigate();
   const hungRef = useRef(false);
 
@@ -249,6 +273,30 @@ export const Matches = () => {
     }, 20000);
     return () => window.clearInterval(id);
   }, [fetchMatches]);
+
+  const handleUnmatch = useCallback(
+    async (person: MatchesPerson) => {
+      if (unmatchingId) return;
+      const confirmed = window.confirm(
+        `Unmatch with ${person.name}? Chat locks again until you both match.`,
+      );
+      if (!confirmed) return;
+      setUnmatchingId(person.id);
+      try {
+        await usersAPI.unmatchUser(person.id);
+        setMatches((prev) => {
+          const next = prev.filter((m) => m.id !== person.id);
+          writeCachedMatches(next, receivedLikes);
+          return next;
+        });
+      } catch {
+        setError('Could not unmatch. Try again.');
+      } finally {
+        setUnmatchingId(null);
+      }
+    },
+    [unmatchingId, receivedLikes],
+  );
 
   const isEmpty = matches.length === 0 && receivedLikes.length === 0;
 
@@ -369,9 +417,12 @@ export const Matches = () => {
                       }
                       testId={`match-card-${match.id}`}
                       onMessage={() => navigate(`/messages/${match.id}`)}
+                      onUnmatch={() => void handleUnmatch(match)}
+                      unmatching={unmatchingId === match.id}
                     />
                   ))}
                 </div>
+
               </section>
             ) : null}
           </div>

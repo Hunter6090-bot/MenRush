@@ -93,7 +93,7 @@ export function ProfileDrawerPreview() {
           mutual={mutual}
           onClose={() => setOpen(false)}
           onLike={() => setMatchDemo('outgoing')}
-          onPass={() => setOpen(false)}
+          onUnmatch={() => setMatchDemo('none')}
           onMessage={() => undefined}
         />
       ) : null}

@@ -114,4 +114,33 @@ describe('ProfileView distance display', () => {
       expect(screen.getByText('Own Profile Page')).toBeInTheDocument();
     });
   });
+
+  it('renders icon-driven Match action and does not show Pass button', async () => {
+    vi.mocked(usersAPI.getProfile).mockResolvedValueOnce({
+      data: {
+        id: 'other-user-3',
+        name: 'Chris',
+        age: 31,
+        online: true,
+      },
+    } as any);
+
+    render(
+      <MemoryRouter initialEntries={['/profile/other-user-3']}>
+        <Routes>
+          <Route path="/profile/:id" element={<ProfileView />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /chris/i })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('button', { name: /^pass$/i })).toBeNull();
+    const matchBtn = screen.getByTestId('profile-view-match');
+    expect(matchBtn).toHaveAttribute('title', 'Match');
+    expect(matchBtn).toHaveTextContent('Match');
+  });
 });
+

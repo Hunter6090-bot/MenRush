@@ -18,6 +18,7 @@ import {
   matchCtaLabel,
   matchInterestState,
 } from '../lib/matchCta';
+import { IconMatches, IconChat } from './icons';
 import { Link } from 'react-router-dom';
 import { memo, useEffect } from 'react';
 
@@ -306,23 +307,28 @@ const NearbyGridCard = memo(function NearbyGridCard({
             aria-label={matchCtaAriaLabel(matchState, user.name, {
               mutualOpensChat: true,
             })}
+            title={matching ? 'Sending…' : matchState === 'mutual' ? 'Chat' : matchState === 'outgoing' ? 'Sent' : 'Match'}
             data-testid={`grid-match-${user.id}`}
             onClick={(e) => {
               e.stopPropagation();
               if (matchDisabled) return;
               void onMatch(user);
             }}
-            className={`w-full rounded-lg py-1.5 text-[10px] font-extrabold tracking-wide transition-colors md:rounded-xl md:py-2 md:text-[11px] ${
+            className={`w-full rounded-lg py-1.5 text-[10px] font-extrabold tracking-wide transition-colors flex items-center justify-center gap-1.5 md:rounded-xl md:py-2 md:text-[11px] ${
               matchState === 'none' || matching ? 'uppercase' : ''
             } ${matchCtaCompactToneClasses(matchState)}`}
           >
-            {matchCtaLabel(matchState, user.name, {
-              sending: matching,
-              mutualLabel: 'open_chat',
-            })}
+            {matchState === 'mutual' ? <IconChat size={14} /> : <IconMatches size={14} />}
+            <span>
+              {matchCtaLabel(matchState, user.name, {
+                sending: matching,
+                mutualLabel: 'chat',
+              })}
+            </span>
           </button>
         </div>
       ) : null}
+
     </div>
   );
 });

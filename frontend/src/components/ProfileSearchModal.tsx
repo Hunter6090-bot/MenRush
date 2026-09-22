@@ -11,6 +11,7 @@ import {
   matchCtaLabel,
   matchInterestState,
 } from '../lib/matchCta';
+import { IconMatches, IconChat } from './icons';
 
 interface ProfileSearchModalProps {
   open: boolean;
@@ -148,11 +149,6 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
     }
   };
 
-  const handlePass = (hit: SearchHit) => {
-    setResults((prev) => prev.filter((r) => r.id !== hit.id));
-    flash(`Passed on ${hit.name}.`);
-  };
-
   const handleMessage = (hit: SearchHit) => {
     if (mutualIds.has(hit.id)) {
       onClose();
@@ -260,14 +256,7 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
                     )}
                   </div>
                 </button>
-                <div className="mt-2 flex flex-wrap gap-1.5 pl-11">
-                  <button
-                    type="button"
-                    onClick={() => handlePass(hit)}
-                    className="rounded-full border border-[var(--border-default)] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-[var(--cream)] hover:border-[var(--copper)]/40 hover:text-[var(--copper)]"
-                  >
-                    Pass
-                  </button>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-11">
                   <button
                     type="button"
                     disabled={matchDisabled}
@@ -275,25 +264,31 @@ export function ProfileSearchModal({ open, onClose }: ProfileSearchModalProps) {
                     aria-label={matchCtaAriaLabel(matchState, hit.name, {
                       mutualOpensChat: true,
                     })}
+                    title={matching ? 'Sending…' : matchState === 'outgoing' ? 'Sent' : 'Match'}
                     onClick={() => void handleMatch(hit)}
                     data-testid={`search-match-${hit.id}`}
-                    className={`rounded-full px-3 py-1 text-[11px] font-extrabold tracking-wide ${
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-extrabold tracking-wide ${
                       matchState === 'none' || matching ? 'uppercase' : ''
                     } ${matchCtaCompactToneClasses(matchState)}`}
                   >
-                    {matchCtaLabel(matchState, hit.name, {
+                    <IconMatches size={14} />
+                    <span>{matchCtaLabel(matchState, hit.name, {
                       sending: matching,
                       mutualLabel: 'chat',
-                    })}
+                    })}</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => handleMessage(hit)}
-                    className="rounded-full border border-[var(--border-default)] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-[var(--cream-muted)] hover:border-[#C4832A]/40 hover:text-[#C4832A]"
+                    title="Chat"
+                    aria-label={`Chat with ${hit.name}`}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-default)] px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-[var(--cream-muted)] hover:border-[#C4832A]/40 hover:text-[#C4832A]"
                   >
-                    Message
+                    <IconChat size={14} />
+                    <span>Chat</span>
                   </button>
                 </div>
+
               </div>
             );
           })}
