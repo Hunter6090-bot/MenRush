@@ -374,7 +374,7 @@ export function VideoCallModal() {
       : offline
       ? 'Ask them to open menrush.com, stay on the chat screen, then try again. A push alone cannot answer the call.'
       : insecure
-        ? 'Open MenRush from its secure HTTPS address, then allow camera and microphone access.'
+        ? 'Please allow camera and microphone access in your browser or operating system settings, and ensure the site is open directly (not inside a sandboxed iframe).'
         : 'Check your connection and try again. Both of you need the app open.';
     return (
       <div

@@ -25,6 +25,7 @@ export const Notifications = () => {
   const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
   const deleteNotification = useNotificationStore((s) => s.deleteNotification);
   const deleteAllRead = useNotificationStore((s) => s.deleteAllRead);
+  const deleteAllNotifications = useNotificationStore((s) => s.deleteAllNotifications);
   const setUnreadCount = useNotificationStore((s) => s.setUnreadCount);
 
   // #74: badge-only on launch, tap opens this page; read items drop out of the
@@ -100,6 +101,15 @@ export const Notifications = () => {
     }
   };
 
+  const handleDeleteAll = async () => {
+    deleteAllNotifications();
+    try {
+      await notificationsAPI.deleteAll();
+    } catch {
+      /* ignore */
+    }
+  };
+
   return (
     <Layout>
       <div className="mx-auto flex min-h-0 max-w-xl flex-col gap-4 px-4 py-4 pb-10 lg:max-w-6xl lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] lg:items-start lg:gap-8 lg:px-8 lg:py-8">
@@ -120,13 +130,13 @@ export const Notifications = () => {
                 Mark all read
               </button>
             )}
-            {readCount > 0 && (
+            {notifications.length > 0 && (
               <button
                 type="button"
-                onClick={() => void handleDeleteAllRead()}
+                onClick={() => void (readCount > 0 && filter === 'unread' ? handleDeleteAllRead() : handleDeleteAll())}
                 className="rounded-xl px-3 py-1 text-[11px] font-semibold text-[var(--cream-muted)] hover:text-[var(--cream)]"
               >
-                Delete read
+                {readCount > 0 && filter === 'unread' ? 'Delete read' : 'Delete all'}
               </button>
             )}
           </div>
@@ -139,13 +149,13 @@ export const Notifications = () => {
               <p className="text-sm text-[var(--cream-muted)]">Recent alerts from your network.</p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              {readCount > 0 && (
+              {notifications.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => void handleDeleteAllRead()}
+                  onClick={() => void (readCount > 0 && filter === 'unread' ? handleDeleteAllRead() : handleDeleteAll())}
                   className="rounded-xl px-3 py-2 text-[11px] font-semibold text-[var(--cream-muted)] hover:text-[var(--cream)]"
                 >
-                  Delete read
+                  {readCount > 0 && filter === 'unread' ? 'Delete read' : 'Delete all'}
                 </button>
               )}
               {unreadCount > 0 && (

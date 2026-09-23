@@ -69,7 +69,7 @@ export function notificationDestination(notification: Notification): string {
     case 'like':
       return notification.userId ? `/profile/${notification.userId}` : '/matches';
     case 'profile_view':
-      return '/profile';
+      return notification.userId ? `/profile/${notification.userId}` : '/profile';
     default:
       return '/notifications';
   }

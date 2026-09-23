@@ -427,6 +427,7 @@ export const notificationsAPI = {
   delete: (id: string) =>
     apiClient.delete<{ ok: boolean; unread_count: number }>(`/notifications/${id}`),
   deleteAllRead: () => apiClient.delete<{ ok: boolean; removed: number }>('/notifications'),
+  deleteAll: () => apiClient.delete<{ ok: boolean; removed: number }>('/notifications?all=true'),
 };
 
 export interface PulseStateDTO {
@@ -474,6 +475,8 @@ export interface MessageDTO {
    * false → soft-blur photos/videos for this viewer; omit/true → clear.
    */
   media_clear?: boolean;
+  read?: boolean;
+  delivered?: boolean;
 }
 
 export interface SendMediaOptions {

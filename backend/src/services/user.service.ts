@@ -842,6 +842,14 @@ export const userService = {
        ON CONFLICT (blocker_id, blocked_id) DO NOTHING`,
       [blockerId, blockedId]
     );
+    // Ticket 1: Block = full silence.
+    // Dismiss/clear any existing notifications between the two parties.
+    await query(
+      `DELETE FROM notifications
+       WHERE (user_id = $1 AND actor_id = $2)
+          OR (user_id = $2 AND actor_id = $1)`,
+      [blockerId, blockedId]
+    );
   },
 
   async unblockUser(blockerId: string, blockedId: string) {

@@ -56,6 +56,7 @@
     "test:nearby-pagination": "ts-node scripts/nearby-pagination-checks.ts",
     "test:map-pin-fuzz": "ts-node scripts/map-pin-fuzz-checks.ts",
     "test:chat-video-open": "ts-node scripts/chat-video-open-checks.ts",
+    "test:common-sense": "ts-node scripts/common-sense-checks.ts",
     "predeploy": "npm run build && bash ../test-features.sh",
     "audit:safety": "bash ../scripts/audit-safety.sh"
   },

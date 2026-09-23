@@ -294,7 +294,7 @@ router.get('/profile/:id', verifiedMiddleware, async (req: AuthRequest, res: Res
             type: 'profile_view',
             title: `${viewerName} viewed your profile`,
             body: 'See who checked you out.',
-            linkPath: '/profile',
+            linkPath: `/profile/${viewerId}`,
           });
         } catch (sideEffectError) {
           console.error('[profile-view-side-effect]', sideEffectError);

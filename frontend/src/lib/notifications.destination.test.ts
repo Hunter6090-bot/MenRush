@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { notificationDestination } from './notifications';
-import type { Notification } from '../hooks/store';
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import { notificationDestination } from './notifications.ts';
+import type { Notification } from '../hooks/store.ts';
 
 function base(partial: Partial<Notification>): Notification {
   return {
@@ -15,29 +16,31 @@ function base(partial: Partial<Notification>): Notification {
 
 describe('notificationDestination', () => {
   it('opens the 1:1 chat for message/photo/voice via linkPath', () => {
-    expect(
+    assert.equal(
       notificationDestination(
         base({ type: 'photo', linkPath: '/messages/peer-1', userId: 'peer-1' }),
       ),
-    ).toBe('/messages/peer-1');
+      '/messages/peer-1',
+    );
   });
 
   it('falls back to /messages/:userId when linkPath is missing', () => {
-    expect(
+    assert.equal(
       notificationDestination(base({ type: 'message', userId: 'peer-2', linkPath: undefined })),
-    ).toBe('/messages/peer-2');
+      '/messages/peer-2',
+    );
   });
 
   it('never returns /notifications for a message with a peer id', () => {
     const dest = notificationDestination(
       base({ type: 'photo', userId: 'peer-3', linkPath: '/messages/peer-3' }),
     );
-    expect(dest).toMatch(/^\/messages\/peer-3/);
-    expect(dest).not.toBe('/notifications');
+    assert.match(dest, /^\/messages\/peer-3/);
+    assert.notEqual(dest, '/notifications');
   });
 
   it('strips absolute same-app linkPath down to a router path', () => {
-    expect(
+    assert.equal(
       notificationDestination(
         base({
           type: 'message',
@@ -45,6 +48,31 @@ describe('notificationDestination', () => {
           linkPath: 'https://menrush.com/messages/peer-4',
         }),
       ),
-    ).toBe('/messages/peer-4');
+      '/messages/peer-4',
+    );
+  });
+
+  it('routes profile_view notifications to the viewer/sender profile', () => {
+    assert.equal(
+      notificationDestination(
+        base({
+          type: 'profile_view',
+          userId: 'peer-mature-horny-69',
+          linkPath: '/profile/peer-mature-horny-69',
+        }),
+      ),
+      '/profile/peer-mature-horny-69',
+    );
+
+    assert.equal(
+      notificationDestination(
+        base({
+          type: 'profile_view',
+          userId: 'peer-mature-horny-69',
+          linkPath: undefined,
+        }),
+      ),
+      '/profile/peer-mature-horny-69',
+    );
   });
 });

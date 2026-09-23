@@ -60,6 +60,8 @@ import {
   threadLikelyHasHistory,
   writeCachedThread,
 } from '../lib/conversationHistoryCache';
+import { refreshNotifications } from '../hooks/useNotificationSync';
+import { useNotificationStore } from '../hooks/store';
 import type { ThreadOpenState } from '../components/ConversationItem';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
@@ -80,6 +82,8 @@ interface Message extends Partial<MessageDTO> {
   remaining_views?: number | null;
   expired?: boolean;
   media_clear?: boolean;
+  read?: boolean;
+  delivered?: boolean;
 }
 
 function seedThreadForOpen(
@@ -239,6 +243,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const [meetSubmitting, setMeetSubmitting] = useState(false);
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
+  const [canJerk, setCanJerk] = useState(false);
+  const [jerkSent, setJerkSent] = useState(false);
+  const [jerking, setJerking] = useState(false);
   // Disappearing countdown lives in ImageViewer only — do not 1Hz re-render the whole thread.
   const socket = useSocket();
   const { setCalling, setCallSetupError, resetCall } = useCallStore();
@@ -317,6 +324,18 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
           });
           setHasMoreOlder(false);
           setHistoryReady(true);
+        }
+      })
+      .finally(() => {
+        // Ticket 4: Thread opened / read messages clear related notifications for this user
+        if (otherId) {
+          const notifState = useNotificationStore.getState();
+          const hasRelated = notifState.notifications.some(
+            (n) => n.userId === otherId && !n.read && (n.type === 'message' || n.type === 'photo' || n.type === 'voice' || n.type === 'missed_call')
+          );
+          if (hasRelated) {
+            void refreshNotifications();
+          }
         }
       });
   }, [otherId]);
@@ -932,8 +951,10 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         const msg = data?.error;
         if (code === 'match_required' || /mutual match/i.test(msg || '')) {
           setMediaError('You need a mutual match before messaging.');
+          setCanJerk(true);
         } else if (code === 'interaction_blocked' || /blocked/i.test(msg || '')) {
           setMediaError('You cannot message this person.');
+          setCanJerk(false);
         } else if (
           (err as { code?: string })?.code === 'ECONNABORTED' ||
           /timeout/i.test(String((err as { message?: string })?.message || ''))
@@ -949,6 +970,20 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     },
     [otherId, user, emitTyping, markOwnSendStick, commitThreadMessage],
   );
+
+  const handleSendJerk = async () => {
+    if (!otherId || jerking || jerkSent) return;
+    setJerking(true);
+    try {
+      await usersAPI.likeUser(otherId);
+      setJerkSent(true);
+      setMediaError('');
+    } catch {
+      setMediaError('Could not send a jerk. Try again.');
+    } finally {
+      setJerking(false);
+    }
+  };
 
   const handleSend = async (e?: React.FormEvent | React.KeyboardEvent) => {
     e?.preventDefault?.();
@@ -1250,14 +1285,39 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       >
         {mediaError && (
           <div
-            className="mb-2 text-[11px] px-3 py-2 rounded-lg"
+            className="mb-2 flex items-center justify-between gap-2 text-[11px] px-3 py-2 rounded-lg"
             style={{
               background: 'rgba(196,131,42,0.12)',
               border: '1px solid rgba(196,131,42,0.35)',
               color: 'var(--cream)',
             }}
           >
-            {mediaError}
+            <span>{mediaError}</span>
+            {canJerk && (
+              <button
+                type="button"
+                onClick={handleSendJerk}
+                disabled={jerking || jerkSent}
+                data-testid="chat-jerk-button"
+                aria-label={jerkSent ? 'Jerk sent' : jerking ? 'Sending jerk' : 'Send a jerk'}
+                title={jerkSent ? 'Jerk sent' : 'Send a jerk'}
+                className="shrink-0 rounded-full bg-[#C4832A] px-3 py-1 text-[11px] font-bold text-[#1A0E03] transition-transform active:scale-95 disabled:opacity-50"
+              >
+                {jerkSent ? 'Jerk sent' : jerking ? 'Sending…' : 'Send a jerk'}
+              </button>
+            )}
+          </div>
+        )}
+        {jerkSent && !mediaError && (
+          <div
+            className="mb-2 text-[11px] px-3 py-1.5 rounded-lg text-center"
+            style={{
+              background: 'rgba(196,131,42,0.12)',
+              border: '1px solid rgba(196,131,42,0.35)',
+              color: 'var(--cream)',
+            }}
+          >
+            Jerk sent to {otherUser?.name ?? 'them'}. They will see your interest.
           </div>
         )}
 
@@ -1748,6 +1808,40 @@ const FlameIcon = ({
     <path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14a8 8 0 0 0 16 0c0-4.16-2-7.86-6.5-13.33z" />
   </svg>
 );
+
+const MessageReceiptTicks = ({
+  read,
+  isMine: _isMine,
+}: {
+  read?: boolean;
+  isMine?: boolean;
+}) => {
+  // Brand Soft lock for ticket 6 (double ticks) — exact rules:
+  // - Light ticks on dark skins: cream/copper on night/card
+  // - Dark ticks on light skins: night/card ink on cream/paper
+  // - No grey-on-grey
+  // We use CSS classes that resolve with the theme (.dark vs light paper):
+  // When read:
+  //   dark skin: copper (#E0A14A / #C4832A)
+  //   light skin: dark copper / night ink (#1A0E03 / #B8732A)
+  // When delivered:
+  //   dark skin: cream (#F0E0C0)
+  //   light skin: night ink (#1E1508)
+  return (
+    <span
+      className={`inline-flex items-center ml-1 align-baseline tracking-[-0.22em] text-[11px] font-bold ${
+        read
+          ? 'text-[#E0A14A] dark:text-[#E0A14A] [html:not(.dark)_&]:text-[#8B5A1A]'
+          : 'text-[var(--cream)] dark:text-[#F0E0C0] [html:not(.dark)_&]:text-[#1E1508]'
+      }`}
+      title={read ? 'Read' : 'Delivered'}
+      aria-label={read ? 'Read' : 'Delivered'}
+      data-testid={read ? 'message-tick-read' : 'message-tick-delivered'}
+    >
+      ✓✓
+    </span>
+  );
+};
 
 function formatDuration(ms?: number | null): string {
   if (!ms || ms < 0) return '0:00';
@@ -3103,13 +3197,15 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                       {msg.message}
                     </div>
                   )}
-                  {/* Timestamp */}
+                  {/* Timestamp & double ticks */}
                   {showTail && (
                     <span
-                      className="text-[10px] mt-1 px-1"
-                      style={{ color: '#6B5035' }}
+                      className="inline-flex items-center text-[10px] mt-1 px-1 text-[var(--cream-muted)] dark:text-[#A89070] [html:not(.dark)_&]:text-[#5C4A32]"
                     >
                       {formatTime(msg.created_at)}
+                      {isMine && (
+                        <MessageReceiptTicks read={msg.read} isMine={isMine} />
+                      )}
                     </span>
                   )}
                 </div>
