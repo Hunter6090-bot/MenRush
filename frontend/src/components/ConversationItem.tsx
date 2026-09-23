@@ -73,9 +73,7 @@ export const ConversationItem = memo(function ConversationItem({
   };
 
   return (
-    <div
-      className="flex items-center gap-1 [content-visibility:auto] [contain-intrinsic-size:auto_72px]"
-    >
+    <div className="flex items-center gap-1">
       <div
         className={`group flex min-w-0 flex-1 items-center gap-3 text-left transition-all duration-200 ${
           isSidebar
