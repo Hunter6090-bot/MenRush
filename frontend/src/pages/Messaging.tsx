@@ -243,9 +243,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const [meetSubmitting, setMeetSubmitting] = useState(false);
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
-  const [canWink, setCanWink] = useState(false);
-  const [winkSent, setWinkSent] = useState(false);
-  const [winking, setWinking] = useState(false);
+  const [canJerk, setCanJerk] = useState(false);
+  const [jerkSent, setJerkSent] = useState(false);
+  const [jerking, setJerking] = useState(false);
   // Disappearing countdown lives in ImageViewer only — do not 1Hz re-render the whole thread.
   const socket = useSocket();
   const { setCalling, setCallSetupError, resetCall } = useCallStore();
@@ -951,10 +951,10 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         const msg = data?.error;
         if (code === 'match_required' || /mutual match/i.test(msg || '')) {
           setMediaError('You need a mutual match before messaging.');
-          setCanWink(true);
+          setCanJerk(true);
         } else if (code === 'interaction_blocked' || /blocked/i.test(msg || '')) {
           setMediaError('You cannot message this person.');
-          setCanWink(false);
+          setCanJerk(false);
         } else if (
           (err as { code?: string })?.code === 'ECONNABORTED' ||
           /timeout/i.test(String((err as { message?: string })?.message || ''))
@@ -971,17 +971,17 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     [otherId, user, emitTyping, markOwnSendStick, commitThreadMessage],
   );
 
-  const handleSendWink = async () => {
-    if (!otherId || winking || winkSent) return;
-    setWinking(true);
+  const handleSendJerk = async () => {
+    if (!otherId || jerking || jerkSent) return;
+    setJerking(true);
     try {
       await usersAPI.likeUser(otherId);
-      setWinkSent(true);
+      setJerkSent(true);
       setMediaError('');
     } catch {
-      setMediaError('Could not send wink. Try again.');
+      setMediaError('Could not send a jerk. Try again.');
     } finally {
-      setWinking(false);
+      setJerking(false);
     }
   };
 
@@ -1293,20 +1293,22 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             }}
           >
             <span>{mediaError}</span>
-            {canWink && (
+            {canJerk && (
               <button
                 type="button"
-                onClick={handleSendWink}
-                disabled={winking || winkSent}
-                data-testid="chat-wink-button"
+                onClick={handleSendJerk}
+                disabled={jerking || jerkSent}
+                data-testid="chat-jerk-button"
+                aria-label={jerkSent ? 'Jerk sent' : jerking ? 'Sending jerk' : 'Send a jerk'}
+                title={jerkSent ? 'Jerk sent' : 'Send a jerk'}
                 className="shrink-0 rounded-full bg-[#C4832A] px-3 py-1 text-[11px] font-bold text-[#1A0E03] transition-transform active:scale-95 disabled:opacity-50"
               >
-                {winkSent ? 'Wink sent 😉' : winking ? 'Sending…' : 'Send Wink 😉'}
+                {jerkSent ? 'Jerk sent' : jerking ? 'Sending…' : 'Send a jerk'}
               </button>
             )}
           </div>
         )}
-        {winkSent && !mediaError && (
+        {jerkSent && !mediaError && (
           <div
             className="mb-2 text-[11px] px-3 py-1.5 rounded-lg text-center"
             style={{
@@ -1315,7 +1317,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               color: 'var(--cream)',
             }}
           >
-            Wink sent to {otherUser?.name ?? 'them'}. They will see your interest.
+            Jerk sent to {otherUser?.name ?? 'them'}. They will see your interest.
           </div>
         )}
 
