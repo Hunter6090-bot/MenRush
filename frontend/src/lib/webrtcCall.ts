@@ -229,11 +229,26 @@ export async function pickPreferredCameraDeviceId(
   }
 }
 
+export function isSecureMediaEnvironment(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (window.isSecureContext) return true;
+  if (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return true;
+  }
+  return false;
+}
+
 export async function acquireLocalMedia(
   facingMode: CameraFacing = 'user',
   preferredDeviceId?: string,
 ): Promise<MediaStream> {
-  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+  const hasGetUserMedia = Boolean(
+    navigator?.mediaDevices?.getUserMedia ||
+    (navigator as unknown as { getUserMedia?: unknown })?.getUserMedia ||
+    (navigator as unknown as { webkitGetUserMedia?: unknown })?.webkitGetUserMedia
+  );
+
+  if (!isSecureMediaEnvironment() || !hasGetUserMedia) {
     throw new Error('insecure_media_context');
   }
 
@@ -357,7 +372,13 @@ export async function acquireVideoTrackForFacing(
   facingMode: CameraFacing,
   options?: { stopTrackFirst?: MediaStreamTrack | null },
 ): Promise<MediaStreamTrack> {
-  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+  const hasGetUserMedia = Boolean(
+    navigator?.mediaDevices?.getUserMedia ||
+    (navigator as unknown as { getUserMedia?: unknown })?.getUserMedia ||
+    (navigator as unknown as { webkitGetUserMedia?: unknown })?.webkitGetUserMedia
+  );
+
+  if (!isSecureMediaEnvironment() || !hasGetUserMedia) {
     throw new Error('insecure_media_context');
   }
 

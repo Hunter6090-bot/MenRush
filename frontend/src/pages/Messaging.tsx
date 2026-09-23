@@ -60,6 +60,8 @@ import {
   threadLikelyHasHistory,
   writeCachedThread,
 } from '../lib/conversationHistoryCache';
+import { refreshNotifications } from '../hooks/useNotificationSync';
+import { useNotificationStore } from '../hooks/store';
 import type { ThreadOpenState } from '../components/ConversationItem';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
@@ -80,6 +82,8 @@ interface Message extends Partial<MessageDTO> {
   remaining_views?: number | null;
   expired?: boolean;
   media_clear?: boolean;
+  read?: boolean;
+  delivered?: boolean;
 }
 
 function seedThreadForOpen(
@@ -239,6 +243,9 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const [meetSubmitting, setMeetSubmitting] = useState(false);
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
+  const [canWink, setCanWink] = useState(false);
+  const [winkSent, setWinkSent] = useState(false);
+  const [winking, setWinking] = useState(false);
   // Disappearing countdown lives in ImageViewer only — do not 1Hz re-render the whole thread.
   const socket = useSocket();
   const { setCalling, setCallSetupError, resetCall } = useCallStore();
@@ -317,6 +324,18 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
           });
           setHasMoreOlder(false);
           setHistoryReady(true);
+        }
+      })
+      .finally(() => {
+        // Ticket 4: Thread opened / read messages clear related notifications for this user
+        if (otherId) {
+          const notifState = useNotificationStore.getState();
+          const hasRelated = notifState.notifications.some(
+            (n) => n.userId === otherId && !n.read && (n.type === 'message' || n.type === 'photo' || n.type === 'voice' || n.type === 'missed_call')
+          );
+          if (hasRelated) {
+            void refreshNotifications();
+          }
         }
       });
   }, [otherId]);
@@ -932,8 +951,10 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         const msg = data?.error;
         if (code === 'match_required' || /mutual match/i.test(msg || '')) {
           setMediaError('You need a mutual match before messaging.');
+          setCanWink(true);
         } else if (code === 'interaction_blocked' || /blocked/i.test(msg || '')) {
           setMediaError('You cannot message this person.');
+          setCanWink(false);
         } else if (
           (err as { code?: string })?.code === 'ECONNABORTED' ||
           /timeout/i.test(String((err as { message?: string })?.message || ''))
@@ -949,6 +970,20 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     },
     [otherId, user, emitTyping, markOwnSendStick, commitThreadMessage],
   );
+
+  const handleSendWink = async () => {
+    if (!otherId || winking || winkSent) return;
+    setWinking(true);
+    try {
+      await usersAPI.likeUser(otherId);
+      setWinkSent(true);
+      setMediaError('');
+    } catch {
+      setMediaError('Could not send wink. Try again.');
+    } finally {
+      setWinking(false);
+    }
+  };
 
   const handleSend = async (e?: React.FormEvent | React.KeyboardEvent) => {
     e?.preventDefault?.();
@@ -1250,14 +1285,37 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       >
         {mediaError && (
           <div
-            className="mb-2 text-[11px] px-3 py-2 rounded-lg"
+            className="mb-2 flex items-center justify-between gap-2 text-[11px] px-3 py-2 rounded-lg"
             style={{
               background: 'rgba(196,131,42,0.12)',
               border: '1px solid rgba(196,131,42,0.35)',
               color: 'var(--cream)',
             }}
           >
-            {mediaError}
+            <span>{mediaError}</span>
+            {canWink && (
+              <button
+                type="button"
+                onClick={handleSendWink}
+                disabled={winking || winkSent}
+                data-testid="chat-wink-button"
+                className="shrink-0 rounded-full bg-[#C4832A] px-3 py-1 text-[11px] font-bold text-[#1A0E03] transition-transform active:scale-95 disabled:opacity-50"
+              >
+                {winkSent ? 'Wink sent 😉' : winking ? 'Sending…' : 'Send Wink 😉'}
+              </button>
+            )}
+          </div>
+        )}
+        {winkSent && !mediaError && (
+          <div
+            className="mb-2 text-[11px] px-3 py-1.5 rounded-lg text-center"
+            style={{
+              background: 'rgba(196,131,42,0.12)',
+              border: '1px solid rgba(196,131,42,0.35)',
+              color: 'var(--cream)',
+            }}
+          >
+            Wink sent to {otherUser?.name ?? 'them'}. They will see your interest.
           </div>
         )}
 
@@ -1748,6 +1806,34 @@ const FlameIcon = ({
     <path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14a8 8 0 0 0 16 0c0-4.16-2-7.86-6.5-13.33z" />
   </svg>
 );
+
+const MessageReceiptTicks = ({
+  read,
+  isMine,
+}: {
+  read?: boolean;
+  isMine: boolean;
+}) => {
+  // Brand lock: contrast — light ticks on dark message skins, dark ticks on light skins.
+  // Use existing Brand tokens (cream/ink from #288); no cream-on-paper.
+  // When read: copper (#E0A14A on dark / #C4832A on light)
+  // When delivered (unread): cream (#F0E0C0/70) on dark bubble, ink (#1E1508/60) on light bubble
+  const tickColor = read
+    ? isMine ? '#FBE0B2' : '#C4832A'
+    : isMine ? 'rgba(255, 245, 230, 0.75)' : 'rgba(30, 21, 8, 0.65)';
+
+  return (
+    <span
+      className="inline-flex items-center ml-1 align-baseline tracking-[-0.22em] text-[11px] font-bold"
+      style={{ color: tickColor }}
+      title={read ? 'Read' : 'Delivered'}
+      aria-label={read ? 'Read' : 'Delivered'}
+      data-testid={read ? 'message-tick-read' : 'message-tick-delivered'}
+    >
+      ✓✓
+    </span>
+  );
+};
 
 function formatDuration(ms?: number | null): string {
   if (!ms || ms < 0) return '0:00';
@@ -3103,13 +3189,16 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                       {msg.message}
                     </div>
                   )}
-                  {/* Timestamp */}
+                  {/* Timestamp & double ticks */}
                   {showTail && (
                     <span
-                      className="text-[10px] mt-1 px-1"
+                      className="inline-flex items-center text-[10px] mt-1 px-1"
                       style={{ color: '#6B5035' }}
                     >
                       {formatTime(msg.created_at)}
+                      {isMine && (
+                        <MessageReceiptTicks read={msg.read} isMine={isMine} />
+                      )}
                     </span>
                   )}
                 </div>

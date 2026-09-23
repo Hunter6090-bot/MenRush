@@ -25,6 +25,8 @@ interface ConversationRow {
   receiver_id: string;
   message: string;
   created_at: string;
+  read?: boolean;
+  delivered?: boolean;
   media_type: MessageMediaKind | null;
   media_url: string | null;
   media_storage_key?: string | null;
@@ -45,7 +47,7 @@ interface ConversationRow {
 const mediaDir = path.resolve(__dirname, '../../uploads/messages');
 
 /** Columns returned for every message row sent to the client. */
-const MESSAGE_COLUMNS = `id, sender_id, receiver_id, message, created_at,
+const MESSAGE_COLUMNS = `id, sender_id, receiver_id, message, created_at, read,
                  media_type, media_url, audio_duration_ms,
                  is_disappearing, expires_at, viewed_at, max_views, view_count, withdrawn_at`;
 
@@ -386,6 +388,13 @@ export const messageService = {
          WHERE receiver_id = $1 AND sender_id = $2 AND read = false`,
         [userId, otherId],
       );
+      // Ticket 4: Opened thread / read messages clear related notifs (message, photo, voice, missed_call)
+      try {
+        const { notificationService } = await import('./notification.service');
+        await notificationService.clearForActor(userId, otherId, ['message', 'photo', 'voice', 'missed_call']);
+      } catch (err) {
+        console.error('[clearForActor]', err);
+      }
     }
 
     const viewerIsPremium = await resolveViewerPremium(userId);
