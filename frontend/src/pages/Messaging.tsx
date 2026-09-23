@@ -1809,23 +1809,29 @@ const FlameIcon = ({
 
 const MessageReceiptTicks = ({
   read,
-  isMine,
+  isMine: _isMine,
 }: {
   read?: boolean;
-  isMine: boolean;
+  isMine?: boolean;
 }) => {
-  // Brand lock: contrast — light ticks on dark message skins, dark ticks on light skins.
-  // Use existing Brand tokens (cream/ink from #288); no cream-on-paper.
-  // When read: copper (#E0A14A on dark / #C4832A on light)
-  // When delivered (unread): cream (#F0E0C0/70) on dark bubble, ink (#1E1508/60) on light bubble
-  const tickColor = read
-    ? isMine ? '#FBE0B2' : '#C4832A'
-    : isMine ? 'rgba(255, 245, 230, 0.75)' : 'rgba(30, 21, 8, 0.65)';
-
+  // Brand Soft lock for ticket 6 (double ticks) — exact rules:
+  // - Light ticks on dark skins: cream/copper on night/card
+  // - Dark ticks on light skins: night/card ink on cream/paper
+  // - No grey-on-grey
+  // We use CSS classes that resolve with the theme (.dark vs light paper):
+  // When read:
+  //   dark skin: copper (#E0A14A / #C4832A)
+  //   light skin: dark copper / night ink (#1A0E03 / #B8732A)
+  // When delivered:
+  //   dark skin: cream (#F0E0C0)
+  //   light skin: night ink (#1E1508)
   return (
     <span
-      className="inline-flex items-center ml-1 align-baseline tracking-[-0.22em] text-[11px] font-bold"
-      style={{ color: tickColor }}
+      className={`inline-flex items-center ml-1 align-baseline tracking-[-0.22em] text-[11px] font-bold ${
+        read
+          ? 'text-[#E0A14A] dark:text-[#E0A14A] [html:not(.dark)_&]:text-[#8B5A1A]'
+          : 'text-[var(--cream)] dark:text-[#F0E0C0] [html:not(.dark)_&]:text-[#1E1508]'
+      }`}
       title={read ? 'Read' : 'Delivered'}
       aria-label={read ? 'Read' : 'Delivered'}
       data-testid={read ? 'message-tick-read' : 'message-tick-delivered'}
@@ -3192,8 +3198,7 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                   {/* Timestamp & double ticks */}
                   {showTail && (
                     <span
-                      className="inline-flex items-center text-[10px] mt-1 px-1"
-                      style={{ color: '#6B5035' }}
+                      className="inline-flex items-center text-[10px] mt-1 px-1 text-[var(--cream-muted)] dark:text-[#A89070] [html:not(.dark)_&]:text-[#5C4A32]"
                     >
                       {formatTime(msg.created_at)}
                       {isMine && (
