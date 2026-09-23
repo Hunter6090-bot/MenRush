@@ -1817,22 +1817,15 @@ const MessageReceiptTicks = ({
   isMine?: boolean;
 }) => {
   // Brand Soft lock for ticket 6 (double ticks) — exact rules:
-  // - Light ticks on dark skins: cream/copper on night/card
-  // - Dark ticks on light skins: night/card ink on cream/paper
+  // - Light ticks on dark skins: cream #F0E0C0 delivered, copper #E0A14A read
+  // - Dark ticks on light skins: night/card ink #1E1508 delivered, dark copper #8B5A1A read
   // - No grey-on-grey
-  // We use CSS classes that resolve with the theme (.dark vs light paper):
-  // When read:
-  //   dark skin: copper (#E0A14A / #C4832A)
-  //   light skin: dark copper / night ink (#1A0E03 / #B8732A)
-  // When delivered:
-  //   dark skin: cream (#F0E0C0)
-  //   light skin: night ink (#1E1508)
+  // Wires to real app theme mechanism (data-theme="light" / html.theme-light) via CSS variables:
+  // --mr-tick-delivered and --mr-tick-read defined in menrush-tokens.css.
   return (
     <span
       className={`inline-flex items-center ml-1 align-baseline tracking-[-0.22em] text-[11px] font-bold ${
-        read
-          ? 'text-[#E0A14A] dark:text-[#E0A14A] [html:not(.dark)_&]:text-[#8B5A1A]'
-          : 'text-[var(--cream)] dark:text-[#F0E0C0] [html:not(.dark)_&]:text-[#1E1508]'
+        read ? 'mr-receipt-tick-read' : 'mr-receipt-tick-delivered'
       }`}
       title={read ? 'Read' : 'Delivered'}
       aria-label={read ? 'Read' : 'Delivered'}
@@ -3200,7 +3193,7 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                   {/* Timestamp & double ticks */}
                   {showTail && (
                     <span
-                      className="inline-flex items-center text-[10px] mt-1 px-1 text-[var(--cream-muted)] dark:text-[#A89070] [html:not(.dark)_&]:text-[#5C4A32]"
+                      className="inline-flex items-center text-[10px] mt-1 px-1 text-[var(--cream-muted)]"
                     >
                       {formatTime(msg.created_at)}
                       {isMine && (
