@@ -46,3 +46,13 @@ Provision a separate staging backend before authenticated preview or real-device
 - Age273 is older repair context; optional-age Terms289 conflicts with mandatory-age behavior. Neither was auto-merged or retargeted.
 
 Activation blockers: separate Age Estimation provider configuration/hosted validation, merchant sandbox contract validation, legacy entitlement reconciliation if invoice/promo paths are used alongside billing, real-device/PWA evidence, owner-reviewed branch reconciliation and deployment-setting cutover. No production migration or deployment is included in this work.
+
+## Post-login preview failure follow-up
+
+The release preview's account-status request is routed to the older production backend, where `/adult-assurance/account` falls through to a session-ID route and returns `400 invalid_session`. The public required-status response also lacks the new availability contract. Completing password and second-factor authentication does not satisfy the separate age gate.
+
+The recovery screen now distinguishes loading, connection failure, provider unavailability and an available hosted flow; it displays one status, provides retry/sign-out, and rejects malformed success responses. Ten focused recovery/access tests and the frontend build passed. This UX fix does not activate the provider.
+
+The existing Railway staging service was inspected: it follows main and has no separate Age Estimation settings. Do not blindly repoint the preview or enable fixtures to grant access. Restore the flow by validating an isolated staging database, deploying the matching backend/migrations there, provisioning the approved separate age integration, and then changing preview API/media/socket routing together. Test a new isolated session through second factor and the hosted age decision.
+
+Production main advanced by two further commits after the original reconciliation snapshot (#294 and #296). They remain outside this draft and need preservation at the final owner-reviewed cutover; no merge or history rewrite was attempted in this follow-up.
