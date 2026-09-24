@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ProfileDrawer } from './ProfileDrawer';
 import type { NearbyUser } from './ProfileCard';
@@ -27,11 +27,11 @@ const graham: NearbyUser = {
   cover_url: undefined,
 };
 
-function renderDrawer() {
+function renderDrawer(user = graham) {
   return render(
     <MemoryRouter>
       <ProfileDrawer
-        user={graham}
+        user={user}
         liked={false}
         onClose={vi.fn()}
         onLike={vi.fn()}
@@ -215,4 +215,28 @@ describe('ProfileDrawer grid sheet layout', () => {
     expect(screen.getByTestId('drawer-avatar-graham-1')).toBeInTheDocument();
     expect(screen.getByTestId('drawer-avatar-graham-1').tagName).toBe('BUTTON');
   });
+});
+
+
+describe('ProfileDrawer legacy media', () => {
+  it.each(['/avatars/generic/09.svg', 'https://menrush.com/avatars/generic/09.svg?v=old'])('shows current empty face for %s without enabling photo enlargement', (photo_url) => {
+    renderDrawer({ ...graham, photo_url, cover_url: photo_url });
+    expect(screen.getAllByTestId('faded-brand-face')).toHaveLength(2);
+    expect(screen.queryByTestId('drawer-cover-enlarge')).not.toBeInTheDocument();
+    expect(screen.getByTestId('drawer-avatar-graham-1').tagName).toBe('DIV');
+  });
+  it('preserves real cover and profile photos', () => {
+    renderDrawer({ ...graham, photo_url: '/uploads/profiles/real.jpg', cover_url: '/uploads/profiles/cover.jpg' });
+    expect(screen.queryByTestId('faded-brand-face')).not.toBeInTheDocument();
+    expect(screen.getByTestId('drawer-cover-enlarge').querySelector('img')?.src).toContain('/uploads/profiles/cover.jpg');
+    expect(screen.getByTestId('drawer-avatar-graham-1').querySelector('img')?.src).toContain('/uploads/profiles/real.jpg');
+  });
+});
+
+
+it('uses the current face when a real photo cannot load', () => {
+  renderDrawer({ ...graham, photo_url: 'https://example.invalid/real.jpg' });
+  fireEvent.error(screen.getByTestId('drawer-avatar-graham-1').querySelector('img')!);
+  expect(screen.getAllByTestId('faded-brand-face')).toHaveLength(2);
+  expect(screen.queryByTestId('drawer-cover-enlarge')).not.toBeInTheDocument();
 });

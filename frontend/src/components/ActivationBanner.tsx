@@ -61,7 +61,7 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
       data-testid="activation-banner"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-[1_1_220px]">
           <p className="text-[14px] font-extrabold text-[var(--cream)]">{headline}</p>
           <p className="mt-1 text-[12px] text-[var(--cream-muted)]">
             {locationOnly || (needsLocation && fieldsComplete)
@@ -77,7 +77,7 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
             />
           </div>
         </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
+        <div className="flex max-w-full flex-wrap gap-2">
           {showLocationCta ? (
             <button
               type="button"

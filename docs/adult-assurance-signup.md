@@ -1,89 +1,49 @@
-# Adult assurance — signup dual path (Veriff liveness + optional ID)
+# Mandatory age assurance and optional ID
 
-**PR #97 / issue #50 (Al order, 2026-09-12).** Signup hard-fails under-18. Required path is **liveness / age-estimation selfie**, not document DOB. Optional ID in the same flow awards the **Verified tick**. Not full identity KYC for all members, not UGC pre-moderation, not an OSA “full compliance” claim.
+Local repair against production-source commit `167e9c8`, 22 September 2026. This document describes the proposed implementation, not live activation or a legal compliance certification.
 
-## What it does
+Signup always requires a one-time token from a positive, authenticated Veriff Age Estimation result. DOB/self-declaration, a standalone liveness approval, a client flag, and the optional ID Verified badge cannot satisfy this check. No skip is offered. Provider configuration failure blocks new checks rather than changing the requirement.
 
-1. Before a `users` row is created, signup starts a **pre-account** Veriff liveness session (`adult_assurance_sessions`, `check_kind=liveness`).
-2. On decision webhook: read `additionalVerifiedData.estimatedAge` when present. Under 18 → `status=underage`, no account. Approved with no underage signal → pass + one-time `adult_assurance_token`. **No DOB required.** MenRush does not keep copies of ID documents (Veriff processes as processor).
-3. After liveness pass, UI offers optional ID: “Want a Verified tick?” Add ID with Veriff / Skip.
-4. If Yes: second Veriff ID session (`check_kind=id`, linked via `parent_session_id`). Approved → parent `id_verified=true`.
-5. `POST /auth/register` redeems the token → `verified_age_18_plus=true`. If `id_verified`, also sets `is_verified` + `verification_provider='veriff'` (Verified tick).
-6. Rejection UI: `/register/underage`.
+Veriff documents a separately provisioned Age Estimation integration, its own key/base URL, and selfie-only hosted capture. The decision includes a numeric `verification.additionalVerifiedData.estimatedAge`. See [Age Estimation](https://devdocs.veriff.com/docs/age-estimation). Provisioning and the suitability of the provider's age/anti-spoof configuration must be verified with the provider before launch; merely setting environment variables does not prove activation.
 
-## What it is not
+## Configuration and provider routing
 
-| Concept | Required gate | Optional Verified tick |
-| --- | --- | --- |
-| When | Signup, before account | Same signup flow or Profile later |
-| Proof | Liveness / age-estimation selfie | ID document check via Veriff |
-| Column | `verified_age_18_plus` | `is_verified` + `verification_provider='veriff'` |
-| Under-18 | No user row | N/A on liveness fail |
+Required age-only settings:
 
-Do **not** say “all users are ID-verified.”
+- `VERIFF_AGE_ESTIMATION_API_KEY`
+- `VERIFF_AGE_ESTIMATION_SHARED_SECRET`
+- `VERIFF_AGE_ESTIMATION_API_BASE` — the explicit HTTPS base supplied for that integration.
+- `FRONTEND_URL` — callback origin.
 
-## Face copy (Al skim)
+Optional document verification continues to use `VERIFF_API_KEY`, `VERIFF_SHARED_SECRET`, and `VERIFF_API_BASE`. The age key cannot equal the ID key; there is no credential/base fallback and no undocumented `selfid` feature override.
 
-| Screen | Copy |
-| --- | --- |
-| A Intro | **Quick selfie.** Confirms you're 18+. Takes about ten seconds. Card: Powered by Veriff / Optional ID later for a Verified tick / MenRush never keeps copies of your ID. CTA: Continue with Veriff. Link: How it works |
-| B Progress / success | Opening Veriff… / 18+ confirmed. Age check done. |
-| C Upsell | **You are through.** Selfie confirmed via Veriff. Card: Want a Verified tick? / Add ID with Veriff / MenRush never keeps copies of your ID. Add ID with Veriff / Skip |
-| D ID success | Verified tick earned. Separate from the age gate you already passed. |
-| E Fail | MenRush is 18+ only. Age check failed. No account was created. |
+Configure the Age Estimation decision webhook as `/api/verify/veriff/webhook` (existing `/api/verify/webhook` alias also supported). The handler verifies the original raw body with the matching integration key and secret, then routes age credentials only to liveness rows and ID credentials only to ID rows. It never links unknown sessions using vendorData. Veriff specifies raw-body HMAC for webhooks and exempts session creation from request HMAC: [authentication contract](https://devdocs.veriff.com/docs/hmac-authentication-and-endpoint-security).
 
-Source of truth in UI: `frontend/src/components/AdultAssuranceFlow.tsx` → `ADULT_ASSURANCE_COPY`.
+A passing age decision requires status `approved`, numeric code `9001`, and a finite numeric estimated age at least 18 (valid range 0–120). Numeric strings, missing evidence, DOB alone, and inconsistent codes do not pass. Explicit underage evidence revokes a prior pass. Terminal denial/expiry/failure cannot be replayed into approval; resubmission/review may advance after a valid provider decision. See [decision webhook](https://devdocs.veriff.com/v1/docs/decision-webhook).
 
-## Env
+The code stores the provider session, decision outcome/code, evidence version and redemption binding. It does not persist the estimated age, document DOB, images or decision payload. ID verification remains optional after the age check. A contradictory underage ID outcome revokes the parent age evidence.
 
-| Var | Purpose |
-| --- | --- |
-| `VERIFF_API_KEY` / `VERIFF_SHARED_SECRET` | Veriff credentials (ID path + default) |
-| `VERIFF_AGE_ESTIMATION_API_BASE` | Optional Age Estimation base URL for liveness start |
-| `VERIFF_AGE_ESTIMATION_API_KEY` | Optional Age Estimation API key (falls back to `VERIFF_API_KEY`) |
-| `ADULT_ASSURANCE_SIGNUP_REQUIRED` | `true` / `false` override. Default: required when Veriff configured |
-| `ADULT_ASSURANCE_ALLOW_TEST_FIXTURE` | Must be `true` for `/fixture` |
-| `ADULT_ASSURANCE_STAGING_FIXTURE` | Escape when Railway staging has `NODE_ENV=production` |
-| `RAILWAY_ENVIRONMENT` / `RAILWAY_ENVIRONMENT_NAME` | If name contains `staging`/`stage`, fixtures allowed |
+## Signup and existing accounts
 
-### Veriff Station configuration for 18+ liveness / age-estimation
+- `GET /api/auth/adult-assurance/required` returns `required: true`, availability and fixture availability, with no-store caching.
+- Public start/status/submitted and optional start-ID routes serve unregistered users. Tokens expire 30 minutes after approval, cannot be extended through polling, and are consumed atomically in the registration transaction. Polling rotates the token; the optional-ID completion step obtains the latest token before registration.
+- `GET /api/auth/adult-assurance/account` reports current server-side clearance for a signed-in account.
+- Account start/status/complete routes bind the session and redemption to the authenticated user. An account token cannot be redeemed as signup or by another account.
+- `/age-assurance` provides existing-account recovery. Login/refresh can establish a session for recovery, but do not confer product access.
+- Protected HTTP routes, socket authentication/events, and signed album/message media check current evidence. Cached user flags, existing JWTs and ID badges do not bypass the gate. Password change, account deletion and logout remain possible without an age pass.
 
-Veriff integration types in Station:
-- An **Identity Verification (IDV)** integration (Document + Selfie) enforces document checks (passport / driving licence / ID card) inside Veriff's hosted flow.
-- A **Biometric Liveness** or **Age Estimation** integration in Veriff Station configures the session flow to capture only a selfie without requesting an ID document.
-- When `VERIFF_AGE_ESTIMATION_API_KEY` (and optionally `VERIFF_AGE_ESTIMATION_API_BASE`) are unset, `startSession()` falls back to `VERIFF_API_KEY`. If `VERIFF_API_KEY` is an IDV integration, Veriff will force document upload unless an Age Estimation integration key is provisioned.
-- In Station: create an **Age Estimation** (or Biometric Liveness) integration, obtain its API key (and shared secret if separate), and configure `VERIFF_AGE_ESTIMATION_API_KEY` in Railway environment settings. `startSession()` will automatically use this key while `startIdSession()` continues using `VERIFF_API_KEY`. In addition, `startSession()` sends `features: ['selfid']` on session creation and omits any `document` payload.
+## Migration and release impact
 
-## API
+Apply `067_mandatory_age_evidence.sql` before starting the repaired backend. Both migration directories contain the identical file. It adds evidence version, account binding and fixture provenance to existing sessions. No live migration has been applied.
 
-- `GET /api/auth/adult-assurance/required`
-- `POST /api/auth/adult-assurance/start` — liveness session
-- `POST /api/auth/adult-assurance/:sessionId/start-id` — optional ID after liveness passed
-- `GET /api/auth/adult-assurance/:sessionId` — status + token when passed; includes `id_verified`
-- `POST /api/auth/adult-assurance/:sessionId/submitted`
-- `POST /api/auth/adult-assurance/fixture` — BOA90 outcomes: `underage` \| `adult` \| `adult_with_id` \| `declined` \| `failed`
-- Register body: `adult_assurance_token`
+**Existing approvals remain evidence version 0.** Historical approved-without-age sessions and DOB-only accounts must re-assure. Deploying this patch before the real Age Estimation integration is available will block new signup and product access for accounts without new trusted evidence. This is intentional fail-closed behavior and requires a coordinated release. Do not backfill evidence version 1 from old booleans or ID badges.
 
-## Migrations
+`ADULT_ASSURANCE_SIGNUP_REQUIRED=false` no longer disables the requirement. Fixtures require exactly `NODE_ENV=test` plus `ADULT_ASSURANCE_ALLOW_TEST_FIXTURE=true`; production/staging override flags cannot enable them in a production runtime. Fixture rows cannot confer product access.
 
-- `058_verified_age_18_plus.sql` — `users.verified_age_18_plus` + `adult_assurance_sessions` (057 taken by outdoor Hot Spots on main)
-- `059_adult_assurance_liveness_id.sql` — `check_kind`, `parent_session_id`, `id_verified`, `id_session_id`
+## Local verification
 
-## BOA90 fixtures (staging)
+- `npm --prefix backend run test:adult-assurance`: offline age-policy/numeric/HMAC checks.
+- `npm --prefix backend run test:mandatory-age`: signed HTTP callbacks, token/transaction/access behavior against an isolated PostgreSQL instance. Requires `AGE_TEST_PG_SOCKET` pointing to a private `/private/tmp/` Unix-socket directory, port 55437, user `age_test`, database `postgres`. Creates a random schema and removes it after testing; ignores `DATABASE_URL`.
+- Existing Veriff, security, billing-disabled and rate-limit checks; both builds; focused frontend unit checks; browser parity suite.
 
-```bash
-ADULT_ASSURANCE_ALLOW_TEST_FIXTURE=true
-ADULT_ASSURANCE_SIGNUP_REQUIRED=true
-```
-
-1. **Underage** — `/register?adultFixture=underage` → `/register/underage`, no user row.
-2. **Adult liveness-only** — `/register?adultFixture=adult` → account with `verified_age_18_plus=true`, **no** Verified tick.
-3. **Adult liveness+ID** — `/register?adultFixture=adult_with_id` → account with Verified tick (`is_verified`).
-
-## Tests
-
-```bash
-cd backend
-npm run test:adult-assurance
-npm run test:veriff
-```
+No real provider sessions, biometric submissions, vendor account configuration, live users, deployment, or production database were used. Hosted selfie behavior and physical-device verification remain release validation tasks after provider activation.

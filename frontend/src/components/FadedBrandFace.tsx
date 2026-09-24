@@ -1,3 +1,4 @@
+import { isPlaceholderAvatar, profileMediaPath } from '../lib/profileMedia';
 import { BRAND_MEDALLION_CUTOUT } from '../lib/brand';
 import type { GridPhotoPhase } from '../lib/nearbyPhotoSrc';
 
@@ -28,12 +29,9 @@ export function isNearbyPlaceholderFace(
 ): boolean {
   const trimmed = photoUrl?.trim() || '';
   // Real user media still loading — not an empty Brand face (media lock).
-  if (phase === 'loading' && trimmed.startsWith('/uploads/')) return false;
+  if (phase === 'loading' && profileMediaPath(trimmed).startsWith('/uploads/')) return false;
   if (phase === 'loading' || phase === 'empty' || phase === 'fallback') return true;
-  if (!trimmed) return true;
-  // Profile-setup generic SVGs and other /avatars/* are placeholders, not user media.
-  if (trimmed.startsWith('/avatars/')) return true;
-  return false;
+  return isPlaceholderAvatar(trimmed);
 }
 
 export type FadedBrandFaceVariant = 'tile' | 'pin' | 'profile';

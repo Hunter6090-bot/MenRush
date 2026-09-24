@@ -44,7 +44,7 @@ export const RegisterSchema = z.object({
   referral_code: z.string().min(1).max(32).optional(),
   /**
    * One-time token from Veriff adult-assurance (liveness / age-estimation ≥ 18).
-   * Required when Veriff adult assurance is configured for signup.
+   * Always required by the registration service, including when the provider is unavailable.
    * Optional ID for Verified tick is recorded on the same session — not a second token.
    */
   adult_assurance_token: z.string().min(16).max(128).optional(),

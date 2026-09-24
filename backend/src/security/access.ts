@@ -61,8 +61,25 @@ export function createAccessControl(runQuery: QueryFn) {
     return result.rows[0] as AccessState;
   }
 
+  async function requireAdult(userId: string): Promise<void> {
+    const result = await runQuery(`SELECT EXISTS (
+      SELECT 1 FROM users u JOIN adult_assurance_sessions a ON a.redeemed_user_id = u.id
+      WHERE u.id = $1 AND u.verified_age_18_plus = TRUE
+        AND a.check_kind = 'liveness' AND a.status = 'passed' AND a.evidence_version = 1
+        AND NOT a.is_fixture
+        AND NOT EXISTS (SELECT 1 FROM adult_assurance_sessions denied
+          WHERE (denied.redeemed_user_id = u.id OR denied.account_user_id = u.id)
+            AND denied.status = 'underage')
+    ) AS adult_assured`, [userId]);
+    if (!result.rows[0]?.adult_assured) {
+      throw new SecurityError('adult_assurance_required', 403, 'Complete the mandatory 18+ age check.');
+    }
+  }
+
   return {
+    requireAdult,
     async requireVerified(userId: string): Promise<void> {
+      await requireAdult(userId);
       if (!isIdVerificationRequired()) return;
       const result = await runQuery(
         `SELECT COALESCE(is_verified, FALSE) AS actor_verified
@@ -87,6 +104,7 @@ export function createAccessControl(runQuery: QueryFn) {
       if (!targetId || actorId === targetId) {
         throw new SecurityError('invalid_target', 400, 'Invalid interaction target');
       }
+      await requireAdult(actorId);
       const state = await getState(actorId, targetId);
       const gateOn = isIdVerificationRequired();
       if (gateOn && !state.actor_verified) {
@@ -111,6 +129,7 @@ export function createAccessControl(runQuery: QueryFn) {
       if (actorId === targetId) {
         return this.requireVerified(actorId);
       }
+      await requireAdult(actorId);
       const state = await getState(actorId, targetId);
       const gateOn = isIdVerificationRequired();
       if (gateOn && !state.actor_verified) {

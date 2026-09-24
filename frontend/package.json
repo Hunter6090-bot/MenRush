@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:lan": "vite --host 0.0.0.0",
-    "build": "node scripts/guard-brand-assets.mjs && tsc && vite build",
+    "build": "node scripts/check-release-branch.mjs && node scripts/guard-brand-assets.mjs && tsc && vite build",
     "brand:sync-logo": "node scripts/sync-brand-logo.mjs",
     "preview": "vite preview",
     "test": "vitest run",
@@ -14,7 +14,8 @@
     "test:unit": "node --experimental-strip-types --test src/lib/notificationToasts.test.ts src/lib/profileLinks.test.ts src/lib/profileTileGrid.test.ts src/lib/nearbyGridFirst.test.ts src/lib/notifications.destination.test.ts src/lib/receiptTicks.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:install": "playwright install chromium"
+    "test:e2e:install": "playwright install chromium",
+    "test:compatibility": "playwright test --config playwright.compatibility.config.ts"
   },
   "dependencies": {
     "@sentry/react": "^10.57.0",

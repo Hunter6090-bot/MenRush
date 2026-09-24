@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import './styles/menrush-tokens.css';
 import './styles/globals.css';
 import App from './App';
+import { AppUpdateNotice } from './components/AppUpdateNotice';
 import { initializeErrorReporting, Sentry } from './observability/sentry';
 import { initThemeFromStorage } from './lib/theme';
 import { startInstallPromptCapture } from './lib/installPromptStore';
@@ -45,6 +46,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <Sentry.ErrorBoundary fallback={errorFallback}>
       <App />
+      <AppUpdateNotice />
     </Sentry.ErrorBoundary>
   </React.StrictMode>,
 );

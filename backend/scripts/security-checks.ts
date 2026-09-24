@@ -31,12 +31,12 @@ async function rejectsWithCode(run: () => Promise<unknown>, code: string) {
   });
 }
 
-test('legacy ID gate cannot deny unverified accounts', async () => {
+test('legacy ID gate cannot deny age-assured accounts without an ID badge', async () => {
   const prev = process.env.REQUIRE_ID_VERIFICATION;
   process.env.REQUIRE_ID_VERIFICATION = 'true';
   try {
     const access = createAccessControl(async () => ({
-      rows: [{ actor_verified: false }],
+      rows: [{ adult_assured: true, actor_verified: false }],
       rowCount: 1,
     }));
     await access.requireVerified('actor');
@@ -51,6 +51,7 @@ test('interaction authorization enforces bilateral blocks and matches', async ()
   process.env.REQUIRE_ID_VERIFICATION = 'true';
   try {
     let state = {
+      adult_assured: true,
       actor_verified: true,
       target_verified: true,
       blocked: true,
@@ -84,6 +85,7 @@ test('profile visibility denies hidden, ghost, and blocked targets but permits o
   process.env.REQUIRE_ID_VERIFICATION = 'true';
   try {
     let state = {
+      adult_assured: true,
       actor_verified: true,
       target_verified: true,
       blocked: false,
@@ -114,6 +116,7 @@ test('ID verification remains optional with no legacy environment setting', asyn
   try {
     const access = createAccessControl(async () => ({
       rows: [{
+        adult_assured: true,
         actor_verified: false,
         target_verified: false,
         blocked: false,

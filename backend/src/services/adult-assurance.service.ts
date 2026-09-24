@@ -1,9 +1,11 @@
 import crypto from 'crypto';
+import { ageEstimationConfig, isAgeEstimationConfigured } from './veriff-age-integration';
+import { isAdultAssuranceRequiredAtSignup, isAdultAssuranceTestFixtureAllowed } from '../config/adult-assurance';
+export { isAdultAssuranceRequiredAtSignup, isAdultAssuranceTestFixtureAllowed } from '../config/adult-assurance';
 import { v4 as uuidv4 } from 'uuid';
 import { query as defaultQuery } from '../db';
 import {
   isVeriffConfigured,
-  signVeriffHmac,
   VeriffConfigError,
 } from './veriff.service';
 import {
@@ -16,17 +18,6 @@ import {
 
 const VERIFF_API_BASE =
   (process.env.VERIFF_API_BASE || 'https://stationapi.veriff.com/v1').replace(/\/$/, '');
-
-/** Optional Age Estimation / biometric base URL (selfie-only). Falls back to VERIFF_API_BASE. */
-function veriffLivenessApiBase(): string {
-  const ageBase = (process.env.VERIFF_AGE_ESTIMATION_API_BASE || '').trim().replace(/\/$/, '');
-  return ageBase || VERIFF_API_BASE;
-}
-
-function veriffLivenessApiKey(): string {
-  const ageKey = (process.env.VERIFF_AGE_ESTIMATION_API_KEY || '').trim();
-  return ageKey || apiKey();
-}
 
 const TOKEN_TTL_MS = 30 * 60 * 1000;
 
@@ -57,41 +48,6 @@ function frontendBase(): string {
   // Vite default when FRONTEND_URL unset — allowlisted (not a prod secret).
   const base = fromEnv || 'http://127.0.0.1:5173'; // pragma: allowlist secret
   return base.replace(/\/$/, '');
-}
-
-/**
- * BOA90 / staging fixture gate.
- * Requires ADULT_ASSURANCE_ALLOW_TEST_FIXTURE=true.
- * Hard-bans real production. Railway staging often still sets NODE_ENV=production —
- * allow when RAILWAY_ENVIRONMENT* looks like staging, NODE_ENV=staging, or
- * ADULT_ASSURANCE_STAGING_FIXTURE=true (explicit staging escape hatch).
- * Never set those staging markers on production Railway.
- */
-export function isAdultAssuranceTestFixtureAllowed(): boolean {
-  if (process.env.ADULT_ASSURANCE_ALLOW_TEST_FIXTURE !== 'true') return false;
-  const nodeEnv = (process.env.NODE_ENV || '').trim().toLowerCase();
-  if (nodeEnv !== 'production') return true;
-
-  const railway = (
-    process.env.RAILWAY_ENVIRONMENT ||
-    process.env.RAILWAY_ENVIRONMENT_NAME ||
-    ''
-  )
-    .trim()
-    .toLowerCase();
-  if (railway.includes('staging') || railway.includes('stage')) return true;
-  if (process.env.ADULT_ASSURANCE_STAGING_FIXTURE === 'true') return true;
-  return false;
-}
-
-/**
- * Signup requires a redeemed Veriff adult-assurance token when Veriff is configured,
- * unless explicitly disabled (local / CI without keys).
- */
-export function isAdultAssuranceRequiredAtSignup(): boolean {
-  if (process.env.ADULT_ASSURANCE_SIGNUP_REQUIRED === 'false') return false;
-  if (process.env.ADULT_ASSURANCE_SIGNUP_REQUIRED === 'true') return true;
-  return isVeriffConfigured();
 }
 
 function hashToken(raw: string): string {
@@ -144,25 +100,25 @@ export const adultAssuranceService = {
 
   /**
    * Start a pre-account Veriff liveness / age-estimation session for signup.
-   * Does not create a users row. vendorData is `adult:<sessionId>`.
+   * Does not create a users row. vendorData is an opaque correlation identifier.
    * No ID document required on this path.
    */
-  async startSession(): Promise<{ sessionId: string; sessionUrl: string }> {
-    if (!isVeriffConfigured() && isAdultAssuranceTestFixtureAllowed()) {
+  async startSession(accountUserId: string | null = null): Promise<{ sessionId: string; sessionUrl: string }> {
+    if (!isAgeEstimationConfigured() && isAdultAssuranceTestFixtureAllowed()) {
       const sessionId = uuidv4();
       const sessionUrl = `https://magic.veriff.me/v/${sessionId}?fixture=1&kind=liveness`;
       await deps.query(
-        `INSERT INTO adult_assurance_sessions (id, session_url, status, check_kind, created_at, updated_at)
-         VALUES ($1, $2, 'created', 'liveness', NOW(), NOW())`,
-        [sessionId, sessionUrl],
+        `INSERT INTO adult_assurance_sessions (id, session_url, status, check_kind, account_user_id, is_fixture, created_at, updated_at)
+         VALUES ($1, $2, 'created', 'liveness', $3, $4, NOW(), NOW())`,
+        [sessionId, sessionUrl, accountUserId, true],
       );
       return { sessionId, sessionUrl };
     }
 
-    if (!isVeriffConfigured()) throw new VeriffConfigError();
+    if (!isAgeEstimationConfigured()) throw new Error('age_estimation_not_configured');
 
-    const base = veriffLivenessApiBase();
-    const key = veriffLivenessApiKey();
+    const base = ageEstimationConfig().base;
+    const key = ageEstimationConfig().key;
     const livenessVendorData = `adult:${uuidv4()}`;
     const res = await deps.fetch(`${base}/sessions`, {
       method: 'POST',
@@ -170,9 +126,8 @@ export const adultAssuranceService = {
       signal: AbortSignal.timeout(15000),
       body: JSON.stringify({
         verification: {
-          callback: `${frontendBase()}/register`,
+          callback: `${frontendBase()}/${accountUserId ? 'age-assurance' : 'register'}`,
           vendorData: livenessVendorData,
-          features: ['selfid'],
         },
       }),
     });
@@ -182,29 +137,10 @@ export const adultAssuranceService = {
     const sessionUrl = json.verification?.url;
     if (!sessionId || !sessionUrl) throw new Error('veriff_session_malformed');
 
-    try {
-      const patchBody = JSON.stringify({
-        verification: { vendorData: `adult:${sessionId}` },
-      });
-      const patchSig = signVeriffHmac(patchBody);
-      await deps.fetch(`${base}/sessions/${encodeURIComponent(sessionId)}`, {
-        method: 'PATCH',
-        signal: AbortSignal.timeout(10000),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-AUTH-CLIENT': key,
-          'X-HMAC-SIGNATURE': patchSig,
-        },
-        body: patchBody,
-      });
-    } catch (err) {
-      console.warn('[adult-assurance] vendorData patch failed (non-fatal)', err);
-    }
-
     await deps.query(
-      `INSERT INTO adult_assurance_sessions (id, session_url, status, check_kind, created_at, updated_at)
-       VALUES ($1, $2, 'created', 'liveness', NOW(), NOW())`,
-      [sessionId, sessionUrl],
+      `INSERT INTO adult_assurance_sessions (id, session_url, status, check_kind, account_user_id, is_fixture, created_at, updated_at)
+       VALUES ($1, $2, 'created', 'liveness', $3, $4, NOW(), NOW())`,
+      [sessionId, sessionUrl, accountUserId, false],
     );
     return { sessionId, sessionUrl };
   },
@@ -218,7 +154,8 @@ export const adultAssuranceService = {
     const parent = await deps.query(
       `SELECT id, status, id_verified, id_session_id
          FROM adult_assurance_sessions
-        WHERE id = $1 AND check_kind = 'liveness'`,
+        WHERE id = $1 AND check_kind = 'liveness' AND evidence_version = 1
+          AND account_user_id IS NULL AND redeemed_at IS NULL`,
       [parentSessionId],
     );
     const row = parent.rows[0];
@@ -317,6 +254,7 @@ export const adultAssuranceService = {
         code?: number | string | null;
       };
     },
+    expectedKind: 'liveness' | 'id',
   ): Promise<{
     handled: boolean;
     decision?: string;
@@ -345,15 +283,23 @@ export const adultAssuranceService = {
       [sessionId],
     );
     const row = existing.rows[0];
-    if (!row) return { handled: false };
+    if (!row || row.check_kind !== expectedKind) return { handled: false };
 
     // Optional ID document session (Verified tick).
     if (row.check_kind === 'id') {
       return adultAssuranceService.applyIdDecision(payload, row);
     }
 
-    // Terminal outcomes are sticky on liveness parent.
-    if (row.status === 'passed' || row.status === 'underage') {
+    // Explicit underage evidence overrides earlier approvals, even after token redemption.
+    const suppliedAge = isAdultFromLivenessDecision(payload);
+    if (!suppliedAge.ok && suppliedAge.reason === 'underage') {
+      await deps.query(`UPDATE adult_assurance_sessions SET status = 'underage', evidence_version = 0,
+        assurance_token_hash = NULL, token_expires_at = NULL, id_verified = FALSE,
+        updated_at = NOW(), decided_at = NOW() WHERE id = $1`, [sessionId]);
+      return { handled: true, decision, adultStatus: 'underage' };
+    }
+    // Only resubmission/review can later advance; terminal denials cannot be replayed into a pass.
+    if (['passed', 'underage', 'declined', 'expired', 'abandoned', 'failed'].includes(row.status)) {
       return { handled: true, decision, adultStatus: row.status, idVerified: Boolean(row.id_verified) };
     }
 
@@ -371,50 +317,37 @@ export const adultAssuranceService = {
                   ? 'review'
                   : 'failed';
 
-      // Declined + positive underage signal → hard underage (no account).
-      const declineAge = isAdultFromLivenessDecision(payload);
-      const underageSignal =
-        mapped === 'declined' && !declineAge.ok && declineAge.reason === 'underage';
-
-      const nextStatus: AdultAssuranceStatus = underageSignal ? 'underage' : mapped;
+      const nextStatus = mapped;
       await deps.query(
         `UPDATE adult_assurance_sessions
             SET status = $2, decision_code = $3, updated_at = NOW(),
                 decided_at = CASE WHEN $2 IN ('declined','expired','abandoned','review','failed','underage')
                                   THEN NOW() ELSE decided_at END
-          WHERE id = $1 AND status NOT IN ('passed', 'underage')`,
+          WHERE id = $1 AND status IN ('created', 'started', 'submitted', 'resubmission_requested', 'review')`,
         [sessionId, nextStatus, verification?.code != null ? String(verification.code) : null],
       );
       return { handled: true, decision, adultStatus: nextStatus };
     }
 
-    // Approved liveness — underage if estimate/DOB says so; else pass (no DOB required).
+    // Only the authenticated Age Estimation integration can supply this decision.
     const ageCheck = isAdultFromLivenessDecision(payload);
-    if (!ageCheck.ok && ageCheck.reason === 'underage') {
-      await deps.query(
-        `UPDATE adult_assurance_sessions
-            SET status = 'underage',
-                assurance_token_hash = NULL,
-                token_expires_at = NULL,
-                decision_code = $2,
-                updated_at = NOW(),
-                decided_at = NOW()
-          WHERE id = $1 AND status NOT IN ('passed', 'underage')`,
-        [sessionId, verification?.code != null ? String(verification.code) : null],
-      );
-      return { handled: true, decision, adultStatus: 'underage' };
+    if (!ageCheck.ok || verification?.code !== 9001) {
+      await deps.query(`UPDATE adult_assurance_sessions SET status = 'failed',
+        assurance_token_hash = NULL, token_expires_at = NULL, updated_at = NOW(), decided_at = NOW()
+        WHERE id = $1 AND status IN ('created', 'started', 'submitted', 'resubmission_requested', 'review')`, [sessionId]);
+      return { handled: true, decision, adultStatus: 'failed' };
     }
 
     const token = mintAssuranceToken();
     await deps.query(
       `UPDATE adult_assurance_sessions
-          SET status = 'passed',
+          SET status = 'passed', evidence_version = 1,
               assurance_token_hash = $2,
               token_expires_at = $3,
               decision_code = $4,
               updated_at = NOW(),
               decided_at = NOW()
-        WHERE id = $1 AND status NOT IN ('passed', 'underage')`,
+        WHERE id = $1 AND status IN ('created', 'started', 'submitted', 'resubmission_requested', 'review')`,
       [
         sessionId,
         token.hash,
@@ -456,8 +389,16 @@ export const adultAssuranceService = {
     const parentId = row.parent_session_id;
     if (!parentId) return { handled: true, decision, adultStatus: row.status as AdultAssuranceStatus };
 
-    if (row.status === 'passed') {
-      return { handled: true, decision, adultStatus: 'passed', idVerified: true };
+    const ageCheck = isAdultFromVeriffDecision(payload);
+    if (!ageCheck.ok && ageCheck.reason === 'underage') {
+      await deps.query(`UPDATE adult_assurance_sessions SET status = 'underage',
+        evidence_version = 0, assurance_token_hash = NULL, token_expires_at = NULL,
+        id_verified = FALSE, updated_at = NOW(), decided_at = NOW()
+        WHERE id = $1 OR id = $2`, [sessionId, parentId]);
+      return { handled: true, decision, adultStatus: 'underage', idVerified: false };
+    }
+    if (['passed', 'underage', 'declined', 'expired', 'abandoned', 'failed'].includes(row.status)) {
+      return { handled: true, decision, adultStatus: row.status as AdultAssuranceStatus, idVerified: row.status === 'passed' };
     }
 
     if (decision !== 'approved') {
@@ -484,18 +425,10 @@ export const adultAssuranceService = {
       return { handled: true, decision, adultStatus: mapped, idVerified: false };
     }
 
-    // Optional ID approved — block under-18 document DOB from awarding Verified.
-    const ageCheck = isAdultFromVeriffDecision(payload);
-    if (!ageCheck.ok && ageCheck.reason === 'underage') {
-      await deps.query(
-        `UPDATE adult_assurance_sessions
-            SET status = 'underage', updated_at = NOW(), decided_at = NOW(),
-                decision_code = $2
-          WHERE id = $1 AND status <> 'passed'`,
-        [sessionId, verification?.code != null ? String(verification.code) : null],
-      );
-      // Parent liveness already passed; do not revoke age gate — just no Verified tick.
-      return { handled: true, decision, adultStatus: 'underage', idVerified: false };
+    if (!ageCheck.ok) {
+      await deps.query(`UPDATE adult_assurance_sessions SET status = 'failed', updated_at = NOW()
+        WHERE id = $1 AND status <> 'passed'`, [sessionId]);
+      return { handled: true, decision, adultStatus: 'failed', idVerified: false };
     }
 
     await deps.query(
@@ -543,11 +476,11 @@ export const adultAssuranceService = {
   /**
    * Issue (or re-issue within TTL) the plaintext assurance token for a passed session.
    */
-  async issueTokenIfPassed(sessionId: string): Promise<AdultAssurancePublicStatus | null> {
+  async issueTokenIfPassed(sessionId: string, accountUserId: string | null = null): Promise<AdultAssurancePublicStatus | null> {
     const result = await deps.query(
-      `SELECT id, status, assurance_token_hash, token_expires_at, redeemed_at, id_verified, id_session_id
-         FROM adult_assurance_sessions WHERE id = $1 AND check_kind = 'liveness'`,
-      [sessionId],
+      `SELECT evidence_version, id, status, assurance_token_hash, token_expires_at, redeemed_at, id_verified, id_session_id
+         FROM adult_assurance_sessions WHERE id = $1 AND check_kind = 'liveness' AND account_user_id IS NOT DISTINCT FROM $2::uuid`,
+      [sessionId, accountUserId],
     );
     const row = result.rows[0];
     if (!row) return null;
@@ -584,13 +517,18 @@ export const adultAssuranceService = {
       };
     }
 
+    if (row.evidence_version !== 1 || !row.token_expires_at || new Date(row.token_expires_at).getTime() <= Date.now()) {
+      return { sessionId: row.id, status: 'expired' };
+    }
     const token = mintAssuranceToken();
-    await deps.query(
+    const issued = await deps.query(
       `UPDATE adult_assurance_sessions
-          SET assurance_token_hash = $2, token_expires_at = $3, updated_at = NOW()
-        WHERE id = $1 AND status = 'passed' AND redeemed_at IS NULL`,
-      [sessionId, token.hash, token.expiresAt.toISOString()],
+          SET assurance_token_hash = $2, updated_at = NOW()
+        WHERE id = $1 AND status = 'passed' AND evidence_version = 1 AND redeemed_at IS NULL
+          AND token_expires_at > NOW() RETURNING id`,
+      [sessionId, token.hash],
     );
+    if (!issued.rows[0]) return { sessionId: row.id, status: 'expired' };
     return {
       sessionId: row.id,
       status: 'passed',
@@ -609,6 +547,7 @@ export const adultAssuranceService = {
     rawToken: string,
     userId: string,
     client?: { query: QueryFn },
+    forAccount = false,
   ): Promise<{ sessionId: string; idVerified: boolean }> {
     const db = client ?? deps;
     const hash = hashToken(rawToken.trim());
@@ -619,11 +558,14 @@ export const adultAssuranceService = {
         WHERE assurance_token_hash = $1
           AND status = 'passed'
           AND check_kind = 'liveness'
+          AND evidence_version = 1
+          AND (NOT is_fixture OR $4::boolean)
+          AND account_user_id IS NOT DISTINCT FROM (CASE WHEN $3::boolean THEN $2::uuid ELSE NULL END)
           AND redeemed_at IS NULL
           AND token_expires_at IS NOT NULL
           AND token_expires_at > NOW()
         RETURNING id, id_verified`,
-      [hash, userId],
+      [hash, userId, forAccount, isAdultAssuranceTestFixtureAllowed()],
     );
     if (!result.rows[0]) {
       throw new Error('Adult assurance is required. Complete the 18+ check and try again.');
@@ -673,7 +615,7 @@ export const adultAssuranceService = {
       } = {
         verification: { id: input.sessionId, status: 'declined' },
       };
-      const result = await adultAssuranceService.applyDecision(payload);
+      const result = await adultAssuranceService.applyDecision({ ...payload, verification: { ...payload.verification, code: 9001 } }, 'liveness');
       return {
         handled: result.handled,
         adultStatus: result.adultStatus,
@@ -696,7 +638,7 @@ export const adultAssuranceService = {
           additionalVerifiedData: { estimatedAge: years },
         },
       };
-      const result = await adultAssuranceService.applyDecision(payload);
+      const result = await adultAssuranceService.applyDecision({ ...payload, verification: { ...payload.verification, code: 9001 } }, 'liveness');
       return {
         handled: result.handled,
         adultStatus: result.adultStatus,
@@ -719,7 +661,7 @@ export const adultAssuranceService = {
         additionalVerifiedData: { estimatedAge: years },
       },
     };
-    const result = await adultAssuranceService.applyDecision(payload);
+    const result = await adultAssuranceService.applyDecision({ ...payload, verification: { ...payload.verification, code: 9001 } }, 'liveness');
     if (result.adultStatus !== 'passed' || !result.assuranceToken) {
       return {
         handled: result.handled,
@@ -743,7 +685,7 @@ export const adultAssuranceService = {
           person: { dateOfBirth: fixtureDateOfBirthYearsAgo(years) },
         },
       };
-      await adultAssuranceService.applyDecision(idPayload);
+      await adultAssuranceService.applyDecision(idPayload, 'id');
       return {
         handled: true,
         adultStatus: 'passed',

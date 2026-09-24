@@ -10,7 +10,7 @@ export function CruisingSearchBar({ onOpen, className = '' }: CruisingSearchBarP
       onClick={onOpen}
       data-testid="cruising-search-bar"
       aria-label="Search cruising spots"
-      className={`group flex items-center gap-2 rounded-full border border-[rgba(196,131,42,0.35)] bg-[rgba(13,10,6,0.85)] px-3.5 py-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.4)] backdrop-blur-md transition-all hover:border-[rgba(196,131,42,0.7)] hover:bg-[rgba(13,10,6,0.95)] ${className}`}
+      className={`group flex min-h-[44px] items-center gap-2 rounded-full border border-[rgba(196,131,42,0.35)] bg-[rgba(13,10,6,0.85)] px-3.5 py-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.4)] backdrop-blur-md transition-all hover:border-[rgba(196,131,42,0.7)] hover:bg-[rgba(13,10,6,0.95)] ${className}`}
     >
       <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[#E0A14A] transition-transform group-hover:scale-110">
         <svg

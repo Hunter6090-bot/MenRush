@@ -422,7 +422,7 @@ export const veriffService = {
 
     // Pre-signup adult-assurance sessions (no user row) — liveness / age-estimation gate.
     const { adultAssuranceService } = await import('./adult-assurance.service');
-    const adult = await adultAssuranceService.applyDecision(payload);
+    const adult = await adultAssuranceService.applyDecision(payload, 'id');
     if (adult.handled) {
       return {
         handled: true,
@@ -468,18 +468,8 @@ export const veriffService = {
         : decision === 'resubmission_requested'
           ? 'Continue your check with Veriff.'
           : null;
-    const verifiedAge =
-      approved && ageCheck && ageCheck.ok
-        ? true
-        : underageBlock
-          ? false
-          : null;
-    const ageAssuranceStatus =
-      approved && ageCheck && ageCheck.ok
-        ? 'confirmed'
-        : underageBlock
-          ? 'failed'
-          : null;
+    const verifiedAge = underageBlock ? false : null;
+    const ageAssuranceStatus = underageBlock ? 'failed' : null;
 
     // One database statement: a failed user update must not leave an approved
     // session whose retry can no longer award the badge.

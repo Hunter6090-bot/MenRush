@@ -46,7 +46,7 @@ export function extractVeriffEstimatedAge(payload: VeriffDecisionAgePayload): nu
   if (!data || Array.isArray(data)) return null;
   const raw = data.estimatedAge;
   if (raw == null) return null;
-  const n = typeof raw === 'number' ? raw : parseFloat(String(raw).trim());
+  const n = typeof raw === 'number' ? raw : NaN;
   if (!Number.isFinite(n) || n < 0 || n > 120) return null;
   return Math.floor(n);
 }
@@ -83,14 +83,14 @@ export function isAdultFromVeriffDecision(
 /**
  * Signup liveness / age-estimation gate (required).
  * Underage when estimatedAge < 18 or document DOB proves under 18.
- * Approved with no underage signal → pass (Veriff portal threshold / liveness).
+ * Requires an explicit numeric age estimate. Liveness alone is not age evidence.
  * Does not require or store document DOB.
  */
 export function isAdultFromLivenessDecision(
   payload: VeriffDecisionAgePayload,
   asOf: Date = new Date(),
 ):
-  | { ok: true; age?: number; source: 'estimated_age' | 'document_dob' | 'approved' }
+  | { ok: true; age: number; source: 'estimated_age' }
   | { ok: false; reason: 'underage' | 'no_decision'; age?: number } {
   const estimated = extractVeriffEstimatedAge(payload);
   if (estimated != null && estimated < ADULT_AGE_MINIMUM) {
@@ -105,11 +105,7 @@ export function isAdultFromLivenessDecision(
   if (estimated != null && estimated >= ADULT_AGE_MINIMUM) {
     return { ok: true, age: estimated, source: 'estimated_age' };
   }
-  if (doc.ok) {
-    return { ok: true, age: doc.age, source: 'document_dob' };
-  }
-  // Approved path with no underage signal — Veriff Age Estimation portal threshold.
-  return { ok: true, source: 'approved' };
+  return { ok: false, reason: 'no_decision' };
 }
 
 /** Build a YYYY-MM-DD that is exactly `years` old today (for fixtures). */

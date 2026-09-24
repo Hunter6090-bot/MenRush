@@ -1,3 +1,4 @@
+import { accessControl } from '../security/access';
 import { Router, Response } from 'express';
 import fs from 'fs';
 import multer from 'multer';
@@ -68,6 +69,7 @@ router.get('/:messageId/media', async (req, res) => {
   try {
     const resource = `/api/messages/${req.params.messageId}/media`;
     const grant = verifyMediaAccess(String(req.query.access || ''), resource);
+    await accessControl.requireAdult(grant.viewerId);
     const media = await messageService.getMedia(grant.viewerId, req.params.messageId);
     // Blur decision already ships on the conversation payload for SoftBlurMedia.
     // When Discreet blur is off, skip the Premium lookup on every Range request

@@ -384,6 +384,15 @@ async function authorizeSocketTarget(
 io.on('connection', (socket: Socket) => {
   console.log('User connected:', socket.id);
 
+  // Recheck age clearance for every authenticated event, including existing sockets.
+  socket.use(async ([event], next) => {
+    if (event === 'authenticate') return next();
+    const userId = socketToUser.get(socket.id);
+    if (!userId) return next(new Error('authentication_required'));
+    try { await accessControl.requireAdult(userId); next(); }
+    catch { socket.emit('authorization:error', { error: 'adult_assurance_required' }); socket.disconnect(true); }
+  });
+
   socket.on('authenticate', async (token: string) => {
     try {
       const decoded = authService.verifyToken(token);

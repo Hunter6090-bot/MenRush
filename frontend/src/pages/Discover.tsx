@@ -21,7 +21,6 @@ import { nearbyRosterFingerprint } from '../lib/nearbyRoster';
 import { ProfileDrawer } from '../components/ProfileDrawer';
 import { HotSpotSheet } from '../components/HotSpotSheet';
 import { HotSpotReviewsModal } from '../components/HotSpotReviewsModal';
-import { CruisingSearchBar } from '../components/CruisingSearchBar';
 import { CruisingSearchSheet } from '../components/CruisingSearchSheet';
 import { createMapMarkerElement, MapMarker } from '../components/MapMarker';
 import { createHotSpotPinElement, HotSpotPin } from '../components/HotSpotPin';
@@ -79,19 +78,12 @@ import {
 import { mapboxStyleForTheme, resolvedThemeNow, THEME_CHANGED_EVENT } from '../lib/mapTheme';
 import { readLayerVisible, writeLayerVisible } from '../lib/discoveryLayers';
 import { useIsDesktopLayout } from '../hooks/useMediaQuery';
-import { MapDiscretionSlider } from '../components/MapDiscretionSlider';
-import { IconMapExpand, IconDiscover, IconHotSpots } from '../components/icons';
+import { MapFloatingChrome } from '../components/MapFloatingChrome';
 import {
   mapPinZIndex,
   shouldShowHotSpotLabel,
 } from '../lib/mapPinOverlap';
-import { HOT_SPOTS_CHIP_LABEL, HOT_SPOTS_MAP_BANNER } from '../lib/cruiseCopy';
 import {
-  dismissHotSpotsMapBanner,
-  isHotSpotsMapBannerDismissed,
-} from '../lib/hotSpotsMapBanner';
-import {
-  formatFuzzPrivacyNote,
   MAP_PIN_FUZZ_DEFAULT_M,
   nearestMapPinFuzzStep,
   privateMapPointAround,
@@ -124,158 +116,6 @@ function mapPanelHeightCss(mode: MapPanelMode): string {
 
 function desktopMapHeightCss(expanded: boolean): string {
   return expanded ? 'min(72vh, 760px)' : 'min(42vh, 480px)';
-}
-
-const mapChromeBtnClass =
-  'flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] text-[#3D2B0E] shadow-md backdrop-blur-md transition-transform active:scale-95 touch-manipulation pointer-events-auto';
-
-/**
- * Shared map chrome — one control cluster per corner.
- * TL: Discretion (pin randomization) · TR: layers + expand · BL: Chat FAB (dock).
- * BR: Mapbox locate (+ zoom on desktop only; phone uses pinch).
- * Search radius lives only in the list "All" miles dropdown (not duplicated here).
- * Nearby/live count lives in the list pill only (no map status card).
- */
-function MapFloatingChrome({
-  expanded,
-  mapPinFuzzM,
-  onMapPinFuzzChange,
-  onToggleExpand,
-  showHide = false,
-  onHide,
-  peopleLayerOn,
-  hotSpotsLayerOn,
-  onTogglePeopleLayer,
-  onToggleHotSpotsLayer,
-  onOpenCruisingSearch,
-}: {
-  expanded: boolean;
-  mapPinFuzzM: number;
-  onMapPinFuzzChange: (meters: number) => void;
-  onToggleExpand: () => void;
-  showHide?: boolean;
-  onHide?: () => void;
-  peopleLayerOn: boolean;
-  hotSpotsLayerOn: boolean;
-  onTogglePeopleLayer: () => void;
-  onToggleHotSpotsLayer: () => void;
-  onOpenCruisingSearch?: () => void;
-}) {
-  // One-time Legal quiet-face dismiss — same localStorage pattern as match coach.
-  const [mapBannerDismissed, setMapBannerDismissed] = useState(isHotSpotsMapBannerDismissed);
-
-  return (
-    <>
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 p-3">
-        {!expanded ? (
-          <div className="pointer-events-auto" data-map-chrome-corner="top-left">
-            <MapDiscretionSlider valueM={mapPinFuzzM} onChange={onMapPinFuzzChange} />
-          </div>
-        ) : (
-          <span />
-        )}
-        <div
-          className="pointer-events-auto flex items-center gap-1.5"
-          data-map-chrome-corner="top-right"
-        >
-          {/* #67: compact independent People / Cruise (Hot Spots) layer control. */}
-          <button
-            type="button"
-            onClick={onTogglePeopleLayer}
-            data-testid="layer-toggle-people"
-            aria-label={peopleLayerOn ? 'Hide people' : 'Show people'}
-            aria-pressed={peopleLayerOn}
-            title={peopleLayerOn ? 'Hide people' : 'Show people'}
-            className={`${mapChromeBtnClass} ${peopleLayerOn ? '' : 'opacity-45'}`}
-          >
-            <IconDiscover size={18} />
-          </button>
-          <button
-            type="button"
-            onClick={onToggleHotSpotsLayer}
-            data-testid="layer-toggle-hotspots"
-            aria-label={hotSpotsLayerOn ? `Hide ${HOT_SPOTS_CHIP_LABEL}` : `Show ${HOT_SPOTS_CHIP_LABEL}`}
-            aria-pressed={hotSpotsLayerOn}
-            title={hotSpotsLayerOn ? `Hide ${HOT_SPOTS_CHIP_LABEL}` : `Show ${HOT_SPOTS_CHIP_LABEL}`}
-            className={`${mapChromeBtnClass} ${hotSpotsLayerOn ? '' : 'opacity-45'} gap-1 px-2.5`}
-          >
-            <IconHotSpots size={18} />
-            <span className="hidden text-[10px] font-extrabold tracking-wide sm:inline">
-              {HOT_SPOTS_CHIP_LABEL}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={onToggleExpand}
-            data-testid="map-expand-toggle"
-            aria-label={expanded ? 'Shrink map' : 'Expand map'}
-            title={expanded ? 'Shrink map' : 'Expand map'}
-            className={`${mapChromeBtnClass} z-20 cursor-pointer`}
-          >
-            <IconMapExpand size={18} collapse={expanded} />
-          </button>
-
-          {showHide && !expanded && onHide ? (
-            <button
-              type="button"
-              onClick={onHide}
-              data-testid="map-hide"
-              aria-label="Hide map"
-              title="Hide map"
-              className={mapChromeBtnClass}
-            >
-              <span className="text-lg leading-none font-light" aria-hidden>
-                −
-              </span>
-            </button>
-          ) : null}
-        </div>
-      </div>
-      {onOpenCruisingSearch ? (
-        <div className="pointer-events-none absolute inset-x-0 top-14 z-10 flex justify-center px-3">
-          <div className="pointer-events-auto">
-            <CruisingSearchBar onOpen={onOpenCruisingSearch} />
-          </div>
-        </div>
-      ) : null}
-      {hotSpotsLayerOn && !mapBannerDismissed ? (
-        <div
-          className="pointer-events-none absolute inset-x-0 top-24 z-10 flex justify-center px-3"
-          data-testid="hotspots-map-helper"
-        >
-          <div
-            className="pointer-events-auto relative max-w-sm rounded-lg border py-1 pl-2.5 pr-6"
-            style={{
-              background: 'rgba(13,10,6,0.82)',
-              borderColor: 'rgba(196,131,42,0.28)',
-            }}
-            role="status"
-          >
-            <p
-              className="text-center text-[9px] font-semibold leading-snug tracking-wide"
-              style={{ color: 'rgba(240,224,192,0.82)' }}
-              data-testid="hotspots-map-helper-copy"
-            >
-              {HOT_SPOTS_MAP_BANNER}
-            </p>
-            <button
-              type="button"
-              data-testid="hotspots-map-helper-dismiss"
-              aria-label="Dismiss map disclaimer"
-              title="Dismiss"
-              onClick={() => {
-                setMapBannerDismissed(true);
-                dismissHotSpotsMapBanner();
-              }}
-              className="absolute -right-0.5 -top-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[15px] leading-none text-[rgba(240,224,192,0.85)] transition-colors hover:bg-[rgba(196,131,42,0.18)] hover:text-[rgba(240,224,192,1)]"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      ) : null}
-    </>
-  );
 }
 
 const INJECT_ID = '__discover_styles_v3__';
@@ -1297,6 +1137,8 @@ export const Discover = () => {
       } else if (dy > 40) {
         if (drag.mode === 'hidden') setMapPanel('default');
         else if (drag.mode === 'default') setMapPanel('expanded');
+      } else if (Math.abs(dy) <= 8) {
+        setMapPanel('expanded');
       }
     },
     [setMapPanel],
@@ -2099,9 +1941,9 @@ export const Discover = () => {
           inside Layout's flex + overflow page-enter, which left expanded map ~minHeight. */}
       <div className="flex h-[calc(100dvh-var(--mobile-header-height)-var(--mobile-tab-bar-height))] min-h-0 min-w-0 max-w-full flex-col overflow-x-clip overflow-hidden overscroll-none lg:h-full" data-testid="discover-shell">
       {!mobileMapExpanded ? (
-      <div className="shrink-0">
+      <div className="max-h-[40%] shrink-0 overflow-y-auto overscroll-contain" data-testid="discover-notices">
       <>
-      {activationProfile ? (
+      {activationProfile && !needsLocationGate ? (
         <ActivationBanner
           profile={{
             ...activationProfile,
@@ -2339,6 +2181,7 @@ export const Discover = () => {
             data-testid="discover-map-canvas-host"
           />
           <MapFloatingChrome
+            showPrivacyNote={!needsLocationGate && !tokenMissing}
             expanded={desktopMapExpanded}
             mapPinFuzzM={mapPinFuzzM}
             onMapPinFuzzChange={handleMapPinFuzzChange}
@@ -2350,19 +2193,7 @@ export const Discover = () => {
             onOpenCruisingSearch={() => setCruisingSearchOpen(true)}
           />
           <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
-          {!needsLocationGate && !tokenMissing ? (
-            <p
-              className="pointer-events-none absolute top-[4.75rem] left-1/2 z-[4] max-w-[min(70%,240px)] -translate-x-1/2 rounded-full px-2.5 py-0.5 text-center text-[9px] font-medium leading-snug"
-              style={{
-                background: 'rgba(13,10,6,0.55)',
-                color: 'rgba(240,224,192,0.65)',
-                border: '1px solid rgba(196,131,42,0.18)',
-              }}
-              data-testid="map-privacy-note"
-            >
-              {formatFuzzPrivacyNote(mapPinFuzzM)}
-            </p>
-          ) : null}
+
         </div>
         ) : null}
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -2442,7 +2273,7 @@ export const Discover = () => {
           } ${mapPanelMode === 'expanded' ? 'min-h-0 flex-1' : 'shrink-0'}`}
           style={{
             height: mapPanelMode === 'expanded' ? undefined : mapPanelHeightCss(mapPanelMode),
-            minHeight: mapPanelMode === 'hidden' ? 0 : 120,
+            minHeight: mapPanelMode === 'hidden' ? 0 : mapPanelMode === 'expanded' ? 120 : 280,
           }}
           data-testid="discover-map-panel"
           data-map-mode={mapPanelMode}
@@ -2488,6 +2319,7 @@ export const Discover = () => {
 
           {mapPanelMode !== 'hidden' ? (
             <MapFloatingChrome
+              showPrivacyNote={!needsLocationGate && !tokenMissing}
               expanded={mapPanelMode === 'expanded'}
               mapPinFuzzM={mapPinFuzzM}
               onMapPinFuzzChange={handleMapPinFuzzChange}
@@ -2507,20 +2339,7 @@ export const Discover = () => {
             <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
           ) : null}
 
-          {mapPanelMode !== 'hidden' && !needsLocationGate && !tokenMissing ? (
-            <p
-              className="pointer-events-none absolute left-1/2 z-[4] max-w-[min(70%,220px)] -translate-x-1/2 rounded-full px-2.5 py-0.5 text-center text-[9px] font-medium leading-snug"
-              style={{
-                top: hotSpotsLayerOn ? '4.75rem' : '3.25rem',
-                background: 'rgba(13,10,6,0.55)',
-                color: 'rgba(240,224,192,0.65)',
-                border: '1px solid rgba(196,131,42,0.18)',
-              }}
-              data-testid="map-privacy-note"
-            >
-              {formatFuzzPrivacyNote(mapPinFuzzM)}
-            </p>
-          ) : null}
+
 
           {/* Drag handle — pill only; no instructional clutter */}
           {mapPanelMode !== 'hidden' && mapPanelMode !== 'expanded' ? (
@@ -2536,13 +2355,21 @@ export const Discover = () => {
                 aria-valuenow={mapPanelMode === 'default' ? 1 : 2}
                 tabIndex={0}
                 data-testid="map-drag-handle"
-                onClick={() => setMapPanel('expanded')}
+                onKeyDown={(event) => {
+                  if (['Enter', ' ', 'ArrowDown', 'End'].includes(event.key)) {
+                    event.preventDefault();
+                    setMapPanel('expanded');
+                  } else if (['ArrowUp', 'Home'].includes(event.key)) {
+                    event.preventDefault();
+                    setMapPanel('hidden');
+                  }
+                }}
                 onPointerDown={onMapHandlePointerDown}
                 onPointerUp={onMapHandlePointerUp}
                 onPointerCancel={() => {
                   mapDragRef.current = null;
                 }}
-                className="flex cursor-grab touch-none flex-col items-center px-8 py-3.5 min-h-[44px] active:cursor-grabbing"
+                className="flex min-h-[44px] cursor-grab touch-none flex-col items-center px-8 py-3.5 active:cursor-grabbing"
                 style={{ touchAction: 'none' }}
               >
                 {/* var(--cream) inverts with theme (light text on dark map, dark text on light map) — stays visible on either basemap. */}

@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  fallbackAvatarForAge,
   resolveAssetUrl,
   resolveDisplayThumbCandidates,
   resolveUploadUrlCandidates,
 } from '../lib/assetUrl';
+import { FadedBrandFace } from './FadedBrandFace';
+import { isPlaceholderAvatar } from '../lib/profileMedia';
 import { profilePathForUser } from '../lib/profileLinks';
 import { useAuthStore } from '../hooks/store';
 
@@ -38,7 +39,8 @@ const sizes: Record<Size, { outer: string; text: string; dot: string; dotPos: st
   xl: { outer: 'w-24 h-24', text: 'text-3xl', dot: 'w-4 h-4', dotPos: 'bottom-1 right-1' },
 };
 
-export const getPhotoUrl = (url?: string) => resolveAssetUrl(url);
+export const getPhotoUrl = (url?: string) =>
+  isPlaceholderAvatar(url) ? undefined : resolveAssetUrl(url);
 
 export type ResolvingPhotoOptions = {
   /** Prefer `/api/media/display` thumbs (Nearby / Matches grids — iPhone decode). */
@@ -46,16 +48,16 @@ export type ResolvingPhotoOptions = {
 };
 
 /**
- * Walk upload URL candidates (API host ↔ same-origin rewrite) before generic fallback.
+ * Walk upload URL candidates (API host ↔ same-origin rewrite) before the current no-photo fallback.
  * Keeps real /uploads photos visible when Vercel rewrite and VITE_API_URL disagree.
  */
 export function useResolvingPhotoSrc(
   photoUrl?: string | null,
-  age?: number,
+  _age?: number,
   options?: ResolvingPhotoOptions,
 ): { src: string | undefined; onError: () => void } {
   const [candidateIdx, setCandidateIdx] = useState(0);
-  const [phase, setPhase] = useState<'candidates' | 'generic' | 'empty'>('candidates');
+  const [phase, setPhase] = useState<'candidates' | 'empty'>('candidates');
   const displayWidth = options?.displayWidth;
 
   const candidates =
@@ -69,23 +71,12 @@ export function useResolvingPhotoSrc(
   }, [photoUrl, displayWidth]);
 
   let src: string | undefined;
-  if (phase === 'empty') src = undefined;
-  else if (phase === 'generic') src = resolveAssetUrl(fallbackAvatarForAge(age));
+  if (phase === 'empty' || isPlaceholderAvatar(photoUrl)) src = undefined;
   else src = candidates[candidateIdx] ?? resolveAssetUrl(photoUrl);
 
   const onError = () => {
     if (phase === 'candidates' && candidateIdx + 1 < candidates.length) {
       setCandidateIdx((i) => i + 1);
-      return;
-    }
-    // Broken /uploads (volume wipe, 404) → age-based generic face so the map
-    // and list still show a person pin, not a blank hole.
-    if (phase === 'candidates' && photoUrl) {
-      setPhase('generic');
-      return;
-    }
-    if (phase === 'generic') {
-      setPhase('empty');
       return;
     }
     setPhase('empty');
@@ -115,7 +106,6 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   'data-testid': testId,
 }) => {
   const s = sizes[size];
-  const initial = name?.[0]?.toUpperCase() ?? '?';
   const { src, onError } = useResolvingPhotoSrc(photoUrl, age);
   const href = useProfilePhotoHref(userId);
   const shouldLink = Boolean(href) && linkToProfile !== false;
@@ -136,7 +126,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
             loading="lazy"
           />
         ) : (
-          <span className={s.text}>{initial}</span>
+          <FadedBrandFace variant="profile" label={name} />
         )}
       </div>
       {showStatus && online !== undefined && (

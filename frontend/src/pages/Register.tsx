@@ -110,13 +110,13 @@ export const Register = () => {
   const yearOptions = useMemo(() => dobYearOptions(), []);
   const [error, setError] = useState('');
   const [isDuplicateEmail, setIsDuplicateEmail] = useState(false);
-  const [assuranceSkipped, setAssuranceSkipped] = useState(false);
+  const [adultAvailable, setAdultAvailable] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showAssurance, setShowAssurance] = useState(false);
   const [assurancePhase, setAssurancePhase] = useState<
     'intro' | 'liveness' | 'liveness_ok' | 'upsell' | 'id' | 'id_ok' | 'done'
   >('intro');
-  const [adultRequired, setAdultRequired] = useState(false);
+  const adultRequired = true;
   const [fixtureAllowed, setFixtureAllowed] = useState(false);
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
@@ -139,12 +139,12 @@ export const Register = () => {
       .adultAssuranceRequired()
       .then((res) => {
         if (!alive) return;
-        setAdultRequired(Boolean(res.data.required));
+        setAdultAvailable(res.data.required === true && res.data.available === true);
         setFixtureAllowed(Boolean(res.data.fixtureAllowed));
       })
       .catch(() => {
         if (!alive) return;
-        setAdultRequired(false);
+        setAdultAvailable(false);
         setFixtureAllowed(false);
       });
     return () => {
@@ -253,6 +253,7 @@ export const Register = () => {
   const pwScore = useMemo(() => passwordScore(form.password), [form.password]);
 
   const completeRegistration = async (adultToken?: string) => {
+    if (!adultToken) { setError('Complete the mandatory 18+ selfie check to continue.'); return; }
     setLoading(true);
     try {
       const isoDob =
@@ -345,7 +346,11 @@ export const Register = () => {
       return;
     }
 
-    if (adultRequired && !assuranceSkipped) {
+    if (!adultAvailable) {
+      setError('The required 18+ selfie check is currently unavailable. Please try again later.');
+      return;
+    }
+    if (adultRequired) {
       setShowAssurance(true);
       return;
     }
@@ -408,20 +413,8 @@ export const Register = () => {
             setAssurancePhase('intro');
             clearError();
           }}
-          onSkip={() => {
-            setShowAssurance(false);
-            setAssurancePhase('intro');
-            setAssuranceSkipped(true);
-            void completeRegistration();
-          }}
           onComplete={(result) => {
-            if ('skip' in result) {
-              setShowAssurance(false);
-              setAssurancePhase('intro');
-              setAssuranceSkipped(true);
-              void completeRegistration();
-              return;
-            }
+            if ('skip' in result) return;
             if ('underage' in result) {
               navigate('/register/underage', { replace: true });
               return;
@@ -734,7 +727,7 @@ export const Register = () => {
               </p>
             </div>
 
-            {adultRequired && !assuranceSkipped ? (
+            {adultRequired ? (
               <p className={helperClass} data-testid="register-adult-assurance-note">
                 {ADULT_ASSURANCE_COPY.registerHelper}
               </p>

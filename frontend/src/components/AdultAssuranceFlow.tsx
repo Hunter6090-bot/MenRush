@@ -40,7 +40,7 @@ export const ADULT_ASSURANCE_COPY = {
   livenessProgress: 'Opening Veriff…',
   livenessSlow: 'Veriff is taking longer than expected to open.',
   livenessTimeout:
-    'Veriff is taking longer than expected to open. You can continue without Veriff or try again.',
+    'Veriff is taking longer than expected to open. Go back and try again. The 18+ check is required.',
   livenessSkip: 'Skip / Continue without Veriff',
   livenessSuccess: '18+ confirmed. Age check done.',
   /** Upsell hero */
@@ -89,6 +89,7 @@ export type AdultAssuranceResult =
 type Props = {
   fixtureAllowed: boolean;
   required?: boolean;
+  account?: boolean;
   onComplete: (result: AdultAssuranceResult) => void;
   onCancel: () => void;
   onSkip?: () => void;
@@ -115,10 +116,11 @@ function fixtureOutcomeFromQuery():
 async function pollLiveness(
   sessionId: string,
   signal: { cancelled: boolean },
+  account = false,
 ): Promise<AdultAssuranceResult & { sessionId?: string }> {
   const startedAt = Date.now();
   while (!signal.cancelled && Date.now() - startedAt < ADULT_POLL_MAX_MS) {
-    const { data } = await authAPI.adultAssuranceStatus(sessionId);
+    const { data } = await authAPI.adultAssuranceStatus(sessionId, account);
     if (data.underage || data.status === 'underage') return { underage: true };
     if (data.status === 'passed' && data.assurance_token) {
       return {
@@ -187,7 +189,8 @@ function AssuranceInfoCard({
 
 export function AdultAssuranceFlow({
   fixtureAllowed,
-  required,
+  required = true,
+  account = false,
   onComplete,
   onCancel,
   onSkip,
@@ -215,6 +218,7 @@ export function AdultAssuranceFlow({
         clearTimeout(livenessTimerRef.current);
         livenessTimerRef.current = null;
       }
+      cancelRef.current.cancelled = true;
       frameRef.current?.close();
       frameRef.current = null;
     };
@@ -255,13 +259,15 @@ export function AdultAssuranceFlow({
       });
     });
 
-  const finish = (idVerified: boolean) => {
-    if (!token) {
-      onComplete({ error: ADULT_ASSURANCE_COPY.failGeneric });
-      return;
-    }
-    goPhase('done');
-    onComplete({ token, idVerified });
+  const finish = async (idVerified: boolean) => {
+    if (!token || !livenessSessionId) { onComplete({ error: ADULT_ASSURANCE_COPY.failGeneric }); return; }
+    try {
+      const { data } = await authAPI.adultAssuranceStatus(livenessSessionId);
+      if (data.underage) { onComplete({ underage: true }); return; }
+      if (!data.assurance_token) { setError(ADULT_ASSURANCE_COPY.failGeneric); return; }
+      goPhase('done');
+      onComplete({ token: data.assurance_token, idVerified });
+    } catch { setError(ADULT_ASSURANCE_COPY.failGeneric); }
   };
 
   const startLiveness = async () => {
@@ -277,7 +283,7 @@ export function AdultAssuranceFlow({
       setLivenessSlow(true);
     }, 8000);
     try {
-      const { data: started } = await authAPI.startAdultAssurance();
+      const { data: started } = await authAPI.startAdultAssurance(account);
       setLivenessSessionId(started.sessionId);
 
       const fixture = fixtureAllowed ? fixtureOutcomeFromQuery() : null;
@@ -328,7 +334,7 @@ export function AdultAssuranceFlow({
         clearTimeout(livenessTimerRef.current);
         livenessTimerRef.current = null;
       }
-      const polled = await pollLiveness(started.sessionId, cancelRef.current);
+      const polled = await pollLiveness(started.sessionId, cancelRef.current, account);
       if ('underage' in polled) {
         onComplete({ underage: true });
         return;
@@ -343,6 +349,7 @@ export function AdultAssuranceFlow({
         return;
       }
       if ('token' in polled) {
+        if (account) { onComplete(polled); return; }
         setToken(polled.token);
         goPhase('liveness_ok');
         await new Promise((r) => setTimeout(r, 1200));
@@ -398,6 +405,7 @@ export function AdultAssuranceFlow({
   };
 
   const handleSkip = () => {
+    if (required) return;
     cancelRef.current.cancelled = true;
     if (livenessTimerRef.current) {
       clearTimeout(livenessTimerRef.current);
@@ -442,14 +450,14 @@ export function AdultAssuranceFlow({
           >
             {ADULT_ASSURANCE_COPY.introCta}
           </button>
-          <button
+          {!required ? (<button
             type="button"
             className={publicSecondaryButtonClass}
             onClick={handleSkip}
             data-testid="adult-assurance-skip-cta"
           >
             {ADULT_ASSURANCE_COPY.introSkip}
-          </button>
+          </button>) : null}
           <button
             type="button"
             className="w-full text-center text-[15px] font-bold text-[#C4832A] transition-colors hover:text-[#E0A14A]"
@@ -482,14 +490,14 @@ export function AdultAssuranceFlow({
             </p>
           ) : null}
           <div className="mt-2 flex w-full flex-col gap-3">
-            <button
+            {!required ? (<button
               type="button"
               className={publicSecondaryButtonClass}
               onClick={handleSkip}
               data-testid="adult-assurance-liveness-skip"
             >
               {ADULT_ASSURANCE_COPY.livenessSkip}
-            </button>
+            </button>) : null}
             <button
               type="button"
               className={publicBackButtonClass}

@@ -17,8 +17,10 @@ import {
   TwoFactorVerifyLoginSchema,
   AdultAssuranceFixtureSchema,
 } from '../types/validation';
-import { AuthRequest, authMiddleware } from '../middleware/auth';
-import { query } from '../db';
+import { AuthRequest, authMiddleware, sessionAuthMiddleware } from '../middleware/auth';
+import pool, { query } from '../db';
+import { accessControl, SecurityError } from '../security/access';
+import { isAgeEstimationConfigured } from '../services/veriff-age-integration';
 import { z } from 'zod';
 import { authSessionService } from '../services/auth-session.service';
 import {
@@ -108,8 +110,10 @@ const resendConfirmLimiter = rateLimit({
  * Front-end uses this to know whether Veriff age gate is mandatory on /register.
  */
 router.get('/adult-assurance/required', (_req, res: Response) => {
+  res.setHeader('Cache-Control', 'no-store');
   res.json({
     required: isAdultAssuranceRequiredAtSignup(),
+    available: isAgeEstimationConfigured() || isAdultAssuranceTestFixtureAllowed(),
     fixtureAllowed: isAdultAssuranceTestFixtureAllowed(),
   });
 });
@@ -118,11 +122,60 @@ router.get('/adult-assurance/required', (_req, res: Response) => {
  * POST /api/auth/adult-assurance/start
  * Creates a pre-account Veriff liveness / age-estimation session. No user row.
  */
+// Account recovery endpoints deliberately require a session token but not an age pass.
+// These are the only new routes available before the mandatory gate.
+router.get('/adult-assurance/account', sessionAuthMiddleware, async (req: AuthRequest, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    await accessControl.requireAdult(req.userId!);
+    res.json({ assured: true, available: isAgeEstimationConfigured() });
+  } catch (err) {
+    if (err instanceof SecurityError && err.code === 'adult_assurance_required') {
+      return res.json({ assured: false, available: isAgeEstimationConfigured() });
+    }
+    next(err);
+  }
+});
+router.post('/adult-assurance/account/start', sessionAuthMiddleware, adultAssuranceLimiter, async (req: AuthRequest, res, next) => {
+  if (!isAgeEstimationConfigured()) return res.status(503).json({ error: 'age_estimation_not_configured' });
+  try { res.status(201).json(await adultAssuranceService.startSession(req.userId!)); }
+  catch (err) { next(err); }
+});
+router.get('/adult-assurance/account/:sessionId', sessionAuthMiddleware, adultAssuranceStatusPollLimiter, async (req: AuthRequest, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const parsed = z.string().uuid().safeParse(req.params.sessionId);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_session' });
+  try {
+    const result = await adultAssuranceService.issueTokenIfPassed(parsed.data, req.userId!);
+    if (!result) return res.status(404).json({ error: 'session_not_found' });
+    res.json(result);
+  } catch (err) { next(err); }
+});
+router.post('/adult-assurance/account/complete', sessionAuthMiddleware, adultAssuranceLimiter, async (req: AuthRequest, res, next) => {
+  const parsed = z.object({ token: z.string().min(32).max(512) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_token' });
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+    await adultAssuranceService.redeemToken(parsed.data.token, req.userId!, client, true);
+    await client.query(`UPDATE users SET verified_age_18_plus = TRUE, age_assurance_status = 'confirmed',
+      age_assured_at = NOW(), updated_at = NOW() WHERE id = $1`, [req.userId!]);
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (err) {
+    if (client) await client.query('ROLLBACK');
+    if (err instanceof Error && err.message.startsWith('Adult assurance')) return res.status(400).json({ error: 'invalid_age_assurance_token' });
+    next(err);
+  } finally { client?.release(); }
+});
+
 router.post('/adult-assurance/start', adultAssuranceLimiter, async (_req, res: Response) => {
   try {
     const session = await adultAssuranceService.startSession();
     res.status(201).json(session);
   } catch (err: any) {
+    if (err?.message === 'age_estimation_not_configured') return res.status(503).json({ error: 'age_estimation_not_configured' });
     if (err instanceof VeriffConfigError || err?.code === 'veriff_not_configured') {
       return res.status(503).json({ error: 'veriff_not_configured' });
     }
@@ -147,6 +200,7 @@ router.post('/adult-assurance/:sessionId/start-id', adultAssuranceLimiter, async
     const session = await adultAssuranceService.startIdSession(sessionId);
     res.status(201).json(session);
   } catch (err: any) {
+    if (err?.message === 'age_estimation_not_configured') return res.status(503).json({ error: 'age_estimation_not_configured' });
     if (err instanceof VeriffConfigError || err?.code === 'veriff_not_configured') {
       return res.status(503).json({ error: 'veriff_not_configured' });
     }
@@ -175,6 +229,7 @@ router.get('/adult-assurance/:sessionId', adultAssuranceStatusPollLimiter, async
     if (!/^[0-9a-f-]{36}$/i.test(sessionId)) {
       return res.status(400).json({ error: 'invalid_session' });
     }
+    res.setHeader('Cache-Control', 'no-store');
     const status = await adultAssuranceService.issueTokenIfPassed(sessionId);
     if (!status) return res.status(404).json({ error: 'session_not_found' });
     res.json(status);
@@ -300,7 +355,7 @@ router.post('/reset-password', authLimiter, async (req: AuthRequest, res: Respon
   }
 });
 
-router.post('/change-password', authMiddleware, authLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/change-password', sessionAuthMiddleware, authLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = ChangePasswordSchema.parse(req.body);
     await authService.changePassword(req.userId!, data);
@@ -336,7 +391,7 @@ router.post('/change-email', authMiddleware, authLimiter, async (req: AuthReques
   }
 });
 
-router.post('/delete-account', authMiddleware, authLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/delete-account', sessionAuthMiddleware, authLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = DeleteAccountSchema.parse(req.body);
     await authService.deleteAccount(req.userId!, data);
