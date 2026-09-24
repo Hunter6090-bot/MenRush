@@ -174,4 +174,62 @@ describe('Discover nearby headcount display lock', () => {
     expect(loadMoreBtn).toBeInTheDocument();
     expect(loadMoreBtn).toHaveTextContent('Load more men');
   });
+
+  it('renders "End of this range · Widen search" CTA when has_more is false and radius is below max', async () => {
+    const mockUsers = [
+      {
+        id: 'u1',
+        name: 'James',
+        age: 29,
+        lat: 51.51,
+        lng: -0.12,
+        online: true,
+        last_seen: new Date().toISOString(),
+        distance_meters: 800,
+        distance_km: 0.8,
+        photo_url: 'https://example.com/u1.jpg',
+      },
+    ];
+
+    vi.mocked(usersAPI.getNearby).mockResolvedValue({
+      data: {
+        users: mockUsers,
+        total: 1,
+        page: 1,
+        limit: 60,
+        has_more: false,
+      },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config: {} as any,
+    });
+
+    render(
+      <MemoryRouter>
+        <DiscoveryShellProvider>
+          <Discover />
+        </DiscoveryShellProvider>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('nearby-counts').length).toBeGreaterThan(0);
+    });
+
+    // When has_more is false, Load more button should not appear
+    expect(screen.queryByTestId('nearby-load-more')).not.toBeInTheDocument();
+
+    // Instead, the end of radius widen search CTA should appear
+    const widenBtn = await screen.findByTestId('nearby-widen-search');
+    expect(widenBtn).toBeInTheDocument();
+    expect(widenBtn).toHaveTextContent('End of this range · Widen search');
+    expect(screen.getByText('Show men farther away')).toBeInTheDocument();
+
+    // Clicking widen search cycles radius to wider range
+    widenBtn.click();
+    await waitFor(() => {
+      expect(usersAPI.getNearby).toHaveBeenCalledTimes(2);
+    });
+  });
 });

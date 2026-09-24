@@ -20,7 +20,7 @@ import {
 } from '../lib/matchCta';
 import { IconMatches, IconChat } from './icons';
 import { Link } from 'react-router-dom';
-import { memo, useEffect } from 'react';
+import { memo, useEffect, useRef } from 'react';
 
 interface NearbyProfileGridProps {
   users: NearbyUser[];
@@ -38,6 +38,8 @@ interface NearbyProfileGridProps {
   matchingUserId?: string | null;
   /** Expand search radius — cold-start density for beta. */
   onExpandRadius?: () => void;
+  /** When true, current search radius can still be expanded (i.e. below max/All). */
+  canExpandRadius?: boolean;
   /** Jump to profile setup when location/avatar incomplete. */
   onFinishProfile?: () => void;
   /** Turn on Pulse to become more visible when density is empty. */
@@ -71,6 +73,7 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
   mutualUserIds,
   matchingUserId,
   onExpandRadius,
+  canExpandRadius = true,
   onFinishProfile,
   onStartPulse,
   pulseOn,
@@ -85,6 +88,35 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
   useEffect(() => {
     clearGridPhotoQueue();
   }, []);
+
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const onLoadMoreRef = useRef(onLoadMore);
+  useEffect(() => {
+    onLoadMoreRef.current = onLoadMore;
+  }, [onLoadMore]);
+
+  useEffect(() => {
+    if (!hasMore || loadingMore || !onLoadMore) return;
+    const el = sentinelRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (first?.isIntersecting) {
+          onLoadMoreRef.current?.();
+        }
+      },
+      {
+        rootMargin: '250px',
+      },
+    );
+
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasMore, loadingMore, Boolean(onLoadMore)]);
 
   if (loading && users.length === 0) {
     return (
@@ -220,16 +252,44 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
         ))}
       </div>
       {hasMore && onLoadMore ? (
-        <div className="mt-4 flex justify-center py-3" data-testid="nearby-load-more-container">
+        <div
+          className="mt-4 flex flex-col items-center justify-center py-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))]"
+          data-testid="nearby-load-more-container"
+        >
+          <div
+            ref={sentinelRef}
+            className="h-1 w-full"
+            data-testid="nearby-grid-sentinel"
+            aria-hidden="true"
+          />
           <button
             type="button"
             onClick={onLoadMore}
             disabled={loadingMore}
             data-testid="nearby-load-more"
-            className="inline-flex items-center gap-2 rounded-full border border-[var(--copper)]/60 bg-[var(--bg-elevated)]/90 px-6 py-2.5 text-[12px] font-extrabold uppercase tracking-wider text-[var(--cream)] shadow-md transition-all hover:border-[var(--copper)] hover:bg-[var(--copper)]/20 active:scale-[0.98] disabled:opacity-50"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-[var(--copper)]/60 bg-[var(--bg-elevated)]/90 px-6 py-2.5 text-[12px] font-extrabold uppercase tracking-wider text-[var(--cream)] shadow-md transition-all hover:border-[var(--copper)] hover:bg-[var(--copper)]/20 active:scale-[0.98] disabled:opacity-50"
           >
             {loadingMore ? 'Loading more men…' : 'Load more men'}
           </button>
+        </div>
+      ) : null}
+      {!hasMore && !loading && !loadingMore && users.length > 0 && canExpandRadius && onExpandRadius ? (
+        <div
+          className="mt-5 mb-2 flex flex-col items-center justify-center gap-1.5 px-4 py-3 text-center pb-[max(1rem,env(safe-area-inset-bottom,0px))]"
+          data-testid="nearby-widen-container"
+        >
+          <button
+            type="button"
+            onClick={onExpandRadius}
+            data-testid="nearby-widen-search"
+            title="Show men farther away"
+            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border border-[var(--copper)]/60 bg-[var(--bg-elevated)]/90 px-6 py-2.5 text-[12px] font-extrabold uppercase tracking-wider text-[var(--cream)] shadow-md transition-all hover:border-[var(--copper)] hover:bg-[var(--copper)]/20 active:scale-[0.98]"
+          >
+            End of this range · Widen search
+          </button>
+          <p className="text-[11px] font-medium text-[var(--cream-muted)]">
+            Show men farther away
+          </p>
         </div>
       ) : null}
     </>

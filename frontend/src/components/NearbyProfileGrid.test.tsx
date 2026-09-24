@@ -121,6 +121,118 @@ describe('NearbyProfileGrid pagination', () => {
     expect(loadMoreBtn).toHaveTextContent('Loading more men…');
   });
 
+  it('renders sentinel element when hasMore is true and triggers onLoadMore on intersection', () => {
+    let observerCallback: (entries: IntersectionObserverEntry[]) => void = () => {};
+    const observeMock = vi.fn();
+    const disconnectMock = vi.fn();
+
+    class MockIntersectionObserver {
+      constructor(callback: (entries: IntersectionObserverEntry[]) => void) {
+        observerCallback = callback;
+      }
+      observe = observeMock;
+      disconnect = disconnectMock;
+      unobserve = vi.fn();
+    }
+
+    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
+
+    const user = mockUser({ id: 'u1', name: 'James' });
+    const onLoadMore = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid
+          users={[user]}
+          loading={false}
+          hasMore={true}
+          onLoadMore={onLoadMore}
+        />
+      </MemoryRouter>,
+    );
+
+    const sentinel = screen.getByTestId('nearby-grid-sentinel');
+    expect(sentinel).toBeInTheDocument();
+    expect(observeMock).toHaveBeenCalled();
+
+    // Trigger intersection
+    observerCallback([
+      {
+        isIntersecting: true,
+        target: sentinel,
+      } as unknown as IntersectionObserverEntry,
+    ]);
+
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
+
+    vi.unstubAllGlobals();
+  });
+
+  it('renders "End of this range · Widen search" CTA when !hasMore, users exist, and canExpandRadius is true', () => {
+    const user = mockUser({ id: 'u1', name: 'James' });
+    const onExpandRadius = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid
+          users={[user]}
+          loading={false}
+          hasMore={false}
+          canExpandRadius={true}
+          onExpandRadius={onExpandRadius}
+        />
+      </MemoryRouter>,
+    );
+
+    const widenBtn = screen.getByTestId('nearby-widen-search');
+    expect(widenBtn).toBeInTheDocument();
+    expect(widenBtn).toHaveTextContent('End of this range · Widen search');
+    expect(widenBtn.textContent).not.toMatch(/[—–]/); // No em dashes
+    expect(screen.getByText('Show men farther away')).toBeInTheDocument();
+
+    widenBtn.click();
+    expect(onExpandRadius).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides widen search CTA when canExpandRadius is false (at max radius)', () => {
+    const user = mockUser({ id: 'u1', name: 'James' });
+    const onExpandRadius = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid
+          users={[user]}
+          loading={false}
+          hasMore={false}
+          canExpandRadius={false}
+          onExpandRadius={onExpandRadius}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByTestId('nearby-widen-search')).not.toBeInTheDocument();
+  });
+
+  it('hides widen search CTA when loadingMore is true', () => {
+    const user = mockUser({ id: 'u1', name: 'James' });
+    const onExpandRadius = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid
+          users={[user]}
+          loading={false}
+          hasMore={false}
+          loadingMore={true}
+          canExpandRadius={true}
+          onExpandRadius={onExpandRadius}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByTestId('nearby-widen-search')).not.toBeInTheDocument();
+  });
+
   it('renders neutral "Men are farther out" without revealing exact count when empty radius', () => {
     render(
       <MemoryRouter>
