@@ -4,6 +4,8 @@ import { getEmailStatus, sendEmail } from '../services/mailer.service';
 import { verificationService } from '../services/verification.service';
 import { authenticityService } from '../services/verification/authenticity.service';
 import { inviteCodeService } from '../services/invite-code.service';
+import { venueClaimService } from '../services/venue-claim.service';
+import { FreezeVenueClaimSchema } from '../types/validation';
 import {
   buildTransactionalEmail,
   transactionalParagraph,
@@ -465,6 +467,88 @@ router.delete('/users/test/:email', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[admin] delete test user error:', err);
     return res.status(500).json({ error: 'delete_test_user_failed' });
+  }
+});
+
+/**
+ * GET /api/admin/venue-claims/pending
+ * Ops review queue: list pending venue claims.
+ */
+router.get('/venue-claims/pending', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const claims = await venueClaimService.listPendingClaims();
+    return res.json({ claims });
+  } catch (err: unknown) {
+    console.error('[admin] venue-claims pending error:', err);
+    return res.status(500).json({ error: 'venue_claims_list_failed' });
+  }
+});
+
+/**
+ * GET /api/admin/venue-claims
+ * Ops: list all venue claims (with optional status query param).
+ */
+router.get('/venue-claims', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const claims = await venueClaimService.listAllClaims(status);
+    return res.json({ claims });
+  } catch (err: unknown) {
+    console.error('[admin] venue-claims error:', err);
+    return res.status(500).json({ error: 'venue_claims_list_failed' });
+  }
+});
+
+/**
+ * POST /api/admin/venue-claims/:id/approve
+ * Ops human approve gate: grants calendar management rights.
+ */
+router.post('/venue-claims/:id/approve', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const notes = typeof req.body?.notes === 'string' ? req.body.notes : undefined;
+    const claim = await venueClaimService.approveClaim(req.params.id, 'ops-admin', notes);
+    return res.json({ ok: true, claim });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Claim approval failed';
+    return res.status(400).json({ error: message });
+  }
+});
+
+/**
+ * POST /api/admin/venue-claims/:id/reject
+ * Ops reject claim.
+ */
+router.post('/venue-claims/:id/reject', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const notes = typeof req.body?.notes === 'string' ? req.body.notes : undefined;
+    const claim = await venueClaimService.rejectClaim(req.params.id, 'ops-admin', notes);
+    return res.json({ ok: true, claim });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Claim rejection failed';
+    return res.status(400).json({ error: message });
+  }
+});
+
+/**
+ * POST /api/admin/venue-claims/:id/freeze
+ * Ops freeze claim / false-claim ban path.
+ */
+router.post('/venue-claims/:id/freeze', async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const parsed = FreezeVenueClaimSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.errors[0]?.message || 'Invalid freeze input' });
+  }
+  try {
+    const claim = await venueClaimService.freezeClaim(req.params.id, 'ops-admin', parsed.data);
+    return res.json({ ok: true, claim });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Claim freeze failed';
+    return res.status(400).json({ error: message });
   }
 });
 

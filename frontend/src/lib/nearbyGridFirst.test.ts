@@ -20,6 +20,20 @@ describe('Nearby Grid-first Brand lock', () => {
     assert.match(src, /'Grid'/);
   });
 
+  it('Nearest/Latest sort labels stay Brand-safe (no dating-coded words)', () => {
+    const toggle = readFileSync(join(root, 'components/NearbySortToggle.tsx'), 'utf8');
+    const sortLib = readFileSync(join(root, 'lib/nearbySort.ts'), 'utf8');
+    // Assert on the exported label map + default — ignore prose comments.
+    const labelsBlock = sortLib.match(/NEARBY_SORT_LABELS[\s\S]*?};/);
+    assert.ok(labelsBlock);
+    assert.doesNotMatch(labelsBlock[0], /\bDate\b|\bDating\b|\bFriends\b|\bRomantic\b/i);
+    assert.match(labelsBlock[0], /Nearest/);
+    assert.match(labelsBlock[0], /Latest/);
+    assert.match(sortLib, /DEFAULT_NEARBY_SORT:\s*NearbySortMode\s*=\s*'nearest'/);
+    assert.match(toggle, /nearby-sort-toggle/);
+    assert.match(toggle, /NEARBY_SORT_LABELS/);
+  });
+
   it('Layout discover mark has no MENRUSH type wordmark', () => {
     const src = readFileSync(join(root, 'components/Layout.tsx'), 'utf8');
     assert.doesNotMatch(src, />\s*MENRUSH\s*</);
@@ -50,5 +64,25 @@ describe('Nearby Grid-first Brand lock', () => {
     const streamAt = src.indexOf("to: '/stream'");
     const chatAt = src.indexOf("to: '/conversations'");
     assert.ok(discoverAt >= 0 && streamAt > discoverAt && chatAt > streamAt);
+  });
+
+  it('hides exact nearby count digits in public app UI', () => {
+    const discover = readFileSync(join(root, 'pages/Discover.tsx'), 'utf8');
+    assert.doesNotMatch(discover, /\$\{nearbyCount\}\s+\$\{nearbyCount === 1/);
+    assert.doesNotMatch(discover, /\{nearbyCount\}\s*(?:man|men)\s+nearby/);
+    assert.doesNotMatch(discover, /<span[^>]*>\{nearbyCount\}<\/span>/);
+    assert.match(discover, /'Men nearby'/);
+
+    const mapStatus = readFileSync(join(root, 'components/MapLiveStatus.tsx'), 'utf8');
+    assert.doesNotMatch(mapStatus, /\{nearbyCount\}\s+nearby/);
+    assert.match(mapStatus, /Men nearby/);
+
+    const layout = readFileSync(join(root, 'components/Layout.tsx'), 'utf8');
+    assert.doesNotMatch(layout, /\{discoveryShell\.nearbyCount\}\s+in your radius/);
+    assert.match(layout, /Men nearby/);
+
+    const grid = readFileSync(join(root, 'components/NearbyProfileGrid.tsx'), 'utf8');
+    assert.doesNotMatch(grid, /\$\{beyondRadiusCount\}\s+men are farther out/);
+    assert.match(grid, /Men are farther out/);
   });
 });

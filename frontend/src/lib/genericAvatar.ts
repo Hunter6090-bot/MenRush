@@ -1,3 +1,4 @@
+import { profileMediaPath } from './profileMedia';
 const TRIBE_LEAN = new Set(['Twink', 'Twunk', 'Jock']);
 const TRIBE_BEAR = new Set(['Bear', 'Cub', 'Daddy', 'Leather']);
 
@@ -27,7 +28,7 @@ export const GENERIC_AVATAR_VARIANTS = [
 export type PhotoChoice = 'upload' | 'generic';
 
 export function isGenericAvatarUrl(url?: string | null): boolean {
-  return Boolean(url?.startsWith('/avatars/generic/'));
+  return profileMediaPath(url).startsWith('/avatars/generic/');
 }
 
 function ageBucket(age?: number): 'young' | 'mid' | 'mature' {

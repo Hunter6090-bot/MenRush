@@ -56,7 +56,10 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
 
 router.delete('/', async (req: AuthRequest, res: Response) => {
   try {
-    const removed = await notificationService.removeAllRead(req.userId!);
+    const all = req.query.all === 'true' || req.query.all === '1';
+    const removed = all
+      ? await notificationService.removeAll(req.userId!)
+      : await notificationService.removeAllRead(req.userId!);
     res.json({ ok: true, removed });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

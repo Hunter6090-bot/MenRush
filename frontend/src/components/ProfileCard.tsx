@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useResolvingPhotoSrc } from './UserAvatar';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { StatusBadge } from './StatusBadge';
-import { SilhouetteAvatar } from './SilhouetteAvatar';
-import { IconMatches } from './icons';
+import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
+import { IconMatches, IconChat } from './icons';
 import { usersAPI } from '../api/client';
 import { VerifiedBadge } from './VerifiedBadge';
 import { MoodBadge } from './MoodPicker';
@@ -41,6 +41,15 @@ export interface NearbyUser {
   pulse_expires_at?: string | null;
   /** Active mood (auto-expires after 6h server-side; null when unset/expired). */
   mood?: import('../api/client').Mood | null;
+  /**
+   * Account created_at (ISO) from `/users/nearby` — account age only for NEW badge.
+   * Not exact GPS; privacy-safe.
+   */
+  created_at?: string;
+  /** Active visitor fresh-face boost (left home area; TTL not expired). */
+  is_visitor?: boolean;
+  /** ISO expiry for visitor boost — null when not visiting. */
+  visitor_expires_at?: string | null;
 }
 
 interface ProfileCardProps {
@@ -66,6 +75,8 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
     user.photo_url,
     user.age,
   );
+  // Empty / missing / /avatars/* → faded cutout (same as Grid + Matches). Never gold stub.
+  const showBrandEmpty = isNearbyPlaceholderFace(user.photo_url) || !fullPhotoUrl;
   const isPulsing = isUserPulsing(user);
 
   useEffect(() => {
@@ -140,17 +151,20 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           className="absolute inset-0 z-0 block"
           data-testid={`profile-card-photo-${user.id}`}
         >
-          {fullPhotoUrl ? (
+          {showBrandEmpty ? (
+            <div
+              className="h-full w-full"
+              data-testid={`profile-card-photo-placeholder-${user.id}`}
+            >
+              <FadedBrandFace variant="tile" label={user.name} />
+            </div>
+          ) : (
             <img
               src={fullPhotoUrl}
               alt={user.name}
               className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
               onError={onPhotoError}
             />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center">
-              <SilhouetteAvatar size={120} variant="card" />
-            </div>
           )}
         </ProfilePhotoLink>
 
@@ -179,6 +193,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           disabled={matchDisabled}
           aria-disabled={matchDisabled}
           aria-label={matchCtaAriaLabel(matchState, user.name, { mutualOpensChat: true })}
+          title={matchState === 'mutual' ? 'Chat' : matchState === 'outgoing' ? 'Sent' : 'Match'}
           data-testid={`profile-card-match-${user.id}`}
           className={`absolute bottom-3 left-3 z-10 flex h-11 w-11 items-center justify-center rounded-full transition-all ${
             matchState === 'outgoing'
@@ -188,8 +203,9 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 : 'bg-black/50 backdrop-blur-sm text-nn-copper-bright hover:bg-nn-copper/20 hover:scale-110 border border-nn-border'
           }`}
         >
-          <IconMatches size={20} />
+          {matchState === 'mutual' ? <IconChat size={20} /> : <IconMatches size={20} />}
         </button>
+
       </div>
 
       {/* Content */}
@@ -248,6 +264,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           disabled={matchDisabled}
           aria-disabled={matchDisabled}
           aria-label={matchCtaAriaLabel(matchState, user.name, { mutualOpensChat: true })}
+          title={liking ? 'Sending…' : matchState === 'mutual' ? 'Chat' : matchState === 'outgoing' ? 'Sent' : 'Match'}
           data-testid={`profile-card-match-cta-${user.id}`}
           onClick={
             matchState === 'mutual'
@@ -257,17 +274,21 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 }
               : handleLike
           }
-          className={`mt-4 w-full py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+          className={`mt-4 w-full py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
             matchState === 'none'
               ? 'bg-gradient-to-r from-[#C4832A] to-[#A45E18] hover:from-[#D4943B] hover:to-[#C4832A] text-white hover:shadow-glow-blue active:scale-95'
               : matchCtaToneClasses(matchState)
           }`}
         >
-          {matchCtaLabel(matchState, user.name, {
-            sending: liking,
-            mutualLabel: 'open_chat',
-          })}
+          {matchState === 'mutual' ? <IconChat size={18} /> : <IconMatches size={18} />}
+          <span>
+            {matchCtaLabel(matchState, user.name, {
+              sending: liking,
+              mutualLabel: 'chat',
+            })}
+          </span>
         </button>
+
         {likeHint ? (
           <p className="mt-2 text-center text-[11px] text-[var(--cream-muted)]" role="status">
             {likeHint}

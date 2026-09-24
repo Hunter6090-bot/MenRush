@@ -32,6 +32,7 @@ import betaRoutes from './routes/beta';
 import adminRoutes from './routes/admin.routes';
 import campaignRoutes from './routes/campaigns';
 import socialRoutes from './routes/social';
+import mapFeedRoutes from './routes/map-feed';
 import communityRoutes from './routes/community';
 import mediaDisplayRoutes from './routes/media-display';
 import { startPulseExpiryCron } from './services/pulse.service';
@@ -60,6 +61,7 @@ import { query } from './db';
 import { ensureUploadDirs, getUploadsRoot, probeUploadsWritable } from './lib/uploads-root';
 import { logCallMetric } from './services/call-metrics.service';
 import { mediaStorageMode } from './services/media-storage.service';
+import { warmIceServers } from './services/webrtc.service';
 
 // Transient DB disconnects must not take down login/API.
 process.on('unhandledRejection', (reason) => {
@@ -143,6 +145,7 @@ app.use('/api/beta', betaRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/social', socialRoutes);
+app.use('/api/map-feed', mapFeedRoutes);
 app.use('/api/community', communityRoutes);
 
 // Waitlist signup — POSTs to /api/waitlist land here; the dripRoutes router
@@ -380,6 +383,15 @@ async function authorizeSocketTarget(
 
 io.on('connection', (socket: Socket) => {
   console.log('User connected:', socket.id);
+
+  // Recheck age clearance for every authenticated event, including existing sockets.
+  socket.use(async ([event], next) => {
+    if (event === 'authenticate') return next();
+    const userId = socketToUser.get(socket.id);
+    if (!userId) return next(new Error('authentication_required'));
+    try { await accessControl.requireAdult(userId); next(); }
+    catch { socket.emit('authorization:error', { error: 'adult_assurance_required' }); socket.disconnect(true); }
+  });
 
   socket.on('authenticate', async (token: string) => {
     try {
@@ -947,6 +959,7 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  warmIceServers();
   startPulseExpiryCron();
   startRoomTempIdentityPurgeCron();
   startVerificationRetentionWorker();

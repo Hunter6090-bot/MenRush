@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { communityAPI, type CommunityCommentDTO } from '../api/client';
 import { formatRelativeTime } from '../lib/notifications';
-import { SilhouetteAvatar } from './SilhouetteAvatar';
+import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
 import { useResolvingPhotoSrc } from './UserAvatar';
 
 const MAX_CHARS = 280;
 
 function CommentAvatar({ name, photoUrl }: { name: string; photoUrl: string | null }) {
   const { src, onError } = useResolvingPhotoSrc(photoUrl);
-  if (src) {
+  if (src && !isNearbyPlaceholderFace(photoUrl)) {
     return (
       <img
         src={src}
@@ -21,8 +21,7 @@ function CommentAvatar({ name, photoUrl }: { name: string; photoUrl: string | nu
   }
   return (
     <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full ring-1 ring-[rgba(196,131,42,0.3)]">
-      <SilhouetteAvatar size={32} variant="card" className="!h-8 !w-8" />
-      <span className="sr-only">{name}</span>
+      <FadedBrandFace variant="profile" size={32} label={name} />
     </div>
   );
 }
@@ -162,7 +161,7 @@ export function CommunityPostComments({
               maxLength={MAX_CHARS}
               rows={2}
               placeholder="Write a comment…"
-              className="w-full resize-none rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 py-2 text-[13px] leading-relaxed text-[var(--cream)] placeholder:text-[var(--cream-muted)] focus:border-[#C4832A] focus:outline-none"
+              className="w-full resize-none rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 py-2 text-[16px] leading-relaxed text-[var(--cream)] placeholder:text-[var(--cream-muted)] focus:border-[#C4832A] focus:outline-none"
             />
             <div className="mt-1.5 flex items-center justify-between gap-2">
               <span

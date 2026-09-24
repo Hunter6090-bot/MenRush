@@ -37,7 +37,72 @@ const CONTEXT_MIMES: Record<UploadContext, Set<string>> = {
 /** Strip RFC 2045 parameters (`codecs=…`) before allowlist / extension lookup. */
 export function normalizeUploadMime(mimetype: string | undefined | null): string {
   if (!mimetype) return '';
-  return mimetype.split(';')[0].trim().toLowerCase();
+  const base = mimetype.split(';')[0].trim().toLowerCase();
+  if (base === 'video/quicktime' || base === 'video/3gpp' || base === 'video/3gpp2') return 'video/mp4';
+  if (base === 'video/x-matroska') return 'video/webm';
+  if (base === 'audio/x-m4a' || base === 'audio/aac') return 'audio/mp4';
+  return base;
+}
+
+function asciiAt(bytes: Uint8Array, start: number, length: number): string {
+  return String.fromCharCode(...bytes.subarray(start, start + length));
+}
+
+/** Sniff container from file header (iPhone MP4 vs Chrome WebM). */
+export function sniffMediaMime(bytes: Uint8Array, kind?: string): string | null {
+  if (
+    bytes.length >= 4 &&
+    bytes[0] === 0x1a &&
+    bytes[1] === 0x45 &&
+    bytes[2] === 0xdf &&
+    bytes[3] === 0xa3
+  ) {
+    return kind === 'audio' ? 'audio/webm' : 'video/webm';
+  }
+  if (bytes.length >= 8 && asciiAt(bytes, 4, 4) === 'ftyp') {
+    return kind === 'audio' ? 'audio/mp4' : 'video/mp4';
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return 'image/png';
+  }
+  if (bytes.length >= 12 && asciiAt(bytes, 0, 4) === 'RIFF' && asciiAt(bytes, 8, 4) === 'WEBP') {
+    return 'image/webp';
+  }
+  if (bytes.length >= 4 && asciiAt(bytes, 0, 4) === 'OggS') return 'audio/ogg';
+  if (
+    bytes.length >= 3 &&
+    (asciiAt(bytes, 0, 3) === 'ID3' || (bytes[0] === 0xff && (bytes[1]! & 0xe0) === 0xe0))
+  ) {
+    return 'audio/mpeg';
+  }
+  return null;
+}
+
+export async function sniffMediaMimeFromPath(
+  filePath: string,
+  kind?: string,
+): Promise<string | null> {
+  const handle = await fs.open(filePath, 'r');
+  try {
+    const buffer = Buffer.alloc(16);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    return sniffMediaMime(buffer.subarray(0, bytesRead), kind);
+  } finally {
+    await handle.close();
+  }
 }
 
 function unsupportedUploadError(mimetype: string | undefined | null): Error {

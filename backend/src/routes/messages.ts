@@ -1,3 +1,4 @@
+import { accessControl } from '../security/access';
 import { Router, Response } from 'express';
 import fs from 'fs';
 import multer from 'multer';
@@ -5,10 +6,18 @@ import { messageService } from '../services/message.service';
 import { albumService } from '../services/album.service';
 import { sendPushToUser } from '../services/push.service';
 import { notificationService } from '../services/notification.service';
+import { isDiscreetMediaBlurEnabled } from '../services/discreet-media';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { SecurityError } from '../security/access';
-import { resolveMediaPath, verifyMediaAccess } from '../security/media';
-import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
+import { resolveMediaPath, signedMediaUrl, verifyMediaAccess } from '../security/media';
+import {
+  safeUploadFilename,
+  uploadFileFilter,
+  validateFileSignature,
+  sniffMediaMimeFromPath,
+  normalizeUploadMime,
+  allowedUpload,
+} from '../security/uploads';
 import {
   MessageSchema,
   MediaMessageFormSchema,
@@ -60,12 +69,18 @@ router.get('/:messageId/media', async (req, res) => {
   try {
     const resource = `/api/messages/${req.params.messageId}/media`;
     const grant = verifyMediaAccess(String(req.query.access || ''), resource);
+    await accessControl.requireAdult(grant.viewerId);
     const media = await messageService.getMedia(grant.viewerId, req.params.messageId);
-    const mediaClear = await messageService.viewerMediaClear(
-      grant.viewerId,
-      media.senderId,
-      media.mediaType,
-    );
+    // Blur decision already ships on the conversation payload for SoftBlurMedia.
+    // When Discreet blur is off, skip the Premium lookup on every Range request
+    // so short video notes can paint the first frame faster.
+    const mediaClear = isDiscreetMediaBlurEnabled()
+      ? await messageService.viewerMediaClear(
+          grant.viewerId,
+          media.senderId,
+          media.mediaType,
+        )
+      : true;
     const absolute = resolveMediaPath(mediaDir, media.storageKey);
     // Safari needs Accept-Ranges to start playback before the full download
     // (Pete iPhone ~12s open on chat video that had already arrived).
@@ -167,6 +182,13 @@ router.post('/media', mediaUpload.single('media'), async (req: AuthRequest, res:
   }
 
   const { receiver_id, kind, caption, disappearing, max_views, duration_ms } = parsed.data;
+  const sniffed = await sniffMediaMimeFromPath(req.file.path, kind);
+  if (sniffed) req.file.mimetype = sniffed;
+  else req.file.mimetype = normalizeUploadMime(req.file.mimetype) || req.file.mimetype;
+  if (!allowedUpload(req.file.mimetype, 'message')) {
+    try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+    return res.status(400).json({ error: 'Unsupported upload type' });
+  }
   if (!(await validateFileSignature(req.file.path, req.file.mimetype))) {
     try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
     return res.status(400).json({ error: 'File content does not match its type' });
@@ -344,6 +366,28 @@ router.post('/media/from-album', async (req: AuthRequest, res: Response) => {
   }
 });
 
+/**
+ * Fresh signed media URL for an existing message (JWT auth).
+ * Used by VideoBubble so playback does not depend on a grant that may have
+ * expired in a cached thread row, and so open/retry never remounts on poll churn.
+ */
+router.get('/:messageId/media-url', async (req: AuthRequest, res: Response) => {
+  try {
+    const media = await messageService.getMedia(req.userId!, req.params.messageId);
+    const resource = `/api/messages/${req.params.messageId}/media`;
+    return res.json({
+      url: signedMediaUrl(resource, req.userId!),
+      mime_type: media.mimeType,
+      media_type: media.mediaType,
+    });
+  } catch (error) {
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.code });
+    }
+    return res.status(404).json({ error: 'media_unavailable' });
+  }
+});
+
 router.post('/:messageId/view', async (req: AuthRequest, res: Response) => {
   try {
     const updated = await messageService.markMessageViewed(req.userId!, req.params.messageId);
@@ -391,7 +435,20 @@ router.post('/:messageId/withdraw', async (req: AuthRequest, res: Response) => {
 
 router.get('/conversation/:otherId', async (req: AuthRequest, res: Response) => {
   try {
-    const messages = await messageService.getConversation(req.userId!, req.params.otherId);
+    const before =
+      typeof req.query.before === 'string' && req.query.before.trim()
+        ? req.query.before.trim()
+        : undefined;
+    const rawLimit = typeof req.query.limit === 'string' ? Number(req.query.limit) : 50;
+    const limit = Number.isFinite(rawLimit)
+      ? Math.min(100, Math.max(1, Math.round(rawLimit)))
+      : 50;
+    const messages = await messageService.getConversation(
+      req.userId!,
+      req.params.otherId,
+      limit,
+      before,
+    );
     res.json(messages);
   } catch (error: unknown) {
     if (error instanceof SecurityError) {

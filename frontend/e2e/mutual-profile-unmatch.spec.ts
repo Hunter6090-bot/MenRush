@@ -69,15 +69,16 @@ test('mutual profile shows Pass, Open chat, Unmatch — not two chat buttons', a
 
   await page.goto(`/profile/${bobId}`);
   await expect(page.getByTestId('profile-view-message')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByTestId('profile-view-message')).toHaveText('Open chat');
+  await expect(page.getByTestId('profile-view-message')).toHaveText(/Chat/i);
   await expect(page.getByTestId('profile-view-matched-status')).toHaveText(/Matched with/i);
   await expect(page.getByTestId('profile-view-unmatch')).toBeVisible();
-  await expect(page.getByTestId('profile-view-unmatch')).toHaveText('Unmatch');
-  await expect(page.getByRole('button', { name: 'Pass' })).toBeVisible();
+  await expect(page.getByTestId('profile-view-unmatch')).toHaveText(/Unmatch/i);
+  // Pass killed entirely
+  await expect(page.getByRole('button', { name: 'Pass' })).toHaveCount(0);
 
-  // Exactly one chat action — no duplicate Message button.
+  // Exactly one chat action — no duplicate button.
   await expect(page.getByRole('button', { name: 'Message' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Open chat' })).toHaveCount(1);
+  await expect(page.getByTestId('profile-view-message')).toHaveCount(1);
 
   // Dismiss Home Screen install banner if it covers the action row.
   const dismissInstall = page.getByRole('button', { name: /Not now/i });
@@ -94,9 +95,9 @@ test('mutual profile shows Pass, Open chat, Unmatch — not two chat buttons', a
   await page.getByTestId('profile-view-unmatch').click();
   await unmatchReq;
 
-  // After unmatch, Match + Message return (no longer mutual).
+  // After unmatch, Match + Chat return (no longer mutual).
   await expect(page.getByTestId('profile-view-match')).toBeVisible({ timeout: 5_000 });
-  await expect(page.getByTestId('profile-view-message')).toHaveText('Message');
+  await expect(page.getByTestId('profile-view-message')).toHaveText(/Chat/i);
   await expect(page.getByTestId('profile-view-unmatch')).toHaveCount(0);
 
   await context.close();

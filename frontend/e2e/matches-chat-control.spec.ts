@@ -110,6 +110,8 @@ test('Matches cards paint fast; Chat list stays light (iPhone-sized)', async ({ 
   const matchesSrc = readFileSync(resolve(here, '../src/pages/Matches.tsx'), 'utf8');
   expect(matchesSrc).toMatch(/clearGridPhotoQueue/);
   expect(matchesSrc).toMatch(/setLoading\(false\)/);
+  expect(matchesSrc).toMatch(/readCachedMatches|refreshMatches/);
+  expect(matchesSrc).toMatch(/matches-skeleton/);
 
   await ctx.close();
 });

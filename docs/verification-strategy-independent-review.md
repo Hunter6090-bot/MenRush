@@ -211,6 +211,6 @@ A stronger structure is:
 
 1. **Send to Grok CLI** — redesign the verification flow around the three-tier model (adult / authentic / identity-checked) rather than a single mandatory ID gate.
 2. **Update DPIA** — reflect the layered data-processing activities separately.
-3. **Update CCBill and Stripe applications** — current description says "mandatory government ID + selfie for all users." Update to "layered optional verification above a mandatory age-assurance baseline."
+3. **Update payment provider applications** — current description says "mandatory government ID + selfie for all users." Update to "layered optional verification above a mandatory age-assurance baseline."
 4. **Update CLAUDE.md** — replace current verification stack description with the three-tier model.
 5. **UK law note** — Ofcom's highly-effective age-assurance requirement likely means the mandatory baseline must be more than self-declaration. Phone + email + credit card bin check is a practical v1 gate before the optional tiers.

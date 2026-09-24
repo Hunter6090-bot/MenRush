@@ -1,18 +1,18 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, memo } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { messagesAPI, usersAPI, meetAPI, MediaKind, MessageMediaKind, MessageDTO, MeetAgreementState, LibraryPhotoDTO } from '../api/client';
 import { trackEventOnce } from '../observability/analytics';
 import { useSocket } from '../hooks/useSocket';
 import { useAuthStore, useCallStore, useUnreadStore } from '../hooks/store';
 import { UserAvatar } from '../components/UserAvatar';
 import { StatusBadge } from '../components/StatusBadge';
-import { SilhouetteAvatar } from '../components/SilhouetteAvatar';
 import { PulseRing } from '../components/PulseRing';
 import { getPhotoUrl } from '../components/UserAvatar';
 import { FEATURES } from '../lib/featureFlags';
 import { SelfieCaptureModal } from '../components/SelfieCaptureModal';
 import { CameraCaptureChooser } from '../components/CameraCaptureChooser';
 import { VideoNoteCaptureModal } from '../components/VideoNoteCaptureModal';
+import { videoFileFromRecorderBlob } from '../lib/mediaMime';
 import { ChatAttachLibrarySheet } from '../components/ChatAttachLibrarySheet';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 import { PanicReportButton } from '../components/PanicReportButton';
@@ -27,15 +27,42 @@ import { parseLocationPayload } from '../lib/locationMessage';
 import { profilePathForUser } from '../lib/profileLinks';
 import { ProfilePhotoLink } from '../components/ProfilePhotoLink';
 import { SoftBlurMedia, shouldBlurMedia } from '../components/SoftBlurMedia';
+import { ChatBubbleFace } from '../components/ChatBubbleFace';
 import { compressChatImageFile } from '../lib/imageUpload';
 import { armOverlayBack } from '../lib/overlayBack';
 import { CHAT_IMAGE_VIEWER_FRAME } from '../lib/chatImageViewerFrame';
 import {
+  shouldLoadOlderOnScroll,
+  shouldStickToBottomOnUpdate,
+  restoreScrollAfterPrepend,
+} from '../lib/chatScroll';
+import {
+  VIDEO_LOAD_TIMEOUT_MS,
+  chatVideoUnsupportedHint,
+  resolveChatVideoPlayUrl,
+  type ChatVideoLoadState,
+} from '../lib/chatVideoPlayback';
+import {
   appendUniqueMessage,
   CHAT_LIVE_REFRESH_EVENT,
+  CONVERSATION_PAGE_SIZE,
   conversationFingerprint,
   mergeConversationRows,
+  prependOlderMessages,
+  sortMessagesChronologically,
 } from '../lib/pushDeepLink';
+import {
+  appendCachedThreadMessage,
+  isPreviewSeedMessage,
+  readCachedThread,
+  rememberInboxThread,
+  stripPreviewSeedMessages,
+  threadLikelyHasHistory,
+  writeCachedThread,
+} from '../lib/conversationHistoryCache';
+import { refreshNotifications } from '../hooks/useNotificationSync';
+import { useNotificationStore } from '../hooks/store';
+import type { ThreadOpenState } from '../components/ConversationItem';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
 interface Message extends Partial<MessageDTO> {
@@ -55,6 +82,26 @@ interface Message extends Partial<MessageDTO> {
   remaining_views?: number | null;
   expired?: boolean;
   media_clear?: boolean;
+  read?: boolean;
+  delivered?: boolean;
+}
+
+function seedThreadForOpen(
+  peerId: string | undefined,
+  selfId: string | undefined,
+  nav: ThreadOpenState | null,
+): Message[] {
+  if (!peerId) return [];
+  const preview = nav?.threadPreview;
+  if (preview && preview.peerId === peerId && preview.lastMessage) {
+    rememberInboxThread(peerId, {
+      lastMessage: preview.lastMessage,
+      lastMessageTime: preview.lastMessageTime,
+      selfId,
+    });
+  }
+  const cached = readCachedThread(peerId);
+  return cached ? (cached as Message[]) : [];
 }
 
 /** Sender's chosen viewing rule for an outgoing image. */
@@ -141,15 +188,37 @@ function canWithdrawMedia(msg: Message, userId?: string): boolean {
   );
 }
 
+/** Direct, premium openers — never creepy. 18+ consent-first tone. */
+const ICEBREAKERS = [
+  'Hey — saw you nearby. Free later?',
+  'Your profile stood out. Up for a chat?',
+  'What are you looking for tonight?',
+] as const;
+
 // ── Main component ───────────────────────────────────────────────────────────
 
 export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const { otherId } = useParams<{ otherId: string }>();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const location = useLocation();
+  const navState = (location.state as ThreadOpenState | null) || null;
+  const user = useAuthStore((s) => s.user);
+  // Seed from nav preview / session cache so existing threads never flash empty.
+  const [messages, setMessages] = useState<Message[]>(() =>
+    seedThreadForOpen(otherId, user?.id, navState),
+  );
+  const [historyReady, setHistoryReady] = useState(
+    () => readCachedThread(otherId) !== undefined,
+  );
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
-  const [otherUser, setOtherUser] = useState<OtherUser | null>(null);
+  const [otherUser, setOtherUser] = useState<OtherUser | null>(() => {
+    const preview = navState?.threadPreview;
+    if (preview && otherId && preview.peerId === otherId && preview.name) {
+      return { name: preview.name, photo_url: preview.photoUrl };
+    }
+    return null;
+  });
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -174,15 +243,25 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const [meetSubmitting, setMeetSubmitting] = useState(false);
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
-  // Ticks once a second so disappearing countdowns and burned states update.
-  const [, setBurnTick] = useState(0);
+  const [canJerk, setCanJerk] = useState(false);
+  const [jerkSent, setJerkSent] = useState(false);
+  const [jerking, setJerking] = useState(false);
+  // Disappearing countdown lives in ImageViewer only — do not 1Hz re-render the whole thread.
   const socket = useSocket();
-  const user = useAuthStore((s) => s.user);
   const { setCalling, setCallSetupError, resetCall } = useCallStore();
   const navigate = useNavigate();
   const bottomRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const savedScrollTopRef = useRef<number | null>(null);
+  /** Follow latest only while near the tip (or after own send). */
+  const stickToBottomRef = useRef(true);
+  /** One-shot: own send always snaps to latest even if reading history. */
+  const forceStickAfterSendRef = useRef(false);
+  /** scrollHeight before an older-page prepend — restore in useLayoutEffect. */
+  const pendingPrependHeightRef = useRef<number | null>(null);
+  const loadingOlderRef = useRef(false);
+  const [hasMoreOlder, setHasMoreOlder] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const inputValueRef = useRef('');
@@ -193,30 +272,169 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const recordStreamRef = useRef<MediaStream | null>(null);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  /** Append a confirmed server row to the open thread + session cache. */
+  const commitThreadMessage = useCallback(
+    (msg: Message) => {
+      if (!otherId) return;
+      setMessages((prev) => {
+        const next = appendUniqueMessage(stripPreviewSeedMessages(prev), msg);
+        appendCachedThreadMessage(otherId, msg);
+        return next;
+      });
+      setHistoryReady(true);
+    },
+    [otherId],
+  );
+
   const loadConversation = useCallback((opts?: { replace?: boolean }) => {
     if (!otherId) return;
     messagesAPI
       .getConversation(otherId)
       .then((r) => {
         const rows = Array.isArray(r.data) ? (r.data as Message[]) : [];
+        if (opts?.replace) {
+          setHasMoreOlder(rows.length >= CONVERSATION_PAGE_SIZE);
+        }
         setMessages((prev) => {
-          const next = opts?.replace ? rows : mergeConversationRows(prev, rows);
+          // Drop inbox preview seeds before merge so LIMIT-window union stays correct.
+          const base = stripPreviewSeedMessages(prev);
+          // Always normalize order: poll merge used to re-append rows that slid
+          // out of the LIMIT page and jump earlier bubbles to the bottom.
+          const next = opts?.replace
+            ? sortMessagesChronologically(rows)
+            : mergeConversationRows(base, rows);
           if (
-            !opts?.replace &&
-            conversationFingerprint(prev) === conversationFingerprint(next)
+            conversationFingerprint(base) === conversationFingerprint(next) &&
+            base.length === prev.length
           ) {
             return prev;
           }
+          writeCachedThread(otherId, next);
+          return next;
+        });
+        setHistoryReady(true);
+      })
+      .catch(() => {
+        if (opts?.replace) {
+          // Keep any cached/preview paint; only clear when we had nothing to show.
+          setMessages((prev) => {
+            if (prev.length > 0) return prev;
+            writeCachedThread(otherId, []);
+            return [];
+          });
+          setHasMoreOlder(false);
+          setHistoryReady(true);
+        }
+      })
+      .finally(() => {
+        // Ticket 4: Thread opened / read messages clear related notifications for this user
+        if (otherId) {
+          const notifState = useNotificationStore.getState();
+          const hasRelated = notifState.notifications.some(
+            (n) => n.userId === otherId && !n.read && (n.type === 'message' || n.type === 'photo' || n.type === 'voice' || n.type === 'missed_call')
+          );
+          if (hasRelated) {
+            void refreshNotifications();
+          }
+        }
+      });
+  }, [otherId]);
+
+  const markOwnSendStick = useCallback(() => {
+    forceStickAfterSendRef.current = true;
+    stickToBottomRef.current = true;
+  }, []);
+
+  const loadOlderMessages = useCallback(() => {
+    if (!otherId || loadingOlderRef.current || !hasMoreOlder) return;
+    // Skip inbox preview seeds — they are not real server message ids.
+    const oldestId = messages.find((m) => m.id && !isPreviewSeedMessage(m))?.id;
+    if (!oldestId) return;
+
+    const scroller = messagesScrollRef.current;
+    pendingPrependHeightRef.current = scroller?.scrollHeight ?? null;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    // Reading history — never snap to tip after this prepend.
+    stickToBottomRef.current = false;
+
+    messagesAPI
+      .getConversation(otherId, { before: oldestId, limit: CONVERSATION_PAGE_SIZE })
+      .then((r) => {
+        const rows = Array.isArray(r.data) ? (r.data as Message[]) : [];
+        if (rows.length < CONVERSATION_PAGE_SIZE) setHasMoreOlder(false);
+        if (rows.length === 0) {
+          pendingPrependHeightRef.current = null;
+          return;
+        }
+        setMessages((prev) => {
+          const next = prependOlderMessages(prev, rows);
+          if (conversationFingerprint(prev) === conversationFingerprint(next)) {
+            pendingPrependHeightRef.current = null;
+            return prev;
+          }
+          writeCachedThread(otherId, next);
           return next;
         });
       })
       .catch(() => {
-        if (opts?.replace) setMessages([]);
+        pendingPrependHeightRef.current = null;
+      })
+      .finally(() => {
+        loadingOlderRef.current = false;
+        setLoadingOlder(false);
       });
-  }, [otherId]);
+  }, [otherId, hasMoreOlder, messages]);
+
+  const handleThreadScroll = useCallback(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    stickToBottomRef.current = shouldStickToBottomOnUpdate(el);
+    if (
+      shouldLoadOlderOnScroll(el, {
+        loading: loadingOlderRef.current,
+        hasMore: hasMoreOlder,
+      })
+    ) {
+      loadOlderMessages();
+    }
+  }, [hasMoreOlder, loadOlderMessages]);
+
+  // Paint before browser paint: nav preview + session cache (survives lazy remount).
+  useLayoutEffect(() => {
+    if (!otherId) return;
+    const seeded = seedThreadForOpen(otherId, user?.id, navState);
+    if (seeded.length > 0) {
+      setMessages(seeded);
+      setHistoryReady(true);
+    } else {
+      const cached = readCachedThread(otherId);
+      setMessages(cached ? (cached as Message[]) : []);
+      setHistoryReady(cached !== undefined);
+    }
+    const preview = navState?.threadPreview;
+    if (preview && preview.peerId === otherId && preview.name) {
+      setOtherUser((prev) =>
+        prev?.name
+          ? prev
+          : {
+              name: preview.name,
+              photo_url: preview.photoUrl,
+            },
+      );
+    }
+  }, [otherId, user?.id, navState]);
 
   useEffect(() => {
     if (!otherId) return;
+    stickToBottomRef.current = true;
+    forceStickAfterSendRef.current = false;
+    pendingPrependHeightRef.current = null;
+    loadingOlderRef.current = false;
+    setHasMoreOlder(true);
+    setLoadingOlder(false);
+    setIsOtherTyping(false);
+    // Keep any seeded preview while fetching; do not blank the thread.
     loadConversation({ replace: true });
     usersAPI
       .getProfile(otherId)
@@ -231,10 +449,39 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     useUnreadStore.getState().clearUnreadFrom(otherId);
   }, [otherId, loadConversation]);
 
+  // Preserve visual position after older history is prepended (before paint).
+  useLayoutEffect(() => {
+    const prevHeight = pendingPrependHeightRef.current;
+    const el = messagesScrollRef.current;
+    if (prevHeight == null || !el) return;
+    restoreScrollAfterPrepend(el, prevHeight);
+    pendingPrependHeightRef.current = null;
+    // Keep stick off — user was reading history.
+    stickToBottomRef.current = false;
+  }, [messages]);
+
   useEffect(() => {
     // Don't yank scroll while the photo viewer is open — restore on close instead.
+    // Owner lock: while reading earlier history (not near latest edge), never
+    // force scroll on poll / socket / merge / typing re-render.
     if (viewerMsg) return;
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Avoid scrolling away a single inbox-preview seed before real history arrives.
+    if (
+      messages.length > 0 &&
+      messages.every((m) => isPreviewSeedMessage(m))
+    ) {
+      return;
+    }
+    const force = forceStickAfterSendRef.current;
+    if (!force && !stickToBottomRef.current) return;
+    const stick = shouldStickToBottomOnUpdate(messagesScrollRef.current, { force });
+    if (!stick) {
+      stickToBottomRef.current = false;
+      return;
+    }
+    forceStickAfterSendRef.current = false;
+    stickToBottomRef.current = true;
+    bottomRef.current?.scrollIntoView({ behavior: force ? 'smooth' : 'auto' });
   }, [messages, isOtherTyping, viewerMsg]);
 
   const openImageViewer = useCallback((msg: Message) => {
@@ -311,7 +558,12 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
     const onMessage = (data: Message) => {
       if (data.sender_id === otherId || data.receiver_id === otherId) {
-        setMessages((prev) => appendUniqueMessage(prev, data));
+        setMessages((prev) => {
+          const next = appendUniqueMessage(stripPreviewSeedMessages(prev), data);
+          appendCachedThreadMessage(otherId, data);
+          return next;
+        });
+        setHistoryReady(true);
       }
     };
     const onTyping = ({ typing }: { typing: boolean }) => setIsOtherTyping(typing);
@@ -359,13 +611,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       socket.off('meet:updated', onMeetUpdated);
     };
   }, [socket, otherId]);
-
-  // Drive disappearing-message countdowns. 1Hz is enough — the burn window
-  // is 10s, so users see the second-by-second tick clearly.
-  useEffect(() => {
-    const id = window.setInterval(() => setBurnTick((n) => n + 1), 1000);
-    return () => window.clearInterval(id);
-  }, []);
 
   // Auto-dismiss media error toasts so they don't stick around.
   useEffect(() => {
@@ -491,7 +736,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             disappearing,
             maxViews,
           });
-          setMessages((prev) => [...prev, res.data]);
+          markOwnSendStick();
+          commitThreadMessage(res.data);
         }
         clearPendingImage();
         trackEventOnce(
@@ -510,7 +756,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         disappearing,
         maxViews,
       });
-      setMessages((prev) => [...prev, res.data]);
+      markOwnSendStick();
+      commitThreadMessage(res.data);
       clearPendingImage();
       trackEventOnce(
         'first_message_success',
@@ -556,18 +803,25 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       setUploadingMedia(true);
       setMediaError('');
       try {
-        const res = await messagesAPI.sendMedia(otherId, blob, {
+        const file = blob instanceof File ? blob : await videoFileFromRecorderBlob(blob);
+        const res = await messagesAPI.sendMedia(otherId, file, {
           kind: 'video',
           durationMs,
         });
-        setMessages((prev) => [...prev, res.data]);
+        markOwnSendStick();
+        commitThreadMessage(res.data);
       } catch (err: any) {
-        setMediaError(err?.response?.data?.error || 'Failed to send video');
+        const code = String(err?.response?.data?.error || '');
+        setMediaError(
+          /unsupported|not supported|does not match/i.test(code)
+            ? 'This video could not be sent. Record again and tap Send.'
+            : code || 'Failed to send video',
+        );
       } finally {
         setUploadingMedia(false);
       }
     },
-    [otherId, uploadingMedia],
+    [otherId, uploadingMedia, markOwnSendStick, commitThreadMessage],
   );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -612,7 +866,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             kind: 'audio',
             durationMs: duration,
           });
-          setMessages((prev) => [...prev, res.data]);
+          markOwnSendStick();
+          commitThreadMessage(res.data);
         } catch (err: any) {
           setMediaError(err?.response?.data?.error || 'Failed to send voice note');
         } finally {
@@ -638,7 +893,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       setMediaError('Microphone access denied.');
       setRecording(false);
     }
-  }, [recording, uploadingMedia, otherId]);
+  }, [recording, uploadingMedia, otherId, markOwnSendStick, commitThreadMessage]);
 
   const handleStopRecording = useCallback(() => {
     const mr = mediaRecorderRef.current;
@@ -680,7 +935,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       try {
         const res = await messagesAPI.sendMessage(otherId, current);
         const saved: Message = res.data;
-        setMessages((prev) => (prev.some((m) => m.id === saved.id) ? prev : [...prev, saved]));
+        markOwnSendStick();
+        commitThreadMessage(saved);
         trackEventOnce(
           'first_message_success',
           { kind: 'text', surface: 'direct_message' },
@@ -695,8 +951,10 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         const msg = data?.error;
         if (code === 'match_required' || /mutual match/i.test(msg || '')) {
           setMediaError('You need a mutual match before messaging.');
+          setCanJerk(true);
         } else if (code === 'interaction_blocked' || /blocked/i.test(msg || '')) {
           setMediaError('You cannot message this person.');
+          setCanJerk(false);
         } else if (
           (err as { code?: string })?.code === 'ECONNABORTED' ||
           /timeout/i.test(String((err as { message?: string })?.message || ''))
@@ -710,8 +968,22 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         setSending(false);
       }
     },
-    [otherId, user, emitTyping],
+    [otherId, user, emitTyping, markOwnSendStick, commitThreadMessage],
   );
+
+  const handleSendJerk = async () => {
+    if (!otherId || jerking || jerkSent) return;
+    setJerking(true);
+    try {
+      await usersAPI.likeUser(otherId);
+      setJerkSent(true);
+      setMediaError('');
+    } catch {
+      setMediaError('Could not send a jerk. Try again.');
+    } finally {
+      setJerking(false);
+    }
+  };
 
   const handleSend = async (e?: React.FormEvent | React.KeyboardEvent) => {
     e?.preventDefault?.();
@@ -729,13 +1001,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     e.preventDefault();
     void handleSend(e as unknown as React.FormEvent);
   };
-
-  /** Direct, premium openers — never creepy. 18+ consent-first tone. */
-  const ICEBREAKERS = [
-    'Hey — saw you nearby. Free later?',
-    'Your profile stood out. Up for a chat?',
-    'What are you looking for tonight?',
-  ] as const;
 
   /**
    * Desktop Enter + Android Gboard quirks: Chrome often reports IME keys as
@@ -757,7 +1022,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     void handleSend();
   };
 
-  const handleWithdrawMedia = async (messageId: string) => {
+  const handleWithdrawMedia = useCallback(async (messageId: string) => {
     if (withdrawingId) return;
     setWithdrawingId(messageId);
     try {
@@ -768,7 +1033,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     } finally {
       setWithdrawingId(null);
     }
-  };
+  }, [withdrawingId]);
 
   const handleShareLocation = () => {
     if (!otherId || sharingLocation || uploadingMedia) return;
@@ -789,7 +1054,8 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             position.coords.latitude,
             position.coords.longitude,
           );
-          setMessages((prev) => [...prev, res.data]);
+          markOwnSendStick();
+          commitThreadMessage(res.data);
         } catch {
           setMediaError('Could not share your location.');
         } finally {
@@ -853,7 +1119,11 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
           ? 'flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-x-clip'
           : 'fixed inset-0 flex min-w-0 max-w-full flex-col overflow-x-clip'
       }
-      style={{ background: 'var(--bg-primary)' }}
+      style={{
+        background: 'var(--bg-primary)',
+        // Kill iOS double-tap zoom trap on the thread chrome (pinch still allowed).
+        touchAction: 'manipulation',
+      }}
     >
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
@@ -988,261 +1258,25 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         />
       )}
 
-      {/* ── Messages area ─────────────────────────────────────────────────── */}
-      <div
-        ref={messagesScrollRef}
-        className="min-h-0 min-w-0 max-w-full flex-1 overflow-x-clip overflow-y-auto px-3 py-4 sm:px-4"
-        style={{ scrollbarWidth: 'thin' }}
-        data-testid="chat-messages-scroll"
-        data-messaging-thread="1"
-      >
-        {messages.length === 0 && !sending && (
-          <div
-            className="flex flex-col items-center justify-center h-full select-none px-4"
-            data-testid="chat-icebreakers"
-          >
-            <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
-            >
-              <BubbleIcon className="w-8 h-8" style={{ color: 'var(--copper)', opacity: 0.5 }} />
-            </div>
-            <p className="font-medium text-sm text-[var(--cream-muted)]">
-              No messages yet
-            </p>
-            <p className="text-xs mt-1 mb-4 text-center text-[var(--cream-muted)]">
-              Be direct. Consent first.
-            </p>
-            <div className="flex flex-col gap-2 w-full max-w-sm">
-              {ICEBREAKERS.map((line) => (
-                <button
-                  key={line}
-                  type="button"
-                  disabled={sending}
-                  onClick={() => void sendTextMessage(line)}
-                  className="rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-4 py-3 text-left text-[13px] font-medium text-[var(--cream)] transition-colors hover:bg-[rgba(196,131,42,0.2)] disabled:opacity-50"
-                >
-                  {line}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {messages.map((msg, i) => {
-          const isMine = msg.sender_id === user?.id;
-          const prevMsg = messages[i - 1];
-          const nextMsg = messages[i + 1];
-          const showDateSep = !isSameDay(prevMsg?.created_at, msg.created_at);
-          const showTail = !nextMsg || nextMsg.sender_id !== msg.sender_id;
-          const isGrouped = prevMsg && prevMsg.sender_id === msg.sender_id && !showDateSep;
-
-          if (isMissedCallMessage(msg)) {
-            return (
-              <React.Fragment key={msg.id ?? i}>
-                {showDateSep && (
-                  <div className="flex items-center gap-3 my-5">
-                    <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
-                    <span
-                      className="text-[10px] font-semibold px-3 py-1 rounded-full"
-                      style={{
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border-default)',
-                        color: 'var(--cream-muted)',
-                        letterSpacing: '0.06em',
-                      }}
-                    >
-                      {formatDateLabel(msg.created_at)}
-                    </span>
-                    <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
-                  </div>
-                )}
-                <div className="flex justify-center my-4" data-testid="missed-call-log">
-                  <div
-                    className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
-                    style={{
-                      background: 'rgba(176,67,46,0.12)',
-                      border: '1px solid rgba(217,106,82,0.35)',
-                      color: '#D96A52',
-                    }}
-                  >
-                    <MissedCallIcon size={14} className="shrink-0" />
-                    <span className="text-xs font-semibold">{MISSED_CALL_PREVIEW}</span>
-                    {msg.created_at && (
-                      <span className="text-[10px] opacity-80">{formatTime(msg.created_at)}</span>
-                    )}
-                  </div>
-                </div>
-              </React.Fragment>
-            );
-          }
-
-          return (
-            <React.Fragment key={msg.id ?? i}>
-              {/* Date separator */}
-              {showDateSep && (
-                <div className="flex items-center gap-3 my-5">
-                  <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
-                  <span
-                    className="text-[10px] font-semibold px-3 py-1 rounded-full"
-                    style={{
-                      background: 'var(--bg-card)',
-                      border: '1px solid var(--border-default)',
-                      color: 'var(--cream-muted)',
-                      letterSpacing: '0.06em',
-                    }}
-                  >
-                    {formatDateLabel(msg.created_at)}
-                  </span>
-                  <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
-                </div>
-              )}
-
-              {/* Message row — min-w-0 so long/media bubbles cannot widen the phone viewport */}
-              <div
-                className={`flex min-w-0 max-w-full ${isMine ? 'justify-end' : 'justify-start'} ${
-                  isGrouped ? 'mt-0.5' : 'mt-3'
-                }`}
-              >
-                {/* Received: avatar placeholder for spacing */}
-                {!isMine && (
-                  <div className="mr-2 mb-1 flex w-7 flex-shrink-0 items-end">
-                    {showTail && otherId ? (
-                      <ProfilePhotoLink
-                        userId={otherId}
-                        name={otherUser?.name}
-                        className="block"
-                        data-testid={`chat-bubble-avatar-${otherId}`}
-                      >
-                        {otherUser?.photo_url ? (
-                          <div
-                            className="h-7 w-7 overflow-hidden rounded-full"
-                            style={{ border: '1px solid var(--border-default)', flexShrink: 0 }}
-                          >
-                            <img
-                              src={otherUser.photo_url}
-                              alt={otherUser.name}
-                              className="h-full w-full object-cover"
-                            />
-                          </div>
-                        ) : (
-                          <SilhouetteAvatar size={28} variant="chat" />
-                        )}
-                      </ProfilePhotoLink>
-                    ) : null}
-                  </div>
-                )}
-
-                <div
-                  className={`flex min-w-0 max-w-[min(78%,20rem)] flex-col overflow-hidden ${
-                    isMine ? 'items-end' : 'items-start'
-                  }`}
-                >
-                  {msg.media_type === 'image' ? (
-                    <ImageBubble
-                      msg={msg}
-                      isMine={isMine}
-                      showTail={showTail}
-                      onOpen={openImageViewer}
-                      onWithdraw={
-                        canWithdrawMedia(msg, user?.id)
-                          ? () => msg.id && handleWithdrawMedia(msg.id)
-                          : undefined
-                      }
-                      withdrawing={withdrawingId === msg.id}
-                    />
-                  ) : msg.media_type === 'audio' ? (
-                    <AudioBubble
-                      msg={msg}
-                      isMine={isMine}
-                      showTail={showTail}
-                      onWithdraw={
-                        canWithdrawMedia(msg, user?.id)
-                          ? () => msg.id && handleWithdrawMedia(msg.id)
-                          : undefined
-                      }
-                      withdrawing={withdrawingId === msg.id}
-                    />
-                  ) : msg.media_type === 'video' ? (
-                    <VideoBubble
-                      msg={msg}
-                      isMine={isMine}
-                      showTail={showTail}
-                      onWithdraw={
-                        canWithdrawMedia(msg, user?.id)
-                          ? () => msg.id && handleWithdrawMedia(msg.id)
-                          : undefined
-                      }
-                      withdrawing={withdrawingId === msg.id}
-                    />
-                  ) : msg.media_type === 'location' ? (
-                    <LocationBubble
-                      msg={msg}
-                      isMine={isMine}
-                      showTail={showTail}
-                      peerName={otherUser?.name}
-                    />
-                  ) : (
-                    <div
-                      className="relative max-w-full break-words px-4 py-2.5 text-sm leading-relaxed [overflow-wrap:anywhere]"
-                      style={
-                        isMine
-                          ? {
-                              background: 'linear-gradient(135deg, #C4832A, #A45E18)',
-                              color: '#FFF5E6',
-                              borderRadius: showTail
-                                ? '18px 18px 4px 18px'
-                                : '18px 18px 18px 18px',
-                              boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
-                            }
-                          : {
-                              background: 'var(--bg-card)',
-                              border: '1px solid var(--border-default)',
-                              color: 'var(--cream)',
-                              borderRadius: showTail
-                                ? '18px 18px 18px 4px'
-                                : '18px 18px 18px 18px',
-                            }
-                      }
-                    >
-                      {msg.message}
-                    </div>
-                  )}
-                  {/* Timestamp */}
-                  {showTail && (
-                    <span
-                      className="text-[10px] mt-1 px-1"
-                      style={{ color: '#6B5035' }}
-                    >
-                      {formatTime(msg.created_at)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </React.Fragment>
-          );
-        })}
-
-        {/* Typing indicator */}
-        {isOtherTyping && (
-          <div className="flex justify-start mt-3">
-            <div className="w-7 flex-shrink-0 mr-2" />
-            <div
-              className="px-4 py-3 rounded-[18px] rounded-bl-[4px] flex items-center gap-1.5"
-              style={{
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border-default)',
-              }}
-            >
-              <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
-              <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
-              <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
-            </div>
-          </div>
-        )}
-
-        <div ref={bottomRef} />
-      </div>
+      {/* ── Messages area — memoized so composer keystrokes do not redraw bubbles ─ */}
+      <ChatThreadScroll
+        messages={messages}
+        userId={user?.id}
+        otherId={otherId}
+        otherUser={otherUser}
+        isOtherTyping={isOtherTyping}
+        withdrawingId={withdrawingId}
+        sending={sending}
+        historyReady={historyReady}
+        loadingOlder={loadingOlder}
+        hasMoreOlder={hasMoreOlder}
+        messagesScrollRef={messagesScrollRef}
+        bottomRef={bottomRef}
+        onScroll={handleThreadScroll}
+        onOpenImage={openImageViewer}
+        onWithdrawMedia={handleWithdrawMedia}
+        onSendIcebreaker={sendTextMessage}
+      />
 
       {/* ── Input bar ─────────────────────────────────────────────────────── */}
       <div
@@ -1251,14 +1285,39 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       >
         {mediaError && (
           <div
-            className="mb-2 text-[11px] px-3 py-2 rounded-lg"
+            className="mb-2 flex items-center justify-between gap-2 text-[11px] px-3 py-2 rounded-lg"
             style={{
               background: 'rgba(196,131,42,0.12)',
               border: '1px solid rgba(196,131,42,0.35)',
               color: 'var(--cream)',
             }}
           >
-            {mediaError}
+            <span>{mediaError}</span>
+            {canJerk && (
+              <button
+                type="button"
+                onClick={handleSendJerk}
+                disabled={jerking || jerkSent}
+                data-testid="chat-jerk-button"
+                aria-label={jerkSent ? 'Jerk sent' : jerking ? 'Sending jerk' : 'Send a jerk'}
+                title={jerkSent ? 'Jerk sent' : 'Send a jerk'}
+                className="shrink-0 rounded-full bg-[#C4832A] px-3 py-1 text-[11px] font-bold text-[#1A0E03] transition-transform active:scale-95 disabled:opacity-50"
+              >
+                {jerkSent ? 'Jerk sent' : jerking ? 'Sending…' : 'Send a jerk'}
+              </button>
+            )}
+          </div>
+        )}
+        {jerkSent && !mediaError && (
+          <div
+            className="mb-2 text-[11px] px-3 py-1.5 rounded-lg text-center"
+            style={{
+              background: 'rgba(196,131,42,0.12)',
+              border: '1px solid rgba(196,131,42,0.35)',
+              color: 'var(--cream)',
+            }}
+          >
+            Jerk sent to {otherUser?.name ?? 'them'}. They will see your interest.
           </div>
         )}
 
@@ -1386,12 +1445,14 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 enterKeyHint="send"
                 inputMode="text"
                 data-testid="chat-text-input"
-                className="w-full min-w-0 rounded-full px-3 py-2.5 text-sm transition-all duration-200 focus:outline-none sm:px-5 sm:py-3"
+                // ≥16px: iOS Safari auto-zooms focused inputs under 16px and sticks >1× until pinch-out.
+                className="w-full min-w-0 rounded-full px-3 py-2.5 text-[16px] leading-snug transition-all duration-200 focus:outline-none sm:px-5 sm:py-3"
                 style={{
                   background: 'var(--bg-card)',
                   border: '1px solid var(--border-default)',
                   color: 'var(--cream)',
                   caretColor: '#C4832A',
+                  fontSize: '16px',
                 }}
                 onFocus={(e) => {
                   e.currentTarget.style.border = '1px solid rgba(196,131,42,0.5)';
@@ -1747,6 +1808,33 @@ const FlameIcon = ({
     <path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14a8 8 0 0 0 16 0c0-4.16-2-7.86-6.5-13.33z" />
   </svg>
 );
+
+const MessageReceiptTicks = ({
+  read,
+  isMine: _isMine,
+}: {
+  read?: boolean;
+  isMine?: boolean;
+}) => {
+  // Brand Soft lock for ticket 6 (double ticks) — exact rules:
+  // - Light ticks on dark skins: cream #F0E0C0 delivered, copper #E0A14A read
+  // - Dark ticks on light skins: night/card ink #1E1508 delivered, dark copper #8B5A1A read
+  // - No grey-on-grey
+  // Wires to real app theme mechanism (data-theme="light" / html.theme-light) via CSS variables:
+  // --mr-tick-delivered and --mr-tick-read defined in menrush-tokens.css.
+  return (
+    <span
+      className={`inline-flex items-center ml-1 align-baseline tracking-[-0.22em] text-[11px] font-bold ${
+        read ? 'mr-receipt-tick-read' : 'mr-receipt-tick-delivered'
+      }`}
+      title={read ? 'Read' : 'Delivered'}
+      aria-label={read ? 'Read' : 'Delivered'}
+      data-testid={read ? 'message-tick-read' : 'message-tick-delivered'}
+    >
+      ✓✓
+    </span>
+  );
+};
 
 function formatDuration(ms?: number | null): string {
   if (!ms || ms < 0) return '0:00';
@@ -2547,6 +2635,10 @@ const AudioBubble: React.FC<AudioBubbleProps> = ({ msg, isMine, showTail, onWith
 };
 
 // ── VideoBubble ──────────────────────────────────────────────────────────────
+// Progressive Range stream into <video> — do NOT await a JWT media-url refresh
+// (or full blob) before first frame. Lock play src so open-thread poll re-grants
+// cannot remount src every ~2.5s (that caused forever black + duration `--:--`).
+// Hard timeout → tap-to-retry; refresh grant only on retry / missing URL.
 
 interface VideoBubbleProps {
   msg: Message;
@@ -2557,15 +2649,87 @@ interface VideoBubbleProps {
 }
 
 const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWithdraw, withdrawing }) => {
-  const url = getPhotoUrl(msg.media_url || undefined);
+  const propUrl = getPhotoUrl(msg.media_url || undefined);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [armed, setArmed] = useState(false);
+  const loadGenRef = useRef(0);
+  const [loadState, setLoadState] = useState<ChatVideoLoadState>('idle');
+  const [playSrc, setPlaySrc] = useState<string | null>(null);
+  const [errorHint, setErrorHint] = useState<string | null>(null);
   const withdrawn = isWithdrawnMedia(msg);
   const radius = showTail
     ? isMine
       ? '18px 18px 4px 18px'
       : '18px 18px 18px 4px'
     : '18px';
+
+  useEffect(() => {
+    return () => {
+      loadGenRef.current += 1;
+    };
+  }, []);
+
+  // Wait for metadata / first frame (or short timeout / error) once src is locked.
+  // Keep error listeners through `ready` so a mid-play void surfaces retry UI
+  // instead of a forever-black native player with duration `--:--`.
+  useEffect(() => {
+    if ((loadState !== 'loading' && loadState !== 'ready') || !playSrc) return;
+    const el = videoRef.current;
+    if (!el) return;
+
+    const gen = loadGenRef.current;
+    let settled = loadState === 'ready';
+
+    const succeed = () => {
+      if (settled || gen !== loadGenRef.current) return;
+      settled = true;
+      setLoadState('ready');
+      void el.play().catch(() => undefined);
+    };
+
+    const fail = (hint: string) => {
+      if (gen !== loadGenRef.current) return;
+      settled = true;
+      setPlaySrc(null);
+      setErrorHint(hint);
+      setLoadState('error');
+    };
+
+    const onMeta = () => {
+      if (loadState === 'loading') succeed();
+    };
+    const onCanPlay = () => {
+      if (loadState === 'loading') succeed();
+    };
+    const onLoadedData = () => {
+      if (loadState === 'loading') succeed();
+    };
+    const onError = () => fail('Download failed. Tap to try again');
+
+    el.addEventListener('loadedmetadata', onMeta);
+    el.addEventListener('loadeddata', onLoadedData);
+    el.addEventListener('canplay', onCanPlay);
+    el.addEventListener('error', onError);
+
+    let timer: number | undefined;
+    if (loadState === 'loading') {
+      timer = window.setTimeout(
+        () => fail('Still downloading. Tap to try again'),
+        VIDEO_LOAD_TIMEOUT_MS,
+      );
+      // Cached / already-buffered
+      if (el.readyState >= HTMLMediaElement.HAVE_METADATA) {
+        succeed();
+      }
+    }
+
+    return () => {
+      el.removeEventListener('loadedmetadata', onMeta);
+      el.removeEventListener('loadeddata', onLoadedData);
+      el.removeEventListener('canplay', onCanPlay);
+      el.removeEventListener('error', onError);
+      if (timer != null) window.clearTimeout(timer);
+    };
+  }, [loadState, playSrc]);
 
   if (withdrawn) {
     return (
@@ -2586,16 +2750,65 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
 
   const blurred = shouldBlurMedia(msg.media_clear);
 
-  const armAndPlay = () => {
-    if (blurred || !url) return;
-    setArmed(true);
-    // Defer play until src is attached with preload metadata (range-friendly).
-    requestAnimationFrame(() => {
-      const el = videoRef.current;
-      if (!el) return;
-      void el.play().catch(() => undefined);
-    });
+  const beginLoad = (opts?: { refreshGrant?: boolean }) => {
+    if (blurred) return;
+    const gen = ++loadGenRef.current;
+    const preferRefresh = opts?.refreshGrant === true;
+    setLoadState('loading');
+    setErrorHint(null);
+
+    // Fast path: stream the thread-signed URL immediately (progressive Range).
+    // Do not await JWT /media-url before first byte — that alone blew the 1–2s bar.
+    if (!preferRefresh && propUrl) {
+      setPlaySrc(propUrl);
+      return;
+    }
+
+    // Retry / missing URL: refresh grant, then stream the fresh signed URL.
+    setPlaySrc(null);
+    void (async () => {
+      let refreshed: string | null = null;
+      let mime: string | undefined;
+
+      if (msg.id) {
+        try {
+          const res = await messagesAPI.getMediaUrl(msg.id);
+          if (gen !== loadGenRef.current) return;
+          refreshed = getPhotoUrl(res.data.url) || null;
+          mime = res.data.mime_type;
+        } catch {
+          // Fall through to the thread URL if refresh fails.
+        }
+      }
+
+      if (gen !== loadGenRef.current) return;
+
+      const unsupported = chatVideoUnsupportedHint(mime);
+      if (unsupported) {
+        setErrorHint(unsupported);
+        setLoadState('error');
+        return;
+      }
+
+      const resolved = resolveChatVideoPlayUrl({
+        threadUrl: propUrl,
+        refreshedUrl: refreshed,
+        preferRefresh: true,
+      });
+
+      if (!resolved) {
+        setErrorHint('Video unavailable');
+        setLoadState('error');
+        return;
+      }
+
+      setPlaySrc(resolved);
+    })();
   };
+
+  const showPlayer = (loadState === 'loading' || loadState === 'ready') && !!playSrc;
+  const showOverlay =
+    loadState === 'idle' || loadState === 'loading' || loadState === 'error' || blurred;
 
   return (
     <div className={`flex max-w-full flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
@@ -2607,37 +2820,68 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
           background: 'var(--bg-elevated)',
         }}
       >
-        {url ? (
+        {propUrl || showPlayer ? (
           <SoftBlurMedia blurred={blurred} data-testid="video-bubble">
-            {armed ? (
-              <video
-                ref={videoRef}
-                src={url}
-                controls={!blurred}
-                playsInline
-                // metadata + Accept-Ranges lets Safari paint/play before full file.
-                preload="metadata"
-                className="block h-auto max-h-[320px] w-full bg-black"
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={armAndPlay}
-                data-testid="video-bubble-open"
-                className="flex h-[180px] w-full flex-col items-center justify-center gap-2 bg-black/90 text-[#F0E0C0]"
-                aria-label="Open video"
-              >
-                <span
-                  className="flex h-12 w-12 items-center justify-center rounded-full bg-[#C4832A] text-lg font-extrabold text-[#1A0E03]"
-                  aria-hidden
-                >
-                  ▶
-                </span>
-                <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--cream-muted)]">
-                  Tap to open
-                </span>
-              </button>
-            )}
+            <div className="relative w-full bg-black">
+              {showPlayer ? (
+                <video
+                  ref={videoRef}
+                  key={playSrc}
+                  src={playSrc || undefined}
+                  controls={loadState === 'ready' && !blurred}
+                  playsInline
+                  {...{ 'webkit-playsinline': 'true' }}
+                  // auto + Accept-Ranges: short notes start painting before full file.
+                  preload="auto"
+                  className="block h-auto min-h-[180px] max-h-[320px] w-full bg-black"
+                  data-testid="video-bubble-player"
+                  data-load-state={loadState}
+                />
+              ) : (
+                <div className="h-[180px] w-full bg-black/90" aria-hidden />
+              )}
+
+              {showOverlay && !blurred ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 px-3">
+                  {loadState === 'loading' ? (
+                    <div
+                      className="flex flex-col items-center gap-2 text-[#F0E0C0]"
+                      data-testid="video-bubble-loading"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <PulseRing size={44} />
+                      <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--cream-muted)]">
+                        Loading…
+                      </span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => beginLoad({ refreshGrant: loadState === 'error' })}
+                      data-testid={loadState === 'error' ? 'video-bubble-retry' : 'video-bubble-open'}
+                      className="flex flex-col items-center justify-center gap-2 text-[#F0E0C0]"
+                      aria-label={loadState === 'error' ? 'Retry video' : 'Open video'}
+                    >
+                      <span
+                        className="flex h-12 w-12 items-center justify-center rounded-full bg-[#C4832A] text-lg font-extrabold text-[#1A0E03]"
+                        aria-hidden
+                      >
+                        {loadState === 'error' ? '↻' : '▶'}
+                      </span>
+                      <span className="text-center text-[11px] font-bold uppercase tracking-wide text-[var(--cream-muted)]">
+                        {loadState === 'error' ? 'Tap to try again' : 'Tap to open'}
+                      </span>
+                      {loadState === 'error' && errorHint ? (
+                        <span className="max-w-[16rem] text-center text-[10px] font-medium normal-case tracking-normal text-[#F0E0C0]/90">
+                          {errorHint}
+                        </span>
+                      ) : null}
+                    </button>
+                  )}
+                </div>
+              ) : null}
+            </div>
           </SoftBlurMedia>
         ) : (
           <div className="px-4 py-6 text-xs text-[var(--cream-muted)]">Video unavailable</div>
@@ -2654,3 +2898,335 @@ const VideoBubble: React.FC<VideoBubbleProps> = ({ msg, isMine, showTail, onWith
     </div>
   );
 };
+
+/**
+ * Isolated message list — keeps typing/composer state from re-rendering every bubble.
+ *
+ * PERF next pass: virtualize with @tanstack/react-virtual when threads regularly
+ * exceed ~80 messages on phone; preserve date separators + media bubbles + scroll restore.
+ */
+interface ChatThreadScrollProps {
+  messages: Message[];
+  userId?: string;
+  otherId?: string;
+  otherUser: OtherUser | null;
+  isOtherTyping: boolean;
+  withdrawingId: string | null;
+  sending: boolean;
+  historyReady: boolean;
+  loadingOlder: boolean;
+  hasMoreOlder: boolean;
+  messagesScrollRef: React.RefObject<HTMLDivElement | null>;
+  bottomRef: React.RefObject<HTMLDivElement | null>;
+  onScroll: () => void;
+  onOpenImage: (msg: Message) => void;
+  onWithdrawMedia: (id: string) => void | Promise<void>;
+  onSendIcebreaker: (text: string) => void | Promise<void>;
+}
+
+const ChatThreadScroll = memo(function ChatThreadScroll({
+  messages,
+  userId,
+  otherId,
+  otherUser,
+  isOtherTyping,
+  withdrawingId,
+  sending,
+  historyReady,
+  loadingOlder,
+  hasMoreOlder,
+  messagesScrollRef,
+  bottomRef,
+  onScroll,
+  onOpenImage,
+  onWithdrawMedia,
+  onSendIcebreaker,
+}: ChatThreadScrollProps) {
+  return (
+      <div
+        ref={messagesScrollRef}
+        onScroll={onScroll}
+        className="min-h-0 min-w-0 max-w-full flex-1 overflow-x-clip overflow-y-auto px-3 py-4 sm:px-4 [content-visibility:auto] [overflow-anchor:none]"
+        style={{ scrollbarWidth: 'thin' }}
+        data-testid="chat-messages-scroll"
+        data-messaging-thread="1"
+        data-stick-policy="near-bottom-or-own-send"
+      >
+        {(loadingOlder || hasMoreOlder) && messages.length > 0 && (
+          <div
+            className="mb-3 flex justify-center"
+            data-testid="chat-load-older"
+            aria-hidden={!loadingOlder}
+          >
+            <span className="text-[10px] font-medium text-[var(--cream-muted)]">
+              {loadingOlder ? 'Loading earlier…' : hasMoreOlder ? 'Scroll for earlier' : ''}
+            </span>
+          </div>
+        )}
+        {messages.length === 0 &&
+          !sending &&
+          (!historyReady || threadLikelyHasHistory(otherId)) && (
+          <div
+            className="flex flex-col gap-3 pt-2"
+            data-testid="chat-history-loading"
+            aria-busy="true"
+            aria-label="Loading conversation"
+          >
+            {[0.92, 0.7, 0.84].map((width, i) => (
+              <div
+                key={i}
+                className={`h-11 animate-pulse rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] ${
+                  i % 2 === 0 ? 'self-start' : 'self-end'
+                }`}
+                style={{ width: `${Math.round(width * 100)}%`, maxWidth: 280 }}
+              />
+            ))}
+          </div>
+        )}
+
+        {messages.length === 0 &&
+          !sending &&
+          historyReady &&
+          !threadLikelyHasHistory(otherId) && (
+          <div
+            className="flex flex-col items-center justify-center h-full select-none px-4"
+            data-testid="chat-icebreakers"
+          >
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
+            >
+              <BubbleIcon className="w-8 h-8" style={{ color: 'var(--copper)', opacity: 0.5 }} />
+            </div>
+            <p className="font-medium text-sm text-[var(--cream-muted)]">
+              No messages yet
+            </p>
+            <p className="text-xs mt-1 mb-4 text-center text-[var(--cream-muted)]">
+              Be direct. Consent first.
+            </p>
+            <div className="flex flex-col gap-2 w-full max-w-sm">
+              {ICEBREAKERS.map((line) => (
+                <button
+                  key={line}
+                  type="button"
+                  disabled={sending}
+                  onClick={() => void onSendIcebreaker(line)}
+                  className="rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-4 py-3 text-left text-[13px] font-medium text-[var(--cream)] transition-colors hover:bg-[rgba(196,131,42,0.2)] disabled:opacity-50"
+                >
+                  {line}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {messages.map((msg, i) => {
+          const isMine = msg.sender_id === userId;
+          const prevMsg = messages[i - 1];
+          const nextMsg = messages[i + 1];
+          const showDateSep = !isSameDay(prevMsg?.created_at, msg.created_at);
+          const showTail = !nextMsg || nextMsg.sender_id !== msg.sender_id;
+          const isGrouped = prevMsg && prevMsg.sender_id === msg.sender_id && !showDateSep;
+
+          if (isMissedCallMessage(msg)) {
+            return (
+              <React.Fragment key={msg.id ?? i}>
+                {showDateSep && (
+                  <div className="flex items-center gap-3 my-5">
+                    <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
+                    <span
+                      className="text-[10px] font-semibold px-3 py-1 rounded-full"
+                      style={{
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border-default)',
+                        color: 'var(--cream-muted)',
+                        letterSpacing: '0.06em',
+                      }}
+                    >
+                      {formatDateLabel(msg.created_at)}
+                    </span>
+                    <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
+                  </div>
+                )}
+                <div className="flex justify-center my-4" data-testid="missed-call-log">
+                  <div
+                    className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
+                    style={{
+                      background: 'rgba(176,67,46,0.12)',
+                      border: '1px solid rgba(217,106,82,0.35)',
+                      color: '#D96A52',
+                    }}
+                  >
+                    <MissedCallIcon size={14} className="shrink-0" />
+                    <span className="text-xs font-semibold">{MISSED_CALL_PREVIEW}</span>
+                    {msg.created_at && (
+                      <span className="text-[10px] opacity-80">{formatTime(msg.created_at)}</span>
+                    )}
+                  </div>
+                </div>
+              </React.Fragment>
+            );
+          }
+
+          return (
+            <React.Fragment key={msg.id ?? i}>
+              {/* Date separator */}
+              {showDateSep && (
+                <div className="flex items-center gap-3 my-5">
+                  <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
+                  <span
+                    className="text-[10px] font-semibold px-3 py-1 rounded-full"
+                    style={{
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border-default)',
+                      color: 'var(--cream-muted)',
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    {formatDateLabel(msg.created_at)}
+                  </span>
+                  <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
+                </div>
+              )}
+
+              {/* Message row — min-w-0 so long/media bubbles cannot widen the phone viewport */}
+              <div
+                className={`flex min-w-0 max-w-full [content-visibility:auto] [contain-intrinsic-size:auto_72px] ${isMine ? 'justify-end' : 'justify-start'} ${
+                  isGrouped ? 'mt-0.5' : 'mt-3'
+                }`}
+              >
+                {/* Received: avatar placeholder for spacing */}
+                {!isMine && (
+                  <div className="mr-2 mb-1 flex w-7 flex-shrink-0 items-end">
+                    {showTail && otherId ? (
+                      <ProfilePhotoLink
+                        userId={otherId}
+                        name={otherUser?.name}
+                        className="block"
+                        data-testid={`chat-bubble-avatar-${otherId}`}
+                      >
+                        <ChatBubbleFace
+                          userId={otherId}
+                          name={otherUser?.name}
+                          photoUrl={otherUser?.photo_url}
+                        />
+                      </ProfilePhotoLink>
+                    ) : null}
+                  </div>
+                )}
+
+                <div
+                  className={`flex min-w-0 max-w-[min(78%,20rem)] flex-col overflow-hidden ${
+                    isMine ? 'items-end' : 'items-start'
+                  }`}
+                >
+                  {msg.media_type === 'image' ? (
+                    <ImageBubble
+                      msg={msg}
+                      isMine={isMine}
+                      showTail={showTail}
+                      onOpen={onOpenImage}
+                      onWithdraw={
+                        canWithdrawMedia(msg, userId)
+                          ? () => msg.id && void onWithdrawMedia(msg.id)
+                          : undefined
+                      }
+                      withdrawing={withdrawingId === msg.id}
+                    />
+                  ) : msg.media_type === 'audio' ? (
+                    <AudioBubble
+                      msg={msg}
+                      isMine={isMine}
+                      showTail={showTail}
+                      onWithdraw={
+                        canWithdrawMedia(msg, userId)
+                          ? () => msg.id && void onWithdrawMedia(msg.id)
+                          : undefined
+                      }
+                      withdrawing={withdrawingId === msg.id}
+                    />
+                  ) : msg.media_type === 'video' ? (
+                    <VideoBubble
+                      msg={msg}
+                      isMine={isMine}
+                      showTail={showTail}
+                      onWithdraw={
+                        canWithdrawMedia(msg, userId)
+                          ? () => msg.id && void onWithdrawMedia(msg.id)
+                          : undefined
+                      }
+                      withdrawing={withdrawingId === msg.id}
+                    />
+                  ) : msg.media_type === 'location' ? (
+                    <LocationBubble
+                      msg={msg}
+                      isMine={isMine}
+                      showTail={showTail}
+                      peerName={otherUser?.name}
+                    />
+                  ) : (
+                    <div
+                      className="relative max-w-full break-words px-4 py-2.5 text-sm leading-relaxed [overflow-wrap:anywhere]"
+                      style={
+                        isMine
+                          ? {
+                              background: 'linear-gradient(135deg, #C4832A, #A45E18)',
+                              color: '#FFF5E6',
+                              borderRadius: showTail
+                                ? '18px 18px 4px 18px'
+                                : '18px 18px 18px 18px',
+                              boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
+                            }
+                          : {
+                              background: 'var(--bg-card)',
+                              border: '1px solid var(--border-default)',
+                              color: 'var(--cream)',
+                              borderRadius: showTail
+                                ? '18px 18px 18px 4px'
+                                : '18px 18px 18px 18px',
+                            }
+                      }
+                    >
+                      {msg.message}
+                    </div>
+                  )}
+                  {/* Timestamp & double ticks */}
+                  {showTail && (
+                    <span
+                      className="inline-flex items-center text-[10px] mt-1 px-1 text-[var(--cream-muted)]"
+                    >
+                      {formatTime(msg.created_at)}
+                      {isMine && (
+                        <MessageReceiptTicks read={msg.read} isMine={isMine} />
+                      )}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </React.Fragment>
+          );
+        })}
+
+        {/* Typing indicator */}
+        {isOtherTyping && (
+          <div className="flex justify-start mt-3">
+            <div className="w-7 flex-shrink-0 mr-2" />
+            <div
+              className="px-4 py-3 rounded-[18px] rounded-bl-[4px] flex items-center gap-1.5"
+              style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-default)',
+              }}
+            >
+              <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
+              <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
+              <span className="typing-dot w-2 h-2 rounded-full" style={{ background: '#C4832A' }} />
+            </div>
+          </div>
+        )}
+
+        <div ref={bottomRef} />
+      </div>
+
+  );
+});

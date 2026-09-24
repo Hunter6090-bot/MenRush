@@ -2,7 +2,12 @@ import { Router, Response } from 'express';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { profileMetaService } from '../services/profile-meta.service';
 import { premiumService } from '../services/premium.service';
-import { MoodSchema, GhostSchema, LiveLocationSharingSchema } from '../types/validation';
+import {
+  MoodSchema,
+  GhostSchema,
+  LiveLocationSharingSchema,
+  MapPinFuzzSchema,
+} from '../types/validation';
 
 const router = Router();
 router.use(authMiddleware, verifiedMiddleware);
@@ -77,6 +82,31 @@ router.post('/live-location-sharing', async (req: AuthRequest, res: Response) =>
   try {
     await profileMetaService.setLiveLocationSharing(req.userId!, parsed.data.enabled);
     res.json({ enabled: parsed.data.enabled });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/map-pin-fuzz', async (req: AuthRequest, res: Response) => {
+  try {
+    const map_pin_fuzz_m = await profileMetaService.getMapPinFuzz(req.userId!);
+    res.json({ map_pin_fuzz_m });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/map-pin-fuzz', async (req: AuthRequest, res: Response) => {
+  const parsed = MapPinFuzzSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.errors[0].message });
+  }
+  try {
+    const map_pin_fuzz_m = await profileMetaService.setMapPinFuzz(
+      req.userId!,
+      parsed.data.map_pin_fuzz_m,
+    );
+    res.json({ map_pin_fuzz_m });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

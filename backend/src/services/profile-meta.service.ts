@@ -1,4 +1,8 @@
 import { query } from '../db';
+import {
+  clampMapPinFuzzM,
+  MAP_PIN_FUZZ_DEFAULT_M,
+} from '../lib/mapPinFuzz';
 
 /**
  * Mood + Ghost-mode persistence.
@@ -91,6 +95,30 @@ export const profileMetaService = {
   async setLiveLocationSharing(userId: string, enabled: boolean): Promise<void> {
     const { matchLocationService } = await import('./match-location.service');
     await matchLocationService.setSharingEnabled(userId, enabled);
+  },
+
+  async getMapPinFuzz(userId: string): Promise<number> {
+    const res = await query(
+      `SELECT COALESCE(map_pin_fuzz_m, $2) AS map_pin_fuzz_m
+         FROM profiles
+        WHERE user_id = $1`,
+      [userId, MAP_PIN_FUZZ_DEFAULT_M],
+    );
+    if (!res.rows[0]) return MAP_PIN_FUZZ_DEFAULT_M;
+    return clampMapPinFuzzM(Number(res.rows[0].map_pin_fuzz_m));
+  },
+
+  async setMapPinFuzz(userId: string, meters: number): Promise<number> {
+    const mapPinFuzzM = clampMapPinFuzzM(meters);
+    await query(
+      `INSERT INTO profiles (user_id, map_pin_fuzz_m, updated_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (user_id) DO UPDATE
+         SET map_pin_fuzz_m = EXCLUDED.map_pin_fuzz_m,
+             updated_at = NOW()`,
+      [userId, mapPinFuzzM],
+    );
+    return mapPinFuzzM;
   },
 };
 

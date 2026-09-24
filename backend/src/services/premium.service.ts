@@ -1,18 +1,26 @@
 import type { PoolClient } from 'pg';
 import pool, { query } from '../db';
-import { ccbillService, CCBillTier } from './ccbill.service';
 import { isInviteRequired } from './invite-code.service';
 import { isAlwaysPremiumName } from '../lib/always-premium';
 
 type Queryable = PoolClient | typeof pool;
 
-/** Fallback when webhook body omits billed amount — matches locked CCBill price. */
+export type PaymentProcessor = 'verotel' | 'segpay';
+
+export class BillingNotConfiguredError extends Error {
+  constructor(message = 'Billing is not configured') {
+    super(message);
+    this.name = 'BillingNotConfiguredError';
+  }
+}
+
+/** Fallback when webhook body omits billed amount — matches standard premium price. */
 export const PREMIUM_PAID_PRICE = 6.99;
 
 /**
  * Waitlist gift cutoff: UK launch midnight 1 Oct 2026 (BST = UTC+1).
  * Anyone who registers before this gets 30 days Premium with no code.
- * Pride grants replace this gift (do not stack).
+ * Pride / BSF26 / MR3FREE 3-month grants replace this gift (do not stack).
  */
 export const WAITLIST_GIFT_CUTOFF = new Date('2026-09-30T23:00:00Z');
 export const WAITLIST_GIFT_DAYS = 30;
@@ -71,27 +79,6 @@ export class PremiumRequiredError extends Error {
     super(message);
     this.name = 'PremiumRequiredError';
   }
-}
-
-function tierFromPassthrough(_raw: Record<string, string>): PremiumTier {
-  return 'premium';
-}
-
-async function syncUserEntitlements(
-  userId: string,
-  tier: PremiumTier,
-  active: boolean,
-  until: Date | null,
-): Promise<void> {
-  await query(
-    `UPDATE users
-     SET premium_tier = $2,
-         is_premium = $3,
-         premium_until = $4,
-         updated_at = NOW()
-     WHERE id = $1`,
-    [userId, tier, active, until],
-  );
 }
 
 export const premiumService = {
@@ -154,7 +141,7 @@ export const premiumService = {
 
   /**
    * Immediate 30-day Premium for open signup before UK launch (Terms 7.2).
-   * Call only when no Pride path applied for this registration.
+   * Call only when no Pride / BSF26 / MR3FREE path applied for this registration.
    */
   async grantWaitlistGift(
     userId: string,
@@ -220,7 +207,7 @@ export const premiumService = {
     return { premiumUntil, skippedLifetime: false };
   },
 
-  /** Parse billed amount from a CCBill-like webhook body; fallback to list price. */
+  /** Parse billed amount from a webhook body; fallback to list price. */
   extractPaymentAmount(raw: Record<string, string>): number {
     const keys = [
       'billedAmount',
@@ -281,153 +268,21 @@ export const premiumService = {
     return result.rows[0]?.count ?? 0;
   },
 
-  buildCheckoutUrl(userId: string, tier: CCBillTier, returnUrl?: string) {
-    return ccbillService.buildFlexFormUrl(userId, tier, returnUrl);
+  buildCheckoutUrl(_userId: string, _tier: PremiumTier, _returnUrl?: string): string {
+    // Verotel is active merchant under review; live checkout wiring disabled until approved.
+    throw new BillingNotConfiguredError();
   },
 
   getPlans() {
-    return ccbillService.getPlans();
+    return [
+      {
+        id: 'premium' as const,
+        name: 'MenRush Premium',
+        tagline: 'See who matched you. Boost. Ghost browse. No caps.',
+        price: '6.99',
+        period_days: 30,
+      },
+    ];
   },
 
-  async activateFromWebhook(event: ReturnType<typeof ccbillService.parseWebhook>) {
-    if (!event.userId) {
-      return { ok: false, reason: 'missing_user_id' };
-    }
-
-    const tier = tierFromPassthrough(event.raw);
-    const periodEnd =
-      event.periodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-
-    await query(
-      `UPDATE subscriptions
-       SET status = 'canceled', canceled_at = NOW(), updated_at = NOW()
-       WHERE user_id = $1 AND status = 'active'`,
-      [event.userId],
-    );
-
-    await query(
-      `INSERT INTO subscriptions (
-         user_id, tier, status, processor,
-         processor_subscription_id, processor_customer_id,
-         current_period_start, current_period_end, metadata
-       ) VALUES ($1, $2, 'active', 'ccbill', $3, $4, NOW(), $5, $6::jsonb)`,
-      [
-        event.userId,
-        tier,
-        event.subscriptionId,
-        event.customerId,
-        periodEnd,
-        JSON.stringify(event.raw),
-      ],
-    );
-
-    await syncUserEntitlements(event.userId, tier, true, periodEnd);
-
-    // Referral commission — record only; never send money / call payout rails.
-    try {
-      const { referralService } = await import('./referral.service');
-      await referralService.onPaidUpgrade(
-        event.userId,
-        this.extractPaymentAmount(event.raw),
-      );
-    } catch (err) {
-      console.error('[premium] referral paid-upgrade hook failed', err);
-    }
-
-    return { ok: true, userId: event.userId, tier, periodEnd };
-  },
-
-  async renewFromWebhook(event: ReturnType<typeof ccbillService.parseWebhook>) {
-    if (!event.userId) return { ok: false, reason: 'missing_user_id' };
-
-    const periodEnd =
-      event.periodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-
-    const existing = await query(
-      `SELECT tier FROM subscriptions
-       WHERE user_id = $1 AND status = 'active'
-       ORDER BY created_at DESC LIMIT 1`,
-      [event.userId],
-    );
-
-    const tier = (existing.rows[0]?.tier || tierFromPassthrough(event.raw)) as PremiumTier;
-
-    await query(
-      `UPDATE subscriptions
-       SET current_period_end = $2,
-           processor_subscription_id = COALESCE($3, processor_subscription_id),
-           updated_at = NOW(),
-           metadata = metadata || $4::jsonb
-       WHERE user_id = $1 AND status = 'active'`,
-      [event.userId, periodEnd, event.subscriptionId, JSON.stringify(event.raw)],
-    );
-
-    await syncUserEntitlements(event.userId, tier, true, periodEnd);
-
-    try {
-      const { referralService } = await import('./referral.service');
-      await referralService.onPaidUpgrade(
-        event.userId,
-        this.extractPaymentAmount(event.raw),
-      );
-    } catch (err) {
-      console.error('[premium] referral renew hook failed', err);
-    }
-
-    return { ok: true, userId: event.userId, tier, periodEnd };
-  },
-
-  async deactivateFromWebhook(event: ReturnType<typeof ccbillService.parseWebhook>) {
-    if (!event.userId) return { ok: false, reason: 'missing_user_id' };
-
-    // Never strip always-Premium owner accounts.
-    const nameRow = await query(`SELECT name FROM users WHERE id = $1`, [event.userId]);
-    if (isAlwaysPremiumName(nameRow.rows[0]?.name)) {
-      await query(
-        `UPDATE subscriptions
-         SET status = 'expired', updated_at = NOW()
-         WHERE user_id = $1 AND status = 'active'`,
-        [event.userId],
-      );
-      return { ok: true, userId: event.userId, preserved: true };
-    }
-
-    await query(
-      `UPDATE subscriptions
-       SET status = 'expired', updated_at = NOW()
-       WHERE user_id = $1 AND status = 'active'`,
-      [event.userId],
-    );
-
-    await syncUserEntitlements(event.userId, 'free', false, null);
-    return { ok: true, userId: event.userId };
-  },
-
-  async handleWebhook(body: Record<string, unknown>) {
-    if (!ccbillService.verifyWebhook(body)) {
-      const err = new Error('Invalid webhook signature');
-      (err as any).code = 'invalid_signature';
-      throw err;
-    }
-
-    const event = ccbillService.parseWebhook(body);
-    const type = event.eventType.toLowerCase();
-
-    if (type.includes('newsale') || type.includes('new_sale')) {
-      return this.activateFromWebhook(event);
-    }
-    if (type.includes('renewal')) {
-      return this.renewFromWebhook(event);
-    }
-    if (
-      type.includes('cancel') ||
-      type.includes('expir') ||
-      type.includes('refund') ||
-      type.includes('chargeback')
-    ) {
-      return this.deactivateFromWebhook(event);
-    }
-
-    return { ok: true, ignored: true, eventType: event.eventType };
-  },
 };

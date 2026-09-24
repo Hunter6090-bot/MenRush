@@ -25,7 +25,7 @@ const PRIDE_BG = '/images/menrush/21-pride-parade-flags.jpeg';
  * Photo shows through slightly (claim face, not a brochure).
  */
 const PRIDE_WASH =
-  'linear-gradient(180deg, rgba(13,10,6,0.58) 0%, rgba(13,10,6,0.72) 32%, rgba(18,12,6,0.86) 62%, rgba(13,10,6,0.94) 82%, #0D0A06 100%), radial-gradient(ellipse 85% 50% at 50% 8%, rgba(196,131,42,0.18) 0%, transparent 55%)';
+  'linear-gradient(180deg, rgba(13,10,6,0.10) 0%, rgba(13,10,6,0.22) 32%, rgba(18,12,6,0.38) 62%, rgba(13,10,6,0.60) 85%, #0D0A06 100%), radial-gradient(ellipse 85% 50% at 50% 8%, rgba(196,131,42,0.18) 0%, transparent 55%)';
 
 /**
  * Printed QR → menrush.com/pride.
@@ -110,6 +110,7 @@ export const Pride = () => {
           backgroundImage: `url(${PRIDE_BG})`,
           // Keep parade faces in frame (crowd is mid/lower). Avoid top-heavy crop.
           backgroundPosition: 'center 42%',
+          filter: 'saturate(1.05) brightness(1.20)',
         }}
         data-testid="pride-bg-photo"
         aria-hidden
@@ -146,7 +147,7 @@ export const Pride = () => {
             from launch
           </h1>
 
-          <div className="mt-10 w-full max-w-[460px]" data-testid="pride-invite-path">
+          <div className="mt-10 w-full max-w-[460px] rounded-[24px] border border-[rgba(240,224,192,0.35)] bg-[#1E1508]/96 p-6 backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.6)]" data-testid="pride-invite-path">
             {!claimOpen ? (
               <button
                 type="button"

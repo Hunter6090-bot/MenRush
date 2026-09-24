@@ -25,6 +25,8 @@ interface ConversationRow {
   receiver_id: string;
   message: string;
   created_at: string;
+  read?: boolean;
+  delivered?: boolean;
   media_type: MessageMediaKind | null;
   media_url: string | null;
   media_storage_key?: string | null;
@@ -45,7 +47,7 @@ interface ConversationRow {
 const mediaDir = path.resolve(__dirname, '../../uploads/messages');
 
 /** Columns returned for every message row sent to the client. */
-const MESSAGE_COLUMNS = `id, sender_id, receiver_id, message, created_at,
+const MESSAGE_COLUMNS = `id, sender_id, receiver_id, message, created_at, read,
                  media_type, media_url, audio_duration_ms,
                  is_disappearing, expires_at, viewed_at, max_views, view_count, withdrawn_at`;
 
@@ -343,23 +345,57 @@ export const messageService = {
     return { forSender, forReceiver, receiverId: row.receiver_id as string };
   },
 
-  async getConversation(userId: string, otherId: string, limit: number = 50) {
+  async getConversation(
+    userId: string,
+    otherId: string,
+    limit: number = 50,
+    before?: string,
+  ) {
     await accessControl.assertInteraction(userId, otherId, { requireMatch: true });
+
+    const values: unknown[] = [userId, otherId];
+    let cursorClause = '';
+    if (before) {
+      const cursorResult = await query(
+        `SELECT created_at FROM messages WHERE id = $1
+           AND ((sender_id = $2 AND receiver_id = $3) OR (sender_id = $3 AND receiver_id = $2))`,
+        [before, userId, otherId],
+      );
+      if (cursorResult.rows.length > 0) {
+        values.push(cursorResult.rows[0].created_at);
+        cursorClause = `AND created_at < $${values.length}`;
+      }
+    }
+    values.push(limit);
+    const limitParam = `$${values.length}`;
+
     const result = await query(
       `SELECT ${MESSAGE_COLUMNS}
        FROM messages
-       WHERE (sender_id = $1 AND receiver_id = $2)
-          OR (sender_id = $2 AND receiver_id = $1)
+       WHERE ((sender_id = $1 AND receiver_id = $2)
+          OR (sender_id = $2 AND receiver_id = $1))
+         ${cursorClause}
        ORDER BY created_at DESC
-       LIMIT $3`,
-      [userId, otherId, limit]
+       LIMIT ${limitParam}`,
+      values,
     );
 
-    await query(
-      `UPDATE messages SET read = true
-       WHERE receiver_id = $1 AND sender_id = $2 AND read = false`,
-      [userId, otherId],
-    );
+    // Only mark read on the live (newest) page — older history fetches must not
+    // clear unread as a side effect of scroll-back.
+    if (!before) {
+      await query(
+        `UPDATE messages SET read = true
+         WHERE receiver_id = $1 AND sender_id = $2 AND read = false`,
+        [userId, otherId],
+      );
+      // Ticket 4: Opened thread / read messages clear related notifs (message, photo, voice, missed_call)
+      try {
+        const { notificationService } = await import('./notification.service');
+        await notificationService.clearForActor(userId, otherId, ['message', 'photo', 'voice', 'missed_call']);
+      } catch (err) {
+        console.error('[clearForActor]', err);
+      }
+    }
 
     const viewerIsPremium = await resolveViewerPremium(userId);
     return result.rows

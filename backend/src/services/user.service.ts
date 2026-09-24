@@ -1,35 +1,30 @@
-import crypto from 'crypto';
 import { query } from '../db';
 import { defaultGenericAvatarUrl } from '../lib/genericAvatar';
 import { discoveryPhotoUrl } from '../lib/discoveryPhoto';
+import {
+  MAP_PIN_FUZZ_DEFAULT_M,
+  privateMapPointAround,
+} from '../lib/mapPinFuzz';
 import { accessControl } from '../security/access';
 import { ProfileInput } from '../types/validation';
 import { ageFromDateOfBirth, AGE_FILTER_MIN } from '../lib/age';
 import { premiumService } from './premium.service';
-
-/**
- * Privacy fuzz for map pins: keep people near where they actually are, with a
- * small deterministic offset so exact home/street is not public.
- *
- * Previous logic placed people on a RANDOM bearing at bucketed distance from
- * the viewer — that put pins in the sea and far from known real locations.
- */
-function privateMapPointAround(realLat: number, realLng: number, seed: string) {
-  const hash = crypto.createHash('sha256').update(seed).digest();
-  // 80–320 m — enough to stop doorstep triangulation, small enough to stay on land.
-  const meters = 80 + (hash.readUInt16BE(0) % 241);
-  const bearing = ((hash.readUInt16BE(2) % 360) * Math.PI) / 180;
-  const dLat = (meters / 1000 / 111) * Math.cos(bearing);
-  const longitudeScale = Math.max(Math.cos((realLat * Math.PI) / 180), 0.2);
-  const dLng = (meters / 1000 / (111 * longitudeScale)) * Math.sin(bearing);
-  return {
-    lat: Number((realLat + dLat).toFixed(6)),
-    lng: Number((realLng + dLng).toFixed(6)),
-  };
-}
+import {
+  isVisitorBoostActive,
+  planVisitorLocationUpdate,
+  type VisitorProfileState,
+} from '../lib/visitorFreshFace';
 
 const includeE2eFixtures = () =>
   process.env.INCLUDE_E2E_FIXTURES === 'true' || process.env.INCLUDE_E2E_FIXTURES === '1';
+
+export interface NearbyUsersResult {
+  users: Array<any>;
+  total: number;
+  page: number;
+  limit: number;
+  has_more: boolean;
+}
 
 export const userService = {
   async getNearbyUsers(
@@ -40,11 +35,19 @@ export const userService = {
       maxAge?: number;
       interests?: string[];
       onlyPulse?: boolean;
+      online?: boolean;
+      verified?: boolean;
+      new?: boolean;
       lookingFor?: string;
       mood?: string;
     },
     clientLocation?: { lat: number; lng: number },
-  ) {
+    pagination?: {
+      page?: number;
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<NearbyUsersResult> {
     await accessControl.requireVerified(userId);
 
     // Do NOT await full-table online cleanup or avatar backfill on this hot path —
@@ -63,29 +66,43 @@ export const userService = {
       await this.updateLocation(userId, clientLocation.lat, clientLocation.lng);
     }
 
+    const limit = Math.min(Math.max(Number(pagination?.limit) || 60, 1), 200);
+    const page = Math.max(Number(pagination?.page) || 1, 1);
+    const offset =
+      pagination?.offset != null && Number.isFinite(Number(pagination.offset))
+        ? Math.max(0, Number(pagination.offset))
+        : (page - 1) * limit;
+
     const locationResult = await query(
       `SELECT lat, lng
        FROM profiles
        WHERE user_id = $1 AND location IS NOT NULL AND lat IS NOT NULL AND lng IS NOT NULL`,
       [userId],
     );
-    if (!locationResult.rows[0]) return [];
+    if (!locationResult.rows[0]) return { users: [], total: 0, page, limit, has_more: false };
 
     const originLat = Number(locationResult.rows[0].lat);
     const originLng = Number(locationResult.rows[0].lng);
     const radiusMeters = radiusKm * 1000;
     const values: any[] = [originLat, originLng, userId, radiusMeters];
-    // Pulse v1: is_pulsing/pulse_expires_at live on users (per pulse-spec.md).
-    // Computed `is_pulsing_live` AND-checks the expiry so a stale row that hasn't
-    // been cron-swept yet doesn't masquerade as pulsing in the UI.
-    let queryStr = `
+
+    const selectFields = `
       SELECT
         u.id, u.name, CASE WHEN COALESCE(u.show_age, TRUE) THEN u.age ELSE NULL END AS age,
         u.bio, u.headline, u.looking_for, u.photo_url, u.cover_url, u.map_photo_url, u.interests,
         CASE WHEN COALESCE(u.show_height, TRUE) THEN u.height_cm ELSE NULL END AS height_cm,
         CASE WHEN COALESCE(u.show_weight, TRUE) THEN u.weight_kg ELSE NULL END AS weight_kg,
         CASE WHEN COALESCE(u.show_relationship, TRUE) THEN u.relationship_status ELSE NULL END AS relationship_status,
-        u.hosting_status,        COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified, u.authenticity_status,
+        u.hosting_status, COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified, u.authenticity_status,
+        -- Account age only (privacy-safe) — powers Nearby NEW badge / New filter. Not exact GPS.
+        u.created_at,
+        -- Visitor fresh-face: active boost only (never home coords).
+        (p.visitor_expires_at IS NOT NULL AND p.visitor_expires_at > NOW()) AS is_visitor,
+        CASE
+          WHEN p.visitor_expires_at IS NOT NULL AND p.visitor_expires_at > NOW()
+          THEN p.visitor_expires_at
+          ELSE NULL
+        END AS visitor_expires_at,
         -- Presence must be fresh: stuck online=true from a crashed tab is not "Active now".
         (p.online = TRUE AND p.last_seen IS NOT NULL AND p.last_seen > NOW() - INTERVAL '20 minutes') AS online,
         p.last_seen, p.available_until,
@@ -100,9 +117,13 @@ export const userService = {
         END AS mood,
         p.lat AS real_lat,
         p.lng AS real_lng,
+        COALESCE(p.map_pin_fuzz_m, ${MAP_PIN_FUZZ_DEFAULT_M}) AS map_pin_fuzz_m,
         ST_Distance(p.location, ST_MakePoint($2, $1)::geography) as distance_m
       FROM users u
       JOIN profiles p ON u.id = p.user_id
+    `;
+
+    let whereClause = `
       WHERE u.id != $3
         AND u.photo_url IS NOT NULL
         AND TRIM(u.photo_url) <> ''
@@ -120,41 +141,50 @@ export const userService = {
     `;
 
     if (!includeE2eFixtures()) {
-      queryStr += ` AND u.email NOT LIKE '%@example.com'`;
+      whereClause += ` AND u.email NOT LIKE '%@example.com'`;
     }
 
     if (filters?.onlyPulse) {
       // Honour either the new (users.is_pulsing) or legacy (profiles.available_until)
       // pulse signal so old data still surfaces during the transition.
-      queryStr += ` AND (
+      whereClause += ` AND (
         (u.is_pulsing = TRUE AND u.pulse_expires_at > NOW())
         OR (p.available_until IS NOT NULL AND p.available_until > NOW())
       )`;
     }
+    if (filters?.online) {
+      whereClause += ` AND (p.online = TRUE AND p.last_seen IS NOT NULL AND p.last_seen > NOW() - INTERVAL '20 minutes')`;
+    }
+    if (filters?.verified) {
+      whereClause += ` AND (u.is_verified = TRUE AND u.verification_provider = 'veriff')`;
+    }
+    if (filters?.new) {
+      whereClause += ` AND (u.created_at > NOW() - INTERVAL '7 days' OR (p.visitor_expires_at IS NOT NULL AND p.visitor_expires_at > NOW()))`;
+    }
     if (filters?.minAge != null) {
       values.push(Math.max(filters.minAge, AGE_FILTER_MIN));
-      queryStr += ` AND u.age >= $${values.length}`;
+      whereClause += ` AND u.age >= $${values.length}`;
     }
     if (filters?.maxAge != null) {
       values.push(filters.maxAge);
-      queryStr += ` AND u.age <= $${values.length}`;
+      whereClause += ` AND u.age <= $${values.length}`;
     }
     if (filters?.interests && filters.interests.length > 0) {
       values.push(filters.interests);
-      queryStr += ` AND u.interests && $${values.length}`;
+      whereClause += ` AND u.interests && $${values.length}`;
     }
     if (filters?.lookingFor) {
       const lf = filters.lookingFor.toLowerCase();
       if (lf === 'chat') {
-        queryStr += ` AND p.online = true AND p.last_seen > NOW() - INTERVAL '20 minutes'`;
+        whereClause += ` AND p.online = true AND p.last_seen > NOW() - INTERVAL '20 minutes'`;
       } else if (lf === 'date') {
         values.push('%dating%');
-        queryStr += ` AND (u.looking_for ILIKE $${values.length} OR u.interests && ARRAY['Dating']::text[])`;
+        whereClause += ` AND (u.looking_for ILIKE $${values.length} OR u.interests && ARRAY['Dating']::text[])`;
       } else if (lf === 'nsa') {
         values.push('%nsa%');
-        queryStr += ` AND (u.looking_for ILIKE $${values.length} OR u.interests && ARRAY['NSA']::text[])`;
+        whereClause += ` AND (u.looking_for ILIKE $${values.length} OR u.interests && ARRAY['NSA']::text[])`;
       } else if (lf === 'drinks') {
-        queryStr += ` AND (
+        whereClause += ` AND (
           (p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' AND p.mood ILIKE '%drink%')
           OR u.looking_for ILIKE '%drink%'
           OR u.interests && ARRAY['Drinks']::text[]
@@ -163,22 +193,40 @@ export const userService = {
     }
     if (filters?.mood) {
       values.push(filters.mood);
-      queryStr += ` AND p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' AND p.mood ILIKE $${values.length}`;
+      whereClause += ` AND p.mood_set_at IS NOT NULL AND p.mood_set_at > NOW() - INTERVAL '6 hours' AND p.mood ILIKE $${values.length}`;
     }
 
-    // Spec: pulse first, then fresh presence. Real photos rank above shared
-    // generic avatars so the grid feels intentional and incentivizes upgrades.
-    queryStr += ` ORDER BY
-      (u.is_pulsing AND u.pulse_expires_at > NOW()) DESC,
-      (p.available_until IS NOT NULL AND p.available_until > NOW()) DESC,
-      (p.online = TRUE AND p.last_seen > NOW() - INTERVAL '20 minutes') DESC,
-      (u.photo_url IS NOT NULL AND u.photo_url NOT LIKE '/avatars/generic/%') DESC,
-      p.last_seen DESC NULLS LAST
-    LIMIT 50`;
+    const countSql = `
+      SELECT COUNT(*)::int AS total
+      FROM users u
+      JOIN profiles p ON u.id = p.user_id
+      ${whereClause}
+    `;
 
-    const result = await query(queryStr, values);
+    const limitIndex = values.length + 1;
+    const offsetIndex = values.length + 2;
 
-    return result.rows.map((row) => {
+    const queryStr = `
+      ${selectFields}
+      ${whereClause}
+      ORDER BY
+        (u.is_pulsing AND u.pulse_expires_at > NOW()) DESC,
+        (p.available_until IS NOT NULL AND p.available_until > NOW()) DESC,
+        (p.visitor_expires_at IS NOT NULL AND p.visitor_expires_at > NOW()) DESC,
+        (p.online = TRUE AND p.last_seen > NOW() - INTERVAL '20 minutes') DESC,
+        (u.photo_url IS NOT NULL AND u.photo_url NOT LIKE '/avatars/generic/%') DESC,
+        p.last_seen DESC NULLS LAST
+      LIMIT $${limitIndex} OFFSET $${offsetIndex}
+    `;
+
+    const [countResult, result] = await Promise.all([
+      query(countSql, values),
+      query(queryStr, [...values, limit, offset]),
+    ]);
+
+    const total = Number(countResult.rows[0]?.total ?? 0);
+
+    const users = result.rows.map((row) => {
       const km = row.distance_m / 1000;
       // Distance labels stay bucketed for list privacy; map pins stay near real coords.
       let bucketed: number;
@@ -199,6 +247,7 @@ export const userService = {
 
       const realLat = Number(row.real_lat);
       const realLng = Number(row.real_lng);
+      const fuzzMaxM = Number(row.map_pin_fuzz_m);
       const mapPoint =
         Number.isFinite(realLat) && Number.isFinite(realLng)
           ? privateMapPointAround(
@@ -206,14 +255,43 @@ export const userService = {
               realLng,
               // Seed without viewer position so pin is stable for everyone viewing this person.
               `map:${row.id}`,
+              Number.isFinite(fuzzMaxM) ? fuzzMaxM : MAP_PIN_FUZZ_DEFAULT_M,
             )
           : { lat: originLat, lng: originLng };
 
-      // Do not leak exact GPS in the API payload — only the fuzzed map pin.
-      const { real_lat: _rl, real_lng: _rg, map_photo_url: mapPhoto, ...publicRow } = row;
+      // Do not leak exact GPS or the subject's fuzz setting in the API payload —
+      // only the fuzzed map pin.
+      const {
+        real_lat: _rl,
+        real_lng: _rg,
+        map_photo_url: mapPhoto,
+        map_pin_fuzz_m: _fuzz,
+        ...publicRow
+      } = row;
+
+      // Account age only — ISO string for Nearby NEW treatment (not exact GPS).
+      const createdRaw = row.created_at;
+      const created_at =
+        createdRaw instanceof Date
+          ? createdRaw.toISOString()
+          : typeof createdRaw === 'string'
+            ? createdRaw
+            : undefined;
+
+      const visitorRaw = row.visitor_expires_at;
+      const visitor_expires_at =
+        visitorRaw instanceof Date
+          ? visitorRaw.toISOString()
+          : typeof visitorRaw === 'string'
+            ? visitorRaw
+            : null;
+      const is_visitor = Boolean(row.is_visitor) && isVisitorBoostActive(visitor_expires_at);
 
       return {
         ...publicRow,
+        created_at,
+        is_visitor,
+        visitor_expires_at: is_visitor ? visitor_expires_at : null,
         // Nearby Map / grid: Map photo when set so the main shot can stay private.
         photo_url: discoveryPhotoUrl(mapPhoto, publicRow.photo_url) ?? publicRow.photo_url,
         lat: mapPoint.lat,
@@ -222,6 +300,14 @@ export const userService = {
         distance_label: label,
       };
     });
+
+    return {
+      users,
+      total,
+      page,
+      limit,
+      has_more: offset + users.length < total,
+    };
   },
 
   async ensureProfileRow(userId: string) {
@@ -351,8 +437,17 @@ export const userService = {
     return row;
   },
 
-  async getPublicProfile(viewerId: string, targetId: string) {
+  async getPublicProfile(
+    viewerId: string,
+    targetId: string,
+    clientLocation?: { lat: number; lng: number },
+  ) {
     await accessControl.assertProfileView(viewerId, targetId);
+
+    if (clientLocation) {
+      await this.updateLocation(viewerId, clientLocation.lat, clientLocation.lng);
+    }
+
     const result = await query(
       `SELECT
         u.id, u.name,
@@ -379,13 +474,55 @@ export const userService = {
         EXISTS (
           SELECT 1 FROM likes l
           WHERE l.liker_id = $2 AND l.liked_id = $1
-        ) AS is_liked
+        ) AS is_liked,
+        CASE
+          WHEN $1 = $2 THEN NULL
+          WHEN vp.is_visible = true AND vp.location IS NOT NULL
+               AND p.is_visible = true AND p.location IS NOT NULL
+               AND p.is_ghost = false
+          THEN ST_Distance(p.location, vp.location)
+          ELSE NULL
+        END AS distance_m
        FROM users u
        LEFT JOIN profiles p ON p.user_id = u.id
+       LEFT JOIN profiles vp ON vp.user_id = $2
        WHERE u.id = $1`,
       [targetId, viewerId],
     );
-    return result.rows[0];
+
+    const row = result.rows[0];
+    if (!row) return row;
+
+    let distance_km: string | null = null;
+    let distance_label: string | null = null;
+
+    if (row.distance_m != null && Number.isFinite(Number(row.distance_m))) {
+      const km = Number(row.distance_m) / 1000;
+      let bucketed: number;
+      let label: string;
+      if (km < 0.3) {
+        bucketed = 0.2;
+        label = '< 300 m';
+      } else if (km < 1) {
+        bucketed = Math.round(km * 10) / 10;
+        label = `${Math.round(bucketed * 1000)} m`;
+      } else if (km < 5) {
+        bucketed = Math.round(km * 2) / 2;
+        label = `${bucketed.toFixed(1)} km`;
+      } else {
+        bucketed = Math.round(km);
+        label = `${bucketed} km`;
+      }
+      distance_km = bucketed.toFixed(2);
+      distance_label = label;
+    }
+
+    const { distance_m: _dm, ...publicRow } = row;
+    return {
+      ...publicRow,
+      distance_km,
+      distance_label,
+    };
   },
 
   async getDisplayName(userId: string) {
@@ -394,6 +531,7 @@ export const userService = {
   },
 
   async updateLocation(userId: string, lat: number, lng: number) {
+    // Upsert live pin + presence first.
     await query(
       `INSERT INTO profiles (user_id, location, lat, lng, online, last_seen, share_live_location_with_matches)
        VALUES ($1, ST_MakePoint($3, $2), $2, $3, true, NOW(), TRUE)
@@ -403,8 +541,73 @@ export const userService = {
          lng = $3,
          online = true,
          last_seen = NOW()`,
-      [userId, lat, lng]
+      [userId, lat, lng],
     );
+
+    // Visitor fresh-face: seed home / start visit / clear on return (honest dwell).
+    // Never invent density — only boost accounts that actually left home.
+    const existing = await query(
+      `SELECT home_lat, home_lng, visitor_since, visitor_expires_at,
+              visitor_anchor_lat, visitor_anchor_lng
+         FROM profiles
+        WHERE user_id = $1`,
+      [userId],
+    );
+    const row = existing.rows[0] as VisitorProfileState | undefined;
+    if (!row) return;
+
+    const plan = planVisitorLocationUpdate(lat, lng, {
+      home_lat: row.home_lat != null ? Number(row.home_lat) : null,
+      home_lng: row.home_lng != null ? Number(row.home_lng) : null,
+      visitor_since: row.visitor_since,
+      visitor_expires_at: row.visitor_expires_at,
+      visitor_anchor_lat:
+        row.visitor_anchor_lat != null ? Number(row.visitor_anchor_lat) : null,
+      visitor_anchor_lng:
+        row.visitor_anchor_lng != null ? Number(row.visitor_anchor_lng) : null,
+    });
+
+    if (plan.action === 'seed_home') {
+      await query(
+        `UPDATE profiles
+            SET home_lat = $2,
+                home_lng = $3,
+                home_set_at = NOW(),
+                visitor_since = NULL,
+                visitor_expires_at = NULL,
+                visitor_anchor_lat = NULL,
+                visitor_anchor_lng = NULL
+          WHERE user_id = $1
+            AND home_lat IS NULL`,
+        [userId, plan.homeLat, plan.homeLng],
+      );
+      return;
+    }
+
+    if (plan.action === 'clear_visitor') {
+      await query(
+        `UPDATE profiles
+            SET visitor_since = NULL,
+                visitor_expires_at = NULL,
+                visitor_anchor_lat = NULL,
+                visitor_anchor_lng = NULL
+          WHERE user_id = $1`,
+        [userId],
+      );
+      return;
+    }
+
+    if (plan.action === 'start_visit') {
+      await query(
+        `UPDATE profiles
+            SET visitor_since = $2,
+                visitor_expires_at = $3,
+                visitor_anchor_lat = $4,
+                visitor_anchor_lng = $5
+          WHERE user_id = $1`,
+        [userId, plan.since, plan.expiresAt, plan.anchorLat, plan.anchorLng],
+      );
+    }
   },
 
   async setOnlineStatus(userId: string, online: boolean) {
@@ -639,6 +842,14 @@ export const userService = {
        ON CONFLICT (blocker_id, blocked_id) DO NOTHING`,
       [blockerId, blockedId]
     );
+    // Ticket 1: Block = full silence.
+    // Dismiss/clear any existing notifications between the two parties.
+    await query(
+      `DELETE FROM notifications
+       WHERE (user_id = $1 AND actor_id = $2)
+          OR (user_id = $2 AND actor_id = $1)`,
+      [blockerId, blockedId]
+    );
   },
 
   async unblockUser(blockerId: string, blockedId: string) {
@@ -857,7 +1068,8 @@ export const userService = {
   async getMatches(userId: string) {
     const result = await query(
       `SELECT
-        u.id, u.name, u.age, u.bio, u.photo_url, COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified, u.authenticity_status,
+        u.id, u.name, u.age, u.bio, u.photo_url, u.map_photo_url,
+        COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified, u.authenticity_status,
         p.online, p.last_seen,
         msg.message as last_message,
         msg.created_at as last_message_at,
@@ -882,7 +1094,18 @@ export const userService = {
        ORDER BY p.online DESC, COALESCE(msg.created_at, p.last_seen) DESC`,
       [userId]
     );
-    return result.rows;
+    // Same face URL as Nearby thumbs: Map photo when set, else main (media lock).
+    return result.rows.map((row: Record<string, unknown>) => {
+      const { map_photo_url: mapPhoto, ...publicRow } = row;
+      return {
+        ...publicRow,
+        photo_url:
+          discoveryPhotoUrl(
+            mapPhoto as string | null | undefined,
+            publicRow.photo_url as string | null | undefined,
+          ) ?? publicRow.photo_url,
+      };
+    });
   },
 
   /** Outbound like targets — hydrate Match CTA after reload (ids only). */
@@ -905,7 +1128,8 @@ export const userService = {
   async getReceivedLikes(userId: string) {
     const result = await query(
       `SELECT
-         u.id, u.name, u.age, u.bio, u.photo_url, COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified, u.authenticity_status,
+         u.id, u.name, u.age, u.bio, u.photo_url, u.map_photo_url,
+         COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE) AS is_verified, u.authenticity_status,
          p.online, p.last_seen,
          l.created_at AS liked_at
        FROM likes l
@@ -925,7 +1149,18 @@ export const userService = {
        LIMIT 100`,
       [userId],
     );
-    return result.rows;
+    // Align with Nearby thumbs so map-only faces are not empty on Matches.
+    return result.rows.map((row: Record<string, unknown>) => {
+      const { map_photo_url: mapPhoto, ...publicRow } = row;
+      return {
+        ...publicRow,
+        photo_url:
+          discoveryPhotoUrl(
+            mapPhoto as string | null | undefined,
+            publicRow.photo_url as string | null | undefined,
+          ) ?? publicRow.photo_url,
+      };
+    });
   },
 
   async getReceivedLikesSummary(userId: string) {
@@ -953,7 +1188,7 @@ export const userService = {
     let preview: Array<{ id: string; name: string; age: number; photo_url: string | null }> = [];
     if (count > 0) {
       const previewResult = await query(
-        `SELECT u.id, u.name, u.age, u.photo_url
+        `SELECT u.id, u.name, u.age, u.photo_url, u.map_photo_url
          FROM likes l
          JOIN users u ON u.id = l.liker_id
          WHERE l.liked_id = $1
@@ -970,7 +1205,21 @@ export const userService = {
          LIMIT 3`,
         [userId],
       );
-      preview = previewResult.rows;
+      preview = previewResult.rows.map(
+        (row: {
+          id: string;
+          name: string;
+          age: number;
+          photo_url: string | null;
+          map_photo_url?: string | null;
+        }) => {
+          const { map_photo_url: mapPhoto, ...publicRow } = row;
+          return {
+            ...publicRow,
+            photo_url: discoveryPhotoUrl(mapPhoto, publicRow.photo_url) ?? publicRow.photo_url,
+          };
+        },
+      );
     }
 
     return { count, is_premium: isPremium, preview };

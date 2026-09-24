@@ -156,7 +156,7 @@ fi
 # Age filter empty
 FILTER1=$(curl -s -X GET "$API_URL/users/nearby?lat=40.7128&lng=-74.0060&minAge=18&maxAge=20" \
   -H "Authorization: Bearer $TOKEN1")
-if [ "$FILTER1" = "[]" ]; then
+if [ "$FILTER1" = "[]" ] || echo "$FILTER1" | grep -q '"users":\[\]'; then
   ok "Age filter 18-20 empty"
 else
   bad "Age filter 18-20 expected [] got: $FILTER1"

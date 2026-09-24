@@ -1,8 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { authMiddleware, AuthRequest, verifiedMiddleware } from '../middleware/auth';
-import { FREE_LIMITS, premiumService } from '../services/premium.service';
-import { CCBillNotConfiguredError } from '../services/ccbill.service';
+import { FREE_LIMITS, premiumService, BillingNotConfiguredError } from '../services/premium.service';
 
 const router = Router();
 
@@ -13,7 +12,7 @@ const SubscribeSchema = z.object({
 
 router.get('/plans', (_req: Request, res: Response) => {
   res.json({
-    processor: 'ccbill',
+    processor: 'verotel',
     plans: premiumService.getPlans(),
     free_limits: FREE_LIMITS,
   });
@@ -46,13 +45,13 @@ router.post('/subscribe', async (req: AuthRequest, res: Response) => {
       parsed.data.return_url || defaultReturn,
     );
     res.json({
-      processor: 'ccbill',
+      processor: 'verotel',
       tier: parsed.data.tier,
       checkout_url: checkoutUrl,
     });
   } catch (err) {
-    if (err instanceof CCBillNotConfiguredError) {
-      return res.status(503).json({ error: 'ccbill_not_configured' });
+    if (err instanceof BillingNotConfiguredError) {
+      return res.status(503).json({ error: 'billing_not_configured' });
     }
     console.error('[premium] subscribe error:', err);
     res.status(500).json({ error: 'subscribe_failed' });

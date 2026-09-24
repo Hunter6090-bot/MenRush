@@ -1,10 +1,12 @@
-
 name: CI
 
 on:
   pull_request:
     branches:
       - main
+      - mvp-complete
+      # Land rate-limit / age-gate fixes into open #97 without retargeting to main.
+      - cursor/adult-assurance-enforcement-fac3
   workflow_dispatch:
 
 permissions:
@@ -27,13 +29,37 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - name: Install dependencies
         run: npm ci
       - name: Build
         run: npm run build
+
+  backend-adult-assurance:
+    name: Adult assurance + Veriff checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Adult assurance checks
+        run: npm run test:adult-assurance
+      - name: Adult assurance status-poll rate limit
+        run: npm run test:adult-assurance-rate-limit
+      - name: Veriff checks
+        run: npm run test:veriff
 
   frontend-build:
     name: Frontend build
@@ -47,11 +73,47 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
         run: npm ci
       - name: Build
         run: npm run build
+      - name: Frontend unit suites
+        run: npm test && npm run test:unit
 
+  backend-billing:
+    name: Verotel transactional checks (isolated database)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --prefix backend
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-16
+      - name: Test signed callbacks and database rollback
+        env:
+          VEROTEL_TEST_PG_SOCKET: /tmp/menrush-verotel-pg-ci/socket
+        run: |
+          export PATH="/usr/lib/postgresql/16/bin:$PATH"
+          mkdir -p "$VEROTEL_TEST_PG_SOCKET"
+          initdb -D /tmp/menrush-verotel-pg-ci/data -U verotel_test -A trust --no-locale
+          pg_ctl -D /tmp/menrush-verotel-pg-ci/data -l /tmp/menrush-verotel-pg-ci/server.log -o "-k $VEROTEL_TEST_PG_SOCKET -p 55439 -h ''" start
+          trap 'pg_ctl -D /tmp/menrush-verotel-pg-ci/data stop -m fast' EXIT
+          npm --prefix backend run test:billing-disabled
+          npm --prefix backend run test:verotel
+
+      - name: Test mandatory age evidence (isolated database)
+        env:
+          AGE_TEST_PG_SOCKET: /tmp/menrush-age-pg-ci/socket
+        run: |
+          export PATH="/usr/lib/postgresql/16/bin:$PATH"
+          mkdir -p "$AGE_TEST_PG_SOCKET"
+          initdb -D /tmp/menrush-age-pg-ci/data -U age_test -A trust --no-locale
+          pg_ctl -D /tmp/menrush-age-pg-ci/data -l /tmp/menrush-age-pg-ci/server.log -o "-k $AGE_TEST_PG_SOCKET -p 55437 -h ''" start
+          trap 'pg_ctl -D /tmp/menrush-age-pg-ci/data stop -m fast' EXIT
+          npm --prefix backend run test:mandatory-age

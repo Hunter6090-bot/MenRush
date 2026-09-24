@@ -1,7 +1,7 @@
 /**
  * Referral system — signup attribution, verified unlock, pending payouts.
  *
- * Does NOT: send money, call CCBill, invent device fingerprinting, or gate signup.
+ * Does NOT: send money, call external payment rails, invent device fingerprinting, or gate signup.
  */
 import crypto from 'crypto';
 import type { PoolClient } from 'pg';
@@ -65,8 +65,14 @@ export function normalizeReferralCode(raw: string): string {
 /**
  * Reject codes that belong to other systems (fail closed at referral field).
  */
-export function classifyForeignCode(code: string): 'pride' | 'invite' | null {
+export function classifyForeignCode(code: string): 'pride' | 'invite' | 'bsf26' | 'mr3free' | null {
   const c = normalizeReferralCode(code);
+  if (c === 'MR3FREE') {
+    return 'mr3free';
+  }
+  if (c === 'BSF26') {
+    return 'bsf26';
+  }
   if (c.startsWith('PRIDE') || c === 'PRIDE3MONTHFREE' || /^PRIDE[\s-]?3MONTH[\s-]?FREE$/i.test(code.trim())) {
     return 'pride';
   }
@@ -123,7 +129,10 @@ export const referralService = {
   ): Promise<{ referrerId: string; code: string }> {
     const foreign = classifyForeignCode(referralCodeRaw);
     if (foreign === 'pride') {
-      throw new Error('That looks like a Pride promo — use the Pride promo field instead.');
+      throw new Error('That looks like a Pride promo — use the promo field instead.');
+    }
+    if (foreign === 'mr3free' || foreign === 'bsf26') {
+      throw new Error('That looks like a promo code — use the promo field instead.');
     }
     if (foreign === 'invite') {
       throw new Error('That looks like a waitlist invite — enter it as an invite code, not a referral.');

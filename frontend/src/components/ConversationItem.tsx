@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { StatusDot, UserAvatar } from './UserAvatar';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
@@ -6,9 +6,21 @@ import { MissedCallIcon } from './MissedCallIcon';
 import { ChatSafetyMenu } from './ChatSafetyMenu';
 import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
 import { MISSED_CALL_PREVIEW } from '../lib/missedCall';
+import { useAuthStore } from '../hooks/store';
+import { rememberInboxThread } from '../lib/conversationHistoryCache';
 
 /** Thread-list face — circle only, slightly larger than UserAvatar md (44px). */
 const THREAD_AVATAR_PX = 52;
+
+export type ThreadOpenState = {
+  threadPreview?: {
+    peerId: string;
+    lastMessage?: string;
+    lastMessageTime?: string;
+    name?: string;
+    photoUrl?: string;
+  };
+};
 
 interface ConversationItemProps {
   userId: string;
@@ -23,7 +35,7 @@ interface ConversationItemProps {
   variant?: 'default' | 'sidebar';
 }
 
-export const ConversationItem: React.FC<ConversationItemProps> = ({
+export const ConversationItem = memo(function ConversationItem({
   userId,
   name,
   photoUrl,
@@ -34,11 +46,31 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   onBlocked,
   isActive = false,
   variant = 'default',
-}) => {
+}: ConversationItemProps) {
   const navigate = useNavigate();
+  const selfId = useAuthStore((s) => s.user?.id);
   const isMissedCall = lastMessage === MISSED_CALL_PREVIEW;
   const isSidebar = variant === 'sidebar';
   const useBrandEmptyFace = isNearbyPlaceholderFace(photoUrl);
+
+  const openThread = () => {
+    // Seed cache synchronously on tap so Messages first paint has last-known text.
+    rememberInboxThread(userId, {
+      lastMessage,
+      lastMessageTime,
+      selfId,
+    });
+    const state: ThreadOpenState = {
+      threadPreview: {
+        peerId: userId,
+        lastMessage,
+        lastMessageTime,
+        name,
+        photoUrl,
+      },
+    };
+    navigate(`/messages/${userId}`, { state });
+  };
 
   return (
     <div className="flex items-center gap-1">
@@ -62,7 +94,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
               className="relative inline-flex shrink-0 overflow-hidden rounded-full"
               style={{ width: THREAD_AVATAR_PX, height: THREAD_AVATAR_PX }}
             >
-              <FadedBrandFace variant="pin" size={THREAD_AVATAR_PX} label={name} />
+              <FadedBrandFace variant="profile" size={THREAD_AVATAR_PX} label={name} />
               {online !== undefined ? (
                 <StatusDot
                   online={online}
@@ -84,7 +116,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
 
         <button
           type="button"
-          onClick={() => navigate(`/messages/${userId}`)}
+          onClick={openThread}
           data-testid={`conversation-open-chat-${userId}`}
           className="flex min-w-0 flex-1 items-center gap-3 text-left"
           aria-label={`Open chat with ${name}`}
@@ -130,7 +162,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
       <ChatSafetyMenu peerId={userId} peerName={name} onBlocked={onBlocked} />
     </div>
   );
-};
+});
 
 function formatRelative(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
