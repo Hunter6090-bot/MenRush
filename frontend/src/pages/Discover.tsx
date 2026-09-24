@@ -2414,6 +2414,7 @@ export const Discover = () => {
                 mutualUserIds={matchedUsers}
                 matchingUserId={matchingUserId}
                 onExpandRadius={handleRadiusCycle}
+                canExpandRadius={radius < MAX_RADIUS_KM - 0.5}
                 onFinishProfile={
                   showFinishProfileEmptyCta ? () => navigate('/profile/setup') : undefined
                 }
@@ -2665,6 +2666,7 @@ export const Discover = () => {
                   mutualUserIds={matchedUsers}
                   matchingUserId={matchingUserId}
                   onExpandRadius={handleRadiusCycle}
+                  canExpandRadius={radius < MAX_RADIUS_KM - 0.5}
                   onFinishProfile={
                     showFinishProfileEmptyCta ? () => navigate('/profile/setup') : undefined
                   }

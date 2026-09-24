@@ -77,6 +77,8 @@ export default defineConfig({
       'src/lib/profileLinks.test.ts',
       'src/lib/profileTileGrid.test.ts',
       'src/lib/nearbyGridFirst.test.ts',
+      'src/lib/notifications.destination.test.ts',
+      'src/lib/receiptTicks.test.ts',
     ],
   },
 });
