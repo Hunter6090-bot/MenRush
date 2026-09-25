@@ -121,9 +121,18 @@ export const RoomList: React.FC<RoomListProps> = ({
       setMemberRooms(patch);
       setOfficialRooms(patch);
     };
+    const onOccupancy = (data: { room_id?: string; count?: number }) => {
+      if (!data?.room_id || typeof data.count !== 'number') return;
+      const patch = (prev: RoomRow[]) =>
+        prev.map((room) => (room.id === data.room_id ? { ...room, member_count: data.count! } : room));
+      setMemberRooms(patch);
+      setOfficialRooms(patch);
+    };
     socket.on('room:message', onRoomMessage);
+    socket.on('room:occupancy', onOccupancy);
     return () => {
       socket.off('room:message', onRoomMessage);
+      socket.off('room:occupancy', onOccupancy);
     };
   }, [socket]);
 
@@ -340,7 +349,7 @@ export const RoomList: React.FC<RoomListProps> = ({
                             </span>
                           </div>
                           <p className="mt-0.5 truncate text-xs" style={{ color: '#6B5035' }}>
-                            {room.description ?? `${room.member_count} members`}
+                            {room.description ?? `${room.member_count} in now`}
                           </p>
                           <div className="mt-1.5 flex items-center justify-between gap-2">
                             <span className="text-[10px]" style={{ color: '#6B5035' }}>
@@ -428,7 +437,7 @@ export const RoomList: React.FC<RoomListProps> = ({
                           </div>
                           <div className="mt-0.5 flex items-center justify-between gap-2">
                             <span className="truncate text-xs" style={{ color: '#6B5035' }}>
-                              {room.last_message ?? `${room.member_count} members`}
+                              {room.last_message ?? `${room.member_count} in now`}
                             </span>
                             <div className="flex flex-shrink-0 items-center gap-1.5">
                               <span className="text-[10px]" style={{ color: '#6B5035' }}>
