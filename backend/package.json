@@ -43,6 +43,7 @@
     "test:open-signup": "ts-node scripts/open-signup-checks.ts",
     "test:email-confirm": "ts-node scripts/email-confirm-checks.ts",
     "test:referrals": "ts-node scripts/referral-checks.ts",
+    "test:premium-webhook": "ts-node scripts/premium-webhook-checks.ts",
     "test:room-inroom-dm": "ts-node --transpile-only scripts/room-inroom-dm-checks.ts",
     "test:official-rooms": "ts-node scripts/official-rooms-checks.ts",
     "test:community-comments": "ts-node scripts/community-comments-checks.ts",
