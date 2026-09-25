@@ -36,7 +36,8 @@ import mapFeedRoutes from './routes/map-feed';
 import communityRoutes from './routes/community';
 import mediaDisplayRoutes from './routes/media-display';
 import { startPulseExpiryCron } from './services/pulse.service';
-import { startRoomTempIdentityPurgeCron } from './services/room.service';
+import { startRoomMessagePurgeCron, startRoomTempIdentityPurgeCron } from './services/room.service';
+import { noteRoomEnter, noteRoomExit } from './services/room-presence';
 import {
   hasWelcomeBeenSent,
   isWaitlistEmailPaused,
@@ -587,6 +588,8 @@ io.on('connection', (socket: Socket) => {
       const presence = await roomService.resolveRoomPresence(userId, roomId);
 
       socket.join(`room:${roomId}`);
+      const occupancy = noteRoomEnter(roomId, userId);
+      io.emit('room:occupancy', { room_id: roomId, count: occupancy });
 
       socket.to(`room:${roomId}`).emit('room:presence', {
         room_id: roomId,
@@ -649,12 +652,13 @@ io.on('connection', (socket: Socket) => {
     const stillHere = await userStillInRoom(userId, roomId);
     if (!stillHere) {
       endRoomDmsForUser(roomId, userId, 'leave');
+      const occupancy = noteRoomExit(roomId, userId);
+      io.emit('room:occupancy', { room_id: roomId, count: occupancy });
       socket.to(`room:${roomId}`).emit('room:presence', {
         room_id: roomId,
         type: 'leave',
         user_id: userId,
       });
-      // Wipe unsaved temp identity + drop open-join membership (leave no roster trace).
       void roomService.exitRoomSession(userId, roomId).catch(() => {});
     }
   });
@@ -922,7 +926,8 @@ io.on('connection', (socket: Socket) => {
             type: 'leave',
             user_id: userId,
           });
-          // Wipe unsaved temp identity + drop open-join membership (leave no roster trace).
+          const occupancy = noteRoomExit(roomId, userId);
+          io.emit('room:occupancy', { room_id: roomId, count: occupancy });
           void roomService.exitRoomSession(userId, roomId).catch(() => {});
         }
       })();
@@ -953,6 +958,7 @@ server.listen(PORT, () => {
   warmIceServers();
   startPulseExpiryCron();
   startRoomTempIdentityPurgeCron();
+  startRoomMessagePurgeCron();
   startVerificationRetentionWorker();
   // Optional: in-process drip worker. Prefer an external cron in production
   // (POST /api/waitlist/admin/run); only enable in-process when running a

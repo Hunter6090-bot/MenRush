@@ -440,13 +440,20 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       });
     };
 
+    const onOccupancy = (data: { room_id?: string; count?: number }) => {
+      if (!data?.room_id || data.room_id !== roomId || typeof data.count !== 'number') return;
+      setRoom((prev) => (prev ? { ...prev, member_count: data.count! } : prev));
+    };
+
     socket.on('room:message', onMessage);
     socket.on('room:presence', onPresence);
     socket.on('room:presence-sync', onPresenceSync);
     socket.on('room:typing', onTyping);
+    socket.on('room:occupancy', onOccupancy);
     return () => {
       socket.off('room:message', onMessage);
       socket.off('room:presence', onPresence);
+      socket.off('room:occupancy', onOccupancy);
       socket.off('room:presence-sync', onPresenceSync);
       socket.off('room:typing', onTyping);
     };
