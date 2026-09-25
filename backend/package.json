@@ -36,6 +36,7 @@
     "test:my-photos": "ts-node scripts/my-photos-checks.ts",
     "test:map-photo-hosting": "ts-node scripts/map-photo-hosting-checks.ts",
     "test:chat-attach-my-photos": "ts-node scripts/chat-attach-my-photos-checks.ts",
+    "test:chat-withdraw-location": "ts-node scripts/chat-withdraw-location-checks.ts",
     "test:pride-one-path": "ts-node scripts/pride-one-path-checks.ts",
     "test:bsf26": "ts-node scripts/bsf26-promo-checks.ts",
     "test:mr3free": "ts-node scripts/mr3free-promo-checks.ts",

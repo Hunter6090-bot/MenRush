@@ -175,7 +175,11 @@ function isSameDay(a?: string, b?: string): boolean {
 }
 
 function isWithdrawnMedia(msg: Message): boolean {
-  return !!msg.withdrawn_at || (!!msg.expired && /withdrawn/i.test(msg.message || ''));
+  return (
+    !!msg.withdrawn_at ||
+    (!!msg.expired && /withdrawn/i.test(msg.message || '')) ||
+    (!!msg.media_type && /withdrawn/i.test(msg.message || ''))
+  );
 }
 
 function canWithdrawMedia(msg: Message, userId?: string): boolean {
@@ -184,7 +188,7 @@ function canWithdrawMedia(msg: Message, userId?: string): boolean {
     msg.sender_id === userId &&
     !!msg.media_type &&
     !isWithdrawnMedia(msg) &&
-    (!!msg.media_url || !!msg.is_disappearing)
+    (!!msg.media_url || !!msg.is_disappearing || msg.media_type === 'location')
   );
 }
 
@@ -1554,54 +1558,94 @@ interface LocationBubbleProps {
   isMine: boolean;
   showTail: boolean;
   peerName?: string;
+  onWithdraw?: () => void;
+  withdrawing?: boolean;
 }
 
-const LocationBubble: React.FC<LocationBubbleProps> = ({ msg, isMine, showTail, peerName }) => {
-  const coords = parseLocationPayload(msg.media_type, msg.message);
+const LocationBubble: React.FC<LocationBubbleProps> = ({
+  msg,
+  isMine,
+  showTail,
+  peerName,
+  onWithdraw,
+  withdrawing,
+}) => {
+  const radius = showTail
+    ? isMine
+      ? '18px 18px 4px 18px'
+      : '18px 18px 18px 4px'
+    : '18px';
+
+  if (isWithdrawnMedia(msg)) {
+    return (
+      <div className={`flex max-w-full flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
+        <div
+          className="flex max-w-full items-center gap-2 px-4 py-3 text-xs break-words [overflow-wrap:anywhere]"
+          data-testid="media-withdrawn"
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-default)',
+            color: 'var(--cream-muted)',
+            borderRadius: radius,
+          }}
+        >
+          <FlameIcon className="h-4 w-4 shrink-0" />
+          <span>{msg.message || 'Location withdrawn'}</span>
+        </div>
+      </div>
+    );
+  }
+
+  const coords = parseLocationPayload(msg.media_type, msg.message, msg.withdrawn_at);
   const label = isMine ? 'Shared location' : `${peerName ?? 'Match'}'s location`;
 
   const bubbleStyle = isMine
     ? {
         background: 'linear-gradient(135deg, #C4832A, #A45E18)',
         color: '#FFF5E6',
-        borderRadius: showTail ? '18px 18px 4px 18px' : '18px',
+        borderRadius: radius,
         boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
       }
     : {
         background: 'var(--bg-card)',
         border: '1px solid var(--border-default)',
         color: 'var(--cream)',
-        borderRadius: showTail ? '18px 18px 18px 4px' : '18px',
+        borderRadius: radius,
       };
 
   return (
-    <div className="relative max-w-full px-4 py-3 text-sm leading-relaxed break-words [overflow-wrap:anywhere]" style={bubbleStyle}>
-      <div className="flex min-w-0 items-start gap-2">
-        <LocationPinIcon className="mt-0.5 h-5 w-5 shrink-0" />
-        <div className="min-w-0">
-          <p className="font-semibold">{label}</p>
-          {coords ? (
-            <p className="mt-1 text-[11px] opacity-80">
-              {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
-            </p>
-          ) : null}
+    <div className={`flex max-w-full flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
+      <div className="relative max-w-full px-4 py-3 text-sm leading-relaxed break-words [overflow-wrap:anywhere]" style={bubbleStyle}>
+        <div className="flex min-w-0 items-start gap-2">
+          <LocationPinIcon className="mt-0.5 h-5 w-5 shrink-0" />
+          <div className="min-w-0">
+            <p className="font-semibold">{label}</p>
+            {coords ? (
+              <p className="mt-1 text-[11px] opacity-80">
+                {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
+              </p>
+            ) : null}
+          </div>
         </div>
+        {coords ? (
+          <button
+            type="button"
+            onClick={() => openMapsDirections(coords.lat, coords.lng, label)}
+            className="mt-3 w-full rounded-lg px-3 py-2 text-xs font-bold"
+            style={
+              isMine
+                ? { background: 'rgba(13,10,6,0.22)', color: '#FFF5E6' }
+                : { background: 'rgba(196,131,42,0.16)', color: '#C4832A', border: '1px solid rgba(196,131,42,0.35)' }
+            }
+          >
+            Get directions
+          </button>
+        ) : (
+          <p className="mt-2 text-[11px] opacity-70">Location unavailable</p>
+        )}
       </div>
-      {coords ? (
-        <button
-          type="button"
-          onClick={() => openMapsDirections(coords.lat, coords.lng, label)}
-          className="mt-3 w-full rounded-lg px-3 py-2 text-xs font-bold"
-          style={
-            isMine
-              ? { background: 'rgba(13,10,6,0.22)', color: '#FFF5E6' }
-              : { background: 'rgba(196,131,42,0.16)', color: '#C4832A', border: '1px solid rgba(196,131,42,0.35)' }
-          }
-        >
-          Get directions
-        </button>
-      ) : (
-        <p className="mt-2 text-[11px] opacity-70">Location unavailable</p>
+      {onWithdraw && isMine && (
+        <WithdrawMediaButton onClick={onWithdraw} loading={withdrawing} label="Withdraw location" />
       )}
     </div>
   );
@@ -1689,19 +1733,25 @@ const MeetConsentBar: React.FC<MeetConsentBarProps> = ({
   );
 };
 
-const WithdrawMediaButton: React.FC<{ onClick: () => void; loading?: boolean }> = ({
+const WithdrawMediaButton: React.FC<{
+  onClick: () => void;
+  loading?: boolean;
+  label?: string;
+}> = ({
   onClick,
   loading,
+  label = 'Withdraw media',
 }) => (
   <button
     type="button"
     onClick={onClick}
     disabled={loading}
     data-testid="withdraw-media"
+    aria-label={label}
     className="text-[10px] font-semibold underline disabled:opacity-50"
     style={{ color: 'var(--cream-muted)' }}
   >
-    {loading ? 'Withdrawing…' : 'Withdraw media'}
+    {loading ? 'Withdrawing…' : label}
   </button>
 );
 
@@ -3163,6 +3213,12 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                       isMine={isMine}
                       showTail={showTail}
                       peerName={otherUser?.name}
+                      onWithdraw={
+                        canWithdrawMedia(msg, userId)
+                          ? () => msg.id && void onWithdrawMedia(msg.id)
+                          : undefined
+                      }
+                      withdrawing={withdrawingId === msg.id}
                     />
                   ) : (
                     <div
