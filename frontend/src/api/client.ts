@@ -561,6 +561,8 @@ export const messagesAPI = {
     apiClient.post<MessageDTO>(`/messages/${messageId}/view`),
   withdrawMedia: (messageId: string) =>
     apiClient.post<MessageDTO>(`/messages/${messageId}/withdraw`),
+  withdrawLocation: (messageId: string) =>
+    apiClient.post<MessageDTO>(`/messages/${messageId}/withdraw`),
 };
 
 export interface MeetAgreementState {
