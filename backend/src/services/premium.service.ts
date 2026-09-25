@@ -433,7 +433,21 @@ export const premiumService = {
     return { ok: true, userId: event.userId };
   },
 
+  /**
+   * Live checkout is disabled and no processor signature check is wired.
+   * Until that check exists, every billing callback is untrusted.
+   */
+  webhookSignatureVerified(_body: Record<string, unknown>): boolean {
+    return false;
+  },
+
   async handleWebhook(body: Record<string, unknown>) {
+    if (!this.webhookSignatureVerified(body)) {
+      const err = new Error('Billing webhook signature is not configured');
+      (err as { code?: string }).code = 'invalid_signature';
+      throw err;
+    }
+
     const raw: Record<string, string> = {};
     for (const [key, value] of Object.entries(body)) {
       if (typeof value === 'string') raw[key] = value;
