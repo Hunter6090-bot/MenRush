@@ -13,7 +13,11 @@ import {
  * a clear user action. Unsupported / blocked states are surfaced honestly
  * rather than pretending push is on.
  */
-export const NotificationSettings: React.FC = () => {
+export interface NotificationSettingsProps {
+  flush?: boolean;
+}
+
+export const NotificationSettings: React.FC<NotificationSettingsProps> = ({ flush = false }) => {
   const [support, setSupport] = useState<PushSupport>(getPushSupport());
   const [busy, setBusy] = useState(false);
   const [serverConfigured, setServerConfigured] = useState(true);
@@ -58,12 +62,16 @@ export const NotificationSettings: React.FC = () => {
 
   return (
     <div
-      className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 flex items-center justify-between shadow-card"
+      className={
+        flush
+          ? 'p-4 sm:p-5 flex items-center justify-between gap-3'
+          : 'bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 flex items-center justify-between shadow-card'
+      }
       data-testid="notification-settings"
     >
       <div className="pr-4">
-        <p className="text-[var(--cream)]/80 text-sm font-semibold">Push notifications</p>
-        <p className="text-[var(--cream-muted)] text-xs mt-0.5" data-testid="notification-settings-status">
+        <p className="text-[var(--cream)] text-[15px] font-bold">Push notifications</p>
+        <p className="text-[var(--cream-muted)] text-[13px] mt-0.5" data-testid="notification-settings-status">
           {description}
         </p>
       </div>
@@ -74,7 +82,7 @@ export const NotificationSettings: React.FC = () => {
         aria-pressed={enabled}
         aria-label="Toggle push notifications"
         data-testid="notification-settings-toggle"
-        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none disabled:opacity-40 ${
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none disabled:opacity-40 ${
           enabled ? 'bg-[#C4832A]' : 'bg-[var(--border-default)]'
         }`}
       >
