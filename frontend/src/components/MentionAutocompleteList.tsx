@@ -54,7 +54,7 @@ export function MentionAutocompleteList({
   useEffect(() => {
     if (listRef.current && selectedIndex >= 0) {
       const activeItem = listRef.current.children[selectedIndex] as HTMLElement | undefined;
-      if (activeItem) {
+      if (activeItem && typeof activeItem.scrollIntoView === 'function') {
         activeItem.scrollIntoView({ block: 'nearest' });
       }
     }

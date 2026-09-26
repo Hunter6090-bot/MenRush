@@ -121,6 +121,7 @@ async function assertPostVisible(
     `SELECT cp.id, cp.user_id
      FROM community_posts cp
      WHERE cp.id = $1
+       AND cp.created_at > NOW() - INTERVAL '24 hours'
        AND NOT EXISTS (
          SELECT 1 FROM blocks b
          WHERE (b.blocker_id = $2 AND b.blocked_id = cp.user_id)
@@ -214,7 +215,8 @@ export const communityService = {
          ) AS comment_count
        FROM community_posts cp
        JOIN users u ON u.id = cp.user_id
-       WHERE ST_DWithin(
+       WHERE cp.created_at > NOW() - INTERVAL '24 hours'
+       AND ST_DWithin(
          cp.location,
          ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography,
          $3

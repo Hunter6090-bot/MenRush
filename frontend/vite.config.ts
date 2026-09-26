@@ -79,6 +79,9 @@ export default defineConfig({
       'src/lib/nearbyGridFirst.test.ts',
       'src/lib/notifications.destination.test.ts',
       'src/lib/receiptTicks.test.ts',
+      'src/lib/mentions.test.ts',
+      'src/lib/mentionsAutocomplete.test.ts',
+      'src/lib/communityExpiry.test.ts',
     ],
   },
 });

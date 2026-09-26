@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { CommunityFeed } from './CommunityFeed';
@@ -32,6 +32,10 @@ vi.mock('../lib/deviceLocation', () => ({
 
 vi.mock('./UserAvatar', () => ({
   useResolvingPhotoSrc: () => ({ src: null, onError: () => {} }),
+}));
+
+vi.mock('./CommunityPostComments', () => ({
+  CommunityPostComments: () => <div data-testid="mock-comments" />,
 }));
 
 function renderFeed() {
@@ -186,5 +190,85 @@ describe('CommunityFeed Mention Autocomplete', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('mention-autocomplete-list')).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('CommunityFeed 24h expiry client filter', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getMe.mockResolvedValue({
+      data: { lat: 51.5074, lng: -0.1278 },
+    });
+    updateLocation.mockResolvedValue({ ok: true });
+  });
+
+  it('filters out posts older than 24h even if the API returns them', async () => {
+    const now = Date.now();
+    const freshPost = {
+      id: 'fresh-1',
+      user_id: 'user-1',
+      body: 'Fresh post within 24h',
+      created_at: new Date(now - 2 * 60 * 60 * 1000).toISOString(), // 2h ago
+      author_name: 'Fresh Author',
+      author_photo_url: null,
+      distance_km: '0.50',
+      distance_label: '500 m',
+      comment_count: 0,
+    };
+    const stalePost = {
+      id: 'stale-1',
+      user_id: 'user-2',
+      body: 'Stale post from 16 Sept',
+      created_at: new Date(now - 48 * 60 * 60 * 1000).toISOString(), // 48h ago
+      author_name: 'Stale Author',
+      author_photo_url: null,
+      distance_km: '1.00',
+      distance_label: '1 km',
+      comment_count: 2,
+    };
+
+    listPosts.mockResolvedValue({
+      data: {
+        posts: [freshPost, stalePost],
+      },
+    });
+
+    renderFeed();
+
+    await waitFor(() => {
+      expect(screen.getByText('Fresh post within 24h')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('Stale post from 16 Sept')).not.toBeInTheDocument();
+  });
+
+  it('shows empty state when all returned posts are older than 24h', async () => {
+    const now = Date.now();
+    const stalePost = {
+      id: 'stale-2',
+      user_id: 'user-3',
+      body: 'Old post from August',
+      created_at: new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString(), // 30d ago
+      author_name: 'August Author',
+      author_photo_url: null,
+      distance_km: '2.00',
+      distance_label: '2 km',
+      comment_count: 0,
+    };
+
+    listPosts.mockResolvedValue({
+      data: {
+        posts: [stalePost],
+      },
+    });
+
+    renderFeed();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('community-empty')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('No posts nearby yet')).toBeInTheDocument();
+    expect(screen.queryByText('Old post from August')).not.toBeInTheDocument();
   });
 });
