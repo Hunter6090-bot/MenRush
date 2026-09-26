@@ -6,6 +6,7 @@ import { communityService } from '../services/community.service';
 import {
   CommunityCreateCommentSchema,
   CommunityCreatePostSchema,
+  CommunityMentionSuggestionsQuerySchema,
   LocationSchema,
 } from '../types/validation';
 
@@ -98,6 +99,35 @@ function handleCommentAccessError(err: unknown, res: Response): boolean {
   }
   return false;
 }
+
+/**
+ * GET /api/community/mention-suggestions?q=&limit=
+ * Autocomplete suggestions for @ mentions in Community posts and comments.
+ * Limited strictly to:
+ * 1. Live public Hot Spots (commercial venues + ops-curated outdoor)
+ * 2. Mutual matches of the viewer
+ * Never strangers, never un-matched nearby users.
+ */
+router.get('/mention-suggestions', async (req: AuthRequest, res: Response) => {
+  try {
+    const parsed = CommunityMentionSuggestionsQuerySchema.parse({
+      q: req.query.q != null ? String(req.query.q) : '',
+      limit: req.query.limit != null ? req.query.limit : 10,
+    });
+    const suggestions = await communityService.getMentionSuggestions(
+      req.userId!,
+      parsed.q,
+      parsed.limit,
+    );
+    res.json({ suggestions });
+  } catch (err: unknown) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid mention query parameters' });
+    }
+    console.error('[community] mention-suggestions', err);
+    res.status(500).json({ error: 'Could not load mention suggestions' });
+  }
+});
 
 /**
  * GET /api/community/posts/:id/comments
