@@ -184,8 +184,10 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     expect(screen.getByText('Terms of service')).toBeInTheDocument();
     expect(screen.getByText('Privacy policy')).toBeInTheDocument();
     expect(screen.getByText('Help & support')).toBeInTheDocument();
-    expect(screen.getByText('Follow MenRush')).toBeInTheDocument();
+    expect(screen.getByText('Follow on Instagram')).toBeInTheDocument();
     expect(screen.getByText('Instagram @menrushsocial')).toBeInTheDocument();
+    expect(screen.getByText('Follow on Bluesky')).toBeInTheDocument();
+    expect(screen.getByText('Bluesky @menrush.bsky.social')).toBeInTheDocument();
 
     // Section 10: Account actions (Delete account + Sign out)
     expect(screen.getByTestId('settings-delete-account')).toBeInTheDocument();
@@ -347,5 +349,62 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     expect(shellScope.queryByText(/^dating$/i)).not.toBeInTheDocument();
     expect(shellScope.queryByText(/^matches$/i)).not.toBeInTheDocument();
     expect(shellScope.queryByText(/^relationship$/i)).not.toBeInTheDocument();
+  });
+
+  it('renders official Instagram and Bluesky follow rows with real glyphs, correct links, and no unverified platforms', () => {
+    render(
+      <MemoryRouter>
+        <Settings />
+      </MemoryRouter>,
+    );
+
+    // 1. Instagram row
+    const instagramLink = screen.getByTestId('settings-follow-instagram');
+    expect(instagramLink).toBeInTheDocument();
+    expect(instagramLink).toHaveAttribute('href', 'https://www.instagram.com/menrushsocial/');
+    expect(instagramLink).toHaveAttribute('target', '_blank');
+    expect(instagramLink).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(instagramLink).toHaveAttribute(
+      'aria-label',
+      'Follow MenRush on Instagram @menrushsocial',
+    );
+
+    expect(within(instagramLink).getByTestId('settings-follow-instagram-glyph')).toBeInTheDocument();
+    expect(within(instagramLink).getByTestId('settings-instagram-glyph')).toBeInTheDocument();
+    // Soft Brand lock: glyph wrapper stays monochrome cream, no copper on hover
+    expect(within(instagramLink).getByTestId('settings-follow-instagram-glyph')).toHaveClass('text-[var(--cream)]');
+    expect(within(instagramLink).getByTestId('settings-follow-instagram-glyph')).not.toHaveClass(/group-hover:text-/);
+
+    expect(within(instagramLink).getByText('Follow on Instagram')).toBeInTheDocument();
+    expect(within(instagramLink).getByText('Instagram @menrushsocial')).toBeInTheDocument();
+
+    // 2. Bluesky row
+    const blueskyLink = screen.getByTestId('settings-follow-bluesky');
+    expect(blueskyLink).toBeInTheDocument();
+    expect(blueskyLink).toHaveAttribute('href', 'https://bsky.app/profile/menrush.bsky.social');
+    expect(blueskyLink).toHaveAttribute('target', '_blank');
+    expect(blueskyLink).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(blueskyLink).toHaveAttribute(
+      'aria-label',
+      'Follow MenRush on Bluesky @menrush.bsky.social',
+    );
+
+    expect(within(blueskyLink).getByTestId('settings-follow-bluesky-glyph')).toBeInTheDocument();
+    expect(within(blueskyLink).getByTestId('settings-bluesky-glyph')).toBeInTheDocument();
+    // Soft Brand lock: glyph wrapper stays monochrome cream, no copper on hover
+    expect(within(blueskyLink).getByTestId('settings-follow-bluesky-glyph')).toHaveClass('text-[var(--cream)]');
+    expect(within(blueskyLink).getByTestId('settings-follow-bluesky-glyph')).not.toHaveClass(/group-hover:text-/);
+
+    expect(within(blueskyLink).getByText('Follow on Bluesky')).toBeInTheDocument();
+    expect(within(blueskyLink).getByText('Bluesky @menrush.bsky.social')).toBeInTheDocument();
+
+    // 3. Soft Brand HOLD: X, TikTok, Facebook absent entirely
+    const shell = screen.getByTestId('settings-shell');
+    const shellText = shell.textContent || '';
+    expect(shellText).not.toMatch(/\b(TikTok|Facebook|Twitter)\b/i);
+    expect(shell.querySelector('a[href*="twitter.com"]')).not.toBeInTheDocument();
+    expect(shell.querySelector('a[href*="x.com"]')).not.toBeInTheDocument();
+    expect(shell.querySelector('a[href*="tiktok.com"]')).not.toBeInTheDocument();
+    expect(shell.querySelector('a[href*="facebook.com"]')).not.toBeInTheDocument();
   });
 });
