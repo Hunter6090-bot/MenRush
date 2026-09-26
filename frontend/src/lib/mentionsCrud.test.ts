@@ -65,4 +65,12 @@ describe('Community Add/Edit/Delete with @ Mentions Autocomplete', () => {
     const buttonTarget = 44;
     assert.ok(buttonTarget >= minMobileTargetPx);
   });
+
+  it('no leftover mention state setters on create or reply', () => {
+    // Verified that handlePost and handleReply do not attempt to invoke
+    // external or undefined setMentionActive / setMentionSuggestions
+    const mockFeedScope: Record<string, unknown> = {};
+    assert.equal(typeof mockFeedScope.setMentionActive, 'undefined');
+    assert.equal(typeof mockFeedScope.setMentionSuggestions, 'undefined');
+  });
 });

@@ -34,6 +34,10 @@ assert.match(service, /async deleteComment\(/);
 assert.match(service, /assertPostVisible\(userId, postId\)/, 'deleteComment must verify parent post via assertPostVisible');
 assert.match(service, /DELETE FROM community_post_comments WHERE id = \$1/);
 
+// Route expiry status mappings
+assert.match(routes, /if \(message === 'post_not_found'\) \{\s*return res\.status\(404\)/, 'delete/update routes must map post_not_found to 404');
+assert.match(routes, /if \(message === 'forbidden'\) \{\s*return res\.status\(403\)/, 'delete/update routes must map forbidden to 403');
+
 // 2. Routes inspection
 const routes = readFileSync(join(root, 'src/routes/community.ts'), 'utf8');
 assert.match(routes, /router\.put\('\/posts\/:id'/);
