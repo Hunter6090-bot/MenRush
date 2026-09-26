@@ -47,6 +47,7 @@
     "test:official-rooms": "ts-node scripts/official-rooms-checks.ts",
     "test:community-comments": "ts-node scripts/community-comments-checks.ts",
     "test:community-mentions": "node --experimental-strip-types scripts/community-mentions-checks.ts",
+    "test:community-crud": "node --experimental-strip-types scripts/community-crud-checks.ts",
     "test:community-mentions-http": "ts-node scripts/community-mentions-endpoint.test.ts",
     "test:community-expiry": "ts-node scripts/community-expiry-checks.ts",
     "test:room-temp-identity-privacy": "ts-node src/services/room-temp-identity.privacy.test.ts",

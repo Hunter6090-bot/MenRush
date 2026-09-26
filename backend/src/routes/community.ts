@@ -7,6 +7,8 @@ import {
   CommunityCreateCommentSchema,
   CommunityCreatePostSchema,
   CommunityMentionSuggestionsQuerySchema,
+  CommunityUpdateCommentSchema,
+  CommunityUpdatePostSchema,
   LocationSchema,
 } from '../types/validation';
 
@@ -74,6 +76,60 @@ router.post('/posts', createLimiter, async (req: AuthRequest, res: Response) => 
     }
     console.error('[community] create', err);
     res.status(500).json({ error: 'Could not create post' });
+  }
+});
+
+/**
+ * PUT /api/community/posts/:id { body }
+ * Update author's own Community post (≤280).
+ */
+router.put('/posts/:id', createLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const postId = PostIdParam.parse(req.params.id);
+    const parsed = CommunityUpdatePostSchema.parse(req.body ?? {});
+    const post = await communityService.updatePost(req.userId!, postId, parsed.body);
+    res.json({ post });
+  } catch (err: unknown) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Post must be 1–280 characters' });
+    }
+    const message = err instanceof Error ? err.message : '';
+    if (message === 'post_not_found') {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    if (message === 'forbidden') {
+      return res.status(403).json({ error: 'You can only edit your own posts' });
+    }
+    if (message === 'invalid_body') {
+      return res.status(400).json({ error: 'Post must be 1–280 characters' });
+    }
+    console.error('[community] update post', err);
+    res.status(500).json({ error: 'Could not update post' });
+  }
+});
+
+/**
+ * DELETE /api/community/posts/:id
+ * Delete author's own Community post.
+ */
+router.delete('/posts/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const postId = PostIdParam.parse(req.params.id);
+    await communityService.deletePost(req.userId!, postId);
+    res.json({ ok: true });
+  } catch (err: unknown) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid post' });
+    }
+    const message = err instanceof Error ? err.message : '';
+    if (message === 'post_not_found') {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    if (message === 'forbidden') {
+      return res.status(403).json({ error: 'You can only delete your own posts' });
+    }
+    console.error('[community] delete post', err);
+    res.status(500).json({ error: 'Could not delete post' });
   }
 });
 
@@ -165,6 +221,67 @@ router.post('/posts/:id/comments', commentLimiter, async (req: AuthRequest, res:
     if (handleCommentAccessError(err, res)) return;
     console.error('[community] create comment', err);
     res.status(500).json({ error: 'Could not add comment' });
+  }
+});
+
+const CommentIdParam = z.string().uuid();
+
+/**
+ * PUT /api/community/posts/:id/comments/:commentId { body }
+ * Update author's own comment (≤280).
+ */
+router.put('/posts/:id/comments/:commentId', commentLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const postId = PostIdParam.parse(req.params.id);
+    const commentId = CommentIdParam.parse(req.params.commentId);
+    const parsed = CommunityUpdateCommentSchema.parse(req.body ?? {});
+    const comment = await communityService.updateComment(req.userId!, postId, commentId, parsed.body);
+    res.json({ comment });
+  } catch (err: unknown) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Comment must be 1–280 characters' });
+    }
+    const message = err instanceof Error ? err.message : '';
+    if (message === 'post_not_found') {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    if (message === 'comment_not_found') {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+    if (message === 'forbidden') {
+      return res.status(403).json({ error: 'You can only edit your own comments' });
+    }
+    if (message === 'invalid_body') {
+      return res.status(400).json({ error: 'Comment must be 1–280 characters' });
+    }
+    console.error('[community] update comment', err);
+    res.status(500).json({ error: 'Could not update comment' });
+  }
+});
+
+/**
+ * DELETE /api/community/posts/:id/comments/:commentId
+ * Delete author's own comment.
+ */
+router.delete('/posts/:id/comments/:commentId', async (req: AuthRequest, res: Response) => {
+  try {
+    const postId = PostIdParam.parse(req.params.id);
+    const commentId = CommentIdParam.parse(req.params.commentId);
+    await communityService.deleteComment(req.userId!, postId, commentId);
+    res.json({ ok: true });
+  } catch (err: unknown) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid request' });
+    }
+    const message = err instanceof Error ? err.message : '';
+    if (message === 'comment_not_found') {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+    if (message === 'forbidden') {
+      return res.status(403).json({ error: 'You can only delete your own comments' });
+    }
+    console.error('[community] delete comment', err);
+    res.status(500).json({ error: 'Could not delete comment' });
   }
 });
 
