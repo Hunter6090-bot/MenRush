@@ -274,6 +274,9 @@ router.delete('/posts/:id/comments/:commentId', async (req: AuthRequest, res: Re
       return res.status(400).json({ error: 'Invalid request' });
     }
     const message = err instanceof Error ? err.message : '';
+    if (message === 'post_not_found') {
+      return res.status(404).json({ error: 'Post not found' });
+    }
     if (message === 'comment_not_found') {
       return res.status(404).json({ error: 'Comment not found' });
     }

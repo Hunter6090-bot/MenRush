@@ -357,6 +357,7 @@ export const communityService = {
 
   /**
    * Delete author's own Community post.
+   * Enforces author ownership and 24h expiry (expired post fails with post_not_found).
    * Cascades comments via DB foreign key constraint.
    */
   async deletePost(
@@ -364,7 +365,9 @@ export const communityService = {
     postId: string,
   ): Promise<{ ok: boolean }> {
     const existing = await query(
-      `SELECT id, user_id FROM community_posts WHERE id = $1`,
+      `SELECT id, user_id FROM community_posts
+       WHERE id = $1
+         AND created_at > NOW() - INTERVAL '24 hours'`,
       [postId],
     );
     if (existing.rows.length === 0) {
@@ -432,12 +435,16 @@ export const communityService = {
 
   /**
    * Delete author's own comment on a Community post.
+   * Enforces comment ownership and post visibility / 24h expiry.
    */
   async deleteComment(
     userId: string,
     postId: string,
     commentId: string,
   ): Promise<{ ok: boolean }> {
+    // Verify parent post is visible and not expired
+    await assertPostVisible(userId, postId);
+
     const existing = await query(
       `SELECT id, post_id, user_id FROM community_post_comments WHERE id = $1 AND post_id = $2`,
       [commentId, postId],

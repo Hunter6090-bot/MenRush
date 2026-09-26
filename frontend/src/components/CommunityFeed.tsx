@@ -199,8 +199,6 @@ export function CommunityFeed({
       const res = await communityAPI.createPost(body);
       const created = res.data.post;
       setDraft('');
-      setMentionActive(null);
-      setMentionSuggestions([]);
       setPosts((prev) => [created, ...prev.filter((p) => p.id !== created.id)]);
     } catch (err: unknown) {
       const ax = err as { response?: { data?: { error?: string; message?: string } } };
@@ -356,7 +354,7 @@ export function CommunityFeed({
                               type="button"
                               data-testid={`community-post-edit-${post.id}`}
                               onClick={() => startEditPost(post)}
-                              className="inline-flex min-h-[36px] min-w-[44px] cursor-pointer items-center justify-center rounded-lg px-2.5 py-1 text-[12px] font-bold text-[var(--cream-muted)] transition-colors hover:bg-[rgba(196,131,42,0.15)] hover:text-[#E0A14A] active:bg-[rgba(196,131,42,0.25)] touch-manipulation"
+                              className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-lg px-2.5 py-1 text-[12px] font-bold text-[var(--cream-muted)] transition-colors hover:bg-[rgba(196,131,42,0.15)] hover:text-[#E0A14A] active:bg-[rgba(196,131,42,0.25)] touch-manipulation"
                             >
                               Edit
                             </button>
@@ -364,7 +362,7 @@ export function CommunityFeed({
                               type="button"
                               data-testid={`community-post-delete-${post.id}`}
                               onClick={() => setDeleteConfirmPostId(post.id)}
-                              className="inline-flex min-h-[36px] min-w-[44px] cursor-pointer items-center justify-center rounded-lg px-2.5 py-1 text-[12px] font-bold text-[var(--cream-muted)] transition-colors hover:bg-red-500/10 hover:text-red-400 active:bg-red-500/20 touch-manipulation"
+                              className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-lg px-2.5 py-1 text-[12px] font-bold text-[var(--cream-muted)] transition-colors hover:bg-red-500/10 hover:text-red-400 active:bg-red-500/20 touch-manipulation"
                             >
                               Delete
                             </button>
@@ -389,7 +387,7 @@ export function CommunityFeed({
                           data-testid={`community-post-delete-btn-${post.id}`}
                           disabled={deletingPostId === post.id}
                           onClick={() => void handleDeletePost(post.id)}
-                          className="inline-flex min-h-[38px] cursor-pointer items-center justify-center rounded-full bg-red-600 px-4 py-1.5 text-[12px] font-extrabold uppercase tracking-wide text-white transition-colors hover:bg-red-500 active:bg-red-700 disabled:opacity-40 touch-manipulation"
+                          className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full bg-red-600 px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-white transition-colors hover:bg-red-500 active:bg-red-700 disabled:opacity-40 touch-manipulation"
                         >
                           {deletingPostId === post.id ? 'Deleting…' : 'Delete post'}
                         </button>
@@ -398,7 +396,7 @@ export function CommunityFeed({
                           data-testid={`community-post-delete-cancel-${post.id}`}
                           disabled={deletingPostId === post.id}
                           onClick={() => setDeleteConfirmPostId(null)}
-                          className="inline-flex min-h-[38px] cursor-pointer items-center justify-center rounded-full border border-[var(--border-default)] px-4 py-1.5 text-[12px] font-bold text-[var(--cream-muted)] hover:text-[var(--cream)] active:bg-white/5 touch-manipulation"
+                          className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full border border-[var(--border-default)] px-4 py-2 text-[12px] font-bold text-[var(--cream-muted)] hover:text-[var(--cream)] active:bg-white/5 touch-manipulation"
                         >
                           Cancel
                         </button>
@@ -438,7 +436,7 @@ export function CommunityFeed({
                             data-testid={`community-post-edit-cancel-${post.id}`}
                             disabled={savingEdit}
                             onClick={cancelEditPost}
-                            className="inline-flex min-h-[36px] cursor-pointer items-center justify-center rounded-full border border-[var(--border-default)] px-3.5 py-1 text-[12px] font-bold text-[var(--cream-muted)] hover:text-[var(--cream)] active:bg-white/5 touch-manipulation"
+                            className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full border border-[var(--border-default)] px-4 py-2 text-[12px] font-bold text-[var(--cream-muted)] hover:text-[var(--cream)] active:bg-white/5 touch-manipulation"
                           >
                             Cancel
                           </button>
@@ -447,7 +445,7 @@ export function CommunityFeed({
                             data-testid={`community-post-edit-save-${post.id}`}
                             disabled={savingEdit || editDraft.trim().length === 0}
                             onClick={() => void handleSaveEditPost(post.id)}
-                            className="inline-flex min-h-[36px] cursor-pointer items-center justify-center rounded-full bg-[#C4832A] px-4 py-1 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] active:bg-[#C4832A] disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
+                            className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full bg-[#C4832A] px-5 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] active:bg-[#C4832A] disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
                           >
                             {savingEdit ? 'Saving…' : 'Save'}
                           </button>

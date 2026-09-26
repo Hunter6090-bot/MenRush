@@ -148,8 +148,6 @@ export function CommunityPostComments({
       const res = await communityAPI.createComment(postId, body);
       const created = res.data.comment;
       setDraft('');
-      setMentionActive(null);
-      setMentionSuggestions([]);
       setComments((prev) => [...prev.filter((c) => c.id !== created.id), created]);
       setLoaded(true);
       onCountChange?.(comments.filter((c) => c.id !== created.id).length + 1);
@@ -217,7 +215,7 @@ export function CommunityPostComments({
                                 type="button"
                                 data-testid={`community-comment-edit-${comment.id}`}
                                 onClick={() => startEditComment(comment)}
-                                className="inline-flex min-h-[32px] min-w-[38px] cursor-pointer items-center justify-center rounded px-2 py-0.5 text-[11px] font-bold text-[var(--cream-muted)] transition-colors hover:bg-[rgba(196,131,42,0.15)] hover:text-[#E0A14A] active:bg-[rgba(196,131,42,0.25)] touch-manipulation"
+                                className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded px-2.5 py-1 text-[11px] font-bold text-[var(--cream-muted)] transition-colors hover:bg-[rgba(196,131,42,0.15)] hover:text-[#E0A14A] active:bg-[rgba(196,131,42,0.25)] touch-manipulation"
                               >
                                 Edit
                               </button>
@@ -225,7 +223,7 @@ export function CommunityPostComments({
                                 type="button"
                                 data-testid={`community-comment-delete-${comment.id}`}
                                 onClick={() => setDeleteConfirmCommentId(comment.id)}
-                                className="inline-flex min-h-[32px] min-w-[38px] cursor-pointer items-center justify-center rounded px-2 py-0.5 text-[11px] font-bold text-[var(--cream-muted)] transition-colors hover:bg-red-500/10 hover:text-red-400 active:bg-red-500/20 touch-manipulation"
+                                className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded px-2.5 py-1 text-[11px] font-bold text-[var(--cream-muted)] transition-colors hover:bg-red-500/10 hover:text-red-400 active:bg-red-500/20 touch-manipulation"
                               >
                                 Delete
                               </button>
@@ -247,7 +245,7 @@ export function CommunityPostComments({
                             data-testid={`community-comment-delete-btn-${comment.id}`}
                             disabled={deletingCommentId === comment.id}
                             onClick={() => void handleDeleteComment(comment.id)}
-                            className="inline-flex min-h-[34px] cursor-pointer items-center justify-center rounded-full bg-red-600 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-white transition-colors hover:bg-red-500 active:bg-red-700 disabled:opacity-40 touch-manipulation"
+                            className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full bg-red-600 px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-wide text-white transition-colors hover:bg-red-500 active:bg-red-700 disabled:opacity-40 touch-manipulation"
                           >
                             {deletingCommentId === comment.id ? 'Deleting…' : 'Delete'}
                           </button>
@@ -256,7 +254,7 @@ export function CommunityPostComments({
                             data-testid={`community-comment-delete-cancel-${comment.id}`}
                             disabled={deletingCommentId === comment.id}
                             onClick={() => setDeleteConfirmCommentId(null)}
-                            className="inline-flex min-h-[34px] cursor-pointer items-center justify-center rounded-full border border-[var(--border-default)] px-3 py-1 text-[11px] font-bold text-[var(--cream-muted)] hover:text-[var(--cream)] active:bg-white/5 touch-manipulation"
+                            className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full border border-[var(--border-default)] px-4 py-1.5 text-[11px] font-bold text-[var(--cream-muted)] hover:text-[var(--cream)] active:bg-white/5 touch-manipulation"
                           >
                             Cancel
                           </button>
@@ -296,7 +294,7 @@ export function CommunityPostComments({
                               data-testid={`community-comment-edit-cancel-${comment.id}`}
                               disabled={savingEdit}
                               onClick={cancelEditComment}
-                              className="inline-flex min-h-[32px] cursor-pointer items-center justify-center rounded-full border border-[var(--border-default)] px-3 py-0.5 text-[11px] font-bold text-[var(--cream-muted)] hover:text-[var(--cream)] active:bg-white/5 touch-manipulation"
+                              className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full border border-[var(--border-default)] px-3.5 py-1 text-[11px] font-bold text-[var(--cream-muted)] hover:text-[var(--cream)] active:bg-white/5 touch-manipulation"
                             >
                               Cancel
                             </button>
@@ -305,7 +303,7 @@ export function CommunityPostComments({
                               data-testid={`community-comment-edit-save-${comment.id}`}
                               disabled={savingEdit || editDraft.trim().length === 0}
                               onClick={() => void handleSaveEditComment(comment.id)}
-                              className="inline-flex min-h-[32px] cursor-pointer items-center justify-center rounded-full bg-[#C4832A] px-3.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] active:bg-[#C4832A] disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
+                              className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full bg-[#C4832A] px-4 py-1 text-[11px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] active:bg-[#C4832A] disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
                             >
                               {savingEdit ? 'Saving…' : 'Save'}
                             </button>

@@ -21,15 +21,17 @@ assert.match(service, /trimmed\.length > 280/);
 // Post delete checks
 assert.match(service, /async deletePost\(/);
 assert.match(service, /existing\.rows\[0\]\.user_id !== userId[\s\S]*forbidden/);
+assert.match(service, /created_at > NOW\(\) - INTERVAL '24 hours'/, 'deletePost must enforce 24h expiry');
 assert.match(service, /DELETE FROM community_posts WHERE id = \$1/);
 
 // Comment update checks
 assert.match(service, /async updateComment\(/);
-assert.match(service, /assertPostVisible\(userId, postId\)/);
+assert.match(service, /assertPostVisible\(userId, postId\)/, 'updateComment must verify parent post via assertPostVisible');
 assert.match(service, /existing\.rows\[0\]\.user_id !== userId[\s\S]*forbidden/);
 
 // Comment delete checks
 assert.match(service, /async deleteComment\(/);
+assert.match(service, /assertPostVisible\(userId, postId\)/, 'deleteComment must verify parent post via assertPostVisible');
 assert.match(service, /DELETE FROM community_post_comments WHERE id = \$1/);
 
 // 2. Routes inspection
