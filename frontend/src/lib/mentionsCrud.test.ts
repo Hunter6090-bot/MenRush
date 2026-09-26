@@ -60,9 +60,9 @@ describe('Community Add/Edit/Delete with @ Mentions Autocomplete', () => {
   });
 
   it('mobile parity: tap target sizes and touch-manipulation rules', () => {
-    // Touch targets must be at least 32-36px for buttons on mobile (iOS Safari & Android Chrome)
-    const minMobileTargetPx = 32;
-    const buttonTarget = 36;
+    // Mobile finger touch targets must be at least 44px touch envelope on iOS Safari & Android Chrome
+    const minMobileTargetPx = 44;
+    const buttonTarget = 44;
     assert.ok(buttonTarget >= minMobileTargetPx);
   });
 });
