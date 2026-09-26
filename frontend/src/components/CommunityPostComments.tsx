@@ -211,6 +211,8 @@ export function CommunityPostComments({
       const res = await communityAPI.createComment(postId, body);
       const created = res.data.comment;
       setDraft('');
+      setMentionActive(null);
+      setMentionSuggestions([]);
       setComments((prev) => [...prev.filter((c) => c.id !== created.id), created]);
       setLoaded(true);
       onCountChange?.(comments.filter((c) => c.id !== created.id).length + 1);

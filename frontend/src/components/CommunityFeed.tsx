@@ -15,6 +15,7 @@ import { MentionAutocompleteList } from './MentionAutocompleteList';
 import { PulseRing } from './PulseRing';
 import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
 import { useResolvingPhotoSrc } from './UserAvatar';
+import { isCommunityPostFresh } from '../lib/communityExpiry';
 
 const MAX_CHARS = 280;
 
@@ -196,7 +197,8 @@ export function CommunityFeed({
   const loadFeed = useCallback(
     async (lat: number, lng: number) => {
       const res = await communityAPI.listPosts(lat, lng, radiusKm);
-      setPosts(res.data.posts ?? []);
+      const rawPosts = res.data.posts ?? [];
+      setPosts(rawPosts.filter((p) => isCommunityPostFresh(p.created_at)));
       setError('');
       setNeedsLocation(false);
       setViewerLat(lat);
@@ -263,6 +265,8 @@ export function CommunityFeed({
       const res = await communityAPI.createPost(body);
       const created = res.data.post;
       setDraft('');
+      setMentionActive(null);
+      setMentionSuggestions([]);
       setPosts((prev) => [created, ...prev.filter((p) => p.id !== created.id)]);
     } catch (err: unknown) {
       const ax = err as { response?: { data?: { error?: string; message?: string } } };
@@ -394,7 +398,7 @@ export function CommunityFeed({
         <div className="rounded-2xl border border-[#A45E18]/40 bg-[var(--bg-card)] p-5 text-sm text-[var(--cream)]">
           {error}
         </div>
-      ) : posts.length === 0 ? (
+      ) : posts.filter((post) => isCommunityPostFresh(post.created_at)).length === 0 ? (
         <div
           className="rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[rgba(196,131,42,0.08)] px-6 py-10 text-center"
           data-testid="community-empty"
@@ -406,7 +410,9 @@ export function CommunityFeed({
         </div>
       ) : (
         <ul className="space-y-3" data-testid="community-post-list">
-          {posts.map((post) => (
+          {posts
+            .filter((post) => isCommunityPostFresh(post.created_at))
+            .map((post) => (
             <li
               key={post.id}
               data-testid="community-post"
