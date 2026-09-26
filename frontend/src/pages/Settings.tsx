@@ -17,6 +17,7 @@ import {
 } from '../lib/theme';
 import { clearDeviceTrustToken } from '../lib/deviceTrust';
 import { isGenericAvatarUrl } from '../lib/genericAvatar';
+import { IconBluesky, IconInstagram } from '../components/icons';
 import {
   profileCompletionScore,
   type ProfileEssentialItem,
@@ -1146,18 +1147,55 @@ export const Settings = () => {
               </Link>
 
               <a
-                href="https://www.instagram.com/menrushsocial"
+                href="https://www.instagram.com/menrushsocial/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className={rowActionClass}
+                aria-label="Follow MenRush on Instagram @menrushsocial"
+                data-testid="settings-follow-instagram"
+                className={`${rowActionClass} group`}
               >
-                <div>
-                  <p className="text-[15px] font-bold text-[var(--cream)]">Follow MenRush</p>
-                  <p className="mt-0.5 text-[13px] text-[var(--cream-muted)]">
-                    Instagram @menrushsocial
-                  </p>
+                <div className="flex items-center gap-3.5 min-w-0 pr-2">
+                  <div
+                    data-testid="settings-follow-instagram-glyph"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] transition-colors group-hover:border-[var(--copper)]"
+                  >
+                    <IconInstagram size={22} data-testid="settings-instagram-glyph" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-bold text-[var(--cream)]">Follow on Instagram</p>
+                    <p className="mt-0.5 text-[13px] text-[var(--cream-muted)]">
+                      Instagram @menrushsocial
+                    </p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5 text-[var(--cream-muted)]">
+                <div className="flex items-center gap-1.5 text-[var(--cream-muted)] transition-colors group-hover:text-[var(--copper)]">
+                  <ExternalLinkIcon />
+                </div>
+              </a>
+
+              <a
+                href="https://bsky.app/profile/menrush.bsky.social"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Follow MenRush on Bluesky @menrush.bsky.social"
+                data-testid="settings-follow-bluesky"
+                className={`${rowActionClass} group`}
+              >
+                <div className="flex items-center gap-3.5 min-w-0 pr-2">
+                  <div
+                    data-testid="settings-follow-bluesky-glyph"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] transition-colors group-hover:border-[var(--copper)]"
+                  >
+                    <IconBluesky size={22} data-testid="settings-bluesky-glyph" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-bold text-[var(--cream)]">Follow on Bluesky</p>
+                    <p className="mt-0.5 text-[13px] text-[var(--cream-muted)]">
+                      Bluesky @menrush.bsky.social
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 text-[var(--cream-muted)] transition-colors group-hover:text-[var(--copper)]">
                   <ExternalLinkIcon />
                 </div>
               </a>
