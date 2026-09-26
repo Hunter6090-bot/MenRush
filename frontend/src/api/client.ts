@@ -1209,12 +1209,23 @@ export const communityAPI = {
     }),
   createPost: (body: string) =>
     apiClient.post<{ post: CommunityPostDTO }>('/community/posts', { body }),
+  updatePost: (postId: string, body: string) =>
+    apiClient.put<{ post: CommunityPostDTO }>(`/community/posts/${postId}`, { body }),
+  deletePost: (postId: string) =>
+    apiClient.delete<{ ok: boolean }>(`/community/posts/${postId}`),
   listComments: (postId: string) =>
     apiClient.get<{ comments: CommunityCommentDTO[] }>(`/community/posts/${postId}/comments`),
   createComment: (postId: string, body: string) =>
     apiClient.post<{ comment: CommunityCommentDTO }>(`/community/posts/${postId}/comments`, {
       body,
     }),
+  updateComment: (postId: string, commentId: string, body: string) =>
+    apiClient.put<{ comment: CommunityCommentDTO }>(
+      `/community/posts/${postId}/comments/${commentId}`,
+      { body },
+    ),
+  deleteComment: (postId: string, commentId: string) =>
+    apiClient.delete<{ ok: boolean }>(`/community/posts/${postId}/comments/${commentId}`),
   getMentionSuggestions: (q: string = '', limit: number = 10) =>
     apiClient.get<{ suggestions: CommunityMentionSuggestionDTO[] }>(
       '/community/mention-suggestions',

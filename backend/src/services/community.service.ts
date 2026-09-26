@@ -296,6 +296,164 @@ export const communityService = {
   },
 
   /**
+   * Edit author's own Community post (≤280).
+   * Enforces author ownership and 24h expiry (expired post fails with post_not_found).
+   */
+  async updatePost(
+    userId: string,
+    postId: string,
+    body: string,
+  ): Promise<CommunityPostDTO> {
+    const trimmed = body.trim();
+    if (!trimmed || trimmed.length > 280) {
+      throw new Error('invalid_body');
+    }
+
+    // Check post exists, not expired (24h), and check ownership
+    const existing = await query(
+      `SELECT id, user_id, lat, lng, created_at
+       FROM community_posts
+       WHERE id = $1
+         AND created_at > NOW() - INTERVAL '24 hours'`,
+      [postId],
+    );
+    if (existing.rows.length === 0) {
+      throw new Error('post_not_found');
+    }
+    const postRow = existing.rows[0];
+    if (postRow.user_id !== userId) {
+      throw new Error('forbidden');
+    }
+
+    const updated = await query(
+      `UPDATE community_posts
+       SET body = $2
+       WHERE id = $1
+       RETURNING id, user_id, body, created_at, lat, lng`,
+      [postId, trimmed],
+    );
+    const updatedPost = updated.rows[0];
+
+    const author = await query(`SELECT name, photo_url FROM users WHERE id = $1`, [userId]);
+    const authorRow = author.rows[0] ?? { name: 'Member', photo_url: null };
+
+    const commentCountRes = await query(
+      `SELECT COUNT(*)::int AS count FROM community_post_comments WHERE post_id = $1`,
+      [postId],
+    );
+    const commentCount = Number(commentCountRes.rows[0]?.count ?? 0);
+
+    return toDto({
+      id: updatedPost.id,
+      user_id: updatedPost.user_id,
+      body: updatedPost.body,
+      created_at: updatedPost.created_at,
+      author_name: authorRow.name,
+      author_photo_url: authorRow.photo_url,
+      distance_m: 0,
+      comment_count: commentCount,
+    });
+  },
+
+  /**
+   * Delete author's own Community post.
+   * Cascades comments via DB foreign key constraint.
+   */
+  async deletePost(
+    userId: string,
+    postId: string,
+  ): Promise<{ ok: boolean }> {
+    const existing = await query(
+      `SELECT id, user_id FROM community_posts WHERE id = $1`,
+      [postId],
+    );
+    if (existing.rows.length === 0) {
+      throw new Error('post_not_found');
+    }
+    if (existing.rows[0].user_id !== userId) {
+      throw new Error('forbidden');
+    }
+
+    await query(`DELETE FROM community_posts WHERE id = $1`, [postId]);
+    return { ok: true };
+  },
+
+  /**
+   * Edit author's own comment on a Community post (≤280).
+   * Enforces comment ownership and post visibility / 24h expiry.
+   */
+  async updateComment(
+    userId: string,
+    postId: string,
+    commentId: string,
+    body: string,
+  ): Promise<CommunityCommentDTO> {
+    const trimmed = body.trim();
+    if (!trimmed || trimmed.length > 280) {
+      throw new Error('invalid_body');
+    }
+
+    // Verify parent post is visible and not expired
+    await assertPostVisible(userId, postId);
+
+    const existing = await query(
+      `SELECT id, post_id, user_id FROM community_post_comments WHERE id = $1 AND post_id = $2`,
+      [commentId, postId],
+    );
+    if (existing.rows.length === 0) {
+      throw new Error('comment_not_found');
+    }
+    if (existing.rows[0].user_id !== userId) {
+      throw new Error('forbidden');
+    }
+
+    const updated = await query(
+      `UPDATE community_post_comments
+       SET body = $2
+       WHERE id = $1
+       RETURNING id, post_id, user_id, body, created_at`,
+      [commentId, trimmed],
+    );
+    const row = updated.rows[0];
+
+    const author = await query(`SELECT name, photo_url FROM users WHERE id = $1`, [userId]);
+    const authorRow = author.rows[0] ?? { name: 'Member', photo_url: null };
+
+    return toCommentDto({
+      id: row.id,
+      post_id: row.post_id,
+      user_id: row.user_id,
+      body: row.body,
+      created_at: row.created_at,
+      author_name: authorRow.name,
+      author_photo_url: authorRow.photo_url,
+    });
+  },
+
+  /**
+   * Delete author's own comment on a Community post.
+   */
+  async deleteComment(
+    userId: string,
+    postId: string,
+    commentId: string,
+  ): Promise<{ ok: boolean }> {
+    const existing = await query(
+      `SELECT id, post_id, user_id FROM community_post_comments WHERE id = $1 AND post_id = $2`,
+      [commentId, postId],
+    );
+    if (existing.rows.length === 0) {
+      throw new Error('comment_not_found');
+    }
+    if (existing.rows[0].user_id !== userId) {
+      throw new Error('forbidden');
+    }
+
+    await query(`DELETE FROM community_post_comments WHERE id = $1`, [commentId]);
+    return { ok: true };
+  },
+
+  /**
    * Mention suggestions for Community posts and comments.
    * Strictly limited to:
    * 1. Hot Spots that appear on the Discover/map Hot Spots set (live public Hot Spots)

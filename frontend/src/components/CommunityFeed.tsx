@@ -1,17 +1,16 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   communityAPI,
-  type CommunityMentionSuggestionDTO,
   type CommunityPostDTO,
   usersAPI,
 } from '../api/client';
 import { formatDistanceFromKm } from '../lib/localeUnits';
 import { formatRelativeTime } from '../lib/notifications';
 import { ROUTE_LABELS } from '../lib/routeLabels';
-import { applyMentionReplacement, getActiveMention, type MentionActiveMatch } from '../lib/mentions';
+import { useAuthStore } from '../hooks/store';
+import { MentionTextarea } from './MentionTextarea';
 import { CommunityPostComments } from './CommunityPostComments';
-import { MentionAutocompleteList } from './MentionAutocompleteList';
 import { PulseRing } from './PulseRing';
 import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
 import { useResolvingPhotoSrc } from './UserAvatar';
@@ -61,6 +60,8 @@ export function CommunityFeed({
   compact = false,
   className = '',
 }: CommunityFeedProps) {
+  const currentUserId = useAuthStore((s) => s.user?.id);
+
   const [posts, setPosts] = useState<CommunityPostDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -71,126 +72,59 @@ export function CommunityFeed({
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState('');
 
-  // Mentions autocomplete state
-  const [mentionSuggestions, setMentionSuggestions] = useState<CommunityMentionSuggestionDTO[]>([]);
-  const [mentionLoading, setMentionLoading] = useState(false);
-  const [mentionActive, setMentionActive] = useState<MentionActiveMatch | null>(null);
-  const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const composerContainerRef = useRef<HTMLDivElement>(null);
+  // Editing state for posts
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState('');
 
-  const checkMentionState = useCallback((text: string, cursorPos: number) => {
-    const active = getActiveMention(text, cursorPos);
-    setMentionActive(active);
-    if (!active) {
-      setMentionSuggestions([]);
-      setMentionSelectedIndex(0);
+  // Deleting state for posts
+  const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
+  const [deleteConfirmPostId, setDeleteConfirmPostId] = useState<string | null>(null);
+
+  const startEditPost = (post: CommunityPostDTO) => {
+    setEditingPostId(post.id);
+    setEditDraft(post.body);
+    setEditError('');
+    setDeleteConfirmPostId(null);
+  };
+
+  const cancelEditPost = () => {
+    setEditingPostId(null);
+    setEditDraft('');
+    setEditError('');
+  };
+
+  const handleSaveEditPost = async (postId: string) => {
+    const trimmed = editDraft.trim();
+    if (!trimmed || trimmed.length > MAX_CHARS || savingEdit) return;
+    setSavingEdit(true);
+    setEditError('');
+    try {
+      const res = await communityAPI.updatePost(postId, trimmed);
+      const updated = res.data.post;
+      setPosts((prev) => prev.map((p) => (p.id === postId ? updated : p)));
+      setEditingPostId(null);
+      setEditDraft('');
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { error?: string } } };
+      setEditError(ax.response?.data?.error || 'Could not update post.');
+    } finally {
+      setSavingEdit(false);
     }
-  }, []);
+  };
 
-  useEffect(() => {
-    if (!mentionActive) return;
-
-    let cancelled = false;
-    setMentionLoading(true);
-
-    const timer = setTimeout(async () => {
-      try {
-        const res = await communityAPI.getMentionSuggestions(mentionActive.query, 10);
-        if (!cancelled) {
-          setMentionSuggestions(res.data.suggestions ?? []);
-          setMentionSelectedIndex(0);
-        }
-      } catch {
-        if (!cancelled) {
-          setMentionSuggestions([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setMentionLoading(false);
-        }
-      }
-    }, 120);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [mentionActive?.query]);
-
-  // Dismiss on outside click
-  useEffect(() => {
-    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
-      if (
-        composerContainerRef.current &&
-        !composerContainerRef.current.contains(e.target as Node)
-      ) {
-        setMentionActive(null);
-        setMentionSuggestions([]);
-      }
-    };
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('touchstart', handlePointerDown);
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('touchstart', handlePointerDown);
-    };
-  }, []);
-
-  const handleSelectMention = useCallback(
-    (item: CommunityMentionSuggestionDTO) => {
-      if (!mentionActive) return;
-      const { newText, newCursorPos } = applyMentionReplacement(
-        draft,
-        mentionActive.startIndex,
-        mentionActive.endIndex,
-        item.name,
-        MAX_CHARS,
-      );
-      setDraft(newText);
-      setMentionActive(null);
-      setMentionSuggestions([]);
-      setMentionSelectedIndex(0);
-
-      // Restore focus and cursor position in textarea
-      setTimeout(() => {
-        if (textareaRef.current) {
-          textareaRef.current.focus();
-          textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
-        }
-      }, 0);
-    },
-    [draft, mentionActive],
-  );
-
-  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (mentionActive && mentionSuggestions.length > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setMentionSelectedIndex((prev) => (prev + 1) % mentionSuggestions.length);
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setMentionSelectedIndex((prev) =>
-          prev <= 0 ? mentionSuggestions.length - 1 : prev - 1,
-        );
-        return;
-      }
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault();
-        const item = mentionSuggestions[mentionSelectedIndex] ?? mentionSuggestions[0];
-        if (item) {
-          handleSelectMention(item);
-        }
-        return;
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setMentionActive(null);
-        setMentionSuggestions([]);
-        return;
-      }
+  const handleDeletePost = async (postId: string) => {
+    setDeletingPostId(postId);
+    try {
+      await communityAPI.deletePost(postId);
+      setPosts((prev) => prev.filter((p) => p.id !== postId));
+      setDeleteConfirmPostId(null);
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { error?: string } } };
+      alert(ax.response?.data?.error || 'Could not delete post.');
+    } finally {
+      setDeletingPostId(null);
     }
   };
 
@@ -300,42 +234,17 @@ export function CommunityFeed({
 
       {!needsLocation ? (
         <div
-          ref={composerContainerRef}
-          className="relative rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[rgba(196,131,42,0.08)] p-3 sm:p-4"
+          className="rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[rgba(196,131,42,0.08)] p-3 sm:p-4"
           data-testid="community-composer"
         >
-          {mentionActive ? (
-            <MentionAutocompleteList
-              suggestions={mentionSuggestions}
-              selectedIndex={mentionSelectedIndex}
-              loading={mentionLoading}
-              onSelect={handleSelectMention}
-            />
-          ) : null}
           <label htmlFor="community-post-body" className="sr-only">
             Community post
           </label>
-          <textarea
-            ref={textareaRef}
+          <MentionTextarea
             id="community-post-body"
             data-testid="community-post-input"
             value={draft}
-            onChange={(e) => {
-              const val = e.target.value.slice(0, MAX_CHARS);
-              setDraft(val);
-              checkMentionState(val, e.target.selectionEnd ?? val.length);
-            }}
-            onClick={(e) => {
-              const pos = (e.target as HTMLTextAreaElement).selectionEnd ?? draft.length;
-              checkMentionState(draft, pos);
-            }}
-            onKeyUp={(e) => {
-              if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) {
-                const pos = (e.target as HTMLTextAreaElement).selectionEnd ?? draft.length;
-                checkMentionState(draft, pos);
-              }
-            }}
-            onKeyDown={handleTextareaKeyDown}
+            onChange={setDraft}
             maxLength={MAX_CHARS}
             rows={compact ? 2 : 3}
             placeholder="What's happening nearby? Type @ to mention a Hot Spot or Match"
@@ -423,23 +332,139 @@ export function CommunityFeed({
                   <PostAvatar name={post.author_name} photoUrl={post.author_photo_url} />
                 </Link>
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <Link
-                      to={`/profile/${post.user_id}`}
-                      className="truncate text-[14px] font-extrabold text-[var(--cream)] hover:text-[#C4832A]"
-                    >
-                      {post.author_name}
-                    </Link>
-                    <span className="text-[11px] font-bold text-[var(--copper)]">
-                      {distanceDisplay(post)}
-                    </span>
-                    <span className="text-[11px] text-[var(--cream-muted)]">
-                      {formatRelativeTime(post.created_at)}
-                    </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <Link
+                        to={`/profile/${post.user_id}`}
+                        className="truncate text-[14px] font-extrabold text-[var(--cream)] hover:text-[#C4832A]"
+                      >
+                        {post.author_name}
+                      </Link>
+                      <span className="text-[11px] font-bold text-[var(--copper)]">
+                        {distanceDisplay(post)}
+                      </span>
+                      <span className="text-[11px] text-[var(--cream-muted)]">
+                        {formatRelativeTime(post.created_at)}
+                      </span>
+                    </div>
+
+                    {currentUserId && currentUserId === post.user_id ? (
+                      <div className="flex items-center gap-1 shrink-0">
+                        {editingPostId !== post.id ? (
+                          <>
+                            <button
+                              type="button"
+                              data-testid={`community-post-edit-${post.id}`}
+                              onClick={() => startEditPost(post)}
+                              className="inline-flex min-h-[36px] min-w-[44px] cursor-pointer items-center justify-center rounded-lg px-2.5 py-1 text-[12px] font-bold text-[var(--cream-muted)] transition-colors hover:bg-[rgba(196,131,42,0.15)] hover:text-[#E0A14A] active:bg-[rgba(196,131,42,0.25)] touch-manipulation"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              data-testid={`community-post-delete-${post.id}`}
+                              onClick={() => setDeleteConfirmPostId(post.id)}
+                              className="inline-flex min-h-[36px] min-w-[44px] cursor-pointer items-center justify-center rounded-lg px-2.5 py-1 text-[12px] font-bold text-[var(--cream-muted)] transition-colors hover:bg-red-500/10 hover:text-red-400 active:bg-red-500/20 touch-manipulation"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
-                  <p className="mt-1.5 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-[var(--cream-soft)]">
-                    {post.body}
-                  </p>
+
+                  {deleteConfirmPostId === post.id ? (
+                    <div
+                      data-testid={`community-post-delete-confirm-${post.id}`}
+                      className="mt-2 rounded-xl border border-red-500/40 bg-red-950/30 p-2.5 text-[12px] text-[var(--cream)]"
+                    >
+                      <p className="font-semibold text-red-300">Delete this post?</p>
+                      <p className="mt-0.5 text-[11px] text-[var(--cream-muted)]">
+                        This cannot be undone. Its comments will be removed too.
+                      </p>
+                      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          data-testid={`community-post-delete-btn-${post.id}`}
+                          disabled={deletingPostId === post.id}
+                          onClick={() => void handleDeletePost(post.id)}
+                          className="inline-flex min-h-[38px] cursor-pointer items-center justify-center rounded-full bg-red-600 px-4 py-1.5 text-[12px] font-extrabold uppercase tracking-wide text-white transition-colors hover:bg-red-500 active:bg-red-700 disabled:opacity-40 touch-manipulation"
+                        >
+                          {deletingPostId === post.id ? 'Deleting…' : 'Delete post'}
+                        </button>
+                        <button
+                          type="button"
+                          data-testid={`community-post-delete-cancel-${post.id}`}
+                          disabled={deletingPostId === post.id}
+                          onClick={() => setDeleteConfirmPostId(null)}
+                          className="inline-flex min-h-[38px] cursor-pointer items-center justify-center rounded-full border border-[var(--border-default)] px-4 py-1.5 text-[12px] font-bold text-[var(--cream-muted)] hover:text-[var(--cream)] active:bg-white/5 touch-manipulation"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {editingPostId === post.id ? (
+                    <div
+                      data-testid={`community-post-edit-box-${post.id}`}
+                      className="mt-2 space-y-2 rounded-xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.06)] p-2.5"
+                    >
+                      <MentionTextarea
+                        id={`edit-post-${post.id}`}
+                        data-testid={`community-post-edit-input-${post.id}`}
+                        value={editDraft}
+                        onChange={setEditDraft}
+                        rows={2}
+                        maxChars={MAX_CHARS}
+                        placeholder="Edit your post…"
+                        className="w-full resize-none rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 py-2 text-[14px] leading-relaxed text-[var(--cream)] placeholder:text-[var(--cream-muted)] focus:border-[#C4832A] focus:outline-none"
+                        autoFocus
+                      />
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className={`text-[11px] font-bold tabular-nums ${
+                            MAX_CHARS - editDraft.length < 20
+                              ? 'text-[#C4832A]'
+                              : 'text-[var(--cream-muted)]'
+                          }`}
+                        >
+                          {MAX_CHARS - editDraft.length}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            data-testid={`community-post-edit-cancel-${post.id}`}
+                            disabled={savingEdit}
+                            onClick={cancelEditPost}
+                            className="inline-flex min-h-[36px] cursor-pointer items-center justify-center rounded-full border border-[var(--border-default)] px-3.5 py-1 text-[12px] font-bold text-[var(--cream-muted)] hover:text-[var(--cream)] active:bg-white/5 touch-manipulation"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            data-testid={`community-post-edit-save-${post.id}`}
+                            disabled={savingEdit || editDraft.trim().length === 0}
+                            onClick={() => void handleSaveEditPost(post.id)}
+                            className="inline-flex min-h-[36px] cursor-pointer items-center justify-center rounded-full bg-[#C4832A] px-4 py-1 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] active:bg-[#C4832A] disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
+                          >
+                            {savingEdit ? 'Saving…' : 'Save'}
+                          </button>
+                        </div>
+                      </div>
+                      {editError ? (
+                        <p className="text-[11px] text-[#E0A14A]" role="alert">
+                          {editError}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="mt-1.5 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-[var(--cream-soft)]">
+                      {post.body}
+                    </p>
+                  )}
+
                   <CommunityPostComments
                     postId={post.id}
                     commentCount={post.comment_count ?? 0}
