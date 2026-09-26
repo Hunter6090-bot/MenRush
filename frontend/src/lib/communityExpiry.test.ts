@@ -37,4 +37,10 @@ describe('isCommunityPostFresh', () => {
     const now = 1758888000000;
     assert.equal(isCommunityPostFresh('invalid-date', now), false);
   });
+
+  it('fails closed for operations on expired posts (view/edit/delete/comment)', () => {
+    const now = 1758888000000;
+    const expiredTimestamp = new Date(now - (25 * 60 * 60 * 1000)).toISOString();
+    assert.equal(isCommunityPostFresh(expiredTimestamp, now), false);
+  });
 });

@@ -53,12 +53,16 @@ assert.match(client, /\/community\/mention-suggestions/, 'must hit /community/me
 // 5. Frontend composer inspection
 const composer = readFileSync(join(root, '../frontend/src/components/CommunityFeed.tsx'), 'utf8');
 assert.match(composer, /MentionTextarea/, 'CommunityFeed must use MentionTextarea for composer');
+assert.doesNotMatch(composer, /setMentionActive/, 'CommunityFeed must not have dead setMentionActive references');
+assert.doesNotMatch(composer, /setMentionSuggestions/, 'CommunityFeed must not have dead setMentionSuggestions references');
 assert.match(composer, /community-post-edit/, 'CommunityFeed must have post edit affordance');
 assert.match(composer, /community-post-delete/, 'CommunityFeed must have post delete affordance');
 
 // 6. Frontend comments inspection
 const comments = readFileSync(join(root, '../frontend/src/components/CommunityPostComments.tsx'), 'utf8');
 assert.match(comments, /MentionTextarea/, 'CommunityPostComments must use MentionTextarea for comments');
+assert.doesNotMatch(comments, /setMentionActive/, 'CommunityPostComments must not have dead setMentionActive references');
+assert.doesNotMatch(comments, /setMentionSuggestions/, 'CommunityPostComments must not have dead setMentionSuggestions references');
 assert.match(comments, /community-comment-edit/, 'CommunityPostComments must have comment edit affordance');
 assert.match(comments, /community-comment-delete/, 'CommunityPostComments must have comment delete affordance');
 
