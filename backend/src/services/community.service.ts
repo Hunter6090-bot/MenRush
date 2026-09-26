@@ -1,4 +1,6 @@
 import { query } from '../db';
+import { discoveryPhotoUrl } from '../lib/discoveryPhoto';
+import { isPublicHotSpotVisibilitySql } from './hot-spots.service';
 
 export type CommunityPostRow = {
   id: string;
@@ -43,6 +45,17 @@ export type CommunityCommentDTO = {
   created_at: string;
   author_name: string;
   author_photo_url: string | null;
+};
+
+export type CommunityMentionSuggestionDTO = {
+  id: string;
+  type: 'hot_spot' | 'match';
+  name: string;
+  subtitle?: string | null;
+  photo_url?: string | null;
+  icon?: string | null;
+  category_name?: string | null;
+  category_slug?: string | null;
 };
 
 function bucketDistance(distanceM: number): { distance_km: string; distance_label: string } {
@@ -278,5 +291,137 @@ export const communityService = {
       author_name: authorRow.name,
       author_photo_url: authorRow.photo_url,
     });
+  },
+
+  /**
+   * Mention suggestions for Community posts and comments.
+   * Strictly limited to:
+   * 1. Hot Spots that appear on the Discover/map Hot Spots set (live public Hot Spots)
+   * 2. Users you already Match with (mutual like relationship)
+   * Never strangers, never all nearby, never all DB users.
+   */
+  async getMentionSuggestions(
+    viewerId: string,
+    queryStr: string = '',
+    limit: number = 10,
+  ): Promise<CommunityMentionSuggestionDTO[]> {
+    const cleanQuery = queryStr.trim();
+    const cappedLimit = Math.min(Math.max(limit, 1), 20);
+
+    const matchValues: unknown[] = [viewerId];
+    let matchQueryFilter = '';
+    if (cleanQuery) {
+      matchValues.push(`%${cleanQuery.toLowerCase()}%`);
+      matchQueryFilter = ` AND lower(u.name) LIKE $${matchValues.length}`;
+    }
+    matchValues.push(cappedLimit);
+    const matchLimitIdx = matchValues.length;
+
+    const matchesPromise = query(
+      `SELECT
+         u.id,
+         u.name,
+         u.photo_url,
+         u.map_photo_url
+       FROM users u
+       JOIN likes l1 ON l1.liker_id = $1 AND l1.liked_id = u.id
+       JOIN likes l2 ON l2.liker_id = u.id AND l2.liked_id = $1
+       WHERE NOT EXISTS (
+         SELECT 1 FROM blocks b
+         WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+            OR (b.blocker_id = u.id AND b.blocked_id = $1)
+       )
+       ${matchQueryFilter}
+       ORDER BY u.name ASC
+       LIMIT $${matchLimitIdx}`,
+      matchValues,
+    );
+
+    const spotValues: unknown[] = [];
+    let spotQueryFilter = '';
+    if (cleanQuery) {
+      spotValues.push(`%${cleanQuery.toLowerCase()}%`);
+      const qIdx = spotValues.length;
+      spotQueryFilter = ` AND (
+        lower(hs.name) LIKE $${qIdx}
+        OR lower(COALESCE(hs.city, '')) LIKE $${qIdx}
+      )`;
+    }
+    spotValues.push(cappedLimit);
+    const spotLimitIdx = spotValues.length;
+
+    const validCoordsFilter = `
+      AND hs.latitude IS NOT NULL
+      AND hs.longitude IS NOT NULL
+      AND hs.latitude != 0
+      AND hs.longitude != 0
+      AND hs.latitude BETWEEN -90 AND 90
+      AND hs.longitude BETWEEN -180 AND 180
+    `;
+
+    const spotsPromise = query(
+      `SELECT
+         hs.id,
+         hs.name,
+         hs.city,
+         c.name AS category_name,
+         c.slug AS category_slug,
+         c.icon AS category_icon
+       FROM hot_spots hs
+       JOIN hot_spot_categories c ON c.id = hs.category_id
+       WHERE hs.is_active = TRUE
+         AND ${isPublicHotSpotVisibilitySql('c', 'hs')}
+         ${validCoordsFilter}
+         ${spotQueryFilter}
+       ORDER BY hs.name ASC
+       LIMIT $${spotLimitIdx}`,
+      spotValues,
+    );
+
+    const [matchesRes, spotsRes] = await Promise.all([matchesPromise, spotsPromise]);
+
+    const spotSuggestions: CommunityMentionSuggestionDTO[] = spotsRes.rows.map((row: any) => ({
+      id: row.id,
+      type: 'hot_spot',
+      name: row.name,
+      subtitle: row.city || row.category_name || 'Hot Spot',
+      photo_url: null,
+      icon: row.category_icon || null,
+      category_name: row.category_name || null,
+      category_slug: row.category_slug || null,
+    }));
+
+    const matchSuggestions: CommunityMentionSuggestionDTO[] = matchesRes.rows.map((row: any) => {
+      const photo =
+        discoveryPhotoUrl(
+          row.map_photo_url as string | null | undefined,
+          row.photo_url as string | null | undefined,
+        ) ?? row.photo_url;
+      return {
+        id: row.id,
+        type: 'match',
+        name: row.name,
+        subtitle: 'Match',
+        photo_url: photo || null,
+        icon: null,
+      };
+    });
+
+    const combined: CommunityMentionSuggestionDTO[] = [];
+    const maxItems = cappedLimit;
+    let sIdx = 0;
+    let mIdx = 0;
+
+    // Interleave or combine Hot Spots and Matches up to maxItems
+    while (combined.length < maxItems && (sIdx < spotSuggestions.length || mIdx < matchSuggestions.length)) {
+      if (sIdx < spotSuggestions.length) {
+        combined.push(spotSuggestions[sIdx++]);
+      }
+      if (combined.length < maxItems && mIdx < matchSuggestions.length) {
+        combined.push(matchSuggestions[mIdx++]);
+      }
+    }
+
+    return combined;
   },
 };

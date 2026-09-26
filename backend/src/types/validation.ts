@@ -160,6 +160,11 @@ export const CommunityCreateCommentSchema = z.object({
     .max(280, 'Comment must be 280 characters or fewer'),
 });
 
+export const CommunityMentionSuggestionsQuerySchema = z.object({
+  q: z.string().default('').transform((val) => val.trim()),
+  limit: z.coerce.number().int().min(1).max(20).optional().default(10),
+});
+
 export const MessageSchema = z.object({
   receiver_id: z.string().uuid(),
   message: z.string().min(1).max(1000),
@@ -323,6 +328,7 @@ export type DeleteAccountInput = z.infer<typeof DeleteAccountSchema>;
 export type LocationInput = z.infer<typeof LocationSchema>;
 export type CommunityCreatePostInput = z.infer<typeof CommunityCreatePostSchema>;
 export type CommunityCreateCommentInput = z.infer<typeof CommunityCreateCommentSchema>;
+export type CommunityMentionSuggestionsQueryInput = z.infer<typeof CommunityMentionSuggestionsQuerySchema>;
 export type MessageInput = z.infer<typeof MessageSchema>;
 export type CreateRoomInput = z.infer<typeof CreateRoomSchema>;
 export type RoomMessageInput = z.infer<typeof RoomMessageSchema>;

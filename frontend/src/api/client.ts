@@ -1191,6 +1191,17 @@ export interface CommunityCommentDTO {
   author_photo_url: string | null;
 }
 
+export interface CommunityMentionSuggestionDTO {
+  id: string;
+  type: 'hot_spot' | 'match';
+  name: string;
+  subtitle?: string | null;
+  photo_url?: string | null;
+  icon?: string | null;
+  category_name?: string | null;
+  category_slug?: string | null;
+}
+
 export const communityAPI = {
   listPosts: (lat: number, lng: number, radiusKm?: number) =>
     apiClient.get<{ posts: CommunityPostDTO[] }>('/community/posts', {
@@ -1204,6 +1215,13 @@ export const communityAPI = {
     apiClient.post<{ comment: CommunityCommentDTO }>(`/community/posts/${postId}/comments`, {
       body,
     }),
+  getMentionSuggestions: (q: string = '', limit: number = 10) =>
+    apiClient.get<{ suggestions: CommunityMentionSuggestionDTO[] }>(
+      '/community/mention-suggestions',
+      {
+        params: { q, limit },
+      },
+    ),
 };
 
 export const aiAPI = {

@@ -1,7 +1,13 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { communityAPI, type CommunityCommentDTO } from '../api/client';
+import {
+  communityAPI,
+  type CommunityCommentDTO,
+  type CommunityMentionSuggestionDTO,
+} from '../api/client';
 import { formatRelativeTime } from '../lib/notifications';
+import { applyMentionReplacement, getActiveMention, type MentionActiveMatch } from '../lib/mentions';
+import { MentionAutocompleteList } from './MentionAutocompleteList';
 import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
 import { useResolvingPhotoSrc } from './UserAvatar';
 
@@ -47,6 +53,128 @@ export function CommunityPostComments({
   const [draft, setDraft] = useState('');
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState('');
+
+  // Mentions autocomplete state
+  const [mentionSuggestions, setMentionSuggestions] = useState<CommunityMentionSuggestionDTO[]>([]);
+  const [mentionLoading, setMentionLoading] = useState(false);
+  const [mentionActive, setMentionActive] = useState<MentionActiveMatch | null>(null);
+  const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composerContainerRef = useRef<HTMLDivElement>(null);
+
+  const checkMentionState = useCallback((text: string, cursorPos: number) => {
+    const active = getActiveMention(text, cursorPos);
+    setMentionActive(active);
+    if (!active) {
+      setMentionSuggestions([]);
+      setMentionSelectedIndex(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!mentionActive) return;
+
+    let cancelled = false;
+    setMentionLoading(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await communityAPI.getMentionSuggestions(mentionActive.query, 10);
+        if (!cancelled) {
+          setMentionSuggestions(res.data.suggestions ?? []);
+          setMentionSelectedIndex(0);
+        }
+      } catch {
+        if (!cancelled) {
+          setMentionSuggestions([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setMentionLoading(false);
+        }
+      }
+    }, 120);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [mentionActive?.query]);
+
+  // Dismiss on outside click
+  useEffect(() => {
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      if (
+        composerContainerRef.current &&
+        !composerContainerRef.current.contains(e.target as Node)
+      ) {
+        setMentionActive(null);
+        setMentionSuggestions([]);
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+    };
+  }, []);
+
+  const handleSelectMention = useCallback(
+    (item: CommunityMentionSuggestionDTO) => {
+      if (!mentionActive) return;
+      const { newText, newCursorPos } = applyMentionReplacement(
+        draft,
+        mentionActive.startIndex,
+        mentionActive.endIndex,
+        item.name,
+        MAX_CHARS,
+      );
+      setDraft(newText);
+      setMentionActive(null);
+      setMentionSuggestions([]);
+      setMentionSelectedIndex(0);
+
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+        }
+      }, 0);
+    },
+    [draft, mentionActive],
+  );
+
+  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionActive && mentionSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionSelectedIndex((prev) => (prev + 1) % mentionSuggestions.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionSelectedIndex((prev) =>
+          prev <= 0 ? mentionSuggestions.length - 1 : prev - 1,
+        );
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        const item = mentionSuggestions[mentionSelectedIndex] ?? mentionSuggestions[0];
+        if (item) {
+          handleSelectMention(item);
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMentionActive(null);
+        setMentionSuggestions([]);
+        return;
+      }
+    }
+  };
 
   const count = loaded ? comments.length : commentCount;
   const remaining = MAX_CHARS - draft.length;
@@ -149,18 +277,46 @@ export function CommunityPostComments({
             </ul>
           )}
 
-          <div data-testid="community-comment-composer">
+          <div
+            ref={composerContainerRef}
+            className="relative"
+            data-testid="community-comment-composer"
+          >
+            {mentionActive ? (
+              <MentionAutocompleteList
+                suggestions={mentionSuggestions}
+                selectedIndex={mentionSelectedIndex}
+                loading={mentionLoading}
+                onSelect={handleSelectMention}
+              />
+            ) : null}
             <label htmlFor={`community-comment-${postId}`} className="sr-only">
               Write a comment
             </label>
             <textarea
+              ref={textareaRef}
               id={`community-comment-${postId}`}
               data-testid="community-comment-input"
               value={draft}
-              onChange={(e) => setDraft(e.target.value.slice(0, MAX_CHARS))}
+              onChange={(e) => {
+                const val = e.target.value.slice(0, MAX_CHARS);
+                setDraft(val);
+                checkMentionState(val, e.target.selectionEnd ?? val.length);
+              }}
+              onClick={(e) => {
+                const pos = (e.target as HTMLTextAreaElement).selectionEnd ?? draft.length;
+                checkMentionState(draft, pos);
+              }}
+              onKeyUp={(e) => {
+                if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) {
+                  const pos = (e.target as HTMLTextAreaElement).selectionEnd ?? draft.length;
+                  checkMentionState(draft, pos);
+                }
+              }}
+              onKeyDown={handleTextareaKeyDown}
               maxLength={MAX_CHARS}
               rows={2}
-              placeholder="Write a comment…"
+              placeholder="Write a comment… Type @ to mention"
               className="w-full resize-none rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 py-2 text-[16px] leading-relaxed text-[var(--cream)] placeholder:text-[var(--cream-muted)] focus:border-[#C4832A] focus:outline-none"
             />
             <div className="mt-1.5 flex items-center justify-between gap-2">
