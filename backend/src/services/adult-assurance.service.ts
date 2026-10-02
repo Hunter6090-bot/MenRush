@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { ageEstimationConfig, isAgeEstimationConfigured } from './veriff-age-integration';
+import { ageEstimationConfig, isAgeEstimationConfigured, ageLivenessContract } from './veriff-age-integration';
 import { isAdultAssuranceRequiredAtSignup, isAdultAssuranceTestFixtureAllowed } from '../config/adult-assurance';
 export { isAdultAssuranceRequiredAtSignup, isAdultAssuranceTestFixtureAllowed } from '../config/adult-assurance';
 import { v4 as uuidv4 } from 'uuid';
@@ -138,9 +138,9 @@ export const adultAssuranceService = {
     if (!sessionId || !sessionUrl) throw new Error('veriff_session_malformed');
 
     await deps.query(
-      `INSERT INTO adult_assurance_sessions (id, session_url, status, check_kind, account_user_id, is_fixture, created_at, updated_at)
-       VALUES ($1, $2, 'created', 'liveness', $3, $4, NOW(), NOW())`,
-      [sessionId, sessionUrl, accountUserId, false],
+      `INSERT INTO adult_assurance_sessions (id, session_url, status, check_kind, account_user_id, is_fixture, liveness_contract, created_at, updated_at)
+       VALUES ($1, $2, 'created', 'liveness', $3, $4, $5, NOW(), NOW())`,
+      [sessionId, sessionUrl, accountUserId, false, ageLivenessContract()],
     );
     return { sessionId, sessionUrl };
   },
@@ -154,7 +154,7 @@ export const adultAssuranceService = {
     const parent = await deps.query(
       `SELECT id, status, id_verified, id_session_id
          FROM adult_assurance_sessions
-        WHERE id = $1 AND check_kind = 'liveness' AND evidence_version = 1
+        WHERE id = $1 AND check_kind = 'liveness' AND evidence_version = 2
           AND account_user_id IS NULL AND redeemed_at IS NULL`,
       [parentSessionId],
     );
@@ -278,7 +278,7 @@ export const adultAssuranceService = {
     }
 
     const existing = await deps.query(
-      `SELECT id, status, check_kind, parent_session_id, assurance_token_hash, token_expires_at, redeemed_at, id_verified
+      `SELECT id, status, check_kind, parent_session_id, liveness_contract, assurance_token_hash, token_expires_at, redeemed_at, id_verified
          FROM adult_assurance_sessions WHERE id = $1`,
       [sessionId],
     );
@@ -297,6 +297,13 @@ export const adultAssuranceService = {
         assurance_token_hash = NULL, token_expires_at = NULL, id_verified = FALSE,
         updated_at = NOW(), decided_at = NOW() WHERE id = $1`, [sessionId]);
       return { handled: true, decision, adultStatus: 'underage' };
+    }
+    // A later authenticated negative decision revokes prior clearance immediately.
+    if (row.status === 'passed' && ['declined', 'expired', 'abandoned'].includes(decision)) {
+      await deps.query(`UPDATE adult_assurance_sessions SET status = $2, evidence_version = 0,
+        assurance_token_hash = NULL, token_expires_at = NULL, updated_at = NOW(), decided_at = NOW()
+        WHERE id = $1`, [sessionId, decision]);
+      return { handled: true, decision, adultStatus: decision as AdultAssuranceStatus };
     }
     // Only resubmission/review can later advance; terminal denials cannot be replayed into a pass.
     if (['passed', 'underage', 'declined', 'expired', 'abandoned', 'failed'].includes(row.status)) {
@@ -331,7 +338,7 @@ export const adultAssuranceService = {
 
     // Only the authenticated Age Estimation integration can supply this decision.
     const ageCheck = isAdultFromLivenessDecision(payload);
-    if (!ageCheck.ok || verification?.code !== 9001) {
+    if (!ageCheck.ok || verification?.code !== 9001 || !isAgeEstimationConfigured() || !row.liveness_contract || row.liveness_contract !== ageLivenessContract()) {
       await deps.query(`UPDATE adult_assurance_sessions SET status = 'failed',
         assurance_token_hash = NULL, token_expires_at = NULL, updated_at = NOW(), decided_at = NOW()
         WHERE id = $1 AND status IN ('created', 'started', 'submitted', 'resubmission_requested', 'review')`, [sessionId]);
@@ -341,7 +348,7 @@ export const adultAssuranceService = {
     const token = mintAssuranceToken();
     await deps.query(
       `UPDATE adult_assurance_sessions
-          SET status = 'passed', evidence_version = 1,
+          SET status = 'passed', evidence_version = 2,
               assurance_token_hash = $2,
               token_expires_at = $3,
               decision_code = $4,
@@ -517,14 +524,14 @@ export const adultAssuranceService = {
       };
     }
 
-    if (row.evidence_version !== 1 || !row.token_expires_at || new Date(row.token_expires_at).getTime() <= Date.now()) {
+    if (row.evidence_version !== 2 || !row.token_expires_at || new Date(row.token_expires_at).getTime() <= Date.now()) {
       return { sessionId: row.id, status: 'expired' };
     }
     const token = mintAssuranceToken();
     const issued = await deps.query(
       `UPDATE adult_assurance_sessions
           SET assurance_token_hash = $2, updated_at = NOW()
-        WHERE id = $1 AND status = 'passed' AND evidence_version = 1 AND redeemed_at IS NULL
+        WHERE id = $1 AND status = 'passed' AND evidence_version = 2 AND redeemed_at IS NULL
           AND token_expires_at > NOW() RETURNING id`,
       [sessionId, token.hash],
     );
@@ -558,14 +565,15 @@ export const adultAssuranceService = {
         WHERE assurance_token_hash = $1
           AND status = 'passed'
           AND check_kind = 'liveness'
-          AND evidence_version = 1
-          AND (NOT is_fixture OR $4::boolean)
+          AND evidence_version = 2
+          AND liveness_contract IS NOT NULL
+          AND NOT is_fixture
           AND account_user_id IS NOT DISTINCT FROM (CASE WHEN $3::boolean THEN $2::uuid ELSE NULL END)
           AND redeemed_at IS NULL
           AND token_expires_at IS NOT NULL
           AND token_expires_at > NOW()
         RETURNING id, id_verified`,
-      [hash, userId, forAccount, isAdultAssuranceTestFixtureAllowed()],
+      [hash, userId, forAccount],
     );
     if (!result.rows[0]) {
       throw new Error('Adult assurance is required. Complete the 18+ check and try again.');

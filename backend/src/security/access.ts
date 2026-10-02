@@ -65,8 +65,8 @@ export function createAccessControl(runQuery: QueryFn) {
     const result = await runQuery(`SELECT EXISTS (
       SELECT 1 FROM users u JOIN adult_assurance_sessions a ON a.redeemed_user_id = u.id
       WHERE u.id = $1 AND u.verified_age_18_plus = TRUE
-        AND a.check_kind = 'liveness' AND a.status = 'passed' AND a.evidence_version = 1
-        AND NOT a.is_fixture
+        AND a.check_kind = 'liveness' AND a.status = 'passed' AND a.evidence_version = 2
+        AND NOT a.is_fixture AND a.liveness_contract IS NOT NULL
         AND NOT EXISTS (SELECT 1 FROM adult_assurance_sessions denied
           WHERE (denied.redeemed_user_id = u.id OR denied.account_user_id = u.id)
             AND denied.status = 'underage')

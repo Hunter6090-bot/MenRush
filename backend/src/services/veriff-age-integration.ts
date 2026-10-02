@@ -8,9 +8,17 @@ export function ageEstimationConfig() {
     base: (process.env.VERIFF_AGE_ESTIMATION_API_BASE || '').trim().replace(/\/$/, ''),
   };
 }
+/** Enable only after Veriff confirms that approved decisions include successful liveness
+ * for this exact integration. This is deployment configuration, not a provider result. */
+export function ageLivenessContract(): string | null {
+  if (process.env.VERIFF_AGE_ESTIMATION_LIVENESS_CONTRACT !== 'approved-includes-liveness-v1') return null;
+  const { key, base } = ageEstimationConfig();
+  if (!key || !base) return null;
+  return crypto.createHash('sha256').update(`approved-includes-liveness-v1:${base}:${key}`).digest('hex');
+}
 export function isAgeEstimationConfigured(): boolean {
   const { key, secret, base } = ageEstimationConfig();
-  if (!key || !secret || !base || key === (process.env.VERIFF_API_KEY || '').trim()) return false;
+  if (!ageLivenessContract() || !key || !secret || !base || key === (process.env.VERIFF_API_KEY || '').trim()) return false;
   try {
     const url = new URL(base);
     return url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash;

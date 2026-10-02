@@ -160,7 +160,7 @@ test('existing session with cached age and ID flags is gated when server has no 
   await page.goto('/discover');
   await expect(page).toHaveURL(/\/age-assurance$/);
   await expect(page.getByRole('heading', { name: 'Confirm you’re 18+' })).toBeVisible();
-  await expect(page.getByText('The required age check is currently unavailable. Please try again later.')).toBeVisible();
+  await expect(page.getByText('Your sign-in is complete. The required age-check service is currently unavailable, so access remains paused.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
   await expect(page.getByTestId('map-expand-toggle')).toHaveCount(0);
   await assertFits(page);

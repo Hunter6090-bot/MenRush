@@ -41,7 +41,22 @@ async function main() {
     calls.push({ url: String(url), headers: init.headers, body: JSON.parse(init.body) });
     return new Response(JSON.stringify({ verification: { id: crypto.randomUUID(), url: 'https://example.invalid/selfie' } }), { status: 201 });
   } });
+  const { requireUploadGrant, signUploadResponse } = await import('../src/middleware/adult-media');
+  const { signedMediaUrl } = await import('../src/security/media');
+  const { installAdultSocketGate } = await import('../src/security/adult-socket');
+  const socketEvent = async (userId: string | undefined, event: string) => {
+    let middleware:any, accepted=false, disconnected=false;
+    const socket:any={use:(handler:any)=>{middleware=handler;},emit:()=>{},disconnect:()=>{disconnected=true;}};
+    installAdultSocketGate(socket,()=>userId);
+    await middleware([event],(error?:Error)=>{accepted=!error;});
+    return {accepted,disconnected};
+  };
+  let thumbnailReads=0;
+  require('../src/services/image-optimize.service').displayJpegBuffer=async()=>{thumbnailReads++;return Buffer.from('test-thumbnail');};
+  const { default: displayRouter } = await import('../src/routes/media-display');
   const app = express();
+  app.use('/api/media',displayRouter);
+  app.use('/uploads', requireUploadGrant, (_req,res) => res.send('private-media'));
   app.post('/webhook', veriffWebhookRawParser, handleVeriffDecisionWebhook);
   app.use(express.json());
   app.use('/api/auth', authRouter);
@@ -64,7 +79,7 @@ async function main() {
   const check = (actual: unknown, expected: unknown) => { assert.deepEqual(actual, expected); assertions++; };
   try {
     await run('CREATE TABLE users (id uuid PRIMARY KEY, verified_age_18_plus boolean DEFAULT false, age_assurance_status text, age_assured_at timestamptz, updated_at timestamptz)');
-    for (const name of ['058_verified_age_18_plus.sql','059_adult_assurance_liveness_id.sql','067_mandatory_age_evidence.sql']) await run(fs.readFileSync(path.resolve(__dirname, '../../database/migrations', name), 'utf8'));
+    for (const name of ['058_verified_age_18_plus.sql','059_adult_assurance_liveness_id.sql','069_mandatory_age_evidence.sql','070_age_liveness_contract.sql']) await run(fs.readFileSync(path.resolve(__dirname, '../../database/migrations', name), 'utf8'));
     await run('CREATE TABLE veriff_sessions (id uuid, user_id uuid, status text)');
     await run('ALTER TABLE users ADD COLUMN verification_session_id text');
     await run('INSERT INTO users(id) VALUES($1),($2)', [user1,user2]);
@@ -83,12 +98,24 @@ async function main() {
     check((await request('/api/auth/adult-assurance/start', { method:'POST' })).status,503);
     check((await request('/protected', { headers:auth(user1) })).status,403);
     check((await request('/protected')).status,401);
+    for(const event of ['message','room:join','typing','call:offer']) {
+      check(await socketEvent(undefined,event),{accepted:false,disconnected:false});
+      check(await socketEvent(user1,event),{accepted:false,disconnected:true});
+    }
     process.env.VERIFF_AGE_ESTIMATION_API_KEY='local-id-key';
     process.env.VERIFF_AGE_ESTIMATION_SHARED_SECRET='local-age-secret';
     process.env.VERIFF_AGE_ESTIMATION_API_BASE='https://age.example.invalid/v1';
     check(isAgeEstimationConfigured(),false);
     process.env.VERIFF_AGE_ESTIMATION_API_KEY='local-age-key';
+    delete process.env.VERIFF_AGE_ESTIMATION_LIVENESS_CONTRACT;
+    check(isAgeEstimationConfigured(),false);
+    await assert.rejects(age.startSession(), /age_estimation_not_configured/);
+    process.env.VERIFF_AGE_ESTIMATION_LIVENESS_CONTRACT='approved-includes-liveness-v1';
     check(isAgeEstimationConfigured(),true);
+    const noContract = await age.startSession();
+    await run('UPDATE adult_assurance_sessions SET liveness_contract=NULL WHERE id=$1',[noContract.sessionId]);
+    await webhook(payload(noContract.sessionId,30));
+    check((await row(noContract.sessionId)).status,'failed');
     const started = await age.startSession();
     check(calls[0].url,'https://age.example.invalid/v1/sessions');
     check(calls[0].headers['X-AUTH-CLIENT'],'local-age-key');
@@ -126,7 +153,29 @@ async function main() {
     await run('UPDATE users SET verified_age_18_plus=true WHERE id=$1',[winner]);
     await access.requireAdult(winner);
     check((await request('/protected',{headers:auth(winner)})).status,200);
+    check(await socketEvent(winner,'message'),{accepted:true,disconnected:false});
+    const mediaPath = '/uploads/profiles/local-test.jpg';
+    check((await request(mediaPath)).status,403);
+    const mediaUrl = signedMediaUrl(mediaPath,winner);
+    check((await request(mediaUrl)).status,200);
+    check((await request('/api/media/display?src='+encodeURIComponent(mediaPath))).status,404);
+    check(thumbnailReads,0);
+    check((await request('/api/media/display?src='+encodeURIComponent(mediaUrl))).status,200);
+    check(thumbnailReads,1);
+    check((await request(mediaUrl)).headers.get('cache-control'),'private, no-store');
+    check((await request(mediaUrl.replace('local-test.jpg','other.jpg'))).status,403);
+    check((await request(signedMediaUrl(mediaPath,crypto.randomUUID()))).status,403);
+    const serialized:any = signUploadResponse({photos:[mediaPath],external:'https://example.invalid/photo.jpg'},winner);
+    check((await request(serialized.photos[0])).status,200);
+    check(serialized.external,'https://example.invalid/photo.jpg');
+    await run('UPDATE adult_assurance_sessions SET evidence_version=1 WHERE id=$1',[started.sessionId]);
+    check((await request(mediaUrl)).status,403);
+    await run('UPDATE adult_assurance_sessions SET evidence_version=2,is_fixture=true WHERE id=$1',[started.sessionId]);
+    check((await request(mediaUrl)).status,403);
+    await run('UPDATE adult_assurance_sessions SET is_fixture=false WHERE id=$1',[started.sessionId]);
     await webhook(payload(started.sessionId,16)); await assert.rejects(access.requireAdult(winner),/18/);
+    check((await request(mediaUrl)).status,403);
+    check(await socketEvent(winner,'room:join'),{accepted:false,disconnected:true});
     // Recovery session tokens cannot be read or redeemed as signup / another account.
     const recovery = await age.startSession(user2); await webhook(payload(recovery.sessionId,25));
     check(await age.issueTokenIfPassed(recovery.sessionId),null);
@@ -149,6 +198,10 @@ async function main() {
     const oldToken = (await age.issueTokenIfPassed(expired.sessionId))!.assurance_token!;
     await run("UPDATE adult_assurance_sessions SET token_expires_at=NOW()-INTERVAL '1 second' WHERE id=$1",[expired.sessionId]);
     check((await age.issueTokenIfPassed(expired.sessionId))!.status,'expired'); await assert.rejects(age.redeemToken(oldToken,user1));
+    const revoked=await age.startSession(); await webhook(payload(revoked.sessionId,30));
+    await webhook(payload(revoked.sessionId,30,'declined',9102));
+    check((await row(revoked.sessionId)).status,'declined');
+    check((await age.issueTokenIfPassed(revoked.sessionId))?.assurance_token,undefined);
     const legacy = await age.startSession(); await run("UPDATE adult_assurance_sessions SET status='passed',evidence_version=0,token_expires_at=NOW()+INTERVAL '1 hour' WHERE id=$1",[legacy.sessionId]);
     check((await age.issueTokenIfPassed(legacy.sessionId))!.assurance_token,undefined);
     // Age key cannot approve optional ID; optional ID remains separately skippable.
