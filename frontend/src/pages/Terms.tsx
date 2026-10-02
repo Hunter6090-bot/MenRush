@@ -410,10 +410,10 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>7.4</Strong> Where recurring billing is activated with a valid payment
-                  method on file, you authorise us to charge that payment method at the start of
-                  each billing period. For manual invoices, payment is due upon issuance prior to
-                  entitlement activation.
+                  <Strong>7.4</Strong> Once automated card billing is activated following merchant review,
+                  users who opt into recurring billing authorise the charging of their payment method at the
+                  start of each billing period. In the interim, no automated recurring card charges occur, and
+                  any paid subscription requests are fulfilled through direct invoice upon request.
                 </>,
               )}
               {para(
@@ -424,9 +424,9 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>7.6</Strong> Subscriptions auto-renew unless cancelled at least 24 hours
-                  before the renewal date. You can cancel at any time through your account
-                  settings.
+                  <Strong>7.6</Strong> When recurring billing is active, subscriptions auto-renew
+                  unless cancelled at least 24 hours before the renewal date. Subscriptions can be
+                  managed or cancelled through your account settings or by contacting support.
                 </>,
               )}
               {para(
