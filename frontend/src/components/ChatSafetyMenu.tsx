@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { usersAPI } from '../api/client';
@@ -30,22 +30,78 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
   const [reportDetails, setReportDetails] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuCoords, setMenuCoords] = useState<{
+    top?: number;
+    bottom?: number;
+    right: number;
+  } | null>(null);
+
+  const updateMenuPosition = useCallback(() => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const menuHeight = 148;
+    const menuWidth = 208;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUpwards = spaceBelow < menuHeight + 16 && rect.top > menuHeight + 16;
+
+    let right = window.innerWidth - rect.right;
+    if (window.innerWidth - right < menuWidth + 12) {
+      right = window.innerWidth - menuWidth - 12;
+    }
+    right = Math.max(12, right);
+
+    setMenuCoords({
+      top: openUpwards ? undefined : Math.round(rect.bottom + 8),
+      bottom: openUpwards ? Math.round(window.innerHeight - rect.top + 8) : undefined,
+      right: Math.round(right),
+    });
+  }, []);
+
+  const handleToggle = () => {
+    if (!menuOpen) {
+      updateMenuPosition();
+      setMenuOpen(true);
+    } else {
+      setMenuOpen(false);
+    }
+  };
+
+  useLayoutEffect(() => {
+    if (menuOpen) {
+      updateMenuPosition();
+    }
+  }, [menuOpen, updateMenuPosition]);
 
   useEffect(() => {
     if (!menuOpen) return;
     const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        !rootRef.current?.contains(target) &&
+        !menuRef.current?.contains(target)
+      ) {
         setMenuOpen(false);
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setMenuOpen(false);
     };
+    const onScrollOrResize = () => {
+      setMenuOpen(false);
+    };
+
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
+    window.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize);
+
     return () => {
       document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('scroll', onScrollOrResize, true);
+      window.removeEventListener('resize', onScrollOrResize);
     };
   }, [menuOpen]);
 
@@ -92,8 +148,9 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
     <>
       <div ref={rootRef} className="relative flex-shrink-0">
         <button
+          ref={buttonRef}
           type="button"
-          onClick={() => setMenuOpen((open) => !open)}
+          onClick={handleToggle}
           aria-label="Chat options"
           aria-haspopup="menu"
           aria-expanded={menuOpen}
@@ -102,46 +159,56 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
           <MoreIcon className="w-5 h-5" />
         </button>
 
-        {menuOpen && (
-          <div
-            role="menu"
-            className="absolute right-0 top-full mt-2 w-52 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] py-1.5 shadow-2xl z-50"
-          >
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setMenuOpen(false);
-                setReportOpen(true);
+        {menuOpen &&
+          menuCoords &&
+          createPortal(
+            <div
+              ref={menuRef}
+              role="menu"
+              aria-label={`Options for ${peerName}`}
+              className="fixed w-52 max-w-[calc(100vw-24px)] rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] py-1.5 shadow-2xl z-[150] animate-fade-in"
+              style={{
+                top: menuCoords.top !== undefined ? `${menuCoords.top}px` : undefined,
+                bottom: menuCoords.bottom !== undefined ? `${menuCoords.bottom}px` : undefined,
+                right: `${menuCoords.right}px`,
               }}
-              className="w-full px-4 py-2.5 text-left text-sm text-[var(--cream)] transition-colors hover:bg-[var(--bg-card)]"
             >
-              Report {peerName}
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setMenuOpen(false);
-                setBlockOpen(true);
-              }}
-              className="w-full px-4 py-2.5 text-left text-sm text-[var(--nn-danger)] transition-colors hover:bg-[rgba(155,58,40,0.12)]"
-            >
-              Block {peerName}
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setMenuOpen(false);
-                navigate('/settings#blocked');
-              }}
-              className="w-full px-4 py-2.5 text-left text-sm text-[var(--cream-muted)] transition-colors hover:bg-[var(--bg-card)]"
-            >
-              Manage blocked people
-            </button>
-          </div>
-        )}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setReportOpen(true);
+                }}
+                className="w-full px-4 py-2.5 text-left text-sm text-[var(--cream)] transition-colors hover:bg-[var(--bg-card)] focus-visible:outline-none focus-visible:bg-[var(--bg-card)]"
+              >
+                Report {peerName}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setBlockOpen(true);
+                }}
+                className="w-full px-4 py-2.5 text-left text-sm text-[var(--nn-danger)] transition-colors hover:bg-[rgba(155,58,40,0.12)] focus-visible:outline-none focus-visible:bg-[rgba(155,58,40,0.12)]"
+              >
+                Block {peerName}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  navigate('/settings#blocked');
+                }}
+                className="w-full px-4 py-2.5 text-left text-sm text-[var(--cream-muted)] transition-colors hover:bg-[var(--bg-card)] focus-visible:outline-none focus-visible:bg-[var(--bg-card)]"
+              >
+                Manage blocked people
+              </button>
+            </div>,
+            document.body,
+          )}
       </div>
 
       {blockOpen && (
@@ -237,7 +304,7 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
               maxLength={1000}
               rows={3}
               placeholder="Anything else we should know?"
-              className="mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm resize-none bg-[var(--bg-primary)] border border-[var(--border-default)] text-[var(--cream)] focus:outline-none focus:ring-2 focus:ring-[var(--copper)]/50"
+              className="mt-1.5 w-full rounded-xl px-3 py-2.5 text-[16px] resize-none bg-[var(--bg-primary)] border border-[var(--border-default)] text-[var(--cream)] focus:outline-none focus:ring-2 focus:ring-[var(--copper)]/50"
             />
           </label>
         </SafetyModal>

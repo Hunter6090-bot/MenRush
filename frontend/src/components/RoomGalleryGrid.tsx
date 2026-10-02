@@ -107,13 +107,41 @@ function ParticipantTile({
     <button
       type="button"
       onClick={onPin}
-      className="relative aspect-[4/5] overflow-hidden rounded-sm bg-[#11100E] text-left transition-all"
+      className={`group relative overflow-hidden rounded-sm bg-[#11100E] text-left transition-all ${
+        pinned ? 'w-full h-full' : 'w-full aspect-[4/5]'
+      }`}
       style={{
         border: pinned ? '2px solid #C4832A' : '1px solid rgba(255,255,255,0.08)',
         boxShadow: pinned ? '0 0 0 1px rgba(196,131,42,0.35)' : undefined,
       }}
-      aria-label={`${participant.name}${participant.isLive ? ', live' : ''}`}
+      aria-label={`${participant.name}${participant.isLive ? ', live' : ''}${
+        pinned ? ', focused. Click to unfocus' : '. Click to focus'
+      }`}
     >
+      {pinned ? (
+        <div className="absolute top-2 left-2 z-10 flex items-center gap-1 rounded bg-[#C4832A]/90 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--nn-on-copper)] shadow-sm">
+          <PinIcon className="h-3 w-3" />
+          <span>Focused</span>
+        </div>
+      ) : null}
+
+      {pinned ? (
+        <span
+          className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur-sm transition-colors hover:bg-black/80"
+          title="Unfocus"
+        >
+          <span>Unpin</span>
+          <CloseIcon className="h-3 w-3" />
+        </span>
+      ) : (
+        <span
+          className="absolute top-1.5 right-1.5 z-10 hidden rounded bg-black/50 px-1 py-0.5 text-[9px] font-semibold text-white/70 backdrop-blur-sm transition-opacity group-hover:block"
+          title="Focus video"
+        >
+          Focus
+        </span>
+      )}
+
       {showVideo ? (
         <>
           <video
@@ -205,15 +233,18 @@ export function RoomGalleryGrid({
   return (
     <div className="flex h-full min-h-0 flex-col gap-1 p-1">
       {pinned && (
-        <div className="shrink-0 px-1">
-          <ParticipantTile
-            participant={pinned}
-            pinned
-            onPin={() => onPin(null)}
-            stream={getStreamFor(pinned.user_id)}
-            photoUrl={photoUrl(pinned.photo_url)}
-            showVideo={tileVideo(pinned)}
-          />
+        <div className="shrink-0 w-full px-1 flex justify-center" data-testid="room-spotlight-container">
+          <div className="relative w-full max-w-2xl aspect-[4/5] sm:aspect-video max-h-[46vh] flex">
+            <ParticipantTile
+              key={pinned.user_id}
+              participant={pinned}
+              pinned
+              onPin={() => onPin(null)}
+              stream={getStreamFor(pinned.user_id)}
+              photoUrl={photoUrl(pinned.photo_url)}
+              showVideo={tileVideo(pinned)}
+            />
+          </div>
         </div>
       )}
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -234,6 +265,18 @@ export function RoomGalleryGrid({
     </div>
   );
 }
+
+const PinIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v2a2 2 0 01-.586 1.414L16 11v6l-2 2v2h-4v-2l-2-2v-6L5.586 8.414A2 2 0 015 7V5z" />
+  </svg>
+);
+
+const CloseIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+  </svg>
+);
 
 const MicOffIcon = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

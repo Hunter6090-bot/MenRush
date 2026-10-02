@@ -28,10 +28,6 @@ export const BetaAccess = () => {
   const submittingRef = useRef(false);
 
   useEffect(() => {
-    if (!BETA_INVITE_REQUIRED) {
-      navigate('/register', { replace: true });
-      return;
-    }
     // Prefill from waitlist welcome / invite email deep links.
     try {
       const params = new URLSearchParams(window.location.search);
@@ -121,8 +117,8 @@ export const BetaAccess = () => {
 
           <p className="m-0 text-sm leading-[1.55] text-[var(--cream-muted)]">
             Codes are single-use and tied to selected waitlist members. No code?{' '}
-            <Link to="/coming-soon#waitlist" className={publicLinkClass}>
-              Join the waitlist
+            <Link to="/register" className={publicLinkClass}>
+              Sign up free
             </Link>
             .
           </p>

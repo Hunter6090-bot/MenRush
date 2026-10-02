@@ -5,6 +5,8 @@
  */
 import { Router, Response, Request } from 'express';
 import path from 'path';
+import { verifyMediaAccess } from '../security/media';
+import { accessControl } from '../security/access';
 import { getUploadsRoot } from '../lib/uploads-root';
 import { displayJpegBuffer } from '../services/image-optimize.service';
 
@@ -29,7 +31,11 @@ function safeRelativeUpload(raw: string): string | null {
 router.get('/display', async (req: Request, res: Response) => {
   try {
     const src = typeof req.query.src === 'string' ? req.query.src : '';
-    const rel = safeRelativeUpload(src);
+    const source = new URL(src, 'https://media.invalid');
+    if (source.origin !== 'https://media.invalid') return res.status(400).json({ error: 'invalid_src' });
+    const grant = verifyMediaAccess(source.searchParams.get('access') || '', source.pathname);
+    await accessControl.requireAdult(grant.viewerId);
+    const rel = safeRelativeUpload(source.pathname);
     if (!rel) return res.status(400).json({ error: 'invalid_src' });
 
     const wRaw = typeof req.query.w === 'string' ? Number.parseInt(req.query.w, 10) : 480;
@@ -43,7 +49,7 @@ router.get('/display', async (req: Request, res: Response) => {
 
     const buf = await displayJpegBuffer(absolute, w);
     res.setHeader('Content-Type', 'image/jpeg');
-    res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+    res.setHeader('Cache-Control', 'private, no-store');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     return res.send(buf);
   } catch {

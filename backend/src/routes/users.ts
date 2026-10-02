@@ -184,7 +184,23 @@ router.get('/search', verifiedMiddleware, async (req: AuthRequest, res: Response
 
 router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { radius, minAge, maxAge, interests, onlyPulse, lookingFor, mood } = req.query;
+    const {
+      radius,
+      minAge,
+      maxAge,
+      interests,
+      onlyPulse,
+      lookingFor,
+      mood,
+      online,
+      verified,
+      new: isNew,
+      page,
+      limit,
+      offset,
+      format,
+    } = req.query;
+
     const requestedRadius = radius ? Number.parseFloat(radius as string) : 5;
     if (!Number.isFinite(requestedRadius)) {
       return res.status(400).json({ error: 'Invalid radius' });
@@ -199,6 +215,9 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
       maxAge: ageBounds.maxAge,
       interests: (interests as string)?.split(',').filter(Boolean),
       onlyPulse: onlyPulse === 'true' || onlyPulse === '1',
+      online: online === 'true' || online === '1',
+      verified: verified === 'true' || verified === '1',
+      new: isNew === 'true' || isNew === '1',
       lookingFor: typeof lookingFor === 'string' ? lookingFor : undefined,
       mood: typeof mood === 'string' ? mood : undefined,
     };
@@ -210,14 +229,27 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
         ? { lat: queryLat, lng: queryLng }
         : undefined;
 
-    const users = await userService.getNearbyUsers(
+    const pageNum = page ? Math.max(1, Number.parseInt(String(page), 10) || 1) : 1;
+    const limitNum = limit
+      ? Math.min(Math.max(1, Number.parseInt(String(limit), 10) || 60), 200)
+      : 60;
+    const offsetNum = offset
+      ? Math.max(0, Number.parseInt(String(offset), 10) || 0)
+      : (pageNum - 1) * limitNum;
+
+    const result = await userService.getNearbyUsers(
       req.userId!,
       Math.min(Math.max(requestedRadius, 0.8), 161),
       filters,
       clientLocation,
+      { page: pageNum, limit: limitNum, offset: offsetNum },
     );
 
-    res.json(users);
+    res.setHeader('X-Total-Count', String(result.total));
+    if (format === 'array') {
+      return res.json(result.users);
+    }
+    res.json(result);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }
@@ -236,7 +268,14 @@ router.get('/profile/:id', verifiedMiddleware, async (req: AuthRequest, res: Res
   try {
     const viewerId = req.userId!;
     const targetId = req.params.id;
-    const user = await userService.getPublicProfile(viewerId, targetId);
+    const queryLat = typeof req.query.lat === 'string' ? Number.parseFloat(req.query.lat) : NaN;
+    const queryLng = typeof req.query.lng === 'string' ? Number.parseFloat(req.query.lng) : NaN;
+    const clientLocation =
+      Number.isFinite(queryLat) && Number.isFinite(queryLng)
+        ? { lat: queryLat, lng: queryLng }
+        : undefined;
+
+    const user = await userService.getPublicProfile(viewerId, targetId, clientLocation);
     if (!user) {
       return res.status(404).json({ error: 'User not found', code: 'user_not_found' });
     }
@@ -255,7 +294,7 @@ router.get('/profile/:id', verifiedMiddleware, async (req: AuthRequest, res: Res
             type: 'profile_view',
             title: `${viewerName} viewed your profile`,
             body: 'See who checked you out.',
-            linkPath: '/profile',
+            linkPath: `/profile/${viewerId}`,
           });
         } catch (sideEffectError) {
           console.error('[profile-view-side-effect]', sideEffectError);

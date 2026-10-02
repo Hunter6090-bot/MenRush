@@ -6,8 +6,9 @@
  * candidates made it worse until the backend ships.
  *
  * Strategy:
- * 1. Probe display API once per session (same-origin). Use it when alive.
- * 2. Otherwise fetch the upload, `createImageBitmap` resize to ~480px, blob URL.
+ * 1. Probe display API once per session. Use it when alive.
+ * 2. Otherwise fetch upload candidates (Railway production → same-origin → …),
+ *    `createImageBitmap` resize to ~480px, blob URL.
  * 3. Cap concurrent fetches so one Discover open does not decode 10× multi‑MB files.
  * 4. Fail fast → age-based generic avatar (never leave a blank tile).
  */
@@ -16,6 +17,8 @@ import {
   fallbackAvatarForAge,
   getApiOrigin,
   resolveAssetUrl,
+  resolveDisplayThumbCandidates,
+  resolveUploadUrlCandidates,
 } from './assetUrl';
 
 const MAX_EDGE = 480;
@@ -55,7 +58,12 @@ async function probeDisplayApi(samplePath: string): Promise<boolean> {
     const ctrl = new AbortController();
     const timer = window.setTimeout(() => ctrl.abort(), DISPLAY_PROBE_MS);
     try {
-      const res = await fetch(displayUrl(samplePath, 64), {
+      // Prefer first display candidate (Railway on menrush.com, else same-origin).
+      const candidates = resolveDisplayThumbCandidates(samplePath, 64).filter((u) =>
+        u.includes('/api/media/display'),
+      );
+      const probeTarget = candidates[0] || displayUrl(samplePath, 64);
+      const res = await fetch(probeTarget, {
         method: 'GET',
         signal: ctrl.signal,
         credentials: 'omit',
@@ -124,21 +132,11 @@ async function blobToDownscaledObjectUrl(blob: Blob): Promise<string | null> {
   }
 }
 
-async function loadOne(path: string): Promise<string | null> {
-  const cached = memoryCache.get(path);
-  if (cached) return cached;
-
-  const useDisplay = await probeDisplayApi(path);
-  if (useDisplay) {
-    const url = displayUrl(path, MAX_EDGE);
-    memoryCache.set(path, url);
-    return url;
-  }
-
+async function fetchBlobFromUrl(url: string): Promise<Blob | null> {
   const ctrl = new AbortController();
   const timer = window.setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(sameOriginUploadUrl(path), {
+    const res = await fetch(url, {
       signal: ctrl.signal,
       credentials: 'omit',
     });
@@ -147,21 +145,49 @@ async function loadOne(path: string): Promise<string | null> {
     if (ct && !ct.startsWith('image/')) return null;
     const blob = await res.blob();
     if (blob.size < 32) return null;
-    // Small enough already — object URL without canvas.
-    if (blob.size <= 120_000) {
-      const url = URL.createObjectURL(blob);
-      memoryCache.set(path, url);
-      return url;
-    }
-    const url = await blobToDownscaledObjectUrl(blob);
-    if (!url) return null;
-    memoryCache.set(path, url);
-    return url;
+    return blob;
   } catch {
     return null;
   } finally {
     window.clearTimeout(timer);
   }
+}
+
+async function loadOne(path: string): Promise<string | null> {
+  const cached = memoryCache.get(path);
+  if (cached) return cached;
+
+  const useDisplay = await probeDisplayApi(path);
+  if (useDisplay) {
+    const displayCandidates = resolveDisplayThumbCandidates(path, MAX_EDGE).filter((u) =>
+      u.includes('/api/media/display'),
+    );
+    for (const url of displayCandidates) {
+      const blob = await fetchBlobFromUrl(url);
+      if (!blob) continue;
+      // Display API already resized — object URL is enough.
+      const objectUrl = URL.createObjectURL(blob);
+      memoryCache.set(path, objectUrl);
+      return objectUrl;
+    }
+    // Display probe was optimistic; fall through to raw uploads.
+  }
+
+  const uploadCandidates = resolveUploadUrlCandidates(path);
+  for (const url of uploadCandidates) {
+    const blob = await fetchBlobFromUrl(url);
+    if (!blob) continue;
+    if (blob.size <= 120_000) {
+      const objectUrl = URL.createObjectURL(blob);
+      memoryCache.set(path, objectUrl);
+      return objectUrl;
+    }
+    const objectUrl = await blobToDownscaledObjectUrl(blob);
+    if (!objectUrl) continue;
+    memoryCache.set(path, objectUrl);
+    return objectUrl;
+  }
+  return null;
 }
 
 function pumpQueue() {

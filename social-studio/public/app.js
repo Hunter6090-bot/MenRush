@@ -248,7 +248,7 @@ function tagsHtml(p) {
 
 function weekCardHtml(p) {
   const media = p.media || {};
-  const preview = media.previewUrl || 'https://menrush.com/menrush-logo.png';
+  const preview = media.previewUrl || 'https://menrush.com/brand/medallion-transparent.png';
   const logoClass = media.defaultLogo ? 'logo-default' : '';
   const meta = `${formatDayLabel(p.date)} · ${formatTimeUk(p.timeUk)} · ${typeLabel(p)}`;
   const headline = media.headline || firstLine(p.body);
@@ -301,7 +301,7 @@ function wireWeekCard(el, post) {
 function applyPreview(cardEl, media) {
   const img = $('[data-preview]', cardEl);
   if (!img || !media) return;
-  img.src = media.previewUrl || 'https://menrush.com/menrush-logo.png';
+  img.src = media.previewUrl || 'https://menrush.com/brand/medallion-transparent.png';
   img.classList.toggle('logo-default', Boolean(media.defaultLogo));
 }
 

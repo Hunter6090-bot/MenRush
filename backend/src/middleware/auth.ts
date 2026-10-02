@@ -7,7 +7,7 @@ export interface AuthRequest extends Request {
   userId?: string;
 }
 
-export const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const sessionAuthMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
   const token = req.headers.authorization?.split(' ')[1];
 
   if (!token) {
@@ -22,6 +22,12 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
     return res.status(401).json({ error: 'Invalid token' });
   }
 };
+
+/** All protected HTTP routes require current server-side age evidence, even for old JWTs. */
+export const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction) =>
+  sessionAuthMiddleware(req, res, () => {
+    void accessControl.requireAdult(req.userId!).then(() => next()).catch(next);
+  });
 
 export const verifiedMiddleware = async (
   req: AuthRequest,
@@ -65,6 +71,10 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
 
   if (typeof err.message === 'string' && err.message.startsWith('Unsupported upload type')) {
     return res.status(400).json({ error: err.message });
+  }
+
+  if (typeof err.message === 'string' && err.message.includes('Not allowed by CORS')) {
+    return res.status(403).json({ error: 'Not allowed by CORS' });
   }
 
   return res.status(500).json({ error: 'Internal server error' });

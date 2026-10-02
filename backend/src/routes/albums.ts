@@ -1,3 +1,4 @@
+import { accessControl } from '../security/access';
 import { Router, Response } from 'express';
 import fs from 'fs';
 import multer from 'multer';
@@ -35,6 +36,7 @@ router.get('/media/:photoId', async (req, res) => {
   try {
     const resource = `/api/albums/media/${req.params.photoId}`;
     const grant = verifyMediaAccess(String(req.query.access || ''), resource);
+    await accessControl.requireAdult(grant.viewerId);
     const media = await albumService.getMedia(grant.viewerId, req.params.photoId);
     const mediaClear = await albumService.viewerMediaClear(grant.viewerId, media.ownerId);
     res.type(media.mimeType);
@@ -117,7 +119,7 @@ router.post('/:albumId/upload', upload.single('photo'), async (req: AuthRequest,
   const visibility: PhotoVisibility = visibilityParsed.data;
 
   // Free-tier cap check. If the user is hitting the cap, tell them so they can upgrade.
-  // Premium gating is enforced by the frontend until CCBill entitlements are fully wired.
+  // Premium gating is enforced by the frontend until payment entitlements are fully wired.
   const total = await albumService.countPhotosForUser(req.userId!);
   const isPremium = await premiumService.isPremium(req.userId!);
   if (!isPremium && total >= FREE_PHOTO_CAP) {

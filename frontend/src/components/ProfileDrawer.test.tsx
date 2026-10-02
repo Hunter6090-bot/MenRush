@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ProfileDrawer } from './ProfileDrawer';
 import type { NearbyUser } from './ProfileCard';
@@ -27,15 +27,14 @@ const graham: NearbyUser = {
   cover_url: undefined,
 };
 
-function renderDrawer() {
+function renderDrawer(user = graham) {
   return render(
     <MemoryRouter>
       <ProfileDrawer
-        user={graham}
+        user={user}
         liked={false}
         onClose={vi.fn()}
         onLike={vi.fn()}
-        onPass={vi.fn()}
         onMessage={vi.fn()}
       />
     </MemoryRouter>,
@@ -53,6 +52,13 @@ describe('ProfileDrawer grid sheet layout', () => {
     const hero = screen.getByTestId('profile-sheet-hero');
     const avatar = screen.getByTestId('drawer-avatar-graham-1');
     expect(hero).toContainElement(avatar);
+
+    // Empty photo → Brand faded face (same size 72, profile crop)
+    const brandFace = avatar.querySelector('[data-testid="faded-brand-face"]') as HTMLElement;
+    expect(brandFace).toBeTruthy();
+    expect(avatar).toContainElement(brandFace);
+    expect(brandFace.getAttribute('data-faded-variant')).toBe('profile');
+    expect(brandFace).toHaveStyle({ width: '72px', height: '72px' });
 
     // Avatar must not live under an overflow-y-auto/scroll ancestor — that
     // bisected faces on phone when paired with -mt-* overlap.
@@ -78,7 +84,7 @@ describe('ProfileDrawer grid sheet layout', () => {
     expect(screen.getByTestId('drawer-looking-for')).toHaveTextContent(/casual/i);
     expect(screen.getByText('Bear')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /view full profile/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^pass$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^pass$/i })).toBeNull();
     expect(screen.getByTestId('drawer-match')).toBeInTheDocument();
     expect(screen.getByTestId('drawer-match')).toHaveTextContent(/^Match$/);
     expect(screen.getByText(/match is mutual interest/i)).toBeInTheDocument();
@@ -92,7 +98,7 @@ describe('ProfileDrawer grid sheet layout', () => {
     expect(photoBand!.textContent).toMatch(/28 mi/);
   });
 
-  it('shows muted Match (not Matched with) when one-way pending', () => {
+  it('shows muted Sent when one-way pending', () => {
     render(
       <MemoryRouter>
         <ProfileDrawer
@@ -101,19 +107,20 @@ describe('ProfileDrawer grid sheet layout', () => {
           mutual={false}
           onClose={vi.fn()}
           onLike={vi.fn()}
-          onPass={vi.fn()}
           onMessage={vi.fn()}
         />
       </MemoryRouter>,
     );
     const btn = screen.getByTestId('drawer-match');
-    expect(btn).toHaveTextContent(/^Match$/);
+    expect(btn).toHaveTextContent(/^Sent$/);
     expect(btn).toBeDisabled();
     expect(btn).not.toHaveTextContent(/Matched/i);
     expect(btn.className).toMatch(/cream-muted|opacity-70|cursor-not-allowed/);
   });
 
-  it('shows Matched with {name} only when mutual', () => {
+  it('shows Chat and Unmatch when mutual', () => {
+    const onUnmatch = vi.fn();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(
       <MemoryRouter>
         <ProfileDrawer
@@ -122,14 +129,69 @@ describe('ProfileDrawer grid sheet layout', () => {
           mutual
           onClose={vi.fn()}
           onLike={vi.fn()}
-          onPass={vi.fn()}
+          onUnmatch={onUnmatch}
           onMessage={vi.fn()}
         />
       </MemoryRouter>,
     );
     const btn = screen.getByTestId('drawer-open-chat');
-    expect(btn).toHaveTextContent('Matched with Graham');
+    expect(btn).toHaveTextContent('Chat');
     expect(btn).not.toBeDisabled();
+    const unmatchBtn = screen.getByTestId('drawer-unmatch');
+    expect(unmatchBtn).toHaveTextContent('Unmatch');
+    unmatchBtn.click();
+    expect(confirmSpy).toHaveBeenCalledWith(
+      'Unmatch with Graham? Chat locks again until you both match.',
+    );
+    expect(onUnmatch).toHaveBeenCalledTimes(1);
+    confirmSpy.mockRestore();
+  });
+
+
+
+  it('aborts unmatch when user cancels confirmation', () => {
+    const onUnmatch = vi.fn();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(
+      <MemoryRouter>
+        <ProfileDrawer
+          user={graham}
+          liked
+          mutual
+          onClose={vi.fn()}
+          onLike={vi.fn()}
+          onUnmatch={onUnmatch}
+          onMessage={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    const unmatchBtn = screen.getByTestId('drawer-unmatch');
+    unmatchBtn.click();
+    expect(confirmSpy).toHaveBeenCalledWith(
+      'Unmatch with Graham? Chat locks again until you both match.',
+    );
+    expect(onUnmatch).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it('omits distance gracefully when unknown/null/empty', () => {
+    const noDistanceUser: NearbyUser = {
+      ...graham,
+      distance_km: '',
+      distance_label: undefined,
+    };
+    render(
+      <MemoryRouter>
+        <ProfileDrawer
+          user={noDistanceUser}
+          liked={false}
+          onClose={vi.fn()}
+          onLike={vi.fn()}
+          onMessage={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText(/away/i)).not.toBeInTheDocument();
   });
 
   it('exposes enlarge hooks on cover and avatar when photos exist', () => {
@@ -145,7 +207,6 @@ describe('ProfileDrawer grid sheet layout', () => {
           liked={false}
           onClose={vi.fn()}
           onLike={vi.fn()}
-          onPass={vi.fn()}
           onMessage={vi.fn()}
         />
       </MemoryRouter>,
@@ -154,4 +215,28 @@ describe('ProfileDrawer grid sheet layout', () => {
     expect(screen.getByTestId('drawer-avatar-graham-1')).toBeInTheDocument();
     expect(screen.getByTestId('drawer-avatar-graham-1').tagName).toBe('BUTTON');
   });
+});
+
+
+describe('ProfileDrawer legacy media', () => {
+  it.each(['/avatars/generic/09.svg', 'https://menrush.com/avatars/generic/09.svg?v=old'])('shows current empty face for %s without enabling photo enlargement', (photo_url) => {
+    renderDrawer({ ...graham, photo_url, cover_url: photo_url });
+    expect(screen.getAllByTestId('faded-brand-face')).toHaveLength(2);
+    expect(screen.queryByTestId('drawer-cover-enlarge')).not.toBeInTheDocument();
+    expect(screen.getByTestId('drawer-avatar-graham-1').tagName).toBe('DIV');
+  });
+  it('preserves real cover and profile photos', () => {
+    renderDrawer({ ...graham, photo_url: '/uploads/profiles/real.jpg', cover_url: '/uploads/profiles/cover.jpg' });
+    expect(screen.queryByTestId('faded-brand-face')).not.toBeInTheDocument();
+    expect(screen.getByTestId('drawer-cover-enlarge').querySelector('img')?.src).toContain('/uploads/profiles/cover.jpg');
+    expect(screen.getByTestId('drawer-avatar-graham-1').querySelector('img')?.src).toContain('/uploads/profiles/real.jpg');
+  });
+});
+
+
+it('uses the current face when a real photo cannot load', () => {
+  renderDrawer({ ...graham, photo_url: 'https://example.invalid/real.jpg' });
+  fireEvent.error(screen.getByTestId('drawer-avatar-graham-1').querySelector('img')!);
+  expect(screen.getAllByTestId('faded-brand-face')).toHaveLength(2);
+  expect(screen.queryByTestId('drawer-cover-enlarge')).not.toBeInTheDocument();
 });

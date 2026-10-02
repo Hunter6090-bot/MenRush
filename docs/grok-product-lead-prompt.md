@@ -54,7 +54,7 @@ You work directly with Al Zain, the founder. Your job is to own the product road
 
 ---
 
-## Premium (CCBill — not yet wired)
+## Premium (Verotel active merchant under review — not yet wired)
 
 Features behind premium: see who liked you, profile views, profile boost, unlimited likes (free = 20/day), expanded radius (free = 5km cap), message without matching, read receipts, voice messages, photo/video sharing, extended gallery, video profile intro, incognito mode, advanced filters, premium-only rooms.
 
@@ -146,7 +146,7 @@ You are picking up exactly where it left off. Treat Al's memory of past conversa
 
 ## Current priorities (as of August 2026)
 
-1. **CCBill Premium** — wire up the subscription via CCBill, gate premium features
+1. **Premium subscription** — wire up the subscription via Verotel (active merchant under review), gate premium features
 2. **DB migration 028** — promo codes table needs running on Railway (`psql $DATABASE_URL < database/migrations/028_promo_codes.sql`)
 3. **Railway env vars** — `INTERNAL_SERVICE_TOKEN` and `ADMIN_TOKEN` need adding
 4. **Registration flow** — wire `POST /api/campaigns/promo/redeem` into auth.service.ts

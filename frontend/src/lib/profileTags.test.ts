@@ -22,6 +22,15 @@ describe('PROFILE_TAG_GROUPS selection rules', () => {
     const multi = PROFILE_TAG_GROUPS.filter((g) => !g.singleSelect).map((g) => g.label);
     expect(multi).toEqual(['Position', 'Tribe', 'Body', 'Vibe', 'Scene', 'Connection']);
   });
+
+  it('hides Legal RED Scene chips from profile editor (shared categories)', () => {
+    const scene = PROFILE_TAG_GROUPS.find((g) => g.label === 'Scene')!;
+    expect(scene.tags).toContain('Glory hole');
+    expect(scene.tags).toContain('Sauna');
+    for (const red of ['Cruising', 'Car', 'Toilets']) {
+      expect(scene.tags).not.toContain(red);
+    }
+  });
 });
 
 describe('toggleProfileInterest', () => {

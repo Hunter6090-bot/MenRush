@@ -85,7 +85,10 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
   const [micMuted, setMicMuted] = useState(false);
   const [pinnedId, setPinnedId] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState('');
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [currentCameraId, setCurrentCameraId] = useState<string>('');
 
+  const selectedCameraIdRef = useRef<string>('');
   const streamRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<Map<string, PeerSlot>>(new Map());
   const earlyIceRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
@@ -307,7 +310,7 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
 
     try {
       // iOS Safari: keep getUserMedia early in this call stack (no await before it).
-      const stream = await acquireLocalMedia();
+      const stream = await acquireLocalMedia('user', selectedCameraIdRef.current || undefined);
 
       // Hangup / leave / unmount won the race — never keep an orphan stream.
       if (session !== mediaSessionRef.current) {
@@ -320,6 +323,25 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
       setLocalStream(stream);
       setCameraOn(true);
       setMicMuted(false);
+
+      const activeVideoTrack = stream.getVideoTracks()[0];
+      if (activeVideoTrack) {
+        const settings = activeVideoTrack.getSettings?.();
+        if (settings?.deviceId) {
+          selectedCameraIdRef.current = settings.deviceId;
+          setCurrentCameraId(settings.deviceId);
+        }
+      }
+      if (typeof navigator.mediaDevices?.enumerateDevices === 'function') {
+        navigator.mediaDevices
+          .enumerateDevices()
+          .then((devices) => {
+            const cams = devices.filter((d) => d.kind === 'videoinput');
+            setVideoDevices(cams);
+          })
+          .catch(() => {});
+      }
+
       const myId = userIdRef.current;
       if (myId) {
         setParticipants((prev) =>
@@ -464,6 +486,66 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     emitMediaState(muted, cameraOn);
   }, [localStream, cameraOn, emitMediaState]);
 
+  const switchCameraDevice = useCallback(
+    async (deviceId: string) => {
+      if (!deviceId) return;
+      selectedCameraIdRef.current = deviceId;
+      setCurrentCameraId(deviceId);
+
+      const curStream = streamRef.current;
+      if (!curStream) return;
+
+      try {
+        const oldTrack = curStream.getVideoTracks()[0];
+        const gumStream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: deviceId } },
+          audio: false,
+        });
+        const newTrack = gumStream.getVideoTracks()[0];
+        if (!newTrack) return;
+
+        if (oldTrack) {
+          try {
+            curStream.removeTrack?.(oldTrack);
+          } catch {
+            /* ignore */
+          }
+          oldTrack.stop();
+        }
+        try {
+          curStream.addTrack?.(newTrack);
+        } catch {
+          /* ignore */
+        }
+        newTrack.enabled = cameraOn;
+
+        await replaceLocalTracksOnPeers(curStream);
+        setLocalStream(new MediaStream(curStream.getTracks()));
+      } catch (err) {
+        console.error('[room-video] switch camera failed', err);
+      }
+    },
+    [cameraOn, replaceLocalTracksOnPeers],
+  );
+
+  useEffect(() => {
+    if (typeof navigator.mediaDevices?.enumerateDevices !== 'function') return;
+    const updateDevices = () => {
+      navigator.mediaDevices
+        .enumerateDevices()
+        .then((devices) => {
+          const cams = devices.filter((d) => d.kind === 'videoinput');
+          setVideoDevices(cams);
+        })
+        .catch(() => {});
+    };
+    updateDevices();
+    navigator.mediaDevices.addEventListener?.('devicechange', updateDevices);
+    return () => {
+      navigator.mediaDevices.removeEventListener?.('devicechange', updateDevices);
+    };
+  }, []);
+
   // Join / leave lifecycle: start when enabled, hard-stop on disable/unmount.
   useEffect(() => {
     if (!enabled || !roomId) {
@@ -541,6 +623,8 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
           closePeer(peerId);
         }
       }
+
+      setPinnedId((cur) => (cur && !presentIds.has(cur) ? null : cur));
 
       // Mesh: open a PC toward every other present peer once we have local media.
       if (streamRef.current && userId) {
@@ -748,5 +832,8 @@ export function useRoomVideo({ roomId, userId, enabled = true }: UseRoomVideoOpt
     startCamera,
     stopCamera,
     photoUrl: (url?: string | null) => getPhotoUrl(url ?? undefined),
+    videoDevices,
+    currentCameraId,
+    switchCameraDevice,
   };
 }

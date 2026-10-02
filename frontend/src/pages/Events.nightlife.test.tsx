@@ -14,8 +14,10 @@ vi.mock('../api/client', () => ({
   },
 }));
 
+const locationState = { lat: 51.5074 as number | null, lng: -0.1278 as number | null };
+
 vi.mock('../hooks/store', () => ({
-  useLocationStore: () => ({ lat: 51.5074, lng: -0.1278 }),
+  useLocationStore: () => locationState,
   useAuthStore: (sel: (s: { user: { is_premium: boolean } | null }) => unknown) =>
     sel({ user: { is_premium: false } }),
 }));
@@ -47,6 +49,8 @@ const SAMPLE_EVENT = {
 describe('Events nightlife check-in', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    locationState.lat = 51.5074;
+    locationState.lng = -0.1278;
     getNearby.mockResolvedValue({ data: [SAMPLE_EVENT] });
     checkIn.mockResolvedValue({
       data: {
@@ -61,6 +65,19 @@ describe('Events nightlife check-in', () => {
         },
       },
     });
+  });
+
+  it('location gate keeps Consent first and never says Meet in public', () => {
+    locationState.lat = null;
+    locationState.lng = null;
+    render(
+      <MemoryRouter>
+        <Events />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('Consent first.')).toBeInTheDocument();
+    expect(screen.queryByText(/Meet in public/i)).not.toBeInTheDocument();
   });
 
   it('gates Promote Your Event behind Premium for free users', async () => {

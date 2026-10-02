@@ -6,7 +6,14 @@
  *   (same Railway box that stored the file). Falls back to same-origin (Vercel rewrite)
  *   or VITE_ASSET_URL when set.
  * - Never use VITE_SOCKET_URL for avatars (that host does not serve them).
+ *
+ * Production lock: menrush.com Vercel rewrites MUST target RAILWAY_PRODUCTION_ORIGIN
+ * (see frontend/vercel.json). #97 briefly pointed rewrites at staging and blanked
+ * every face — keep this origin in sync with vercel.json.
  */
+
+/** Railway production API host — volume where live /uploads photos live. */
+export const RAILWAY_PRODUCTION_ORIGIN = 'https://backend-production-d587.up.railway.app';
 
 function sanitizeEnvUrl(raw: unknown): string {
   if (typeof raw !== 'string') return '';
@@ -15,6 +22,14 @@ function sanitizeEnvUrl(raw: unknown): string {
     s = s.slice(0, -2).trimEnd();
   }
   return s.replace(/[\r\n]+/g, '').trim();
+}
+
+/** True on the public production site (not local / preview aliases). */
+export function isMenrushProductionHost(hostname?: string): boolean {
+  const host =
+    hostname ??
+    (typeof window !== 'undefined' ? window.location.hostname : '');
+  return host === 'menrush.com' || host === 'www.menrush.com';
 }
 
 /** API origin (no trailing /api) when VITE_API_URL is absolute. */
@@ -32,8 +47,14 @@ export function getUploadAssetBaseUrl(): string {
   const configured = sanitizeEnvUrl(import.meta.env.VITE_ASSET_URL).replace(/\/$/, '');
   if (configured) return configured;
 
-  // Prefer the backend origin that accepted the multipart upload. Vercel rewrite
-  // targets can drift from VITE_API_URL and then every /uploads/* 404s → generic egg.
+  // Public production site: always the Railway production volume (matches vercel.json).
+  // Must win over a relative/absolute VITE_API_URL so a bad rewrite or local-shaped
+  // env cannot blank faces on menrush.com (#97 staging rewrite regression).
+  if (typeof window !== 'undefined' && isMenrushProductionHost()) {
+    return RAILWAY_PRODUCTION_ORIGIN;
+  }
+
+  // Prefer the backend origin that accepted the multipart upload.
   const apiOrigin = getApiOrigin();
   if (apiOrigin) return apiOrigin;
 
@@ -111,14 +132,19 @@ export function resolveUploadUrlCandidates(url?: string | null): string[] {
     if (!candidates.includes(full)) candidates.push(full);
   };
 
-  // Prefer same-origin (Vercel /uploads rewrite) before absolute Railway —
-  // iPhone was walking dead Railway URLs and leaving Nearby tiles blank.
-  if (typeof window !== 'undefined') push(window.location.origin);
+  // On menrush.com, prefer Railway production first (files live on that volume).
+  // Same-origin Vercel rewrite is second — it 404s if rewrites drift to staging (#97).
+  if (typeof window !== 'undefined' && isMenrushProductionHost()) {
+    push(RAILWAY_PRODUCTION_ORIGIN);
+    push(window.location.origin);
+  } else if (typeof window !== 'undefined') {
+    push(window.location.origin);
+  }
   push(getUploadAssetBaseUrl());
   push(getApiOrigin());
   if (import.meta.env.DEV) push('http://localhost:3000');
-  // Last-resort: same host as frontend/vercel.json rewrite (files live on Railway).
-  push('https://backend-production-d587.up.railway.app');
+  // Last-resort: Railway production (matches frontend/vercel.json).
+  push(RAILWAY_PRODUCTION_ORIGIN);
 
   return candidates;
 }
@@ -157,11 +183,16 @@ export function resolveDisplayThumbCandidates(
     if (!thumbs.includes(full)) thumbs.push(full);
   };
 
-  if (typeof window !== 'undefined') push(window.location.origin);
+  if (typeof window !== 'undefined' && isMenrushProductionHost()) {
+    push(RAILWAY_PRODUCTION_ORIGIN);
+    push(window.location.origin);
+  } else if (typeof window !== 'undefined') {
+    push(window.location.origin);
+  }
   push(getApiOrigin());
   push(getUploadAssetBaseUrl());
   if (import.meta.env.DEV) push('http://localhost:3000');
-  push('https://backend-production-d587.up.railway.app');
+  push(RAILWAY_PRODUCTION_ORIGIN);
 
   return [...thumbs, ...resolveUploadUrlCandidates(trimmed)];
 }

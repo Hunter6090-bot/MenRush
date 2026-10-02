@@ -46,6 +46,7 @@ apiClient.interceptors.request.use((config) => {
 const AUTH_CHALLENGE_PATHS = [
   '/auth/login',
   '/auth/register',
+  '/auth/adult-assurance',
   '/auth/2fa/verify',
   '/auth/forgot-password',
   '/auth/reset-password',
@@ -68,6 +69,10 @@ apiClient.interceptors.response.use(
     const reqUrl = String(error?.config?.url ?? '');
     const isAuthChallenge = AUTH_CHALLENGE_PATHS.some((p) => reqUrl.includes(p));
 
+    if (status === 403 && error?.response?.data?.error === 'adult_assurance_required' &&
+        window.location.pathname !== '/age-assurance') {
+      window.location.replace('/age-assurance');
+    }
     if (status === 401 && !isAuthChallenge && !sessionExpiredHandling) {
       const store = useAuthStore.getState();
       const hadSession = Boolean(store.token || readStoredToken());
@@ -94,6 +99,40 @@ export const authAPI = {
       user?: import('../lib/authSession').StoredAuthUser;
       token?: string;
     }>('/auth/register', data),
+  /** Signup 18+ liveness gate. Optional ID → Verified tick (same flow). */
+  adultAssuranceRequired: () =>
+    apiClient.get<{ required: boolean; available: boolean; fixtureAllowed: boolean }>('/auth/adult-assurance/required'),
+  adultAccountStatus: () => apiClient.get<{ assured: boolean; available: boolean }>('/auth/adult-assurance/account'),
+  completeAdultAccount: (token: string) => apiClient.post('/auth/adult-assurance/account/complete', { token }),
+  startAdultAssurance: (account = false) =>
+    apiClient.post<{ sessionId: string; sessionUrl: string }>(account ? '/auth/adult-assurance/account/start' : '/auth/adult-assurance/start'),
+  startAdultAssuranceId: (sessionId: string) =>
+    apiClient.post<{ sessionId: string; sessionUrl: string }>(
+      `/auth/adult-assurance/${sessionId}/start-id`,
+    ),
+  adultAssuranceStatus: (sessionId: string, account = false) =>
+    apiClient.get<{
+      sessionId: string;
+      status: string;
+      assurance_token?: string;
+      underage?: boolean;
+      id_verified?: boolean;
+      id_status?: string | null;
+    }>(`/auth/adult-assurance/${account ? 'account/' : ''}${sessionId}`),
+  markAdultAssuranceSubmitted: (sessionId: string) =>
+    apiClient.post(`/auth/adult-assurance/${sessionId}/submitted`),
+  /** Non-prod BOA90 / CI fixture only — never in production. */
+  adultAssuranceFixture: (data: {
+    sessionId: string;
+    outcome: 'adult' | 'adult_with_id' | 'underage' | 'declined' | 'failed' | 'missing_dob';
+    yearsOld?: number;
+  }) =>
+    apiClient.post<{
+      handled: boolean;
+      adultStatus?: string;
+      assurance_token?: string;
+      id_verified?: boolean;
+    }>('/auth/adult-assurance/fixture', data),
   login: (data: { email: string; password: string; deviceTrustToken?: string }) =>
     apiClient.post('/auth/login', data),
   logout: (refreshToken?: string | null) =>
@@ -151,6 +190,14 @@ export const betaAPI = {
   validateInvite: (data: { code: string }) => apiClient.post('/beta/validate-invite', data),
 };
 
+export interface NearbyRosterResponse<T = any> {
+  users: T[];
+  total: number;
+  page: number;
+  limit: number;
+  has_more: boolean;
+}
+
 export const usersAPI = {
   getMe: () => apiClient.get('/users/me'),
   getReferrals: () =>
@@ -183,11 +230,17 @@ export const usersAPI = {
       maxAge?: number;
       interests?: string[];
       onlyPulse?: boolean;
+      online?: boolean;
+      verified?: boolean;
+      new?: boolean;
       lookingFor?: string;
       mood?: string;
+      page?: number;
+      limit?: number;
+      offset?: number;
     }
   ) =>
-    apiClient.get('/users/nearby', {
+    apiClient.get<NearbyRosterResponse | any[]>('/users/nearby', {
       params: {
         lat,
         lng,
@@ -196,11 +249,23 @@ export const usersAPI = {
         maxAge: filters?.maxAge,
         interests: filters?.interests?.join(','),
         onlyPulse: filters?.onlyPulse ? 'true' : undefined,
+        online: filters?.online ? 'true' : undefined,
+        verified: filters?.verified ? 'true' : undefined,
+        new: filters?.new ? 'true' : undefined,
         lookingFor: filters?.lookingFor,
         mood: filters?.mood,
+        page: filters?.page,
+        limit: filters?.limit,
+        offset: filters?.offset,
       },
     }),
-  getProfile: (id: string) => apiClient.get(`/users/profile/${id}`),
+  getProfile: (id: string, coords?: { lat?: number | null; lng?: number | null }) =>
+    apiClient.get(`/users/profile/${id}`, {
+      params:
+        coords?.lat != null && coords?.lng != null
+          ? { lat: coords.lat, lng: coords.lng }
+          : undefined,
+    }),
   searchProfiles: (q: string) =>
     apiClient.get<Array<{ id: string; name: string; age?: number; photo_url?: string; bio?: string; headline?: string }>>(
       '/users/search',
@@ -368,6 +433,7 @@ export const notificationsAPI = {
   delete: (id: string) =>
     apiClient.delete<{ ok: boolean; unread_count: number }>(`/notifications/${id}`),
   deleteAllRead: () => apiClient.delete<{ ok: boolean; removed: number }>('/notifications'),
+  deleteAll: () => apiClient.delete<{ ok: boolean; removed: number }>('/notifications?all=true'),
 };
 
 export interface PulseStateDTO {
@@ -415,6 +481,8 @@ export interface MessageDTO {
    * false → soft-blur photos/videos for this viewer; omit/true → clear.
    */
   media_clear?: boolean;
+  read?: boolean;
+  delivered?: boolean;
 }
 
 export interface SendMediaOptions {
@@ -437,8 +505,19 @@ export const messagesAPI = {
     ),
   sendLocation: (receiver_id: string, lat: number, lng: number) =>
     apiClient.post<MessageDTO>('/messages/location', { receiver_id, lat, lng }),
-  getConversation: (otherId: string) =>
-    apiClient.get<MessageDTO[]>(`/messages/conversation/${otherId}`),
+  getConversation: (otherId: string, opts?: { before?: string; limit?: number }) =>
+    apiClient.get<MessageDTO[]>(`/messages/conversation/${otherId}`, {
+      params: {
+        ...(opts?.before ? { before: opts.before } : {}),
+        ...(opts?.limit != null ? { limit: opts.limit } : {}),
+      },
+    }),
+  /** Fresh signed media URL for video/audio/image open + retry (avoids expired cache grants). */
+  getMediaUrl: (messageId: string) =>
+    apiClient.get<{ url: string; mime_type: string; media_type: string | null }>(
+      `/messages/${messageId}/media-url`,
+      { timeout: 15_000 },
+    ),
   getConversations: () => apiClient.get('/messages/conversations'),
   getUnreadSummary: () =>
     apiClient.get<{ total: number; bySender: Record<string, number> }>('/messages/unread'),
@@ -458,8 +537,8 @@ export const messagesAPI = {
         ? file.name
         : `${opts.kind}-${Date.now()}.${extensionForMediaMime(upload.type, opts.kind)}`;
     fd.append('media', upload, filename);
+    // Do not set Content-Type: axios must add the multipart boundary itself.
     return apiClient.post<MessageDTO>('/messages/media', fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       // Android→iPhone multi‑MB uploads were timing out / retrying (~50s then ~20s).
       timeout: 180_000,
     });
@@ -574,6 +653,26 @@ export const roomsAPI = {
     apiClient.delete(`/rooms/${roomId}/temp-identity`),
 };
 
+// ── Map feed (Sniffies-style location chat on Discover map) ─────────────────
+export interface MapFeedMessage {
+  id: string;
+  display_name: string;
+  photo_url?: string | null;
+  message: string;
+  created_at: string;
+  /** Distance bucket label e.g. "< 500m" */
+  distance_label?: string;
+}
+
+export const mapFeedAPI = {
+  list: (lat?: number, lng?: number, limit = 20) =>
+    apiClient.get<{ messages: MapFeedMessage[] }>('/map-feed', {
+      params: { lat, lng, limit },
+    }),
+  post: (data: { message: string; lat?: number; lng?: number; display_name?: string }) =>
+    apiClient.post<MapFeedMessage>('/map-feed', data),
+};
+
 export type ContactSubmitPayload = {
   name: string;
   email: string;
@@ -619,6 +718,10 @@ export const profileMetaAPI = {
     apiClient.get<{ enabled: boolean }>('/profile-meta/live-location-sharing'),
   setLiveLocationSharing: (enabled: boolean) =>
     apiClient.post<{ enabled: boolean }>('/profile-meta/live-location-sharing', { enabled }),
+  getMapPinFuzz: () =>
+    apiClient.get<{ map_pin_fuzz_m: number }>('/profile-meta/map-pin-fuzz'),
+  setMapPinFuzz: (map_pin_fuzz_m: number) =>
+    apiClient.post<{ map_pin_fuzz_m: number }>('/profile-meta/map-pin-fuzz', { map_pin_fuzz_m }),
 };
 
 // ── Albums / My Photos ────────────────────────────────────────────────────
@@ -739,6 +842,12 @@ export interface EventDTO {
   member_count: number;
   distance_m: number | null;
   is_live: boolean;
+  spot_id?: string | null;
+  venue_claim_id?: string | null;
+  is_venue_managed?: boolean;
+  status?: string;
+  managed_label?: string | null;
+  ticket_url?: string | null;
 }
 
 export const eventsAPI = {
@@ -784,14 +893,167 @@ export interface HotSpotDTO {
   venue_type?: string | null;
   source_url?: string | null;
   verified_at?: string | null;
+  last_activity_at?: string | null;
+  claimed_by_user_id?: string | null;
+  claim_status?: string;
+  is_calendar_managed?: boolean;
+  can_manage_calendar?: boolean;
+  rating_avg?: number | null;
+  review_count?: number;
+}
+
+export interface HotSpotReviewDTO {
+  id: string;
+  spot_id: string;
+  user_id: string;
+  rating: number;
+  body: string;
+  is_anonymous: boolean;
+  created_at: string;
+  updated_at: string;
+  author_name: string;
+  author_photo_url: string | null;
+  is_mine: boolean;
+}
+
+export interface HotSpotReviewsResponseDTO {
+  reviews: HotSpotReviewDTO[];
+  rating_avg: number | null;
+  review_count: number;
+}
+
+export interface VenueClaimDTO {
+  id: string;
+  spot_id: string;
+  user_id: string;
+  status: 'pending' | 'approved' | 'rejected' | 'disputed' | 'frozen';
+  venue_role: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone: string | null;
+  website_or_social_proof: string | null;
+  attestation_agreed: boolean;
+  attestation_text: string;
+  attested_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_notes: string | null;
+  dispute_reason: string | null;
+  disputed_at: string | null;
+  frozen_reason: string | null;
+  frozen_at: string | null;
+  domain_email: string | null;
+  domain_email_verified: boolean;
+  phone_otp: string | null;
+  phone_otp_verified: boolean;
+  companies_house_num: string | null;
+  companies_house_verified: boolean;
+  created_at: string;
+  updated_at: string;
+  spot_name?: string;
+  spot_city?: string | null;
+  applicant_name?: string;
+  applicant_email?: string;
+}
+
+export interface SubmitVenueClaimPayload {
+  venue_role: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone?: string | null;
+  website_or_social_proof?: string | null;
+  attestation_agreed: true;
+  attestation_text: string;
+  domain_email?: string | null;
+  phone_otp?: string | null;
+  companies_house_num?: string | null;
+}
+
+export interface DisputeVenueClaimPayload {
+  dispute_reason: string;
+}
+
+export interface VenueCalendarEventDTO {
+  id: string;
+  spot_id: string;
+  venue_claim_id: string;
+  name: string;
+  description: string | null;
+  venue_name: string | null;
+  starts_at: string;
+  ends_at: string | null;
+  lat: number;
+  lng: number;
+  status: 'published' | 'cancelled' | 'draft';
+  is_venue_managed: boolean;
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
+  ticket_url: string | null;
+  member_count: number;
+  distance_m: number | null;
+  is_live: boolean;
+  created_at: string;
+  updated_at: string;
+  managed_label: 'Calendar managed by venue';
+}
+
+export interface VenueCalendarEventCreatePayload {
+  name: string;
+  description?: string | null;
+  starts_at: string;
+  ends_at?: string | null;
+  ticket_url?: string | null;
+}
+
+export interface VenueCalendarEventUpdatePayload {
+  name?: string;
+  description?: string | null;
+  starts_at?: string;
+  ends_at?: string | null;
+  ticket_url?: string | null;
+}
+
+export interface VenueCalendarEventCancelPayload {
+  cancellation_reason?: string | null;
 }
 
 export const hotSpotsAPI = {
   listCategories: () =>
     apiClient.get<{ categories: HotSpotCategoryDTO[] }>('/hot-spots/categories'),
-  listNearby: (lat: number, lng: number, radiusKm?: number, category?: string) =>
+  listNearby: (
+    lat: number,
+    lng: number,
+    radiusKm?: number,
+    category?: string,
+    options?: { outdoor?: boolean; q?: string; sort?: 'closest' | 'live'; limit?: number },
+  ) =>
     apiClient.get<{ spots: HotSpotDTO[] }>('/hot-spots', {
-      params: { lat, lng, radiusKm, category },
+      params: {
+        lat,
+        lng,
+        radiusKm,
+        category,
+        outdoor: options?.outdoor,
+        q: options?.q,
+        sort: options?.sort,
+        limit: options?.limit,
+      },
+    }),
+  searchCruising: (
+    lat: number,
+    lng: number,
+    query?: string,
+    radiusKm?: number,
+  ) =>
+    apiClient.get<{ spots: HotSpotDTO[] }>('/hot-spots', {
+      params: {
+        lat,
+        lng,
+        cruising: true,
+        sort: 'closest',
+        q: query?.trim() || undefined,
+        radiusKm: radiusKm || (query?.trim() ? undefined : 100),
+      },
     }),
   getSpot: (id: string) => apiClient.get<{ spot: HotSpotDTO }>(`/hot-spots/${id}`),
   checkIn: (id: string, anonymous = false) =>
@@ -802,6 +1064,112 @@ export const hotSpotsAPI = {
       : apiClient.post<{ ok: boolean }>('/hot-spots/check-out'),
   getMyCheckIn: () =>
     apiClient.get<{ check_in: unknown | null }>('/hot-spots/me/check-in'),
+
+  // ── Venue Claims & Calendar ──
+  getClaim: (spotId: string) =>
+    apiClient.get<{
+      claim_status: string;
+      is_claimed: boolean;
+      is_calendar_managed: boolean;
+      my_claim?: VenueClaimDTO | null;
+    }>(`/hot-spots/${spotId}/claim`),
+  submitClaim: (spotId: string, data: SubmitVenueClaimPayload) =>
+    apiClient.post<{ ok: boolean; claim: VenueClaimDTO; message: string }>(
+      `/hot-spots/${spotId}/claim`,
+      data,
+    ),
+  disputeClaim: (spotId: string, data: DisputeVenueClaimPayload) =>
+    apiClient.post<{ ok: boolean; claim: VenueClaimDTO; message: string }>(
+      `/hot-spots/${spotId}/claim/dispute`,
+      data,
+    ),
+  listMyClaims: () =>
+    apiClient.get<{ claims: VenueClaimDTO[] }>('/hot-spots/my/claims'),
+  listVenueEvents: (spotId: string) =>
+    apiClient.get<{
+      events: VenueCalendarEventDTO[];
+      venue_name: string;
+      is_claimed: boolean;
+      can_manage: boolean;
+      managed_label: string;
+    }>(`/hot-spots/${spotId}/events`),
+  createVenueEvent: (spotId: string, data: VenueCalendarEventCreatePayload) =>
+    apiClient.post<{ ok: boolean; event: VenueCalendarEventDTO }>(
+      `/hot-spots/${spotId}/events`,
+      data,
+    ),
+  updateVenueEvent: (
+    spotId: string,
+    eventId: string,
+    data: VenueCalendarEventUpdatePayload,
+  ) =>
+    apiClient.patch<{ ok: boolean; event: VenueCalendarEventDTO }>(
+      `/hot-spots/${spotId}/events/${eventId}`,
+      data,
+    ),
+  cancelVenueEvent: (
+    spotId: string,
+    eventId: string,
+    data: VenueCalendarEventCancelPayload,
+  ) =>
+    apiClient.post<{ ok: boolean; event: VenueCalendarEventDTO }>(
+      `/hot-spots/${spotId}/events/${eventId}/cancel`,
+      data,
+    ),
+  listReviews: (spotId: string) =>
+    apiClient.get<HotSpotReviewsResponseDTO>(`/hot-spots/${spotId}/reviews`),
+  submitReview: (
+    spotId: string,
+    rating: number,
+    body: string,
+    anonymous = true,
+  ) =>
+    apiClient.post<{ ok: boolean; review: HotSpotReviewDTO; spot: HotSpotDTO }>(
+      `/hot-spots/${spotId}/reviews`,
+      { rating, body, anonymous },
+    ),
+  deleteReview: (spotId: string, reviewId?: string) =>
+    reviewId
+      ? apiClient.delete<{ ok: boolean; spot: HotSpotDTO }>(
+          `/hot-spots/${spotId}/reviews/${reviewId}`,
+        )
+      : apiClient.delete<{ ok: boolean; spot: HotSpotDTO }>(
+          `/hot-spots/${spotId}/reviews/me`,
+        ),
+};
+
+export const adminVenueAPI = {
+  listPendingClaims: (adminToken: string) =>
+    apiClient.get<{ claims: VenueClaimDTO[] }>('/admin/venue-claims/pending', {
+      headers: { 'x-admin-token': adminToken },
+    }),
+  listAllClaims: (adminToken: string, status?: string) =>
+    apiClient.get<{ claims: VenueClaimDTO[] }>('/admin/venue-claims', {
+      params: { status },
+      headers: { 'x-admin-token': adminToken },
+    }),
+  approveClaim: (claimId: string, adminToken: string, notes?: string) =>
+    apiClient.post<{ ok: boolean; claim: VenueClaimDTO }>(
+      `/admin/venue-claims/${claimId}/approve`,
+      { notes },
+      { headers: { 'x-admin-token': adminToken } },
+    ),
+  rejectClaim: (claimId: string, adminToken: string, notes?: string) =>
+    apiClient.post<{ ok: boolean; claim: VenueClaimDTO }>(
+      `/admin/venue-claims/${claimId}/reject`,
+      { notes },
+      { headers: { 'x-admin-token': adminToken } },
+    ),
+  freezeClaim: (
+    claimId: string,
+    adminToken: string,
+    data: { frozen_reason: string; ban_user?: boolean },
+  ) =>
+    apiClient.post<{ ok: boolean; claim: VenueClaimDTO }>(
+      `/admin/venue-claims/${claimId}/freeze`,
+      data,
+      { headers: { 'x-admin-token': adminToken } },
+    ),
 };
 
 /** Community Space — short local text posts (≤280). Free for all. */

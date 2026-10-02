@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - mvp-complete
     paths:
       - "frontend/**"
       - "backend/**"
@@ -49,7 +50,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Install postgresql-client
         run: sudo apt-get update && sudo apt-get install --yes postgresql-client
@@ -115,4 +116,32 @@ jobs:
         with:
           name: playwright-report
           path: frontend/playwright-report/
+          retention-days: 7
+
+  device-parity:
+    name: Device parity (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit, firefox]
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      # Local fixtures intercept API traffic; no production credentials or test users.
+      - run: npm run test:compatibility -- --project=${{ matrix.browser }}
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: device-parity-${{ matrix.browser }}
+          path: frontend/test-results/
           retention-days: 7

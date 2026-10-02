@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import './observability/sentry';
 import express from 'express';
+import { adultMediaResponses, requireUploadGrant } from './middleware/adult-media';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import http from 'http';
 import path from 'path';
@@ -32,6 +33,7 @@ import betaRoutes from './routes/beta';
 import adminRoutes from './routes/admin.routes';
 import campaignRoutes from './routes/campaigns';
 import socialRoutes from './routes/social';
+import mapFeedRoutes from './routes/map-feed';
 import communityRoutes from './routes/community';
 import mediaDisplayRoutes from './routes/media-display';
 import { startPulseExpiryCron } from './services/pulse.service';
@@ -52,6 +54,7 @@ import { sendPushToUser } from './services/push.service';
 import { notificationService } from './services/notification.service';
 import { messageService } from './services/message.service';
 import { accessControl } from './security/access';
+import { installAdultSocketGate } from './security/adult-socket';
 import { logResendMailerStatus } from './services/mailer.service';
 import { startVerificationRetentionWorker } from './services/verification/retention.worker';
 import { Sentry } from './observability/sentry';
@@ -60,6 +63,7 @@ import { query } from './db';
 import { ensureUploadDirs, getUploadsRoot, probeUploadsWritable } from './lib/uploads-root';
 import { logCallMetric } from './services/call-metrics.service';
 import { mediaStorageMode } from './services/media-storage.service';
+import { warmIceServers } from './services/webrtc.service';
 
 // Transient DB disconnects must not take down login/API.
 process.on('unhandledRejection', (reason) => {
@@ -91,6 +95,7 @@ app.use('/api/verify/veriff', veriffRoutes);
 // Primary portal URL remains /api/verify/veriff/webhook.
 app.post('/api/verify/webhook', veriffWebhookRawParser, handleVeriffDecisionWebhook);
 app.use(express.json());
+app.use(adultMediaResponses);
 app.use('/api/verify', verifyRoutes);
 // Profile / message / album media. fallthrough:true so missing files hit a clean 404
 // (not 500). Production mounts a Railway volume at /app/uploads (see Dockerfile + UPLOADS_ROOT).
@@ -104,13 +109,14 @@ void probeUploadsWritable().then((probe) => {
 
 app.use(
   '/uploads',
+  requireUploadGrant,
   express.static(uploadsRoot, {
     dotfiles: 'deny',
     fallthrough: true,
     // Do not immutable-cache — profile photos are replaced; avoid sticky 404s in CDNs.
     maxAge: '1h',
     setHeaders(res) {
-      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+      res.setHeader('Cache-Control', 'private, no-store');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     },
   }),
@@ -143,6 +149,7 @@ app.use('/api/beta', betaRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/social', socialRoutes);
+app.use('/api/map-feed', mapFeedRoutes);
 app.use('/api/community', communityRoutes);
 
 // Waitlist signup — POSTs to /api/waitlist land here; the dripRoutes router
@@ -380,6 +387,8 @@ async function authorizeSocketTarget(
 
 io.on('connection', (socket: Socket) => {
   console.log('User connected:', socket.id);
+
+  installAdultSocketGate(socket, () => socketToUser.get(socket.id));
 
   socket.on('authenticate', async (token: string) => {
     try {
@@ -947,6 +956,7 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  warmIceServers();
   startPulseExpiryCron();
   startRoomTempIdentityPurgeCron();
   startVerificationRetentionWorker();

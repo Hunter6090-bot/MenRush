@@ -2,6 +2,11 @@ import React, { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../api/client';
 import { BrandMark } from '../components/BrandMark';
+import {
+  AUTH_BACKGROUND_OPACITY,
+  AUTH_BACKGROUND_BRIGHTNESS,
+  AUTH_GRADIENT,
+} from '../components/PublicAuthShell';
 import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
 import { SiteFooter } from '../components/SiteFooter';
@@ -44,9 +49,9 @@ export const ResetPassword = () => {
   };
 
   return (
-    <div className="relative flex min-h-dvh flex-col overflow-hidden">
-      <RandomBackground />
-      <div className="absolute inset-0 bg-black/60" />
+    <div className="relative flex min-h-dvh flex-col overflow-hidden text-[#F0E0C0]">
+      <RandomBackground opacity={AUTH_BACKGROUND_OPACITY} brightness={AUTH_BACKGROUND_BRIGHTNESS} />
+      <div className="absolute inset-0" style={{ background: AUTH_GRADIENT }} aria-hidden />
 
       <div className="relative z-10 mx-auto flex min-h-0 flex-1 w-full max-w-lg items-center px-5 py-8 sm:px-8">
         <section className="w-full">
@@ -54,14 +59,14 @@ export const ResetPassword = () => {
             <BrandMark size="md" showWordmark />
           </Link>
 
-          <h1 className="mr-page-heading mt-6">
+          <h1 className="mr-page-heading mt-6 drop-shadow-[0_2px_8px_rgba(0,0,0,0.75)]">
             Choose a new password
           </h1>
-          <p className="mr-copy mt-3">
+          <p className="mr-copy mt-3 drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]">
             Enter a new password for your MenRush account.
           </p>
 
-          <div className="mt-8">
+          <div className="mt-8 rounded-[24px] border border-[rgba(240,224,192,0.35)] bg-[#1E1508]/96 p-6 backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.6)] sm:p-8">
             {error && (
               <div className="mb-4 rounded-2xl border border-[#A45E18]/30 bg-[#A45E18]/12 px-4 py-3 text-sm text-[#F0E0C0]/90">
                 {error}

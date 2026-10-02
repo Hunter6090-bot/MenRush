@@ -1,16 +1,20 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { usersAPI } from '../api/client';
-import { useAuthStore } from '../hooks/store';
+import { useAuthStore, useLocationStore } from '../hooks/store';
 import { Layout } from '../components/Layout';
 import { UserAvatar, getPhotoUrl } from '../components/UserAvatar';
+import { FadedBrandFace, isNearbyPlaceholderFace } from '../components/FadedBrandFace';
 import { CoverBanner, normalizeCoverFrame } from '../components/CoverBanner';
 import { ProfilePhotoViewer } from '../components/ProfilePhotoViewer';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { StatusBadge } from '../components/StatusBadge';
+import { DistancePill } from '../components/DistancePill';
 import { ProfileAlbumsSection } from '../components/ProfileAlbumsSection';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
+import { IconMatches, IconChat, IconUnmatch } from '../components/icons';
 import { formatHeight, formatWeight } from '../lib/age';
+import { formatDistanceFromKm } from '../lib/localeUnits';
 import {
   matchCtaAriaLabel,
   matchCtaDisabled,
@@ -32,6 +36,10 @@ interface ViewableUser {
   cover_position_x?: number;
   cover_position_y?: number;
   cover_zoom?: number;
+  /** Bucketed distance in km for locale formatting on the client. */
+  distance_km?: string | number | null;
+  /** Approximate distance label (privacy-bucketed). */
+  distance_label?: string | null;
   interests?: string[];
   height_cm?: number | null;
   weight_kg?: number | null;
@@ -71,7 +79,7 @@ export function normalizeInterests(raw: unknown): string[] {
   return raw.filter((tag): tag is string => typeof tag === 'string' && tag.length > 0);
 }
 
-function normalizeProfilePayload(raw: unknown): ViewableUser | null {
+export function normalizeProfilePayload(raw: unknown): ViewableUser | null {
   if (!raw || typeof raw !== 'object') return null;
   const data = raw as Record<string, unknown>;
   if (typeof data.id !== 'string' || typeof data.name !== 'string' || !data.name.trim()) {
@@ -89,6 +97,8 @@ export const ProfileView = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const authUserId = useAuthStore((s) => s.user?.id);
+  const locationLat = useLocationStore((s) => s.lat);
+  const locationLng = useLocationStore((s) => s.lng);
   const [user, setUser] = useState<ViewableUser | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -115,7 +125,7 @@ export const ProfileView = () => {
 
     setLoading(true);
     usersAPI
-      .getProfile(id)
+      .getProfile(id, { lat: locationLat, lng: locationLng })
       .then((r) => {
         const data = normalizeProfilePayload(r.data);
         if (!data) {
@@ -133,7 +143,7 @@ export const ProfileView = () => {
         setError(profileErrorMessage(err));
       })
       .finally(() => setLoading(false));
-  }, [id, authUserId, navigate]);
+  }, [id, authUserId, navigate, locationLat, locationLng]);
 
   const flash = useCallback((msg: string, tone: 'success' | 'error' = 'success') => {
     setSafetyNotice({ msg, tone });
@@ -202,10 +212,6 @@ export const ProfileView = () => {
     }
   }, [user, unmatching, mutual, flash]);
 
-  const handlePass = useCallback(() => {
-    navigate(-1);
-  }, [navigate]);
-
   if (loading) {
     return (
       <Layout>
@@ -238,10 +244,22 @@ export const ProfileView = () => {
   const matchState = matchInterestState({ liked, mutual });
   const coverSrc = user.cover_url ? getPhotoUrl(user.cover_url) : undefined;
   const photoSrc = user.photo_url ? getPhotoUrl(user.photo_url) : undefined;
+  const distanceKmVal =
+    user.distance_km != null && user.distance_km !== ''
+      ? parseFloat(String(user.distance_km))
+      : user.distance_label != null && user.distance_label.trim() !== ''
+        ? parseFloat(user.distance_label.replace(/[^0-9.]/g, ''))
+        : null;
+  const distLabel =
+    distanceKmVal != null && Number.isFinite(distanceKmVal)
+      ? formatDistanceFromKm(distanceKmVal)
+      : user.distance_label != null && user.distance_label.trim() !== ''
+        ? user.distance_label
+        : null;
 
   return (
     <Layout>
-      <div className="max-w-xl mx-auto px-4 py-6 pb-10 space-y-4">
+      <div className="mx-auto min-w-0 max-w-xl space-y-4 overflow-x-clip px-4 py-6 pb-10" data-testid="profile-view-shell">
         {safetyNotice ? (
           <div
             role="status"
@@ -281,7 +299,7 @@ export const ProfileView = () => {
           )}
           <div className="px-5 pb-5">
             <div className="-mt-10 mb-3 flex items-end justify-between gap-2">
-              {photoSrc ? (
+              {photoSrc && !isNearbyPlaceholderFace(user.photo_url) ? (
                 <button
                   type="button"
                   data-testid="profile-view-avatar-enlarge"
@@ -299,6 +317,18 @@ export const ProfileView = () => {
                     className="ring-4 ring-[var(--bg-card)]"
                   />
                 </button>
+              ) : isNearbyPlaceholderFace(user.photo_url) ? (
+                <span
+                  className="relative inline-flex shrink-0 overflow-hidden rounded-full ring-4 ring-[var(--bg-card)]"
+                  style={{ width: 96, height: 96 }}
+                  data-testid="profile-view-empty-brand-face"
+                >
+                  <FadedBrandFace
+                    variant="profile"
+                    size={96}
+                    label={user.name}
+                  />
+                </span>
               ) : (
                 <UserAvatar
                   name={user.name}
@@ -326,9 +356,18 @@ export const ProfileView = () => {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-bold text-[var(--cream)]">{user.name}</h2>{user.is_verified ? <VerifiedBadge /> : null}</div>
-            {typeof user.age === 'number' && (
-              <p className="text-[var(--cream-muted)] text-sm mt-0.5">Age {user.age}</p>
-            )}
+            <div className="flex flex-wrap items-center gap-2 text-sm mt-0.5">
+              {typeof user.age === 'number' && (
+                <span className="text-[var(--cream-muted)]">Age {user.age}</span>
+              )}
+              {distLabel && (
+                <DistancePill
+                  km={distanceKmVal ?? 0}
+                  label={distLabel}
+                  className="bg-black/40 text-[var(--cream)]/90"
+                />
+              )}
+            </div>
             {(user.height_cm != null ||
               user.weight_kg != null ||
               user.relationship_status ||
@@ -385,39 +424,41 @@ export const ProfileView = () => {
 
         <ProfileAlbumsSection ownerId={user.id} ownerName={user.name} />
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={handlePass}
-            className="flex-1 min-w-[5.5rem] py-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] font-bold text-sm hover:border-[var(--copper)] hover:text-[var(--copper)] transition-all"
+        {mutual ? (
+          <div
+            data-testid="profile-view-matched-status"
+            className="flex items-center justify-center gap-1.5 rounded-full border border-[var(--copper)]/35 bg-[rgba(196,131,42,0.12)] px-3.5 py-1.5 text-xs font-bold text-[#E0A14A]"
           >
-            Pass
-          </button>
+            <IconMatches size={16} />
+            <span>Matched with {user.name}</span>
+          </div>
+        ) : null}
+
+        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 overflow-x-clip">
           {mutual ? (
             <>
-              <span
-                data-testid="profile-view-matched-status"
-                className="flex-[1.2] min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide text-center border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] text-[var(--copper)]"
-                aria-label={matchCtaAriaLabel('mutual', user.name)}
-              >
-                {matchCtaLabel('mutual', user.name)}
-              </span>
               <button
                 type="button"
                 onClick={handleMessage}
                 data-testid="profile-view-message"
-                className="flex-[1.2] min-w-[6.5rem] py-3 rounded-xl font-black text-sm tracking-wide active:scale-[0.98] transition-all border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] text-[var(--copper)]"
+                title="Chat"
+                aria-label={`Chat with ${user.name}`}
+                className="flex-1 min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide active:scale-[0.98] transition-all border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] text-[var(--copper)] flex items-center justify-center gap-2 hover:bg-[rgba(196,131,42,0.28)]"
               >
-                Open chat
+                <IconChat size={20} />
+                <span>Chat</span>
               </button>
               <button
                 type="button"
                 disabled={unmatching}
                 onClick={() => void handleUnmatch()}
                 data-testid="profile-view-unmatch"
-                className="flex-1 min-w-[5.5rem] py-3 rounded-xl font-bold text-sm transition-all border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] hover:border-[#c45a4a]/55 hover:text-[#e08a7a] disabled:opacity-60"
+                title="Unmatch"
+                aria-label={`Unmatch with ${user.name}`}
+                className="flex-1 min-w-[7rem] py-3 rounded-xl font-bold text-sm transition-all border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] hover:border-[#c45a4a]/55 hover:text-[#e08a7a] disabled:opacity-60 flex items-center justify-center gap-2"
               >
-                {unmatching ? 'Unmatching…' : 'Unmatch'}
+                <IconUnmatch size={20} />
+                <span>{unmatching ? 'Unmatching…' : 'Unmatch'}</span>
               </button>
             </>
           ) : (
@@ -427,25 +468,31 @@ export const ProfileView = () => {
                 disabled={matchCtaDisabled(matchState, matching)}
                 aria-disabled={matchCtaDisabled(matchState, matching)}
                 aria-label={matchCtaAriaLabel(matchState, user.name)}
+                title={matching ? 'Sending…' : matchState === 'outgoing' ? 'Sent' : 'Match'}
                 onClick={() => void handleMatch()}
                 data-testid="profile-view-match"
-                className={`flex-[1.4] min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide transition-all ${
+                className={`flex-1 min-w-[7rem] py-3 rounded-xl font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 ${
                   matchState === 'none' ? 'uppercase active:scale-[0.98]' : ''
                 } ${matchCtaToneClasses(matchState)}`}
               >
-                {matchCtaLabel(matchState, user.name, { sending: matching })}
+                <IconMatches size={20} />
+                <span>{matching ? 'Sending…' : matchState === 'outgoing' ? 'Sent' : 'Match'}</span>
               </button>
               <button
                 type="button"
                 onClick={handleMessage}
                 data-testid="profile-view-message"
-                className="flex-1 min-w-[5.5rem] py-3 rounded-xl font-bold text-sm transition-all border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] hover:border-[var(--copper)]/40 hover:text-[var(--copper)]"
+                title="Chat"
+                aria-label={`Chat with ${user.name}`}
+                className="flex-1 min-w-[7rem] py-3 rounded-xl font-bold text-sm transition-all border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)] hover:border-[var(--copper)]/40 hover:text-[var(--copper)] flex items-center justify-center gap-2"
               >
-                Message
+                <IconChat size={20} />
+                <span>Chat</span>
               </button>
             </>
           )}
         </div>
+
         <p className="text-center text-[11px] text-[var(--cream-muted)]">
           Match is mutual interest · Chat unlocks when he matches back · Report anytime
         </p>

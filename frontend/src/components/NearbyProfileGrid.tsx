@@ -1,8 +1,11 @@
 import type { NearbyUser } from './ProfileCard';
 import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
 import { VerifiedBadge } from './VerifiedBadge';
+import { NewJoinerBadge } from './NewJoinerBadge';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { formatActiveStatus, formatDistanceMiles, getTribeTag } from '../lib/discoveryFormat';
+import { getDistanceLabel } from '../lib/discovery';
+import { isFreshFaceNearby } from '../lib/newJoiner';
 import {
   PROFILE_TILE_GRID_CLASS,
   PROFILE_TILE_SKELETON_CLASS,
@@ -15,6 +18,7 @@ import {
   matchCtaLabel,
   matchInterestState,
 } from '../lib/matchCta';
+import { IconMatches, IconChat } from './icons';
 import { Link } from 'react-router-dom';
 import { memo, useEffect } from 'react';
 
@@ -46,8 +50,18 @@ interface NearbyProfileGridProps {
   radiusLabel?: string;
   /** Count of men at max radius when current radius is empty. */
   beyondRadiusCount?: number;
+  /** When true, more pages can be loaded. */
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
 }
 
+/**
+ * Nearby Grid — memo boundary so Discover GPS/header churn does not rebuild tiles.
+ *
+ * PERF next pass (phone, 40+ tiles): window with @tanstack/react-virtual or
+ * CSS grid + IntersectionObserver mount; keep Brand empty face + Match CTA intact.
+ */
 export const NearbyProfileGrid = memo(function NearbyProfileGrid({
   users,
   loading,
@@ -64,6 +78,9 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
   onOpenHotSpots,
   radiusLabel,
   beyondRadiusCount = 0,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
 }: NearbyProfileGridProps) {
   useEffect(() => {
     clearGridPhotoQueue();
@@ -94,9 +111,7 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
           {beyondRadiusCount > 0 ? (
             <>
               <span className="font-bold text-[#E0A14A]">
-                {beyondRadiusCount === 1
-                  ? '1 man is farther out'
-                  : `${beyondRadiusCount} men are farther out`}
+                Men are farther out
               </span>
               . Expand beyond
               {radiusLabel ? ` ${radiusLabel}` : ' this range'} to see them.
@@ -187,75 +202,133 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
 
   // Phone: 3 cols (Brand lock). Tablet md+: denser auto-fill so iPad is not two giant squares.
   return (
-    <div
-      className={PROFILE_TILE_GRID_CLASS}
-      data-testid="nearby-profile-grid"
-    >
-      {users.map((user) => {
-        const meta = `${formatDistanceMiles(user)} · ${getTribeTag(user)} · ${formatActiveStatus(user)}`;
-        const liked = likedUserIds?.has(user.id) ?? false;
-        const mutual = mutualUserIds?.has(user.id) ?? false;
-        const matching = matchingUserId === user.id;
-        const matchState = matchInterestState({ liked, mutual });
-        const matchDisabled = matchCtaDisabled(matchState, matching);
-        return (
-          <div
+    <>
+      <div
+        className={PROFILE_TILE_GRID_CLASS}
+        data-testid="nearby-profile-grid"
+      >
+        {users.map((user) => (
+          <NearbyGridCard
             key={user.id}
-            className="group relative overflow-hidden rounded-xl border border-nn-border bg-nn-card text-left shadow-card transition-all hover:-translate-y-[3px] hover:border-[rgba(196,131,42,0.4)] md:rounded-2xl"
-            data-testid="nearby-grid-card"
+            user={user}
+            liked={likedUserIds?.has(user.id) ?? false}
+            mutual={mutualUserIds?.has(user.id) ?? false}
+            matching={matchingUserId === user.id}
+            onSelect={onSelect}
+            onMatch={onMatch}
+          />
+        ))}
+      </div>
+      {hasMore && onLoadMore ? (
+        <div className="mt-4 flex justify-center py-3" data-testid="nearby-load-more-container">
+          <button
+            type="button"
+            onClick={onLoadMore}
+            disabled={loadingMore}
+            data-testid="nearby-load-more"
+            className="inline-flex items-center gap-2 rounded-full border border-[var(--copper)]/60 bg-[var(--bg-elevated)]/90 px-6 py-2.5 text-[12px] font-extrabold uppercase tracking-wider text-[var(--cream)] shadow-md transition-all hover:border-[var(--copper)] hover:bg-[var(--copper)]/20 active:scale-[0.98] disabled:opacity-50"
           >
-            <div className="relative">
-              {onSelect ? (
-                <button
-                  type="button"
-                  onClick={() => onSelect(user)}
-                  className="block w-full text-left"
-                  aria-label={`Open profile for ${user.name}`}
-                  data-testid={`nearby-grid-photo-${user.id}`}
-                >
-                  <GridCardFace user={user} meta={meta} />
-                </button>
-              ) : (
-                <ProfilePhotoLink
-                  userId={user.id}
-                  name={user.name}
-                  className="block w-full text-left"
-                  data-testid={`nearby-grid-photo-${user.id}`}
-                >
-                  <GridCardFace user={user} meta={meta} />
-                </ProfilePhotoLink>
-              )}
-              {user.is_verified ? <VerifiedBadge compact className="absolute bottom-1.5 right-1.5 z-10" /> : null}
-            </div>
-            {onMatch ? (
-              <div className="border-t border-[var(--border-default)] p-1 md:p-1.5">
-                <button
-                  type="button"
-                  disabled={matchDisabled}
-                  aria-disabled={matchDisabled}
-                  aria-label={matchCtaAriaLabel(matchState, user.name, {
-                    mutualOpensChat: true,
-                  })}
-                  data-testid={`grid-match-${user.id}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (matchDisabled) return;
-                    void onMatch(user);
-                  }}
-                  className={`w-full rounded-lg py-1.5 text-[10px] font-extrabold tracking-wide transition-colors md:rounded-xl md:py-2 md:text-[11px] ${
-                    matchState === 'none' || matching ? 'uppercase' : ''
-                  } ${matchCtaCompactToneClasses(matchState)}`}
-                >
-                  {matchCtaLabel(matchState, user.name, {
-                    sending: matching,
-                    mutualLabel: 'open_chat',
-                  })}
-                </button>
-              </div>
-            ) : null}
+            {loadingMore ? 'Loading more men…' : 'Load more men'}
+          </button>
+        </div>
+      ) : null}
+    </>
+  );
+});
+
+const NearbyGridCard = memo(function NearbyGridCard({
+  user,
+  liked,
+  mutual,
+  matching,
+  onSelect,
+  onMatch,
+}: {
+  user: NearbyUser;
+  liked: boolean;
+  mutual: boolean;
+  matching: boolean;
+  onSelect?: (user: NearbyUser) => void;
+  onMatch?: (user: NearbyUser) => void | Promise<void>;
+}) {
+  const distLabel = getDistanceLabel(user);
+  const meta = `${distLabel} · ${getTribeTag(user)} · ${formatActiveStatus(user)}`;
+  const matchState = matchInterestState({ liked, mutual });
+  const matchDisabled = matchCtaDisabled(matchState, matching);
+
+  return (
+    <div
+      className="group relative overflow-hidden rounded-xl border border-nn-border bg-nn-card text-left shadow-card transition-all hover:-translate-y-[3px] hover:border-[rgba(196,131,42,0.4)] md:rounded-2xl [content-visibility:auto] [contain-intrinsic-size:auto_220px]"
+      data-testid="nearby-grid-card"
+    >
+      <div className="relative">
+        {onSelect ? (
+          <button
+            type="button"
+            onClick={() => onSelect(user)}
+            className="block w-full text-left"
+            aria-label={`Open profile for ${user.name}`}
+            data-testid={`nearby-grid-photo-${user.id}`}
+          >
+            <GridCardFace user={user} meta={meta} />
+          </button>
+        ) : (
+          <ProfilePhotoLink
+            userId={user.id}
+            name={user.name}
+            className="block w-full text-left"
+            data-testid={`nearby-grid-photo-${user.id}`}
+          >
+            <GridCardFace user={user} meta={meta} />
+          </ProfilePhotoLink>
+        )}
+        {distLabel ? (
+          <div className="pointer-events-none absolute top-1.5 right-1.5 z-10 md:top-2 md:right-2">
+            <span
+              data-testid={`nearby-grid-distance-${user.id}`}
+              className="inline-flex items-center gap-1 rounded-full border border-nn-border bg-black/60 px-2 py-0.5 text-[9px] font-semibold tracking-wide text-[var(--cream)]/90 backdrop-blur-md shadow-sm md:text-[10px]"
+            >
+              <PinIcon className="h-2.5 w-2.5 shrink-0 text-[#C4832A]" />
+              {distLabel}
+            </span>
           </div>
-        );
-      })}
+        ) : null}
+        {isFreshFaceNearby(user) ? (
+          <NewJoinerBadge className={distLabel ? 'max-w-[calc(100%-4.5rem)] truncate' : ''} />
+        ) : null}
+        {user.is_verified ? <VerifiedBadge compact className="absolute bottom-1.5 right-1.5 z-10" /> : null}
+      </div>
+      {onMatch ? (
+        <div className="border-t border-[var(--border-default)] p-1 md:p-1.5">
+          <button
+            type="button"
+            disabled={matchDisabled}
+            aria-disabled={matchDisabled}
+            aria-label={matchCtaAriaLabel(matchState, user.name, {
+              mutualOpensChat: true,
+            })}
+            title={matching ? 'Sending…' : matchState === 'mutual' ? 'Chat' : matchState === 'outgoing' ? 'Sent' : 'Match'}
+            data-testid={`grid-match-${user.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (matchDisabled) return;
+              void onMatch(user);
+            }}
+            className={`w-full rounded-lg py-1.5 text-[10px] font-extrabold tracking-wide transition-colors flex items-center justify-center gap-1.5 md:rounded-xl md:py-2 md:text-[11px] ${
+              matchState === 'none' || matching ? 'uppercase' : ''
+            } ${matchCtaCompactToneClasses(matchState)}`}
+          >
+            {matchState === 'mutual' ? <IconChat size={14} /> : <IconMatches size={14} />}
+            <span>
+              {matchCtaLabel(matchState, user.name, {
+                sending: matching,
+                mutualLabel: 'chat',
+              })}
+            </span>
+          </button>
+        </div>
+      ) : null}
+
     </div>
   );
 });
@@ -300,6 +373,19 @@ function GridPhoto({
 }) {
   // Phone path: display API when live, else fetch+downscale — never leave blank tiles.
   const { src, phase } = useGridPhotoSrc(photoUrl, age);
+  const trimmed = photoUrl?.trim() || '';
+
+  // Real /uploads still loading — elevated pending tile (not Brand empty cutout).
+  if (phase === 'loading' && trimmed.startsWith('/uploads/')) {
+    return (
+      <div
+        className="h-full w-full bg-[var(--bg-elevated)]"
+        data-testid="nearby-photo-pending"
+        data-photo-phase={phase}
+        aria-hidden
+      />
+    );
+  }
 
   // Empty / missing / generic avatar slots → faded official medallion (Brand).
   // Real /uploads photos keep their bytes (media lock).
@@ -322,3 +408,12 @@ function GridPhoto({
     />
   );
 }
+
+function PinIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z" />
+    </svg>
+  );
+}
+

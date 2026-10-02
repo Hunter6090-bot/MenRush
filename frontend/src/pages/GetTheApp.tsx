@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { BrandMark } from '../components/BrandMark';
 import { SiteFooter } from '../components/SiteFooter';
 import {
   clearDeferredInstallPrompt,
@@ -106,7 +107,9 @@ export function GetTheApp() {
         <Link to="/" className="text-xs font-bold uppercase tracking-[0.18em] text-[#A89070] hover:text-[#C4832A]">
           Back
         </Link>
-        <img src="/brand/icon-512.png" alt="MenRush" width={96} height={96} className="mx-auto mt-6 h-24 w-24 rounded-full" />
+        <div className="mx-auto mt-6 flex justify-center">
+          <BrandMark size="md" />
+        </div>
         <p className="mt-5 text-center text-[11px] font-bold uppercase tracking-[0.18em] text-[#C4832A]">Get the app</p>
         <h1 className="mt-3 text-center text-[34px] font-extrabold leading-[1.05] tracking-[-0.03em]">Put MenRush on your phone.</h1>
         <p className="mt-3 text-center text-[15px] leading-[1.45] text-[#A89070]">Opens like an app. No store. No extra download.</p>

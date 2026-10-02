@@ -88,9 +88,15 @@ test('routes expose map-photo upload + clear', () => {
   assert.match(usersRoute, /router\.delete\('\/map-photo'/);
 });
 
-test('Nearby discovery substitutes Map photo into photo_url', () => {
+test('Nearby + Matches substitute Map photo into photo_url', () => {
   assert.match(userService, /discoveryPhotoUrl/);
   assert.match(userService, /map_photo_url/);
+  // getMatches / getReceivedLikes must not leave map-only faces empty.
+  assert.match(userService, /async getMatches/);
+  const matchesFn = userService.slice(userService.indexOf('async getMatches'));
+  const likesFn = userService.slice(userService.indexOf('async getReceivedLikes'));
+  assert.match(matchesFn.slice(0, 1800), /discoveryPhotoUrl/);
+  assert.match(likesFn.slice(0, 1800), /discoveryPhotoUrl/);
 });
 
 test('discoveryPhotoUrl prefers Map photo', () => {

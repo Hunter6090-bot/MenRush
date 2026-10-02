@@ -9,7 +9,8 @@ describe('MapLiveStatus', () => {
     );
     expect(screen.getByTestId('map-live-status')).toHaveAttribute('data-nearby-count', '46');
     expect(screen.getByTestId('map-live-status')).toHaveAttribute('data-live-count', '0');
-    expect(screen.getByText('46 nearby')).toBeInTheDocument();
+    expect(screen.getByText('Men nearby')).toBeInTheDocument();
+    expect(screen.queryByText(/46 nearby/)).not.toBeInTheDocument();
     expect(screen.getByTestId('map-live-line')).toHaveTextContent('None live now');
     expect(screen.queryByText(/Live ·/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Live · All/)).not.toBeInTheDocument();
@@ -19,8 +20,20 @@ describe('MapLiveStatus', () => {
     render(
       <MapLiveStatus nearbyCount={46} liveCount={3} radiusKm={8} onExpandRadius={() => {}} />,
     );
+    expect(screen.getByText('Men nearby')).toBeInTheDocument();
     expect(screen.getByTestId('map-live-line')).toHaveTextContent('Live · 3');
     expect(screen.getByTestId('map-live-status')).toHaveAttribute('data-live-count', '3');
+  });
+
+  it('shows honest count exceeding 50 when more users are in range without capping', () => {
+    render(
+      <MapLiveStatus nearbyCount={142} liveCount={18} radiusKm={25} onExpandRadius={() => {}} />,
+    );
+    expect(screen.getByTestId('map-live-status')).toHaveAttribute('data-nearby-count', '142');
+    expect(screen.getByTestId('map-live-status')).toHaveAttribute('data-live-count', '18');
+    expect(screen.getByText('Men nearby')).toBeInTheDocument();
+    expect(screen.queryByText(/142 nearby/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('map-live-line')).toHaveTextContent('Live · 18');
   });
 
   it('offers Expand radius when nearby is empty and not already at max', () => {

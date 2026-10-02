@@ -38,6 +38,10 @@
   --nn-danger:    #B0432E;
   --nn-verified:  #C4832A;
 
+  /* Ticket 6: Brand Soft receipt ticks (dark/night default) */
+  --mr-tick-delivered: #F0E0C0;
+  --mr-tick-read:      #E0A14A;
+
   --nn-fg-1: var(--nn-text);
   --nn-fg-2: var(--nn-muted);
   --nn-fg-3: var(--nn-faint);
@@ -189,6 +193,10 @@ html.theme-light {
   --nn-online: #3D7A2E;
   --nn-warning: #B8860B;
   --nn-danger: #9B3A28;
+
+  /* Ticket 6: Brand Soft receipt ticks (light cream/paper) */
+  --mr-tick-delivered: #1E1508;
+  --mr-tick-read:      #8B5A1A;
 
   --bg-primary: var(--nn-bg);
   --bg-elevated: var(--nn-elevated);
@@ -355,4 +363,13 @@ html, body {
 
 .mr-cta-gradient:hover {
   background: linear-gradient(90deg, #e0a14a, #c4832a);
+}
+
+/* Ticket 6: WhatsApp-style double ticks theme wiring */
+.mr-receipt-tick-delivered {
+  color: var(--mr-tick-delivered);
+}
+
+.mr-receipt-tick-read {
+  color: var(--mr-tick-read);
 }

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { NearbyUser } from "./ProfileCard";
-import { SilhouetteAvatar } from "./SilhouetteAvatar";
+import { FadedBrandFace } from "./FadedBrandFace";
 import { PulsingAvatar } from "./PulsingAvatar";
 import { useResolvingPhotoSrc } from "./UserAvatar";
 import { ProfilePhotoViewer } from "./ProfilePhotoViewer";
-import { IconPulse, IconClose } from "./icons";
+import { IconPulse, IconClose, IconMatches, IconChat, IconUnmatch } from "./icons";
 import { StatusBadge } from "./StatusBadge";
 import { DistancePill } from "./DistancePill";
 import { VerifiedBadge } from "./VerifiedBadge";
@@ -15,7 +15,6 @@ import { profilePathForUser } from "../lib/profileLinks";
 import {
   matchCtaAriaLabel,
   matchCtaDisabled,
-  matchCtaLabel,
   matchCtaToneClasses,
   matchInterestState,
 } from "../lib/matchCta";
@@ -37,6 +36,7 @@ interface ProfileDrawerProps {
   mutual?: boolean;
   onClose: () => void;
   onLike: () => Promise<void> | void;
+  onUnmatch?: () => Promise<void> | void;
   onPass?: () => void;
   onMessage: () => void;
   onPulseBack?: () => Promise<void> | void;
@@ -65,6 +65,7 @@ export function ProfileDrawer({
   mutual = false,
   onClose,
   onLike,
+  onUnmatch,
   onPass,
   onMessage,
   onPulseBack,
@@ -157,12 +158,22 @@ export function ProfileDrawer({
 
   if (!user) return null;
 
-  const distance = parseFloat(String(user.distance_km));
-  const distLabel = getDistanceLabel(user);
+  const parsedDistance =
+    user.distance_km != null && user.distance_km !== ""
+      ? parseFloat(String(user.distance_km))
+      : user.distance_label != null && user.distance_label.trim() !== ""
+        ? parseFloat(user.distance_label.replace(/[^0-9.]/g, ""))
+        : null;
+  const distance = Number.isFinite(parsedDistance) ? parsedDistance : null;
+  const distLabel =
+    distance != null
+      ? getDistanceLabel({ ...user, distance_km: distance })
+      : user.distance_label != null && user.distance_label.trim() !== ""
+        ? user.distance_label
+        : null;
   const isPulsing = isUserPulsing(user);
   const dragging = dragVh != null;
   const matchState = matchInterestState({ liked, mutual });
-  const matchLabel = matchCtaLabel(matchState, user.name);
   const matchDisabled = matchCtaDisabled(matchState);
   const heroEnlargeSrc = cover || photo || null;
   const avatarEnlargeSrc = photo || null;
@@ -280,8 +291,11 @@ export function ProfileDrawer({
                 />
               </button>
             ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <SilhouetteAvatar size={148} variant="card" />
+              <div
+                className="h-full w-full"
+                data-testid={`drawer-hero-placeholder-${user.id}`}
+              >
+                <FadedBrandFace variant="tile" label={user.name} />
               </div>
             )}
             <div
@@ -298,7 +312,7 @@ export function ProfileDrawer({
               ) : user.online ? (
                 <StatusBadge online lastSeen={user.last_seen} size="xs" />
               ) : null}
-              <DistancePill km={distance} label={distLabel} />
+              {distLabel && <DistancePill km={distance ?? 0} label={distLabel} />}
             </div>
           </div>
 
@@ -342,7 +356,7 @@ export function ProfileDrawer({
                       background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
                     }}
                   >
-                    <SilhouetteAvatar size={72} variant="card" />
+                    <FadedBrandFace variant="profile" size={72} label={user.name} />
                   </div>
                 </PulsingAvatar>
               </div>
@@ -361,7 +375,8 @@ export function ProfileDrawer({
             {(user as { is_verified?: boolean }).is_verified ? <VerifiedBadge /> : null}
           </div>
           <p className="text-sm font-medium text-[var(--cream-soft)] leading-snug">
-            {user.online ? "Active now" : "Offline"} · {distLabel} away
+            {user.online ? "Active now" : "Offline"}
+            {distLabel ? ` · ${distLabel} away` : ""}
           </p>
 
           {user.headline && (
@@ -428,34 +443,60 @@ export function ProfileDrawer({
             View full profile
           </button>
           <div className="flex gap-2">
-            {onPass && (
+            {mutual ? (
+              <>
+                <button
+                  type="button"
+                  onClick={onMessage}
+                  data-testid="drawer-open-chat"
+                  title="Chat"
+                  aria-label={`Chat with ${user.name}`}
+                  className="flex-1 py-3 rounded-[var(--radius-md)] font-black text-sm tracking-wide transition-all border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] text-[var(--copper)] flex items-center justify-center gap-2 hover:bg-[rgba(196,131,42,0.28)]"
+                >
+                  <IconChat size={18} />
+                  <span>Chat</span>
+                </button>
+                {onUnmatch && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const confirmed = window.confirm(
+                        `Unmatch with ${user.name}? Chat locks again until you both match.`,
+                      );
+                      if (confirmed) void onUnmatch();
+                    }}
+                    data-testid="drawer-unmatch"
+                    title="Unmatch"
+                    aria-label={`Unmatch with ${user.name}`}
+                    className="flex-1 py-3 rounded-[var(--radius-md)] font-bold text-sm transition-all border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream)] hover:border-[#c45a4a]/55 hover:text-[#e08a7a] flex items-center justify-center gap-2"
+                  >
+                    <IconUnmatch size={18} />
+                    <span>Unmatch</span>
+                  </button>
+                )}
+
+              </>
+            ) : (
               <button
-                onClick={onPass}
-                className="flex-1 py-3 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream)] font-bold text-sm hover:text-[var(--copper)] hover:border-[var(--copper)] transition-colors"
+                type="button"
+                disabled={matchDisabled}
+                aria-disabled={matchDisabled}
+                aria-label={matchCtaAriaLabel(matchState, user.name, {
+                  mutualOpensChat: true,
+                })}
+                title={matchState === "outgoing" ? "Sent" : "Match"}
+                onClick={() => {
+                  if (matchState === "none") void onLike();
+                }}
+                data-testid="drawer-match"
+                className={`flex-1 py-3.5 rounded-[var(--radius-md)] font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 ${
+                  matchState === "none" ? "uppercase active:scale-[0.98]" : ""
+                } ${matchCtaToneClasses(matchState)}`}
               >
-                Pass
+                <IconMatches size={18} />
+                <span>{matchState === "outgoing" ? "Sent" : "Match"}</span>
               </button>
             )}
-            <button
-              type="button"
-              disabled={matchDisabled}
-              aria-disabled={matchDisabled}
-              aria-label={matchCtaAriaLabel(matchState, user.name, {
-                mutualOpensChat: true,
-              })}
-              onClick={() => {
-                if (matchState === "mutual") onMessage();
-                else if (matchState === "none") void onLike();
-              }}
-              data-testid={
-                matchState === "mutual" ? "drawer-open-chat" : "drawer-match"
-              }
-              className={`flex-1 py-3.5 rounded-[var(--radius-md)] font-black text-sm tracking-wide transition-all ${
-                matchState === "none" ? "uppercase active:scale-[0.98]" : ""
-              } ${matchState === "mutual" ? "normal-case" : ""} ${matchCtaToneClasses(matchState)}`}
-            >
-              {matchLabel}
-            </button>
             {onPulseBack && isPulsing && (
               <button
                 type="button"
@@ -468,6 +509,7 @@ export function ProfileDrawer({
               </button>
             )}
           </div>
+
           <p className="text-center text-[11px] font-semibold tracking-wide text-[var(--cream-soft)]">
             Match is mutual interest · Chat with consent
           </p>

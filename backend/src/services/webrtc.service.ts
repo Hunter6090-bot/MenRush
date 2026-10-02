@@ -1,18 +1,19 @@
 /**
- * ICE server list for WebRTC.
+ * ICE servers for WebRTC.
  *
- * Screenshot diagnosis (BOA↔Bigbear): local camera works, remote stuck on
- * "waiting for his video" = signalling OK, media/ICE path failed. Phones
- * need working TURN (TLS/TCP preferred).
+ * CRITICAL: Metered free Open Relay's public static secret no longer yields
+ * usable relay candidates (0 relay in real ICE gather tests). Production
+ * must use a real provider:
  *
- * Env (Railway):
- *   TURN_URL     comma-separated turn:/turns: URLs
- *   TURN_SECRET  static-auth HMAC secret (TURN REST) — preferred
- *   or TURN_USERNAME + TURN_CREDENTIAL for long-lived auth
+ *   METERED_DOMAIN + METERED_API_KEY
+ *     → GET https://{domain}.metered.live/api/v1/turn/credentials?apiKey=…
+ *     (free 20GB/mo — create at https://dashboard.metered.ca)
  *
- * Free Open Relay: we emit BOTH TURN REST (staticauth host) and the legacy
- * username/password pair — browsers try all; one path often succeeds where
- * the other fails.
+ *   or TURN_URL + TURN_SECRET (TURN-REST HMAC)
+ *   or TURN_URL + TURN_USERNAME + TURN_CREDENTIAL
+ *
+ * Without one of the above, only STUN is returned and phone↔Wi‑Fi calls
+ * stay stuck on "waiting for his video".
  */
 import crypto from 'crypto';
 
@@ -22,46 +23,13 @@ export interface IceServerConfig {
   credential?: string;
 }
 
-const OPEN_RELAY_STATIC_SECRET = 'openrelayprojectsecret';
-
-/** TLS/TCP first — mobile carriers often block UDP 3478. */
-const OPEN_RELAY_STATIC_URLS = [
-  'turns:staticauth.openrelay.metered.ca:443?transport=tcp',
-  'turns:staticauth.openrelay.metered.ca:443',
-  'turn:staticauth.openrelay.metered.ca:443?transport=tcp',
-  'turn:staticauth.openrelay.metered.ca:443',
-  'turn:staticauth.openrelay.metered.ca:80?transport=tcp',
-  'turn:staticauth.openrelay.metered.ca:80',
-];
-
-/** Legacy Open Relay password auth (still widely documented). */
-const OPEN_RELAY_LEGACY_URLS = [
-  'turns:openrelay.metered.ca:443?transport=tcp',
-  'turn:openrelay.metered.ca:443?transport=tcp',
-  'turn:openrelay.metered.ca:443',
-  'turn:openrelay.metered.ca:80?transport=tcp',
-  'turn:openrelay.metered.ca:80',
-];
-
 /** TURN REST username/credential (draft-uberti-behave-turn-rest). */
 export function createTurnRestCredentials(
   secret: string,
   ttlSeconds = 6 * 60 * 60,
 ): { username: string; credential: string } {
   const expiry = Math.floor(Date.now() / 1000) + ttlSeconds;
-  // Metered/Nextcloud static-auth: username is often just the expiry, and also
-  // expiry:userid. Emit both as separate iceServer entries from the caller.
   const username = `${expiry}:menrush`;
-  const credential = crypto.createHmac('sha1', secret).update(username).digest('base64');
-  return { username, credential };
-}
-
-function createTurnRestCredentialsExpiryOnly(
-  secret: string,
-  ttlSeconds = 6 * 60 * 60,
-): { username: string; credential: string } {
-  const expiry = Math.floor(Date.now() / 1000) + ttlSeconds;
-  const username = String(expiry);
   const credential = crypto.createHmac('sha1', secret).update(username).digest('base64');
   return { username, credential };
 }
@@ -80,8 +48,8 @@ function prioritizeTurnUrls(urls: string[]): string[] {
     const x = u.toLowerCase();
     if (x.startsWith('turns:') && x.includes('transport=tcp')) return 0;
     if (x.startsWith('turns:')) return 1;
-    if (x.startsWith('turn:') && x.includes('443') && x.includes('transport=tcp')) return 2;
-    if (x.startsWith('turn:') && x.includes('443')) return 3;
+    if (x.includes('443') && x.includes('transport=tcp')) return 2;
+    if (x.includes('443')) return 3;
     if (x.includes('transport=tcp')) return 4;
     return 5;
   };
@@ -103,64 +71,126 @@ function turnIceServers(
   if (!ordered.length) return [];
   const out: IceServerConfig[] = [];
   const tls = ordered.find((u) => u.toLowerCase().startsWith('turns:'));
-  // Safari: first entry matters — put a single TLS URL first.
   if (tls) out.push({ urls: tls, ...auth });
   out.push({ urls: ordered, ...auth });
   return out;
 }
 
-function openRelayFallbackServers(): IceServerConfig[] {
-  const secret = OPEN_RELAY_STATIC_SECRET;
-  const restUser = createTurnRestCredentials(secret);
-  const restExpiry = createTurnRestCredentialsExpiryOnly(secret);
-  return [
-    ...turnIceServers(OPEN_RELAY_STATIC_URLS, restUser),
-    ...turnIceServers(OPEN_RELAY_STATIC_URLS, restExpiry),
-    // Legacy password auth on openrelay.metered.ca (may fail DNS in some regions).
-    {
-      urls: OPEN_RELAY_LEGACY_URLS,
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-  ];
+/**
+ * Free Metered Open Relay via their REST API (needs free dashboard API key).
+ * Returns full iceServers array from Metered, or null if not configured / failed.
+ */
+async function fetchMeteredOpenRelay(): Promise<IceServerConfig[] | null> {
+  const apiKey = process.env.METERED_API_KEY?.trim() || process.env.METERED_TURN_API_KEY?.trim();
+  const domain = (process.env.METERED_DOMAIN?.trim() || process.env.METERED_APP_NAME?.trim() || '').replace(
+    /\.metered\.live$/i,
+    '',
+  );
+  if (!apiKey || !domain) return null;
+
+  const url = `https://${domain}.metered.live/api/v1/turn/credentials?apiKey=${encodeURIComponent(apiKey)}`;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) {
+      console.error('[webrtc] Metered credentials HTTP', res.status);
+      return null;
+    }
+    const data = (await res.json()) as IceServerConfig[] | { iceServers?: IceServerConfig[] };
+    const list = Array.isArray(data) ? data : data.iceServers;
+    if (!list?.length) {
+      console.error('[webrtc] Metered credentials empty');
+      return null;
+    }
+    console.log('[webrtc] ICE: Metered Open Relay REST API (', list.length, 'entries)');
+    return list;
+  } catch (err) {
+    console.error('[webrtc] Metered credentials fetch failed:', err);
+    return null;
+  }
 }
 
-export function getIceServers(): IceServerConfig[] {
-  const servers = stunServers();
-
+function envTurnServers(): IceServerConfig[] | null {
   const turnUrl = process.env.TURN_URL?.trim();
-  if (turnUrl) {
-    const urls = parseTurnUrls(turnUrl);
-    if (urls.length) {
-      const secret = process.env.TURN_SECRET?.trim();
-      if (secret) {
-        // Dual username formats for static-auth compatibility.
-        servers.push(...turnIceServers(urls, createTurnRestCredentials(secret)));
-        servers.push(...turnIceServers(urls, createTurnRestCredentialsExpiryOnly(secret)));
-        // Always also offer free Open Relay as backup when using custom TURN.
-        if (!turnUrl.includes('openrelay') && !turnUrl.includes('staticauth')) {
-          servers.push(...openRelayFallbackServers());
-        }
-        console.log('[webrtc] ICE: STUN + TURN REST (TURN_URL + TURN_SECRET) + dual auth formats');
-        return servers;
-      }
+  if (!turnUrl) return null;
+  const urls = parseTurnUrls(turnUrl);
+  if (!urls.length) return null;
 
-      const username = process.env.TURN_USERNAME?.trim();
-      const credential = process.env.TURN_CREDENTIAL?.trim();
-      if (username && credential) {
-        servers.push(...turnIceServers(urls, { username, credential }));
-        servers.push(...openRelayFallbackServers());
-        console.log('[webrtc] ICE: STUN + TURN long-lived credentials');
-        return servers;
-      }
-
-      console.warn(
-        '[webrtc] TURN_URL is set but TURN_SECRET (or TURN_USERNAME+TURN_CREDENTIAL) is missing; Open Relay fallback',
-      );
-    }
+  // Ignore the known-dead public Open Relay static secret when used alone —
+  // it produces 0 relay candidates (see docs/turn-provider-decision.md).
+  const secret = process.env.TURN_SECRET?.trim();
+  if (secret && secret !== 'openrelayprojectsecret') {
+    const auth = createTurnRestCredentials(secret);
+    console.log('[webrtc] ICE: STUN + TURN REST (TURN_URL + TURN_SECRET)');
+    return turnIceServers(urls, auth);
   }
 
-  servers.push(...openRelayFallbackServers());
-  console.log('[webrtc] ICE: STUN + Open Relay TURN (REST dual + legacy password)');
-  return servers;
+  const username = process.env.TURN_USERNAME?.trim();
+  const credential = process.env.TURN_CREDENTIAL?.trim();
+  if (username && credential && username !== 'openrelayproject') {
+    console.log('[webrtc] ICE: STUN + TURN long-lived credentials');
+    return turnIceServers(urls, { username, credential });
+  }
+
+  if (secret === 'openrelayprojectsecret' || username === 'openrelayproject') {
+    console.warn(
+      '[webrtc] Ignoring public Open Relay static secret (0 relay candidates). ' +
+        'Set METERED_DOMAIN + METERED_API_KEY from https://dashboard.metered.ca',
+    );
+  }
+  return null;
+}
+
+/** Sync entry used by Express — may include only STUN if async Metered not warmed. */
+let cachedMetered: { at: number; servers: IceServerConfig[] } | null = null;
+const METERED_CACHE_MS = 5 * 60 * 1000;
+
+export async function getIceServersAsync(): Promise<IceServerConfig[]> {
+  const stun = stunServers();
+  const fromEnv = envTurnServers();
+  if (fromEnv) return [...stun, ...fromEnv];
+
+  const now = Date.now();
+  if (cachedMetered && now - cachedMetered.at < METERED_CACHE_MS) {
+    return [...stun, ...cachedMetered.servers];
+  }
+
+  const metered = await fetchMeteredOpenRelay();
+  if (metered) {
+    cachedMetered = { at: now, servers: metered };
+    // Metered payload already includes STUN+TURN; don't double STUN if present.
+    const hasStun = metered.some((s) => {
+      const u = Array.isArray(s.urls) ? s.urls.join(',') : String(s.urls || '');
+      return u.includes('stun:');
+    });
+    return hasStun ? metered : [...stun, ...metered];
+  }
+
+  console.error(
+    '[webrtc] NO WORKING TURN — video calls will fail across networks. ' +
+      'Set METERED_DOMAIN + METERED_API_KEY (free) or TURN_URL + TURN_SECRET (paid).',
+  );
+  return stun;
+}
+
+/** Sync wrapper for routes that cannot await (warm cache on boot). */
+export function getIceServers(): IceServerConfig[] {
+  const stun = stunServers();
+  const fromEnv = envTurnServers();
+  if (fromEnv) return [...stun, ...fromEnv];
+  if (cachedMetered) {
+    const hasStun = cachedMetered.servers.some((s) => {
+      const u = Array.isArray(s.urls) ? s.urls.join(',') : String(s.urls || '');
+      return u.includes('stun:');
+    });
+    return hasStun ? cachedMetered.servers : [...stun, ...cachedMetered.servers];
+  }
+  // Kick off background warm; this request may still be STUN-only.
+  void getIceServersAsync().catch(() => undefined);
+  console.warn('[webrtc] ICE: STUN only this request (Metered cache cold or unset)');
+  return stun;
+}
+
+/** Call once at server boot so first call is not STUN-only. */
+export function warmIceServers(): void {
+  void getIceServersAsync().catch(() => undefined);
 }

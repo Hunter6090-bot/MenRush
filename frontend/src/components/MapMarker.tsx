@@ -1,7 +1,9 @@
 import { createRoot, Root } from 'react-dom/client';
+import { memo } from 'react';
 import { PulsingAvatar } from './PulsingAvatar';
 import { useGridPhotoSrc } from '../lib/nearbyPhotoSrc';
 import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
+import { NewJoinerBadge } from './NewJoinerBadge';
 
 export interface MapMarkerUser {
   id: string;
@@ -10,6 +12,8 @@ export interface MapMarkerUser {
   age?: number;
   isPulsing: boolean;
   isVerified?: boolean;
+  /** Account age within NEW window — small corner pill on pin. */
+  isNew?: boolean;
 }
 
 interface MapMarkerProps {
@@ -17,10 +21,10 @@ interface MapMarkerProps {
   size?: number;
 }
 
-export function MapMarker({ user, size = 44 }: MapMarkerProps) {
+export const MapMarker = memo(function MapMarker({ user, size = 44 }: MapMarkerProps) {
   return (
     <div
-      className={`cursor-pointer transition-transform duration-150 hover:scale-110 ${
+      className={`relative cursor-pointer transition-transform duration-150 hover:scale-110 ${
         user.isPulsing ? 'animate-pulse-breathe' : ''
       }`}
       style={{ width: size, height: size }}
@@ -44,9 +48,10 @@ export function MapMarker({ user, size = 44 }: MapMarkerProps) {
           <MapPhoto name={user.name} photoUrl={user.photo_url} age={user.age} size={size} />
         </div>
       </PulsingAvatar>
+      {user.isNew ? <NewJoinerBadge variant="dot" /> : null}
     </div>
   );
-}
+});
 
 function MapPhoto({
   name,
@@ -60,6 +65,17 @@ function MapPhoto({
   size: number;
 }) {
   const { src, phase } = useGridPhotoSrc(photoUrl, age);
+  const trimmed = photoUrl?.trim() || '';
+  if (phase === 'loading' && trimmed.startsWith('/uploads/')) {
+    return (
+      <div
+        className="h-full w-full rounded-full bg-[var(--bg-elevated)]"
+        data-testid="map-marker-photo-pending"
+        data-photo-phase={phase}
+        aria-hidden
+      />
+    );
+  }
   if (isNearbyPlaceholderFace(photoUrl, phase) || !src) {
     // Faded official medallion — same empty face as Nearby Grid (Brand).
     return <FadedBrandFace variant="pin" size={size} label={name} />;
@@ -79,26 +95,18 @@ function MapPhoto({
 
 export function createMapMarkerElement(
   user: MapMarkerUser,
-  onTap: () => void,
+  _onTap: () => void,
   size = 44,
-): { element: HTMLDivElement; root: Root; suppressClickRef: { current: boolean } } {
+): { element: HTMLDivElement; root: Root } {
   const el = document.createElement('div');
   el.style.width = `${size}px`;
   el.style.height = `${size}px`;
+  // Do not set position on this root — Mapbox needs absolute (see mapMarkerPlacement.ts).
+  // Canvas owns pan/pinch — markers must not capture touches (see mapMarkerHitTest).
+  // Tap opens profile via map click hit-test in Discover, not DOM click here.
   el.style.touchAction = 'none';
-  /** Set by wireHtmlMarkerMapGestures after a drag/pinch so click is ignored. */
-  const suppressClickRef = { current: false };
-  el.addEventListener('click', (e) => {
-    if (suppressClickRef.current) {
-      e.preventDefault();
-      e.stopPropagation();
-      suppressClickRef.current = false;
-      return;
-    }
-    e.stopPropagation();
-    onTap();
-  });
+  el.style.pointerEvents = 'none';
   const root = createRoot(el);
   root.render(<MapMarker user={user} size={size} />);
-  return { element: el, root, suppressClickRef };
+  return { element: el, root };
 }

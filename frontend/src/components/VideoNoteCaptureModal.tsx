@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { baseMediaMime, pickVideoRecorderMime } from '../lib/mediaMime';
+import { createVideoMediaRecorder, videoFileFromRecorderBlob } from '../lib/mediaMime';
 
 interface VideoNoteCaptureModalProps {
   open: boolean;
@@ -170,24 +170,14 @@ export function VideoNoteCaptureModal({
     const stream = streamRef.current;
     if (!stream || recording || pendingBlob) return;
 
-    // Prefer MP4 (Safari / iPhone) then WebM (Chrome desktop + Android).
-    // Recorder may still report codecs=… on mimeType — we strip those when
-    // building the upload Blob so multipart Content-Type stays busboy-safe.
-    const mime = pickVideoRecorderMime();
+    // Apple → MP4; Android/Chrome → WebM. Sniff bytes on stop so the upload
+    // label matches the real container (fixes iPhone "media not supported").
     let mr: MediaRecorder;
     try {
-      // Cap bitrate so Android→iPhone open is not a multi‑MB wait (~12s report).
-      const recorderOpts: MediaRecorderOptions = mime
-        ? { mimeType: mime, videoBitsPerSecond: 1_200_000 }
-        : { videoBitsPerSecond: 1_200_000 };
-      mr = new MediaRecorder(stream, recorderOpts);
+      mr = createVideoMediaRecorder(stream);
     } catch {
-      try {
-        mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
-      } catch {
-        onErrorRef.current('Video recording is not supported on this device.');
-        return;
-      }
+      onErrorRef.current('Video recording is not supported on this device.');
+      return;
     }
 
     recorderRef.current = mr;
@@ -198,25 +188,26 @@ export function VideoNoteCaptureModal({
     mr.onstop = () => {
       clearTimers();
       const duration = Date.now() - startRef.current;
-      // Base MIME only — `video/webm;codecs=vp8,opus` becomes text/plain in multer.
-      const uploadType =
-        baseMediaMime(mr.mimeType) ||
-        baseMediaMime(mime) ||
-        'video/webm';
-      const blob = new Blob(chunksRef.current, { type: uploadType });
+      const raw = new Blob(chunksRef.current, { type: mr.mimeType || '' });
       setRecording(false);
       setSeconds(0);
       recorderRef.current = null;
-      if (duration < 600 || blob.size < 2000) {
+      if (duration < 600 || raw.size < 2000) {
         onErrorRef.current('Video was too short — hold a moment longer.');
         return;
       }
-      setPendingBlob(blob);
-      setPendingDuration(duration);
-      setPendingUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return URL.createObjectURL(blob);
-      });
+      void videoFileFromRecorderBlob(raw)
+        .then((file) => {
+          setPendingBlob(file);
+          setPendingDuration(duration);
+          setPendingUrl((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return URL.createObjectURL(file);
+          });
+        })
+        .catch(() => {
+          onErrorRef.current('Could not prepare the video. Try recording again.');
+        });
     };
 
     startRef.current = Date.now();
@@ -287,6 +278,7 @@ export function VideoNoteCaptureModal({
               src={pendingUrl}
               controls
               playsInline
+              {...{ 'webkit-playsinline': 'true' }}
               className="absolute inset-0 h-full w-full object-cover"
             />
           ) : (

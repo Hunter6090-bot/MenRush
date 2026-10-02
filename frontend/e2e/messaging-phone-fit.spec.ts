@@ -1,8 +1,10 @@
 /**
- * P0 Messaging phone-fit: 1:1 chat must not require pinch-to-shrink.
+ * P0 Messaging phone-fit: 1:1 chat must open at 1× (no pinch-to-fit).
  * Document + messaging root scrollWidth ≤ clientWidth on common phone widths.
  *
- * Builds on phone-fit-no-horizontal-overflow (#191) — Messaging leftovers only.
+ * Builds on #191 overflow lock + #203 Messaging containment.
+ * Also guards iOS auto-zoom: composer input computed font-size ≥ 16px, and
+ * visualViewport.scale stays ~1 after focusing the composer (no text-sm regress).
  * Does not set user-scalable=no.
  */
 import { expect, test, request as apiRequest, type BrowserContext, type Page } from '@playwright/test';
@@ -167,19 +169,32 @@ for (const vp of PHONE_VIEWPORTS) {
       await expect(page.getByTestId('chat-composer')).toBeVisible();
       await expect(page.getByText(long, { exact: true }).first()).toBeVisible({ timeout: 15_000 });
 
-      // Type so Send replaces Mic — composer width under pressure.
-      await page.getByTestId('chat-text-input').fill('fit check');
+      const textInput = page.getByTestId('chat-text-input');
+
+      // iOS Safari auto-zooms focused <input> when computed font-size < 16px.
+      const inputFontPx = await textInput.evaluate((el) => {
+        const px = parseFloat(getComputedStyle(el).fontSize);
+        return Number.isFinite(px) ? px : 0;
+      });
+      expect(
+        inputFontPx,
+        `${vp.name}: chat-text-input font-size must be ≥16px (got ${inputFontPx})`,
+      ).toBeGreaterThanOrEqual(16);
+
+      // Focus + type so Send replaces Mic — composer width under pressure + scale lock.
+      await textInput.click();
+      await textInput.fill('fit check');
       await expect(page.getByTestId('chat-send-button')).toBeVisible();
 
       const metrics = await assertNoHorizontalOverflow(page, `${vp.name} open thread`);
-      expect(metrics.scale).toBeCloseTo(1, 1);
+      expect(metrics.scale, `${vp.name}: visualViewport.scale after composer focus`).toBeCloseTo(1, 1);
 
       // Guard against overflow-x:clip hiding a still-clipped composer/header.
       const bounds = await page.evaluate(() => {
         const vw = window.innerWidth;
         const send = document.querySelector('[data-testid="chat-send-button"]');
         const composer = document.querySelector('[data-testid="chat-composer"]');
-        const root = document.querySelector('[data-testid="messaging-root"]');
+        const root = document.querySelector('[data-testid="messaging-root"]') as HTMLElement | null;
         const rect = (el: Element | null) => {
           if (!el) return null;
           const r = el.getBoundingClientRect();
@@ -194,11 +209,18 @@ for (const vp of PHONE_VIEWPORTS) {
           send: rect(send),
           composer: rect(composer),
           root: rect(root),
+          touchAction: root ? getComputedStyle(root).touchAction : '',
+          scaleAfterFocus: window.visualViewport?.scale ?? 1,
         };
       });
       expect(bounds.send?.overflows, `${vp.name}: Send clipped`).toBeFalsy();
       expect(bounds.composer?.overflows, `${vp.name}: composer clipped`).toBeFalsy();
       expect(bounds.root?.overflows, `${vp.name}: messaging-root clipped`).toBeFalsy();
+      expect(
+        bounds.touchAction,
+        `${vp.name}: messaging-root should use touch-action:manipulation (no double-tap zoom trap)`,
+      ).toMatch(/manipulation/);
+      expect(bounds.scaleAfterFocus).toBeCloseTo(1, 1);
 
       await ctx.close();
     });

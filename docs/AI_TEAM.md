@@ -361,8 +361,8 @@ Do not:
 
 Current areas of work may include:
 
-- CCBill payment integration
-- CCBill documentation and provider contact
+- Payment processor integration (Verotel active merchant under review; Segpay later)
+- Payment provider documentation and contact
 - webhook verification
 - idempotency
 - payment audit logging

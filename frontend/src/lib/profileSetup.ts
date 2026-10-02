@@ -136,9 +136,9 @@ export function activationBlockers(profile: ProfileSetupSnapshot): ActivationBlo
   return blockers;
 }
 
-/** Shared generic avatar — soft upgrade, not a hard Discover gate. */
-export function needsRealPhotoUpgrade(profile: ProfileSetupSnapshot): boolean {
-  return isGenericAvatarUrl(profile.photo_url);
+/** Shared generic avatar — soft upgrade nag retired (kept no-op for older imports). */
+export function needsRealPhotoUpgrade(_profile: ProfileSetupSnapshot): boolean {
+  return false;
 }
 
 export function profileSetupProgress(profile: ProfileSetupSnapshot): number {

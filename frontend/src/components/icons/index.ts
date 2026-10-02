@@ -23,3 +23,4 @@ export { IconSettings } from "./IconSettings";
 export { IconMapExpand } from "./IconMapExpand";
 export { IconMore } from "./IconMore";
 export { IconSignOut } from "./IconSignOut";
+export { IconUnmatch } from "./IconUnmatch";

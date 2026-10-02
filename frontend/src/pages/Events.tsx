@@ -147,7 +147,7 @@ export const Events = () => {
                     Cruise
                   </Link>
                 </div>
-                <p className="mt-4 text-[11px] text-[var(--cream-muted)]">Meet in public · Consent first</p>
+                <p className="mt-4 text-[11px] text-[var(--cream-muted)]">Consent first.</p>
               </div>
             ) : loading ? (
               <div className="grid gap-3.5 sm:grid-cols-2">
@@ -194,13 +194,30 @@ export const Events = () => {
                   >
                     <div className="h-[120px] bg-[var(--bg-elevated)]" />
                     <div className="flex flex-1 flex-col gap-1.5 p-3.5">
-                      <p className="text-xs font-extrabold tracking-wide text-[#E0A14A]">{ev.cat}</p>
+                      <div className="flex flex-wrap items-center justify-between gap-1">
+                        <p className="text-xs font-extrabold tracking-wide text-[#E0A14A]">{ev.cat}</p>
+                        {ev.is_venue_managed ? (
+                          <div className="flex flex-wrap items-center gap-1">
+                            <span className="rounded bg-[rgba(196,131,42,0.15)] px-1.5 py-0.5 text-[10px] font-extrabold text-[#E0A14A]">
+                              Venue claimed
+                            </span>
+                            <span className="rounded border border-[var(--border-default)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--cream-muted)]">
+                              Calendar managed by venue
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
                       <h2 className="text-base font-bold text-[var(--cream)]">{ev.name}</h2>
                       <p className="text-[13px] text-[var(--cream-muted)]">
                         {ev.venue_name || 'Venue TBC'} · {ev.member_count} in
                       </p>
                       {ev.description ? (
                         <p className="text-[13px] leading-relaxed text-[var(--cream-muted)]">{ev.description}</p>
+                      ) : null}
+                      {ev.is_venue_managed ? (
+                        <p className="text-[11px] text-[var(--cream-muted)] italic">
+                          Venue event submission (UGC)
+                        </p>
                       ) : null}
                       <div className="mt-auto flex flex-wrap gap-2 pt-2">
                         {ticketUrl ? (
