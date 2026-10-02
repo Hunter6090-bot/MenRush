@@ -42,12 +42,25 @@ async function main() {
       calls.length = 0;
       // 0: adult_assurance lookup (miss) → 1: veriff_sessions → 2: update users
       responses = [[], [{ user_id: 'user-1', status: 'submitted' }], [{ id: 'user-1' }]];
-      assert.deepEqual(await veriffService.applyDecision({ verification: { id: 'session-1', status: decision } }),
+      assert.deepEqual(await veriffService.applyDecision({ verification: { id: 'session-1', status: decision, code: decision === 'approved' ? 9001 : 9102 } }),
         { handled: true, userId: 'user-1', decision });
       assert.equal(calls[2].params[2], expectedBadge, `${decision} badge`);
       assert.equal(calls[2].params[3], expectedStatus, `${decision} status`);
     }
     assert.equal(referralCount, 1, 'only approved unlocks referrals');
+    calls.length=0; responses=[[],[{user_id:'user-1',status:'approved'}],[{id:'user-1'}]];
+    assert.equal((await veriffService.applyDecision({verification:{id:'session-1',status:'approved',code:9001}})).handled,true);
+    assert.equal(calls[2].params[2],true,'fresh approved replay repairs a missing badge');
+    for(const code of [undefined,9102,'9001']) {
+      calls.length=0; responses=[[],[{user_id:'user-1',status:'approved'}]];
+      assert.equal((await veriffService.applyDecision({verification:{id:'session-1',status:'approved',code}})).handled,false);
+      assert.equal(calls.length,2,'invalid approval never writes flags');
+    }
+    for(const status of ['declined','expired','abandoned']) {
+      responses=[[],[{user_id:'user-1',status}]];
+      assert.equal((await veriffService.applyDecision({verification:{id:'session-1',status:'approved',code:9001}})).handled,false);
+    }
+
     calls.length = 0; responses = [];
     assert.deepEqual(await veriffService.applyDecision({ verification: { id: 'session-1', status: 'done' } }), { handled: false });
     assert.equal(calls.length, 0);
@@ -66,6 +79,7 @@ async function main() {
       verification: {
         id: 'session-1',
         status: 'approved',
+        code: 9001,
         person: { dateOfBirth: '2015-01-15' },
       },
     });
@@ -96,7 +110,7 @@ async function main() {
       __setVeriffDepsForTests({ fetch: async (_url, options) => {
         const signed = crypto.createHmac('sha256', process.env.VERIFF_SHARED_SECRET!).update('session-1').digest('hex');
         assert.equal((options?.headers as Record<string,string>)['X-HMAC-SIGNATURE'], signed);
-        return new Response(JSON.stringify({ verification: { id: 'session-1', status: decision } }), {status: 200});
+        return new Response(JSON.stringify({ verification: { id: 'session-1', status: decision, code: decision === 'approved' ? 9001 : 9102 } }), {status: 200});
       }, query: db.query });
       const recovered = await veriffService.repollStaleSessions({ delayMs: 0 });
       assert.equal(recovered.applied, 1);

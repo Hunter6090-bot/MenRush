@@ -278,15 +278,10 @@ export const veriffService = {
       `SELECT vs.id, vs.user_id, vs.status, vs.created_at
          FROM veriff_sessions vs
          JOIN users u ON u.id = vs.user_id
-        WHERE vs.status IN ('created', 'started', 'submitted', 'review', 'resubmission_requested')
+        WHERE vs.status IN ('created', 'started', 'submitted', 'review', 'resubmission_requested', 'approved')
           AND u.verification_session_id = vs.id::text
           AND vs.created_at <= NOW() - ($1::double precision * INTERVAL '1 hour')
-          AND COALESCE(u.is_verified, FALSE) = FALSE
-          AND (
-            u.verification_provider IS NULL
-            OR u.verification_provider = 'veriff'
-            OR u.verification_status = 'pending'
-          )
+          AND NOT COALESCE(u.is_verified AND u.verification_provider = 'veriff' AND u.verification_status = 'verified', FALSE)
           AND ($2::uuid IS NULL OR vs.id = $2::uuid)
           AND ($3::uuid IS NULL OR vs.user_id = $3::uuid)
         ORDER BY vs.created_at ASC
@@ -316,7 +311,7 @@ export const veriffService = {
 
       try {
         const fetched = await veriffService.fetchSessionDecision(sessionId);
-        if (!fetched.ok || !fetched.verification) {
+        if (!fetched.ok || !fetched.verification || fetched.verification.id !== sessionId) {
           skipped += 1;
           results.push({
             sessionId,
@@ -341,7 +336,7 @@ export const veriffService = {
               `[veriff] re-poll skip session=${sessionId} user=${userId} reason=non_final status=${status || 'empty'}`,
             );
           } else {
-            // Ensure vendorData is set so applyDecision can resolve the user if needed.
+            // Only the exact current, locally linked session may repair a badge.
             const payload = {
               verification: {
                 ...fetched.verification,
@@ -440,7 +435,10 @@ export const veriffService = {
     const row = session.rows[0];
     // Never attach unknown provider sessions by vendorData or overwrite a newer attempt.
     if (!row) return { handled: false };
-    if (row.status === 'approved') return { handled: true, userId: row.user_id, decision: 'approved' };
+    // A fresh authenticated approval may repair a missing badge on an already
+    // approved session. Stored status alone is not sufficient to award anything.
+    if (row.status === 'approved' && decision !== 'approved') return { handled: true, userId: row.user_id, decision: 'approved' };
+    if (decision === 'approved' && (verification?.code !== 9001 || ['declined', 'expired', 'abandoned'].includes(row.status))) return { handled: false };
 
     const { isAdultFromVeriffDecision } = await import('../lib/veriff-age');
     const ageCheck = decision === 'approved' ? isAdultFromVeriffDecision(payload) : null;
@@ -479,7 +477,7 @@ export const veriffService = {
            decided_at = CASE WHEN $2 IN ('approved', 'declined', 'expired', 'abandoned', 'review')
                                   OR $7::boolean
                              THEN NOW() ELSE decided_at END
-         WHERE id = $1 AND status <> 'approved' RETURNING id, user_id
+         WHERE id = $1 AND (status <> 'approved' OR $2 = 'approved' OR $7::boolean) RETURNING id, user_id
        )
        UPDATE users u SET is_verified = $3, verification_status = $4,
               verification_provider = 'veriff',
@@ -500,7 +498,7 @@ export const veriffService = {
               END
          FROM updated_session s
         WHERE u.id = s.user_id AND u.verification_session_id = s.id::text
-          AND NOT COALESCE(u.is_verified AND u.verification_provider = 'veriff', FALSE)
+          AND ($7::boolean OR NOT COALESCE(u.is_verified AND u.verification_provider = 'veriff' AND u.verification_status = 'verified', FALSE))
         RETURNING u.id`,
       [
         sessionId,

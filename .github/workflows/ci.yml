@@ -117,3 +117,4 @@ jobs:
           pg_ctl -D /tmp/menrush-age-pg-ci/data -l /tmp/menrush-age-pg-ci/server.log -o "-k $AGE_TEST_PG_SOCKET -p 55437 -h ''" start
           trap 'pg_ctl -D /tmp/menrush-age-pg-ci/data stop -m fast' EXIT
           npm --prefix backend run test:mandatory-age
+          npm --prefix backend run test:veriff-badges
