@@ -33,15 +33,15 @@ export function MapLiveStatus({
         aria-hidden
       />
       <div className="min-w-0">
-        <p className="text-[13px] font-bold leading-tight text-[#1A1208]">
+        <p className="text-[15px] font-bold leading-tight text-[#1A1208]">
           Men nearby
         </p>
         {liveCount > 0 ? (
-          <p className="text-[11px] font-semibold text-[#3D7A2E]" data-testid="map-live-line">
+          <p className="text-[13px] font-semibold text-[#3D7A2E]" data-testid="map-live-line">
             Live · {liveCount}
           </p>
         ) : (
-          <p className="text-[11px] font-semibold text-[#6B5B45]" data-testid="map-live-line">
+          <p className="text-[13px] font-semibold text-[#6B5B45]" data-testid="map-live-line">
             None live now
             {nearbyCount === 0 && radiusKm < MAX_RADIUS_KM - 0.5 ? (
               <button

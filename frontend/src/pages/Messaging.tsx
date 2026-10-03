@@ -1515,7 +1515,7 @@ const LocationBubble: React.FC<LocationBubbleProps> = ({ msg, isMine, showTail, 
       };
 
   return (
-    <div className="relative max-w-full px-4 py-3 text-sm leading-relaxed break-words [overflow-wrap:anywhere]" style={bubbleStyle}>
+    <div className="relative max-w-full px-4 py-3 text-base leading-relaxed break-words [overflow-wrap:anywhere]" style={bubbleStyle}>
       <div className="flex min-w-0 items-start gap-2">
         <LocationPinIcon className="mt-0.5 h-5 w-5 shrink-0" />
         <div className="min-w-0">
@@ -2911,10 +2911,10 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
             >
               <BubbleIcon className="w-8 h-8" style={{ color: 'var(--copper)', opacity: 0.5 }} />
             </div>
-            <p className="font-medium text-sm text-[var(--cream-muted)]">
+            <p className="font-medium text-base text-[var(--cream-muted)]">
               No messages yet
             </p>
-            <p className="text-xs mt-1 mb-4 text-center text-[var(--cream-muted)]">
+            <p className="text-sm mt-1 mb-4 text-center text-[var(--cream-muted)]">
               Be direct. Consent first.
             </p>
             <div className="flex flex-col gap-2 w-full max-w-sm">
@@ -2924,7 +2924,7 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                   type="button"
                   disabled={sending}
                   onClick={() => void onSendIcebreaker(line)}
-                  className="rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-4 py-3 text-left text-[13px] font-medium text-[var(--cream)] transition-colors hover:bg-[rgba(196,131,42,0.2)] disabled:opacity-50"
+                  className="rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-4 py-3 text-left text-base font-medium text-[var(--cream)] transition-colors hover:bg-[rgba(196,131,42,0.2)] disabled:opacity-50"
                 >
                   {line}
                 </button>
@@ -2948,7 +2948,7 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                   <div className="flex items-center gap-3 my-5">
                     <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
                     <span
-                      className="text-[10px] font-semibold px-3 py-1 rounded-full"
+                      className="text-xs font-semibold px-3 py-1 rounded-full"
                       style={{
                         background: 'var(--bg-card)',
                         border: '1px solid var(--border-default)',
@@ -2988,7 +2988,7 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                 <div className="flex items-center gap-3 my-5">
                   <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
                   <span
-                    className="text-[10px] font-semibold px-3 py-1 rounded-full"
+                    className="text-xs font-semibold px-3 py-1 rounded-full"
                     style={{
                       background: 'var(--bg-card)',
                       border: '1px solid var(--border-default)',
@@ -3079,7 +3079,7 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                     />
                   ) : (
                     <div
-                      className="relative max-w-full break-words px-4 py-2.5 text-sm leading-relaxed [overflow-wrap:anywhere]"
+                      className="relative max-w-full break-words px-4 py-2.5 text-base leading-relaxed [overflow-wrap:anywhere]"
                       style={
                         isMine
                           ? {
@@ -3106,7 +3106,7 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                   {/* Timestamp */}
                   {showTail && (
                     <span
-                      className="text-[10px] mt-1 px-1"
+                      className="text-xs mt-1 px-1"
                       style={{ color: '#6B5035' }}
                     >
                       {formatTime(msg.created_at)}

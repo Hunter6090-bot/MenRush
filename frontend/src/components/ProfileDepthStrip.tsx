@@ -64,19 +64,19 @@ export function ProfileDepthStrip() {
     >
       <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-extrabold text-[var(--cream)]">
+          <p className="text-base font-extrabold text-[var(--cream)]">
             {primary === 'avatar'
-              ? 'You need a photo to get matched'
-              : 'Finish your profile — more views, more matches'}
+              ? 'Add a photo'
+              : 'Finish your profile'}
           </p>
-          <p className="text-[11px] text-[var(--cream-muted)]">
-            {detail}. Be direct. Consent.
+          <p className="text-sm text-[var(--cream-muted)]">
+            {detail}. Be direct. Consent first.
           </p>
         </div>
         <Link
           to="/profile/setup"
           data-testid="profile-depth-finish"
-          className="shrink-0 rounded-full bg-[#C4832A] px-4 py-2 text-[11px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+          className="shrink-0 rounded-full bg-[#C4832A] px-4 py-2 text-sm font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
         >
           Finish profile
         </Link>

@@ -228,7 +228,7 @@ export function ProfileDrawer({
           onPointerCancel={endDrag}
         >
           <span className="h-1.5 w-11 rounded-full bg-[var(--border-strong)]" />
-          <span className="mt-1 text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--cream-muted)]">
+          <span className="mt-1 text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--cream-muted)]">
             Drag to resize
           </span>
         </div>

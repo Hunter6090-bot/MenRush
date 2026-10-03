@@ -72,7 +72,7 @@ export function CruisingSpotMapThumbnail({
                 <circle cx="12" cy="10" r="3" />
               </svg>
             </span>
-            <span className="mt-1 font-mono text-[8px] font-bold tracking-tight text-[var(--cream-muted)]">
+            <span className="mt-1 font-mono text-[11px] font-bold tracking-tight text-[var(--cream-muted)]">
               {latitude.toFixed(2)}, {longitude.toFixed(2)}
             </span>
           </div>

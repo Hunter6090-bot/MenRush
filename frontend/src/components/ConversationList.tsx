@@ -124,10 +124,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             <h2 className="text-xl font-bold text-[var(--cream)]">Messages</h2>
           ) : (
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)]">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)]">
                 Inbox
               </p>
-              <p className="text-sm font-semibold text-[var(--cream)]">Direct messages</p>
+              <p className="text-base font-semibold text-[var(--cream)]">Direct messages</p>
             </div>
           )}
           {FEATURES.chatRooms && (
@@ -201,8 +201,8 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               <ChatIcon className="h-8 w-8 text-[#C4832A]/60" />
             </div>
             <p className="mb-1 text-[15px] font-extrabold text-[var(--cream)]">No conversations yet</p>
-            <p className="mx-auto mb-5 max-w-xs text-sm leading-relaxed text-nn-muted">
-              Match someone nearby, then open chat. Be direct. Consent first.
+            <p className="mx-auto mb-5 max-w-xs text-base leading-relaxed text-nn-muted">
+              Open Nearby. Be direct. Consent first.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-2">
               <button

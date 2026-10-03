@@ -125,10 +125,10 @@ export const ConversationItem = memo(function ConversationItem({
         >
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2">
-              <p className="truncate text-sm font-bold text-nn-text">{name}</p>
+              <p className="truncate text-base font-bold text-nn-text">{name}</p>
               <div className="flex shrink-0 items-center gap-1.5">
                 {lastMessageTime ? (
-                  <span className="text-[11px] text-nn-faint">{formatRelative(lastMessageTime)}</span>
+                  <span className="text-xs text-nn-faint">{formatRelative(lastMessageTime)}</span>
                 ) : null}
                 {unreadCount ? (
                   <span className="h-[9px] w-[9px] rounded-full bg-nn-copper" aria-label="Unread" />
@@ -136,7 +136,7 @@ export const ConversationItem = memo(function ConversationItem({
               </div>
             </div>
             <p
-              className={`mt-0.5 truncate text-[13px] flex items-center gap-1 ${
+              className={`mt-0.5 truncate text-[15px] flex items-center gap-1 ${
                 isMissedCall
                   ? 'font-semibold text-nn-danger-light'
                   : unreadCount

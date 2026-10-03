@@ -144,11 +144,11 @@ function PersonGridCard({
                 <span
                   className={`h-1.5 w-1.5 shrink-0 rounded-full md:h-2 md:w-2 ${person.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
                 />
-                <span className="truncate text-[11px] font-bold leading-tight text-[#FFF6E6] md:text-[12px] lg:text-[13px]">
+                <span className="truncate text-[13px] font-bold leading-tight text-[#FFF6E6] md:text-sm lg:text-[15px]">
                   {person.name} {person.age}
                 </span>
               </div>
-              <p className="mt-0.5 truncate text-[9px] font-semibold text-[var(--cream)] md:text-xs">{subtitle}</p>
+              <p className="mt-0.5 truncate text-xs font-semibold text-[var(--cream)] md:text-sm">{subtitle}</p>
             </div>
           </div>
         </ProfilePhotoLink>
@@ -162,7 +162,7 @@ function PersonGridCard({
             type="button"
             onClick={onMessage}
             data-testid={`match-message-${person.id}`}
-            className="w-full rounded-lg border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] py-1.5 text-[10px] font-extrabold uppercase tracking-wide text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.28)] md:rounded-xl md:py-2 md:text-[11px]"
+            className="w-full rounded-lg border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] py-1.5 text-xs font-extrabold uppercase tracking-wide text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.28)] md:rounded-xl md:py-2 md:text-sm"
           >
             Message
           </button>
