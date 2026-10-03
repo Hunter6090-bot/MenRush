@@ -1,6 +1,6 @@
 import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
 
-const BUBBLE_AVATAR_PX = 28;
+const BUBBLE_AVATAR_PX = 32;
 
 /**
  * 1:1 chat bubble face — empty/missing/generic → faded cutout (never gold stub).
@@ -18,7 +18,7 @@ export function ChatBubbleFace({
   if (isNearbyPlaceholderFace(photoUrl)) {
     return (
       <span
-        className="inline-flex h-7 w-7 shrink-0 overflow-hidden rounded-full"
+        className="inline-flex h-8 w-8 shrink-0 overflow-hidden rounded-full"
         data-testid={`chat-bubble-avatar-empty-${userId}`}
       >
         <FadedBrandFace
@@ -32,7 +32,7 @@ export function ChatBubbleFace({
 
   return (
     <div
-      className="h-7 w-7 overflow-hidden rounded-full"
+      className="h-8 w-8 overflow-hidden rounded-full"
       style={{ border: '1px solid var(--border-default)', flexShrink: 0 }}
       data-testid={`chat-bubble-avatar-photo-${userId}`}
     >

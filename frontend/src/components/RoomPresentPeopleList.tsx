@@ -28,17 +28,17 @@ export const RoomPresentPeopleList: React.FC<Props> = ({
       aria-label="People in this room"
     >
       <div className="flex-shrink-0 border-b border-[var(--border-default)] px-3 py-2">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--cream-muted)]">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--cream-muted)]">
           In room now
         </p>
-        <p className="text-[11px] text-[var(--cream-muted)] opacity-80">
+        <p className="text-sm text-[var(--cream-muted)] opacity-80">
           {people.length === 0 ? 'Just you' : `${people.length} here`}
         </p>
       </div>
       <ul className="flex-1 overflow-y-auto px-1.5 py-2 space-y-0.5" style={{ scrollbarWidth: 'thin' }}>
         {people.length === 0 ? (
-          <li className="px-2 py-3 text-xs text-[var(--cream-muted)]">
-            Nobody else here yet. When someone joins, tap to open a private 1:1 inside this room.
+          <li className="px-2 py-3 text-sm text-[var(--cream-muted)]">
+            Nobody else yet. Tap a name for 1:1.
           </li>
         ) : (
           people.map((person) => {
@@ -71,10 +71,10 @@ export const RoomPresentPeopleList: React.FC<Props> = ({
                     )}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-[var(--cream)]">
+                    <span className="block truncate text-base font-medium text-[var(--cream)]">
                       {person.name}
                     </span>
-                    <span className="block text-[10px] text-[var(--cream-muted)]">
+                    <span className="block text-xs text-[var(--cream-muted)]">
                       Tap for 1:1
                     </span>
                   </span>

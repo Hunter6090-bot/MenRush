@@ -200,7 +200,7 @@ function MapFloatingChrome({
             className={`${mapChromeBtnClass} ${hotSpotsLayerOn ? '' : 'opacity-45'} gap-1 px-2.5`}
           >
             <IconHotSpots size={18} />
-            <span className="hidden text-[10px] font-extrabold tracking-wide sm:inline">
+            <span className="hidden text-xs font-extrabold tracking-wide sm:inline">
               {HOT_SPOTS_CHIP_LABEL}
             </span>
           </button>
@@ -252,7 +252,7 @@ function MapFloatingChrome({
             role="status"
           >
             <p
-              className="text-center text-[9px] font-semibold leading-snug tracking-wide"
+              className="text-center text-xs font-semibold leading-snug tracking-wide"
               style={{ color: 'rgba(240,224,192,0.82)' }}
               data-testid="hotspots-map-helper-copy"
             >
@@ -2127,12 +2127,11 @@ export const Discover = () => {
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-extrabold text-[var(--cream)]">
-                Men nearby — tap Match on a card
+              <p className="text-base font-extrabold text-[var(--cream)]">
+                Tap Match on a card
               </p>
-              <p className="mt-1 text-[12px] text-[var(--cream-muted)]">
-                No swiping. Tap Match to show interest. Chat and calling unlock when it&apos;s mutual · consent
-               .
+              <p className="mt-1 text-sm text-[var(--cream-muted)]">
+                No swipe. Mutual like unlocks chat and calls. Consent first.
               </p>
             </div>
             <button
@@ -2352,7 +2351,7 @@ export const Discover = () => {
           <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
           {!needsLocationGate && !tokenMissing ? (
             <p
-              className="pointer-events-none absolute top-[4.75rem] left-1/2 z-[4] max-w-[min(70%,240px)] -translate-x-1/2 rounded-full px-2.5 py-0.5 text-center text-[9px] font-medium leading-snug"
+              className="pointer-events-none absolute top-[4.75rem] left-1/2 z-[4] max-w-[min(78%,280px)] -translate-x-1/2 rounded-full px-2.5 py-1 text-center text-xs font-medium leading-snug"
               style={{
                 background: 'rgba(13,10,6,0.55)',
                 color: 'rgba(240,224,192,0.65)',
@@ -2374,7 +2373,7 @@ export const Discover = () => {
                 data-live-count={liveCount}
                 className="mb-3 inline-flex min-h-[36px] items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
               >
-                <p className="text-[11px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
+                <p className="text-[13px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
                   {loading && nearbyCount === 0 ? (
                     <span className="text-[var(--cream-muted)]">Scanning…</span>
                   ) : nearbyCount === 0 ? (
@@ -2510,7 +2509,7 @@ export const Discover = () => {
 
           {mapPanelMode !== 'hidden' && !needsLocationGate && !tokenMissing ? (
             <p
-              className="pointer-events-none absolute left-1/2 z-[4] max-w-[min(70%,220px)] -translate-x-1/2 rounded-full px-2.5 py-0.5 text-center text-[9px] font-medium leading-snug"
+              className="pointer-events-none absolute left-1/2 z-[4] max-w-[min(78%,260px)] -translate-x-1/2 rounded-full px-2.5 py-1 text-center text-xs font-medium leading-snug"
               style={{
                 top: hotSpotsLayerOn ? '4.75rem' : '3.25rem',
                 background: 'rgba(13,10,6,0.55)',
@@ -2567,7 +2566,7 @@ export const Discover = () => {
                 data-live-count={liveCount}
                 className="inline-flex min-h-[36px] max-w-full items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
               >
-                <p className="text-[11px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
+                <p className="text-[13px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
                   {loading && nearbyCount === 0 ? (
                     <span className="text-[var(--cream-muted)]">Scanning…</span>
                   ) : nearbyCount === 0 ? (

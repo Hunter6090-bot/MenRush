@@ -111,7 +111,7 @@ export function LocationPresenceStrip() {
         role="status"
         data-testid="location-presence-success"
       >
-        <p className="mx-auto max-w-3xl text-[13px] font-semibold text-[#8FC773]">{success}</p>
+        <p className="mx-auto max-w-3xl text-sm font-semibold text-[#8FC773]">{success}</p>
       </div>
     );
   }
@@ -126,12 +126,12 @@ export function LocationPresenceStrip() {
     >
       <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-extrabold text-[var(--cream)]">Turn on location for Nearby</p>
-          <p className="text-[11px] leading-relaxed text-[var(--cream-muted)]">
+          <p className="text-base font-extrabold text-[var(--cream)]">Turn on location for Nearby</p>
+          <p className="text-sm leading-snug text-[var(--cream-muted)]">
             {LOCATION_PRIVACY_LINE}
           </p>
           {notice ? (
-            <p className="mt-1 text-[11px] font-semibold text-[#E0A14A]" data-testid="location-strip-error">
+            <p className="mt-1 text-sm font-semibold text-[#E0A14A]" data-testid="location-strip-error">
               {notice}
             </p>
           ) : null}
@@ -140,7 +140,7 @@ export function LocationPresenceStrip() {
           type="button"
           disabled={busy}
           onClick={() => void enableLocation()}
-          className="min-h-[44px] shrink-0 rounded-full bg-[#C4832A] px-4 py-2 text-[11px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] disabled:opacity-60"
+          className="min-h-[44px] shrink-0 rounded-full bg-[#C4832A] px-4 py-2 text-sm font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] disabled:opacity-60"
         >
           {busy ? 'Locating…' : 'Enable location'}
         </button>
