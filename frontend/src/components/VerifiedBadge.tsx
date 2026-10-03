@@ -18,8 +18,8 @@ interface VerifiedBadgeProps {
 export function VerifiedBadge({ size = 'sm', className = '' }: VerifiedBadgeProps) {
   const [open, setOpen] = useState(false);
   const descriptionId = useId();
-  const box = size === 'lg' ? 'h-8 w-8' : 'h-7 w-7';
-  const icon = size === 'lg' ? 16 : 14;
+  const box = size === 'lg' ? 'h-9 w-9' : 'h-8 w-8';
+  const icon = size === 'lg' ? 18 : 16;
   return (
     <span className={`inline-flex shrink-0 ${className}`}>
       <button

@@ -30,7 +30,7 @@ export function MapDiscretionSlider({
       data-testid="map-discretion-slider"
       title="How far others see your pin from your real spot"
     >
-      <span className="shrink-0 text-[9px] font-extrabold uppercase tracking-[0.12em] text-[#3D2B0E]/90">
+      <span className="shrink-0 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#3D2B0E]/90">
         Discretion
       </span>
       <input
@@ -49,7 +49,7 @@ export function MapDiscretionSlider({
         data-testid="map-discretion-range"
       />
       <span
-        className="shrink-0 rounded-full border border-[rgba(196,131,42,0.45)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] px-2 py-1 text-[10px] font-extrabold tabular-nums tracking-wide text-[#3D2B0E]"
+        className="shrink-0 rounded-full border border-[rgba(196,131,42,0.45)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] px-2 py-1 text-xs font-extrabold tabular-nums tracking-wide text-[#3D2B0E]"
         data-testid="map-discretion-pill"
       >
         {label}

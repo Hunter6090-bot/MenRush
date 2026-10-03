@@ -45,7 +45,7 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
         ? 'You are invisible on the map'
         : primary === 'location'
           ? 'We need your location. Others only see distance'
-          : 'Complete your profile. More views, more matches';
+          : 'Finish your profile';
 
   const showLocationCta =
     (locationOnly || primary === 'location' || (needsLocation && fieldsComplete)) &&
@@ -62,13 +62,13 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-extrabold text-[var(--cream)]">{headline}</p>
-          <p className="mt-1 text-[12px] text-[var(--cream-muted)]">
+          <p className="text-base font-extrabold text-[var(--cream)]">{headline}</p>
+          <p className="mt-1 text-sm text-[var(--cream-muted)]">
             {locationOnly || (needsLocation && fieldsComplete)
-              ? 'Your profile is ready. We need GPS for Nearby — others only see approximate distance, not your exact public pin.'
+              ? 'Your profile is ready. GPS for Nearby — others see distance, not your pin.'
               : blockers.length > 0
                 ? blockers.map((b) => BLOCKER_COPY[b]).join(' · ')
-                : 'We need GPS for Nearby. You are not broadcasting an exact public pin — only approximate distance.'}
+                : 'GPS for Nearby. Distance only — no public pin.'}
           </p>
           <div className="mt-2 h-1.5 w-full max-w-[200px] overflow-hidden rounded-full bg-[rgba(13,10,6,0.5)]">
             <div
@@ -83,7 +83,7 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
               type="button"
               onClick={onEnableLocation}
               data-testid="activation-enable-location"
-              className="rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+              className="rounded-full bg-[#C4832A] px-4 py-2 text-sm font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
             >
               Allow location
             </button>
@@ -91,7 +91,7 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
             <Link
               to="/profile/setup"
               data-testid="activation-finish-profile"
-              className="rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+              className="rounded-full bg-[#C4832A] px-4 py-2 text-sm font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
             >
               Finish profile
             </Link>
@@ -100,7 +100,7 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
             <Link
               to="/settings"
               data-testid="activation-location-settings"
-              className="rounded-full border border-[rgba(196,131,42,0.5)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
+              className="rounded-full border border-[rgba(196,131,42,0.5)] px-4 py-2 text-sm font-extrabold uppercase tracking-wide text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.12)]"
             >
               Settings
             </Link>

@@ -440,13 +440,20 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       });
     };
 
+    const onOccupancy = (data: { room_id?: string; count?: number }) => {
+      if (!data?.room_id || data.room_id !== roomId || typeof data.count !== 'number') return;
+      setRoom((prev) => (prev ? { ...prev, member_count: data.count! } : prev));
+    };
+
     socket.on('room:message', onMessage);
     socket.on('room:presence', onPresence);
     socket.on('room:presence-sync', onPresenceSync);
     socket.on('room:typing', onTyping);
+    socket.on('room:occupancy', onOccupancy);
     return () => {
       socket.off('room:message', onMessage);
       socket.off('room:presence', onPresence);
+      socket.off('room:occupancy', onOccupancy);
       socket.off('room:presence-sync', onPresenceSync);
       socket.off('room:typing', onTyping);
     };
@@ -917,10 +924,10 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
 
         {/* Room name + members */}
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm leading-tight truncate text-[var(--cream)]">
+          <p className="font-semibold text-base leading-tight truncate text-[var(--cream)]">
             {room?.name ?? 'Room'}
           </p>
-          <p className="text-[10px] mt-0.5 text-[var(--cream-muted)]">
+          <p className="text-xs mt-0.5 text-[var(--cream-muted)]">
             <GroupIcon className="w-3 h-3 inline mr-0.5" />
             {presentCount > 0 ? `${presentCount} here` : 'Waiting…'}
           </p>
@@ -1295,10 +1302,10 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             >
               <BubbleIcon className="w-8 h-8" style={{ color: '#C4832A', opacity: 0.5 }} />
             </div>
-            <p className="font-medium text-sm" style={{ color: '#A89070' }}>
+            <p className="font-medium text-base" style={{ color: '#A89070' }}>
               No messages yet
             </p>
-            <p className="text-xs mt-1" style={{ color: '#6B5035' }}>
+            <p className="text-sm mt-1" style={{ color: '#6B5035' }}>
               Be the first to say something
             </p>
           </div>
@@ -1321,7 +1328,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                 <div className="flex items-center gap-3 my-5">
                   <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
                   <span
-                    className="text-[10px] font-semibold px-3 py-1 rounded-full"
+                    className="text-xs font-semibold px-3 py-1 rounded-full"
                     style={{
                       background: 'var(--bg-card)',
                       border: '1px solid var(--border-default)',
@@ -1379,7 +1386,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                   {/* Sender name — shown for others, first in a group */}
                   {showSenderName && (
                     <span
-                      className="text-[10px] font-semibold mb-1 px-1"
+                      className="text-xs font-semibold mb-1 px-1"
                       style={{ color }}
                     >
                       {msg.sender_name}
@@ -1387,7 +1394,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                   )}
 
                   <div
-                    className="relative px-4 py-2.5 text-sm leading-relaxed"
+                    className="relative px-4 py-2.5 text-base leading-relaxed"
                     style={
                       isMine
                         ? {
@@ -1429,7 +1436,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                     })()}
                   </div>
                   {showTail && (
-                    <span className="text-[10px] mt-1 px-1" style={{ color: '#6B5035' }}>
+                    <span className="text-xs mt-1 px-1" style={{ color: '#6B5035' }}>
                       {formatTime(msg.created_at)}
                     </span>
                   )}

@@ -346,7 +346,7 @@ const NearbyGridCard = memo(function NearbyGridCard({
           <div className="pointer-events-none absolute top-1.5 right-1.5 z-10 md:top-2 md:right-2">
             <span
               data-testid={`nearby-grid-distance-${user.id}`}
-              className="inline-flex items-center gap-1 rounded-full border border-nn-border bg-black/60 px-2 py-0.5 text-[9px] font-semibold tracking-wide text-[var(--cream)]/90 backdrop-blur-md shadow-sm md:text-[10px]"
+              className="inline-flex items-center gap-1 rounded-full border border-nn-border bg-black/60 px-2 py-0.5 text-xs font-semibold tracking-wide text-[var(--cream)]/90 backdrop-blur-md shadow-sm md:text-[13px]"
             >
               <PinIcon className="h-2.5 w-2.5 shrink-0 text-[#C4832A]" />
               {distLabel}
@@ -374,7 +374,7 @@ const NearbyGridCard = memo(function NearbyGridCard({
               if (matchDisabled) return;
               void onMatch(user);
             }}
-            className={`w-full rounded-lg py-1.5 text-[10px] font-extrabold tracking-wide transition-colors flex items-center justify-center gap-1.5 md:rounded-xl md:py-2 md:text-[11px] ${
+            className={`w-full rounded-lg py-1.5 text-xs font-extrabold tracking-wide transition-colors flex items-center justify-center gap-1.5 md:rounded-xl md:py-2 md:text-sm ${
               matchState === 'none' || matching ? 'uppercase' : ''
             } ${matchCtaCompactToneClasses(matchState)}`}
           >
@@ -408,14 +408,14 @@ const GridCardFace = memo(function GridCardFace({
           <span
             className={`h-1.5 w-1.5 shrink-0 rounded-full md:h-2 md:w-2 ${user.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
           />
-          <span className="truncate text-[11px] font-bold leading-tight text-[#FFF6E6] md:text-[12px] lg:text-[13px]">
+          <span className="truncate text-[13px] font-bold leading-tight text-[#FFF6E6] md:text-sm lg:text-[15px]">
             {user.name}{typeof user.age === 'number' ? ` ${user.age}` : ''}
           </span>
 
         </div>
-        <p className="mt-0.5 truncate text-[9px] font-semibold text-[var(--cream)] md:text-[11px]">{meta}</p>
+        <p className="mt-0.5 truncate text-xs font-semibold text-[var(--cream)] md:text-[13px]">{meta}</p>
         {user.looking_for ? (
-          <p className="mt-0.5 truncate text-[9px] font-bold text-[#E0A14A] md:text-[10px]">{user.looking_for}</p>
+          <p className="mt-0.5 truncate text-xs font-bold text-[#E0A14A] md:text-[13px]">{user.looking_for}</p>
         ) : null}
       </div>
     </div>

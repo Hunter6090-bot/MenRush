@@ -15,7 +15,7 @@ export function NewJoinerBadge({ variant = 'chip', className = '' }: NewJoinerBa
   if (variant === 'dot') {
     return (
       <span
-        className={`pointer-events-none absolute -right-0.5 -top-0.5 z-10 rounded-full border border-[#1A0E03] bg-[#C4832A] px-1 py-px text-[7px] font-extrabold uppercase leading-none tracking-wide text-[#1A0E03] shadow-sm ${className}`}
+        className={`pointer-events-none absolute -right-0.5 -top-0.5 z-10 rounded-full border border-[#1A0E03] bg-[#C4832A] px-1 py-px text-[10px] font-extrabold uppercase leading-none tracking-wide text-[#1A0E03] shadow-sm ${className}`}
         data-testid="nearby-new-badge"
         title={NEW_JOINER_HELPER}
         aria-label={NEW_JOINER_HELPER}
@@ -27,7 +27,7 @@ export function NewJoinerBadge({ variant = 'chip', className = '' }: NewJoinerBa
 
   return (
     <span
-      className={`pointer-events-none absolute left-1.5 top-1.5 z-10 rounded-md bg-[#C4832A] px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-[#1A0E03] shadow-md md:left-2 md:top-2 md:text-[10px] ${className}`}
+      className={`pointer-events-none absolute left-1.5 top-1.5 z-10 rounded-md bg-[#C4832A] px-1.5 py-0.5 text-xs font-extrabold uppercase tracking-wider text-[#1A0E03] shadow-md md:left-2 md:top-2 md:text-[13px] ${className}`}
       data-testid="nearby-new-badge"
       title={NEW_JOINER_HELPER}
       aria-label={NEW_JOINER_HELPER}
