@@ -422,7 +422,7 @@ export const veriffService = {
 
     // Pre-signup adult-assurance sessions (no user row) — liveness / age-estimation gate.
     const { adultAssuranceService } = await import('./adult-assurance.service');
-    const adult = await adultAssuranceService.applyDecision(payload);
+    const adult = await adultAssuranceService.applyDecision(payload, 'id');
     if (adult.handled) {
       return {
         handled: true,

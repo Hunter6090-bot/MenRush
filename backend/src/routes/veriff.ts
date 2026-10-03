@@ -8,6 +8,9 @@ import {
   verifyVeriffWebhookSignature,
 } from '../services/veriff.service';
 
+import { verifyAgeEstimationWebhook } from '../services/veriff-age-integration';
+import { adultAssuranceService } from '../services/adult-assurance.service';
+
 const router = Router();
 
 const sessionLimiter = rateLimit({
@@ -69,7 +72,8 @@ export async function handleVeriffDecisionWebhook(req: Request, res: Response): 
     const signature = String(req.header('x-hmac-signature') || '');
     const authClient = String(req.header('x-auth-client') || '');
 
-    if (!verifyVeriffWebhookSignature(raw, signature, authClient)) {
+    const ageWebhook = verifyAgeEstimationWebhook(raw, signature, authClient);
+    if (!ageWebhook && !verifyVeriffWebhookSignature(raw, signature, authClient)) {
       res.status(401).json({ error: 'invalid_signature' });
       return;
     }
@@ -82,6 +86,11 @@ export async function handleVeriffDecisionWebhook(req: Request, res: Response): 
       return;
     }
 
+    if (ageWebhook) {
+      const result = await adultAssuranceService.applyDecision(payload, 'liveness');
+      res.status(200).json({ status: 'ok', adultStatus: result.adultStatus });
+      return;
+    }
     const result = await veriffService.applyDecision(payload);
 
     if (result.handled && result.userId) {

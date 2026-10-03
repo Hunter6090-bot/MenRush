@@ -116,7 +116,8 @@ export const Register = () => {
   const [assurancePhase, setAssurancePhase] = useState<
     'intro' | 'liveness' | 'liveness_ok' | 'upsell' | 'id' | 'id_ok' | 'done'
   >('intro');
-  const [adultRequired, setAdultRequired] = useState(false);
+  const [adultRequired, setAdultRequired] = useState(true);
+  const [assuranceAvailable, setAssuranceAvailable] = useState(false);
   const [fixtureAllowed, setFixtureAllowed] = useState(false);
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
@@ -140,11 +141,13 @@ export const Register = () => {
       .then((res) => {
         if (!alive) return;
         setAdultRequired(Boolean(res.data.required));
+        setAssuranceAvailable(res.data.available !== false);
         setFixtureAllowed(Boolean(res.data.fixtureAllowed));
       })
       .catch(() => {
         if (!alive) return;
-        setAdultRequired(false);
+        setAdultRequired(true);
+        setAssuranceAvailable(false);
         setFixtureAllowed(false);
       });
     return () => {
@@ -253,6 +256,10 @@ export const Register = () => {
   const pwScore = useMemo(() => passwordScore(form.password), [form.password]);
 
   const completeRegistration = async (adultToken?: string) => {
+    if (adultRequired && !adultToken) {
+      setError('Complete the 18+ selfie check to create your account.');
+      return;
+    }
     setLoading(true);
     try {
       const isoDob =
@@ -345,7 +352,11 @@ export const Register = () => {
       return;
     }
 
-    if (adultRequired && !assuranceSkipped) {
+    if (adultRequired) {
+      if (!assuranceAvailable) {
+        setError('The 18+ selfie check is temporarily unavailable. Please try again shortly.');
+        return;
+      }
       setShowAssurance(true);
       return;
     }

@@ -97,7 +97,7 @@ export const authAPI = {
     }>('/auth/register', data),
   /** Signup 18+ liveness gate. Optional ID → Verified tick (same flow). */
   adultAssuranceRequired: () =>
-    apiClient.get<{ required: boolean; fixtureAllowed: boolean }>('/auth/adult-assurance/required'),
+    apiClient.get<{ required: boolean; available?: boolean; fixtureAllowed: boolean }>('/auth/adult-assurance/required'),
   startAdultAssurance: () =>
     apiClient.post<{ sessionId: string; sessionUrl: string }>('/auth/adult-assurance/start'),
   startAdultAssuranceId: (sessionId: string) =>

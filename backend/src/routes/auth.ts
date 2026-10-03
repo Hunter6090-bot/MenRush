@@ -26,6 +26,7 @@ import {
   isAdultAssuranceRequiredAtSignup,
   isAdultAssuranceTestFixtureAllowed,
 } from '../services/adult-assurance.service';
+import { isAgeEstimationConfigured } from '../services/veriff-age-integration';
 import { VeriffConfigError } from '../services/veriff.service';
 
 const router = Router();
@@ -110,6 +111,7 @@ const resendConfirmLimiter = rateLimit({
 router.get('/adult-assurance/required', (_req, res: Response) => {
   res.json({
     required: isAdultAssuranceRequiredAtSignup(),
+    available: isAgeEstimationConfigured() || isAdultAssuranceTestFixtureAllowed(),
     fixtureAllowed: isAdultAssuranceTestFixtureAllowed(),
   });
 });
@@ -120,6 +122,9 @@ router.get('/adult-assurance/required', (_req, res: Response) => {
  */
 router.post('/adult-assurance/start', adultAssuranceLimiter, async (_req, res: Response) => {
   try {
+    if (!isAgeEstimationConfigured() && !isAdultAssuranceTestFixtureAllowed()) {
+      return res.status(503).json({ error: 'age_estimation_not_configured' });
+    }
     const session = await adultAssuranceService.startSession();
     res.status(201).json(session);
   } catch (err: any) {
