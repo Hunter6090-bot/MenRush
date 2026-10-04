@@ -7,7 +7,7 @@ import { PasswordInput } from '../components/PasswordInput';
 import { authAPI, usersAPI } from '../api/client';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { RadiusMilesSelect } from '../components/RadiusMilesSelect';
-import { clampRadiusKm, formatRadiusMiles } from '../lib/discoveryFormat';
+import { migrateStoredRadiusKm, formatRadiusMiles } from '../lib/discoveryFormat';
 import { ROUTE_LABELS } from '../lib/routeLabels';
 import {
   readThemePreference,
@@ -68,7 +68,7 @@ export const Settings = () => {
   const storeEmail = useAuthStore((s) => s.user?.email);
   const setLocation = useLocationStore((s) => s.setLocation);
   const [savedRadius, setSavedRadius] = useState(() =>
-    clampRadiusKm(Number(localStorage.getItem(RADIUS_KEY) ?? 5)),
+    migrateStoredRadiusKm(Number(localStorage.getItem(RADIUS_KEY) ?? 5)),
   );
   const [hasPin, setHasPin] = useState<boolean | null>(null);
   const [locating, setLocating] = useState(false);
@@ -236,7 +236,7 @@ export const Settings = () => {
         await usersAPI.updateLocation(result.lat, result.lng);
         setLocation(result.lat, result.lng);
         setHasPin(true);
-        const km = clampRadiusKm(Number(localStorage.getItem(RADIUS_KEY) ?? 5));
+        const km = migrateStoredRadiusKm(Number(localStorage.getItem(RADIUS_KEY) ?? 5));
         setLocNotice(`Location is active. Showing people within ${formatRadiusMiles(km)}.`);
       } catch {
         setLocNotice('Could not save location. Check your connection.');
@@ -247,7 +247,7 @@ export const Settings = () => {
   }, [setLocation]);
 
   const setRadius = (km: number) => {
-    const clamped = clampRadiusKm(km);
+    const clamped = migrateStoredRadiusKm(km);
     localStorage.setItem(RADIUS_KEY, String(clamped));
     setSavedRadius(clamped);
   };

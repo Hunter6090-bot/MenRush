@@ -199,10 +199,12 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
       limit,
       offset,
       format,
+      scope,
     } = req.query;
 
+    const discoveryScope: 'radius' | 'uk_ie' = scope === 'uk_ie' ? 'uk_ie' : 'radius';
     const requestedRadius = radius ? Number.parseFloat(radius as string) : 5;
-    if (!Number.isFinite(requestedRadius)) {
+    if (discoveryScope === 'radius' && !Number.isFinite(requestedRadius)) {
       return res.status(400).json({ error: 'Invalid radius' });
     }
 
@@ -220,6 +222,7 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
       new: isNew === 'true' || isNew === '1',
       lookingFor: typeof lookingFor === 'string' ? lookingFor : undefined,
       mood: typeof mood === 'string' ? mood : undefined,
+      discoveryScope,
     };
 
     const queryLat = typeof req.query.lat === 'string' ? Number.parseFloat(req.query.lat) : NaN;
@@ -239,7 +242,7 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
 
     const result = await userService.getNearbyUsers(
       req.userId!,
-      Math.min(Math.max(requestedRadius, 0.8), 161),
+      discoveryScope === 'uk_ie' ? 0 : Math.min(Math.max(requestedRadius, 0.8), 161),
       filters,
       clientLocation,
       { page: pageNum, limit: limitNum, offset: offsetNum },

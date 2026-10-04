@@ -15,10 +15,15 @@ const serviceSrc = fs.readFileSync(
   path.join(__dirname, '../src/services/user.service.ts'),
   'utf8',
 );
+const rosterSqlSrc = fs.readFileSync(
+  path.join(__dirname, '../src/lib/nearbyRosterSql.ts'),
+  'utf8',
+);
 const routesSrc = fs.readFileSync(
   path.join(__dirname, '../src/routes/users.ts'),
   'utf8',
 );
+const nearbySqlSrc = `${serviceSrc}\n${rosterSqlSrc}`;
 
 // 1. Hardcoded LIMIT 50 must be completely removed
 assert.doesNotMatch(
@@ -29,16 +34,16 @@ assert.doesNotMatch(
 
 // 2. getNearbyUsers must calculate COUNT(*) for honest total
 assert.match(
-  serviceSrc,
+  nearbySqlSrc,
   /SELECT\s+COUNT\(\*\)::int\s+AS\s+total/i,
-  'user.service.ts must query COUNT(*) total for honest nearby count',
+  'nearby roster SQL must query COUNT(*) total for honest nearby count',
 );
 
 // 3. getNearbyUsers must support LIMIT and OFFSET
 assert.match(
-  serviceSrc,
+  nearbySqlSrc,
   /LIMIT\s+(\$\d+|\$\$\{limitIndex\})\s+OFFSET\s+(\$\d+|\$\$\{offsetIndex\})/i,
-  'user.service.ts must paginate using parameterized LIMIT and OFFSET',
+  'nearby roster SQL must paginate using parameterized LIMIT and OFFSET',
 );
 
 // 4. Result must return honest total, page, limit, has_more

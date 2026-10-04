@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { usersAPI } from '../api/client';
 import { LOCATION_PRIVACY_LINE, requestDeviceLocation } from '../lib/deviceLocation';
 import { useLocationStore } from '../hooks/store';
-import { formatRadiusControlLabel, clampRadiusKm } from '../lib/discoveryFormat';
+import { formatRadiusControlLabel, migrateStoredRadiusKm } from '../lib/discoveryFormat';
 
 const RADIUS_KEY = 'menrush_default_radius_km';
 
@@ -74,7 +74,7 @@ export function LocationPresenceStrip() {
         setLocation(result.lat, result.lng);
         setMissing(false);
         setNotice('');
-        const km = clampRadiusKm(Number(localStorage.getItem(RADIUS_KEY) ?? 5));
+        const km = migrateStoredRadiusKm(Number(localStorage.getItem(RADIUS_KEY) ?? 5));
         setSuccess(`Location is active. Showing people within ${formatRadiusControlLabel(km)}.`);
         window.setTimeout(() => setSuccess(''), 5000);
       } catch {

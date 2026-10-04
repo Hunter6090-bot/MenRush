@@ -232,6 +232,7 @@ export const usersAPI = {
       page?: number;
       limit?: number;
       offset?: number;
+      scope?: 'uk_ie';
     }
   ) =>
     apiClient.get<NearbyRosterResponse | any[]>('/users/nearby', {
@@ -251,6 +252,7 @@ export const usersAPI = {
         page: filters?.page,
         limit: filters?.limit,
         offset: filters?.offset,
+        scope: filters?.scope,
       },
     }),
   getProfile: (id: string, coords?: { lat?: number | null; lng?: number | null }) =>
