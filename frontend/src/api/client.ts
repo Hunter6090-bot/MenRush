@@ -262,10 +262,10 @@ export const usersAPI = {
           ? { lat: coords.lat, lng: coords.lng }
           : undefined,
     }),
-  searchProfiles: (q: string) =>
+  searchProfiles: (q: string, by: 'name' | 'place' = 'name') =>
     apiClient.get<Array<{ id: string; name: string; age?: number; photo_url?: string; bio?: string; headline?: string }>>(
       '/users/search',
-      { params: { q } },
+      { params: { q, by } },
     ),
   updateLocation: (lat: number, lng: number) =>
     apiClient.post('/users/location', { lat, lng }),

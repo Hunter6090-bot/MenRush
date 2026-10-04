@@ -3,6 +3,7 @@ import { defaultGenericAvatarUrl } from '../lib/genericAvatar';
 import { discoveryPhotoUrl } from '../lib/discoveryPhoto';
 import {
   MAP_PIN_FUZZ_DEFAULT_M,
+  MAP_PIN_FUZZ_MAX_M,
   privateMapPointAround,
 } from '../lib/mapPinFuzz';
 import { accessControl } from '../security/access';
@@ -20,6 +21,7 @@ import {
   nearbyRosterListSql,
   nearbyRosterWhereSql,
 } from '../lib/nearbyRosterSql';
+import { lookupUkIePlace, placeContainsPoint } from '../lib/ukIePlace';
 
 const includeE2eFixtures = () =>
   process.env.INCLUDE_E2E_FIXTURES === 'true' || process.env.INCLUDE_E2E_FIXTURES === '1';
@@ -976,10 +978,80 @@ export const userService = {
     return isTeamEmail(result.rows[0]?.email);
   },
 
-  async searchProfiles(viewerId: string, q: string) {
+  async searchProfiles(viewerId: string, q: string, by: 'name' | 'place' = 'name') {
     await accessControl.requireVerified(viewerId);
     const term = q.trim();
     if (term.length < 2) return [];
+
+    if (by === 'place') {
+      const place = await lookupUkIePlace(term);
+      if (!place) return [];
+
+      // Candidate window: near the place (buffered by max pin fuzz). Final match uses
+      // privateMapPointAround + map_pin_fuzz_m — never the exact stored pin against
+      // small-place geometry (hamlet/village/suburb are also rejected upstream).
+      const values: unknown[] = [viewerId, MAP_PIN_FUZZ_MAX_M];
+      let placeGeogSql: string;
+      if (place.geojson) {
+        values.push(JSON.stringify(place.geojson));
+        placeGeogSql = `ST_SetSRID(ST_GeomFromGeoJSON($3), 4326)::geography`;
+      } else {
+        values.push(place.west, place.south, place.east, place.north);
+        placeGeogSql = `ST_MakeEnvelope($3, $4, $5, $6, 4326)::geography`;
+      }
+
+      const result = await query(
+        `SELECT u.id, u.name, u.age, u.photo_url, u.bio, u.headline,
+                p.lat AS real_lat, p.lng AS real_lng,
+                COALESCE(p.map_pin_fuzz_m, ${MAP_PIN_FUZZ_DEFAULT_M}) AS map_pin_fuzz_m
+         FROM users u
+         JOIN profiles p ON p.user_id = u.id
+         WHERE u.id != $1
+           AND p.is_visible = true
+           AND COALESCE(p.is_ghost, FALSE) = false
+           AND p.location IS NOT NULL
+           AND p.lat IS NOT NULL
+           AND p.lng IS NOT NULL
+           AND ST_DWithin(p.location, ${placeGeogSql}, $2)
+           AND NOT EXISTS (
+             SELECT 1 FROM blocks b
+             WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+                OR (b.blocker_id = u.id AND b.blocked_id = $1)
+           )
+         ORDER BY u.name ASC
+         LIMIT 80`,
+        values,
+      );
+
+      const matched = result.rows.filter((row: {
+        id: string;
+        real_lat: number;
+        real_lng: number;
+        map_pin_fuzz_m: number;
+      }) => {
+        const realLat = Number(row.real_lat);
+        const realLng = Number(row.real_lng);
+        if (!Number.isFinite(realLat) || !Number.isFinite(realLng)) return false;
+        const fuzzMaxM = Number(row.map_pin_fuzz_m);
+        const discretionary = privateMapPointAround(
+          realLat,
+          realLng,
+          `map:${row.id}`,
+          Number.isFinite(fuzzMaxM) ? fuzzMaxM : MAP_PIN_FUZZ_DEFAULT_M,
+        );
+        return placeContainsPoint(place, discretionary.lat, discretionary.lng);
+      });
+
+      return matched.slice(0, 20).map((row: Record<string, unknown>) => {
+        const {
+          real_lat: _rl,
+          real_lng: _rg,
+          map_pin_fuzz_m: _fuzz,
+          ...publicRow
+        } = row;
+        return publicRow;
+      });
+    }
 
     const result = await query(
       `SELECT u.id, u.name, u.age, u.photo_url, u.bio, u.headline
