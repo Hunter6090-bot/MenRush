@@ -175,10 +175,17 @@ router.get('/me/referrals', async (req: AuthRequest, res: Response) => {
 router.get('/search', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const q = typeof req.query.q === 'string' ? req.query.q : '';
-    const users = await userService.searchProfiles(req.userId!, q);
+    const by = req.query.by === 'place' ? 'place' : 'name';
+    const users = await userService.searchProfiles(req.userId!, q, by);
     res.json(users);
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    const { PlaceLookupError, PLACE_LOOKUP_FAILED_MESSAGE } = await import('../lib/ukIePlace');
+    if (error instanceof PlaceLookupError || error?.name === 'PlaceLookupError') {
+      res.status(400).json({ error: PLACE_LOOKUP_FAILED_MESSAGE });
+      return;
+    }
+    // Never surface raw codes / stack internals to the client.
+    res.status(400).json({ error: 'Search failed. Please try again.' });
   }
 });
 
