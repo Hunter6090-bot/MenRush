@@ -582,6 +582,7 @@ export const Discover = () => {
     }
     return DEFAULT_RADIUS_KM;
   });
+  const allScope = isDiscoveryAllScope(radius);
   /** How far others see your pin — profiles.map_pin_fuzz_m (not search radius). */
   const [mapPinFuzzM, setMapPinFuzzM] = useState<number>(MAP_PIN_FUZZ_DEFAULT_M);
   const [nearbyView, setNearbyView] = useState<NearbyView>(() => readNearbyView());
@@ -2395,6 +2396,8 @@ export const Discover = () => {
                 <p className="text-[13px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
                   {loading && nearbyCount === 0 ? (
                     <span className="text-[var(--cream-muted)]">Scanning…</span>
+                  ) : nearbyCount === 0 && allScope ? (
+                    <span className="font-extrabold text-[var(--cream-soft)]">Men nearby</span>
                   ) : nearbyCount === 0 ? (
                     <button
                       type="button"
@@ -2432,7 +2435,8 @@ export const Discover = () => {
                 mutualUserIds={matchedUsers}
                 matchingUserId={matchingUserId}
                 onExpandRadius={handleRadiusCycle}
-                canExpandRadius={radius < MAX_RADIUS_KM - 0.5}
+                canExpandRadius={!allScope && radius < MAX_RADIUS_KM - 0.5}
+                hideExpandRadius={allScope}
                 onFinishProfile={
                   showFinishProfileEmptyCta ? () => navigate('/profile/setup') : undefined
                 }
@@ -2588,6 +2592,8 @@ export const Discover = () => {
                 <p className="text-[13px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
                   {loading && nearbyCount === 0 ? (
                     <span className="text-[var(--cream-muted)]">Scanning…</span>
+                  ) : nearbyCount === 0 && allScope ? (
+                    <span className="font-extrabold text-[var(--cream-soft)]">Men nearby</span>
                   ) : nearbyCount === 0 ? (
                     <button
                       type="button"
@@ -2684,7 +2690,8 @@ export const Discover = () => {
                   mutualUserIds={matchedUsers}
                   matchingUserId={matchingUserId}
                   onExpandRadius={handleRadiusCycle}
-                  canExpandRadius={radius < MAX_RADIUS_KM - 0.5}
+                  canExpandRadius={!allScope && radius < MAX_RADIUS_KM - 0.5}
+                  hideExpandRadius={allScope}
                   onFinishProfile={
                     showFinishProfileEmptyCta ? () => navigate('/profile/setup') : undefined
                   }

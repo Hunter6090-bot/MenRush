@@ -1,38 +1,59 @@
 /**
- * UK + Ireland discovery region for Nearby "All".
- * Boxes are inclusive of GB (incl. NI, Shetland, Channel Islands) and IE.
- * They are not a radius and exclude US / most of continental Europe.
+ * UK + Ireland discovery region for map/list "All".
+ * Split boxes keep Channel Islands and southeast England without
+ * sweeping in northern France (Cherbourg, Caen, Rouen, Le Havre, Dieppe, Boulogne).
+ * Not a radius. Excludes US and continental Europe.
  */
-export const UK_BOX = {
-  minLat: 49.15,
-  maxLat: 61.0,
-  minLng: -8.75,
-  maxLng: 1.85,
-} as const;
+export type LatLngBox = {
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
+};
 
-export const IRELAND_BOX = {
-  minLat: 51.35,
-  maxLat: 55.45,
-  minLng: -10.75,
-  maxLng: -5.45,
-} as const;
+export const UK_IRELAND_BOXES = {
+  /** GB + NI + Scilly / Shetland, west of Greenwich-ish so Normandy stays out. */
+  gbWest: { minLat: 49.85, maxLat: 61.0, minLng: -8.75, maxLng: 0.55 },
+  /** Kent / Sussex coast — north of Dieppe, west of Boulogne. */
+  gbEastKent: { minLat: 50.88, maxLat: 51.45, minLng: 0.35, maxLng: 1.45 },
+  /** East Anglia including Lowestoft; Calais is east of maxLng. */
+  gbEastAnglia: { minLat: 51.45, maxLat: 53.7, minLng: 0.35, maxLng: 1.8 },
+  /** Jersey, Guernsey, Alderney, Sark — Cherbourg stays east of maxLng. */
+  channelIslands: { minLat: 49.15, maxLat: 49.76, minLng: -2.7, maxLng: -2.0 },
+  ireland: { minLat: 51.35, maxLat: 55.45, minLng: -10.75, maxLng: -5.45 },
+} as const satisfies Record<string, LatLngBox>;
+
+function boxSql(box: LatLngBox): string {
+  return `(p.lat BETWEEN ${box.minLat} AND ${box.maxLat} AND p.lng BETWEEN ${box.minLng} AND ${box.maxLng})`;
+}
 
 /** SQL fragment (profiles p) — real stored lat/lng, not fuzzed map pins. */
 export const UK_IRELAND_LOCATION_SQL = `
         AND (
-          (p.lat BETWEEN ${UK_BOX.minLat} AND ${UK_BOX.maxLat} AND p.lng BETWEEN ${UK_BOX.minLng} AND ${UK_BOX.maxLng})
-          OR (p.lat BETWEEN ${IRELAND_BOX.minLat} AND ${IRELAND_BOX.maxLat} AND p.lng BETWEEN ${IRELAND_BOX.minLng} AND ${IRELAND_BOX.maxLng})
+          ${Object.values(UK_IRELAND_BOXES).map(boxSql).join('\n          OR ')}
         )
 `;
 
+/**
+ * Viewer origin ($1 lat, $2 lng) and $4 must appear in count and list.
+ * All binds $4 = 0 so this is not a radius cap.
+ */
+export const UK_IE_BOUND_PARAMS_SQL = `
+        AND ST_Distance(p.location, ST_MakePoint($2, $1)::geography) >= $4
+`;
+
+export function nearbyLocationPredicate(scope: 'radius' | 'uk_ie'): string {
+  if (scope === 'uk_ie') {
+    return `${UK_IRELAND_LOCATION_SQL}${UK_IE_BOUND_PARAMS_SQL}`;
+  }
+  return `AND ST_DWithin(p.location, ST_MakePoint($2, $1)::geography, $4)`;
+}
+
+export function isInBox(lat: number, lng: number, box: LatLngBox): boolean {
+  return lat >= box.minLat && lat <= box.maxLat && lng >= box.minLng && lng <= box.maxLng;
+}
+
 export function isInUkIreland(lat: number, lng: number): boolean {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
-  const inUk =
-    lat >= UK_BOX.minLat && lat <= UK_BOX.maxLat && lng >= UK_BOX.minLng && lng <= UK_BOX.maxLng;
-  const inIe =
-    lat >= IRELAND_BOX.minLat &&
-    lat <= IRELAND_BOX.maxLat &&
-    lng >= IRELAND_BOX.minLng &&
-    lng <= IRELAND_BOX.maxLng;
-  return inUk || inIe;
+  return Object.values(UK_IRELAND_BOXES).some((box) => isInBox(lat, lng, box));
 }

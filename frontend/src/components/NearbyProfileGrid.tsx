@@ -52,6 +52,8 @@ interface NearbyProfileGridProps {
   radiusLabel?: string;
   /** Count of men at max radius when current radius is empty. */
   beyondRadiusCount?: number;
+  /** All (UK + Ireland) — hide Expand radius; it does nothing on this path. */
+  hideExpandRadius?: boolean;
   /** When true, more pages can be loaded. */
   hasMore?: boolean;
   loadingMore?: boolean;
@@ -81,6 +83,7 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
   onOpenHotSpots,
   radiusLabel,
   beyondRadiusCount = 0,
+  hideExpandRadius = false,
   hasMore = false,
   loadingMore = false,
   onLoadMore,
@@ -138,9 +141,13 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
         data-testid="discover-empty-density"
         role="status"
       >
-        <p className="text-[16px] font-extrabold text-[var(--cream)]">No men in this radius yet</p>
+        <p className="text-[16px] font-extrabold text-[var(--cream)]">
+          {hideExpandRadius ? 'No men in the UK and Ireland yet' : 'No men in this radius yet'}
+        </p>
         <p className="mx-auto mt-2 max-w-sm text-[13px] leading-relaxed text-[var(--cream-muted)]">
-          {beyondRadiusCount > 0 ? (
+          {hideExpandRadius ? (
+            <>Turn on location and finish your profile so others can find you.</>
+          ) : beyondRadiusCount > 0 ? (
             <>
               <span className="font-bold text-[#E0A14A]">
                 Men are farther out
@@ -157,7 +164,7 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
           )}
         </p>
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-          {onExpandRadius ? (
+          {onExpandRadius && !hideExpandRadius ? (
             <button
               type="button"
               onClick={onExpandRadius}
@@ -273,7 +280,7 @@ export const NearbyProfileGrid = memo(function NearbyProfileGrid({
           </button>
         </div>
       ) : null}
-      {!hasMore && !loading && !loadingMore && users.length > 0 && canExpandRadius && onExpandRadius ? (
+      {!hasMore && !loading && !loadingMore && users.length > 0 && canExpandRadius && !hideExpandRadius && onExpandRadius ? (
         <div
           className="mt-5 mb-2 flex flex-col items-center justify-center gap-1.5 px-4 py-3 text-center pb-[max(1rem,env(safe-area-inset-bottom,0px))]"
           data-testid="nearby-widen-container"

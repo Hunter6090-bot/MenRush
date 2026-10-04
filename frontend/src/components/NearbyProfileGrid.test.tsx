@@ -248,4 +248,22 @@ describe('NearbyProfileGrid pagination', () => {
     expect(screen.getByText('Men are farther out')).toBeInTheDocument();
     expect(screen.queryByText(/14/)).not.toBeInTheDocument();
   });
+
+  it('hides Expand radius when All (UK + Ireland) is selected', () => {
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid
+          users={[]}
+          loading={false}
+          hideExpandRadius
+          onExpandRadius={() => {}}
+          radiusLabel="All"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('No men in the UK and Ireland yet')).toBeInTheDocument();
+    expect(screen.queryByTestId('empty-expand-radius')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Expand radius/i })).not.toBeInTheDocument();
+  });
 });
