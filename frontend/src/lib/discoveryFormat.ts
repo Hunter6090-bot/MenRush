@@ -6,6 +6,9 @@ import {
   formatRadiusFromKm,
   kmToDisplayRadiusValue,
   resolveDistanceUnitSystem,
+  MAX_NEARBY_RADIUS_KM,
+  DISCOVERY_ALL_SCOPE_KM,
+  isDiscoveryAllScope,
   type DistanceUnitSystem,
 } from './localeUnits';
 
@@ -26,11 +29,13 @@ const TRIBE_TAGS = [
   'Muscle',
 ];
 
-/** Matches backend `/users/nearby` clamp: Math.min(Math.max(radius, 0.8), 161). */
-export const MAX_RADIUS_KM = 161;
+/** Widest Nearby radius (100 miles). Matches backend `/users/nearby` clamp. */
+export const MAX_RADIUS_KM = MAX_NEARBY_RADIUS_KM;
 
-/** "All" uses the widest search the API allows (100 miles). */
-export const RADIUS_ALL_KM = MAX_RADIUS_KM;
+/** "All" is UK + Ireland — not a radius. Sentinel only for client state. */
+export const RADIUS_ALL_KM = DISCOVERY_ALL_SCOPE_KM;
+
+export { isDiscoveryAllScope, DISCOVERY_ALL_SCOPE_KM };
 
 const KM_PER_MILE = 1.60934;
 
@@ -62,12 +67,21 @@ export function kmToMiles(km: number): number {
 }
 
 export function clampRadiusKm(km: number): number {
+  if (isDiscoveryAllScope(km)) return RADIUS_ALL_KM;
   return Math.min(Math.max(km, MIN_RADIUS_KM), MAX_RADIUS_KM);
 }
 
+/** Legacy stored All was 161 km (collapsed with 100 miles). Treat as All. */
+export function migrateStoredRadiusKm(km: number): number {
+  if (!Number.isFinite(km) || km <= 0) return DEFAULT_RADIUS_KM;
+  if (isDiscoveryAllScope(km)) return RADIUS_ALL_KM;
+  if (km >= 160.95 && km <= 161.05) return RADIUS_ALL_KM;
+  return clampRadiusKm(km);
+}
+
 export function kmToRadiusSelection(km: number): RadiusMilesSelection {
-  const clamped = clampRadiusKm(km);
-  if (clamped >= RADIUS_ALL_KM - 0.5) return 'all';
+  if (isDiscoveryAllScope(km) || (km >= 160.95 && km <= 161.05)) return 'all';
+  const clamped = Math.min(Math.max(km, MIN_RADIUS_KM), MAX_RADIUS_KM);
   const miles = kmToMiles(clamped);
   return RADIUS_MILE_OPTIONS.reduce((best, option) =>
     Math.abs(option - miles) < Math.abs(best - miles) ? option : best,
@@ -90,11 +104,11 @@ export function formatRadiusMiles(km: number, system?: DistanceUnitSystem): stri
  */
 export function formatRadiusControlLabel(km: number, system?: DistanceUnitSystem): string {
   const resolved = system ?? resolveDistanceUnitSystem();
+  if (isDiscoveryAllScope(km) || kmToRadiusSelection(km) === 'all') return 'All';
   if (resolved === 'imperial') {
     return formatRadiusMilesLabel(kmToRadiusSelection(km));
   }
   const clamped = clampRadiusKm(km);
-  if (clamped >= RADIUS_ALL_KM - 0.5) return 'All';
   const selection = kmToDisplayRadiusValue(clamped, 'metric');
   if (selection === 'all') return 'All';
   return formatRadiusFromKm(selection, 'metric');
@@ -117,7 +131,7 @@ export function radiusStepOptionsKm(system?: DistanceUnitSystem): number[] {
     const miles = [0.5, 1, 5, 10, 25, 50, 100] as const;
     return [...miles.map((m) => milesToKm(m)), RADIUS_ALL_KM];
   }
-  return [...RADIUS_KM_OPTIONS];
+  return [...RADIUS_KM_OPTIONS.filter((km) => km < MAX_NEARBY_RADIUS_KM), RADIUS_ALL_KM];
 }
 
 export function formatRadiusMilesLabel(selection: RadiusMilesSelection): string {

@@ -12,8 +12,10 @@ import { MoodPicker } from '../components/MoodPicker';
 import {
   DEFAULT_RADIUS_KM,
   MAX_RADIUS_KM,
-  clampRadiusKm,
+  RADIUS_ALL_KM,
   formatRadiusControlLabel,
+  isDiscoveryAllScope,
+  migrateStoredRadiusKm,
   normalizeRadiusKm,
   radiusStepOptionsKm,
 } from '../lib/discoveryFormat';
@@ -102,6 +104,12 @@ type MapPanelMode = 'hidden' | 'default' | 'expanded';
 const MAP_PANEL_STORAGE_KEY = 'menrush_nearby_map_panel';
 const DESKTOP_MAP_EXPAND_KEY = 'menrush_desktop_map_expanded';
 const DISCOVER_RADIUS_KEY = 'menrush_default_radius_km';
+
+/** Cruise/hot-spot fetch stays a radius even when people All is UK+Ireland. */
+function cruiseSearchRadiusKm(discoveryKm: number): number {
+  const nearbyKm = isDiscoveryAllScope(discoveryKm) ? MAX_RADIUS_KM : discoveryKm;
+  return Math.max(nearbyKm, 25);
+}
 
 function readDesktopMapExpanded(): boolean {
   try {
@@ -567,7 +575,7 @@ export const Discover = () => {
     try {
       const saved = Number(localStorage.getItem(DISCOVER_RADIUS_KEY));
       if (Number.isFinite(saved) && saved > 0) {
-        return normalizeRadiusKm(clampRadiusKm(saved), resolveDistanceUnitSystem());
+        return normalizeRadiusKm(migrateStoredRadiusKm(saved), resolveDistanceUnitSystem());
       }
     } catch {
       /* ignore */
@@ -796,8 +804,10 @@ export const Discover = () => {
         const apiFilters = {
           ...buildNearbyApiFilters(filters),
           page: targetPage,
+          scope: isDiscoveryAllScope(r) ? ('uk_ie' as const) : undefined,
         };
-        const res = await usersAPI.getNearby(latitude, longitude, r, apiFilters);
+        const requestRadius = isDiscoveryAllScope(r) ? MAX_RADIUS_KM : r;
+        const res = await usersAPI.getNearby(latitude, longitude, requestRadius, apiFilters);
         const { users: incomingUsers, total: incomingTotal, hasMore: incomingHasMore, page: incomingPage } =
           unpackNearbyResponse(res.data, (res as any).headers);
 
@@ -827,9 +837,12 @@ export const Discover = () => {
         }
 
         // Cold density: count men outside current radius so Expand is intentional.
-        if (incomingTotal === 0 && r < MAX_RADIUS_KM - 0.5) {
+        if (incomingTotal === 0 && !isDiscoveryAllScope(r)) {
           try {
-            const wider = await usersAPI.getNearby(latitude, longitude, MAX_RADIUS_KM, apiFilters);
+            const wider = await usersAPI.getNearby(latitude, longitude, MAX_RADIUS_KM, {
+              ...apiFilters,
+              scope: 'uk_ie',
+            });
             const unpackedWider = unpackNearbyResponse(wider.data, (wider as any).headers);
             setBeyondRadiusCount(unpackedWider.total);
           } catch {
@@ -1205,7 +1218,7 @@ export const Discover = () => {
 
   const handleRadiusChange = useCallback(
     (next: number) => {
-      const clamped = normalizeRadiusKm(clampRadiusKm(next), resolveDistanceUnitSystem());
+      const clamped = normalizeRadiusKm(migrateStoredRadiusKm(next), resolveDistanceUnitSystem());
       setRadius(clamped);
       try {
         localStorage.setItem(DISCOVER_RADIUS_KEY, String(clamped));
@@ -1232,15 +1245,15 @@ export const Discover = () => {
    * If we already know men exist farther out, jump to max. Otherwise big steps.
    */
   const handleRadiusCycle = useCallback(() => {
-    if (radius >= MAX_RADIUS_KM - 0.5) return;
+    if (isDiscoveryAllScope(radius)) return;
 
     if (beyondRadiusCount > 0) {
-      handleRadiusChange(MAX_RADIUS_KM);
+      handleRadiusChange(RADIUS_ALL_KM);
       return;
     }
 
     const stepsKm = radiusStepOptionsKm(resolveDistanceUnitSystem());
-    const next = stepsKm.find((km) => km > radius + 0.4) ?? MAX_RADIUS_KM;
+    const next = stepsKm.find((km) => km > radius + 0.4) ?? RADIUS_ALL_KM;
     handleRadiusChange(next);
   }, [radius, beyondRadiusCount, handleRadiusChange]);
 
@@ -1417,7 +1430,7 @@ export const Discover = () => {
           setSelectedHotSpot(updatedSpot);
         }
         if (lat != null && lng != null) {
-          const res = await hotSpotsAPI.listNearby(lat, lng, Math.max(radius, 25));
+          const res = await hotSpotsAPI.listNearby(lat, lng, cruiseSearchRadiusKm(radius));
           setHotSpots(res.data.spots ?? []);
         }
       } catch {
@@ -1809,7 +1822,7 @@ export const Discover = () => {
     let cancelled = false;
     const load = async () => {
       try {
-        const res = await hotSpotsAPI.listNearby(lat, lng, Math.max(radius, 25));
+        const res = await hotSpotsAPI.listNearby(lat, lng, cruiseSearchRadiusKm(radius));
         if (!cancelled) setHotSpots(res.data.spots ?? []);
       } catch {
         if (!cancelled) setHotSpots([]);
@@ -2030,6 +2043,12 @@ export const Discover = () => {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || lat == null || lng == null) return;
+
+    if (isDiscoveryAllScope(radius)) {
+      if (map.getLayer(RADIUS_CIRCLE_LAYER)) map.removeLayer(RADIUS_CIRCLE_LAYER);
+      if (map.getSource(RADIUS_CIRCLE_SOURCE)) map.removeSource(RADIUS_CIRCLE_SOURCE);
+      return;
+    }
 
     const data = geoJsonCircle(lng, lat, radius);
     const existing = map.getSource(RADIUS_CIRCLE_SOURCE) as mapboxgl.GeoJSONSource | undefined;

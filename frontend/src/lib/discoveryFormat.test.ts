@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_RADIUS_KM,
+  RADIUS_ALL_KM,
   formatRadiusControlLabel,
   formatRadiusMilesLabel,
+  isDiscoveryAllScope,
   kmToRadiusSelection,
+  migrateStoredRadiusKm,
   milesToKm,
   normalizeRadiusKm,
   radiusSelectionToKm,
@@ -31,5 +34,15 @@ describe('formatRadiusControlLabel', () => {
     expect(formatRadiusControlLabel(normalizeRadiusKm(5, 'imperial'), 'imperial')).toBe(
       '5 miles',
     );
+  });
+
+  it('keeps 100 miles as a radius and treats All as UK/Ireland sentinel', () => {
+    expect(kmToRadiusSelection(milesToKm(100))).toBe(100);
+    expect(formatRadiusControlLabel(milesToKm(100), 'imperial')).toBe('100 miles');
+    expect(kmToRadiusSelection(RADIUS_ALL_KM)).toBe('all');
+    expect(formatRadiusControlLabel(RADIUS_ALL_KM, 'imperial')).toBe('All');
+    expect(radiusSelectionToKm('all')).toBe(RADIUS_ALL_KM);
+    expect(migrateStoredRadiusKm(161)).toBe(RADIUS_ALL_KM);
+    expect(isDiscoveryAllScope(milesToKm(100))).toBe(false);
   });
 });

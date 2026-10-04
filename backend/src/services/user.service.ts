@@ -14,6 +14,7 @@ import {
   planVisitorLocationUpdate,
   type VisitorProfileState,
 } from '../lib/visitorFreshFace';
+import { UK_IRELAND_LOCATION_SQL } from '../lib/ukIrelandBounds';
 
 const includeE2eFixtures = () =>
   process.env.INCLUDE_E2E_FIXTURES === 'true' || process.env.INCLUDE_E2E_FIXTURES === '1';
@@ -40,6 +41,8 @@ export const userService = {
       new?: boolean;
       lookingFor?: string;
       mood?: string;
+      /** UK + Ireland roster — not a radius. Nearby omit this. */
+      discoveryScope?: 'radius' | 'uk_ie';
     },
     clientLocation?: { lat: number; lng: number },
     pagination?: {
@@ -83,7 +86,8 @@ export const userService = {
 
     const originLat = Number(locationResult.rows[0].lat);
     const originLng = Number(locationResult.rows[0].lng);
-    const radiusMeters = radiusKm * 1000;
+    const discoveryScope = filters?.discoveryScope === 'uk_ie' ? 'uk_ie' : 'radius';
+    const radiusMeters = discoveryScope === 'uk_ie' ? 0 : radiusKm * 1000;
     const values: any[] = [originLat, originLng, userId, radiusMeters];
 
     const selectFields = `
@@ -127,7 +131,11 @@ export const userService = {
       WHERE u.id != $3
         AND u.photo_url IS NOT NULL
         AND TRIM(u.photo_url) <> ''
-        AND ST_DWithin(p.location, ST_MakePoint($2, $1)::geography, $4)
+        ${
+          discoveryScope === 'uk_ie'
+            ? UK_IRELAND_LOCATION_SQL
+            : `AND ST_DWithin(p.location, ST_MakePoint($2, $1)::geography, $4)`
+        }
         AND p.is_visible = true
         AND p.is_ghost = false
         AND p.lat IS NOT NULL
