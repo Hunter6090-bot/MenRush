@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MapMarker } from './MapMarker';
-import { ONLINE_PHOTO_BORDER_COLOR } from './DiscoveryPhotoFrame';
 
 vi.mock('../lib/nearbyPhotoSrc', () => ({
   useGridPhotoSrc: (photoUrl?: string | null) => {
@@ -29,7 +28,7 @@ describe('MapMarker online square border', () => {
     expect(screen.getByTestId('map-marker')).toHaveAttribute('data-online', 'true');
     expect(screen.getByTestId('discovery-photo-frame')).toHaveAttribute('data-online', 'true');
     const border = screen.getByTestId('online-photo-border');
-    expect(border.style.borderColor).toBe(ONLINE_PHOTO_BORDER_COLOR);
+    expect(border.style.borderColor.replace(/\s/g, '')).toMatch(/#4ADE80|rgb\(74,222,128\)/i);
     expect(screen.getByTestId('map-marker').querySelector('[data-avatar-shape="square"]')).toBeTruthy();
   });
 

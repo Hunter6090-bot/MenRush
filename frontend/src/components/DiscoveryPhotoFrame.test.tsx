@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { DiscoveryPhotoFrame, ONLINE_PHOTO_BORDER_COLOR } from './DiscoveryPhotoFrame';
+import { DiscoveryPhotoFrame } from './DiscoveryPhotoFrame';
 
 describe('DiscoveryPhotoFrame', () => {
   it('paints a green inset border on the square photo when online', () => {
@@ -13,7 +13,7 @@ describe('DiscoveryPhotoFrame', () => {
     const frame = screen.getByTestId('discovery-photo-frame');
     expect(frame).toHaveAttribute('data-online', 'true');
     const border = screen.getByTestId('online-photo-border');
-    expect(border.style.borderColor).toBe(ONLINE_PHOTO_BORDER_COLOR);
+    expect(border.style.borderColor.replace(/\s/g, '')).toMatch(/#4ADE80|rgb\(74,222,128\)/i);
     expect(border.className).toMatch(/absolute/);
     expect(border.className).toMatch(/inset-0/);
   });
