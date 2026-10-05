@@ -42,16 +42,17 @@ export const MapMarker = memo(function MapMarker({ user, size = 44 }: MapMarkerP
         size={size}
         intensity={user.isPulsing ? 'live' : 'subtle'}
         isVerified={false}
-        shape="square"
+        shape="circle"
       >
         <DiscoveryPhotoFrame
           online={online}
           verified={!!user.isVerified}
           className="h-full w-full"
           borderClassName="border-[3px]"
+          shape="circle"
         >
           <div
-            className="flex h-full w-full items-center justify-center overflow-hidden"
+            className="flex h-full w-full items-center justify-center overflow-hidden rounded-full"
             style={{
               background: 'linear-gradient(135deg,#2A1C0A,#1E1508)',
               boxShadow: user.isPulsing
@@ -84,7 +85,7 @@ function MapPhoto({
   if (phase === 'loading' && trimmed.startsWith('/uploads/')) {
     return (
       <div
-        className="h-full w-full bg-[var(--bg-elevated)]"
+        className="h-full w-full rounded-full bg-[var(--bg-elevated)]"
         data-testid="map-marker-photo-pending"
         data-photo-phase={phase}
         aria-hidden
@@ -99,7 +100,7 @@ function MapPhoto({
     <img
       src={src}
       alt={name}
-      className="h-full w-full object-cover"
+      className="h-full w-full rounded-full object-cover"
       draggable={false}
       decoding="async"
       data-testid="map-marker-photo"
