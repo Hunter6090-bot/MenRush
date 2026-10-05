@@ -1,5 +1,6 @@
 import { AGE_FILTER_MIN } from './age';
 import { MAP_PIN_FUZZ_DEFAULT_M } from './mapPinFuzz';
+import { PRESENCE_LIVE_SQL } from './presence';
 import { nearbyLocationPredicate } from './ukIrelandBounds';
 
 export type DiscoveryScope = 'radius' | 'uk_ie';
@@ -30,7 +31,7 @@ export function nearbyRosterSelectSql(): string {
           THEN p.visitor_expires_at
           ELSE NULL
         END AS visitor_expires_at,
-        (p.online = TRUE AND p.last_seen IS NOT NULL AND p.last_seen > NOW() - INTERVAL '20 minutes') AS online,
+        ${PRESENCE_LIVE_SQL} AS online,
         p.last_seen, p.available_until,
         (u.is_pulsing AND u.pulse_expires_at IS NOT NULL AND u.pulse_expires_at > NOW()) AS is_pulsing,
         CASE
@@ -97,7 +98,7 @@ export function nearbyRosterListSql(
         (u.is_pulsing AND u.pulse_expires_at > NOW()) DESC,
         (p.available_until IS NOT NULL AND p.available_until > NOW()) DESC,
         (p.visitor_expires_at IS NOT NULL AND p.visitor_expires_at > NOW()) DESC,
-        (p.online = TRUE AND p.last_seen IS NOT NULL AND p.last_seen > NOW() - INTERVAL '20 minutes') DESC,
+        ${PRESENCE_LIVE_SQL} DESC,
         (u.photo_url IS NOT NULL AND u.photo_url NOT LIKE '/avatars/generic/%') DESC,
         p.last_seen DESC NULLS LAST
       LIMIT $${limitIndex} OFFSET $${offsetIndex}

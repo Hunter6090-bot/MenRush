@@ -7,6 +7,8 @@ interface PulsingAvatarProps {
   children: ReactNode;
   className?: string;
   isVerified?: boolean;
+  /** Nearby map pins are square photos; drawer avatars stay circular. */
+  shape?: "circle" | "square";
 }
 
 export function PulsingAvatar({
@@ -16,7 +18,11 @@ export function PulsingAvatar({
   children,
   className = "",
   isVerified = false,
+  shape = "circle",
 }: PulsingAvatarProps) {
+  const isSquare = shape === "square";
+  const clip = isSquare ? "overflow-hidden" : "rounded-full overflow-hidden";
+  const ring = isSquare ? "" : "rounded-full";
   // Identity Checked pin mark — slightly larger so it reads on map markers.
   const badgeSize = Math.max(16, Math.round(size * 0.38));
   const isLive = isPulsing && intensity === "live";
@@ -26,11 +32,12 @@ export function PulsingAvatar({
     <div
       className={`relative inline-block ${className}`}
       style={{ width: size, height: size }}
+      data-avatar-shape={shape}
     >
       {isLive && (
         <>
           <div
-            className="pointer-events-none absolute rounded-full nn-radar-1"
+            className={`pointer-events-none absolute ${ring} nn-radar-1`}
             style={{
               inset: ringInset,
               border: "2px solid var(--copper)",
@@ -39,7 +46,7 @@ export function PulsingAvatar({
             aria-hidden
           />
           <div
-            className="pointer-events-none absolute rounded-full nn-radar-2"
+            className={`pointer-events-none absolute ${ring} nn-radar-2`}
             style={{
               inset: ringInset,
               border: "2px solid var(--copper-light)",
@@ -48,7 +55,7 @@ export function PulsingAvatar({
             aria-hidden
           />
           <div
-            className="pointer-events-none absolute rounded-full nn-radar-3"
+            className={`pointer-events-none absolute ${ring} nn-radar-3`}
             style={{
               inset: ringInset,
               border: "2px solid var(--copper)",
@@ -59,7 +66,7 @@ export function PulsingAvatar({
         </>
       )}
 
-      <div className="relative z-10 w-full h-full rounded-full overflow-hidden">
+      <div className={`relative z-10 w-full h-full ${clip}`}>
         {children}
       </div>
 
@@ -105,29 +112,25 @@ export function PulsingAvatar({
           data-testid="map-identity-checked-badge"
           aria-label="Verified"
           title="ID and live selfie verified through Veriff"
-          className="absolute z-20 rounded-full flex items-center justify-center"
+          className="absolute z-20 flex items-center justify-center pointer-events-none"
           style={{
             width: badgeSize,
             height: badgeSize,
-            right: -1,
-            bottom: -1,
-            background:
-              "linear-gradient(135deg, #E0A14A 0%, #C4832A 45%, #A45E18 100%)",
-            border: "2px solid var(--bg-primary)",
-            boxShadow:
-              "0 2px 5px rgba(0,0,0,0.6), 0 0 0 1px rgba(196,131,42,0.35), inset 0 1px 0 rgba(255,225,180,0.5), inset 0 -1px 0 rgba(0,0,0,0.35)",
+            right: 0,
+            bottom: 0,
           }}
         >
           <svg
             viewBox="0 0 24 24"
-            width={Math.round(badgeSize * 0.62)}
-            height={Math.round(badgeSize * 0.62)}
+            width={Math.round(badgeSize * 0.78)}
+            height={Math.round(badgeSize * 0.78)}
             fill="none"
-            stroke="var(--nn-on-copper)"
+            stroke="#E0A14A"
             strokeWidth={3.75}
             strokeLinecap="round"
             strokeLinejoin="round"
             aria-hidden
+            style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.85))' }}
           >
             <path d="M5 12.5l4.5 4.5L19 7.5" />
           </svg>

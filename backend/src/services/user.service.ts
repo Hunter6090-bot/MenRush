@@ -21,6 +21,7 @@ import {
   nearbyRosterListSql,
   nearbyRosterWhereSql,
 } from '../lib/nearbyRosterSql';
+import { PRESENCE_LIVE_SQL, PRESENCE_WINDOW_SQL } from '../lib/presence';
 import { lookupUkIePlace, placeContainsPoint } from '../lib/ukIePlace';
 
 const includeE2eFixtures = () =>
@@ -67,7 +68,7 @@ export const userService = {
       `UPDATE profiles
        SET online = false
        WHERE online = true
-         AND (last_seen IS NULL OR last_seen < NOW() - INTERVAL '20 minutes')`,
+         AND (last_seen IS NULL OR last_seen < NOW() - ${PRESENCE_WINDOW_SQL})`,
     ).catch(() => undefined);
     void this.ensureDefaultAvatar(userId).catch(() => undefined);
     void this.backfillMissingAvatarsNear(userId).catch(() => undefined);
@@ -108,7 +109,7 @@ export const userService = {
       )`;
     }
     if (filters?.online) {
-      whereClause += ` AND (p.online = TRUE AND p.last_seen IS NOT NULL AND p.last_seen > NOW() - INTERVAL '20 minutes')`;
+      whereClause += ` AND ${PRESENCE_LIVE_SQL}`;
     }
     if (filters?.verified) {
       whereClause += ` AND (u.is_verified = TRUE AND u.verification_provider = 'veriff')`;
@@ -131,7 +132,7 @@ export const userService = {
     if (filters?.lookingFor) {
       const lf = filters.lookingFor.toLowerCase();
       if (lf === 'chat') {
-        whereClause += ` AND p.online = true AND p.last_seen > NOW() - INTERVAL '20 minutes'`;
+        whereClause += ` AND ${PRESENCE_LIVE_SQL}`;
       } else if (lf === 'date') {
         values.push('%dating%');
         whereClause += ` AND (u.looking_for ILIKE $${values.length} OR u.interests && ARRAY['Dating']::text[])`;
