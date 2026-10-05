@@ -44,7 +44,7 @@ export const CRUISING_CATEGORY_META: Record<
   },
   sauna: {
     label: 'Sauna',
-    icon: '🧖',
+    icon: '♨️',
     description: 'Licensed saunas, bathhouses and wellness venues',
   },
 };

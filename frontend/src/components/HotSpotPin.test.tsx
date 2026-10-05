@@ -8,7 +8,7 @@ afterEach(() => {
 });
 
 describe('HotSpotPin', () => {
-  it('shows venue name, approximate count, and cruise-ship icon when occupied', () => {
+  it('shows venue name, approximate count, and category icon when occupied', () => {
     render(
       <HotSpotPin
         spot={{
@@ -24,10 +24,11 @@ describe('HotSpotPin', () => {
     expect(screen.getByTestId('hotspot-pin-solid')).toBeInTheDocument();
     expect(screen.getByTestId('hotspot-pin-name')).toHaveTextContent('Heaven');
     expect(screen.getByTestId('hotspot-pin-count')).toHaveTextContent('5+');
-    expect(screen.getByTestId('cruise-ship-icon')).toBeInTheDocument();
+    expect(screen.getByTestId('hotspot-category-icon')).toHaveTextContent('🪩');
+    expect(screen.queryByTestId('cruise-ship-icon')).not.toBeInTheDocument();
   });
 
-  it('shows Cruise pin label when empty and still shows cruise-ship icon', () => {
+  it('shows Cruise pin label when empty and falls back to cruise-ship icon without a category icon', () => {
     render(
       <HotSpotPin
         spot={{
