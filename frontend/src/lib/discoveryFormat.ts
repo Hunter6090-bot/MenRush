@@ -1,4 +1,5 @@
 import type { NearbyUser } from '../components/ProfileCard';
+import { isUserOnlineNow } from './discovery';
 import {
   RADIUS_KM_OPTIONS,
   displayRadiusValueToKm,
@@ -146,7 +147,7 @@ export function formatDistanceMiles(user: NearbyUser): string {
 }
 
 export function formatActiveStatus(user: NearbyUser): string {
-  if (user.online) return 'Active now';
+  if (isUserOnlineNow(user)) return 'Active now';
   if (!user.last_seen) return 'Recently';
   const diffMs = Date.now() - new Date(user.last_seen).getTime();
   const mins = Math.floor(diffMs / 60000);

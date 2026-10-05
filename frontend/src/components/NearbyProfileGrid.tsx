@@ -1,10 +1,10 @@
 import type { NearbyUser } from './ProfileCard';
 import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
-import { VerifiedBadge } from './VerifiedBadge';
+import { DiscoveryPhotoFrame } from './DiscoveryPhotoFrame';
 import { NewJoinerBadge } from './NewJoinerBadge';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { formatActiveStatus, formatDistanceMiles, getTribeTag } from '../lib/discoveryFormat';
-import { getDistanceLabel } from '../lib/discovery';
+import { getDistanceLabel, isUserOnlineNow } from '../lib/discovery';
 import { isFreshFaceNearby } from '../lib/newJoiner';
 import {
   PROFILE_TILE_GRID_CLASS,
@@ -363,7 +363,6 @@ const NearbyGridCard = memo(function NearbyGridCard({
         {isFreshFaceNearby(user) ? (
           <NewJoinerBadge className={distLabel ? 'max-w-[calc(100%-4.5rem)] truncate' : ''} />
         ) : null}
-        {user.is_verified ? <VerifiedBadge compact className="absolute bottom-1.5 right-1.5 z-10" /> : null}
       </div>
       {onMatch ? (
         <div className="border-t border-[var(--border-default)] p-1 md:p-1.5">
@@ -407,14 +406,17 @@ const GridCardFace = memo(function GridCardFace({
   user: NearbyUser;
   meta: string;
 }) {
+  const online = isUserOnlineNow(user);
+
   return (
-    <div className="relative aspect-square w-full bg-[var(--bg-elevated)]">
+    <DiscoveryPhotoFrame
+      online={online}
+      verified={!!user.is_verified}
+      className="relative aspect-square w-full bg-[var(--bg-elevated)]"
+    >
       <GridPhoto name={user.name} photoUrl={user.photo_url} age={user.age} />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent pl-1.5 pr-9 pb-1.5 pt-8 md:pl-2.5 md:pr-10 md:pb-2 md:pt-10">
         <div className="flex items-center gap-0.5 md:gap-1">
-          <span
-            className={`h-1.5 w-1.5 shrink-0 rounded-full md:h-2 md:w-2 ${user.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
-          />
           <span className="truncate text-[13px] font-bold leading-tight text-[#FFF6E6] md:text-sm lg:text-[15px]">
             {user.name}{typeof user.age === 'number' ? ` ${user.age}` : ''}
           </span>
@@ -425,7 +427,7 @@ const GridCardFace = memo(function GridCardFace({
           <p className="mt-0.5 truncate text-xs font-bold text-[#E0A14A] md:text-[13px]">{user.looking_for}</p>
         ) : null}
       </div>
-    </div>
+    </DiscoveryPhotoFrame>
   );
 });
 

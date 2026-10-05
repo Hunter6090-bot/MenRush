@@ -6,8 +6,9 @@ export interface DiscoveryPresence {
   is_pulsing?: boolean | null;
   pulse_expires_at?: string | null;
   available_until?: string | null;
-  /** Backend: online=true AND last_seen within the presence window (~20m). */
+  /** Backend: last_seen within the 1-hour presence window. */
   online?: boolean | null;
+  last_seen?: string | null;
 }
 
 function hasFutureTimestamp(value?: string | null): boolean {
@@ -21,12 +22,23 @@ export function isUserPulsing(user: DiscoveryPresence): boolean {
   return hasFutureTimestamp(user.pulse_expires_at) || hasFutureTimestamp(user.available_until);
 }
 
+/** Pete lock: stay live for 1 hour after last activity / leaving. */
+export const PRESENCE_WINDOW_MS = 60 * 60 * 1000;
+
+function lastSeenWithinPresenceWindow(lastSeen?: string | null): boolean {
+  if (!lastSeen) return false;
+  const ts = new Date(lastSeen).getTime();
+  return Number.isFinite(ts) && Date.now() - ts < PRESENCE_WINDOW_MS;
+}
+
 /**
  * "Live" / Active now — presence only. Never equate radius/filter headcount with Live.
- * Matches backend nearby SQL: online AND last_seen within ~20 minutes.
+ * Backend nearby SQL uses last_seen within 1 hour. Also honour last_seen here so a
+ * stale `online: false` after disconnect still paints the green photo border.
  */
 export function isUserOnlineNow(user: DiscoveryPresence): boolean {
-  return user.online === true;
+  if (user.online === true) return true;
+  return lastSeenWithinPresenceWindow(user.last_seen);
 }
 
 /** Count men who are actually online now among a nearby/filtered roster. */

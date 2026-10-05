@@ -16,6 +16,46 @@ function mockUser(overrides: Partial<NearbyUser> = {}): NearbyUser {
   };
 }
 
+describe('NearbyProfileGrid online square border', () => {
+  it('paints a green border on the square photo when online', () => {
+    const user = mockUser({ id: 'u-online', name: 'James', online: true });
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid users={[user]} loading={false} />
+      </MemoryRouter>,
+    );
+
+    const frame = screen.getByTestId('discovery-photo-frame');
+    expect(frame).toHaveAttribute('data-online', 'true');
+    expect(screen.getByTestId('online-photo-border')).toBeInTheDocument();
+  });
+
+  it('does not paint the green border when offline', () => {
+    const user = mockUser({ id: 'u-off', name: 'Dave', online: false });
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid users={[user]} loading={false} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId('discovery-photo-frame')).toHaveAttribute('data-online', 'false');
+    expect(screen.queryByTestId('online-photo-border')).not.toBeInTheDocument();
+  });
+
+  it('shows verified tick without a circular badge', () => {
+    const user = mockUser({ id: 'u-ver', name: 'Kev', online: true, is_verified: true });
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid users={[user]} loading={false} />
+      </MemoryRouter>,
+    );
+
+    const tick = screen.getByRole('button', { name: /Verified/ });
+    expect(tick.className).not.toMatch(/rounded-full/);
+    expect(tick.className).not.toMatch(/bg-\[#C4832A\]/);
+  });
+});
+
 describe('NearbyProfileGrid distance chips', () => {
   it('renders distance chip in miles on grid profile card', () => {
     const user = mockUser({ id: 'u1', name: 'James', distance_km: 1.93 });

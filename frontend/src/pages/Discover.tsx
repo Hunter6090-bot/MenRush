@@ -51,7 +51,7 @@ import {
   type DiscoveryFilterState,
 } from '../lib/discoveryFilters';
 import { EventsRail } from '../components/EventsRail';
-import { countLiveOnline, isUserPulsing, distanceMeters } from '../lib/discovery';
+import { countLiveOnline, isUserOnlineNow, isUserPulsing, distanceMeters } from '../lib/discovery';
 import { isFreshFaceNearby } from '../lib/newJoiner';
 import {
   readNearbySort,
@@ -1750,6 +1750,8 @@ export const Discover = () => {
         isPulsing,
         isVerified: !!(user as any).is_verified,
         isNew,
+        online: isUserOnlineNow(user),
+        last_seen: user.last_seen,
       };
       const lngLat: [number, number] = [Number(user.lng), Number(user.lat)];
       const existing = markersRef.current.get(user.id);
@@ -1772,7 +1774,8 @@ export const Discover = () => {
           prev.photo_url !== user.photo_url ||
           isUserPulsing(prev) !== isPulsing ||
           !!(prev as any).is_verified !== !!(user as any).is_verified ||
-          isFreshFaceNearby(prev) !== isNew;
+          isFreshFaceNearby(prev) !== isNew ||
+          isUserOnlineNow(prev) !== isUserOnlineNow(user);
         if (visualChanged) {
           const markerSize = isPulsing ? 52 : 44;
           existing.root.render(<MapMarker user={markerUser} size={markerSize} />);
