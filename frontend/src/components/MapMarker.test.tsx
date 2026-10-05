@@ -11,8 +11,8 @@ vi.mock('../lib/nearbyPhotoSrc', () => ({
   clearGridPhotoQueue: vi.fn(),
 }));
 
-describe('MapMarker online square border', () => {
-  it('renders a green square rim when the member is online', () => {
+describe('MapMarker online circular border', () => {
+  it('renders a green circular rim on the map pin when the member is online', () => {
     render(
       <MapMarker
         user={{
@@ -26,10 +26,15 @@ describe('MapMarker online square border', () => {
     );
 
     expect(screen.getByTestId('map-marker')).toHaveAttribute('data-online', 'true');
-    expect(screen.getByTestId('discovery-photo-frame')).toHaveAttribute('data-online', 'true');
+    const frame = screen.getByTestId('discovery-photo-frame');
+    expect(frame).toHaveAttribute('data-online', 'true');
+    expect(frame).toHaveAttribute('data-shape', 'circle');
+    expect(frame.className).toMatch(/rounded-full/);
     const border = screen.getByTestId('online-photo-border');
     expect(border.style.borderColor.replace(/\s/g, '')).toMatch(/#4ADE80|rgb\(74,222,128\)/i);
-    expect(screen.getByTestId('map-marker').querySelector('[data-avatar-shape="square"]')).toBeTruthy();
+    expect(border.className).toMatch(/rounded-full/);
+    expect(screen.getByTestId('map-marker').querySelector('[data-avatar-shape="circle"]')).toBeTruthy();
+    expect(screen.getByTestId('map-marker').querySelector('[data-avatar-shape="square"]')).toBeNull();
   });
 
   it('keeps last_seen within 1 hour live even when online is false', () => {
