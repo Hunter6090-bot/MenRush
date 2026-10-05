@@ -42,16 +42,17 @@ export const MapMarker = memo(function MapMarker({ user, size = 44 }: MapMarkerP
         size={size}
         intensity={user.isPulsing ? 'live' : 'subtle'}
         isVerified={false}
-        shape="square"
+        shape="circle"
       >
         <DiscoveryPhotoFrame
           online={online}
           verified={!!user.isVerified}
+          shape="circle"
           className="h-full w-full"
           borderClassName="border-[3px]"
         >
           <div
-            className="flex h-full w-full items-center justify-center overflow-hidden"
+            className="flex h-full w-full items-center justify-center overflow-hidden rounded-full"
             style={{
               background: 'linear-gradient(135deg,#2A1C0A,#1E1508)',
               boxShadow: user.isPulsing

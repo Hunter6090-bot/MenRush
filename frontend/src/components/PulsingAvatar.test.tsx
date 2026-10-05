@@ -19,17 +19,17 @@ describe('PulsingAvatar identity badge', () => {
     expect(badge.style.border).toBe('');
   });
 
-  it('clips map pins as squares so the green photo rim is not rounded off', () => {
+  it('clips map pins as circles so the green photo rim stays round', () => {
     render(
-      <PulsingAvatar isPulsing={false} size={44} shape="square">
+      <PulsingAvatar isPulsing={false} size={44} shape="circle">
         <span>face</span>
       </PulsingAvatar>,
     );
     const root = screen.getByText('face').closest('[data-avatar-shape]');
-    expect(root).toHaveAttribute('data-avatar-shape', 'square');
+    expect(root).toHaveAttribute('data-avatar-shape', 'circle');
     const clip = root?.querySelector('.relative.z-10');
     expect(clip?.className).toMatch(/overflow-hidden/);
-    expect(clip?.className).not.toMatch(/rounded-full/);
+    expect(clip?.className).toMatch(/rounded-full/);
   });
 
   it('hides the mark when not verified', () => {

@@ -7,7 +7,7 @@ interface PulsingAvatarProps {
   children: ReactNode;
   className?: string;
   isVerified?: boolean;
-  /** Nearby map pins are square photos; drawer avatars stay circular. */
+  /** Map pins and drawer avatars are circular. Square is unused on Discover map. */
   shape?: "circle" | "square";
 }
 
