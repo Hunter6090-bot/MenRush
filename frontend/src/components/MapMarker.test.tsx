@@ -11,8 +11,8 @@ vi.mock('../lib/nearbyPhotoSrc', () => ({
   clearGridPhotoQueue: vi.fn(),
 }));
 
-describe('MapMarker online square border', () => {
-  it('renders a green square rim when the member is online', () => {
+describe('MapMarker circular pin with online rim', () => {
+  it('renders a circular photo pin with a green circular rim when the member is online', () => {
     render(
       <MapMarker
         user={{
@@ -29,7 +29,33 @@ describe('MapMarker online square border', () => {
     expect(screen.getByTestId('discovery-photo-frame')).toHaveAttribute('data-online', 'true');
     const border = screen.getByTestId('online-photo-border');
     expect(border.style.borderColor.replace(/\s/g, '')).toMatch(/#4ADE80|rgb\(74,222,128\)/i);
-    expect(screen.getByTestId('map-marker').querySelector('[data-avatar-shape="square"]')).toBeTruthy();
+    expect(border.className).toMatch(/rounded-full/);
+    const marker = screen.getByTestId('map-marker');
+    expect(marker.querySelector('[data-avatar-shape="circle"]')).toBeTruthy();
+    expect(marker.querySelector('[data-avatar-shape="square"]')).toBeNull();
+    const frame = screen.getByTestId('discovery-photo-frame');
+    expect(frame).toHaveAttribute('data-shape', 'circle');
+    expect(frame.className).toMatch(/rounded-full/);
+    expect(frame.className).toMatch(/overflow-hidden/);
+    expect(screen.getByTestId('map-marker-photo').className).toMatch(/rounded-full/);
+  });
+
+  it('keeps the circle crop when offline (no rim)', () => {
+    render(
+      <MapMarker
+        user={{
+          id: 'm5',
+          name: 'Ian',
+          photo_url: '/uploads/profiles/ian.jpg',
+          isPulsing: false,
+          online: false,
+        }}
+      />,
+    );
+
+    expect(screen.queryByTestId('online-photo-border')).toBeNull();
+    expect(screen.getByTestId('discovery-photo-frame').className).toMatch(/rounded-full/);
+    expect(screen.getByTestId('map-marker').querySelector('[data-avatar-shape="circle"]')).toBeTruthy();
   });
 
   it('keeps last_seen within 1 hour live even when online is false', () => {

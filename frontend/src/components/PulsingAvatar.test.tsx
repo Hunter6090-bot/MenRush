@@ -19,7 +19,20 @@ describe('PulsingAvatar identity badge', () => {
     expect(badge.style.border).toBe('');
   });
 
-  it('clips map pins as squares so the green photo rim is not rounded off', () => {
+  it('clips circle avatars (map pins) with rounded-full by default', () => {
+    render(
+      <PulsingAvatar isPulsing={false} size={44}>
+        <span>face</span>
+      </PulsingAvatar>,
+    );
+    const root = screen.getByText('face').closest('[data-avatar-shape]');
+    expect(root).toHaveAttribute('data-avatar-shape', 'circle');
+    const clip = root?.querySelector('.relative.z-10');
+    expect(clip?.className).toMatch(/rounded-full/);
+    expect(clip?.className).toMatch(/overflow-hidden/);
+  });
+
+  it('still supports an opt-in square clip', () => {
     render(
       <PulsingAvatar isPulsing={false} size={44} shape="square">
         <span>face</span>
