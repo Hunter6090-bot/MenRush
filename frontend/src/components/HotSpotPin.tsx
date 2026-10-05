@@ -20,7 +20,8 @@ interface HotSpotPinProps {
 }
 
 /**
- * Always-visible Cruise marker on the Nearby map — cruise-ship icon at a glance.
+ * Always-visible Cruise marker on the Nearby map — shows the spot's category icon
+ * (park, parking, sauna, bar…); falls back to the cruise-ship icon if none is set.
  * Pin label is Brand "Cruise". Chip on the map chrome is "Hot Spots".
  * Empty: solid copper pin (slightly quieter, never near-invisible).
  * Occupied: larger glow + pulse + venue name + approximate check-in count.
@@ -99,12 +100,26 @@ export function HotSpotPin({ spot, size = 48, showLabel = true }: HotSpotPinProp
           color: '#FFF6E6',
         }}
       >
-        <IconCruise
-          size={Math.round(pinSize * 0.52)}
-          aria-hidden
-          data-testid="cruise-ship-icon"
-          style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.45))' }}
-        />
+        {spot.category_icon ? (
+          <span
+            aria-hidden
+            data-testid="hotspot-category-icon"
+            style={{
+              fontSize: Math.round(pinSize * 0.48),
+              lineHeight: 1,
+              filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.45))',
+            }}
+          >
+            {spot.category_icon}
+          </span>
+        ) : (
+          <IconCruise
+            size={Math.round(pinSize * 0.52)}
+            aria-hidden
+            data-testid="cruise-ship-icon"
+            style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.45))' }}
+          />
+        )}
       </div>
       {occupied ? (
         <span
