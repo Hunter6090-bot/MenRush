@@ -195,19 +195,19 @@ export function Out() {
             <div className="flex flex-wrap gap-2 pt-2">
               <Link
                 to="/hot-spots"
-                className="text-[12px] font-bold text-[var(--copper)] underline-offset-2 hover:underline"
+                className="inline-flex min-h-[44px] items-center text-[12px] font-bold text-[var(--copper)] underline-offset-2 hover:underline"
               >
                 Full Cruise map
               </Link>
               <Link
                 to="/events"
-                className="text-[12px] font-bold text-[var(--copper)] underline-offset-2 hover:underline"
+                className="inline-flex min-h-[44px] items-center text-[12px] font-bold text-[var(--copper)] underline-offset-2 hover:underline"
               >
                 Full Events
               </Link>
               <Link
                 to="/stream"
-                className="text-[12px] font-bold text-[var(--copper)] underline-offset-2 hover:underline"
+                className="inline-flex min-h-[44px] items-center text-[12px] font-bold text-[var(--copper)] underline-offset-2 hover:underline"
               >
                 Community feed
               </Link>
@@ -237,7 +237,7 @@ function OutSpotRow({ spot }: { spot: HotSpotDTO }) {
         <p className="mt-0.5 truncate text-[12px] font-medium text-[var(--cream-muted)]">
           {[dist, spot.city].filter(Boolean).join(' · ') || spot.category_name}
         </p>
-        <p className="mt-1 text-[11px] text-[var(--cream-soft)]">
+        <p className="mt-1 text-[14px] text-[var(--cream-soft)]">
           {spot.category_icon} {spot.category_name}
         </p>
       </div>
@@ -245,7 +245,7 @@ function OutSpotRow({ spot }: { spot: HotSpotDTO }) {
         href={mapUrl}
         target="_blank"
         rel="noreferrer"
-        className="inline-flex min-h-[44px] shrink-0 items-center self-center rounded-full border border-[var(--border-default)] px-3 text-[11px] font-extrabold uppercase tracking-wide text-[var(--cream)]"
+        className="inline-flex min-h-[44px] shrink-0 items-center self-center rounded-full border border-[var(--border-default)] px-3 text-[14px] font-extrabold uppercase tracking-wide text-[var(--cream)]"
         aria-label={`Map directions to ${spot.name}`}
       >
         Map
@@ -272,7 +272,7 @@ function OutEventRow({ event }: { event: EventDTO }) {
           {[event.venue_name, event.starts_at].filter(Boolean).join(' · ')}
         </p>
       </div>
-      <span className="inline-flex min-h-[44px] shrink-0 items-center self-center rounded-full border border-[var(--copper)]/40 px-3 text-[11px] font-extrabold uppercase tracking-wide text-[var(--copper)]">
+      <span className="inline-flex min-h-[44px] shrink-0 items-center self-center rounded-full border border-[var(--copper)]/40 px-3 text-[14px] font-extrabold uppercase tracking-wide text-[var(--copper)]">
         Event
       </span>
     </article>

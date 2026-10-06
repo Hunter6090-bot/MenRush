@@ -12,6 +12,7 @@ import {
   refreshMatches,
   type InboxConversationRow,
 } from '../lib/tabListCache';
+import { IconMatches } from './icons';
 
 export type ConversationRow = InboxConversationRow;
 
@@ -50,6 +51,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   const [matchIds, setMatchIds] = useState<Set<string>>(() => {
     const cached = readCachedMatches();
     return new Set((cached?.matches ?? []).map((m: { id: string }) => m.id));
+  });
+  const [matchCount, setMatchCount] = useState<number>(() => {
+    const cached = readCachedMatches();
+    return cached?.matches.length ?? 0;
   });
   const navigate = useNavigate();
   const unreadBySender = useUnreadStore((s) => s.unreadBySender);
@@ -90,11 +95,17 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     let cancelled = false;
     refreshMatches()
       .then((snap) => {
-        if (!cancelled) setMatchIds(new Set(snap.matches.map((m) => m.id)));
+        if (!cancelled) {
+          setMatchIds(new Set(snap.matches.map((m) => m.id)));
+          setMatchCount(snap.matches.length);
+        }
       })
       .catch(() => {
         const cached = readCachedMatches();
-        if (!cancelled && cached) setMatchIds(new Set(cached.matches.map((m) => m.id)));
+        if (!cancelled && cached) {
+          setMatchIds(new Set(cached.matches.map((m) => m.id)));
+          setMatchCount(cached.matches.length);
+        }
       });
     return () => {
       cancelled = true;
@@ -193,6 +204,29 @@ export const ConversationList: React.FC<ConversationListProps> = ({
       )}
 
 
+      <div className={`shrink-0 ${isSidebar ? 'px-3 pb-2' : 'mb-3'}`}>
+        <button
+          type="button"
+          data-testid="chat-matches-entry"
+          onClick={() => navigate('/matches')}
+          aria-label={matchCount > 0 ? `Matches, ${matchCount}` : 'Matches'}
+          className="flex min-h-[48px] w-full items-center gap-3 rounded-2xl border border-[var(--copper)]/40 bg-[rgba(196,131,42,0.12)] px-3.5 text-left transition-colors hover:border-[var(--copper)] hover:bg-[rgba(196,131,42,0.18)]"
+        >
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[rgba(196,131,42,0.2)] text-[var(--copper)]">
+            <IconMatches size={20} />
+          </span>
+          <span className="min-w-0 flex-1 text-[15px] font-extrabold text-[var(--cream)]">Matches</span>
+          {matchCount > 0 ? (
+            <span
+              data-testid="chat-matches-count"
+              className="inline-flex min-h-[24px] min-w-[24px] items-center justify-center rounded-full bg-[var(--copper)] px-2 text-[12px] font-extrabold text-[#1A0E03]"
+            >
+              {matchCount > 99 ? '99+' : matchCount}
+            </span>
+          ) : null}
+        </button>
+      </div>
+
       <div
         className={`flex shrink-0 gap-2 overflow-x-auto ${isSidebar ? 'px-3 pb-2' : 'mb-3'}`}
         data-testid="chat-filter-chips"
@@ -213,7 +247,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               aria-selected={active}
               data-testid={`chat-filter-${id}`}
               onClick={() => setChatListFilter(id)}
-              className={`inline-flex min-h-[40px] shrink-0 items-center rounded-full px-3.5 text-[12px] font-extrabold ${
+              className={`inline-flex min-h-[44px] shrink-0 items-center rounded-full px-3.5 text-[12px] font-extrabold ${
                 active
                   ? 'bg-[var(--copper)] text-[#1A0E03]'
                   : 'border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream)]'
@@ -227,7 +261,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           type="button"
           data-testid="chat-search-pill"
           onClick={() => window.dispatchEvent(new Event('menrush:open-search'))}
-          className="ml-auto inline-flex min-h-[40px] shrink-0 items-center gap-1 rounded-full border border-[var(--copper)]/45 bg-[rgba(196,131,42,0.12)] px-3 text-[12px] font-extrabold text-[var(--copper)]"
+          className="ml-auto inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded-full border border-[var(--copper)]/45 bg-[rgba(196,131,42,0.12)] px-3 text-[12px] font-extrabold text-[var(--copper)]"
           aria-label="Search"
         >
           Search

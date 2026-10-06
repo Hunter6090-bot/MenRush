@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { NearbyUser } from "./ProfileCard";
 import { FadedBrandFace } from "./FadedBrandFace";
+import { BrandAvatar } from "./BrandAvatar";
 import { PulsingAvatar } from "./PulsingAvatar";
 import { useResolvingPhotoSrc } from "./UserAvatar";
 import { ProfilePhotoViewer } from "./ProfilePhotoViewer";
@@ -368,12 +369,13 @@ export function ProfileDrawer({
           />
           <div className="relative z-10 w-full max-w-lg rounded-t-[1.5rem] border border-[var(--border-default)] bg-[#1E1508] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 shadow-2xl">
             <div className="mb-3 flex items-center gap-3">
-              <div className="h-10 w-10 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
-                {avatarEnlargeSrc ? (
-                  <img src={avatarEnlargeSrc} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <FadedBrandFace variant="profile" size={40} label={user.name} />
-                )}
+              <div className="h-10 w-10 overflow-hidden rounded-full bg-[var(--bg-elevated)]" data-testid="pin-sheet-more-avatar">
+                <BrandAvatar
+                  photoUrl={avatarEnlargeSrc}
+                  name={user.name}
+                  size={40}
+                  variant="profile"
+                />
               </div>
               <p className="truncate text-[16px] font-extrabold text-[#F0E0C0]">{user.name}</p>
             </div>
@@ -445,7 +447,7 @@ export function ProfileDrawer({
               />
             </div>
             <p className="mb-3 px-1 text-[12px] text-[var(--cream-muted)]">
-              Use the flag menu above for Report. Block is red in that menu.
+              Report and Block live in the menu above.
             </p>
 
             <button

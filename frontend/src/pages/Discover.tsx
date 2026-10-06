@@ -179,7 +179,8 @@ function MapFloatingChrome({
 
   return (
     <>
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 p-3">
+      {/* Sit below MapTopPillBar (Radius/Filters/Search) so Discretion + People/Cruise stay tappable at 390px. */}
+      <div className="pointer-events-none absolute inset-x-0 top-[3.75rem] z-10 flex items-start justify-between gap-2 px-3 sm:top-[4rem]">
         {!expanded ? (
           <div className="pointer-events-auto" data-map-chrome-corner="top-left">
             <MapDiscretionSlider valueM={mapPinFuzzM} onChange={onMapPinFuzzChange} />
@@ -245,7 +246,7 @@ function MapFloatingChrome({
         </div>
       </div>
       {onOpenCruisingSearch ? (
-        <div className="pointer-events-none absolute inset-x-0 top-14 z-10 flex justify-center px-3">
+        <div className="pointer-events-none absolute inset-x-0 top-[7.25rem] z-10 flex justify-center px-3 sm:top-[7.5rem]">
           <div className="pointer-events-auto">
             <CruisingSearchBar onOpen={onOpenCruisingSearch} />
           </div>
@@ -253,7 +254,7 @@ function MapFloatingChrome({
       ) : null}
       {hotSpotsLayerOn && !mapBannerDismissed ? (
         <div
-          className="pointer-events-none absolute inset-x-0 top-24 z-10 flex justify-center px-3"
+          className="pointer-events-none absolute inset-x-0 top-[9.75rem] z-10 flex justify-center px-3 sm:top-[10rem]"
           data-testid="hotspots-map-helper"
         >
           <div
@@ -2421,7 +2422,7 @@ export const Discover = () => {
           <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
           {!needsLocationGate && !tokenMissing ? (
             <p
-              className="pointer-events-none absolute top-[4.75rem] left-1/2 z-[4] max-w-[min(78%,280px)] -translate-x-1/2 rounded-full px-2.5 py-1 text-center text-xs font-medium leading-snug"
+              className="pointer-events-none absolute top-[7.5rem] left-1/2 z-[4] max-w-[min(78%,280px)] -translate-x-1/2 rounded-full px-2.5 py-1 text-center text-xs font-medium leading-snug"
               style={{
                 background: 'rgba(13,10,6,0.55)',
                 color: 'rgba(240,224,192,0.65)',
@@ -2595,7 +2596,7 @@ export const Discover = () => {
             <p
               className="pointer-events-none absolute left-1/2 z-[4] max-w-[min(78%,260px)] -translate-x-1/2 rounded-full px-2.5 py-1 text-center text-xs font-medium leading-snug"
               style={{
-                top: hotSpotsLayerOn ? '4.75rem' : '3.25rem',
+                top: hotSpotsLayerOn ? '10.5rem' : '7.5rem',
                 background: 'rgba(13,10,6,0.55)',
                 color: 'rgba(240,224,192,0.65)',
                 border: '1px solid rgba(196,131,42,0.18)',
@@ -2837,6 +2838,10 @@ export const Discover = () => {
         onMessage={() => {
           if (!selectedUser) return;
           navigate(`/messages/${selectedUser.id}`);
+        }}
+        onPulseBack={() => {
+          // Peer is pulsing: open own Pulse sheet (live feature).
+          requestOpenPulse();
         }}
         onSafetyNotice={(msg, tone) => {
           setSafetyNotice({ msg, tone: tone ?? 'success' });
