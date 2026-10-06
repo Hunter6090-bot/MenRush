@@ -29,12 +29,11 @@ import { sendWaitlistCampaignEmail } from './mailer.service';
 import { inviteCodeService } from './invite-code.service';
 
 /**
- * Waitlist + drip sends are OFF by default until you explicitly opt in.
- * Set WAITLIST_EMAILS_PAUSED=false on Railway when templates are approved.
+ * Waitlist ended 2 Sep 2026. Drip is retired and permanently paused.
+ * Do not re-enable WAITLIST_EMAILS_PAUSED for production sends.
  */
 export function isWaitlistEmailPaused(): boolean {
-  const flag = (process.env.WAITLIST_EMAILS_PAUSED ?? 'true').trim().toLowerCase();
-  return flag !== 'false';
+  return true;
 }
 
 // ─── Schedule ──────────────────────────────────────────────────────────────
@@ -55,7 +54,7 @@ export const DRIP_SCHEDULE: readonly DripStep[] = [
     key: 'mr-d00-welcome',
     dayOffset: 0,
     filename: 'welcome-email.html',
-    subject: "You're on the list — want the MenRush beta?",
+    subject: "You're on the list — MenRush is open",
   },
   {
     key: 'mr-d02-why-building',
@@ -79,7 +78,7 @@ export const DRIP_SCHEDULE: readonly DripStep[] = [
     key: 'mr-d17-save-the-date',
     dayOffset: 17,
     filename: 'email5-save-the-date.html',
-    subject: 'Save the date — MenRush beta is open now',
+    subject: 'Save the date — MenRush is open now',
   },
   {
     key: 'mr-d25-build-journey',
@@ -254,7 +253,7 @@ function renderTemplate(
   return html;
 }
 
-/** Mint a single-use beta invite for a waitlist welcome email. */
+/** Mint a single-use invite for a waitlist welcome email. */
 async function createWelcomeInviteCode(email: string): Promise<string> {
   const created = await inviteCodeService.generateBatch({
     count: 1,
@@ -263,7 +262,7 @@ async function createWelcomeInviteCode(email: string): Promise<string> {
   });
   const code = created[0]?.code;
   if (!code) {
-    throw new Error('Failed to generate beta invite code for waitlist welcome');
+    throw new Error('Failed to generate invite code for waitlist welcome');
   }
   return code;
 }
@@ -272,7 +271,7 @@ async function sendDripStep(item: DueSend): Promise<{ messageId: string | null; 
   if (isWaitlistEmailPaused()) {
     console.log(
       `[drip] PAUSED — no email sent to ${item.email} (${item.step.key}). ` +
-        'Set WAITLIST_EMAILS_PAUSED=false when ready to send.',
+        'Waitlist drip is retired (ended 2 Sep 2026).',
     );
     return { messageId: null, skipped: true };
   }
@@ -281,7 +280,7 @@ async function sendDripStep(item: DueSend): Promise<{ messageId: string | null; 
     return { messageId: null, skipped: true };
   }
 
-  // Welcome emails include a personal beta invite — generate before claiming
+  // Welcome emails include a personal invite — generate before claiming
   // the send so a failed mint does not burn the drip ledger row.
   let inviteCode = '';
   let betaUrl = 'https://menrush.com/beta';
@@ -322,7 +321,7 @@ async function sendDripStep(item: DueSend): Promise<{ messageId: string | null; 
         ? [
             "You're on the MenRush waitlist.",
             '',
-            'The beta is live. Want to log in early?',
+            'MenRush is live. Want to log in early?',
             inviteCode ? `Your invite code: ${inviteCode}` : '',
             `Open: ${betaUrl}`,
             '',
@@ -544,7 +543,7 @@ export async function runDripBatch(limit = 50): Promise<DripBatchResult> {
 
   if (isWaitlistEmailPaused()) {
     console.log(
-      '[drip] PAUSED — batch skipped. Set WAITLIST_EMAILS_PAUSED=false when ready to send.',
+      '[drip] PAUSED — batch skipped. Waitlist drip is retired (ended 2 Sep 2026).',
     );
     return result;
   }

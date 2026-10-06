@@ -83,13 +83,13 @@ export const Premium: React.FC = () => {
           </h1>
           <p className="text-sm text-[var(--cream-muted)] text-center mb-6">
             {BETA_INVITE_REQUIRED
-              ? 'Premium perks are included free during the private beta.'
+              ? 'Premium perks are included free while this offer lasts.'
               : 'Direct proximity edge. Full features, no swiping theatre.'}
           </p>
 
           <div className="rounded-xl border border-[#C4832A]/40 bg-[#C4832A]/10 p-4 text-center mb-5">
             <p className="text-[#C4832A] font-bold">
-              {BETA_INVITE_REQUIRED ? 'Beta access includes Premium' : 'In-app card billing is being set up'}
+              {BETA_INVITE_REQUIRED ? 'Your access includes Premium' : 'In-app card billing is being set up'}
             </p>
             <p className="text-xs text-[var(--cream-muted)] mt-1">
               We are not taking card payments in-app yet while payment processing is under merchant review.
