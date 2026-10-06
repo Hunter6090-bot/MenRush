@@ -1176,6 +1176,11 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             <ChatSafetyMenu
               peerId={otherId}
               peerName={otherUser?.name ?? 'this user'}
+              threadId={
+                user?.id
+                  ? `dm:${[user.id, otherId].sort().join('_')}`
+                  : `dm:${otherId}`
+              }
               onNotice={(msg, tone = 'success') => setSafetyNotice({ msg, tone })}
               onBlocked={() => {
                 // Land on the unblock list so the action is obvious.
