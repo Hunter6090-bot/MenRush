@@ -7,7 +7,9 @@ import { useAuthStore, useUnreadStore } from '../hooks/store';
 import { useSocket } from '../hooks/useSocket';
 import {
   readCachedInbox,
+  readCachedMatches,
   refreshInbox,
+  refreshMatches,
   type InboxConversationRow,
 } from '../lib/tabListCache';
 
@@ -44,6 +46,11 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   const [loading, setLoading] = useState(() => cached === undefined);
   const [loadError, setLoadError] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
+  const [chatListFilter, setChatListFilter] = useState<'all' | 'matches' | 'unread'>('all');
+  const [matchIds, setMatchIds] = useState<Set<string>>(() => {
+    const cached = readCachedMatches();
+    return new Set((cached?.matches ?? []).map((m: { id: string }) => m.id));
+  });
   const navigate = useNavigate();
   const unreadBySender = useUnreadStore((s) => s.unreadBySender);
   const selfId = useAuthStore((s) => s.user?.id);
@@ -79,6 +86,21 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     void fetchConversations();
   }, [fetchConversations]);
 
+  useEffect(() => {
+    let cancelled = false;
+    refreshMatches()
+      .then((snap) => {
+        if (!cancelled) setMatchIds(new Set(snap.matches.map((m) => m.id)));
+      })
+      .catch(() => {
+        const cached = readCachedMatches();
+        if (!cancelled && cached) setMatchIds(new Set(cached.matches.map((m) => m.id)));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Cold start hang: do not leave blank skeletons forever.
   useEffect(() => {
     if (!loading) return;
@@ -111,6 +133,15 @@ export const ConversationList: React.FC<ConversationListProps> = ({
       if (timer) clearTimeout(timer);
     };
   }, [socket, fetchConversations]);
+
+  const filtered = convs.filter((c) => {
+    if (chatListFilter === 'unread') {
+      const unread = c.unread_count ?? unreadBySender[c.other_user_id] ?? 0;
+      return unread > 0;
+    }
+    if (chatListFilter === 'matches') return matchIds.has(c.other_user_id);
+    return true;
+  });
 
   return (
     <div className={`flex min-h-0 flex-col ${className}`}>
@@ -161,6 +192,47 @@ export const ConversationList: React.FC<ConversationListProps> = ({
         </div>
       )}
 
+
+      <div
+        className={`flex shrink-0 gap-2 overflow-x-auto ${isSidebar ? 'px-3 pb-2' : 'mb-3'}`}
+        data-testid="chat-filter-chips"
+        role="tablist"
+        aria-label="Chat filters"
+      >
+        {([
+          ['all', 'All'],
+          ['matches', 'Matches'],
+          ['unread', 'Unread'],
+        ] as const).map(([id, label]) => {
+          const active = chatListFilter === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              data-testid={`chat-filter-${id}`}
+              onClick={() => setChatListFilter(id)}
+              className={`inline-flex min-h-[40px] shrink-0 items-center rounded-full px-3.5 text-[12px] font-extrabold ${
+                active
+                  ? 'bg-[var(--copper)] text-[#1A0E03]'
+                  : 'border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream)]'
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          data-testid="chat-search-pill"
+          onClick={() => window.dispatchEvent(new Event('menrush:open-search'))}
+          className="ml-auto inline-flex min-h-[40px] shrink-0 items-center gap-1 rounded-full border border-[var(--copper)]/45 bg-[rgba(196,131,42,0.12)] px-3 text-[12px] font-extrabold text-[var(--copper)]"
+          aria-label="Search"
+        >
+          Search
+        </button>
+      </div>
       <div className={`min-h-0 flex-1 overflow-y-auto ${isSidebar ? 'px-2 py-3' : ''}`}>
         {loading ? (
           <div className="space-y-2" data-testid="conversations-skeleton">
@@ -192,7 +264,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               Try again
             </button>
           </div>
-        ) : convs.length === 0 ? (
+        ) : filtered.length === 0 && convs.length === 0 ? (
           <div
             className={`text-center animate-fade-in ${isSidebar ? 'px-4 py-14' : 'py-16'}`}
             data-testid="conversations-empty"
@@ -236,7 +308,13 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             className={`animate-fade-in ${isSidebar ? 'space-y-1' : 'space-y-2'}`}
             data-testid="conversations-list"
           >
-            {convs.map((c) => (
+            {filtered.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-[var(--cream-muted)]" data-testid="chat-filter-empty">
+                Nothing in this filter.
+              </p>
+            ) : null}
+            {filtered.map((c) => (
+
               <ConversationItem
                 key={c.other_user_id}
                 userId={c.other_user_id}

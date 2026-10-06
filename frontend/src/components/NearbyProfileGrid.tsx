@@ -360,7 +360,7 @@ const NearbyGridCard = memo(function NearbyGridCard({
             </span>
           </div>
         ) : null}
-        {isFreshFaceNearby(user) ? (
+        {false && isFreshFaceNearby(user) ? (
           <NewJoinerBadge className={distLabel ? 'max-w-[calc(100%-4.5rem)] truncate' : ''} />
         ) : null}
       </div>

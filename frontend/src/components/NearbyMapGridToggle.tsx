@@ -13,7 +13,7 @@ export function readNearbyView(): NearbyView {
   } catch {
     /* ignore */
   }
-  return 'grid';
+  return 'map';
 }
 
 export function writeNearbyView(view: NearbyView): void {

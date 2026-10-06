@@ -34,6 +34,9 @@ import { DiscoveryFilterPanel } from '../components/DiscoveryFilterPanel';
 import { MoreFiltersDrawer } from '../components/MoreFiltersDrawer';
 import { NearbyProfileGrid } from '../components/NearbyProfileGrid';
 import { NearbyMapGridToggle, readNearbyView, writeNearbyView, type NearbyView } from '../components/NearbyMapGridToggle';
+import { MapTopPillBar } from '../components/MapTopPillBar';
+import { MapEmptyRadius } from '../components/MapEmptyRadius';
+import { RedesignFiltersSheet } from '../components/RedesignFiltersSheet';
 import { NearbySortToggle } from '../components/NearbySortToggle';
 import { DiscoveryShellPublisher } from '../context/DiscoveryShellContext';
 import type { ProfileSetupSnapshot } from '../lib/profileSetup';
@@ -48,6 +51,7 @@ import {
   DEFAULT_DISCOVERY_FILTERS,
   applyDiscoveryClientFilters,
   buildNearbyApiFilters,
+  countActiveDiscoveryFilters,
   type DiscoveryFilterState,
 } from '../lib/discoveryFilters';
 import { EventsRail } from '../components/EventsRail';
@@ -609,6 +613,7 @@ export const Discover = () => {
   const [chatDockOpen, setChatDockOpen] = useState(readDockOpen);
   const mapDragRef = useRef<{ startY: number; mode: MapPanelMode } | null>(null);
   const [discoveryFilters, setDiscoveryFilters] = useState<DiscoveryFilterState>(DEFAULT_DISCOVERY_FILTERS);
+  const [filtersSheetOpen, setFiltersSheetOpen] = useState(false);
   const [pulseUntil, setPulseUntil] = useState<Date | null>(null);
   const [nextPulseAllowedAt, setNextPulseAllowedAt] = useState<string | null>(null);
   const [pulseIsPremium, setPulseIsPremium] = useState(false);
@@ -1257,6 +1262,17 @@ export const Discover = () => {
     const next = stepsKm.find((km) => km > radius + 0.4) ?? RADIUS_ALL_KM;
     handleRadiusChange(next);
   }, [radius, beyondRadiusCount, handleRadiusChange]);
+
+  const nextWidenRadiusKm = useMemo(() => {
+    if (isDiscoveryAllScope(radius)) return radius;
+    if (beyondRadiusCount > 0) return RADIUS_ALL_KM;
+    const stepsKm = radiusStepOptionsKm(resolveDistanceUnitSystem());
+    return stepsKm.find((km) => km > radius + 0.4) ?? RADIUS_ALL_KM;
+  }, [radius, beyondRadiusCount]);
+
+  const openMapSearch = useCallback(() => {
+    window.dispatchEvent(new Event('menrush:open-search'));
+  }, []);
 
   const setMapPanel = useCallback((mode: MapPanelMode) => {
     setMapPanelMode(mode);
@@ -2360,6 +2376,17 @@ export const Discover = () => {
             className="discover-map-host absolute inset-0"
             data-testid="discover-map-canvas-host"
           />
+          <MapTopPillBar
+            radiusKm={radius}
+            onRadiusClick={handleRadiusCycle}
+            onFiltersClick={() => setFiltersSheetOpen(true)}
+            onSearchClick={openMapSearch}
+            filtersActive={countActiveDiscoveryFilters(discoveryFilters) > 0}
+          />
+          {!loading && nearbyCount === 0 && !allScope && !needsLocationGate ? (
+            <MapEmptyRadius nextRadiusKm={nextWidenRadiusKm} onWiden={handleRadiusCycle} />
+          ) : null}
+
           <MapFloatingChrome
             expanded={desktopMapExpanded}
             mapPinFuzzM={mapPinFuzzM}
@@ -2478,6 +2505,17 @@ export const Discover = () => {
             className="discover-map-host absolute inset-0"
             data-testid="discover-map-canvas-host"
           />
+          <MapTopPillBar
+            radiusKm={radius}
+            onRadiusClick={handleRadiusCycle}
+            onFiltersClick={() => setFiltersSheetOpen(true)}
+            onSearchClick={openMapSearch}
+            filtersActive={countActiveDiscoveryFilters(discoveryFilters) > 0}
+          />
+          {!loading && nearbyCount === 0 && !allScope && !needsLocationGate ? (
+            <MapEmptyRadius nextRadiusKm={nextWidenRadiusKm} onWiden={handleRadiusCycle} />
+          ) : null}
+
 
           {tokenMissing ? (
             <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center bg-[var(--bg-primary)] px-6 text-center">
@@ -2719,6 +2757,14 @@ export const Discover = () => {
       )}
       </div>
       </div>
+
+      <RedesignFiltersSheet
+        open={filtersSheetOpen}
+        value={discoveryFilters}
+        onChange={handleDiscoveryFiltersChange}
+        onClose={() => setFiltersSheetOpen(false)}
+        onShow={() => setFiltersSheetOpen(false)}
+      />
 
       <PulseFab
         isPulsing={!!pulseUntil}

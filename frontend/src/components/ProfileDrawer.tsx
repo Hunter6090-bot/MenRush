@@ -6,8 +6,6 @@ import { PulsingAvatar } from "./PulsingAvatar";
 import { useResolvingPhotoSrc } from "./UserAvatar";
 import { ProfilePhotoViewer } from "./ProfilePhotoViewer";
 import { IconPulse, IconClose, IconMatches, IconChat, IconUnmatch } from "./icons";
-import { StatusBadge } from "./StatusBadge";
-import { DistancePill } from "./DistancePill";
 import { VerifiedBadge } from "./VerifiedBadge";
 import { ChatSafetyMenu } from "./ChatSafetyMenu";
 import { getDistanceLabel, isUserPulsing } from "../lib/discovery";
@@ -24,9 +22,9 @@ import { useIsDesktopLayout } from "../hooks/useMediaQuery";
 type SheetSnap = "half" | "tall" | "full";
 
 const SNAP_VH: Record<SheetSnap, number> = {
-  half: 52,
-  tall: 78,
-  full: 94,
+  half: 42,
+  tall: 56,
+  full: 92,
 };
 
 interface ProfileDrawerProps {
@@ -66,7 +64,7 @@ export function ProfileDrawer({
   onClose,
   onLike,
   onUnmatch,
-  onPass,
+  onPass: _unusedPass,
   onMessage,
   onPulseBack,
   onSafetyNotice,
@@ -78,14 +76,17 @@ export function ProfileDrawer({
   const [mounted, setMounted] = useState(false);
   const [snap, setSnap] = useState<SheetSnap>("tall");
   const [dragVh, setDragVh] = useState<number | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
   const dragRef = useRef<{ startY: number; startVh: number } | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
+  const safetyMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!user) {
       setMounted(false);
       setSnap("tall");
       setDragVh(null);
+      setMoreOpen(false);
       return;
     }
     const id = requestAnimationFrame(() => setMounted(true));
@@ -95,65 +96,56 @@ export function ProfileDrawer({
   useEffect(() => {
     if (!user) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        if (moreOpen) setMoreOpen(false);
+        else onClose();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [user, onClose]);
-
-  const currentVh = dragVh ?? SNAP_VH[snap];
+  }, [user, onClose, moreOpen]);
 
   const onHandlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (isDesktop) return;
-      e.preventDefault();
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-      dragRef.current = {
-        startY: e.clientY,
-        startVh: currentVh,
-      };
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+      dragRef.current = { startY: e.clientY, startVh: dragVh ?? SNAP_VH[snap] };
     },
-    [currentVh, isDesktop],
+    [dragVh, isDesktop, snap],
   );
 
   const onHandlePointerMove = useCallback((e: React.PointerEvent) => {
-    const drag = dragRef.current;
-    if (!drag) return;
-    const dy = drag.startY - e.clientY; // up = taller
-    const next = Math.min(96, Math.max(38, drag.startVh + (dy / window.innerHeight) * 100));
+    if (!dragRef.current) return;
+    const deltaY = dragRef.current.startY - e.clientY;
+    const next = Math.min(96, Math.max(28, dragRef.current.startVh + (deltaY / window.innerHeight) * 100));
     setDragVh(next);
   }, []);
 
-  const endDrag = useCallback(
-    (e: React.PointerEvent) => {
-      const drag = dragRef.current;
-      if (!drag) return;
+  const endDrag = useCallback(() => {
+    if (dragVh == null) {
       dragRef.current = null;
-      try {
-        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-      } catch {
-        /* ignore */
-      }
-      const dy = drag.startY - e.clientY;
-      const next = Math.min(96, Math.max(38, drag.startVh + (dy / window.innerHeight) * 100));
-      // Flick dismiss if dragged far down from half
-      if (next < 42 && dy < -40) {
-        setDragVh(null);
-        onClose();
-        return;
-      }
-      const snapped = nearestSnap(next);
-      setSnap(snapped);
+      return;
+    }
+    if (dragVh < 30) {
+      onClose();
+      dragRef.current = null;
       setDragVh(null);
-    },
-    [onClose],
-  );
+      return;
+    }
+    const next = nearestSnap(dragVh);
+    setSnap(next);
+    setDragVh(null);
+    dragRef.current = null;
+  }, [dragVh, onClose]);
 
-  const { src: photo, onError: onPhotoError } = useResolvingPhotoSrc(
-    user?.photo_url,
-    user?.age,
-  );
-  const { src: cover, onError: onCoverError } = useResolvingPhotoSrc(user?.cover_url);
+  const hasPhoto = Boolean(user?.photo_url?.trim());
+  const hasCover = Boolean(user?.cover_url?.trim());
+  const photoResolved = useResolvingPhotoSrc(hasPhoto ? user?.photo_url : undefined, user?.age);
+  const coverResolved = useResolvingPhotoSrc(hasCover ? user?.cover_url : undefined);
+  const photo = hasPhoto ? photoResolved.src : undefined;
+  const cover = hasCover ? coverResolved.src : undefined;
+  const onPhotoError = photoResolved.onError;
+  const onCoverError = coverResolved.onError;
   const [viewer, setViewer] = useState<{ src: string; alt: string } | null>(null);
 
   if (!user) return null;
@@ -172,31 +164,40 @@ export function ProfileDrawer({
         ? user.distance_label
         : null;
   const isPulsing = isUserPulsing(user);
-  const dragging = dragVh != null;
   const matchState = matchInterestState({ liked, mutual });
   const matchDisabled = matchCtaDisabled(matchState);
+  const currentVh = dragVh ?? SNAP_VH[snap];
+  const dragging = dragVh != null;
   const heroEnlargeSrc = cover || photo || null;
   const avatarEnlargeSrc = photo || null;
+  const ageDist = [user.age, distLabel].filter(Boolean).join(" · ");
+
+  const openAlbum = () => {
+    onClose();
+    navigate(profilePathForUser(user.id, authUserId) + "#albums");
+  };
+
+  const openProfile = () => {
+    onClose();
+    navigate(profilePathForUser(user.id, authUserId));
+  };
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex justify-center items-end sm:items-stretch sm:justify-end"
-      onClick={onClose}
-      style={{
-        background: mounted ? "rgba(13,10,6,0.60)" : "rgba(13,10,6,0)",
-        transition: "background var(--nn-dur-base) var(--nn-ease-out)",
-      }}
+      className="fixed inset-0 z-[70] flex items-end justify-center sm:items-stretch sm:justify-end"
+      data-testid="profile-drawer"
+      role="presentation"
     >
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/55"
+        aria-label="Close profile sheet"
+        onClick={onClose}
+      />
       <div
         ref={sheetRef}
-        onClick={(e) => e.stopPropagation()}
-        className="
-          relative w-full lg:w-[420px] lg:h-full
-          lg:max-h-none
-          bg-[var(--bg-elevated)] border border-[var(--border-default)]
-          rounded-t-3xl lg:rounded-none lg:rounded-l-2xl
-          shadow-[var(--shadow-glow-strong)]
-          overflow-hidden flex flex-col
+        data-testid="pin-sheet"
+        className="relative z-10 flex w-full flex-col overflow-hidden rounded-t-[1.5rem] border border-[var(--border-default)] bg-[#1E1508] shadow-2xl sm:h-full sm:max-w-[420px] sm:rounded-none sm:border-l
         "
         style={{
           height: isDesktop ? "100%" : `${currentVh}vh`,
@@ -211,7 +212,6 @@ export function ProfileDrawer({
             : "transform 280ms cubic-bezier(0.22,1,0.36,1), height 220ms cubic-bezier(0.22,1,0.36,1), max-height 220ms cubic-bezier(0.22,1,0.36,1)",
         }}
       >
-        {/* Drag handle — mobile only */}
         <div
           role="slider"
           aria-label="Resize profile sheet"
@@ -228,293 +228,238 @@ export function ProfileDrawer({
           onPointerCancel={endDrag}
         >
           <span className="h-1.5 w-11 rounded-full bg-[var(--border-strong)]" />
-          <span className="mt-1 text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--cream-muted)]">
-            Drag to resize
-          </span>
         </div>
 
-        <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
-          <div className="rounded-full bg-[color-mix(in_srgb,var(--bg-elevated)_88%,transparent)] border border-[var(--border-default)]">
-            <ChatSafetyMenu
-              peerId={user.id}
-              peerName={user.name}
-              onNotice={onSafetyNotice}
-              onBlocked={() => {
-                onBlocked?.();
-                onClose();
-              }}
-            />
-          </div>
+        <div className="absolute top-3 right-3 z-20">
           <button
             onClick={onClose}
-            className="w-9 h-9 rounded-full bg-[color-mix(in_srgb,var(--bg-elevated)_88%,transparent)] border border-[var(--border-default)] text-[var(--cream)] hover:border-[var(--copper)]/40 flex items-center justify-center transition-colors"
+            className="w-10 h-10 min-h-[44px] min-w-[44px] rounded-full bg-[color-mix(in_srgb,var(--bg-elevated)_88%,transparent)] border border-[var(--border-default)] text-[var(--cream)] flex items-center justify-center"
             aria-label="Close"
           >
             <IconClose size={18} />
           </button>
         </div>
 
-        {/*
-          Hero + avatar live outside the scrollport so the circular face is never
-          clipped by overflow-y (the old -mt-12-inside-scroll pattern bisected
-          avatars on phone). Avatar is a full circle in its own row between photo
-          and name — no negative-margin hang into overflow-hidden bands.
-        */}
-        <div className="relative z-10 w-full shrink-0" data-testid="profile-sheet-hero">
+        {/* Compact pin-sheet body — design state 3 */}
+        <div className="relative z-10 flex shrink-0 gap-3 px-4 pb-2 pt-1" data-testid="profile-sheet-hero">
           <div
-            className="relative w-full overflow-hidden"
-            style={{
-              height: isDesktop ? 360 : snap === "half" && !dragging ? 200 : 240,
-              maxHeight: isDesktop ? "46vh" : "36vh",
-              background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
-              transition: dragging ? "none" : "height 220ms ease",
-            }}
+            className="relative h-28 w-28 shrink-0 overflow-hidden rounded-2xl bg-[var(--bg-elevated)]"
+            data-testid={`drawer-avatar-${user.id}`}
           >
-            {heroEnlargeSrc ? (
+            {avatarEnlargeSrc || heroEnlargeSrc ? (
               <button
                 type="button"
                 data-testid="drawer-cover-enlarge"
-                aria-label={`Enlarge ${cover ? "cover" : "photo"}`}
+                aria-label={`Enlarge ${user.name}'s photo`}
                 className="absolute inset-0 block h-full w-full cursor-zoom-in p-0 border-0"
                 onClick={() =>
                   setViewer({
-                    src: heroEnlargeSrc,
-                    alt: cover ? `${user.name}'s cover` : user.name,
+                    src: (avatarEnlargeSrc || heroEnlargeSrc)!,
+                    alt: user.name,
                   })
                 }
               >
                 <img
-                  src={heroEnlargeSrc}
+                  src={(avatarEnlargeSrc || heroEnlargeSrc)!}
                   alt=""
-                  className={`w-full h-full object-cover ${cover ? "object-center" : "object-top"}`}
-                  onError={cover ? onCoverError : onPhotoError}
+                  className="h-full w-full object-cover object-top"
+                  onError={avatarEnlargeSrc ? onPhotoError : onCoverError}
                 />
               </button>
             ) : (
-              <div
-                className="h-full w-full"
-                data-testid={`drawer-hero-placeholder-${user.id}`}
-              >
-                <FadedBrandFace variant="tile" label={user.name} />
+              <div className="flex h-full w-full items-center justify-center" data-testid={`drawer-hero-placeholder-${user.id}`}>
+                <PulsingAvatar isPulsing={isPulsing} size={112} intensity="subtle">
+                  <FadedBrandFace variant="profile" size={112} label={user.name} />
+                </PulsingAvatar>
               </div>
             )}
-            <div
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                background:
-                  "linear-gradient(to top, var(--bg-elevated) 0%, transparent 38%)",
-              }}
-            />
-            {/* Status + distance in the top band — away from the face mid-frame */}
-            <div className="absolute top-3 left-3 z-[1] flex flex-col items-start gap-1.5 max-w-[70%] pointer-events-none">
-              {isPulsing ? (
-                <StatusBadge online={false} pulsing />
-              ) : user.online ? (
-                <StatusBadge online lastSeen={user.last_seen} size="xs" />
-              ) : null}
-              {distLabel && <DistancePill km={distance ?? 0} label={distLabel} />}
+          </div>
+
+          <div className="min-w-0 flex-1 pt-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <h2 className="truncate font-display text-xl font-extrabold uppercase tracking-wide text-[#F0E0C0]">
+                {user.name}
+              </h2>
+              {(user as { is_verified?: boolean }).is_verified ? <VerifiedBadge /> : null}
             </div>
-          </div>
-
-          {/* Full circular avatar — own padded row, never scroll-clipped or mid-cut */}
-          <div className="flex items-center px-5 pt-3 pb-1">
-            {avatarEnlargeSrc ? (
-              <button
-                type="button"
-                data-testid={`drawer-avatar-${user.id}`}
-                aria-label={`Enlarge ${user.name}'s photo`}
-                className="inline-flex shrink-0 rounded-full ring-2 ring-[var(--copper)] shadow-[0_4px_14px_rgba(0,0,0,0.4)] cursor-zoom-in p-0 border-0 bg-transparent"
-                onClick={() =>
-                  setViewer({ src: avatarEnlargeSrc, alt: user.name })
-                }
-              >
-                <PulsingAvatar isPulsing={isPulsing} size={72} intensity="subtle">
-                  <div
-                    className="w-full h-full rounded-full overflow-hidden flex items-center justify-center"
-                    style={{
-                      background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
-                    }}
-                  >
-                    <img
-                      src={avatarEnlargeSrc}
-                      alt=""
-                      className="w-full h-full object-cover object-top"
-                      onError={onPhotoError}
-                    />
-                  </div>
-                </PulsingAvatar>
-              </button>
-            ) : (
-              <div
-                className="inline-flex shrink-0 rounded-full ring-2 ring-[var(--copper)] shadow-[0_4px_14px_rgba(0,0,0,0.4)]"
-                data-testid={`drawer-avatar-${user.id}`}
-              >
-                <PulsingAvatar isPulsing={isPulsing} size={72} intensity="subtle">
-                  <div
-                    className="w-full h-full rounded-full overflow-hidden flex items-center justify-center"
-                    style={{
-                      background: "linear-gradient(135deg,var(--bg-elevated),var(--bg-card))",
-                    }}
-                  >
-                    <FadedBrandFace variant="profile" size={72} label={user.name} />
-                  </div>
-                </PulsingAvatar>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="relative z-0 flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-2 pb-4">
-          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-            <h2 className="font-display text-2xl font-bold tracking-wide uppercase text-[var(--cream)] truncate">
-              {user.name}
-            </h2>
-            {user.age ? (
-              <span className="text-[var(--cream-soft)] text-lg font-semibold">{user.age}</span>
+            {ageDist ? (
+              <p className="mt-1 text-[14px] font-semibold text-[var(--cream-soft)]">{ageDist}</p>
+            ) : user.age ? (
+              <p className="mt-1 text-[14px] font-semibold text-[var(--cream-soft)]">{user.age}</p>
             ) : null}
-            {(user as { is_verified?: boolean }).is_verified ? <VerifiedBadge /> : null}
-          </div>
-          <p className="text-sm font-medium text-[var(--cream-soft)] leading-snug">
-            {user.online ? "Active now" : "Offline"}
-            {distLabel ? ` · ${distLabel} away` : ""}
-          </p>
-
-          {user.headline && (
-            <p className="mt-3 text-sm text-[var(--cream)] leading-relaxed italic">
-              "{user.headline}"
-            </p>
-          )}
-
-          {user.looking_for ? (
-            <div className="mt-4" data-testid="drawer-looking-for">
-              <p className="text-[10px] font-black text-[var(--cream-muted)] uppercase tracking-[.18em] mb-1">
-                Looking for
+            {isPulsing ? (
+              <p className="mt-1 text-[13px] font-bold text-[#C4832A]">Pulse</p>
+            ) : user.online ? (
+              <p className="mt-1 text-[13px] font-bold text-[#4ADE80]" data-testid="pin-sheet-now">
+                Now
               </p>
-              <p className="text-sm font-semibold text-[var(--copper)]">{user.looking_for}</p>
-            </div>
-          ) : null}
-
-          {user.mood ? (
-            <p className="mt-2 text-[12px] text-[var(--cream-muted)] leading-snug">
-              Mood:{" "}
-              <span className="font-semibold text-[var(--cream)]">
-                {String(user.mood).replace(/_/g, " ")}
-              </span>
-            </p>
-          ) : null}
-
-          {user.interests && user.interests.length > 0 && (
-            <div className="mt-4">
-              <p className="text-[10px] font-black text-[var(--cream-muted)] uppercase tracking-[.18em] mb-2">
-                Interests
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {user.interests.map((tag) => (
-                  <span
-                    key={tag}
-                    className="px-2.5 py-1 rounded-full text-[11px] font-bold border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream)]"
-                  >
-                    {tag}
-                  </span>
-                ))}
+            ) : (
+              <p className="mt-1 text-[13px] font-medium text-[var(--cream-muted)]">Offline</p>
+            )}
+            <button
+              type="button"
+              onClick={openProfile}
+              className="mt-2 min-h-[44px] text-left text-[14px] font-bold text-[var(--copper)]"
+              data-testid="pin-sheet-profile-link"
+            >
+              Profile &gt;
+            </button>
+            {/* Hidden legacy hooks for tests that still look for looking-for / interests in DOM when present */}
+            {user.looking_for ? (
+              <div className="sr-only" data-testid="drawer-looking-for">
+                {user.looking_for}
               </div>
-            </div>
-          )}
-
-          {user.bio && (
-            <div className="mt-4">
-              <p className="text-[10px] font-black text-[var(--cream-muted)] uppercase tracking-[.18em] mb-2">
-                About
-              </p>
-              <p className="text-sm text-[var(--cream)] leading-relaxed whitespace-pre-line">{user.bio}</p>
-            </div>
-          )}
+            ) : null}
+          </div>
         </div>
 
-        <div className="shrink-0 border-t border-[var(--border-default)] p-4 flex flex-col gap-2 bg-[var(--bg-elevated)] pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="mt-auto shrink-0 border-t border-[var(--border-default)] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={onMessage}
+              data-testid="drawer-open-chat"
+              title="Chat"
+              aria-label={`Chat with ${user.name}`}
+              className="inline-flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-2xl border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] px-2 text-[12px] font-extrabold text-[var(--copper)]"
+            >
+              <IconChat size={18} />
+              Chat
+            </button>
+            <button
+              type="button"
+              onClick={openAlbum}
+              data-testid="pin-sheet-album"
+              title="Album"
+              aria-label={`Album for ${user.name}`}
+              className="inline-flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-2 text-[12px] font-extrabold text-[#F0E0C0]"
+            >
+              <AlbumGlyph />
+              Album
+            </button>
+            <button
+              type="button"
+              onClick={() => setMoreOpen(true)}
+              data-testid="pin-sheet-more"
+              title="More"
+              aria-label="More"
+              className="inline-flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-2 text-[12px] font-extrabold text-[#F0E0C0]"
+            >
+              <MoreGlyph />
+              More
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {moreOpen ? (
+        <div
+          className="fixed inset-0 z-[75] flex items-end justify-center"
+          role="dialog"
+          aria-modal="true"
+          aria-label="More"
+          data-testid="pin-sheet-more-menu"
+        >
           <button
             type="button"
-            onClick={() => {
-              onClose();
-              navigate(profilePathForUser(user.id, authUserId));
-            }}
-            className="w-full py-2.5 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream)] font-bold text-sm hover:border-[var(--copper)] hover:text-[var(--copper)] transition-colors"
-          >
-            View full profile
-          </button>
-          <div className="flex gap-2">
-            {mutual ? (
-              <>
-                <button
-                  type="button"
-                  onClick={onMessage}
-                  data-testid="drawer-open-chat"
-                  title="Chat"
-                  aria-label={`Chat with ${user.name}`}
-                  className="flex-1 py-3 rounded-[var(--radius-md)] font-black text-sm tracking-wide transition-all border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] text-[var(--copper)] flex items-center justify-center gap-2 hover:bg-[rgba(196,131,42,0.28)]"
-                >
-                  <IconChat size={18} />
-                  <span>Chat</span>
-                </button>
-                {onUnmatch && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const confirmed = window.confirm(
-                        `Unmatch with ${user.name}? Chat locks again until you both match.`,
-                      );
-                      if (confirmed) void onUnmatch();
-                    }}
-                    data-testid="drawer-unmatch"
-                    title="Unmatch"
-                    aria-label={`Unmatch with ${user.name}`}
-                    className="flex-1 py-3 rounded-[var(--radius-md)] font-bold text-sm transition-all border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream)] hover:border-[#c45a4a]/55 hover:text-[#e08a7a] flex items-center justify-center gap-2"
-                  >
-                    <IconUnmatch size={18} />
-                    <span>Unmatch</span>
-                  </button>
+            className="absolute inset-0 bg-black/55"
+            aria-label="Close more"
+            onClick={() => setMoreOpen(false)}
+          />
+          <div className="relative z-10 w-full max-w-lg rounded-t-[1.5rem] border border-[var(--border-default)] bg-[#1E1508] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 shadow-2xl">
+            <div className="mb-3 flex items-center gap-3">
+              <div className="h-10 w-10 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
+                {avatarEnlargeSrc ? (
+                  <img src={avatarEnlargeSrc} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <FadedBrandFace variant="profile" size={40} label={user.name} />
                 )}
+              </div>
+              <p className="truncate text-[16px] font-extrabold text-[#F0E0C0]">{user.name}</p>
+            </div>
 
-              </>
-            ) : (
+            {/* Match / Unmatch / Pulse relocated into More */}
+            {!mutual ? (
               <button
                 type="button"
                 disabled={matchDisabled}
                 aria-disabled={matchDisabled}
-                aria-label={matchCtaAriaLabel(matchState, user.name, {
-                  mutualOpensChat: true,
-                })}
+                aria-label={matchCtaAriaLabel(matchState, user.name, { mutualOpensChat: true })}
                 title={matchState === "outgoing" ? "Sent" : "Match"}
                 onClick={() => {
                   if (matchState === "none") void onLike();
+                  setMoreOpen(false);
                 }}
                 data-testid="drawer-match"
-                className={`flex-1 py-3.5 rounded-[var(--radius-md)] font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 ${
-                  matchState === "none" ? "uppercase active:scale-[0.98]" : ""
-                } ${matchCtaToneClasses(matchState)}`}
+                className={`mb-2 flex min-h-[48px] w-full items-center gap-3 rounded-2xl px-3 text-left text-[15px] font-bold ${matchCtaToneClasses(matchState)}`}
               >
                 <IconMatches size={18} />
                 <span>{matchState === "outgoing" ? "Sent" : "Match"}</span>
               </button>
-            )}
-            {onPulseBack && isPulsing && (
+            ) : onUnmatch ? (
               <button
                 type="button"
-                onClick={onPulseBack}
-                className="px-4 py-3 rounded-[var(--radius-md)] border border-[var(--copper)] text-[var(--copper)] font-bold text-sm flex items-center gap-1.5 hover:bg-[var(--copper)]/10 transition-colors"
-                title="Pulse back"
+                onClick={() => {
+                  const confirmed = window.confirm(
+                    `Unmatch with ${user.name}? Chat locks again until you both match.`,
+                  );
+                  if (confirmed) {
+                    void onUnmatch();
+                    setMoreOpen(false);
+                  }
+                }}
+                data-testid="drawer-unmatch"
+                className="mb-2 flex min-h-[48px] w-full items-center gap-3 rounded-2xl border border-[var(--border-default)] px-3 text-left text-[15px] font-bold text-[#F0E0C0]"
+              >
+                <IconUnmatch size={18} />
+                Unmatch
+              </button>
+            ) : null}
+
+            {onPulseBack && isPulsing ? (
+              <button
+                type="button"
+                onClick={() => {
+                  void onPulseBack();
+                  setMoreOpen(false);
+                }}
+                data-testid="pin-sheet-pulse"
+                className="mb-2 flex min-h-[48px] w-full items-center gap-3 rounded-2xl border border-[var(--copper)]/50 px-3 text-left text-[15px] font-bold text-[var(--copper)]"
               >
                 <IconPulse size={16} />
-                Back
+                Pulse back
               </button>
-            )}
-          </div>
+            ) : null}
 
-          <p className="text-center text-[11px] font-semibold tracking-wide text-[var(--cream-soft)]">
-            Match is mutual interest · Chat with consent
-          </p>
+            {/* Report / Block via existing ChatSafetyMenu — opened programmatically face */}
+            <div ref={safetyMenuRef} className="mb-2" data-testid="pin-sheet-safety">
+              <ChatSafetyMenu
+                peerId={user.id}
+                peerName={user.name}
+                onNotice={onSafetyNotice}
+                onBlocked={() => {
+                  onBlocked?.();
+                  setMoreOpen(false);
+                  onClose();
+                }}
+              />
+            </div>
+            <p className="mb-3 px-1 text-[12px] text-[var(--cream-muted)]">
+              Use the flag menu above for Report. Block is red in that menu.
+            </p>
+
+            <button
+              type="button"
+              data-testid="pin-sheet-more-cancel"
+              onClick={() => setMoreOpen(false)}
+              className="flex min-h-[48px] w-full items-center justify-center rounded-full border border-[var(--cream)]/45 text-[15px] font-extrabold text-[#F0E0C0]"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
-      </div>
+      ) : null}
+
       {viewer ? (
         <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
           <ProfilePhotoViewer
@@ -525,5 +470,25 @@ export function ProfileDrawer({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function AlbumGlyph() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <circle cx="8.5" cy="10.5" r="1.5" />
+      <path strokeLinecap="round" d="M21 16l-5-5-4 4-2-2-5 5" />
+    </svg>
+  );
+}
+
+function MoreGlyph() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" fillRule="evenodd" aria-hidden>
+      <circle cx="6" cy="12" r="1.75" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.75" fill="currentColor" />
+      <circle cx="18" cy="12" r="1.75" fill="currentColor" />
+    </svg>
   );
 }

@@ -57,32 +57,14 @@ vi.mock('../lib/tabListCache', () => ({
 
 vi.mock('../lib/navConfig', () => ({
   getNavItems: () => [
-    {
-      to: '/discover',
-      label: 'Nearby',
-      shortLabel: 'Near',
-      desktopNav: true,
-      mobileTab: true,
-      Icon: () => null,
-    },
-    {
-      to: '/matches',
-      label: 'Matches',
-      desktopNav: true,
-      mobileTab: true,
-      Icon: () => null,
-    },
-    {
-      to: '/conversations',
-      label: 'Messages',
-      shortLabel: 'Chat',
-      desktopNav: true,
-      mobileTab: true,
-      Icon: () => null,
-    },
+    { to: '/discover', label: 'Map', shortLabel: 'Map', desktopNav: true, mobileTab: true, Icon: () => null },
+    { to: '/conversations', label: 'Messages', shortLabel: 'Chat', desktopNav: true, mobileTab: true, Icon: () => null },
+    { to: '/rooms', label: 'Rooms', shortLabel: 'Rooms', desktopNav: true, mobileTab: true, Icon: () => null },
+    { to: '/out', label: 'Out', shortLabel: 'Out', desktopNav: true, mobileTab: true, Icon: () => null },
+    { to: '/profile', label: 'You', shortLabel: 'You', desktopNav: true, mobileTab: true, Icon: () => null },
   ],
   isNavActive: () => true,
-  mobilePageTitle: () => 'Nearby',
+  mobilePageTitle: () => 'Map',
 }));
 
 describe('Layout sign out', () => {
@@ -119,7 +101,7 @@ describe('Layout sign out', () => {
     expect(navigate).toHaveBeenCalledWith('/login');
   });
 
-  it('renders Nearby ↔ Matches ↔ Chat bottom nav links (React 19 / RR v6)', () => {
+  it('renders Map · Chat · Rooms · Out · You bottom nav links', () => {
     render(
       <MemoryRouter>
         <Layout>
@@ -130,10 +112,13 @@ describe('Layout sign out', () => {
 
     const primary = screen.getByRole('navigation', { name: 'Primary' });
     expect(primary.querySelector('a[href="/discover"]')).toBeTruthy();
-    expect(primary.querySelector('a[href="/matches"]')).toBeTruthy();
     expect(primary.querySelector('a[href="/conversations"]')).toBeTruthy();
+    expect(primary.querySelector('a[href="/rooms"]')).toBeTruthy();
+    expect(primary.querySelector('a[href="/out"]')).toBeTruthy();
+    expect(primary.querySelector('a[href="/profile"]')).toBeTruthy();
+    expect(primary.querySelector('a[href="/matches"]')).toBeFalsy();
     expect(screen.getByTestId('mobile-nav-discover')).toBeTruthy();
-    expect(screen.getByTestId('mobile-nav-matches')).toBeTruthy();
     expect(screen.getByTestId('mobile-nav-conversations')).toBeTruthy();
+    expect(screen.getByTestId('mobile-nav-out')).toBeTruthy();
   });
 });

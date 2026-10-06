@@ -114,6 +114,12 @@ function LayoutInner({ children }: LayoutProps) {
     setMoreMenuOpen(false);
   }, [location.pathname]);
 
+  useEffect(() => {
+    const openSearch = () => setSearchOpen(true);
+    window.addEventListener('menrush:open-search', openSearch);
+    return () => window.removeEventListener('menrush:open-search', openSearch);
+  }, []);
+
   const requestSignOut = () => {
     setSignOutConfirmOpen(true);
   };
