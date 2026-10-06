@@ -118,14 +118,8 @@ export const ComingSoon = () => {
           </ul>
         </section>
 
-        {/* Early access promise */}
         <section className="mx-auto w-full max-w-[560px] px-6 pb-16 text-center">
-          <p className="text-[15px] leading-[1.65] text-[#F0E0C0]/88">
-            Sign up before 1 October 2026 and get{' '}
-            <span className="font-bold text-[#E0A14A]">30 days of Premium</span> free. A promo
-            replaces that gift and does not stack.
-          </p>
-          <p className="mt-6">
+          <p className="mt-0">
             <Link to="/register" className={publicLinkClass}>
               Back to signup
             </Link>
