@@ -19,6 +19,8 @@ import { VerifiedBadge } from '../components/VerifiedBadge';
 import { QRCodeSVG } from 'qrcode.react';
 import { profileUrl as buildProfileUrl } from '../lib/profileLinks';
 import { getPhotoUrl } from '../components/UserAvatar';
+import { BrandAvatar } from '../components/BrandAvatar';
+import { isPlaceholderAvatarUrl, realAvatarUrl } from '../lib/avatarFallback';
 
 import {
   PROFILE_TAG_GROUPS,
@@ -820,11 +822,13 @@ export const Profile = () => {
           <div className="grid grid-cols-[280px_1fr] gap-8">
             <div className="space-y-3">
               <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]">
-                {getPhotoUrl(photoUrl) && !isNearbyPlaceholderFace(photoUrl) ? (
-                  <img
-                    src={getPhotoUrl(photoUrl)!}
+                {!isNearbyPlaceholderFace(photoUrl) ? (
+                  <BrandAvatar
+                    photoUrl={photoUrl}
+                    name={profile.name}
                     alt={profile.name}
-                    className="h-full w-full object-cover"
+                    variant="tile"
+                    imgClassName="h-full w-full object-cover"
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center">
@@ -846,14 +850,15 @@ export const Profile = () => {
                 </button>
               </div>
               <div className="grid grid-cols-3 gap-2">
-                {[photoUrl, coverUrl].filter(Boolean).slice(0, 3).map((src, i) => (
+                {[photoUrl, coverUrl]
+                  .filter((u): u is string => !isPlaceholderAvatarUrl(u))
+                  .slice(0, 3)
+                  .map((src, i) => (
                   <div
                     key={`${src}-${i}`}
                     className="aspect-square overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]"
                   >
-                    {getPhotoUrl(src) ? (
-                      <img src={getPhotoUrl(src)!} alt="" className="h-full w-full object-cover" />
-                    ) : null}
+                    <BrandAvatar photoUrl={src} variant="tile" />
                   </div>
                 ))}
                 <button
@@ -1116,9 +1121,9 @@ export const Profile = () => {
                   className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C4832A]/50 disabled:opacity-60"
                   data-testid="map-photo-picker"
                 >
-                  {getPhotoUrl(mapPhotoUrl) ? (
+                  {realAvatarUrl(mapPhotoUrl) ? (
                     <img
-                      src={getPhotoUrl(mapPhotoUrl)!}
+                      src={getPhotoUrl(realAvatarUrl(mapPhotoUrl)!)!}
                       alt=""
                       className="h-full w-full object-cover"
                     />

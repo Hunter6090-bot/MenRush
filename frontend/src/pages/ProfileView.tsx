@@ -7,6 +7,7 @@ import { UserAvatar, getPhotoUrl } from '../components/UserAvatar';
 import { FadedBrandFace, isNearbyPlaceholderFace } from '../components/FadedBrandFace';
 import { CoverBanner, normalizeCoverFrame } from '../components/CoverBanner';
 import { ProfilePhotoViewer } from '../components/ProfilePhotoViewer';
+import { realAvatarUrl } from '../lib/avatarFallback';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { DistancePill } from '../components/DistancePill';
@@ -242,8 +243,11 @@ export const ProfileView = () => {
   }
 
   const matchState = matchInterestState({ liked, mutual });
-  const coverSrc = user.cover_url ? getPhotoUrl(user.cover_url) : undefined;
-  const photoSrc = user.photo_url ? getPhotoUrl(user.photo_url) : undefined;
+  // Legacy defaults are never "photos" — no enlarge, Brand placeholder instead.
+  const realCover = realAvatarUrl(user.cover_url);
+  const realPhoto = realAvatarUrl(user.photo_url);
+  const coverSrc = realCover ? getPhotoUrl(realCover) : undefined;
+  const photoSrc = realPhoto ? getPhotoUrl(realPhoto) : undefined;
   const distanceKmVal =
     user.distance_km != null && user.distance_km !== ''
       ? parseFloat(String(user.distance_km))
@@ -286,7 +290,7 @@ export const ProfileView = () => {
               onClick={() => setViewer({ src: coverSrc, alt: `${user.name}'s cover` })}
             >
               <CoverBanner
-                coverUrl={user.cover_url!}
+                coverUrl={realCover!}
                 frame={normalizeCoverFrame(
                   user.cover_position_x,
                   user.cover_position_y,
