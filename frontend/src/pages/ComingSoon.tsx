@@ -59,7 +59,7 @@ export const ComingSoon = () => {
           <BrandMark size="hero" className="mb-8" />
 
           <p className="mr-coming-soon-overline mb-5">
-            LIVE NOW. UK OPEN. Sign up free
+            LIVE NOW. UK OPEN
           </p>
 
           <h1 className="mr-coming-soon-heading max-w-[900px] text-balance">

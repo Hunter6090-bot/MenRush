@@ -43,7 +43,6 @@ import {
   isWaitlistEmailPaused,
   sendWelcomeEmailNow,
   subscribeToWaitlist,
-  startDripWorker,
 } from './services/drip.service';
 import { errorHandler } from './middleware/auth';
 import { authService } from './services/auth.service';
@@ -960,12 +959,4 @@ server.listen(PORT, () => {
   startRoomTempIdentityPurgeCron();
   startRoomMessagePurgeCron();
   startVerificationRetentionWorker();
-  // Optional: in-process drip worker. Prefer an external cron in production
-  // (POST /api/waitlist/admin/run); only enable in-process when running a
-  // single backend instance without separate scheduling.
-  // Waitlist drip retired 2 Sep 2026. Do not start the in-process worker.
-  if (false && process.env.DRIP_WORKER_ENABLED === 'true') {
-    const minutes = parseInt(process.env.DRIP_WORKER_INTERVAL_MINUTES || '60', 10);
-    startDripWorker(Number.isFinite(minutes) && minutes > 0 ? minutes : 60);
-  }
 });
