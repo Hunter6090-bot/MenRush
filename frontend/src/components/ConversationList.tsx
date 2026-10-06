@@ -13,6 +13,7 @@ import {
   type InboxConversationRow,
 } from '../lib/tabListCache';
 import { IconMatches } from './icons';
+import { EntryIconPlaceholder } from './EntryIconPlaceholder';
 
 export type ConversationRow = InboxConversationRow;
 
@@ -212,9 +213,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           aria-label={matchCount > 0 ? `Matches, ${matchCount}` : 'Matches'}
           className="flex min-h-[48px] w-full items-center gap-3 rounded-2xl border border-[var(--copper)]/40 bg-[rgba(196,131,42,0.12)] px-3.5 text-left transition-colors hover:border-[var(--copper)] hover:bg-[rgba(196,131,42,0.18)]"
         >
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[rgba(196,131,42,0.2)] text-[var(--copper)]">
+          <EntryIconPlaceholder slot="matches">
+            {/* Temporary — swap when Claude Design Matches icon lands */}
             <IconMatches size={20} />
-          </span>
+          </EntryIconPlaceholder>
           <span className="min-w-0 flex-1 text-[15px] font-extrabold text-[var(--cream)]">Matches</span>
           {matchCount > 0 ? (
             <span

@@ -14,8 +14,8 @@
 |-----|-------------------|---------------------|--------------------|
 | **Home (Map\|List toggle)** | `/discover` | **List** when map is home (grid icon); **Map** when list is home (pin icon) | Nearby map + grid; preference persisted (`map`\|`list`, default map). In-map phone Map/Grid toggle removed as duplicate. |
 | **Chat** | `/conversations` | Chat (+ unread badge) | Messages; Matches page becomes filter chip All / Matches / Unread |
-| **Rooms** | `/rooms` | Rooms | Video rooms (Premium gate unchanged) |
-| **Out** | `/out` | Out | Cruise/Hot Spots, Events, Community (Stream), venue list chips All / Sauna / Bar / Event |
+| **Rooms** | `/rooms` | Rooms | Label is **Rooms** (Video rooms lock retired); Premium gate unchanged |
+| **Out** | `/out` | Out | Cruise/Hot Spots, Events, Community; pinned **Community** entry (`community-entry`) → `/stream`; chips All / Sauna / Bar / Event / Community |
 | **You** | `/profile` | You | Profile + Settings entry, Albums, Discretion, Quiet hours, 2FA, Merch/Brands links, Sign out |
 
 Desktop sidebar mirrors the same five + Settings / Notifications where needed. Mobile "More" sheet removed once Events + Settings have homes (Out / You).
@@ -32,7 +32,7 @@ Desktop sidebar mirrors the same five + Settings / Notifications where needed. M
 | **Map with pins** (#314 circular + green online) | `/discover` map | **Map** (home) | Cream rim; copper ring when selected |
 | **Cluster (+N)** | map markers | **Map** | Keep existing overlap/cluster logic |
 | **People / Cruise layer toggles** | map chrome | **Map** chrome below top pills (icon+short label) | Stacked under Radius/Filters/Search so all stay tappable at 390px |
-| **Discretion / pin fuzz slider** | map chrome | **Map** (below top pills) + **You → Discretion** | Map slider stays live; never covered by top pills; Settings row links |
+| **Discretion / pin fuzz slider** | map chrome | **Map** stacked in-flow under Radius/Filters/Search + **You → Discretion** | Visible/tappable at 360/390/430; pills nowrap; chrome is MapTopPillBar child |
 | **Map expand / hide / geolocate** | map BR controls | **Map** bottom-right control cluster | Design: bottom-right control |
 | **Cruising search (spots)** | CruisingSearchBar/Sheet on Discover + HotSpots | **Map** Search (spots) + **Out** | Search pill opens profile+place search; Cruise search remains reachable |
 | **Profile search (name or town/city)** (#310) | Layout header / ProfileSearchModal | **Map** top **Search** pill (+ header on desktop) | Same modal |
@@ -47,10 +47,10 @@ Desktop sidebar mirrors the same five + Settings / Notifications where needed. M
 | **Hot Spots / Cruise list + map** | `/hot-spots` | **Out** (chips) + deep link `/hot-spots` → `/out?chip=…` | Route still works |
 | **Cruise category chips** (saunas, bars, …) | HotSpots | **Out** chips All / Sauna / Bar / Event | Map Event chip to Events surface |
 | **Events calendar + list** | `/events` | **Out** chip Event + `/events` redirect | Preserve nightlife calendar |
-| **Community / newsfeed** | `/stream` | **Out** chip Community (or All section) + `/stream` redirect | Posts, @mentions, 24h expiry, edit/delete stay |
+| **Community / newsfeed** | `/stream` | **Out** pinned Community row (always visible) + chip + `/stream` | Icon is EntryIconPlaceholder until Claude Design; posts/@mentions/24h stay |
 | **Venue claim / reviews / calendar modals** | HotSpots | **Out** (same modals) | Admin `/admin/venue-claims` unchanged |
 | **Events rail on Discover** | Discover footer rail | **Map** optional thin rail OR **Out** | Prefer Out; keep rail if it does not clutter map-first |
-| **Chat inbox** | `/conversations` | **Chat** | Search pill on list (min 44px); pinned Matches entry (icon + count) opens `/matches` |
+| **Chat inbox** | `/conversations` | **Chat** | Search pill (min 44px); pinned Matches entry (EntryIconPlaceholder + count) → `/matches` |
 | **Chat thread** | `/messages/:id` | **Chat** | Header avatar + name + Near·distance, More; Photo / Message / Send |
 | **Group create** (feature-flagged) | ConversationList | **Chat** | Keep behind flag |
 | **Withdraw location share** | Messaging | **Chat** thread | Unchanged |
@@ -128,14 +128,15 @@ Desktop sidebar mirrors the same five + Settings / Notifications where needed. M
 - [x] Pin sheet: photo, name+tick, age·distance, Now, Profile; Chat / Album (#albums) / More
 - [x] More: Report, Block (red), Cancel + Match / Pulse back (wired) if live; BrandAvatar fallback
 - [ ] Empty radius: Nobody in this radius + Widen to N mi
-- [x] Map pills above Discretion/People/Cruise; Chat Matches entry + 44px chips; Out ≥14px; tokens + 44pt
+- [x] Map stack: pills nowrap + Discretion in-flow (360/390/430); Chat Matches + Out Community entries; Rooms=Rooms
 
 
 
 ## QC follow-ups (6 Oct 2026)
 
-- Phone map (390px): Radius/Filters/Search pills sit above Discretion + People/Cruise so all remain fully visible and tappable.
-- Chat tab: always-visible pinned Matches row (icon + count badge) opens `/matches`; All/Matches/Unread chips kept; chips + Search pill min 44px.
-- Out: spot/event 11px copy raised to 14px; footer deep-links min-height 44px.
-- Pin sheet More: BrandAvatar with brand-face onError; Report/Block copy refers to menu (not flags); Pulse back wired to live Pulse sheet; Album → profile `#albums`.
-- HOLD unchanged: Rooms vs Video rooms label, Nearby default Map with List tab, Community icon.
+- Phone map (360/390/430): Radius/Filters/Search pills (nowrap) stack **above** Discretion + People/Cruise in-flow (`map-top-stack`); no overlap.
+- Chat tab: pinned Matches row (`chat-matches-entry`, `matches-entry-icon` placeholder) → `/matches`.
+- Out: pinned Community row (`community-entry`, `community-entry-icon` placeholder) → `/stream`; chips kept; 14px copy + footer 44px.
+- Rooms tab shortLabel locked to **Rooms** (Video rooms lock retired); navConfig test asserts it.
+- Pin sheet More: BrandAvatar onError; Pulse back wired; Album → `#albums`.
+- HOLD unchanged: Nearby default Map with List tab (do not change Map home/List toggle). Final Matches/Community icons pending Claude Design.

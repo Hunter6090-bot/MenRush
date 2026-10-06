@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 /**
  * Map-first top chrome — Radius / Filters / Search (icon + short label).
  * Pete redesign Step 1.
@@ -13,20 +14,27 @@ export function MapTopPillBar({
   onFiltersClick,
   onSearchClick,
   filtersActive = false,
+  children,
 }: {
   radiusKm: number;
   onRadiusClick: () => void;
   onFiltersClick: () => void;
   onSearchClick: () => void;
   filtersActive?: boolean;
+  /** Second row (Discretion / layers) — stacked in-flow so it never sits under wrapping pills. */
+  children?: ReactNode;
 }) {
   const radiusLabel = formatRadiusControlLabel(radiusKm);
   return (
     <div
-      className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center px-3 pt-3"
-      data-testid="map-top-pill-bar"
+      className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col gap-2 px-3 pt-3"
+      data-testid="map-top-stack"
     >
-      <div className="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-2">
+      {/* flex-nowrap: wrapping at 360px covered Discretion; one scrollable row keeps height stable. */}
+      <div
+        className="pointer-events-auto flex max-w-full flex-nowrap items-center justify-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        data-testid="map-top-pill-bar"
+      >
         <button
           type="button"
           data-testid="map-pill-radius"
@@ -59,6 +67,11 @@ export function MapTopPillBar({
           <span>Search</span>
         </button>
       </div>
+      {children ? (
+        <div className="pointer-events-none w-full" data-testid="map-top-stack-below">
+          {children}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -161,6 +161,8 @@ function MapFloatingChrome({
   onTogglePeopleLayer,
   onToggleHotSpotsLayer,
   onOpenCruisingSearch,
+  /** In-flow under MapTopPillBar children — no absolute offset, safe at 360/390/430. */
+  placement = 'stacked',
 }: {
   expanded: boolean;
   mapPinFuzzM: number;
@@ -173,14 +175,23 @@ function MapFloatingChrome({
   onTogglePeopleLayer: () => void;
   onToggleHotSpotsLayer: () => void;
   onOpenCruisingSearch?: () => void;
+  placement?: 'stacked' | 'absolute';
 }) {
   // One-time Legal quiet-face dismiss — same localStorage pattern as match coach.
   const [mapBannerDismissed, setMapBannerDismissed] = useState(isHotSpotsMapBannerDismissed);
+  const stacked = placement === 'stacked';
 
   return (
     <>
-      {/* Sit below MapTopPillBar (Radius/Filters/Search) so Discretion + People/Cruise stay tappable at 390px. */}
-      <div className="pointer-events-none absolute inset-x-0 top-[3.75rem] z-10 flex items-start justify-between gap-2 px-3 sm:top-[4rem]">
+      {/* Discretion + People/Cruise: stacked in-flow under pills so 360–430px never overlaps. */}
+      <div
+        className={
+          stacked
+            ? 'pointer-events-none flex w-full items-start justify-between gap-2'
+            : 'pointer-events-none absolute inset-x-0 top-16 z-10 flex items-start justify-between gap-2 px-3'
+        }
+        data-testid="map-discretion-chrome"
+      >
         {!expanded ? (
           <div className="pointer-events-auto" data-map-chrome-corner="top-left">
             <MapDiscretionSlider valueM={mapPinFuzzM} onChange={onMapPinFuzzChange} />
@@ -246,7 +257,13 @@ function MapFloatingChrome({
         </div>
       </div>
       {onOpenCruisingSearch ? (
-        <div className="pointer-events-none absolute inset-x-0 top-[7.25rem] z-10 flex justify-center px-3 sm:top-[7.5rem]">
+        <div
+          className={
+            stacked
+              ? 'pointer-events-none flex w-full justify-center'
+              : 'pointer-events-none absolute inset-x-0 top-[8.5rem] z-10 flex justify-center px-3'
+          }
+        >
           <div className="pointer-events-auto">
             <CruisingSearchBar onOpen={onOpenCruisingSearch} />
           </div>
@@ -254,7 +271,11 @@ function MapFloatingChrome({
       ) : null}
       {hotSpotsLayerOn && !mapBannerDismissed ? (
         <div
-          className="pointer-events-none absolute inset-x-0 top-[9.75rem] z-10 flex justify-center px-3 sm:top-[10rem]"
+          className={
+            stacked
+              ? 'pointer-events-none flex w-full justify-center'
+              : 'pointer-events-none absolute inset-x-0 top-[11rem] z-10 flex justify-center px-3'
+          }
           data-testid="hotspots-map-helper"
         >
           <div
@@ -2403,26 +2424,27 @@ export const Discover = () => {
             onFiltersClick={() => setFiltersSheetOpen(true)}
             onSearchClick={openMapSearch}
             filtersActive={countActiveDiscoveryFilters(discoveryFilters) > 0}
-          />
+          >
+            <MapFloatingChrome
+              placement="stacked"
+              expanded={desktopMapExpanded}
+              mapPinFuzzM={mapPinFuzzM}
+              onMapPinFuzzChange={handleMapPinFuzzChange}
+              onToggleExpand={toggleDesktopMapExpanded}
+              peopleLayerOn={peopleLayerOn}
+              hotSpotsLayerOn={hotSpotsLayerOn}
+              onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
+              onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
+              onOpenCruisingSearch={() => setCruisingSearchOpen(true)}
+            />
+          </MapTopPillBar>
           {!loading && nearbyCount === 0 && !allScope && !needsLocationGate ? (
             <MapEmptyRadius nextRadiusKm={nextWidenRadiusKm} onWiden={handleRadiusCycle} />
           ) : null}
-
-          <MapFloatingChrome
-            expanded={desktopMapExpanded}
-            mapPinFuzzM={mapPinFuzzM}
-            onMapPinFuzzChange={handleMapPinFuzzChange}
-            onToggleExpand={toggleDesktopMapExpanded}
-            peopleLayerOn={peopleLayerOn}
-            hotSpotsLayerOn={hotSpotsLayerOn}
-            onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
-            onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
-            onOpenCruisingSearch={() => setCruisingSearchOpen(true)}
-          />
           <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
           {!needsLocationGate && !tokenMissing ? (
             <p
-              className="pointer-events-none absolute top-[7.5rem] left-1/2 z-[4] max-w-[min(78%,280px)] -translate-x-1/2 rounded-full px-2.5 py-1 text-center text-xs font-medium leading-snug"
+              className="pointer-events-none absolute top-[10rem] left-1/2 z-[4] max-w-[min(78%,280px)] -translate-x-1/2 rounded-full px-2.5 py-1 text-center text-xs font-medium leading-snug"
               style={{
                 background: 'rgba(13,10,6,0.55)',
                 color: 'rgba(240,224,192,0.65)',
@@ -2532,7 +2554,26 @@ export const Discover = () => {
             onFiltersClick={() => setFiltersSheetOpen(true)}
             onSearchClick={openMapSearch}
             filtersActive={countActiveDiscoveryFilters(discoveryFilters) > 0}
-          />
+          >
+            {mapPanelMode !== 'hidden' ? (
+              <MapFloatingChrome
+                placement="stacked"
+                expanded={mapPanelMode === 'expanded'}
+                mapPinFuzzM={mapPinFuzzM}
+                onMapPinFuzzChange={handleMapPinFuzzChange}
+                onToggleExpand={() =>
+                  setMapPanel(mapPanelMode === 'expanded' ? 'default' : 'expanded')
+                }
+                showHide
+                onHide={() => setMapPanel('hidden')}
+                peopleLayerOn={peopleLayerOn}
+                hotSpotsLayerOn={hotSpotsLayerOn}
+                onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
+                onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
+                onOpenCruisingSearch={() => setCruisingSearchOpen(true)}
+              />
+            ) : null}
+          </MapTopPillBar>
           {!loading && nearbyCount === 0 && !allScope && !needsLocationGate ? (
             <MapEmptyRadius nextRadiusKm={nextWidenRadiusKm} onWiden={handleRadiusCycle} />
           ) : null}
@@ -2572,23 +2613,6 @@ export const Discover = () => {
           ) : null}
 
           {mapPanelMode !== 'hidden' ? (
-            <MapFloatingChrome
-              expanded={mapPanelMode === 'expanded'}
-              mapPinFuzzM={mapPinFuzzM}
-              onMapPinFuzzChange={handleMapPinFuzzChange}
-              onToggleExpand={() =>
-                setMapPanel(mapPanelMode === 'expanded' ? 'default' : 'expanded')
-              }
-              showHide
-              onHide={() => setMapPanel('hidden')}
-              peopleLayerOn={peopleLayerOn}
-              hotSpotsLayerOn={hotSpotsLayerOn}
-              onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
-              onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
-              onOpenCruisingSearch={() => setCruisingSearchOpen(true)}
-            />
-          ) : null}
-          {mapPanelMode !== 'hidden' ? (
             <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
           ) : null}
 
@@ -2596,7 +2620,7 @@ export const Discover = () => {
             <p
               className="pointer-events-none absolute left-1/2 z-[4] max-w-[min(78%,260px)] -translate-x-1/2 rounded-full px-2.5 py-1 text-center text-xs font-medium leading-snug"
               style={{
-                top: hotSpotsLayerOn ? '10.5rem' : '7.5rem',
+                top: hotSpotsLayerOn ? '13rem' : '10rem',
                 background: 'rgba(13,10,6,0.55)',
                 color: 'rgba(240,224,192,0.65)',
                 border: '1px solid rgba(196,131,42,0.18)',

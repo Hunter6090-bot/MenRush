@@ -39,6 +39,16 @@ describe('navConfig — redesign Step 1 five-tab shell', () => {
     expect(items.find((i) => i.to === '/stream')?.mobileTab).toBeFalsy();
   });
 
+
+  it("Rooms tab shortLabel is Rooms (Video rooms lock retired)", () => {
+    const rooms = getNavItems().find((i) => i.to === '/rooms' && i.mobileTab);
+    expect(rooms).toBeTruthy();
+    expect(rooms!.shortLabel).toBe('Rooms');
+    expect(rooms!.label).toBe(ROUTE_LABELS.rooms);
+    expect(rooms!.label).toBe('Rooms');
+    expect(rooms!.shortLabel).not.toMatch(/Video/i);
+  });
+
   it('keeps Chat and Rooms active states separate', () => {
     expect(isNavActive('/conversations', '/conversations')).toBe(true);
     expect(isNavActive('/messages/abc', '/conversations')).toBe(true);

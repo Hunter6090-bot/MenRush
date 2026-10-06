@@ -11,6 +11,8 @@ import { CommunityFeed } from '../components/CommunityFeed';
 import { useLocationStore } from '../hooks/store';
 import { formatDistanceFromKm } from '../lib/localeUnits';
 import { getDirectionsUrl } from '../lib/cruising';
+import { IconCommunity } from '../components/icons';
+import { EntryIconPlaceholder } from '../components/EntryIconPlaceholder';
 
 type OutChip = 'all' | 'sauna' | 'bar' | 'event' | 'community';
 
@@ -139,6 +141,23 @@ export function Out() {
       >
         <div className="mb-3 flex items-center justify-between gap-3">
           <h1 className="text-2xl font-extrabold text-[var(--cream)]">Out</h1>
+        </div>
+
+        <div className="mb-3 shrink-0">
+          <Link
+            to="/stream"
+            data-testid="community-entry"
+            aria-label="Community"
+            className="flex min-h-[48px] w-full items-center gap-3 rounded-2xl border border-[var(--copper)]/40 bg-[rgba(196,131,42,0.12)] px-3.5 text-left transition-colors hover:border-[var(--copper)] hover:bg-[rgba(196,131,42,0.18)]"
+          >
+            <EntryIconPlaceholder slot="community">
+              {/* Temporary — swap when Claude Design Community icon lands */}
+              <IconCommunity size={20} />
+            </EntryIconPlaceholder>
+            <span className="min-w-0 flex-1 text-[15px] font-extrabold text-[var(--cream)]">
+              Community
+            </span>
+          </Link>
         </div>
 
         <div
