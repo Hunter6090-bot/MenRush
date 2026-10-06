@@ -3,7 +3,7 @@
  * Chips: All / Sauna / Bar / Event / Community.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { eventsAPI, hotSpotsAPI, type EventDTO, type HotSpotDTO } from '../api/client';
 import { Layout } from '../components/Layout';
 import { PulseRing } from '../components/PulseRing';
@@ -52,7 +52,6 @@ function sectionFromParam(raw: string | null): OutChip {
 }
 
 export function Out() {
-  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const chip = sectionFromParam(params.get('section') || params.get('chip'));
   const { lat, lng } = useLocationStore();
@@ -140,16 +139,6 @@ export function Out() {
       >
         <div className="mb-3 flex items-center justify-between gap-3">
           <h1 className="text-2xl font-extrabold text-[var(--cream)]">Out</h1>
-          <button
-            type="button"
-            data-testid="out-map-toggle"
-            onClick={() => navigate('/discover')}
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.12)] px-3.5 py-2 text-[12px] font-extrabold text-[var(--copper)]"
-            aria-label="Open Map"
-          >
-            <MapGlyph />
-            Map
-          </button>
         </div>
 
         <div
@@ -290,24 +279,5 @@ function OutEventRow({ event }: { event: EventDTO }) {
   );
 }
 
-function MapGlyph() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      aria-hidden
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-      />
-    </svg>
-  );
-}
 
 export default Out;

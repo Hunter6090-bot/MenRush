@@ -50,6 +50,11 @@ vi.mock('../api/client', () => ({
   },
 }));
 
+vi.mock('../lib/homeView', async () => {
+  const actual = await vi.importActual<typeof import('../lib/homeView')>('../lib/homeView');
+  return { ...actual };
+});
+
 vi.mock('../lib/tabListCache', () => ({
   readCachedMatches: vi.fn().mockReturnValue(undefined),
   refreshMatches: vi.fn().mockResolvedValue({ matches: [], likes: [] }),
@@ -101,7 +106,7 @@ describe('Layout sign out', () => {
     expect(navigate).toHaveBeenCalledWith('/login');
   });
 
-  it('renders Map · Chat · Rooms · Out · You bottom nav links', () => {
+  it('renders home Map|List toggle + Chat · Rooms · Out · You', () => {
     render(
       <MemoryRouter>
         <Layout>
@@ -111,13 +116,15 @@ describe('Layout sign out', () => {
     );
 
     const primary = screen.getByRole('navigation', { name: 'Primary' });
-    expect(primary.querySelector('a[href="/discover"]')).toBeTruthy();
+    // First slot is a toggle button, not a /discover link.
+    expect(primary.querySelector('a[href="/discover"]')).toBeFalsy();
+    expect(screen.getByTestId('mobile-nav-home-toggle')).toBeTruthy();
+    expect(screen.getByTestId('mobile-nav-home-toggle').textContent).toMatch(/List|Map/);
     expect(primary.querySelector('a[href="/conversations"]')).toBeTruthy();
     expect(primary.querySelector('a[href="/rooms"]')).toBeTruthy();
     expect(primary.querySelector('a[href="/out"]')).toBeTruthy();
     expect(primary.querySelector('a[href="/profile"]')).toBeTruthy();
     expect(primary.querySelector('a[href="/matches"]')).toBeFalsy();
-    expect(screen.getByTestId('mobile-nav-discover')).toBeTruthy();
     expect(screen.getByTestId('mobile-nav-conversations')).toBeTruthy();
     expect(screen.getByTestId('mobile-nav-out')).toBeTruthy();
   });

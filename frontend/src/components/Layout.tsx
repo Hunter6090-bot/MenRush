@@ -4,7 +4,7 @@ import { useAuthStore, useNotificationStore, useUnreadStore } from '../hooks/sto
 import { UserAvatar } from './UserAvatar';
 import { mobileBackFallback, shouldShowMobileBack } from '../lib/mobileBack';
 import { MobileBackButton } from './MobileBackButton';
-import { IconMapExpand, IconMore, IconNotifications, IconPulse, IconSignOut } from './icons';
+import { IconGrid, IconMapExpand, IconMapPin, IconMore, IconNotifications, IconPulse, IconSignOut } from './icons';
 import { BrandMark } from './BrandMark';
 import { ProfileSearchModal } from './ProfileSearchModal';
 import { NotificationDot } from './NotificationDot';
@@ -16,6 +16,14 @@ import { ProfileDepthStrip } from './ProfileDepthStrip';
 import { ThemeToggle } from './ThemeToggle';
 import { PushAlertBanner } from './PushAlertBanner';
 import { readCachedMatches, refreshMatches } from '../lib/tabListCache';
+import {
+  homeToggleLabel,
+  homeToggleTarget,
+  readHomeView,
+  writeHomeView,
+  HOME_VIEW_EVENT,
+  type HomeView,
+} from '../lib/homeView';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -57,6 +65,7 @@ function LayoutInner({ children }: LayoutProps) {
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   const [matchCount, setMatchCount] = useState(0);
+  const [homeView, setHomeView] = useState<HomeView>(() => readHomeView());
   const [sidebarExpanded, setSidebarExpanded] = useState(readSidebarExpanded);
   const { state: discoveryShell } = useDiscoveryShell();
 
@@ -118,6 +127,15 @@ function LayoutInner({ children }: LayoutProps) {
     const openSearch = () => setSearchOpen(true);
     window.addEventListener('menrush:open-search', openSearch);
     return () => window.removeEventListener('menrush:open-search', openSearch);
+  }, []);
+
+  useEffect(() => {
+    const syncHome = (e?: Event) => {
+      const detail = (e as CustomEvent<HomeView> | undefined)?.detail;
+      setHomeView(detail ?? readHomeView());
+    };
+    window.addEventListener(HOME_VIEW_EVENT, syncHome as EventListener);
+    return () => window.removeEventListener(HOME_VIEW_EVENT, syncHome as EventListener);
   }, []);
 
   const requestSignOut = () => {
@@ -374,17 +392,55 @@ function LayoutInner({ children }: LayoutProps) {
             }`}
           >
             {mobileTabs.map((item) => {
+              const compact = mobileTabs.length >= 5;
+              const tabClass = `relative flex flex-1 flex-col items-center justify-center gap-0.5 transition-all duration-200 first:rounded-l-[1.25rem] last:rounded-r-[1.25rem] ${
+                compact ? 'py-2' : 'gap-1 py-2.5'
+              }`;
+
+              // First slot = home Map|List toggle (Pete redesign update).
+              if (item.to === '/discover') {
+                const onHome = location.pathname === '/discover';
+                const target = homeToggleTarget(homeView);
+                const label = homeToggleLabel(homeView);
+                const ToggleIcon = target === 'list' ? IconGrid : IconMapPin;
+                return (
+                  <button
+                    key="home-view-toggle"
+                    type="button"
+                    data-testid="mobile-nav-home-toggle"
+                    aria-label={target === 'list' ? 'Show List' : 'Show Map'}
+                    aria-pressed={onHome}
+                    onClick={() => {
+                      writeHomeView(target);
+                      setHomeView(target);
+                      if (!onHome) navigate('/discover');
+                    }}
+                    className={`${tabClass} ${
+                      onHome
+                        ? 'text-[var(--copper)] bg-[var(--copper)]/10'
+                        : 'text-[var(--cream-muted)] active:scale-95'
+                    }`}
+                  >
+                    <ToggleIcon size={compact ? 20 : 22} className={onHome ? 'scale-110' : ''} />
+                    <span
+                      className={`font-bold leading-none tracking-wide ${
+                        compact ? 'text-[11px]' : 'text-xs'
+                      }`}
+                    >
+                      {label}
+                    </span>
+                  </button>
+                );
+              }
+
               const active = isNavActive(location.pathname, item.to);
               const badge = badgeFor(item, unreadCount, notificationUnread, matchCount);
-              const compact = mobileTabs.length >= 5;
               return (
                 <Link
                   key={item.to}
                   to={item.to}
                   data-testid={`mobile-nav-${item.to.replace(/\//g, '') || 'home'}`}
-                  className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 transition-all duration-200 first:rounded-l-[1.25rem] last:rounded-r-[1.25rem] ${
-                    compact ? 'py-2' : 'gap-1 py-2.5'
-                  } ${
+                  className={`${tabClass} ${
                     active
                       ? 'text-[var(--copper)] bg-[var(--copper)]/10'
                       : 'text-[var(--cream-muted)] active:scale-95'

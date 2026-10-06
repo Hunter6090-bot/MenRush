@@ -122,7 +122,7 @@ describe('React Router v7 BOA90 — login', () => {
 });
 
 describe('React Router v7 BOA90 — routing / bottom nav + deep links', () => {
-  it('exposes Map · Chat · Rooms · Out · You as primary mobile tabs', () => {
+  it('exposes Discover home + Chat · Rooms · Out · You as primary mobile tabs', () => {
     const mobile = getNavItems().filter((i) => i.mobileTab).map((i) => i.to);
     expect(mobile).toEqual([
       '/discover',

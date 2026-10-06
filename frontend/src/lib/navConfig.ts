@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { ROUTE_LABELS } from './routeLabels';
+import { readHomeView } from './homeView';
 import {
   IconChat,
   IconCommunity,
@@ -29,7 +30,7 @@ export interface NavItem {
 
 /**
  * Redesign Step 1 (Pete 6 Oct 2026): 5 primary tabs —
- * Map · Chat · Rooms · Out · You.
+ * Home (Map|List toggle) · Chat · Rooms · Out · You.
  * Old destinations stay in the catalog for deep links / desktop Settings.
  */
 export function getNavItems(): NavItem[] {
@@ -157,7 +158,7 @@ export function mobilePageTitle(pathname: string): string {
   if (pathname.startsWith('/profile/')) return 'Profile';
   if (pathname.startsWith('/rooms/')) return 'Rooms';
   if (pathname === '/out' || pathname.startsWith('/out/')) return ROUTE_LABELS.out;
-  if (pathname === '/discover') return ROUTE_LABELS.map;
+  if (pathname === '/discover') return readHomeView() === 'list' ? 'List' : ROUTE_LABELS.map;
 
   const items = getNavItems();
   const match = items.find((item) => isNavActive(pathname, item.to));

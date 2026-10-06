@@ -12,7 +12,7 @@
 
 | Tab | Route (canonical) | Icon + 1-word label | Replaces / absorbs |
 |-----|-------------------|---------------------|--------------------|
-| **Map** | `/discover` | Map | Nearby (was primary tab), Discover All/Nearby, map layers, grid via toggle |
+| **Home (Map\|List toggle)** | `/discover` | **List** when map is home (grid icon); **Map** when list is home (pin icon) | Nearby map + grid; preference persisted (`map`\|`list`, default map). In-map phone Map/Grid toggle removed as duplicate. |
 | **Chat** | `/conversations` | Chat (+ unread badge) | Messages; Matches page becomes filter chip All / Matches / Unread |
 | **Rooms** | `/rooms` | Rooms | Video rooms (Premium gate unchanged) |
 | **Out** | `/out` | Out | Cruise/Hot Spots, Events, Community (Stream), venue list chips All / Sauna / Bar / Event |
@@ -122,7 +122,7 @@ Desktop sidebar mirrors the same five + Settings / Notifications where needed. M
 ## Step 1 PR scope checklist
 
 - [x] Feature map (this file)
-- [ ] 5-tab bar Map / Chat / Rooms / Out / You
+- [x] 5-tab bar Home(Map|List) / Chat / Rooms / Out / You
 - [ ] Redirects for old tab routes
 - [ ] Map top pills Radius / Filters / Search + Map/Grid toggle
 - [ ] Pin sheet: photo, name+tick, age·distance, Now, Profile; Chat / Album / More

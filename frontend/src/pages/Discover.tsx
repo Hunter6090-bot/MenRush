@@ -34,6 +34,7 @@ import { DiscoveryFilterPanel } from '../components/DiscoveryFilterPanel';
 import { MoreFiltersDrawer } from '../components/MoreFiltersDrawer';
 import { NearbyProfileGrid } from '../components/NearbyProfileGrid';
 import { NearbyMapGridToggle, readNearbyView, writeNearbyView, type NearbyView } from '../components/NearbyMapGridToggle';
+import { HOME_VIEW_EVENT, homeViewToNearby, nearbyToHomeView, readHomeView, writeHomeView, type HomeView } from '../lib/homeView';
 import { MapTopPillBar } from '../components/MapTopPillBar';
 import { MapEmptyRadius } from '../components/MapEmptyRadius';
 import { RedesignFiltersSheet } from '../components/RedesignFiltersSheet';
@@ -589,7 +590,8 @@ export const Discover = () => {
   const allScope = isDiscoveryAllScope(radius);
   /** How far others see your pin — profiles.map_pin_fuzz_m (not search radius). */
   const [mapPinFuzzM, setMapPinFuzzM] = useState<number>(MAP_PIN_FUZZ_DEFAULT_M);
-  const [nearbyView, setNearbyView] = useState<NearbyView>(() => readNearbyView());
+  const [nearbyView, setNearbyView] = useState<NearbyView>(() => homeViewToNearby(readHomeView()));
+
   const [nearbySort, setNearbySort] = useState<NearbySortMode>(() => readNearbySort());
   const handleNearbySortChange = useCallback((next: NearbySortMode) => {
     setNearbySort(next);
@@ -597,7 +599,7 @@ export const Discover = () => {
   }, []);
   const [mapPanelMode, setMapPanelMode] = useState<MapPanelMode>(() => {
     // Keep Grid/Map surface and map panel height in sync on first paint.
-    if (readNearbyView() === 'grid') return 'hidden';
+    if (homeViewToNearby(readHomeView()) === 'grid') return 'hidden';
     const saved = (() => {
       try {
         const raw = localStorage.getItem(MAP_PANEL_STORAGE_KEY);
@@ -609,6 +611,22 @@ export const Discover = () => {
     })();
     return saved === 'hidden' ? 'default' : saved;
   });
+  // Bottom-tab Map|List toggle (Layout) — keep Discover surface in sync.
+  useEffect(() => {
+    const onHomeView = (e: Event) => {
+      const view = (e as CustomEvent<HomeView>).detail ?? readHomeView();
+      const nearby = homeViewToNearby(view);
+      setNearbyView(nearby);
+      writeNearbyView(nearby);
+      setMapPanelMode((mode) => {
+        if (nearby === 'grid') return 'hidden';
+        return mode === 'hidden' ? 'default' : mode;
+      });
+    };
+    window.addEventListener(HOME_VIEW_EVENT, onHomeView as EventListener);
+    return () => window.removeEventListener(HOME_VIEW_EVENT, onHomeView as EventListener);
+  }, []);
+
   const [desktopMapExpanded, setDesktopMapExpanded] = useState(readDesktopMapExpanded);
   const [chatDockOpen, setChatDockOpen] = useState(readDockOpen);
   const mapDragRef = useRef<{ startY: number; mode: MapPanelMode } | null>(null);
@@ -1279,6 +1297,7 @@ export const Discover = () => {
     const view: NearbyView = mode === 'hidden' ? 'grid' : 'map';
     setNearbyView(view);
     writeNearbyView(view);
+    writeHomeView(nearbyToHomeView(view));
     try {
       localStorage.setItem(MAP_PANEL_STORAGE_KEY, mode);
     } catch {
@@ -1288,6 +1307,7 @@ export const Discover = () => {
 
   const setNearbySurface = useCallback(
     (view: NearbyView) => {
+      writeHomeView(nearbyToHomeView(view));
       if (view === 'grid') setMapPanel('hidden');
       else setMapPanel(mapPanelMode === 'expanded' ? 'expanded' : 'default');
     },
@@ -2663,7 +2683,7 @@ export const Discover = () => {
               <DiscoveryFilterPills radiusKm={radius} onRadiusChange={handleRadiusChange} />
               <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
                 <NearbySortToggle mode={nearbySort} onChange={handleNearbySortChange} />
-                <NearbyMapGridToggle view={nearbyView} onChange={setNearbySurface} />
+                {/* Map|List lives on the bottom-tab home toggle — no in-map duplicate on phone. */}
               </div>
             </div>
 

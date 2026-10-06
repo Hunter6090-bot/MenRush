@@ -3,7 +3,7 @@ import { getNavItems, isNavActive, mobilePageTitle } from './navConfig';
 import { ROUTE_LABELS } from './routeLabels';
 
 describe('navConfig — redesign Step 1 five-tab shell', () => {
-  it('exposes Map · Chat · Rooms · Out · You as the only mobile tabs', () => {
+  it('exposes Discover home + Chat · Rooms · Out · You as the only mobile tabs', () => {
     const items = getNavItems();
     const mobileOrder = items.filter((i) => i.mobileTab).map((i) => i.to);
     expect(mobileOrder).toEqual([
@@ -15,8 +15,10 @@ describe('navConfig — redesign Step 1 five-tab shell', () => {
     ]);
 
     const map = items.find((i) => i.to === '/discover');
+    // Catalog label stays Map; bottom-tab slot is a Map|List toggle in Layout.
     expect(map?.shortLabel).toBe('Map');
     expect(map?.label).toBe(ROUTE_LABELS.map);
+    expect(map?.to).toBe('/discover');
 
     const chat = items.find((i) => i.to === '/conversations');
     expect(chat?.shortLabel).toBe('Chat');

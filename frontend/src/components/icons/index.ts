@@ -26,3 +26,6 @@ export { IconSignOut } from "./IconSignOut";
 export { IconUnmatch } from "./IconUnmatch";
 export { IconInstagram } from "./IconInstagram";
 export { IconBluesky } from "./IconBluesky";
+
+export { IconGrid } from "./IconGrid";
+export { IconMapPin } from "./IconMapPin";
