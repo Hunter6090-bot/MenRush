@@ -15,6 +15,7 @@ import { parseRoomImageMessage } from '../lib/roomMediaMessage';
 import { RoomTempIdentityGate } from '../components/RoomTempIdentityGate';
 import { RoomPresentPeopleList } from '../components/RoomPresentPeopleList';
 import { RoomInRoomDm, type InRoomDmMessage } from '../components/RoomInRoomDm';
+import { FadedBrandFace } from '../components/FadedBrandFace';
 import {
   presentOthers,
   removePresentPerson,
@@ -1354,27 +1355,18 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                     {showTail && (
                       // Room chat avatars never deep-link to the real profile.
                       <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                        className="w-8 h-8 rounded-full overflow-hidden"
                         style={{
-                          background: `${color}22`,
                           border: `1px solid ${color}44`,
-                          color,
                           flexShrink: 0,
                         }}
                         data-testid={`room-msg-avatar-${msg.sender_id}`}
                         aria-hidden
                       >
-                        <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                          style={{
-                            background: `${color}22`,
-                            border: `1px solid ${color}44`,
-                            color,
-                            flexShrink: 0,
-                          }}
-                        >
-                          {initials(msg.sender_name)}
-                        </div>
+                        {/* ONE Brand placeholder — no initials (Pete lock 6 Oct 2026). */}
+                        <span className="block h-full w-full overflow-hidden rounded-full">
+                          <FadedBrandFace variant="profile" size={30} label={msg.sender_name} />
+                        </span>
                       </div>
                     )}
                   </div>

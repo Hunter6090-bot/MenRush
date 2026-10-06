@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { getPhotoUrl } from './UserAvatar';
+import { BrandAvatar } from './BrandAvatar';
 
 export type InRoomDmMessage = {
   id: string;
@@ -75,11 +76,7 @@ export const RoomInRoomDm: React.FC<Props> = ({
           }}
           aria-hidden
         >
-          {photo ? (
-            <img src={photo} alt="" className="h-full w-full object-cover" />
-          ) : (
-            peerName.slice(0, 2).toUpperCase()
-          )}
+          <BrandAvatar photoUrl={photo} name={peerName} />
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-base font-semibold text-[var(--cream)]">{peerName}</p>

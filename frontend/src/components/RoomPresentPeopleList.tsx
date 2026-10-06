@@ -1,7 +1,7 @@
 import React from 'react';
 import type { PresentPerson } from '../lib/roomPresentRoster';
-import { roomLetterAvatar } from '../lib/roomLetterAvatar';
 import { getPhotoUrl } from './UserAvatar';
+import { BrandAvatar } from './BrandAvatar';
 
 type Props = {
   people: PresentPerson[];
@@ -64,11 +64,7 @@ export const RoomPresentPeopleList: React.FC<Props> = ({
                       color: '#C4832A',
                     }}
                   >
-                    {src ? (
-                      <img src={src} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      roomLetterAvatar(person.name)
-                    )}
+                    <BrandAvatar photoUrl={src} name={person.name} />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-base font-medium text-[var(--cream)]">

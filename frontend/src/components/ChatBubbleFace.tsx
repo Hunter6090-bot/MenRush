@@ -1,10 +1,11 @@
 import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
+import { BrandAvatar } from './BrandAvatar';
 
 const BUBBLE_AVATAR_PX = 32;
 
 /**
- * 1:1 chat bubble face — empty/missing/generic → faded cutout (never gold stub).
- * Real /uploads photos keep their bytes (media lock).
+ * 1:1 chat bubble face — empty/missing/generic/failed → ONE Brand placeholder
+ * (faded medallion cutout). Real /uploads photos keep their bytes (media lock).
  */
 export function ChatBubbleFace({
   userId,
@@ -36,11 +37,7 @@ export function ChatBubbleFace({
       style={{ border: '1px solid var(--border-default)', flexShrink: 0 }}
       data-testid={`chat-bubble-avatar-photo-${userId}`}
     >
-      <img
-        src={photoUrl!}
-        alt={name ?? ''}
-        className="h-full w-full object-cover"
-      />
+      <BrandAvatar photoUrl={photoUrl} name={name} alt={name ?? ''} size={BUBBLE_AVATAR_PX} />
     </div>
   );
 }

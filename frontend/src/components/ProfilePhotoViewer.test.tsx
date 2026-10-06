@@ -27,4 +27,26 @@ describe('ProfilePhotoViewer', () => {
     fireEvent.click(screen.getByTestId('profile-photo-viewer-back'));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('legacy generic avatar is never enlarged — Brand cutout instead', () => {
+    render(
+      <ProfilePhotoViewer
+        src="https://menrush.com/avatars/generic/01.svg"
+        alt="Gen"
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId('profile-photo-viewer-img')).toBeNull();
+    expect(screen.getByTestId('profile-photo-viewer-brand-face')).toBeInTheDocument();
+    expect(
+      screen.getByTestId('faded-brand-face').querySelector('img')?.getAttribute('src'),
+    ).toBe('/brand/medallion-transparent.png');
+  });
+
+  it('failed real photo shows Brand cutout + Retry (no legacy default)', () => {
+    render(<ProfilePhotoViewer src="https://example.com/gone.jpg" onClose={vi.fn()} />);
+    fireEvent.error(screen.getByTestId('profile-photo-viewer-img'));
+    expect(screen.getByTestId('profile-photo-viewer-brand-face')).toBeInTheDocument();
+    expect(screen.getByTestId('profile-photo-viewer-retry')).toBeInTheDocument();
+  });
 });

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RoomParticipant } from '../hooks/useRoomVideo';
-import { roomLetterAvatar } from '../lib/roomLetterAvatar';
+import { BrandAvatar } from './BrandAvatar';
 import {
   attachRemoteAudio,
   attachStreamToVideo,
@@ -178,19 +178,16 @@ function ParticipantTile({
       ) : null}
 
       {(!showVideo || (!participant.isSelf && !renderVideo)) &&
-        (photoUrl ? (
-          <img src={photoUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-90" />
-        ) : (
-          <div
-            className="absolute inset-0 flex items-center justify-center text-2xl font-black"
-            style={{
-              background: 'linear-gradient(145deg, var(--bg-elevated), var(--bg-primary))',
-              color: '#C4832A',
-            }}
-          >
-            {roomLetterAvatar(participant.name)}
+        (
+          <div className="absolute inset-0" data-testid={`room-tile-face-${participant.user_id}`}>
+            <BrandAvatar
+              photoUrl={photoUrl}
+              name={participant.name}
+              variant="tile"
+              imgClassName="absolute inset-0 h-full w-full object-cover opacity-90"
+            />
           </div>
-        ))}
+        )}
 
       {!participant.isLive && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/45">

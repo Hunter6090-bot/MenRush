@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { roomsAPI } from '../api/client';
 import { useMediaQuery } from '../hooks/useMediaQuery';
-import { roomLetterAvatar } from '../lib/roomLetterAvatar';
 import { getPhotoUrl } from './UserAvatar';
+import { BrandAvatar } from './BrandAvatar';
+import { FadedBrandFace } from './FadedBrandFace';
+import { isPlaceholderAvatarUrl } from '../lib/avatarFallback';
 import { SelfieCaptureModal } from './SelfieCaptureModal';
 
 /** Gate result: explicit profile path, or temp name (+ optional photo). */
@@ -124,7 +126,7 @@ export function resolveTempPhotoSrc(url?: string | null): string | undefined {
 /**
  * Gate before entering a group video room.
  * Clear choice: keep real profile, OR use a temporary name (photo optional).
- * Missing temp photo → letter avatar from the temp name — never blocks join.
+ * Missing temp photo → ONE Brand placeholder face — never blocks join.
  * Layout: mobile bottom sheet; ≥1280px two-column centred dialog (1a).
  */
 export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
@@ -364,7 +366,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
         </span>
       );
     }
-    if (photoPreview || photoUrl) {
+    if (photoPreview || (photoUrl && !isPlaceholderAvatarUrl(photoUrl))) {
       return (
         <img
           src={photoPreview || resolveTempPhotoSrc(photoUrl)}
@@ -374,10 +376,12 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
         />
       );
     }
-    if (trimmed) {
-      return <span className="text-2xl font-bold text-[#C4832A]">{roomLetterAvatar(trimmed)}</span>;
-    }
-    return <span className="text-2xl font-semibold text-[#A89070]">?</span>;
+    // No temp photo → ONE Brand placeholder (never letter / "?" avatar).
+    return (
+      <span className="block h-full w-full" data-testid="room-temp-photo-brand-face">
+        <FadedBrandFace variant="profile" label={trimmed || 'MenRush'} />
+      </span>
+    );
   };
 
   const anonymityLine = (
@@ -406,11 +410,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
           }}
           aria-hidden
         >
-          {resolvedProfilePhoto ? (
-            <img src={resolvedProfilePhoto} alt="" className="h-full w-full object-cover" />
-          ) : (
-            roomLetterAvatar(resolvedProfileName)
-          )}
+          <BrandAvatar photoUrl={resolvedProfilePhoto} name={resolvedProfileName} />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-[14px] font-bold text-[var(--cream)]">{profileCtaLabel}</span>

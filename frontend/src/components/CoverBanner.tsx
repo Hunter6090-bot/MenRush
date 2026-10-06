@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { getPhotoUrl } from './UserAvatar';
+import { useResolvingPhotoSrc } from './UserAvatar';
 
 export interface CoverFrame {
   x: number;
@@ -48,16 +48,27 @@ export function CoverBanner({
   heightClassName = 'h-40 sm:h-32',
 }: CoverBannerProps) {
   const normalized = normalizeCoverFrame(frame.x, frame.y, frame.zoom);
+  // Walk upload candidates; legacy default / failed cover → neutral brand gradient
+  // (never an old default image). Media lock: stored cover_url is untouched.
+  const { src, onError } = useResolvingPhotoSrc(coverUrl);
 
   return (
-    <div className={`relative w-full overflow-hidden ${heightClassName} ${className}`}>
-      <img
-        src={getPhotoUrl(coverUrl)}
-        alt=""
-        className="absolute inset-0 h-full w-full object-cover"
-        style={coverImageStyle(normalized)}
-        draggable={false}
-      />
+    <div
+      className={`relative w-full overflow-hidden ${heightClassName} ${className} ${
+        src ? '' : 'bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#A45E18]/10'
+      }`}
+      data-testid={src ? undefined : 'cover-banner-fallback'}
+    >
+      {src ? (
+        <img
+          src={src}
+          alt=""
+          onError={onError}
+          className="absolute inset-0 h-full w-full object-cover"
+          style={coverImageStyle(normalized)}
+          draggable={false}
+        />
+      ) : null}
     </div>
   );
 }

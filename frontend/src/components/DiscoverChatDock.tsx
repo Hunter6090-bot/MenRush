@@ -3,6 +3,7 @@ import { mapFeedAPI, MapFeedMessage } from '../api/client';
 import { useSocket } from '../hooks/useSocket';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { IconClose } from './icons';
+import { FadedBrandFace } from './FadedBrandFace';
 
 const DOCK_STORAGE_KEY = 'menrush_discover_chat_dock';
 const MAX_VISIBLE = 6;
@@ -228,16 +229,13 @@ export function DiscoverChatDock({
                   className={`flex gap-2 ${isMine ? 'flex-row-reverse' : ''}`}
                   style={{ opacity }}
                 >
-                  {/* Avatar initial */}
+                  {/* Map-feed has no photos — ONE Brand placeholder face (no initials). */}
                   <div
-                  className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold"
-                    style={{
-                      background: 'rgba(196,131,42,0.2)',
-                      border: '1px solid rgba(196,131,42,0.3)',
-                      color: '#C4832A',
-                    }}
+                    className="mt-0.5 h-8 w-8 shrink-0 overflow-hidden rounded-full"
+                    style={{ border: '1px solid rgba(196,131,42,0.3)' }}
+                    data-testid="map-feed-brand-face"
                   >
-                    {(msg.display_name?.[0] ?? '?').toUpperCase()}
+                    <FadedBrandFace variant="profile" size={30} label={msg.display_name || 'MenRush'} />
                   </div>
                   <div className={`flex max-w-[78%] flex-col ${isMine ? 'items-end' : 'items-start'}`}>
                     <span className="mb-0.5 text-xs font-semibold text-[#A89070]">
