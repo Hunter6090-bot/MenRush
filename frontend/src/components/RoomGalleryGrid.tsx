@@ -22,21 +22,34 @@ interface RoomGalleryGridProps {
 /** Column count follows occupancy so one face is not a postage stamp in a 6-col grid. */
 export function galleryGridClass(count: number): string {
   const gap = 'gap-1.5 sm:gap-2';
-  if (count <= 1) return `grid h-full min-h-0 grid-cols-1 ${gap}`;
+  // One person: a single centred cell. The tile itself is capped (SOLO_TILE_CLASS).
+  if (count <= 1) return `grid h-full min-h-0 grid-cols-1 grid-rows-1 place-items-center ${gap}`;
   if (count === 2) return `grid h-full min-h-0 grid-cols-1 sm:grid-cols-2 ${gap}`;
   if (count <= 4) return `grid h-full min-h-0 grid-cols-2 ${gap}`;
   if (count <= 9) return `grid min-h-0 auto-rows-fr grid-cols-2 content-start sm:grid-cols-3 ${gap}`;
   return `grid min-h-0 auto-rows-fr grid-cols-2 content-start sm:grid-cols-3 lg:grid-cols-4 ${gap}`;
 }
 
+/** Two to four people share the whole stage. One person does not (see below). */
 export function galleryTilesFillStage(count: number): boolean {
-  return count > 0 && count <= 4;
+  return count >= 2 && count <= 4;
 }
+
+/**
+ * One person alone: a large, readable portrait tile with stage still visible
+ * around it — not a postage stamp, and not full-bleed.
+ */
+export function galleryTileIsSolo(count: number): boolean {
+  return count === 1;
+}
+
+export const SOLO_TILE_CLASS = 'aspect-[4/5] h-[72%] min-h-[12rem] max-h-[36rem] max-w-full';
 
 function ParticipantTile({
   participant,
   pinned,
   fill,
+  solo = false,
   onPin,
   stream,
   photoUrl,
@@ -45,6 +58,7 @@ function ParticipantTile({
   participant: RoomParticipant;
   pinned: boolean;
   fill: boolean;
+  solo?: boolean;
   onPin: () => void;
   stream: MediaStream | null;
   photoUrl: string | undefined;
@@ -124,8 +138,9 @@ function ParticipantTile({
       type="button"
       onClick={onPin}
       className={`group relative overflow-hidden rounded-sm bg-[#11100E] text-left transition-all ${
-        pinned || fill ? 'h-full min-h-0 w-full' : 'w-full aspect-[4/5]'
+        pinned || fill ? 'h-full min-h-0 w-full' : solo ? SOLO_TILE_CLASS : 'w-full aspect-[4/5]'
       }`}
+      data-testid="room-gallery-tile"
       style={{
         border: pinned ? '2px solid #C4832A' : '1px solid rgba(255,255,255,0.08)',
         boxShadow: pinned ? '0 0 0 1px rgba(196,131,42,0.35)' : undefined,
@@ -225,6 +240,7 @@ export function RoomGalleryGrid({
   const pinned = pinnedId ? ordered.find((p) => p.user_id === pinnedId) : null;
   const gridItems = pinned ? ordered.filter((p) => p.user_id !== pinnedId) : ordered;
   const fillUnpinned = !pinned && galleryTilesFillStage(gridItems.length);
+  const soloUnpinned = !pinned && galleryTileIsSolo(gridItems.length);
 
   const tileVideo = (participant: RoomParticipant) => {
     const stream = getStreamFor(participant.user_id);
@@ -288,6 +304,7 @@ export function RoomGalleryGrid({
                 participant={participant}
                 pinned={participant.user_id === pinnedId}
                 fill={fillUnpinned || Boolean(pinned)}
+                solo={soloUnpinned}
                 onPin={() => onPin(participant.user_id === pinnedId ? null : participant.user_id)}
                 stream={getStreamFor(participant.user_id)}
                 photoUrl={photoUrl(participant.photo_url)}

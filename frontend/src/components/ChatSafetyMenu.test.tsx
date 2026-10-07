@@ -23,6 +23,7 @@ vi.mock('../api/client', () => ({
 function renderMenu(props: {
   peerId?: string;
   peerName?: string;
+  threadId?: string;
   onNotice?: (msg: string, tone?: 'success' | 'error') => void;
   onBlocked?: () => void;
 } = {}) {
@@ -31,6 +32,7 @@ function renderMenu(props: {
       <ChatSafetyMenu
         peerId={props.peerId ?? 'peer-1'}
         peerName={props.peerName ?? 'Nick'}
+        threadId={props.threadId}
         onNotice={props.onNotice}
         onBlocked={props.onBlocked}
       />
@@ -116,6 +118,22 @@ describe('ChatSafetyMenu', () => {
 
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     expect(navigateMock).toHaveBeenCalledWith('/settings#blocked');
+  });
+
+  it('includes conversation threadId in the report payload', async () => {
+    const { usersAPI } = await import('../api/client');
+    renderMenu({ peerName: 'Nick', threadId: 'dm:aaa_bbb' });
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Report Nick' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit report' }));
+    await vi.waitFor(() => {
+      expect(usersAPI.reportUser).toHaveBeenCalledWith(
+        'peer-1',
+        'harassment',
+        undefined,
+        'dm:aaa_bbb',
+      );
+    });
   });
 
   it('opens from a ConversationItem row with unclipped actions in document.body portal', () => {

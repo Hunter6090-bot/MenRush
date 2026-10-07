@@ -2154,7 +2154,7 @@ export const Discover = () => {
                 Tap Match on a card
               </p>
               <p className="mt-1 text-sm text-[var(--cream-muted)]">
-                No swipe. Mutual like unlocks chat and calls. Consent first.
+                Both tap. Chat opens. Consent first.
               </p>
             </div>
             <button
@@ -2198,10 +2198,8 @@ export const Discover = () => {
           className="mx-3 mb-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] px-4 py-3 shadow-[0_12px_28px_rgba(0,0,0,0.4)]"
         >
           <div>
-            <p className="text-[14px] font-extrabold text-[var(--cream)]">Match with {matchToast.name}</p>
-            <p className="mt-0.5 text-[12px] text-[var(--cream-muted)]">
-              You both said yes. Chat when ready — consent first. Pulse to get seen by more men nearby.
-            </p>
+            <p className="text-base font-extrabold text-[var(--cream)]">Match with {matchToast.name}</p>
+            <p className="mt-0.5 text-sm text-[var(--cream-muted)]">Consent first.</p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <button
@@ -2246,10 +2244,8 @@ export const Discover = () => {
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-extrabold text-[var(--cream)]">Quiet map? Start Pulse</p>
-              <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
-                Get 90 minutes of priority visibility and appear first to men nearby.
-              </p>
+              <p className="text-base font-extrabold text-[var(--cream)]">Quiet map? Start Pulse</p>
+              <p className="mt-1 text-sm text-[var(--cream-muted)]">Seen first for 90 minutes.</p>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
               <button
@@ -2289,10 +2285,8 @@ export const Discover = () => {
           <p id="location-gate-title" className="text-[17px] font-extrabold text-[var(--cream)]">
             Allow location to unlock Nearby
           </p>
-          <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--cream-muted)]">
-            We need your device location to show men near you. Your exact pin is not shown to others
-            — they only see approximate distance. You can adjust your search radius once location is
-            on. Shared only while you use the app.
+          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--cream-muted)]">
+            Others see roughly where you are, not your exact pin.
           </p>
           <button
             type="button"
@@ -2492,10 +2486,7 @@ export const Discover = () => {
             <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center bg-[var(--bg-primary)]/90 px-5 text-center backdrop-blur-sm">
               {needsLocationGate ? (
                 <>
-                  <p className="text-sm font-extrabold text-[var(--cream)]">Location required</p>
-                  <p className="mt-2 max-w-xs text-xs leading-relaxed text-[var(--cream-muted)]">
-                    Grant location to load the map around you.
-                  </p>
+                  <p className="text-base font-extrabold text-[var(--cream)]">Location required</p>
                   <button
                     type="button"
                     onClick={handleEnableLocation}

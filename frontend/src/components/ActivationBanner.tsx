@@ -10,11 +10,11 @@ import {
 } from '../lib/profileSetup';
 
 const BLOCKER_COPY: Record<ReturnType<typeof activationBlockers>[number], string> = {
-  avatar: 'Add a photo or avatar',
-  location: 'Allow location (private — not a public pin)',
-  bio: 'Write your bio',
-  looking: 'Say what you want',
-  tags: 'Add at least 3 tags',
+  avatar: 'Photo',
+  location: 'Location',
+  bio: 'Bio',
+  looking: 'Looking for',
+  tags: '3 tags',
 };
 
 interface ActivationBannerProps {
@@ -40,11 +40,11 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
   const primary = blockers[0];
   const headline =
     locationOnly || (needsLocation && fieldsComplete)
-      ? 'Turn on location for Nearby'
+      ? 'Turn on location'
       : primary === 'avatar'
         ? 'You are invisible on the map'
         : primary === 'location'
-          ? 'We need your location. Others only see distance'
+          ? 'Turn on location'
           : 'Finish your profile';
 
   const showLocationCta =
@@ -65,10 +65,10 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
           <p className="text-base font-extrabold text-[var(--cream)]">{headline}</p>
           <p className="mt-1 text-sm text-[var(--cream-muted)]">
             {locationOnly || (needsLocation && fieldsComplete)
-              ? 'Your profile is ready. GPS for Nearby — others see distance, not your pin.'
+              ? 'Others see roughly where you are, not your exact pin.'
               : blockers.length > 0
-                ? blockers.map((b) => BLOCKER_COPY[b]).join(' · ')
-                : 'GPS for Nearby. Distance only — no public pin.'}
+                ? `Missing: ${blockers.map((b) => BLOCKER_COPY[b]).join(' · ')}`
+                : 'Others see roughly where you are, not your exact pin.'}
           </p>
           <div className="mt-2 h-1.5 w-full max-w-[200px] overflow-hidden rounded-full bg-[rgba(13,10,6,0.5)]">
             <div

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, memo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { messagesAPI, usersAPI, meetAPI, MediaKind, MessageMediaKind, MessageDTO, MeetAgreementState, LibraryPhotoDTO } from '../api/client';
+import { messagesAPI, usersAPI, MediaKind, MessageMediaKind, MessageDTO, LibraryPhotoDTO } from '../api/client';
 import { trackEventOnce } from '../observability/analytics';
 import { useSocket } from '../hooks/useSocket';
 import { useAuthStore, useCallStore, useUnreadStore } from '../hooks/store';
@@ -15,7 +15,6 @@ import { VideoNoteCaptureModal } from '../components/VideoNoteCaptureModal';
 import { videoFileFromRecorderBlob } from '../lib/mediaMime';
 import { ChatAttachLibrarySheet } from '../components/ChatAttachLibrarySheet';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
-import { PanicReportButton } from '../components/PanicReportButton';
 import { placeOutgoingCall } from '../lib/callBridge';
 import { mapCallMediaError } from '../lib/callMedia';
 import { ChevronLeftIcon, MobileBackButton } from '../components/MobileBackButton';
@@ -243,8 +242,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const [attachLibraryOpen, setAttachLibraryOpen] = useState(false);
   const [selfieOpen, setSelfieOpen] = useState(false);
   const [videoNoteOpen, setVideoNoteOpen] = useState(false);
-  const [meetState, setMeetState] = useState<MeetAgreementState | null>(null);
-  const [meetSubmitting, setMeetSubmitting] = useState(false);
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
   const [canJerk, setCanJerk] = useState(false);
@@ -449,7 +446,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         }
       })
       .catch(() => {});
-    meetAPI.getState(otherId).then((r) => setMeetState(r.data)).catch(() => setMeetState(null));
     useUnreadStore.getState().clearUnreadFrom(otherId);
   }, [otherId, loadConversation]);
 
@@ -589,30 +585,17 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         prev.map((m) => (m.id === data.id ? { ...m, ...data } : m)),
       );
     };
-    const onMeetUpdated = (data: MeetAgreementState & { peer_id?: string }) => {
-      if (data.peer_id === otherId || !data.peer_id) {
-        setMeetState({
-          my_confirmed: data.my_confirmed,
-          peer_confirmed: data.peer_confirmed,
-          mutual: data.mutual,
-          my_confirmed_at: data.my_confirmed_at,
-          peer_confirmed_at: data.peer_confirmed_at,
-        });
-      }
-    };
 
     socket.on('message', onMessage);
     socket.on('typing', onTyping);
     socket.on('message:viewed', onViewed);
     socket.on('message:withdrawn', onWithdrawn);
-    socket.on('meet:updated', onMeetUpdated);
 
     return () => {
       socket.off('message', onMessage);
       socket.off('typing', onTyping);
       socket.off('message:viewed', onViewed);
       socket.off('message:withdrawn', onWithdrawn);
-      socket.off('meet:updated', onMeetUpdated);
     };
   }, [socket, otherId]);
 
@@ -1074,32 +1057,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     );
   };
 
-  const handleMeetConfirm = async () => {
-    if (!otherId || meetSubmitting) return;
-    setMeetSubmitting(true);
-    try {
-      const res = await meetAPI.confirm(otherId);
-      setMeetState(res.data);
-    } catch {
-      setMediaError('Could not confirm meet readiness.');
-    } finally {
-      setMeetSubmitting(false);
-    }
-  };
-
-  const handleMeetRevoke = async () => {
-    if (!otherId || meetSubmitting) return;
-    setMeetSubmitting(true);
-    try {
-      const res = await meetAPI.revoke(otherId);
-      setMeetState(res.data);
-    } catch {
-      setMediaError('Could not update meet readiness.');
-    } finally {
-      setMeetSubmitting(false);
-    }
-  };
-
   const handleStartVideoCall = async () => {
     if (!otherId) return;
     const peerName = otherUser?.name ?? 'Someone';
@@ -1216,18 +1173,14 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
         {otherId && (
           <>
-            <PanicReportButton
-              reportedUserId={otherId}
+            <ChatSafetyMenu
+              peerId={otherId}
+              peerName={otherUser?.name ?? 'this user'}
               threadId={
                 user?.id
                   ? `dm:${[user.id, otherId].sort().join('_')}`
                   : `dm:${otherId}`
               }
-              onNotice={(msg, tone = 'success') => setSafetyNotice({ msg, tone })}
-            />
-            <ChatSafetyMenu
-              peerId={otherId}
-              peerName={otherUser?.name ?? 'this user'}
               onNotice={(msg, tone = 'success') => setSafetyNotice({ msg, tone })}
               onBlocked={() => {
                 // Land on the unblock list so the action is obvious.
@@ -1250,16 +1203,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         >
           {safetyNotice.msg}
         </div>
-      )}
-
-      {otherId && meetState && (
-        <MeetConsentBar
-          state={meetState}
-          peerName={otherUser?.name ?? 'them'}
-          submitting={meetSubmitting}
-          onConfirm={handleMeetConfirm}
-          onRevoke={handleMeetRevoke}
-        />
       )}
 
       {/* ── Messages area — memoized so composer keystrokes do not redraw bubbles ─ */}
@@ -1321,7 +1264,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               color: 'var(--cream)',
             }}
           >
-            Jerk sent to {otherUser?.name ?? 'them'}. They will see your interest.
+            Jerk sent.
           </div>
         )}
 
@@ -1652,86 +1595,6 @@ const LocationBubble: React.FC<LocationBubbleProps> = ({
 };
 
 // ── SVG Icons ────────────────────────────────────────────────────────────────
-
-interface MeetConsentBarProps {
-  state: MeetAgreementState;
-  peerName: string;
-  submitting: boolean;
-  onConfirm: () => void;
-  onRevoke: () => void;
-}
-
-const MeetConsentBar: React.FC<MeetConsentBarProps> = ({
-  state,
-  peerName,
-  submitting,
-  onConfirm,
-  onRevoke,
-}) => {
-  if (state.mutual) {
-    return (
-      <div
-        className="flex-shrink-0 px-4 py-2.5 border-b text-center"
-        style={{ borderColor: 'var(--border-default)', background: 'rgba(22,163,74,0.12)' }}
-        data-testid="meet-consent-mutual"
-      >
-        <p className="text-xs font-semibold" style={{ color: '#86EFAC' }}>
-          You both confirmed you&apos;re ready to meet — coordinate safely in public.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="flex-shrink-0 max-w-full overflow-x-clip border-b px-3 py-3 sm:px-4"
-      style={{ borderColor: 'var(--border-default)', background: 'color-mix(in srgb, var(--bg-card) 95%, transparent)' }}
-      data-testid="meet-consent-bar"
-    >
-      <p className="text-xs font-semibold break-words" style={{ color: 'var(--cream)' }}>
-        Ready to meet?
-      </p>
-      <p className="mt-1 text-[11px] leading-relaxed break-words [overflow-wrap:anywhere]" style={{ color: 'var(--cream-muted)' }}>
-        Confirm only when you&apos;re happy to arrange a meet-up with {peerName}. Both of you must
-        agree before this shows as mutual.
-      </p>
-      <div className="mt-2 flex min-w-0 max-w-full flex-wrap items-center gap-2">
-        {state.my_confirmed ? (
-          <>
-            <span className="text-[11px] font-medium" style={{ color: '#C4832A' }}>
-              You confirmed · waiting for {peerName}
-              {state.peer_confirmed ? '' : '…'}
-            </span>
-            <button
-              type="button"
-              onClick={onRevoke}
-              disabled={submitting}
-              className="text-[11px] font-semibold underline disabled:opacity-50"
-              style={{ color: 'var(--cream-muted)' }}
-            >
-              Undo
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={submitting}
-            className="rounded-xl px-3 py-2 text-[11px] font-bold disabled:opacity-50"
-            style={{ background: '#C4832A', color: 'var(--nn-on-copper)' }}
-          >
-            {submitting ? 'Saving…' : "I'm ready to meet"}
-          </button>
-        )}
-        {state.peer_confirmed && !state.my_confirmed && (
-          <span className="text-[11px]" style={{ color: '#86EFAC' }}>
-            {peerName} is ready — your turn
-          </span>
-        )}
-      </div>
-    </div>
-  );
-};
 
 const WithdrawMediaButton: React.FC<{
   onClick: () => void;

@@ -80,11 +80,11 @@ export function PushAlertBanner() {
       <p className="text-base font-semibold text-[var(--cream)]">
         {iosInstall ? 'Add MenRush to Home Screen' : 'Turn on alerts'}
       </p>
-      <p className="mt-0.5 text-sm leading-snug text-[var(--cream-muted)]">
-        {iosInstall
-          ? 'iPhone: Share → Add to Home Screen. Open that icon, then allow alerts.'
-          : 'Alerts still ring when MenRush is closed.'}
-      </p>
+      {iosInstall ? (
+        <p className="mt-0.5 text-sm leading-snug text-[var(--cream-muted)]">
+          Share → Add to Home Screen. Open it, then allow alerts.
+        </p>
+      ) : null}
       <div className="mt-2 flex items-center justify-end gap-2">
         <button
           type="button"

@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { galleryGridClass, galleryTilesFillStage, RoomGalleryGrid } from './RoomGalleryGrid';
+import {
+  galleryGridClass,
+  galleryTileIsSolo,
+  galleryTilesFillStage,
+  RoomGalleryGrid,
+  SOLO_TILE_CLASS,
+} from './RoomGalleryGrid';
 import type { RoomParticipant } from '../hooks/useRoomVideo';
 
 vi.mock('../lib/callMedia', () => ({
@@ -13,16 +19,19 @@ vi.mock('../lib/callMedia', () => ({
 }));
 
 describe('galleryGridClass', () => {
-  it('uses a single full-stage column for one person', () => {
+  it('centres one person in a single column without filling the stage', () => {
     expect(galleryGridClass(1)).toContain('grid-cols-1');
-    expect(galleryGridClass(1)).toContain('h-full');
-    expect(galleryTilesFillStage(1)).toBe(true);
+    expect(galleryGridClass(1)).toContain('place-items-center');
+    expect(galleryTilesFillStage(1)).toBe(false);
+    expect(galleryTileIsSolo(1)).toBe(true);
+    expect(galleryTileIsSolo(2)).toBe(false);
   });
 
   it('keeps two-to-four people on a large grid, not six tiny columns', () => {
     expect(galleryGridClass(2)).toContain('sm:grid-cols-2');
     expect(galleryGridClass(4)).toContain('grid-cols-2');
     expect(galleryGridClass(4)).not.toContain('xl:grid-cols-6');
+    expect(galleryTilesFillStage(2)).toBe(true);
     expect(galleryTilesFillStage(4)).toBe(true);
   });
 
@@ -40,7 +49,7 @@ describe('RoomGalleryGrid', () => {
     { user_id: 'user-3', name: 'Chris', photo_url: null, isLive: false, isSelf: false },
   ];
 
-  it('renders a solo live tile on a one-column full-stage grid', () => {
+  it('renders a solo live tile large but not full-stage', () => {
     render(
       <RoomGalleryGrid
         participants={[participants[0]]}
@@ -55,7 +64,10 @@ describe('RoomGalleryGrid', () => {
     const grid = screen.getByTestId('room-gallery-grid');
     expect(grid.getAttribute('data-tile-count')).toBe('1');
     expect(grid.className).toContain('grid-cols-1');
-    expect(grid.className).toContain('h-full');
+    const tile = screen.getByTestId('room-gallery-tile');
+    expect(tile.className).toContain(SOLO_TILE_CLASS);
+    expect(tile.classList.contains('h-full')).toBe(false);
+    expect(tile.classList.contains('w-full')).toBe(false);
     expect(screen.getByText('Alex')).toBeTruthy();
   });
 
