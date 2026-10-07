@@ -51,6 +51,10 @@ test('welcome has exactly six Brand bullets (Verified and 2FA separate)', () => 
   }
   assert.ok(!/rooms|temp profile|albums|Cruise|dating/i.test(text));
   assert.ok(!text.includes('\u2014') && !text.includes('\u2013'), 'no em/en dashes in welcome text');
+  const html = buildWelcomeEmailHtml();
+  for (const body of [text, html]) {
+    assert.ok(!/30 days Premium|before 1 October|beta/i.test(body), 'no expired Premium gift or beta copy in welcome');
+  }
 });
 
 test('confirm email CTA + 24h expiry copy; no em dashes', () => {

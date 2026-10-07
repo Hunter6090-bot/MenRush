@@ -67,6 +67,9 @@ test('Pride invite email is claim path only (no Path 2 / public code promotion)'
   assert.doesNotMatch(mail.html, /PRIDE&nbsp;3MONTH&nbsp;FREE|PRIDE 3MONTH FREE/);
   assert.doesNotMatch(mail.text, /Path 1|Path 2/);
   assert.doesNotMatch(mail.html, /Path 1|Path 2/);
+  for (const body of [mail.text, mail.html]) {
+    assert.doesNotMatch(body, /before launch|from launch|at launch|launch slips|1(&nbsp;| )October|30-day/i);
+  }
 });
 
 test('Brighton personal codes are not the public code (grandfather path stays open)', () => {

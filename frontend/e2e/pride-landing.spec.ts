@@ -36,7 +36,7 @@ test.describe('Pride promotion landing', () => {
     await expect(bargain).toContainText(/Submitting the form sends the invite/i);
     await expect(bargain).toContainText(/It is not the grant/i);
     await expect(bargain).toContainText(/Enter the code at register/i);
-    await expect(bargain).toContainText(/cannot use Premium before launch/i);
+    await expect(bargain).not.toContainText(/before launch/i);
     await expect(bargain).not.toContainText(/PRIDE 3MONTH FREE/i);
     await expect(bargain).not.toContainText(/Brighton/i);
 

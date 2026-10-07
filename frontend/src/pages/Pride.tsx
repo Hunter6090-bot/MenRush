@@ -229,7 +229,6 @@ export const Pride = () => {
               data-testid="pride-invite-bargain"
             >
               Submitting the form sends the invite. It is not the grant. Enter the code at register.
-              You cannot use Premium before launch.
             </p>
           </div>
 
