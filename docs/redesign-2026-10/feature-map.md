@@ -139,4 +139,18 @@ Desktop sidebar mirrors the same five + Settings / Notifications where needed. M
 - Out: pinned Community row (`community-entry`, `community-entry-icon` placeholder) → `/stream`; chips kept; 14px copy + footer 44px.
 - Rooms tab shortLabel locked to **Rooms** (Video rooms lock retired); navConfig test asserts it.
 - Pin sheet More: BrandAvatar onError; Pulse back wired; Album → `#albums`.
-- HOLD unchanged: Nearby default Map with List tab (do not change Map home/List toggle). Final Matches/Community icons pending Claude Design.
+- HOLD unchanged: Nearby default Map with List tab (do not change Map home/List toggle). Matches/Community/Rooms/Out/Discretion icons from Claude Design pack.
+
+## Claude Design icons (7 Oct 2026)
+
+Pete pack at `frontend/src/assets/icons/menrush/` (+ reference `/workspace/claude-design/menrush-icons/`).
+React components use `currentColor`; `filled` for active copper tab state, outline for idle.
+
+| Surface | Icon |
+|---------|------|
+| Chat pinned Matches entry | `IconMatches` (outline) |
+| Out pinned Community entry | `IconCommunity` (outline) |
+| Rooms tab | `IconRooms` outline/filled |
+| Out tab | `IconOut` outline/filled (replaces cruise ship on tab only; Cruise layer keeps `IconHotSpots`) |
+| Map Discretion slider | `IconDiscretion` outline |
+| Map\|List home toggle | unchanged |

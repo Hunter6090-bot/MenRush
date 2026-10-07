@@ -214,7 +214,7 @@ function LayoutInner({ children }: LayoutProps) {
                 }`}
               >
                 <span className="relative inline-flex shrink-0">
-                  <item.Icon size={22} />
+                  <item.Icon size={22} filled={active} />
                   {badge > 0 ? (
                     <span className="absolute -right-2 -top-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-nn-copper px-1 text-[11px] font-bold text-nn-on-copper">
                       {badge > 99 ? '99+' : badge}
@@ -447,7 +447,7 @@ function LayoutInner({ children }: LayoutProps) {
                   }`}
                 >
                   <span className="relative inline-flex">
-                    <item.Icon size={compact ? 20 : 22} className={active ? 'scale-110' : ''} />
+                    <item.Icon size={compact ? 20 : 22} filled={active} className={active ? 'scale-110' : ''} />
                     <NotificationDot
                       count={badge}
                       visible={badge > 0}
@@ -611,7 +611,7 @@ function MobileMoreMenu({
                   : 'text-[var(--cream)] active:bg-[var(--bg-card)]'
               }`}
             >
-              <item.Icon size={20} />
+              <item.Icon size={20} filled={active} />
               {item.label}
             </Link>
           );

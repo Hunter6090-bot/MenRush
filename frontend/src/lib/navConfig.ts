@@ -9,12 +9,13 @@ import {
   IconHotSpots,
   IconMatches,
   IconNotifications,
+  IconOut,
   IconProfile,
   IconRooms,
   IconSettings,
 } from '../components/icons';
 
-export type NavIcon = ComponentType<{ size?: number; className?: string }>;
+export type NavIcon = ComponentType<{ size?: number; className?: string; filled?: boolean }>;
 
 export interface NavItem {
   to: string;
@@ -64,7 +65,7 @@ export function getNavItems(): NavItem[] {
       to: '/out',
       label: ROUTE_LABELS.out,
       shortLabel: 'Out',
-      Icon: IconHotSpots,
+      Icon: IconOut,
       mobileTab: true,
       desktopNav: true,
     },

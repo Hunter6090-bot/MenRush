@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getNavItems, isNavActive, mobilePageTitle } from './navConfig';
 import { ROUTE_LABELS } from './routeLabels';
+import { IconOut, IconRooms } from '../components/icons';
 
 describe('navConfig — redesign Step 1 five-tab shell', () => {
   it('exposes Discover home + Chat · Rooms · Out · You as the only mobile tabs', () => {
@@ -30,6 +31,8 @@ describe('navConfig — redesign Step 1 five-tab shell', () => {
     const out = items.find((i) => i.to === '/out');
     expect(out?.shortLabel).toBe('Out');
     expect(out?.mobileTab).toBe(true);
+    expect(out?.Icon).toBe(IconOut);
+    expect(items.find((i) => i.to === '/rooms')?.Icon).toBe(IconRooms);
 
     const you = items.find((i) => i.to === '/profile');
     expect(you?.shortLabel).toBe('You');

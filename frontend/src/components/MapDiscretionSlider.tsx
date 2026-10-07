@@ -3,6 +3,7 @@ import {
   MAP_PIN_FUZZ_STEPS_M,
   nearestMapPinFuzzStep,
 } from '../lib/mapPinFuzz';
+import { IconDiscretion } from './icons';
 
 interface MapDiscretionSliderProps {
   valueM: number;
@@ -30,7 +31,8 @@ export function MapDiscretionSlider({
       data-testid="map-discretion-slider"
       title="How far others see your pin from your real spot"
     >
-      <span className="shrink-0 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#3D2B0E]/90">
+      <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#3D2B0E]/90">
+        <IconDiscretion size={14} className="text-[#3D2B0E]" data-testid="map-discretion-icon" />
         Discretion
       </span>
       <input
