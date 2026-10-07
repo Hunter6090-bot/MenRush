@@ -76,7 +76,7 @@ function buildEmail(code: string, unsubscribeUrl: string) {
   const betaUrl = 'https://menrush.com/beta';
   const bodyHtml = [
     transactionalParagraph(
-      'Friendly reminder — your MenRush closed beta invite is still open. We saved you a seat.',
+      'Friendly reminder. Your MenRush invite is still open. We saved you a seat.',
     ),
     transactionalParagraph(
       `<strong style="color:#F0E0C0;">Your invite code</strong><br/><span style="font-family:ui-monospace,monospace;font-size:20px;letter-spacing:0.08em;color:#E0A14A;">${code}</span>`,
@@ -87,7 +87,7 @@ function buildEmail(code: string, unsubscribeUrl: string) {
       true,
     ),
     transactionalParagraph(
-      'Takes about two minutes. Premium is free during beta. If anything blocks you (code used, email already exists, or a confusing error), reply to this email — we will help.',
+      'Takes about two minutes. Premium is included for now. If anything blocks you (code used, email already exists, or a confusing error), reply to this email and we will help.',
     ),
     transactionalParagraph(
       `Questions? Reply here or write <a href="mailto:hello@menrush.com" style="color:#C4832A;">hello@menrush.com</a>.`,
@@ -95,9 +95,9 @@ function buildEmail(code: string, unsubscribeUrl: string) {
   ].join('');
 
   const html = buildTransactionalEmail({
-    title: 'Your MenRush beta invite is waiting',
+    title: 'Your MenRush invite is waiting',
     preheader: `Your invite code: ${code} — still valid`,
-    eyebrow: 'Beta reminder',
+    eyebrow: 'Invite reminder',
     headlineHtml: 'Still holding your <span style="color:#C4832A;">invite.</span>',
     subheadline: 'One code. Two minutes. You are on the list.',
     bodyHtml,
@@ -112,7 +112,7 @@ function buildEmail(code: string, unsubscribeUrl: string) {
   );
 
   const text = [
-    'Reminder: your MenRush beta invite is waiting',
+    'Reminder: your MenRush invite is waiting',
     '',
     `Your invite code: ${code}`,
     '',
@@ -126,7 +126,7 @@ function buildEmail(code: string, unsubscribeUrl: string) {
   ].join('\n');
 
   return {
-    subject: 'Reminder: your MenRush beta invite is waiting',
+    subject: 'Reminder: your MenRush invite is waiting',
     html,
     text,
   };

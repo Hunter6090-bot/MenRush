@@ -56,7 +56,7 @@ export function buildPrideFlaggedInviteEmail(params: {
             </h1>
             <p style="margin:0 0 24px;font-size:15px;color:#7a6a5a;line-height:1.6;">
               You claimed this from menrush.com/pride. This one code is your
-              <strong style="color:#8a7a6a;">beta invite</strong>
+              <strong style="color:#8a7a6a;">invite</strong>
               and books <strong style="color:#8a7a6a;">3 months of Premium</strong>
               from launch. Enter it at register on the same email. Premium is not usable before launch.
             </p>
@@ -85,7 +85,7 @@ export function buildPrideFlaggedInviteEmail(params: {
             </table>
             <h2 style="margin:0 0 12px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#C4832A;font-weight:700;">The bargain</h2>
             <ul style="margin:0 0 28px;padding-left:20px;color:#7a6a5a;font-size:14px;line-height:1.8;">
-              <li>One code unlocks two things: beta access, plus 3 months of Premium</li>
+              <li>One code unlocks two things: access, plus 3 months of Premium</li>
               <li>Entering your code now <strong style="color:#8a7a6a;">reserves</strong> your 3 months. It does not start the clock. Premium switches on at launch (on track for 1&nbsp;October&nbsp;2026) and runs for 3 months from that date. If launch slips, your 3 months start from the actual open.</li>
               <li>One code per person/email</li>
               <li>This replaces the 30-day waitlist Premium gift (Terms 7.2). You get one or the other, not both</li>
@@ -113,7 +113,7 @@ You claimed this from menrush.com/pride.
 
 YOUR CODE: ${code}
 
-This one code is your beta invite AND books 3 months of Premium from launch. Enter it at register on the same email. Premium is not usable before launch.
+This one code is your invite AND books 3 months of Premium from launch. Enter it at register on the same email. Premium is not usable before launch.
 
 Create your account with this same email (${to}).
 Enter the code at ${registerUrl}
@@ -121,7 +121,7 @@ Entering it now BOOKS your Pride Premium grant. You do NOT enter it again on 1 O
 One person gets one Pride grant.
 
 The bargain:
-- One code unlocks two things: beta access, plus 3 months of Premium
+- One code unlocks two things: access, plus 3 months of Premium
 - Entering your code now reserves your 3 months. It does not start the clock. Premium switches on at launch (on track for 1 October 2026) and runs for 3 months from that date. If launch slips, your 3 months start from the actual open.
 - One code per person/email
 - This replaces the 30-day waitlist Premium gift (Terms 7.2). You get one or the other, not both

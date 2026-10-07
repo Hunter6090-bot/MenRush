@@ -276,7 +276,7 @@ export const HotSpots = () => {
           >
             <p className="text-[15px] font-extrabold text-[var(--cream)]">No spots in this filter</p>
             <p className="mx-auto mt-2 max-w-sm text-[13px] text-[var(--cream-muted)]">
-              Try another category or check back later as the beta fills in.
+              Try another category or check back later as more spots are added.
             </p>
             <Link
               to="/discover"

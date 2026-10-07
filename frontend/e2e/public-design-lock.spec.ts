@@ -30,7 +30,7 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   await expect(heroHeading).toBeVisible();
   await expect(heroHeading).toHaveClass(/mr-coming-soon-heading/);
 
-  await expect(page.getByText(/LIVE NOW\. UK BETA OPEN/i)).toBeVisible();
+  await expect(page.getByText(/LIVE NOW\. UK OPEN/i)).toBeVisible();
   await expect(page.getByText(/OPENS 1 OCTOBER 2026/i)).toHaveCount(0);
   await expect(page.getByText(/leave your email/i)).toHaveCount(0);
   await expect(page.getByText(/LONDON · MANCHESTER · BIRMINGHAM · BRIGHTON/i)).toHaveCount(0);
@@ -55,12 +55,10 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
     page.getByText('Mutual interest opens chat. Direct when it is real. No endless maybe.'),
   ).toBeVisible();
 
-  // Product lock 31 Aug 2026: open signup waitlist gift; a promo replaces it (no stack).
-  // Do not say invite-only until open — hero is Sign up free / UK BETA OPEN.
-  // Quiet face: no BSF26 / BearScotsFest / MR3FREE marketing blast on landing.
-  await expect(page.getByText(/Sign up before 1 October 2026/i)).toBeVisible();
-  await expect(page.getByText(/30 days of Premium/i)).toBeVisible();
-  await expect(page.getByText(/A promo replaces that gift and does not stack/i)).toBeVisible();
+  // Stale pre-1-Oct waitlist gift removed (live now). Quiet face: no BSF26 blast.
+  await expect(page.getByText(/Sign up before 1 October 2026/i)).toHaveCount(0);
+  await expect(page.getByText(/30 days of Premium free/i)).toHaveCount(0);
+  await expect(page.getByText(/A promo replaces that gift and does not stack/i)).toHaveCount(0);
   await expect(page.getByText(/Pride promo replaces/i)).toHaveCount(0);
   await expect(page.getByText(/BSF26|BearScotsFest|MR3FREE/i)).toHaveCount(0);
   await expect(page.getByText(/invite-only until/i)).toHaveCount(0);
@@ -122,7 +120,7 @@ async function assertCreamInputs(page: import('@playwright/test').Page) {
 
 test.describe('public design lock — landing', () => {
   for (const path of LANDING_PATHS) {
-    test(`${path} keeps UK beta-open landing invariants`, async ({ page }) => {
+    test(`${path} keeps UK-open landing invariants`, async ({ page }) => {
       const network = await guardAgainstSideEffects(page);
       await page.goto(path);
       await assertComingSoonDesignLock(page);
@@ -203,9 +201,7 @@ test.describe('public design lock — auth pages', () => {
     expect(promoBox && refBox && refBox.y > promoBox.y).toBeTruthy();
     await expect(page.getByText(/PRIDE 3MONTH FREE or PRIDE-XXXX/i)).toHaveCount(0);
     await expect(page.getByText(/BSF26|BearScotsFest|MR3FREE/i)).toHaveCount(0);
-    await expect(page.getByTestId('register-gift-note')).toContainText(
-      /A promo replaces that gift and does not stack/i,
-    );
+    await expect(page.getByTestId('register-gift-note')).toHaveCount(0);
     expect(network.expectNoSideEffects()).toEqual([]);
   });
 });

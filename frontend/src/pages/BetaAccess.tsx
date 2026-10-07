@@ -47,14 +47,14 @@ export const BetaAccess = () => {
 
     const trimmed = code.trim();
     if (!trimmed) {
-      setError('Enter the invite code from your beta email.');
+      setError('Enter the invite code from your email.');
       return;
     }
 
     const normalized = normalizeClientInviteCode(trimmed);
     // Codes look like MENRUSHXXXXXXXX (15 chars) after stripping hyphens/spaces.
     if (!normalized.startsWith('MENRUSH') || normalized.length !== 15) {
-      setError('Use the full code from your email (e.g. MENRUSH-XXXX-XXXX). 18+ beta only.');
+      setError('Use the full code from your email (e.g. MENRUSH-XXXX-XXXX). 18+ only.');
       return;
     }
 
@@ -95,7 +95,7 @@ export const BetaAccess = () => {
         <form onSubmit={handleSubmit} className="flex flex-col gap-[18px]">
           <div className="flex flex-col gap-2.5">
             <label htmlFor="beta-invite-code" className={publicLabelCopperClass}>
-              Beta invite code
+              Invite code
             </label>
             <input
               id="beta-invite-code"

@@ -68,7 +68,7 @@ export function buildWelcomeEmailHtml(): string {
 
   return buildTransactionalEmail({
     title: WELCOME_EMAIL_SUBJECT,
-    preheader: 'Your account is ready. LIVE NOW. UK BETA OPEN.',
+    preheader: 'Your account is ready. LIVE NOW. UK OPEN.',
     eyebrow: 'Welcome',
     headlineHtml: 'You are in.<br/><span style="color:#C4832A;">Welcome to MenRush</span>',
     subheadline: 'Thanks for confirming your email. Your account is ready.',
@@ -79,7 +79,7 @@ export function buildWelcomeEmailHtml(): string {
         'Sign up is free. No code. 30 days Premium before 1 October.',
       ),
       transactionalParagraph(
-        '<strong style="color:#F0E0C0;">LIVE NOW. UK BETA OPEN.</strong>',
+        '<strong style="color:#F0E0C0;">LIVE NOW. UK OPEN.</strong>',
       ),
       transactionalParagraph(
         '<a href="https://menrush.com" style="color:#C4832A; text-decoration:underline;">https://menrush.com</a>',
@@ -102,7 +102,7 @@ export function buildWelcomeEmailText(): string {
     bullets,
     '',
     'Sign up is free. No code. 30 days Premium before 1 October.',
-    'LIVE NOW. UK BETA OPEN.',
+    'LIVE NOW. UK OPEN.',
     'https://menrush.com',
     '',
     'The MenRush team',

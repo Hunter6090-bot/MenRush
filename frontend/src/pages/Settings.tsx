@@ -1078,7 +1078,7 @@ export const Settings = () => {
                           : 'border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream-muted)]'
                       }`}
                     >
-                      {user?.beta_premium_included || user?.is_premium ? 'Beta gift active' : 'Standard'}
+                      {user?.beta_premium_included || user?.is_premium ? 'Premium gift active' : 'Standard'}
                     </span>
                   </div>
                   <p className="mt-0.5 text-[13px] text-[var(--cream-muted)]">

@@ -43,7 +43,6 @@ import {
   isWaitlistEmailPaused,
   sendWelcomeEmailNow,
   subscribeToWaitlist,
-  startDripWorker,
 } from './services/drip.service';
 import { errorHandler } from './middleware/auth';
 import { authService } from './services/auth.service';
@@ -176,10 +175,10 @@ app.post('/api/waitlist', async (req, res) => {
       success: true,
       already_subscribed: result.alreadySubscribed,
       message: result.alreadySubscribed
-        ? "You're already on the list. Check your inbox for the beta invite if you haven't used it yet."
+        ? "You're already on the list. Check your inbox for your invite if you haven't used it yet."
         : paused
           ? "You're on the list."
-          : "You're on the list! Check your email for a link to join the beta.",
+          : "You're on the list! Check your email for a link to join.",
     });
   } catch (err) {
     console.error('Waitlist insert error:', err);
@@ -970,11 +969,4 @@ server.listen(PORT, () => {
   startRoomTempIdentityPurgeCron();
   startRoomMessagePurgeCron();
   startVerificationRetentionWorker();
-  // Optional: in-process drip worker. Prefer an external cron in production
-  // (POST /api/waitlist/admin/run); only enable in-process when running a
-  // single backend instance without separate scheduling.
-  if (process.env.DRIP_WORKER_ENABLED === 'true') {
-    const minutes = parseInt(process.env.DRIP_WORKER_INTERVAL_MINUTES || '60', 10);
-    startDripWorker(Number.isFinite(minutes) && minutes > 0 ? minutes : 60);
-  }
 });
