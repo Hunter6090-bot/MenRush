@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComponentProps } from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -13,6 +13,17 @@ vi.mock('../hooks/useMediaQuery', () => ({
 vi.mock('../hooks/store', () => ({
   useAuthStore: (sel: (s: { user: { id: string } | null }) => unknown) =>
     sel({ user: { id: 'viewer-1' } }),
+}));
+
+const locationMocks = vi.hoisted(() => ({
+  listHidden: vi.fn(),
+  hide: vi.fn(),
+  unhide: vi.fn(),
+}));
+
+vi.mock('../api/client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../api/client')>()),
+  locationPrivacyAPI: locationMocks,
 }));
 
 vi.mock('./ChatSafetyMenu', () => ({
@@ -49,6 +60,12 @@ function renderDrawer(props: Partial<ComponentProps<typeof ProfileDrawer>> = {})
 }
 
 describe('ProfileDrawer pin sheet (redesign Step 1)', () => {
+  beforeEach(() => {
+    locationMocks.listHidden.mockReset().mockResolvedValue({ data: { hidden: [], limit: 500 } });
+    locationMocks.hide.mockReset().mockResolvedValue({ data: { hidden: true } });
+    locationMocks.unhide.mockReset().mockResolvedValue({ data: { hidden: false } });
+  });
+
   it('keeps the pin photo outside any scrollport (no mid-face clip)', () => {
     renderDrawer();
     const hero = screen.getByTestId('profile-sheet-hero');
@@ -162,5 +179,33 @@ describe('ProfileDrawer pin sheet (redesign Step 1)', () => {
     );
     expect(screen.getByTestId('drawer-cover-enlarge')).toBeInTheDocument();
     expect(screen.getByTestId('drawer-avatar-graham-1')).toBeInTheDocument();
+  });
+
+  it('More has Hide my location, and it hides from this person', async () => {
+    locationMocks.listHidden.mockResolvedValue({ data: { hidden: [], limit: 500 } });
+    locationMocks.hide.mockResolvedValue({ data: { hidden: true } });
+    const onSafetyNotice = vi.fn();
+    const user = userEvent.setup();
+    renderDrawer({ onSafetyNotice });
+    await user.click(screen.getByTestId('pin-sheet-more'));
+    const item = await screen.findByTestId('pin-sheet-hide-location');
+    expect(item).toHaveTextContent('Hide my location');
+    await user.click(item);
+    expect(locationMocks.hide).toHaveBeenCalledWith('graham-1');
+    await vi.waitFor(() =>
+      expect(onSafetyNotice).toHaveBeenCalledWith("Graham can't see where you are.", 'success'),
+    );
+  });
+
+  it('More shows Show my location when already hidden', async () => {
+    locationMocks.listHidden.mockResolvedValue({
+      data: { hidden: [{ id: 'graham-1', name: 'Graham', photo_url: null, hidden_at: '2026-10-01T10:00:00Z' }], limit: 500 },
+    });
+    const user = userEvent.setup();
+    renderDrawer();
+    await user.click(screen.getByTestId('pin-sheet-more'));
+    await vi.waitFor(() =>
+      expect(screen.getByTestId('pin-sheet-hide-location')).toHaveTextContent('Show my location'),
+    );
   });
 });

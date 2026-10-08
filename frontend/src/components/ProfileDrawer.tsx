@@ -18,6 +18,7 @@ import {
   matchInterestState,
 } from "../lib/matchCta";
 import { useAuthStore } from "../hooks/store";
+import { locationPrivacyAPI } from "../api/client";
 import { useIsDesktopLayout } from "../hooks/useMediaQuery";
 
 type SheetSnap = "half" | "tall" | "full";
@@ -78,6 +79,8 @@ export function ProfileDrawer({
   const [snap, setSnap] = useState<SheetSnap>("tall");
   const [dragVh, setDragVh] = useState<number | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  /** Hide my location from this person. null = not loaded (hiding is idempotent). */
+  const [locationHidden, setLocationHidden] = useState<boolean | null>(null);
   const dragRef = useRef<{ startY: number; startVh: number } | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const safetyMenuRef = useRef<HTMLDivElement | null>(null);
@@ -93,6 +96,21 @@ export function ProfileDrawer({
     const id = requestAnimationFrame(() => setMounted(true));
     return () => cancelAnimationFrame(id);
   }, [user]);
+
+  const peerId = user?.id;
+  useEffect(() => {
+    if (!moreOpen || !peerId) return;
+    let cancelled = false;
+    locationPrivacyAPI
+      .listHidden()
+      .then((res) => {
+        if (!cancelled) setLocationHidden((res.data?.hidden ?? []).some((p) => p.id === peerId));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [moreOpen, peerId]);
 
   useEffect(() => {
     if (!user) return;
@@ -432,6 +450,33 @@ export function ProfileDrawer({
                 Pulse back
               </button>
             ) : null}
+
+            <button
+              type="button"
+              data-testid="pin-sheet-hide-location"
+              onClick={() => {
+                const hide = locationHidden !== true;
+                setMoreOpen(false);
+                void (hide ? locationPrivacyAPI.hide(user.id) : locationPrivacyAPI.unhide(user.id))
+                  .then(() => {
+                    setLocationHidden(hide);
+                    onSafetyNotice?.(
+                      hide ? `${user.name} can't see where you are.` : `${user.name} can see where you are again.`,
+                      "success",
+                    );
+                  })
+                  .catch((err: unknown) => {
+                    const status = (err as { response?: { status?: number } })?.response?.status;
+                    onSafetyNotice?.(
+                      status === 402 ? "Premium hides your location." : "Could not save. Try again.",
+                      "error",
+                    );
+                  });
+              }}
+              className="mb-2 flex min-h-[48px] w-full items-center gap-3 rounded-2xl border border-[var(--border-default)] px-3 text-left text-[15px] font-bold text-[#F0E0C0]"
+            >
+              {locationHidden ? "Show my location" : "Hide my location"}
+            </button>
 
             {/* Report / Block via existing ChatSafetyMenu — opened programmatically face */}
             <div ref={safetyMenuRef} className="mb-2" data-testid="pin-sheet-safety">

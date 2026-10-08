@@ -1231,6 +1231,23 @@ export const aiAPI = {
     ),
 };
 
+export interface LocationHiddenPerson {
+  id: string;
+  name: string;
+  photo_url?: string | null;
+  hidden_at: string;
+}
+
+/** "Hide my location from" list. Premium to add; removing is always allowed. */
+export const locationPrivacyAPI = {
+  listHidden: () =>
+    apiClient.get<{ hidden: LocationHiddenPerson[]; limit: number }>('/location-privacy/hidden'),
+  hide: (id: string) =>
+    apiClient.post<{ hidden: true }>(`/location-privacy/hidden/${encodeURIComponent(id)}`),
+  unhide: (id: string) =>
+    apiClient.delete<{ hidden: false }>(`/location-privacy/hidden/${encodeURIComponent(id)}`),
+};
+
 export { apiClient };
 
 function resolveSocketUrl(): string {
