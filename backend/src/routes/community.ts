@@ -1,15 +1,16 @@
 import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
 import { z } from 'zod';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { communityService } from '../services/community.service';
+import { viewerStoredLocation } from '../lib/viewerOrigin';
 import {
   CommunityCreateCommentSchema,
   CommunityCreatePostSchema,
   CommunityMentionSuggestionsQuerySchema,
   CommunityUpdateCommentSchema,
   CommunityUpdatePostSchema,
-  LocationSchema,
 } from '../types/validation';
 
 const router = Router();
@@ -19,6 +20,7 @@ const createLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   message: { error: 'Too many posts. Try again in a minute.' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -29,15 +31,16 @@ const createLimiter = rateLimit({
  */
 router.get('/posts', async (req: AuthRequest, res: Response) => {
   try {
-    const location = LocationSchema.parse({
-      lat: parseFloat(String(req.query.lat)),
-      lng: parseFloat(String(req.query.lng)),
-    });
+    // Query point is the viewer's stored location (kept fresh by the live
+    // location publisher). Client lat/lng is ignored so it cannot be moved
+    // around to triangulate someone.
+    const origin = await viewerStoredLocation(req.userId!);
+    if (!origin) return res.json({ posts: [] });
     const radiusKm = req.query.radiusKm != null ? parseFloat(String(req.query.radiusKm)) : 10;
     const posts = await communityService.listNearby({
       viewerId: req.userId!,
-      lat: location.lat,
-      lng: location.lng,
+      lat: origin.lat,
+      lng: origin.lng,
       radiusKm: Number.isFinite(radiusKm) ? radiusKm : 10,
     });
     res.json({ posts });
@@ -137,6 +140,7 @@ const commentLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 20,
   message: { error: 'Too many comments. Try again in a minute.' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });

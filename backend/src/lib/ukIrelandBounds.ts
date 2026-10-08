@@ -1,3 +1,5 @@
+import { PIN_PREFILTER_BUFFER_M, publicPinSql } from './mapPinSql';
+
 /**
  * UK + Ireland discovery region for map/list "All".
  * Split boxes keep Channel Islands and southeast England without
@@ -46,7 +48,12 @@ export function nearbyLocationPredicate(scope: 'radius' | 'uk_ie'): string {
   if (scope === 'uk_ie') {
     return `${UK_IRELAND_LOCATION_SQL}${UK_IE_BOUND_PARAMS_SQL}`;
   }
-  return `AND ST_DWithin(p.location, ST_MakePoint($2, $1)::geography, $4)`;
+  // Radius is measured to the member's public (Discretion-fuzzed) pin, never raw
+  // GPS, so shrinking the radius cannot reveal more than the map pin already shows.
+  // The raw-GPS check is only an index prefilter (radius + max fuzz).
+  const pin = publicPinSql('p.lat', 'p.lng', 'u.id', 'p.map_pin_fuzz_m');
+  return `AND ST_DWithin(p.location, ST_MakePoint($2, $1)::geography, $4::float8 + ${PIN_PREFILTER_BUFFER_M})
+        AND ST_DWithin(${pin.geog}, ST_MakePoint($2, $1)::geography, $4::float8)`;
 }
 
 export function isInBox(lat: number, lng: number, box: LatLngBox): boolean {
