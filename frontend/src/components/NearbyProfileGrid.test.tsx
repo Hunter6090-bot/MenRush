@@ -104,6 +104,35 @@ describe('NearbyProfileGrid distance chips', () => {
   });
 });
 
+describe('NearbyProfileGrid distance shows once per card', () => {
+  it('renders each card distance exactly once, in miles, in the meta line (no corner chip)', () => {
+    const users = [
+      mockUser({ id: 'd1', name: 'James', distance_km: 1.93 }),
+      mockUser({ id: 'd2', name: 'Alex', distance_km: 8.05 }),
+    ];
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid users={users} loading={false} />
+      </MemoryRouter>,
+    );
+
+    const cards = screen.getAllByTestId('nearby-grid-card');
+    expect(cards).toHaveLength(2);
+    const expected = ['1.2 mi', '5.0 mi'];
+    cards.forEach((card, i) => {
+      const text = card.textContent ?? '';
+      const label = expected[i];
+      expect(text.split(label).length - 1).toBe(1);
+      // No km anywhere on the card — UK miles only.
+      expect(text).not.toMatch(/\bkm\b/);
+      // Exactly one distance node per card, and it sits in the meta line.
+      expect(card.querySelectorAll('[data-testid^="nearby-grid-distance-"]')).toHaveLength(1);
+      const dist = card.querySelector('[data-testid^="nearby-grid-distance-"]') as HTMLElement;
+      expect(dist.closest('p')?.textContent).toMatch(new RegExp(`^${label} · `));
+    });
+  });
+});
+
 describe('NearbyProfileGrid pagination', () => {
   it('renders "Load more men" button when hasMore is true', () => {
     const user = mockUser({ id: 'u1', name: 'James' });
