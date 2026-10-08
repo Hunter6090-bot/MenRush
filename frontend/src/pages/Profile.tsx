@@ -1725,6 +1725,26 @@ export const Profile = () => {
           </div>
         </Link>
 
+        {/* ── Hide my location from ── */}
+        <Link
+          to="/settings#hide-location"
+          className="block rounded-2xl p-5 shadow-card border transition-colors hover:border-[var(--copper)]"
+          style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-default)' }}
+          data-testid="profile-hide-location-link"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-base font-semibold" style={{ color: 'var(--cream)' }}>
+                Hide my location
+              </p>
+              <p className="text-sm mt-1" style={{ color: 'var(--cream-muted)' }}>
+                Pick who can't see where you are.
+              </p>
+            </div>
+            <span className="text-[var(--copper)] text-lg" aria-hidden>›</span>
+          </div>
+        </Link>
+
         {/* ── Blocked people ── */}
         <Link
           to="/settings#blocked"

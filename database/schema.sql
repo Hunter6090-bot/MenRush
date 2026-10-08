@@ -342,3 +342,14 @@ CREATE TABLE IF NOT EXISTS veriff_sessions (
 
 CREATE INDEX IF NOT EXISTS idx_veriff_sessions_user_id ON veriff_sessions (user_id);
 CREATE INDEX IF NOT EXISTS idx_veriff_sessions_status ON veriff_sessions (status);
+
+-- "Hide my location from" list (migration 069).
+CREATE TABLE IF NOT EXISTS location_hidden_from (
+  owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  hidden_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (owner_id, hidden_user_id),
+  CONSTRAINT location_hidden_from_not_self CHECK (owner_id <> hidden_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_location_hidden_from_hidden_user
+  ON location_hidden_from (hidden_user_id, owner_id);

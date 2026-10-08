@@ -23,6 +23,7 @@ import {
 } from '../lib/nearbyRosterSql';
 import { PRESENCE_LIVE_SQL, PRESENCE_WINDOW_SQL } from '../lib/presence';
 import { lookupUkIePlace, placeContainsPoint } from '../lib/ukIePlace';
+import { notLocationHiddenFromViewerSql } from '../lib/locationHiddenSql';
 
 const includeE2eFixtures = () =>
   process.env.INCLUDE_E2E_FIXTURES === 'true' || process.env.INCLUDE_E2E_FIXTURES === '1';
@@ -418,6 +419,7 @@ export const userService = {
           WHEN vp.is_visible = true AND vp.location IS NOT NULL
                AND p.is_visible = true AND p.location IS NOT NULL
                AND p.is_ghost = false
+               AND ${notLocationHiddenFromViewerSql('u.id', '$2')}
           THEN ST_Distance(p.location, vp.location)
           ELSE NULL
         END AS distance_m
@@ -1019,6 +1021,7 @@ export const userService = {
              WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
                 OR (b.blocker_id = u.id AND b.blocked_id = $1)
            )
+           AND ${notLocationHiddenFromViewerSql('u.id', '$1')}
          ORDER BY u.name ASC
          LIMIT 80`,
         values,

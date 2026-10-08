@@ -238,6 +238,7 @@ export function ProfileDrawer({
             <ChatSafetyMenu
               peerId={user.id}
               peerName={user.name}
+              showHideLocation
               onNotice={onSafetyNotice}
               onBlocked={() => {
                 onBlocked?.();

@@ -1,4 +1,5 @@
 import { AGE_FILTER_MIN } from './age';
+import { notLocationHiddenFromViewerSql } from './locationHiddenSql';
 import { MAP_PIN_FUZZ_DEFAULT_M } from './mapPinFuzz';
 import { PRESENCE_LIVE_SQL } from './presence';
 import { nearbyLocationPredicate } from './ukIrelandBounds';
@@ -70,6 +71,8 @@ export function nearbyRosterWhereSql(
           WHERE (b.blocker_id = $3 AND b.blocked_id = u.id)
              OR (b.blocker_id = u.id AND b.blocked_id = $3)
         )
+        -- Hide my location from: owner u is left out of this viewer's roster + map.
+        AND ${notLocationHiddenFromViewerSql('u.id', '$3')}
     `;
   if (!includeE2eFixtures) {
     whereClause += ` AND u.email NOT LIKE '%@example.com'`;

@@ -350,6 +350,7 @@ export const ProfileView = () => {
                   <ChatSafetyMenu
                     peerId={user.id}
                     peerName={user.name}
+                    showHideLocation
                     onNotice={(msg, tone) => {
                       setSafetyNotice({ msg, tone: tone ?? 'success' });
                       window.setTimeout(() => setSafetyNotice(null), 4000);
