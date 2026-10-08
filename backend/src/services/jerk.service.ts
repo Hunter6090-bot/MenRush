@@ -1,7 +1,7 @@
 import pool, { query } from '../db';
 import { accessControl, SecurityError } from '../security/access';
 import { notificationService } from './notification.service';
-import { sendPushToUser, PushPayload } from './push.service';
+import { sendPushToUser, hasPushSubscription, PushPayload } from './push.service';
 import {
   JERK_DAILY_LIMIT,
   JERK_LIMIT_MESSAGE,
@@ -21,8 +21,11 @@ import {
  *  - JERK_DAILY_LIMIT new jerks per sender per rolling 24h → 429 jerk_daily_limit
  *  - repeat to the same person inside JERK_REPEAT_WINDOW_HOURS → 200 status
  *    'repeat', no new row, no notification, no push, not counted
- *  - a new jerk creates an in-app 'jerk' notification + web push and emits a
- *    jerk_sent event line
+ *  - a new jerk creates an in-app 'jerk' notification (list row + live socket
+ *    toast) and emits a jerk_sent event line
+ *  - web push only when the recipient has push switched on (wantsPush, keyed on
+ *    their push_subscriptions rows, same as message/call pushes). Push off →
+ *    no push is queued; the in-app notification still lands.
  */
 
 type QueryResult = { rows: any[]; rowCount?: number | null };
@@ -47,6 +50,8 @@ export interface JerkDeps {
     },
   ) => Promise<unknown>;
   push: (userId: string, payload: PushPayload) => Promise<unknown>;
+  /** Recipient has push switched on (has a push subscription). False → no push queued. */
+  wantsPush: (userId: string) => Promise<boolean>;
   logEvent: (event: 'jerk_sent' | 'jerk_repeat' | 'jerk_limited', fields: Record<string, unknown>) => void;
   dailyLimit?: number;
   repeatWindowHours?: number;
@@ -164,15 +169,19 @@ export function createJerkService(deps: JerkDeps) {
         console.error('[jerk] notify failed', err);
       }
 
+      // Push only if the recipient has push on. If the check itself fails we
+      // skip the push (fail closed); the in-app notification above still stands.
       void Promise.resolve()
-        .then(() =>
-          deps.push(toId, {
+        .then(() => deps.wantsPush(toId))
+        .then((on) => {
+          if (!on) return undefined;
+          return deps.push(toId, {
             title,
             body: '',
             url: linkPath,
             tag: `jerk-${fromId}`,
-          }),
-        )
+          });
+        })
         .catch(() => undefined);
 
       deps.logEvent('jerk_sent', { from: fromId, to: toId, jerk_id: outcome.id, sent_today: outcome.sentToday });
@@ -234,5 +243,6 @@ export const jerkService = createJerkService({
   },
   notify: (io, params) => notificationService.notify(io, params),
   push: (userId, payload) => sendPushToUser(userId, payload),
+  wantsPush: (userId) => hasPushSubscription(userId),
   logEvent: logJerkEvent,
 });
