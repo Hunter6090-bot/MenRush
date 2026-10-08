@@ -10,12 +10,10 @@
  */
 
 /** Short line for banners / strips — privacy + necessity. */
-export const LOCATION_PRIVACY_LINE =
-  'We need your location to find men near you. Others see approximate distance only — not your exact pin.';
+export const LOCATION_PRIVACY_LINE = "We use your location to show who's nearby.";
 
 /** Slightly longer for gates and Settings. */
-export const LOCATION_PRIVACY_DETAIL =
-  'MenRush uses your GPS for proximity only. You are not broadcasting an exact public address. Nearby shows approximate distance. Exact live pin with matches is optional and separate.';
+export const LOCATION_PRIVACY_DETAIL = "We use your location to show who and what's nearby.";
 
 export type DeviceLocationError =
   | 'insecure'

@@ -65,10 +65,10 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
           <p className="text-base font-extrabold text-[var(--cream)]">{headline}</p>
           <p className="mt-1 text-sm text-[var(--cream-muted)]">
             {locationOnly || (needsLocation && fieldsComplete)
-              ? 'Others see roughly where you are, not your exact pin.'
+              ? "We use your location to show who's nearby."
               : blockers.length > 0
                 ? `Missing: ${blockers.map((b) => BLOCKER_COPY[b]).join(' · ')}`
-                : 'Others see roughly where you are, not your exact pin.'}
+                : "We use your location to show who's nearby."}
           </p>
           <div className="mt-2 h-1.5 w-full max-w-[200px] overflow-hidden rounded-full bg-[rgba(13,10,6,0.5)]">
             <div

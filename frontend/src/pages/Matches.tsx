@@ -306,7 +306,7 @@ export const Matches = () => {
         <div className="mb-6">
           <h1 className="text-2xl font-extrabold text-[var(--cream)] lg:text-[28px]">Matches</h1>
           <p className="mt-1 text-sm text-[var(--cream-muted)]">
-            Exact location is shared only when you send a pin in chat.
+            You can send a location pin in chat when you choose.
           </p>
         </div>
 

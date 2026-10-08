@@ -246,9 +246,8 @@ export const HotSpots = () => {
             <p className="text-[16px] font-extrabold text-[var(--cream)]">
               We need your location for Cruise
             </p>
-            <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--cream-muted)]">
-              Not a public pin on a map — we use GPS privately to rank venues near you. Others do not
-              see your exact address. Shared only while you use the app.
+            <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-[var(--cream-muted)]">
+              We use your location to show venues near you.
             </p>
             <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
               <Link

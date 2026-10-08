@@ -33,7 +33,7 @@ export function formatFuzzPrivacyNote(fuzzMaxM: number): string {
   const { min, max } = fuzzRangeMeters(fuzzMaxM);
   const lo = Math.round(min / 10) * 10;
   const hi = Math.round(max / 10) * 10;
-  return `Pins ~${lo}–${hi} m for privacy`;
+  return `Pin shifts ~${lo} to ${hi} m`;
 }
 
 export function formatFuzzMetersLabel(fuzzMaxM: number): string {

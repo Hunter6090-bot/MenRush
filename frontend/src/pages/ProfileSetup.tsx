@@ -59,7 +59,7 @@ const INTRO_ITEMS = [
   'Write a short bio guys can read on the map',
   'Pick what you are looking for',
   'Tag position, tribe, body, ethnicity & vibe',
-  'Allow location for Nearby (private — not a public pin)',
+  'Allow location for Nearby',
 ] as const;
 
 export const ProfileSetup: React.FC = () => {
@@ -682,9 +682,7 @@ export const ProfileSetup: React.FC = () => {
               );
             })}
             <p className="pt-2 text-[13px] leading-relaxed text-[var(--cream-muted)]">
-              Your profile fields are ready. Location unlocks Nearby — others see approximate
-              distance only, not your exact public pin. Exact live pin with matches is optional
-              later. Shared only while you use the app.
+              Your profile fields are ready. Location unlocks Nearby.
             </p>
             {locationDenied ? (
               <p

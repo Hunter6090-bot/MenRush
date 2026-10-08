@@ -2286,7 +2286,7 @@ export const Discover = () => {
             Allow location to unlock Nearby
           </p>
           <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--cream-muted)]">
-            Others see roughly where you are, not your exact pin.
+            We use your location to show who&apos;s nearby.
           </p>
           <button
             type="button"
