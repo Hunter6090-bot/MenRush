@@ -26,12 +26,12 @@ assert.match(service, /DELETE FROM community_posts WHERE id = \$1/);
 
 // Comment update checks
 assert.match(service, /async updateComment\(/);
-assert.match(service, /assertPostVisible\(userId, postId\)/, 'updateComment must verify parent post via assertPostVisible');
+assert.match(service, /assertPostVisible\(userId, postId(, false)?\)/, 'updateComment must verify parent post via assertPostVisible');
 assert.match(service, /existing\.rows\[0\]\.user_id !== userId[\s\S]*forbidden/);
 
 // Comment delete checks
 assert.match(service, /async deleteComment\(/);
-assert.match(service, /assertPostVisible\(userId, postId\)/, 'deleteComment must verify parent post via assertPostVisible');
+assert.match(service, /assertPostVisible\(userId, postId(, false)?\)/, 'deleteComment must verify parent post via assertPostVisible');
 assert.match(service, /DELETE FROM community_post_comments WHERE id = \$1/);
 
 // Route expiry status mappings

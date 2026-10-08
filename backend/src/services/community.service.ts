@@ -113,9 +113,28 @@ function toCommentDto(row: CommunityCommentRow): CommunityCommentDTO {
   };
 }
 
+/**
+ * Ghost / hidden members: their Community posts are not shown to others.
+ * The author always sees their own posts. Same rule as the live map feed.
+ */
+function authorVisibleToViewerSql(authorExpr: string, viewerExpr: string): string {
+  return `(
+         ${authorExpr} = ${viewerExpr}
+         OR EXISTS (
+           SELECT 1 FROM profiles ap
+           WHERE ap.user_id = ${authorExpr}
+             AND COALESCE(ap.is_visible, FALSE) = TRUE
+             AND COALESCE(ap.is_ghost, FALSE) = FALSE
+         )
+       )`;
+}
+
 async function assertPostVisible(
   viewerId: string,
   postId: string,
+  // false only for editing / deleting your own comment, so a commenter keeps
+  // control of what they wrote if the post's author later goes Ghost.
+  hideGhostAuthors = true,
 ): Promise<{ id: string; user_id: string }> {
   const result = await query(
     `SELECT cp.id, cp.user_id
@@ -126,8 +145,9 @@ async function assertPostVisible(
          SELECT 1 FROM blocks b
          WHERE (b.blocker_id = $2 AND b.blocked_id = cp.user_id)
             OR (b.blocker_id = cp.user_id AND b.blocked_id = $2)
-       )`,
-    [postId, viewerId],
+       )
+       AND ($3::boolean = FALSE OR ${authorVisibleToViewerSql('cp.user_id', '$2')})`,
+    [postId, viewerId, hideGhostAuthors],
   );
   if (result.rows.length === 0) {
     throw new Error('post_not_found');
@@ -184,7 +204,7 @@ export const communityService = {
 
   /**
    * List nearby Community posts within radiusKm of (lat, lng).
-   * Respects blocks; never returns exact post coordinates.
+   * Respects blocks and Ghost / hidden authors; never returns exact post coordinates.
    */
   async listNearby(params: {
     viewerId: string;
@@ -226,6 +246,7 @@ export const communityService = {
          WHERE (b.blocker_id = $4 AND b.blocked_id = cp.user_id)
             OR (b.blocker_id = cp.user_id AND b.blocked_id = $4)
        )
+       AND ${authorVisibleToViewerSql('cp.user_id', '$4')}
        ORDER BY cp.created_at DESC
        LIMIT $5`,
       [params.lat, params.lng, radiusM, params.viewerId, limit],
@@ -397,7 +418,7 @@ export const communityService = {
     }
 
     // Verify parent post is visible and not expired
-    await assertPostVisible(userId, postId);
+    await assertPostVisible(userId, postId, false);
 
     const existing = await query(
       `SELECT id, post_id, user_id FROM community_post_comments WHERE id = $1 AND post_id = $2`,
@@ -443,7 +464,7 @@ export const communityService = {
     commentId: string,
   ): Promise<{ ok: boolean }> {
     // Verify parent post is visible and not expired
-    await assertPostVisible(userId, postId);
+    await assertPostVisible(userId, postId, false);
 
     const existing = await query(
       `SELECT id, post_id, user_id FROM community_post_comments WHERE id = $1 AND post_id = $2`,
