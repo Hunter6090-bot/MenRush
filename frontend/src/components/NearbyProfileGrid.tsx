@@ -19,6 +19,7 @@ import {
   matchInterestState,
 } from '../lib/matchCta';
 import { IconMatches, IconChat } from './icons';
+import { JerkButton } from './JerkButton';
 import { Link } from 'react-router-dom';
 import { memo, useEffect, useRef } from 'react';
 
@@ -354,8 +355,8 @@ const NearbyGridCard = memo(function NearbyGridCard({
           <NewJoinerBadge />
         ) : null}
       </div>
-      {onMatch ? (
-        <div className="border-t border-[var(--border-default)] p-1 md:p-1.5">
+      <div className="flex items-stretch gap-1 border-t border-[var(--border-default)] p-1 md:gap-1.5 md:p-1.5">
+        {onMatch ? (
           <button
             type="button"
             disabled={matchDisabled}
@@ -370,7 +371,7 @@ const NearbyGridCard = memo(function NearbyGridCard({
               if (matchDisabled) return;
               void onMatch(user);
             }}
-            className={`w-full rounded-lg py-1.5 text-xs font-extrabold tracking-wide transition-colors flex items-center justify-center gap-1.5 md:rounded-xl md:py-2 md:text-sm ${
+            className={`min-w-0 flex-1 rounded-lg py-1.5 text-xs font-extrabold tracking-wide transition-colors flex items-center justify-center gap-1.5 md:rounded-xl md:py-2 md:text-sm ${
               matchState === 'none' || matching ? 'uppercase' : ''
             } ${matchCtaCompactToneClasses(matchState)}`}
           >
@@ -382,9 +383,15 @@ const NearbyGridCard = memo(function NearbyGridCard({
               })}
             </span>
           </button>
-        </div>
-      ) : null}
-
+        ) : null}
+        <JerkButton
+          userId={user.id}
+          name={user.name}
+          surface="grid"
+          variant="icon"
+          className={onMatch ? '' : 'mx-auto'}
+        />
+      </div>
     </div>
   );
 });
