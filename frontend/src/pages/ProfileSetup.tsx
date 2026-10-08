@@ -39,7 +39,6 @@ import {
 import {
   publicBackButtonClass,
   publicDarkSelectClass,
-  publicErrorClass,
   publicInfoBoxClass,
   publicLabelClass,
   publicMutedCopyClass,
@@ -455,7 +454,7 @@ export const ProfileSetup: React.FC = () => {
         {step === 'photo' ? (
           <div className="flex flex-col gap-4">
             <div className={publicInfoBoxClass}>
-              <p className="text-[13px] leading-relaxed text-[var(--cream-muted)]">
+              <p className="text-[15px] leading-relaxed text-[var(--cream-muted)]">
                 <span className="font-semibold text-[var(--cream)]">Discreet?</span> A clear photo
                 still helps matches recognise you in chat, but it is your call. No photo means a
                 standard avatar picked from your profile tags; only a few variants exist so you may
@@ -695,7 +694,7 @@ export const ProfileSetup: React.FC = () => {
           </div>
         ) : null}
 
-        {error ? <p className={publicErrorClass}>{error}</p> : null}
+        {error ? <p className="text-[15px] font-semibold text-[#B0432E]">{error}</p> : null}
 
         <div className="flex flex-col gap-3">
           <button
@@ -763,7 +762,7 @@ function SetupChecklistItem({
       >
         {n}
       </span>
-      <span className={`text-[13.5px] ${done ? 'font-semibold text-[var(--cream)]' : 'text-[var(--cream-muted)]'}`}>
+      <span className={`text-[15px] ${done ? 'font-semibold text-[var(--cream)]' : 'text-[var(--cream-muted)]'}`}>
         {text}
       </span>
     </div>
