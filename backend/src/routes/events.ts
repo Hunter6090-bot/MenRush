@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
 import { z } from 'zod';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { eventService } from '../services/event.service';
@@ -13,6 +14,7 @@ const checkInLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   message: { error: 'Too many check-ins. Try again in a minute.' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
