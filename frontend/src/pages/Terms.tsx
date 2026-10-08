@@ -467,8 +467,8 @@ export const Terms = () => {
                   <Strong>7.9</Strong> MenRush launch promotional offer. The code{' '}
                   <span className="font-mono tracking-wide">MR3FREE</span> is for the MenRush
                   launch campaign. Exact code match at register (case-insensitive, no spaces). Live
-                  from 17 September 2026. Claim through end of 5 October 2026 Europe/London
-                  inclusive. Signups after 5 October 2026 with this code receive no promotional grant.
+                  from 17 September 2026. Claim through end of 31 October 2026 Europe/London
+                  inclusive. Signups after 31 October 2026 with this code receive no promotional grant.
                   Redeeming a valid code grants 3 months of Premium free, unlocked from day one
                   (starting the registration calendar day). One grant per account. No stacking.
                   Does not cancel 12-month promises made to early members. Does not wipe existing Premium. Does not
