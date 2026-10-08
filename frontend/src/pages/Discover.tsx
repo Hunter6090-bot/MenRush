@@ -1197,10 +1197,6 @@ export const Discover = () => {
     return stepsKm.find((km) => km > radius + 0.4) ?? RADIUS_ALL_KM;
   }, [radius, beyondRadiusCount]);
 
-  const openMapSearch = useCallback(() => {
-    window.dispatchEvent(new Event('menrush:open-search'));
-  }, []);
-
   const setNearbySurface = useCallback((view: NearbyView) => {
     setMapPanelMode(view === 'grid' ? 'hidden' : 'default');
     setNearbyView(view);
@@ -2236,7 +2232,6 @@ export const Discover = () => {
             radiusKm={radius}
             onRadiusClick={handleRadiusCycle}
             onFiltersClick={() => setFiltersSheetOpen(true)}
-            onSearchClick={openMapSearch}
             filtersActive={countActiveDiscoveryFilters(discoveryFilters) > 0}
           >
             <MapFloatingChrome
@@ -2368,7 +2363,6 @@ export const Discover = () => {
               radiusKm={radius}
               onRadiusClick={handleRadiusCycle}
               onFiltersClick={() => setFiltersSheetOpen(true)}
-              onSearchClick={openMapSearch}
               filtersActive={countActiveDiscoveryFilters(discoveryFilters) > 0}
             >
               <MapFloatingChrome

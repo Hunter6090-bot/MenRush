@@ -119,6 +119,18 @@ describe('new shell keeps every main route reachable', () => {
     expect(ACCOUNT_MENU_LINKS.some((l) => l.label === 'Privacy and security')).toBe(false);
   });
 
+  it('app-wide search is off the map, in the Menu and still on the Chat list', () => {
+    // Map is clean: no Search pill in the top pill bar or on Discover.
+    expect(src('components/MapTopPillBar.tsx')).not.toMatch(/map-pill-search|onSearchClick/);
+    expect(src('pages/Discover.tsx')).not.toMatch(/menrush:open-search|onSearchClick/);
+    // Top-right Menu has a Search row wired to the same profile search.
+    expect(src('components/AccountMenu.tsx')).toMatch(/data-testid="account-menu-search"/);
+    expect(src('components/Layout.tsx')).toMatch(/onSearch=\{\(\) => setSearchOpen\(true\)\}/);
+    expect(src('components/Layout.tsx')).toMatch(/addEventListener\('menrush:open-search'/);
+    // Chat list entry kept, so nothing is lost.
+    expect(src('components/ConversationList.tsx')).toMatch(/dispatchEvent\(new Event\('menrush:open-search'\)\)/);
+  });
+
   it('Menu copy follows the locks', () => {
     const labels = [
       ...ACCOUNT_MENU_SECTIONS.flatMap((s) => [s.title, ...s.links.map((l) => l.label)]),

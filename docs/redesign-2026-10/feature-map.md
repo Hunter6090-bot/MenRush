@@ -31,11 +31,11 @@ Desktop sidebar mirrors the same five + Settings / Notifications where needed. M
 | **Nearby radius** | `/discover` radius pills | **Map** → top pill **Radius N mi** | Cycles / sheet; empty → Widen |
 | **Map with pins** (#314 circular + green online) | `/discover` map | **Map** (home) | Cream rim; copper ring when selected |
 | **Cluster (+N)** | map markers | **Map** | Keep existing overlap/cluster logic |
-| **People / Cruise layer toggles** | map chrome | **Map** chrome below top pills (icon+short label) | Stacked under Radius/Filters/Search so all stay tappable at 390px |
+| **People / Cruise layer toggles** | map chrome | **Map** chrome below top pills (icon+short label) | Stacked under Radius/Filters so all stay tappable at 390px |
 | **Discretion / pin fuzz slider** | map chrome | **Menu** (top-right three-line button), slider at the top (`menu-discretion`) | Moved off the map 8 Oct (Pete). Not on the map or the You page any more. The Menu reads the saved value first and only saves when the slider moves. |
 | **Map expand / hide / geolocate** | map BR controls | **Map** bottom-right control cluster | Design: bottom-right control |
-| **Cruising search (spots)** | CruisingSearchBar/Sheet on Discover + HotSpots | **Map** Search (spots) + **Out** | Search pill opens profile+place search; Cruise search remains reachable |
-| **Profile search (name or town/city)** (#310) | Layout header / ProfileSearchModal | **Map** top **Search** pill (+ header on desktop) | Same modal |
+| **Cruising search (spots)** | CruisingSearchBar/Sheet on Discover + HotSpots | **Out** (cruising search bar on the Out tab) | Moved off the map 8 Oct (Pete). Not on the map any more; `/hot-spots` keeps its own search |
+| **Profile search (name or town/city)** (#310) | Layout header / ProfileSearchModal | **Menu** (top-right three-line button) **Search** row + **Chat** list Search pill (+ header on desktop) | Same modal. Search pill taken off the map 8 Oct so the map is clean |
 | **Filters** (age, status, interests, mood filters) | DiscoveryFilterPanel / MoreFiltersDrawer | **Map** top **Filters** sheet | Design sheet: Age slider, Visiting / Now / Photo only, Reset + Show; keep full filter set behind same sheet (no drop) |
 | **Mood picker (set own mood)** | Discover mood strip | **Map** Filters sheet / You profile edit | Remove mood **text on cards** (cut); setter stays reachable |
 | **NEW joiner badges on cards** | NearbyProfileGrid / ProfileCard | **Cut from cards** | Filter status "NEW" remains in Filters; badge not painted on tiles |
@@ -124,7 +124,7 @@ Desktop sidebar mirrors the same five + Settings / Notifications where needed. M
 - [x] Feature map (this file)
 - [x] 5-tab bar Home(Map|List) / Chat / Rooms / Out / You
 - [ ] Redirects for old tab routes
-- [ ] Map top pills Radius / Filters / Search + Map/Grid toggle
+- [ ] Map top pills Radius / Filters + Map/Grid toggle (Search lives in the Menu and on Chat)
 - [x] Pin sheet: photo, name+tick, age·distance, Now, Profile; Chat / Album (#albums) / More
 - [x] More: Report, Block (red), Cancel + Match / Pulse back (wired) if live; BrandAvatar fallback
 - [ ] Empty radius: Nobody in this radius + Widen to N mi
@@ -134,7 +134,7 @@ Desktop sidebar mirrors the same five + Settings / Notifications where needed. M
 
 ## QC follow-ups (6 Oct 2026)
 
-- Phone map (360/390/430): Radius/Filters/Search pills (nowrap) stack **above** People/Cruise in-flow (`map-top-stack`, layer row `map-layer-chrome`); no overlap. Discretion moved to the Menu on 8 Oct.
+- Phone map (360/390/430): Radius/Filters pills (nowrap) stack **above** People/Cruise in-flow (`map-top-stack`, layer row `map-layer-chrome`); no overlap. Discretion moved to the Menu on 8 Oct.
 - Chat tab: pinned Matches row (`chat-matches-entry`, `matches-entry-icon` placeholder) → `/matches`.
 - Out: pinned Community row (`community-entry`, `community-entry-icon` placeholder) → `/stream`; chips kept; 14px copy + footer 44px.
 - Rooms tab shortLabel locked to **Rooms** (Video rooms lock retired); navConfig test asserts it.

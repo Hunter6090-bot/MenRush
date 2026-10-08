@@ -9,7 +9,6 @@ describe('MapTopPillBar stacking', () => {
         radiusKm={5}
         onRadiusClick={vi.fn()}
         onFiltersClick={vi.fn()}
-        onSearchClick={vi.fn()}
       >
         <div data-testid="map-layer-chrome">Layers</div>
       </MapTopPillBar>,

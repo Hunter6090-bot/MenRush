@@ -433,7 +433,7 @@ function LayoutInner({ children }: LayoutProps) {
                   >
                     <ToggleIcon size={compact ? 20 : 22} className={onHome ? 'scale-110' : ''} />
                     <span
-                      className="font-bold leading-none tracking-wide text-[13px]"
+                      className="font-bold leading-none tracking-wide text-[15px]"
                     >
                       {label}
                     </span>
@@ -468,7 +468,7 @@ function LayoutInner({ children }: LayoutProps) {
                     />
                   </span>
                   <span
-                    className="font-bold leading-none tracking-wide text-[13px]"
+                    className="font-bold leading-none tracking-wide text-[15px]"
                   >
                     {item.shortLabel ?? item.label}
                   </span>
@@ -496,7 +496,7 @@ function LayoutInner({ children }: LayoutProps) {
                   className={isMoreActive || moreMenuOpen ? 'scale-110' : ''}
                 />
                 <span
-                  className="font-bold leading-none tracking-wide text-[13px]"
+                  className="font-bold leading-none tracking-wide text-[15px]"
                 >
                   More
                 </span>
@@ -518,6 +518,7 @@ function LayoutInner({ children }: LayoutProps) {
         open={accountMenuOpen}
         onClose={() => setAccountMenuOpen(false)}
         onSignOut={requestSignOut}
+        onSearch={() => setSearchOpen(true)}
       >
         <MenuDiscretion />
       </AccountMenu>

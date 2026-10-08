@@ -274,18 +274,18 @@ export function ProfileDrawer({
               {(user as { is_verified?: boolean }).is_verified ? <VerifiedBadge /> : null}
             </div>
             {ageDist ? (
-              <p className="mt-1 text-[14px] font-semibold text-[var(--cream-soft)]">{ageDist}</p>
+              <p className="mt-1 text-[15px] font-semibold text-[var(--cream-soft)]">{ageDist}</p>
             ) : user.age ? (
-              <p className="mt-1 text-[14px] font-semibold text-[var(--cream-soft)]">{user.age}</p>
+              <p className="mt-1 text-[15px] font-semibold text-[var(--cream-soft)]">{user.age}</p>
             ) : null}
             {isPulsing ? (
-              <p className="mt-1 text-[13px] font-bold text-[#C4832A]">Pulse</p>
+              <p className="mt-1 text-[15px] font-bold text-[#C4832A]">Pulse</p>
             ) : user.online ? (
-              <p className="mt-1 text-[13px] font-bold text-[#4ADE80]" data-testid="pin-sheet-now">
+              <p className="mt-1 text-[15px] font-bold text-[#4ADE80]" data-testid="pin-sheet-now">
                 Now
               </p>
             ) : (
-              <p className="mt-1 text-[13px] font-medium text-[var(--cream-muted)]">Offline</p>
+              <p className="mt-1 text-[15px] font-medium text-[var(--cream-muted)]">Offline</p>
             )}
             <button
               type="button"
@@ -437,7 +437,7 @@ export function ProfileDrawer({
                 }}
               />
             </div>
-            <p className="mb-3 px-1 text-[12px] text-[var(--cream-muted)]">
+            <p className="mb-3 px-1 text-[15px] leading-snug text-[var(--cream-muted)]">
               Report and Block live in the menu above.
             </p>
 
