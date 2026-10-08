@@ -1,5 +1,6 @@
 /**
- * Integration: the live map feed leaves out blocked people in both directions.
+ * Integration: the live map feed leaves out blocked people in both directions,
+ * and ghost / hidden members' posts (and their pins) are not shown to others.
  * Covers the GET list (mapFeedService.listNearby) and the socket fan-out
  * targets for a new post (mapFeedService.nearbyUserIds with the sender id).
  * Needs a migrated DATABASE_URL (schema.sql + migrations). Skips without one.
@@ -19,7 +20,12 @@ async function main() {
   const { mapFeedService } = await import('../src/services/map-feed.service');
 
   const ids: string[] = [];
-  async function makeUser(name: string, lat: number, lng: number) {
+  async function makeUser(
+    name: string,
+    lat: number,
+    lng: number,
+    opts: { visible?: boolean; ghost?: boolean } = {},
+  ) {
     const id = randomUUID();
     ids.push(id);
     await query(
@@ -29,8 +35,8 @@ async function main() {
     );
     await query(
       `INSERT INTO profiles (user_id, location, lat, lng, online, last_seen, is_visible, is_ghost)
-       VALUES ($1, ST_MakePoint($3, $2)::geography, $2, $3, TRUE, NOW(), TRUE, FALSE)`,
-      [id, lat, lng],
+       VALUES ($1, ST_MakePoint($3, $2)::geography, $2, $3, TRUE, NOW(), $4, $5)`,
+      [id, lat, lng, opts.visible ?? true, opts.ghost ?? false],
     );
     return id;
   }
@@ -105,6 +111,36 @@ async function main() {
     for (const uid of [viewer, blockedByViewer, blockerOfViewer, control]) {
       assert.ok(fanC.has(uid), 'control post reaches everyone nearby');
     }
+
+    // ── Ghost / hidden members ──────────────────────────────────────────────
+    const ghost = await makeUser('MFB Ghost', LAT + 0.002, LNG, { ghost: true });
+    const hidden = await makeUser('MFB Hidden', LAT - 0.002, LNG, { visible: false });
+    const postG = await mapFeedService.post(ghost, 'ghost post');
+    const postH = await mapFeedService.post(hidden, 'hidden post');
+
+    for (const uid of [viewer, control]) {
+      const feed = await senders(uid);
+      assert.ok(!feed.has(ghost), 'ghost post (and pin) hidden from others');
+      assert.ok(!feed.has(hidden), 'hidden member post (and pin) hidden from others');
+      assert.ok(feed.has(control), 'control still appears next to ghost / hidden');
+    }
+    assert.ok((await senders(ghost)).has(ghost), 'ghost still sees own post');
+    assert.ok((await senders(hidden)).has(hidden), 'hidden member still sees own post');
+    assert.ok((await senders(ghost)).has(control), 'ghost can still read the feed');
+
+    const fanG = await mapFeedService.nearbyUserIds(Number(postG.lat), Number(postG.lng), 5, ghost);
+    assert.deepStrictEqual(fanG, [ghost], 'ghost post is pushed to the ghost only');
+    const fanH = await mapFeedService.nearbyUserIds(Number(postH.lat), Number(postH.lng), 5, hidden);
+    assert.deepStrictEqual(fanH, [hidden], 'hidden member post is pushed to them only');
+    // Ghost / hidden members still receive other people's posts.
+    const fanC2 = await mapFeedService.nearbyUserIds(LAT, LNG, 5, control);
+    assert.ok(fanC2.includes(ghost) && fanC2.includes(hidden), 'ghost / hidden still get pushes');
+
+    // Read-time check: turning Ghost off brings the posts back.
+    await query(`UPDATE profiles SET is_ghost = FALSE WHERE user_id = $1`, [ghost]);
+    assert.ok((await senders(viewer)).has(ghost), 'ghost off: post visible again');
+    await query(`UPDATE profiles SET is_ghost = TRUE WHERE user_id = $1`, [ghost]);
+    assert.ok(!(await senders(viewer)).has(ghost), 'ghost on again: hidden again');
 
     // Without a sender id the helper keeps its old behaviour (no block filter).
     const fanAll = new Set(await mapFeedService.nearbyUserIds(LAT, LNG, 5));

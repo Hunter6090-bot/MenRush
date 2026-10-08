@@ -43,8 +43,14 @@ export const mapFeedService = {
               mf.message, mf.lat, mf.lng, mf.created_at
        FROM map_feed_messages mf
        JOIN users u ON u.id = mf.sender_id
+       LEFT JOIN profiles sp ON sp.user_id = mf.sender_id
        WHERE mf.created_at >= $3
          AND ST_DWithin(mf.location, ST_MakePoint($2, $1)::geography, $4)
+         -- Ghost / hidden members: their posts and pins are not shown to others.
+         AND (
+           mf.sender_id = $5
+           OR (COALESCE(sp.is_visible, FALSE) = TRUE AND COALESCE(sp.is_ghost, FALSE) = FALSE)
+         )
          AND NOT EXISTS (
            SELECT 1 FROM blocks b
            WHERE (b.blocker_id = $5 AND b.blocked_id = mf.sender_id)
@@ -92,7 +98,8 @@ export const mapFeedService = {
 
   /**
    * Socket fan-out targets for a new post. With senderId, anyone the sender
-   * blocked or who blocked the sender is left out (same block lookup as Nearby).
+   * blocked or who blocked the sender is left out (same block lookup as Nearby),
+   * and a ghost / hidden sender only reaches themselves.
    */
   async nearbyUserIds(
     lat: number,
@@ -105,11 +112,21 @@ export const mapFeedService = {
       `SELECT user_id FROM profiles
        WHERE lat IS NOT NULL
          AND ST_DWithin(location, ST_MakePoint($2, $1)::geography, $3)
-         AND ($4::uuid IS NULL OR NOT EXISTS (
-           SELECT 1 FROM blocks b
-           WHERE (b.blocker_id = $4::uuid AND b.blocked_id = profiles.user_id)
-              OR (b.blocker_id = profiles.user_id AND b.blocked_id = $4::uuid)
-         ))`,
+         AND (
+           $4::uuid IS NULL
+           OR profiles.user_id = $4::uuid
+           OR (
+             EXISTS (
+               SELECT 1 FROM profiles sp
+               WHERE sp.user_id = $4::uuid AND sp.is_visible = TRUE AND sp.is_ghost = FALSE
+             )
+             AND NOT EXISTS (
+               SELECT 1 FROM blocks b
+               WHERE (b.blocker_id = $4::uuid AND b.blocked_id = profiles.user_id)
+                  OR (b.blocker_id = profiles.user_id AND b.blocked_id = $4::uuid)
+             )
+           )
+         )`,
       [lat, lng, radiusMeters, senderId ?? null],
     );
     return result.rows.map((r: { user_id: string }) => r.user_id);
