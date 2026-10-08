@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { userService } from '../services/user.service';
 import { profileViewsService } from '../services/profile-views.service';
 import { notificationService } from '../services/notification.service';
+import { jerkService, JerkLimitError } from '../services/jerk.service';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { SecurityError } from '../security/access';
 import { safeUploadFilename, uploadFileFilter, validateFileSignature } from '../security/uploads';
@@ -362,6 +363,29 @@ router.post('/like/:id', verifiedMiddleware, async (req: AuthRequest, res: Respo
       return res.status(error.status).json({ error: error.message, code: error.code });
     }
     res.status(400).json({ error: error.message || 'Could not send match' });
+  }
+});
+
+/**
+ * Jerk: one-tap nudge. Own `jerks` table; never creates a like or a match.
+ * 200 { status: 'sent' | 'repeat' }, 429 jerk_daily_limit, 404 target_unavailable
+ * (blocks either way look the same as a hidden or missing profile).
+ */
+router.post('/jerk/:id', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await jerkService.sendJerk(req.userId!, req.params.id, { io: req.app.get('io') });
+    res.json(result);
+  } catch (error: unknown) {
+    if (error instanceof JerkLimitError) {
+      return res
+        .status(429)
+        .json({ error: error.message, code: error.code, daily_limit: error.dailyLimit });
+    }
+    if (error instanceof SecurityError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
+    console.error('[jerk]', error);
+    res.status(500).json({ error: 'Could not send. Try again.' });
   }
 });
 

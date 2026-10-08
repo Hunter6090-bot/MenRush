@@ -318,6 +318,11 @@ export const usersAPI = {
   },
   clearMapPhoto: () => apiClient.delete('/users/map-photo'),
   likeUser: (id: string) => apiClient.post(`/users/like/${id}`),
+  /** Jerk: one-tap nudge. Own table, never a like or a match. 429 = daily cap. */
+  jerkUser: (id: string) =>
+    apiClient.post<{ status: 'sent' | 'repeat'; jerk_id: string; sent_today: number; daily_limit: number }>(
+      `/users/jerk/${id}`,
+    ),
   /** Unmatch — removes both like directions. Does not touch rooms. */
   unmatchUser: (id: string) =>
     apiClient.delete<{ unmatched: boolean; removed: number }>(`/users/like/${id}`),
@@ -411,7 +416,7 @@ export const notificationsAPI = {
     apiClient.get<{
       notifications: Array<{
         id: string;
-        type: 'message' | 'photo' | 'voice' | 'like' | 'match' | 'profile_view' | 'system' | 'missed_call';
+        type: 'message' | 'photo' | 'voice' | 'like' | 'match' | 'profile_view' | 'system' | 'missed_call' | 'jerk';
         title: string;
         body?: string | null;
         link_path?: string | null;

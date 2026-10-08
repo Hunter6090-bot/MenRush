@@ -336,3 +336,21 @@ describe('NearbyProfileGrid pagination', () => {
     expect(screen.queryByRole('button', { name: /Expand radius/i })).not.toBeInTheDocument();
   });
 });
+
+describe('NearbyProfileGrid Jerk', () => {
+  it('each card has a one-tap icon-only Jerk next to Match, no Report or Block', () => {
+    const user = mockUser({ id: 'u-jerk', name: 'Rob' });
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid users={[user]} loading={false} onMatch={() => undefined} />
+      </MemoryRouter>,
+    );
+    const jerk = screen.getByTestId('jerk-button-grid');
+    expect(jerk).toHaveAttribute('aria-label', 'Jerk Rob');
+    expect(jerk.textContent).toBe('');
+    const bar = jerk.parentElement!;
+    expect(bar).toContainElement(screen.getByTestId('grid-match-u-jerk'));
+    expect(bar.textContent).not.toMatch(/report|block/i);
+  });
+});
+

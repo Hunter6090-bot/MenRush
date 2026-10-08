@@ -8,7 +8,8 @@ type AnalyticsEvent =
   | 'verification_transition'
   | 'location_permission_outcome'
   | 'first_discovery_load'
-  | 'first_message_success';
+  | 'first_message_success'
+  | 'jerk_sent';
 
 type MetadataValue = string | number | boolean;
 type EventMetadata = Record<string, MetadataValue | undefined>;
@@ -24,6 +25,7 @@ const ALLOWED_METADATA: Record<AnalyticsEvent, ReadonlySet<string>> = {
   location_permission_outcome: new Set(['outcome']),
   first_discovery_load: new Set(['outcome', 'result_bucket']),
   first_message_success: new Set(['kind', 'surface']),
+  jerk_sent: new Set(['surface', 'repeat']),
 };
 
 let client: StatsigClient | null = null;

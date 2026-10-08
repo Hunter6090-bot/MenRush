@@ -251,7 +251,7 @@ export const useUnreadStore = create<UnreadState>((set) => ({
 
 export interface Notification {
   id: string;
-  type: 'message' | 'photo' | 'voice' | 'like' | 'match' | 'profile_view' | 'system' | 'missed_call';
+  type: 'message' | 'photo' | 'voice' | 'like' | 'match' | 'profile_view' | 'system' | 'missed_call' | 'jerk';
   message: string;
   body?: string;
   userId?: string;

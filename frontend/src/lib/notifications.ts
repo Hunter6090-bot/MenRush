@@ -68,6 +68,8 @@ export function notificationDestination(notification: Notification): string {
       return notification.userId ? `/messages/${notification.userId}` : '/matches';
     case 'like':
       return notification.userId ? `/profile/${notification.userId}` : '/matches';
+    case 'jerk':
+      return notification.userId ? `/profile/${notification.userId}` : '/notifications';
     case 'profile_view':
       return notification.userId ? `/profile/${notification.userId}` : '/profile';
     default:
@@ -117,6 +119,8 @@ export function notificationTypeLabel(type: Notification['type']): string {
       return 'Match';
     case 'profile_view':
       return 'Profile view';
+    case 'jerk':
+      return 'Jerk';
     case 'missed_call':
       return 'Missed call';
     default:

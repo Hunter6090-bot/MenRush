@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { notificationDestination } from './notifications.ts';
+import { notificationDestination, notificationTypeLabel } from './notifications.ts';
 import type { Notification } from '../hooks/store.ts';
 
 function base(partial: Partial<Notification>): Notification {
@@ -74,5 +74,19 @@ describe('notificationDestination', () => {
       ),
       '/profile/peer-mature-horny-69',
     );
+  });
+});
+
+describe('jerk notifications', () => {
+  it('open the sender profile and label as Jerk', () => {
+    assert.equal(
+      notificationDestination(base({ type: 'jerk', userId: 'peer-9', linkPath: undefined })),
+      '/profile/peer-9',
+    );
+    assert.equal(
+      notificationDestination(base({ type: 'jerk', linkPath: '/profile/peer-9', userId: 'peer-9' })),
+      '/profile/peer-9',
+    );
+    assert.equal(notificationTypeLabel('jerk'), 'Jerk');
   });
 });
