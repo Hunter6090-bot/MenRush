@@ -165,7 +165,7 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
 
     // Section 4: Location (Device location)
     expect(screen.getByTestId('settings-device-location')).toBeInTheDocument();
-    expect(screen.getByText(/Active — within/)).toBeInTheDocument();
+    expect(screen.getByText(/Active, within/)).toBeInTheDocument();
 
     // Section 5: Discovery (Default radius + Privacy & visibility)
     expect(screen.getByText('Default radius')).toBeInTheDocument();
