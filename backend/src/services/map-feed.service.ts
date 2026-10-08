@@ -1,29 +1,11 @@
 import { query } from '../db';
 import { v4 as uuidv4 } from 'uuid';
-import { MAP_PIN_FUZZ_DEFAULT_M } from '../lib/mapPinFuzz';
-import { memberPublicPin } from '../lib/memberDistance';
+import { MAP_PIN_FUZZ_DEFAULT_M, privateMapPointAround } from '../lib/mapPinFuzz';
+import { clampRadiusKm, PIN_PREFILTER_BUFFER_M, publicPinSql } from '../lib/mapPinSql';
+import { viewerStoredLocation } from '../lib/viewerOrigin';
 
-/**
- * Map feed coordinates are the sender's PUBLIC (Discretion-fuzzed) pin, the
- * same point the Nearby map shows. Raw GPS never leaves the server, so a feed
- * message cannot be used to measure an exact distance.
- */
-function publicFeedPoint(
-  senderId: string,
-  lat: number | string,
-  lng: number | string,
-  fuzzM: number | string | null | undefined,
-): { lat: number; lng: number } {
-  const la = Number(lat);
-  const ln = Number(lng);
-  if (!Number.isFinite(la) || !Number.isFinite(ln)) return { lat: la, lng: ln };
-  return memberPublicPin(
-    senderId,
-    la,
-    ln,
-    fuzzM != null && Number.isFinite(Number(fuzzM)) ? Number(fuzzM) : MAP_PIN_FUZZ_DEFAULT_M,
-  );
-}
+/** Sender's public pin for a post (seed map:<senderId>, sender's Discretion). */
+const SENDER_PIN = publicPinSql('mf.lat', 'mf.lng', 'mf.sender_id', 'sp.map_pin_fuzz_m');
 
 export interface MapFeedMessage {
   id: string;
@@ -43,34 +25,28 @@ export interface MapFeedMessage {
 export const mapFeedService = {
   async listNearby(
     userId: string,
+    // lat / lng are ignored: the query point is always the viewer's stored
+    // location, so it cannot be moved around to triangulate someone.
     opts: { lat?: number; lng?: number; radiusKm?: number } = {},
   ): Promise<MapFeedMessage[]> {
-    // Fall back to sender's own stored location when caller omits coords.
-    let lat = opts.lat;
-    let lng = opts.lng;
+    const origin = await viewerStoredLocation(userId);
+    if (!origin) return [];
 
-    if (lat === undefined || lng === undefined) {
-      const locRes = await query(
-        `SELECT lat, lng FROM profiles WHERE user_id = $1`,
-        [userId],
-      );
-      if (locRes.rows.length === 0 || locRes.rows[0].lat == null) return [];
-      lat = locRes.rows[0].lat;
-      lng = locRes.rows[0].lng;
-    }
-
-    const radiusMeters = (opts.radiusKm ?? 5) * 1000;
+    // Same radius bounds as Nearby and Community (min 0.8 km).
+    const radiusMeters = clampRadiusKm(opts.radiusKm, 5) * 1000;
     const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
 
+    // Coordinates returned and the radius check both use the sender's public
+    // (Discretion-fuzzed) pin for the post, never raw GPS.
     const result = await query(
       `SELECT mf.id, mf.sender_id, u.name AS display_name, u.photo_url AS photo_url,
-              mf.message, mf.lat, mf.lng, mf.created_at,
-              COALESCE(sp.map_pin_fuzz_m, ${MAP_PIN_FUZZ_DEFAULT_M}) AS sender_fuzz_m
+              mf.message, ${SENDER_PIN.lat} AS lat, ${SENDER_PIN.lng} AS lng, mf.created_at
        FROM map_feed_messages mf
        JOIN users u ON u.id = mf.sender_id
        LEFT JOIN profiles sp ON sp.user_id = mf.sender_id
        WHERE mf.created_at >= $3
-         AND ST_DWithin(mf.location, ST_MakePoint($2, $1)::geography, $4)
+         AND ST_DWithin(mf.location, ST_MakePoint($2, $1)::geography, $4::float8 + ${PIN_PREFILTER_BUFFER_M})
+         AND ST_DWithin(${SENDER_PIN.geog}, ST_MakePoint($2, $1)::geography, $4::float8)
          -- Ghost / hidden members: their posts and pins are not shown to others.
          AND (
            mf.sender_id = $5
@@ -83,20 +59,16 @@ export const mapFeedService = {
          )
        ORDER BY mf.created_at DESC
        LIMIT 200`,
-      [lat, lng, fifteenMinsAgo, radiusMeters, userId],
+      [origin.lat, origin.lng, fifteenMinsAgo, radiusMeters, userId],
     );
 
-    return result.rows.map((row: MapFeedMessage & { sender_fuzz_m?: number | string }) => {
-      const { sender_fuzz_m: fuzz, ...msg } = row;
-      const point = publicFeedPoint(msg.sender_id, msg.lat, msg.lng, fuzz);
-      return { ...msg, lat: point.lat, lng: point.lng };
-    });
+    // lat / lng are already the sender's public pin (SENDER_PIN in SQL).
+    return result.rows;
   },
 
   async post(userId: string, text: string): Promise<MapFeedMessage & { lat: number; lng: number }> {
     const locRes = await query(
-      `SELECT lat, lng, COALESCE(map_pin_fuzz_m, ${MAP_PIN_FUZZ_DEFAULT_M}) AS map_pin_fuzz_m
-         FROM profiles WHERE user_id = $1`,
+      `SELECT lat, lng, map_pin_fuzz_m FROM profiles WHERE user_id = $1`,
       [userId],
     );
 
@@ -107,7 +79,7 @@ export const mapFeedService = {
     const { lat, lng, map_pin_fuzz_m: fuzzM } = locRes.rows[0] as {
       lat: number;
       lng: number;
-      map_pin_fuzz_m: number;
+      map_pin_fuzz_m: number | null;
     };
     const id = uuidv4();
     const sanitized = text.replace(/<script[^>]*>.*?<\/script>/gi, '').trim();
@@ -122,14 +94,19 @@ export const mapFeedService = {
 
     const row = insertRes.rows[0];
 
+    // HTTP reply and socket fan-out carry the public (fuzzed) pin, not raw GPS.
+    const pin = privateMapPointAround(
+      Number(row.lat),
+      Number(row.lng),
+      `map:${userId}`,
+      fuzzM != null && Number.isFinite(Number(fuzzM)) ? Number(fuzzM) : MAP_PIN_FUZZ_DEFAULT_M,
+    );
+
     const userRes = await query(`SELECT name, photo_url FROM users WHERE id = $1`, [userId]);
-    // Payload (HTTP + socket fan-out) carries the public fuzzed pin, not raw GPS.
-    // The fan-out radius is centred on that same public pin.
-    const point = publicFeedPoint(userId, row.lat, row.lng, fuzzM);
     return {
       ...row,
-      lat: point.lat,
-      lng: point.lng,
+      lat: pin.lat,
+      lng: pin.lng,
       display_name: userRes.rows[0]?.name ?? '',
       photo_url: userRes.rows[0]?.photo_url ?? null,
     };

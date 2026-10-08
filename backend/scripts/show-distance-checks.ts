@@ -170,7 +170,12 @@ assert.match(userSrc, /ShowDistancePremiumError/);
 assert.match(userSrc, /premiumService\.isPremium\(userId\)/, 'gated by the existing isPremium helper');
 assert.match(communitySrc, /memberDistanceFields\(/);
 assert.doesNotMatch(communitySrc, /ST_Distance\(/, 'Community no longer measures to raw post GPS');
-assert.match(feedSrc, /memberPublicPin\(/, 'map feed carries the fuzzed pin, not raw GPS');
+// Map feed carries the fuzzed pin, not raw GPS: SQL list uses the sender's
+// public pin (same seed as memberPublicPin), and post() fuzzes the reply.
+assert.match(feedSrc, /publicPinSql\('mf\.lat', 'mf\.lng', 'mf\.sender_id'/, 'map feed list uses the public pin');
+assert.match(feedSrc, /\$\{SENDER_PIN\.lat\} AS lat, \$\{SENDER_PIN\.lng\} AS lng/, 'map feed returns pin coords');
+assert.match(feedSrc, /privateMapPointAround\([\s\S]*?`map:\$\{userId\}`/, 'map feed post reply carries the pin');
+assert.doesNotMatch(feedSrc, /mf\.message, mf\.lat, mf\.lng/, 'raw post GPS never selected for the list');
 
 const migration = read('../database/migrations/072_show_distance.sql');
 assert.match(migration, /show_distance BOOLEAN NOT NULL DEFAULT TRUE/);
