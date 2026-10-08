@@ -128,7 +128,7 @@ function toCommentDto(row: CommunityCommentRow): CommunityCommentDTO {
 }
 
 /**
- * Ghost / hidden members: their Community posts are not shown to others.
+ * Ghost / hidden members: their Community posts and comments are not shown to others.
  * The author always sees their own posts. Same rule as the live map feed.
  */
 function authorVisibleToViewerSql(authorExpr: string, viewerExpr: string): string {
@@ -254,8 +254,15 @@ export const communityService = {
          COALESCE(ap.map_pin_fuzz_m, ${MAP_PIN_FUZZ_DEFAULT_M}) AS author_fuzz_m,
          COALESCE(u.show_distance, TRUE) AS author_show_distance,
          (
+           -- Count only comments this viewer can see (same rules as listComments).
            SELECT COUNT(*)::int FROM community_post_comments c
            WHERE c.post_id = cp.id
+             AND NOT EXISTS (
+               SELECT 1 FROM blocks cb
+               WHERE (cb.blocker_id = $4 AND cb.blocked_id = c.user_id)
+                  OR (cb.blocker_id = c.user_id AND cb.blocked_id = $4)
+             )
+             AND ${authorVisibleToViewerSql('c.user_id', '$4')}
          ) AS comment_count
        FROM community_posts cp
        JOIN users u ON u.id = cp.user_id
@@ -290,7 +297,9 @@ export const communityService = {
 
   /**
    * Comments on a Community post. Viewer must be able to see the post
-   * (exists + not blocked). Oldest first. Free — no premium gate.
+   * (exists + not blocked + author not Ghost / hidden). Comments by blocked,
+   * Ghost or hidden members are left out; your own always show. Oldest first.
+   * Free, no premium gate.
    */
   async listComments(viewerId: string, postId: string): Promise<CommunityCommentDTO[]> {
     await assertPostVisible(viewerId, postId);
@@ -311,6 +320,7 @@ export const communityService = {
            WHERE (b.blocker_id = $2 AND b.blocked_id = c.user_id)
               OR (b.blocker_id = c.user_id AND b.blocked_id = $2)
          )
+         AND ${authorVisibleToViewerSql('c.user_id', '$2')}
        ORDER BY c.created_at ASC
        LIMIT 100`,
       [postId, viewerId],

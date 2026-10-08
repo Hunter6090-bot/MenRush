@@ -1,7 +1,8 @@
 /**
  * Integration: Ghost and hidden (is_visible = false) members' Community posts
  * are not shown to others. The author still sees their own posts. Blocks keep
- * working. Covers listNearby and the post-level gate (comments).
+ * working. Covers listNearby, the post-level gate, and comments by Ghost /
+ * hidden members (left out of listComments and the comment count).
  * Needs a migrated DATABASE_URL (schema.sql + migrations). Skips without one.
  *   DATABASE_URL=postgresql://menrush:menrush123@localhost:5432/menrush \
  *   npx ts-node scripts/community-ghost-hidden-integration.ts
@@ -52,6 +53,10 @@ async function main() {
     const hiddenPost = await communityService.create(hidden, 'cgh hidden post');
     const controlPost = await communityService.create(control, 'cgh control post');
     const comment = await communityService.createComment(viewer, ghostPost.id, 'cgh comment');
+    // Comments on a visible post, made before their authors go Ghost / hidden.
+    const ghostComment = await communityService.createComment(ghost, controlPost.id, 'cgh ghost comment');
+    const hiddenComment = await communityService.createComment(hidden, controlPost.id, 'cgh hidden comment');
+    const viewerComment = await communityService.createComment(viewer, controlPost.id, 'cgh viewer comment');
     await setProfile(ghost, true, true);
     await setProfile(hidden, false, false);
 
@@ -78,9 +83,33 @@ async function main() {
     await communityService.updateComment(viewer, ghostPost.id, comment.id, 'cgh comment edited');
     await communityService.deleteComment(viewer, ghostPost.id, comment.id);
 
-    // Back to visible: post shows again (nothing was deleted).
+    // Comments by Ghost / hidden members are left out for others.
+    const commentIds = async (uid: string, postId: string) =>
+      new Set((await communityService.listComments(uid, postId)).map((c) => c.id));
+    const viewerComments = await commentIds(viewer, controlPost.id);
+    assert.ok(viewerComments.has(viewerComment.id), 'own comment visible');
+    assert.ok(!viewerComments.has(ghostComment.id), 'Ghost commenter: comment hidden from others');
+    assert.ok(!viewerComments.has(hiddenComment.id), 'hidden commenter: comment hidden from others');
+    // Commenters still see their own comments.
+    assert.ok((await commentIds(ghost, controlPost.id)).has(ghostComment.id), 'Ghost commenter sees own comment');
+    assert.ok((await commentIds(hidden, controlPost.id)).has(hiddenComment.id), 'hidden commenter sees own comment');
+    // The count on the post matches what the viewer can open.
+    const countFor = async (uid: string, postId: string) =>
+      (await communityService.listNearby({ viewerId: uid, lat: LAT, lng: LNG, radiusKm: 5 })).find((p) => p.id === postId)
+        ?.comment_count;
+    assert.strictEqual(await countFor(viewer, controlPost.id), 1, 'comment count leaves out Ghost / hidden comments');
+    assert.strictEqual(await countFor(ghost, controlPost.id), 2, 'Ghost commenter counts own comment');
+
+    // Back to visible: post and comment show again (nothing was deleted).
     await setProfile(ghost, true, false);
     assert.ok((await feedFor(viewer)).has(ghostPost.id), 'post shows again when Ghost is off');
+    assert.ok((await commentIds(viewer, controlPost.id)).has(ghostComment.id), 'comment shows again when Ghost is off');
+    assert.strictEqual(await countFor(viewer, controlPost.id), 2, 'count includes comment again when Ghost is off');
+
+    // Blocks apply to comments too.
+    await query(`INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2)`, [ghost, viewer]);
+    assert.ok(!(await commentIds(viewer, controlPost.id)).has(ghostComment.id), 'block hides comments');
+    assert.strictEqual(await countFor(viewer, controlPost.id), 1, 'comment count leaves out blocked comments');
 
     // Blocks still apply on top.
     await query(`INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2)`, [control, viewer]);
