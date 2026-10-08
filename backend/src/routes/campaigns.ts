@@ -1,1 +1,285 @@
-PLACEHOLDER
+/**
+ * /api/campaigns — promotional campaign endpoints
+ *
+ * POST /api/campaigns/:campaignId/signup
+ *   Body: { email: string, adult_confirmed: true }
+ *   Issues an email-locked promo code and sends it to the user.
+ *   Idempotent: repeated calls for the same email re-send the existing code.
+ *   Requires adult_confirmed === true (18+ attestation on the claim form).
+ *
+ * POST /api/campaigns/promo/validate
+ *   Body: { code: string, email: string }
+ *   Returns whether the code is valid for this email.
+ *   Used at registration time to show the user what they'll get.
+ *
+ * POST /api/campaigns/promo/redeem
+ *   Body: { code: string, email: string, userId: string }
+ *   Marks the code as redeemed. Call after account creation.
+ *   Protected: requires internal service token (X-Service-Token header).
+ *
+ * GET  /api/campaigns/:campaignId/stats
+ *   Admin only (X-Admin-Token). Returns issued/redeemed counts.
+ */
+
+import { Router, Request, Response } from 'express';
+import { z } from 'zod';
+import { personalPrideExpiredMessage, promoService } from '../services/promo.service';
+import {
+  PRIDE_WAITLIST_CAMPAIGN_ID,
+  prideInviteService,
+} from '../services/prideInvite.service';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+
+const router = Router();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rate limits
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Generous for signups — someone may refresh the form — but not brute-forceable */
+const signupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 min
+  max: 5,
+  keyGenerator: (req) => {
+    const forwarded = req.headers['x-forwarded-for'];
+    const raw = Array.isArray(forwarded) ? forwarded[0] : (forwarded ?? req.ip ?? '');
+    const ip = String(raw).split(',')[0].trim() || '0.0.0.0';
+    return ipKeyGenerator(ip);
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please wait a few minutes and try again.' },
+});
+
+/** Tight limit for validation — prevent code enumeration */
+const validateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  keyGenerator: (req) => {
+    const forwarded = req.headers['x-forwarded-for'];
+    const raw = Array.isArray(forwarded) ? forwarded[0] : (forwarded ?? req.ip ?? '');
+    const ip = String(raw).split(',')[0].trim() || '0.0.0.0';
+    return ipKeyGenerator(ip);
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests.' },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Auth helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function requireServiceToken(req: Request, res: Response): boolean {
+  const expected = process.env.INTERNAL_SERVICE_TOKEN?.trim();
+  if (!expected) {
+    res.status(503).json({ error: 'Service token not configured on server.' });
+    return false;
+  }
+  if (req.headers['x-service-token'] !== expected) {
+    res.status(403).json({ error: 'Forbidden.' });
+    return false;
+  }
+  return true;
+}
+
+function requireAdminToken(req: Request, res: Response): boolean {
+  const expected = process.env.ADMIN_TOKEN?.trim();
+  if (!expected) {
+    res.status(503).json({ error: 'Admin token not configured on server.' });
+    return false;
+  }
+  if (req.headers['x-admin-token'] !== expected) {
+    res.status(403).json({ error: 'Forbidden.' });
+    return false;
+  }
+  return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Schemas
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SignupSchema = z.object({
+  email: z.string().email('Please enter a valid email address.').toLowerCase().trim(),
+  /** Required attestation for campaign claim forms (Brighton Pride and future). */
+  adult_confirmed: z.literal(true, {
+    errorMap: () => ({ message: 'You must confirm you are 18 or over.' }),
+  }),
+});
+
+const ValidateSchema = z.object({
+  code: z.string().min(1),
+  email: z.string().email().toLowerCase().trim(),
+});
+
+const RedeemSchema = z.object({
+  code: z.string().min(1),
+  email: z.string().email().toLowerCase().trim(),
+  userId: z.string().uuid(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Routes
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/campaigns/:campaignId/signup
+ * Public — rate limited.
+ * - pride26_waitlist (21–31 Aug UK): Pride-flagged MENRUSH invite (beta + booked Premium)
+ * - brightonpride26: closed
+ */
+router.post('/:campaignId/signup', signupLimiter, async (req: Request, res: Response) => {
+  const { campaignId } = req.params;
+
+  const parsed = SignupSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.errors[0]?.message ?? 'Invalid request.' });
+    return;
+  }
+
+  const { email } = parsed.data;
+
+  try {
+    if (campaignId === PRIDE_WAITLIST_CAMPAIGN_ID) {
+      const result = await prideInviteService.issueFromPridePage(email);
+      res.json({
+        ok: true,
+        message:
+          result.outcome === 'existing'
+            ? 'Check your inbox. We re-sent your Pride code. Enter it at register on the same email.'
+            : 'Check your inbox. Your Pride code is on its way. Enter it at register on the same email.',
+      });
+      console.log(`[campaigns] pride invite ${result.outcome} for ${email}`);
+      return;
+    }
+
+    const result = await promoService.issueCode(email, campaignId);
+    // Don't reveal whether the email was new or existing — prevents enumeration
+    res.json({
+      ok: true,
+      message: 'Check your inbox — your personal code is on its way.',
+    });
+    console.log(`[campaigns] ${result.outcome} code for ${email} on ${campaignId}`);
+  } catch (err: any) {
+    if (err.message?.startsWith('Unknown campaign') || err.message === 'use_pride_invite') {
+      res.status(404).json({ error: 'Campaign not found.' });
+      return;
+    }
+    if (err.message === 'campaign_closed') {
+      res.status(410).json({
+        error: 'This claim form is closed. Use the Pride offer at /pride.',
+        code: 'campaign_closed',
+        redirect: '/pride',
+      });
+      return;
+    }
+    if (err.message === 'issue_window_closed') {
+      res.status(410).json({
+        error:
+          'The Pride claim window closed after 31 August 2026. If you already claimed, use the same email on /pride to resend your code.',
+        code: 'issue_window_closed',
+      });
+      return;
+    }
+    if (err.message === 'other_pride_path') {
+      res.status(409).json({
+        error:
+          'This email already has a Pride grant. Use your existing code at register. One grant only, no stacking.',
+        code: 'other_pride_path',
+      });
+      return;
+    }
+    if (err.message === 'email_send_failed') {
+      res.status(502).json({
+        error:
+          'We saved your request but could not send the invite email just now. Please try again in a few minutes, or contact Support if it stays late.',
+        code: 'email_send_failed',
+      });
+      return;
+    }
+    console.error(`[campaigns] signup error for ${email}:`, err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+/**
+ * POST /api/campaigns/promo/validate
+ * Public — rate limited. Checks if a code is valid for an email.
+ */
+router.post('/promo/validate', validateLimiter, async (req: Request, res: Response) => {
+  const parsed = ValidateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid request.' });
+    return;
+  }
+
+  const { code, email } = parsed.data;
+
+  try {
+    const result = await promoService.validate(code, email);
+    if (result.valid) {
+      res.json({
+        valid: true,
+        monthsFree: result.monthsFree,
+        message: `${result.monthsFree} months of Premium will be applied to your account.`,
+      });
+    } else {
+      // Deliberately vague — don't tell attackers why a code failed
+      const userMessage =
+        result.reason === 'already_redeemed'
+          ? 'This code has already been used.'
+          : result.reason === 'expired'
+            ? personalPrideExpiredMessage(result.expiresAt)
+            : 'This code is not valid for this email address.';
+      res.json({ valid: false, message: userMessage });
+    }
+  } catch (err) {
+    console.error('[campaigns] validate error:', err);
+    res.status(500).json({ error: 'Could not validate code.' });
+  }
+});
+
+/**
+ * POST /api/campaigns/promo/redeem
+ * Internal — requires X-Service-Token. Call after user account is created.
+ */
+router.post('/promo/redeem', async (req: Request, res: Response) => {
+  if (!requireServiceToken(req, res)) return;
+
+  const parsed = RedeemSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid request.' });
+    return;
+  }
+
+  const { code, email, userId } = parsed.data;
+
+  try {
+    const { monthsFree } = await promoService.redeem(code, email, userId);
+    res.json({ ok: true, monthsFree });
+  } catch (err: any) {
+    console.error('[campaigns] redeem error:', err);
+    res.status(400).json({ error: err.message ?? 'Redemption failed.' });
+  }
+});
+
+/**
+ * GET /api/campaigns/:campaignId/stats
+ * Admin only.
+ */
+router.get('/:campaignId/stats', async (req: Request, res: Response) => {
+  if (!requireAdminToken(req, res)) return;
+
+  const { campaignId } = req.params;
+
+  try {
+    const stats = await promoService.stats(campaignId);
+    res.json(stats);
+  } catch (err) {
+    console.error('[campaigns] stats error:', err);
+    res.status(500).json({ error: 'Could not fetch stats.' });
+  }
+});
+
+export default router;
