@@ -1,4 +1,4 @@
-/** Map pin / location — Map home-view toggle. */
+/** Map pin / location: Map home-view toggle. */
 export function IconMapPin({ size = 24, className = '' }: { size?: number; className?: string }) {
   return (
     <svg

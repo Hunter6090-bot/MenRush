@@ -1,5 +1,5 @@
 /**
- * Home view preference for redesign Step 1 — map | list (default map).
+ * Home view preference for redesign Step 1: map | list (default map).
  * Kept in sync with NearbyView (map | grid) so Discover and the bottom-tab
  * toggle share one setting.
  */

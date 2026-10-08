@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MOBILE_TAB_ROOTS, mobileBackFallback, shouldShowMobileBack } from './mobileBack';
 
-describe('mobileBack — redesign Step 1 five-tab roots', () => {
+describe('mobileBack: redesign Step 1 five-tab roots', () => {
   it('treats Map · Chat · Rooms · Out · You as tab roots (no back control)', () => {
     expect([...MOBILE_TAB_ROOTS].sort()).toEqual(
       ['/conversations', '/discover', '/out', '/profile', '/rooms'].sort(),

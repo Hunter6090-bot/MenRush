@@ -30,7 +30,7 @@ export interface NavItem {
 }
 
 /**
- * Redesign Step 1 (Pete 6 Oct 2026): 5 primary tabs —
+ * Redesign Step 1 (Pete 6 Oct 2026): 5 primary tabs:
  * Home (Map|List toggle) · Chat · Rooms · Out · You.
  * Old destinations stay in the catalog for deep links / desktop Settings.
  */

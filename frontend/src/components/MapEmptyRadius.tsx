@@ -1,5 +1,5 @@
 /**
- * Empty map radius state — "Nobody in this radius" + Widen to N mi.
+ * Empty map radius state: "Nobody in this radius" + Widen to N mi.
  */
 import { formatRadiusControlLabel } from '../lib/discoveryFormat';
 

@@ -229,7 +229,7 @@ function renderTemplate(
     betaUrl?: string;
   },
 ): string {
-  const betaUrl = ctx.betaUrl || 'https://menrush.com/beta';
+  const betaUrl = ctx.betaUrl || 'https://menrush.com/invite';
   const inviteCode = ctx.inviteCode || '';
   let html = rawHtml
     .replace(/\{\{\s*unsubscribe_url\s*\}\}/g, ctx.unsubscribeUrl)
@@ -283,10 +283,10 @@ async function sendDripStep(item: DueSend): Promise<{ messageId: string | null; 
   // Welcome emails include a personal invite — generate before claiming
   // the send so a failed mint does not burn the drip ledger row.
   let inviteCode = '';
-  let betaUrl = 'https://menrush.com/beta';
+  let betaUrl = 'https://menrush.com/invite';
   if (item.step.key === 'mr-d00-welcome') {
     inviteCode = await createWelcomeInviteCode(item.email);
-    betaUrl = `https://menrush.com/beta?invite=${encodeURIComponent(inviteCode)}`;
+    betaUrl = `https://menrush.com/invite?invite=${encodeURIComponent(inviteCode)}`;
   }
 
   const rawHtml = await loadTemplate(item.step.filename);

@@ -6,7 +6,7 @@ export type MenRushIconProps = SVGProps<SVGSVGElement> & {
 };
 
 /**
- * Community — people group. Claude Design menrush-icons.
+ * Community: people group. Claude Design menrush-icons.
  */
 export function IconCommunity({
   size = 24,

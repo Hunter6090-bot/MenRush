@@ -3,7 +3,7 @@ import { getNavItems, isNavActive, mobilePageTitle } from './navConfig';
 import { ROUTE_LABELS } from './routeLabels';
 import { IconOut, IconRooms } from '../components/icons';
 
-describe('navConfig — redesign Step 1 five-tab shell', () => {
+describe('navConfig: redesign Step 1 five-tab shell', () => {
   it('exposes Discover home + Chat · Rooms · Out · You as the only mobile tabs', () => {
     const items = getNavItems();
     const mobileOrder = items.filter((i) => i.mobileTab).map((i) => i.to);

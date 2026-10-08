@@ -1,5 +1,5 @@
 /**
- * Out tab — venues, events, cruise spots, community.
+ * Out tab: venues, events, cruise spots, community.
  * Chips: All / Sauna / Bar / Event / Community.
  * Cruising spot search lives here (moved off the map, Pete 8 Oct 2026).
  */

@@ -91,6 +91,12 @@ describe('ProfileDrawer pin sheet (redesign Step 1)', () => {
     expect(screen.getByTestId('chat-safety-menu')).toBeInTheDocument();
   });
 
+  it('shows distance once, on the age line, with no "away" line', () => {
+    renderDrawer();
+    expect(screen.getAllByText(/28 mi/i)).toHaveLength(1);
+    expect(screen.queryByText(/away/i)).not.toBeInTheDocument();
+  });
+
   it('shows muted Sent in More when one-way pending', async () => {
     const user = userEvent.setup();
     render(
@@ -141,6 +147,46 @@ describe('ProfileDrawer pin sheet (redesign Step 1)', () => {
   it('shows Now when online', () => {
     renderDrawer({ user: { ...graham, online: true } });
     expect(screen.getByTestId('pin-sheet-now')).toHaveTextContent('Now');
+  });
+
+  it('omits distance gracefully when unknown/null/empty', () => {
+    const noDistanceUser: NearbyUser = {
+      ...graham,
+      distance_km: '',
+      distance_label: undefined,
+    };
+    render(
+      <MemoryRouter>
+        <ProfileDrawer
+          user={noDistanceUser}
+          liked={false}
+          onClose={vi.fn()}
+          onLike={vi.fn()}
+          onMessage={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText(/away/i)).not.toBeInTheDocument();
+  });
+
+  it('shows no distance when the member hides it', () => {
+    const hidden: NearbyUser = { ...graham };
+    delete (hidden as Partial<NearbyUser>).distance_km;
+    delete (hidden as Partial<NearbyUser>).distance_label;
+    render(
+      <MemoryRouter>
+        <ProfileDrawer
+          user={hidden}
+          liked={false}
+          onClose={vi.fn()}
+          onLike={vi.fn()}
+          onMessage={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText(/Nearby\s*·\s*Nearby/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/away/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\d+ mi\b/)).not.toBeInTheDocument();
   });
 
   it('exposes enlarge hooks when photos exist', () => {

@@ -8,7 +8,7 @@ import {
   writeHomeView,
 } from './homeView';
 
-describe('homeView — map|list preference', () => {
+describe('homeView: map|list preference', () => {
   beforeEach(() => {
     localStorage.clear();
   });

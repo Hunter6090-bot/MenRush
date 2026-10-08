@@ -139,8 +139,20 @@ describe('Discover map and grid are exclusive', () => {
     expect(screen.queryByTestId('map-discretion-slider')).not.toBeInTheDocument();
     // Cruising spot search moved to the Out tab.
     expect(screen.queryByTestId('cruising-search-bar')).not.toBeInTheDocument();
-    // No location-privacy claims until the radius fix is live (Zoul, 8 Oct 2026).
-    expect(screen.queryByTestId('map-privacy-note')).not.toBeInTheDocument();
+  });
+
+  it('keeps the map pin note on the phone map (exact range, no privacy promise)', async () => {
+    vi.stubEnv('VITE_MAPBOX_TOKEN', 'pk.test-token');
+    try {
+      setLayout(false);
+      renderDiscover();
+      await waitFor(() => expect(usersAPI.getNearby).toHaveBeenCalled());
+      expect(await screen.findByTestId('map-privacy-note')).toHaveTextContent(
+        /^Your pin is moved \d+ to \d+ m$/,
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('phone swaps the whole screen to the grid and back', async () => {

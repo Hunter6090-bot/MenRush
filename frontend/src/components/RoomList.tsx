@@ -4,6 +4,7 @@ import { roomsAPI } from '../api/client';
 import { CreateGroupModal } from '../components/CreateGroupModal';
 import { useSocket } from '../hooks/useSocket';
 import { ROUTE_LABELS } from '../lib/routeLabels';
+import { RoomAvatar } from './RoomAvatar';
 
 export interface RoomRow {
   id: string;
@@ -19,14 +20,12 @@ export interface RoomRow {
   is_location_based?: boolean;
 }
 
-function roomInitials(name: string): string {
-  return name
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-}
+/** Letter-square look kept for rooms without a Claude Design icon. */
+const LETTER_TILE_STYLE: React.CSSProperties = {
+  background: 'linear-gradient(135deg, rgba(196,131,42,0.25), rgba(139,69,19,0.15))',
+  border: '1px solid rgba(196,131,42,0.25)',
+  color: '#C4832A',
+};
 
 function formatRelative(iso?: string): string {
   if (!iso) return '';
@@ -322,16 +321,14 @@ export const RoomList: React.FC<RoomListProps> = ({
                             : { background: 'var(--bg-card)', border: '1px solid var(--border-default)' }
                         }
                       >
-                        <div
-                          className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl text-base font-bold"
-                          style={{
-                            background: 'linear-gradient(135deg, rgba(196,131,42,0.25), rgba(139,69,19,0.15))',
-                            border: '1px solid rgba(196,131,42,0.25)',
-                            color: '#C4832A',
-                          }}
-                        >
-                          {roomInitials(room.name)}
-                        </div>
+                        <RoomAvatar
+                          name={room.name}
+                          officialSlug={room.official_slug}
+                          className="h-14 w-14 rounded-2xl"
+                          iconClassName="h-8 w-8"
+                          letterClassName="text-lg font-bold"
+                          letterStyle={LETTER_TILE_STYLE}
+                        />
 
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
@@ -415,16 +412,14 @@ export const RoomList: React.FC<RoomListProps> = ({
                             : { background: 'var(--bg-card)', border: '1px solid var(--border-default)' }
                         }
                       >
-                        <div
-                          className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl text-base font-bold"
-                          style={{
-                            background: 'linear-gradient(135deg, rgba(196,131,42,0.25), rgba(139,69,19,0.15))',
-                            border: '1px solid rgba(196,131,42,0.25)',
-                            color: '#C4832A',
-                          }}
-                        >
-                          {roomInitials(room.name)}
-                        </div>
+                        <RoomAvatar
+                          name={room.name}
+                          officialSlug={room.official_slug}
+                          className="h-14 w-14 rounded-2xl"
+                          iconClassName="h-8 w-8"
+                          letterClassName="text-lg font-bold"
+                          letterStyle={LETTER_TILE_STYLE}
+                        />
 
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">

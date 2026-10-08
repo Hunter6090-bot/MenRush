@@ -1,5 +1,5 @@
 /**
- * Map Filters bottom sheet — Age range + Visiting / Now / Photo only + Reset / Show.
+ * Map Filters bottom sheet: Age range + Visiting / Now / Photo only + Reset / Show.
  * Full discovery filter state still drives results (no feature drop).
  */
 import { useEffect, useState } from 'react';

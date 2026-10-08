@@ -293,6 +293,8 @@ export const usersAPI = {
     show_height?: boolean;
     show_weight?: boolean;
     show_relationship?: boolean;
+    /** Off = no distance shown to others ("Nearby"). Turning off is Premium (402). */
+    show_distance?: boolean;
   }) =>
     apiClient.post('/users/profile', data),
   uploadPhoto: (file: File) => {
@@ -1164,8 +1166,10 @@ export interface CommunityPostDTO {
   created_at: string;
   author_name: string;
   author_photo_url: string | null;
-  distance_km: string;
-  distance_label: string;
+  /** Coarse bucket (sorting). Absent when the author hides distance. */
+  distance_km?: string;
+  /** "<1 mi" or whole miles, to the author's fuzzed pin. Absent with distance_km. */
+  distance_label?: string;
   comment_count?: number;
 }
 
@@ -1229,6 +1233,23 @@ export const aiAPI = {
       '/ai/generate-image',
       { prompt, numberOfImages }
     ),
+};
+
+export interface LocationHiddenPerson {
+  id: string;
+  name: string;
+  photo_url?: string | null;
+  hidden_at: string;
+}
+
+/** "Hide my location from" list. Premium to add; removing is always allowed. */
+export const locationPrivacyAPI = {
+  listHidden: () =>
+    apiClient.get<{ hidden: LocationHiddenPerson[]; limit: number }>('/location-privacy/hidden'),
+  hide: (id: string) =>
+    apiClient.post<{ hidden: true }>(`/location-privacy/hidden/${encodeURIComponent(id)}`),
+  unhide: (id: string) =>
+    apiClient.delete<{ hidden: false }>(`/location-privacy/hidden/${encodeURIComponent(id)}`),
 };
 
 export { apiClient };

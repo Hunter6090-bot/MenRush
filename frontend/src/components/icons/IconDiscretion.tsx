@@ -6,7 +6,7 @@ export type MenRushIconProps = SVGProps<SVGSVGElement> & {
 };
 
 /**
- * Discretion — dashed radar + pin (map pin fuzz). Claude Design menrush-icons.
+ * Discretion: dashed radar + pin (map pin fuzz). Claude Design menrush-icons.
  */
 export function IconDiscretion({
   size = 24,

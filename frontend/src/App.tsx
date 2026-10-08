@@ -1,5 +1,6 @@
 import { lazy, Suspense, type ComponentType, type ReactElement, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { LegacyInviteRedirect } from './components/LegacyInviteRedirect';
 import { useEffect } from 'react';
 import { RequireProfileSetup } from './components/RequireProfileSetup';
 import { useAuthStore } from './hooks/store';
@@ -260,7 +261,9 @@ function AppShell() {
           <Route path="/brightonpride" element={<Navigate to="/pride" replace />} />
           <Route path="/brightonpride26" element={<Navigate to="/pride" replace />} />
           <Route path="/pride" element={<Pride />} />
-          <Route path="/beta" element={<BetaAccess />} />
+          <Route path="/invite" element={<BetaAccess />} />
+          {/* Old invite links in sent emails: keep working, show /invite. */}
+          <Route path="/beta" element={<LegacyInviteRedirect />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/register/underage" element={<RegisterUnderage />} />

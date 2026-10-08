@@ -6,7 +6,7 @@ export type MenRushIconProps = SVGProps<SVGSVGElement> & {
 };
 
 /**
- * Rooms — video frame + people. Claude Design menrush-icons.
+ * Rooms: video frame + people. Claude Design menrush-icons.
  */
 export function IconRooms({
   size = 24,

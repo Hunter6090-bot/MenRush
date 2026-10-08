@@ -9,7 +9,7 @@ import { ProfilePhotoViewer } from "./ProfilePhotoViewer";
 import { IconPulse, IconClose, IconMatches, IconChat, IconUnmatch } from "./icons";
 import { VerifiedBadge } from "./VerifiedBadge";
 import { ChatSafetyMenu } from "./ChatSafetyMenu";
-import { getDistanceLabel, isUserPulsing } from "../lib/discovery";
+import { isUserPulsing, memberDistanceLabel } from "../lib/discovery";
 import { profilePathForUser } from "../lib/profileLinks";
 import {
   matchCtaAriaLabel,
@@ -151,19 +151,9 @@ export function ProfileDrawer({
 
   if (!user) return null;
 
-  const parsedDistance =
-    user.distance_km != null && user.distance_km !== ""
-      ? parseFloat(String(user.distance_km))
-      : user.distance_label != null && user.distance_label.trim() !== ""
-        ? parseFloat(user.distance_label.replace(/[^0-9.]/g, ""))
-        : null;
-  const distance = Number.isFinite(parsedDistance) ? parsedDistance : null;
-  const distLabel =
-    distance != null
-      ? getDistanceLabel({ ...user, distance_km: distance })
-      : user.distance_label != null && user.distance_label.trim() !== ""
-        ? user.distance_label
-        : null;
+  // Server label is coarse and Discretion-fuzzed ("<1 mi", "3 mi"). No distance
+  // (member hides it, or no location) leaves the age line without one.
+  const distLabel = memberDistanceLabel(user);
   const isPulsing = isUserPulsing(user);
   const matchState = matchInterestState({ liked, mutual });
   const matchDisabled = matchCtaDisabled(matchState);
@@ -241,7 +231,7 @@ export function ProfileDrawer({
           </button>
         </div>
 
-        {/* Compact pin-sheet body — design state 3 */}
+        {/* Compact pin-sheet body: design state 3 */}
         <div className="relative z-10 flex shrink-0 gap-3 px-4 pb-2 pt-1" data-testid="profile-sheet-hero">
           <div
             className="relative h-28 w-28 shrink-0 overflow-hidden rounded-2xl bg-[var(--bg-elevated)]"
@@ -433,11 +423,12 @@ export function ProfileDrawer({
               </button>
             ) : null}
 
-            {/* Report / Block via existing ChatSafetyMenu — opened programmatically face */}
+            {/* Report / Block via existing ChatSafetyMenu: opened programmatically face */}
             <div ref={safetyMenuRef} className="mb-2" data-testid="pin-sheet-safety">
               <ChatSafetyMenu
                 peerId={user.id}
                 peerName={user.name}
+                showHideLocation
                 onNotice={onSafetyNotice}
                 onBlocked={() => {
                   onBlocked?.();

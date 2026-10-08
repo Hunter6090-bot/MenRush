@@ -4,6 +4,7 @@ import { useMediaQuery } from '../hooks/useMediaQuery';
 import { getPhotoUrl } from './UserAvatar';
 import { BrandAvatar } from './BrandAvatar';
 import { FadedBrandFace } from './FadedBrandFace';
+import { RoomAvatar } from './RoomAvatar';
 import { isPlaceholderAvatarUrl } from '../lib/avatarFallback';
 import { SelfieCaptureModal } from './SelfieCaptureModal';
 
@@ -61,16 +62,12 @@ const THEME_CHIP_MAP: Array<{ match: RegExp; chips: string[] }> = [
   { match: /host/i, chips: ['Hosting', 'Guest Anon', 'Drop In'] },
 ];
 
-function roomInitials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter((w) => /[A-Za-z0-9]/.test(w))
-    .map((w) => w.replace(/[^A-Za-z0-9]/g, '')[0])
-    .filter(Boolean)
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-}
+/** Letter-square look kept for rooms without a Claude Design icon. */
+const GATE_LETTER_STYLE: React.CSSProperties = {
+  background: 'linear-gradient(135deg,rgba(196,131,42,0.35),rgba(139,69,19,0.25))',
+  border: '1px solid rgba(196,131,42,0.45)',
+  color: '#C4832A',
+};
 
 /** Build 3 suggestion labels; Shuffle draws from an expanded pool. */
 export function buildNameSuggestions(theme?: string | null): string[] {
@@ -238,8 +235,8 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   const showChips = loaded && !hadSavedIdentity;
   const subtitleActive =
     typeof activeCount === 'number' && activeCount > 0
-      ? `Video group · ${activeCount} active`
-      : 'Video group';
+      ? `Group room · ${activeCount} active`
+      : 'Group room';
 
   const houseRuleLines = useMemo(() => {
     if (roomRules?.trim()) {
@@ -463,17 +460,13 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
 
   const headerBlock = (
     <div className="relative flex items-start gap-3">
-      <div
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold"
-        style={{
-          background: 'linear-gradient(135deg,rgba(196,131,42,0.35),rgba(139,69,19,0.25))',
-          border: '1px solid rgba(196,131,42,0.45)',
-          color: '#C4832A',
-        }}
-        aria-hidden
-      >
-        {roomInitials(roomName)}
-      </div>
+      <RoomAvatar
+        name={roomName}
+        className="h-12 w-12 rounded-full"
+        iconClassName="h-6 w-6"
+        letterClassName="text-sm font-bold"
+        letterStyle={GATE_LETTER_STYLE}
+      />
       <div className="min-w-0 flex-1 pr-2">
         <p className="truncate text-[15px] font-bold leading-tight text-[var(--cream)]">{roomName}</p>
         <p className="mt-0.5 text-[12px] text-[#A89070]">{subtitleActive}</p>
@@ -804,16 +797,13 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
     >
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
-          <div
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold"
-            style={{
-              background: 'linear-gradient(135deg,rgba(196,131,42,0.35),rgba(139,69,19,0.25))',
-              border: '1px solid rgba(196,131,42,0.45)',
-              color: '#C4832A',
-            }}
-          >
-            {roomInitials(roomName)}
-          </div>
+          <RoomAvatar
+            name={roomName}
+            className="h-14 w-14 rounded-full"
+            iconClassName="h-7 w-7"
+            letterClassName="text-sm font-bold"
+            letterStyle={GATE_LETTER_STYLE}
+          />
           <div className="min-w-0">
             <p className="truncate text-[17px] font-bold text-[var(--cream)]">{roomName}</p>
             <p className="text-[12px] text-[#A89070]">{subtitleActive}</p>

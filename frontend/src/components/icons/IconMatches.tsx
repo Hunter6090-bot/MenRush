@@ -7,7 +7,7 @@ export type MenRushIconProps = SVGProps<SVGSVGElement> & {
 };
 
 /**
- * Matches — two people + spark. Claude Design menrush-icons.
+ * Matches: two people + spark. Claude Design menrush-icons.
  */
 export function IconMatches({
   size = 24,

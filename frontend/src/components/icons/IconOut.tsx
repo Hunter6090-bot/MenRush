@@ -6,7 +6,7 @@ export type MenRushIconProps = SVGProps<SVGSVGElement> & {
 };
 
 /**
- * Out — map pin + star (venues / cruise / events). Claude Design menrush-icons.
+ * Out: map pin + star (venues / cruise / events). Claude Design menrush-icons.
  */
 export function IconOut({
   size = 24,

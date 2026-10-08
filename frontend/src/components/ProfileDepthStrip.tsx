@@ -28,7 +28,7 @@ export function ProfileDepthStrip() {
     pathname.startsWith('/profile/setup') ||
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
-    pathname.startsWith('/beta') ||
+    pathname.startsWith('/invite') ||
     pathname.startsWith('/coming-soon') ||
     pathname === '/';
 

@@ -336,3 +336,29 @@ describe('NearbyProfileGrid pagination', () => {
     expect(screen.queryByRole('button', { name: /Expand radius/i })).not.toBeInTheDocument();
   });
 });
+
+describe('NearbyProfileGrid hidden distance', () => {
+  it('shows Nearby once when distance is hidden and there is no tribe tag', () => {
+    const user = mockUser({ id: 'h1', name: 'Rob', interests: [], online: true });
+    delete (user as Partial<NearbyUser>).distance_km;
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid users={[user]} loading={false} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('nearby-grid-distance-h1').textContent).toBe('Nearby');
+    const line = screen.getByTestId('nearby-grid-distance-h1').parentElement!.textContent ?? '';
+    expect(line).not.toMatch(/Nearby\s*·\s*Nearby/);
+    expect(line.match(/Nearby/g)).toHaveLength(1);
+  });
+
+  it('shows the coarse server label on the card', () => {
+    const user = mockUser({ id: 'h2', name: 'Al', distance_km: '0.80', distance_label: '<1 mi' });
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid users={[user]} loading={false} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('nearby-grid-distance-h2').textContent).toBe('<1 mi');
+  });
+});

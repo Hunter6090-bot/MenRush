@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 /**
- * Map-first top chrome — Radius / Filters / Search (icon + short label).
+ * Map-first top chrome: Radius / Filters / Search (icon + short label).
  * Pete redesign Step 1.
  */
 import { formatRadiusControlLabel } from '../lib/discoveryFormat';
@@ -21,7 +21,7 @@ export function MapTopPillBar({
   onFiltersClick: () => void;
   onSearchClick: () => void;
   filtersActive?: boolean;
-  /** Second row (Discretion / layers) — stacked in-flow so it never sits under wrapping pills. */
+  /** Second row (Discretion / layers): stacked in-flow so it never sits under wrapping pills. */
   children?: ReactNode;
 }) {
   const radiusLabel = formatRadiusControlLabel(radiusKm);

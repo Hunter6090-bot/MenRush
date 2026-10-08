@@ -1,4 +1,4 @@
-/** Four-square grid — List home-view toggle. */
+/** Four-square grid: List home-view toggle. */
 export function IconGrid({ size = 24, className = '' }: { size?: number; className?: string }) {
   return (
     <svg

@@ -97,6 +97,7 @@ import {
 } from '../lib/hotSpotsMapBanner';
 import {
   MAP_PIN_FUZZ_DEFAULT_M,
+  formatFuzzPrivacyNote,
   nearestMapPinFuzzStep,
   privateMapPointAround,
 } from '../lib/mapPinFuzz';
@@ -130,7 +131,7 @@ function MapFloatingChrome({
   hotSpotsLayerOn,
   onTogglePeopleLayer,
   onToggleHotSpotsLayer,
-  /** In-flow under MapTopPillBar children — no absolute offset, safe at 360/390/430. */
+  /** In-flow under MapTopPillBar children, no absolute offset, safe at 360/390/430. */
   placement = 'stacked',
 }: {
   peopleLayerOn: boolean;
@@ -542,7 +543,7 @@ export const Discover = () => {
   const [mapPanelMode, setMapPanelMode] = useState<MapPanelMode>(() =>
     homeViewToNearby(readHomeView()) === 'grid' ? 'hidden' : 'default',
   );
-  // Bottom-tab Map|List toggle (Layout) — keep Discover surface in sync.
+  // Bottom-tab Map|List toggle (Layout): keep Discover surface in sync.
   useEffect(() => {
     const onHomeView = (e: Event) => {
       const view = (e as CustomEvent<HomeView>).detail ?? readHomeView();
@@ -971,7 +972,7 @@ export const Discover = () => {
         saved.lat,
         saved.lng,
         window.isSecureContext
-          ? 'Using your last saved location — refreshing GPS…'
+          ? 'Using your last saved location. Refreshing GPS…'
           : INSECURE_GPS_NOTICE,
         true,
       );
@@ -2164,6 +2165,9 @@ export const Discover = () => {
           <p id="location-gate-title" className="text-[17px] font-extrabold text-[var(--cream)]">
             Allow location to unlock Nearby
           </p>
+          <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-[var(--cream-muted)]">
+            We use your location to show who&apos;s nearby.
+          </p>
           <button
             type="button"
             onClick={handleEnableLocation}
@@ -2172,7 +2176,7 @@ export const Discover = () => {
             Allow location
           </button>
           {locationNotice ? (
-            <p className="mt-3 text-[11px] text-[var(--cream-muted)]">{locationNotice}</p>
+            <p className="mt-3 text-[15px] leading-snug text-[var(--cream-muted)]">{locationNotice}</p>
           ) : null}
         </div>
       ) : null}
@@ -2242,6 +2246,19 @@ export const Discover = () => {
               onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
               onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
             />
+            {!needsLocationGate && !tokenMissing ? (
+              <p
+                className="mx-auto mt-2 w-fit max-w-[min(90%,320px)] rounded-full px-3 py-1 text-center text-[15px] font-medium leading-snug"
+                style={{
+                  background: 'rgba(13,10,6,0.72)',
+                  color: 'rgba(240,224,192,0.85)',
+                  border: '1px solid rgba(196,131,42,0.25)',
+                }}
+                data-testid="map-privacy-note"
+              >
+                {formatFuzzPrivacyNote(mapPinFuzzM)}
+              </p>
+            ) : null}
           </MapTopPillBar>
           {!loading && nearbyCount === 0 && !allScope && !needsLocationGate ? (
             <MapEmptyRadius nextRadiusKm={nextWidenRadiusKm} onWiden={handleRadiusCycle} />
@@ -2361,6 +2378,19 @@ export const Discover = () => {
                 onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
                 onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
               />
+              {!needsLocationGate && !tokenMissing ? (
+                <p
+                  className="mx-auto mt-2 w-fit max-w-[min(90%,320px)] rounded-full px-3 py-1 text-center text-[15px] font-medium leading-snug"
+                  style={{
+                    background: 'rgba(13,10,6,0.72)',
+                    color: 'rgba(240,224,192,0.85)',
+                    border: '1px solid rgba(196,131,42,0.25)',
+                  }}
+                  data-testid="map-privacy-note"
+                >
+                  {formatFuzzPrivacyNote(mapPinFuzzM)}
+                </p>
+              ) : null}
             </MapTopPillBar>
           ) : null}
           {mapPanelMode !== 'hidden' && !loading && nearbyCount === 0 && !allScope && !needsLocationGate ? (
@@ -2457,14 +2487,14 @@ export const Discover = () => {
               <div
                 role="status"
                 data-testid="location-notice"
-                className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-3 py-2 text-[11px] font-medium leading-snug text-[var(--cream-soft)] shadow-md backdrop-blur-sm"
+                className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-3.5 py-2.5 text-[15px] font-medium leading-snug text-[var(--cream-soft)] shadow-md backdrop-blur-sm"
               >
                 <p>{locationNotice}</p>
                 <button
                   type="button"
                   onClick={handleEnableLocation}
                   data-testid="enable-location"
-                  className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[var(--copper)]/15 px-2.5 py-1 text-[11px] font-bold text-[var(--copper)] transition-colors hover:bg-[var(--copper)]/25"
+                  className="mt-2 inline-flex min-h-[44px] items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[var(--copper)]/15 px-4 py-2 text-[15px] font-bold text-[var(--copper)] transition-colors hover:bg-[var(--copper)]/25"
                 >
                   {locationNotice.startsWith('Using your last saved location') ||
                   locationNotice === INSECURE_GPS_NOTICE

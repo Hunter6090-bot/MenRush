@@ -57,6 +57,12 @@ jobs:
         run: npm run test:adult-assurance
       - name: Adult assurance status-poll rate limit
         run: npm run test:adult-assurance-rate-limit
+      - name: Rate-limit client IP key (x-real-ip, spoofed XFF, fallback)
+        run: npm run test:rate-limit-client-ip
+      - name: Vercel edge secret client IP (unset, mismatch, match)
+        run: npm run test:edge-proxy-secret
+      - name: Auth and signup rate limits (loose per IP, per-account caps)
+        run: npm run test:auth-rate-limits
       - name: Veriff checks
         run: npm run test:veriff
 
@@ -79,3 +85,84 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
+
+  # Only the Vercel middleware test runs here: the full frontend vitest suite
+  # has known parked failures. vitest 5 needs Node 22.12 or newer.
+  frontend-edge-proxy-secret:
+    name: Frontend edge secret middleware test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Edge secret middleware (no IP no secret, override list, forged copies deleted)
+        run: npm run test:edge-proxy-secret
+      # vercel build, then import and call the exact built middleware.js under
+      # plain Node ESM from an isolated copy (catches ERR_MODULE_NOT_FOUND /
+      # MIDDLEWARE_INVOCATION_FAILED that vitest and tsc cannot see). No
+      # Vercel token or env: placeholder project, empty global config.
+      - name: Built middleware loads and runs on the nodejs runtime (vercel build + Node ESM import)
+        run: npm run test:middleware-artifact
+
+  # Integration tests that need a real Postgres + PostGIS (map feed blocks and
+  # Ghost, radius on the fuzzed pin, etc.). Throwaway DB per run.
+  backend-db-integration:
+    name: DB integration (PostGIS)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: menrush
+          POSTGRES_PASSWORD: menrush
+          POSTGRES_DB: menrush_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U menrush -d menrush_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://menrush:menrush@localhost:5432/menrush_ci
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Load schema
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f ../database/schema.sql
+      - name: Run migrations
+        run: npm run db:migrate
+      - name: Map feed leaves out blocked and Ghost members
+        run: npm run test:map-feed-blocks
+      # --if-present: these scripts arrive with their own PRs (#333, #327,
+      # #328, Community Ghost). The step is a no-op until the script exists.
+      - name: Radius on the fuzzed pin (oracle)
+        run: npm run --if-present test:radius-oracle
+      - name: Show distance
+        run: npm run --if-present test:show-distance-integration
+      - name: Hide my location from
+        run: npm run --if-present test:hide-location-integration
+      - name: Community leaves out Ghost and hidden members
+        run: npm run --if-present test:community-ghost-hidden

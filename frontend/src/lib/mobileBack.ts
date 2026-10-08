@@ -7,7 +7,7 @@ export const MOBILE_TAB_ROOTS = new Set([
   '/profile',
 ]);
 
-/** Home for signed-in users — Map / Discover. */
+/** Home for signed-in users: Map / Discover. */
 export const APP_HOME = '/discover';
 
 export function shouldShowMobileBack(pathname: string): boolean {
