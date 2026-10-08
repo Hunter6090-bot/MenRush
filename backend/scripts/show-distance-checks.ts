@@ -163,7 +163,7 @@ const rosterSrc = read('src/lib/nearbyRosterSql.ts');
 const feedSrc = read('src/services/map-feed.service.ts');
 assert.match(rosterSrc, /COALESCE\(u\.show_distance, TRUE\) AS show_distance/);
 assert.match(userSrc, /memberDistanceFields\(/);
-assert.match(userSrc, /distance_m: _exactDistance/, 'exact ST_Distance never leaves the roster');
+assert.doesNotMatch(rosterSrc, /as distance_m/i, 'roster never selects the exact ST_Distance');
 assert.match(userSrc, /show_distance: _showDistance/, 'setting itself is not exposed to others');
 assert.doesNotMatch(userSrc, /label = '< 300 m'/, 'old metre buckets are gone');
 assert.match(userSrc, /ShowDistancePremiumError/);

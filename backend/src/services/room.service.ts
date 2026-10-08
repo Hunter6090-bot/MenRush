@@ -1,6 +1,7 @@
 import { query } from '../db';
 import { v4 as uuidv4 } from 'uuid';
 import { premiumService, PremiumRequiredError } from './premium.service';
+import { notLocationHiddenFromViewerSql } from '../lib/locationHiddenSql';
 import { accessControl } from '../security/access';
 import {
   ROOM_TEMP_IDENTITY_TTL_DAYS,
@@ -214,10 +215,12 @@ export const roomService = {
            AND COALESCE(r.is_official, false) = false
            AND r.id != ALL($5::uuid[])
            AND ST_DWithin(r.location, ST_MakePoint($2, $1)::geography, $3)
+           -- Hide my location from: a nearby room pins where its creator was.
+           AND (r.created_by IS NULL OR ${notLocationHiddenFromViewerSql('r.created_by', '$6')})
          GROUP BY r.id
          ORDER BY distance_m ASC
          LIMIT $4`,
-        [options.lat, options.lng, radiusMeters, limit, excludeIds]
+        [options.lat, options.lng, radiusMeters, limit, excludeIds, userId]
       );
       nearbyRooms = nearbyResult.rows;
     }

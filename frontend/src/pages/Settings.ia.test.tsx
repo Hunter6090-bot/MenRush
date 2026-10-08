@@ -33,6 +33,11 @@ vi.mock('../api/client', () => ({
     getTwoFactorStatus: vi.fn().mockResolvedValue({ data: { enabled: false } }),
     listTrustedDevices: vi.fn().mockResolvedValue({ data: { devices: [] } }),
   },
+  locationPrivacyAPI: {
+    listHidden: vi.fn().mockResolvedValue({ data: { hidden: [], limit: 500 } }),
+    hide: vi.fn(),
+    unhide: vi.fn(),
+  },
   usersAPI: {
     getMe: mocks.getMe,
     getBlockedUsers: mocks.getBlockedUsers,

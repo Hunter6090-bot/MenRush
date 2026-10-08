@@ -4,6 +4,7 @@ import { rateLimitKey } from '../lib/clientIp';
 import { z } from 'zod';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { mapFeedService } from '../services/map-feed.service';
+import { locationHideService } from '../services/location-hide.service';
 
 const router = Router();
 router.use(authMiddleware, verifiedMiddleware);
@@ -29,7 +30,13 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const radiusKm =
       req.query.radius !== undefined ? parseFloat(req.query.radius as string) : undefined;
 
-    const messages = await mapFeedService.listNearby(req.userId!, { lat, lng, radiusKm });
+    const all = await mapFeedService.listNearby(req.userId!, { lat, lng, radiusKm });
+    // Hide my location from: drop posts by members who hide their location from me.
+    const hidingFromMe = await locationHideService.ownersHidingFrom(
+      req.userId!,
+      all.map((m) => m.sender_id),
+    );
+    const messages = hidingFromMe.size ? all.filter((m) => !hidingFromMe.has(m.sender_id)) : all;
     res.json({ messages });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Internal server error';
@@ -49,10 +56,15 @@ router.post('/', postLimiter, async (req: AuthRequest, res: Response) => {
     if (io) {
       const lat = Number(saved.lat);
       const lng = Number(saved.lng);
+      // Fan-out radius is fixed on the server at 5 km (no client input), and the
+      // centre is the sender's public (fuzzed) pin from saved.lat / saved.lng.
       const nearbyIds = await mapFeedService.nearbyUserIds(lat, lng, 5, req.userId!);
+      // Hide my location from: never fan out to people the poster hides from.
+      const hiddenFrom = await locationHideService.viewersHiddenBy(req.userId!, nearbyIds);
       // Include the poster: Discover dock does not optimistically render until this
       // event (or the HTTP body) lands — skipping self made own posts look undelivered.
       for (const uid of nearbyIds) {
+        if (hiddenFrom.has(uid)) continue;
         io.to(`user:${uid}`).emit('map:feed:message', saved);
       }
     }

@@ -24,6 +24,7 @@ import {
 } from '../lib/nearbyRosterSql';
 import { PRESENCE_LIVE_SQL, PRESENCE_WINDOW_SQL } from '../lib/presence';
 import { lookupUkIePlace, placeContainsPoint } from '../lib/ukIePlace';
+import { notLocationHiddenFromViewerSql } from '../lib/locationHiddenSql';
 import { memberDistanceFields } from '../lib/memberDistance';
 
 const includeE2eFixtures = () =>
@@ -215,7 +216,6 @@ export const userService = {
         map_photo_url: mapPhoto,
         map_pin_fuzz_m: _fuzz,
         show_distance: _showDistance,
-        distance_m: _exactDistance,
         ...publicRow
       } = row;
 
@@ -430,6 +430,8 @@ export const userService = {
           AND vp.is_visible = true AND vp.location IS NOT NULL
           AND p.is_visible = true AND p.location IS NOT NULL
           AND p.is_ghost = false
+          -- Hide my location from: the owner hid their location from this viewer.
+          AND ${notLocationHiddenFromViewerSql('u.id', '$2')}
         ) AS distance_allowed,
         p.lat AS member_lat,
         p.lng AS member_lng,
@@ -1059,6 +1061,7 @@ export const userService = {
              WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
                 OR (b.blocker_id = u.id AND b.blocked_id = $1)
            )
+           AND ${notLocationHiddenFromViewerSql('u.id', '$1')}
          ORDER BY u.name ASC
          LIMIT 80`,
         values,
