@@ -28,7 +28,8 @@ import {
   PRIDE_WAITLIST_CAMPAIGN_ID,
   prideInviteService,
 } from '../services/prideInvite.service';
-import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
 
 const router = Router();
 
@@ -40,12 +41,7 @@ const router = Router();
 const signupLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
   max: 5,
-  keyGenerator: (req) => {
-    const forwarded = req.headers['x-forwarded-for'];
-    const raw = Array.isArray(forwarded) ? forwarded[0] : (forwarded ?? req.ip ?? '');
-    const ip = String(raw).split(',')[0].trim() || '0.0.0.0';
-    return ipKeyGenerator(ip);
-  },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests. Please wait a few minutes and try again.' },
@@ -55,12 +51,7 @@ const signupLimiter = rateLimit({
 const validateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
-  keyGenerator: (req) => {
-    const forwarded = req.headers['x-forwarded-for'];
-    const raw = Array.isArray(forwarded) ? forwarded[0] : (forwarded ?? req.ip ?? '');
-    const ip = String(raw).split(',')[0].trim() || '0.0.0.0';
-    return ipKeyGenerator(ip);
-  },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests.' },

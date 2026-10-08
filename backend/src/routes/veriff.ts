@@ -1,6 +1,7 @@
 import { Router, Response, Request } from 'express';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 import {
   VeriffConfigError,
@@ -14,6 +15,7 @@ const sessionLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: process.env.NODE_ENV === 'production' ? 8 : 50,
   message: { error: 'Too many verification attempts, please try again later' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });

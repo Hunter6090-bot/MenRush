@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
 import { z } from 'zod';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { mapFeedService } from '../services/map-feed.service';
@@ -11,6 +12,7 @@ const postLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 20,
   message: { error: 'Too many map feed posts. Try again in a minute.' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
