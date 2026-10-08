@@ -9,7 +9,8 @@ import { hotSpotsService } from '../services/hot-spots.service';
 import { LocationSchema } from '../types/validation';
 
 const router = Router();
-router.use(authMiddleware, verifiedMiddleware);
+// Ahead of auth so 401s are not stored either; covers nearby and check-in.
+router.use(privateNoStore, authMiddleware, verifiedMiddleware);
 
 const checkInLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -45,7 +46,7 @@ router.get('/nearby', async (req: AuthRequest, res: Response) => {
 });
 
 /** Free venue check-in → temporary Hot Spot pin (4h TTL). Not a Premium action. */
-router.post('/:id/check-in', privateNoStore, checkInLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/:id/check-in', checkInLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const body = EventCheckInSchema.parse(req.body ?? {});
     const event = await eventService.getEvent(req.params.id);
