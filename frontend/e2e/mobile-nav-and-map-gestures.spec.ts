@@ -93,7 +93,7 @@ test('desktop sidebar still exposes every discovery destination directly', async
   await authenticate(page.context(), alice);
   await page.goto('/discover');
 
-  for (const label of ['Nearby', 'Events', 'Matches', 'Messages', 'Video rooms', 'Profile', 'Settings']) {
+  for (const label of ['Nearby', 'Events', 'Matches', 'Messages', 'Rooms', 'Profile', 'Settings']) {
     await expect(page.getByRole('link', { name: label, exact: true })).toBeVisible();
   }
   await expect(page.getByRole('link', { name: 'Hot Spots', exact: true })).toHaveCount(0);

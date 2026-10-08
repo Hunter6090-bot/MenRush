@@ -78,7 +78,7 @@ export function buildIdVerificationPausedEmail(displayName?: string | null): {
     headlineHtml: 'ID check paused. <span style="color:#C4832A;">You&apos;re still in.</span>',
     subheadline: 'We are fixing verification. Meanwhile, MenRush is open without it.',
     bodyHtml,
-    ctaUrl: 'https://menrush.com/beta',
+    ctaUrl: 'https://menrush.com/invite',
     ctaLabel: 'Open MenRush',
     footerNote: 'You received this because you are on MenRush or the waitlist.',
   });
@@ -100,7 +100,7 @@ export function buildIdVerificationPausedEmail(displayName?: string | null): {
     '',
     '— The MenRush team',
     '',
-    'Open: https://menrush.com/beta',
+    'Open: https://menrush.com/invite',
   ].join('\n');
 
   return {
