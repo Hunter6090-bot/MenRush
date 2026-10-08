@@ -4,14 +4,16 @@ interface DistancePillProps {
   km: number;
   label?: string;
   className?: string;
+  testId?: string;
 }
 
 /** Distance badge with pin icon — no emoji. */
-export function DistancePill({ km, label, className = '' }: DistancePillProps) {
+export function DistancePill({ km, label, className = '', testId }: DistancePillProps) {
   const display = label || formatDistanceFromKm(km);
 
   return (
     <span
+      data-testid={testId}
       className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-nn-bg/60 backdrop-blur-md border border-nn-border text-nn-text text-[13px] font-medium whitespace-nowrap ${className}`}
     >
       <PinIcon className="text-nn-copper shrink-0" />

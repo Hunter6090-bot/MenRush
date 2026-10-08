@@ -64,6 +64,8 @@
     "test:uk-ie-all-scope": "ts-node scripts/uk-ie-all-scope-checks.ts",
     "test:place-search": "ts-node src/lib/ukIePlace.test.ts && ts-node scripts/place-search-checks.ts",
     "test:map-pin-fuzz": "ts-node scripts/map-pin-fuzz-checks.ts",
+    "test:show-distance": "ts-node scripts/show-distance-checks.ts",
+    "test:show-distance-integration": "ts-node scripts/show-distance-integration.ts",
     "test:map-feed-blocks": "ts-node scripts/map-feed-blocks-integration.ts",
     "test:chat-video-open": "ts-node scripts/chat-video-open-checks.ts",
     "test:call-ice-buffer": "ts-node scripts/call-ice-buffer-checks.ts",

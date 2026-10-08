@@ -5,7 +5,7 @@ import {
   type CommunityPostDTO,
   usersAPI,
 } from '../api/client';
-import { formatDistanceFromKm } from '../lib/localeUnits';
+import { getDistanceLabel } from '../lib/discovery';
 import { formatRelativeTime } from '../lib/notifications';
 import { ROUTE_LABELS } from '../lib/routeLabels';
 import { useAuthStore } from '../hooks/store';
@@ -46,9 +46,9 @@ function PostAvatar({ name, photoUrl }: { name: string; photoUrl: string | null 
 }
 
 function distanceDisplay(post: CommunityPostDTO): string {
-  const km = Number(post.distance_km);
-  if (Number.isFinite(km)) return formatDistanceFromKm(km);
-  return post.distance_label || 'Nearby';
+  // Server sends a coarse, Discretion-fuzzed label. None (author hides
+  // distance) reads "Nearby".
+  return getDistanceLabel(post);
 }
 
 /**
