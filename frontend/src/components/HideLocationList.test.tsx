@@ -56,7 +56,7 @@ describe('HideLocationList', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Remove Dan' }));
     await waitFor(() => expect(mocks.unhide).toHaveBeenCalledWith('a'));
     await waitFor(() => expect(screen.queryByTestId('hide-location-row-a')).not.toBeInTheDocument());
-    expect(screen.getByRole('status')).toHaveTextContent('Dan can see where you are again.');
+    expect(screen.getByRole('status')).toHaveTextContent('Dan can see you nearby again.');
     expect(screen.getByTestId('hide-location-empty')).toBeInTheDocument();
   });
 

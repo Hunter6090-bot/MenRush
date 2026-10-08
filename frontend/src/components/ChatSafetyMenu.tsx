@@ -164,10 +164,10 @@ export function ChatSafetyMenu({
     try {
       if (hide) {
         await locationPrivacyAPI.hide(peerId);
-        onNotice?.(`${peerName} can't see where you are.`, 'success');
+        onNotice?.(`${peerName} won't see you nearby or on the map.`, 'success');
       } else {
         await locationPrivacyAPI.unhide(peerId);
-        onNotice?.(`${peerName} can see where you are again.`, 'success');
+        onNotice?.(`${peerName} can see you nearby again.`, 'success');
       }
       setLocationHidden(hide);
     } catch (err: unknown) {

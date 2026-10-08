@@ -343,7 +343,7 @@ CREATE TABLE IF NOT EXISTS veriff_sessions (
 CREATE INDEX IF NOT EXISTS idx_veriff_sessions_user_id ON veriff_sessions (user_id);
 CREATE INDEX IF NOT EXISTS idx_veriff_sessions_status ON veriff_sessions (status);
 
--- "Hide my location from" list (migration 069).
+-- "Hide my location from" list (migration 073).
 CREATE TABLE IF NOT EXISTS location_hidden_from (
   owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   hidden_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

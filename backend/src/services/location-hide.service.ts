@@ -1,4 +1,4 @@
-import { query } from '../db';
+import pool, { query } from '../db';
 import { premiumService } from './premium.service';
 
 /** Generous cap so the list stays a safety tool, not a scraper. */
@@ -65,23 +65,40 @@ export const locationHideService = {
     if (!target.rows[0]) {
       throw new LocationHideError('user_not_found', 404);
     }
-    const count = await query(
-      `SELECT COUNT(*)::int AS n FROM location_hidden_from WHERE owner_id = $1`,
-      [ownerId],
-    );
-    const already = await query(
-      `SELECT 1 FROM location_hidden_from WHERE owner_id = $1 AND hidden_user_id = $2`,
-      [ownerId, hiddenUserId],
-    );
-    if (!already.rows[0] && Number(count.rows[0]?.n ?? 0) >= LOCATION_HIDE_MAX) {
-      throw new LocationHideError('limit_reached', 409);
+    // Count + insert under a per-owner advisory lock in one transaction so two
+    // parallel adds cannot both pass the cap check (cap race).
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext('location_hidden_from:' || $1::text))`, [
+        ownerId,
+      ]);
+      const already = await client.query(
+        `SELECT 1 FROM location_hidden_from WHERE owner_id = $1 AND hidden_user_id = $2`,
+        [ownerId, hiddenUserId],
+      );
+      if (!already.rows[0]) {
+        const count = await client.query(
+          `SELECT COUNT(*)::int AS n FROM location_hidden_from WHERE owner_id = $1`,
+          [ownerId],
+        );
+        if (Number(count.rows[0]?.n ?? 0) >= LOCATION_HIDE_MAX) {
+          throw new LocationHideError('limit_reached', 409);
+        }
+        await client.query(
+          `INSERT INTO location_hidden_from (owner_id, hidden_user_id)
+           VALUES ($1, $2)
+           ON CONFLICT (owner_id, hidden_user_id) DO NOTHING`,
+          [ownerId, hiddenUserId],
+        );
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
     }
-    await query(
-      `INSERT INTO location_hidden_from (owner_id, hidden_user_id)
-       VALUES ($1, $2)
-       ON CONFLICT (owner_id, hidden_user_id) DO NOTHING`,
-      [ownerId, hiddenUserId],
-    );
     return { hidden: true };
   },
 

@@ -37,7 +37,7 @@ export function HideLocationList() {
     try {
       await locationPrivacyAPI.unhide(person.id);
       setPeople((prev) => prev.filter((p) => p.id !== person.id));
-      setNotice(`${person.name} can see where you are again.`);
+      setNotice(`${person.name} can see you nearby again.`);
     } catch {
       setNotice('Could not remove. Try again.');
     } finally {

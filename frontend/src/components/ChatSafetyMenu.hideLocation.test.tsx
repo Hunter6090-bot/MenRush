@@ -48,7 +48,7 @@ describe('ChatSafetyMenu: Hide my location', () => {
     const onNotice = renderMenu(true);
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Hide my location' }));
     await waitFor(() => expect(mocks.hide).toHaveBeenCalledWith('peer-1'));
-    expect(onNotice).toHaveBeenCalledWith("Nick can't see where you are.", 'success');
+    expect(onNotice).toHaveBeenCalledWith("Nick won't see you nearby or on the map.", 'success');
   });
 
   it('offers Show my location when already hidden', async () => {
@@ -58,7 +58,7 @@ describe('ChatSafetyMenu: Hide my location', () => {
     const onNotice = renderMenu(true);
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Show my location' }));
     await waitFor(() => expect(mocks.unhide).toHaveBeenCalledWith('peer-1'));
-    expect(onNotice).toHaveBeenCalledWith('Nick can see where you are again.', 'success');
+    expect(onNotice).toHaveBeenCalledWith('Nick can see you nearby again.', 'success');
   });
 
   it('asks for Premium when the server says so', async () => {

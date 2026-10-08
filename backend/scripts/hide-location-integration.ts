@@ -18,7 +18,9 @@ async function main() {
   const { communityService } = await import('../src/services/community.service');
   const { messageService } = await import('../src/services/message.service');
   const { roomService } = await import('../src/services/room.service');
-  const { locationHideService, LocationHideError } = await import('../src/services/location-hide.service');
+  const { locationHideService, LocationHideError, LOCATION_HIDE_MAX } = await import(
+    '../src/services/location-hide.service'
+  );
   const { SecurityError } = await import('../src/security/access');
 
   const ids: string[] = [];
@@ -93,8 +95,11 @@ async function main() {
 
     // ── Direct profile: stripped, same shape as any no-distance profile ─────
     const hiddenProfile: any = await userService.getPublicProfile(stalker, owner);
-    assert.strictEqual(hiddenProfile.distance_km, null);
-    assert.strictEqual(hiddenProfile.distance_label, null);
+    // No distance at all. Expect undefined (field left out, as with Show distance
+    // off). Until #327's distance_allowed is on main the field is still null, so
+    // normalise null to undefined; the key-set check below catches shape tells.
+    assert.strictEqual(hiddenProfile.distance_km ?? undefined, undefined);
+    assert.strictEqual(hiddenProfile.distance_label ?? undefined, undefined);
     assert.deepStrictEqual(
       Object.keys(hiddenProfile).sort(),
       Object.keys(baselineProfile).sort(),
@@ -160,6 +165,40 @@ async function main() {
     list = await locationHideService.list(owner);
     assert.strictEqual(list.length, 0);
     assert.ok((await nearby(stalker)).users.some((u: any) => u.id === owner), 'visible again after removal');
+
+    // ── Cap race: parallel adds at MAX - 1 let exactly one through ─────────
+    process.env.BETA_PREMIUM_FREE = 'true';
+    const capOwner = await makeUser('HL Cap Owner', 58.97, -3.29, true);
+    const bulk = await query(
+      `INSERT INTO users (id, email, password_hash, name, age, is_verified, verification_status)
+       SELECT gen_random_uuid(), 'hlcap-' || g || '-' || substr(md5(random()::text), 1, 8) || '@test.menrush.local',
+              'x', 'HL Cap ' || g, 30, TRUE, 'verified'
+         FROM generate_series(1, $1::int) g
+       RETURNING id`,
+      [LOCATION_HIDE_MAX + 4],
+    );
+    const capTargets: string[] = bulk.rows.map((r: { id: string }) => String(r.id));
+    ids.push(...capTargets);
+    await query(
+      `INSERT INTO location_hidden_from (owner_id, hidden_user_id)
+       SELECT $1, unnest($2::uuid[])`,
+      [capOwner, capTargets.slice(0, LOCATION_HIDE_MAX - 1)],
+    );
+    const racers = capTargets.slice(LOCATION_HIDE_MAX - 1);
+    const results = await Promise.allSettled(racers.map((t) => locationHideService.add(capOwner, t)));
+    assert.strictEqual(results.filter((r) => r.status === 'fulfilled').length, 1, 'only one add wins the race');
+    for (const r of results) {
+      if (r.status === 'rejected') {
+        assert.ok(r.reason instanceof LocationHideError && (r.reason as any).code === 'limit_reached');
+      }
+    }
+    const capCount = await query(
+      `SELECT COUNT(*)::int AS n FROM location_hidden_from WHERE owner_id = $1`,
+      [capOwner],
+    );
+    assert.strictEqual(capCount.rows[0].n, LOCATION_HIDE_MAX, 'cap holds under parallel adds');
+    // Re-adding someone already on a full list is still a no-op success.
+    await locationHideService.add(capOwner, capTargets[0]);
 
     // ── Cascade on user delete ──────────────────────────────────────────────
     process.env.BETA_PREMIUM_FREE = 'true';
