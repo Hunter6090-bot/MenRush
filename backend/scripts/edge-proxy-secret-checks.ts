@@ -16,8 +16,10 @@
  * - clientIp.ts never logs
  * - frontend/middleware.ts and src/lib/edgeProxySecret.ts agree with the
  *   backend on header names, env name and minimum length, only match /api,
- *   strip client copies, take the IP from ipAddress(), and never use a VITE_
- *   (browser-bundled) env name
+ *   strip client copies, take the IP from ipAddress(), send the secret only
+ *   with one valid IP, always list the three stripped names in
+ *   x-middleware-override-headers, and never use a VITE_ (browser-bundled)
+ *   env name
  */
 import assert from 'assert';
 import fs from 'fs';
@@ -49,7 +51,10 @@ type FrontendEdge = {
   EDGE_SECRET_ENV: string;
   EDGE_SECRET_MIN_LENGTH: number;
   edgeSecretFromEnv: (value: string | undefined | null) => string | null;
+  STRIPPED_CLIENT_HEADERS: readonly string[];
+  OVERRIDE_HEADERS_HEADER: string;
   withEdgeSecret: (headers: Headers, secret: string | null, visitorIp?: string | null) => Headers | null;
+  overrideHeaderList: (headers: Headers) => string;
 };
 function loadFrontendEdge(): FrontendEdge {
   const src = fs.readFileSync(path.join(FRONTEND, 'src/lib/edgeProxySecret.ts'), 'utf8');
@@ -172,8 +177,34 @@ function frontendChecks() {
   assert.equal(out?.get(EDGE_SECRET_HEADER), SECRET, 'client secret copy overwritten');
   assert.equal(out?.get(CLIENT_IP_HEADER), '203.0.113.7', 'client-ip comes from ipAddress()');
   assert.equal(out?.has('x-vercel-forwarded-for'), false, 'client X-Vercel-Forwarded-For dropped');
-  const noIp = frontendEdge.withEdgeSecret(forgedIn, SECRET, undefined);
-  assert.equal(noIp?.has(CLIENT_IP_HEADER), false, 'no IP: no client-ip header, forged one dropped');
+  for (const bad of [undefined, '', 'unknown', '203.0.113.7, 198.51.100.1', '203.0.113.7:443', '1.2.3', 'fe80::1%eth0']) {
+    const noIp = frontendEdge.withEdgeSecret(forgedIn, SECRET, bad);
+    assert.ok(noIp, `no/invalid IP (${bad}): still strips client copies`);
+    assert.equal(noIp.has(EDGE_SECRET_HEADER), false, `no/invalid IP (${bad}): no secret`);
+    assert.equal(noIp.has(CLIENT_IP_HEADER), false, `no/invalid IP (${bad}): no client-ip, forged one dropped`);
+    assert.equal(noIp.has('x-vercel-forwarded-for'), false, `no/invalid IP (${bad}): X-Vercel-Forwarded-For dropped`);
+    const list = frontendEdge.overrideHeaderList(noIp).split(',');
+    for (const name of [EDGE_SECRET_HEADER, CLIENT_IP_HEADER, 'x-vercel-forwarded-for']) {
+      assert.ok(list.includes(name), `no/invalid IP (${bad}): ${name} listed so it is deleted upstream`);
+    }
+    // What reaches Railway when the platform deletes listed-but-unset names: X-Real-IP rule.
+    const asNode: Record<string, string> = {};
+    noIp.forEach((v, k) => {
+      asNode[k] = v;
+    });
+    asNode['x-real-ip'] = VERCEL_EGRESS;
+    assert.equal(clientIp(fakeReq(asNode), { [EDGE_SECRET_ENV]: SECRET }), VERCEL_EGRESS, `no/invalid IP (${bad}): backend keeps the X-Real-IP rule`);
+  }
+  assert.deepEqual(
+    [...frontendEdge.STRIPPED_CLIENT_HEADERS].sort(),
+    [CLIENT_IP_HEADER, EDGE_SECRET_HEADER, 'x-vercel-forwarded-for'].sort(),
+    'stripped names: secret, client-ip, X-Vercel-Forwarded-For',
+  );
+  assert.equal(frontendEdge.OVERRIDE_HEADERS_HEADER, 'x-middleware-override-headers');
+  const fullList = frontendEdge.overrideHeaderList(out as Headers).split(',');
+  for (const name of [EDGE_SECRET_HEADER, CLIENT_IP_HEADER, 'x-vercel-forwarded-for']) {
+    assert.ok(fullList.includes(name), `valid IP: ${name} listed in the override list`);
+  }
   // What the middleware sends is accepted by the backend end to end.
   const asNode: Record<string, string> = { 'x-real-ip': VERCEL_EGRESS };
   out?.forEach((v, k) => {
@@ -190,6 +221,11 @@ function frontendChecks() {
   assert.match(mw, /ipAddress\(request\)/, 'middleware passes ipAddress(request)');
   assert.match(mw, /if \(!headers\) return undefined;/, 'no secret: middleware returns nothing');
   assert.match(mw, /next\(\{ request: \{ headers \} \}\)/, 'forwards modified request headers');
+  assert.match(
+    mw,
+    /res\.headers\.set\(OVERRIDE_HEADERS_HEADER, overrideHeaderList\(headers\)\)/,
+    'override list always names the stripped headers',
+  );
   for (const f of [mw, fs.readFileSync(path.join(FRONTEND, 'src/lib/edgeProxySecret.ts'), 'utf8')]) {
     assert.doesNotMatch(f, /console\./, 'frontend edge code must not log');
     assert.doesNotMatch(f, /VITE_EDGE|import\.meta\.env/, 'secret must never be a VITE_ / browser env');
