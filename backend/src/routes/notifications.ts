@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { notificationService } from '../services/notification.service';
+import { jerkService } from '../services/jerk.service';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 
 const router = Router();
@@ -24,6 +25,7 @@ router.patch('/:id/read', async (req: AuthRequest, res: Response) => {
     if (!updated) {
       return res.status(404).json({ error: 'Notification not found' });
     }
+    void jerkService.markSeenForNotification(req.userId!, req.params.id).catch(() => undefined);
     const unread_count = await notificationService.unreadCount(req.userId!);
     res.json({ ok: true, unread_count });
   } catch (error: any) {
@@ -34,6 +36,7 @@ router.patch('/:id/read', async (req: AuthRequest, res: Response) => {
 router.post('/read-all', async (req: AuthRequest, res: Response) => {
   try {
     await notificationService.markAllRead(req.userId!);
+    void jerkService.markSeen(req.userId!).catch(() => undefined);
     res.json({ ok: true, unread_count: 0 });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

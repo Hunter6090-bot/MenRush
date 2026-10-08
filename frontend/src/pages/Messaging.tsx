@@ -15,6 +15,7 @@ import { VideoNoteCaptureModal } from '../components/VideoNoteCaptureModal';
 import { videoFileFromRecorderBlob } from '../lib/mediaMime';
 import { ChatAttachLibrarySheet } from '../components/ChatAttachLibrarySheet';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
+import { JerkButton } from '../components/JerkButton';
 import { placeOutgoingCall } from '../lib/callBridge';
 import { mapCallMediaError } from '../lib/callMedia';
 import { ChevronLeftIcon, MobileBackButton } from '../components/MobileBackButton';
@@ -245,8 +246,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
   const [canJerk, setCanJerk] = useState(false);
-  const [jerkSent, setJerkSent] = useState(false);
-  const [jerking, setJerking] = useState(false);
   // Disappearing countdown lives in ImageViewer only — do not 1Hz re-render the whole thread.
   const socket = useSocket();
   const { setCalling, setCallSetupError, resetCall } = useCallStore();
@@ -958,20 +957,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     [otherId, user, emitTyping, markOwnSendStick, commitThreadMessage],
   );
 
-  const handleSendJerk = async () => {
-    if (!otherId || jerking || jerkSent) return;
-    setJerking(true);
-    try {
-      await usersAPI.likeUser(otherId);
-      setJerkSent(true);
-      setMediaError('');
-    } catch {
-      setMediaError('Could not send a jerk. Try again.');
-    } finally {
-      setJerking(false);
-    }
-  };
-
   const handleSend = async (e?: React.FormEvent | React.KeyboardEvent) => {
     e?.preventDefault?.();
     await sendTextMessage(inputValueRef.current || input);
@@ -1240,31 +1225,14 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             }}
           >
             <span>{mediaError}</span>
-            {canJerk && (
-              <button
-                type="button"
-                onClick={handleSendJerk}
-                disabled={jerking || jerkSent}
-                data-testid="chat-jerk-button"
-                aria-label={jerkSent ? 'Jerk sent' : jerking ? 'Sending jerk' : 'Send a jerk'}
-                title={jerkSent ? 'Jerk sent' : 'Send a jerk'}
-                className="shrink-0 rounded-full bg-[#C4832A] px-3 py-1 text-[11px] font-bold text-[#1A0E03] transition-transform active:scale-95 disabled:opacity-50"
-              >
-                {jerkSent ? 'Jerk sent' : jerking ? 'Sending…' : 'Send a jerk'}
-              </button>
-            )}
-          </div>
-        )}
-        {jerkSent && !mediaError && (
-          <div
-            className="mb-2 text-[11px] px-3 py-1.5 rounded-lg text-center"
-            style={{
-              background: 'rgba(196,131,42,0.12)',
-              border: '1px solid rgba(196,131,42,0.35)',
-              color: 'var(--cream)',
-            }}
-          >
-            Jerk sent.
+            {canJerk && otherId ? (
+              <JerkButton
+                userId={otherId}
+                name={otherUser?.name || 'him'}
+                surface="chat"
+                className="!min-h-[40px] shrink-0 !px-4 !text-base"
+              />
+            ) : null}
           </div>
         )}
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
-import { IconCommunity, IconDiscretion, IconMatches, IconOut, IconRooms } from './index';
+import { IconCommunity, IconDiscretion, IconJerk, IconMatches, IconOut, IconRooms } from './index';
 
 describe('Claude Design menrush icons', () => {
   it.each([
@@ -9,6 +9,7 @@ describe('Claude Design menrush icons', () => {
     ['Rooms', IconRooms],
     ['Out', IconOut],
     ['Discretion', IconDiscretion],
+    ['Jerk', IconJerk],
   ] as const)('%s renders outline and filled with currentColor stroke', (_name, Icon) => {
     const { rerender, container } = render(<Icon size={24} data-testid="ico" />);
     const svg = container.querySelector('svg');

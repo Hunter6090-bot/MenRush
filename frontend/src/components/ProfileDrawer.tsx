@@ -9,6 +9,7 @@ import { ProfilePhotoViewer } from "./ProfilePhotoViewer";
 import { IconPulse, IconClose, IconMatches, IconChat, IconUnmatch } from "./icons";
 import { VerifiedBadge } from "./VerifiedBadge";
 import { ChatSafetyMenu } from "./ChatSafetyMenu";
+import { JerkButton } from "./JerkButton";
 import { getDistanceLabel, isUserPulsing } from "../lib/discovery";
 import { profilePathForUser } from "../lib/profileLinks";
 import {
@@ -315,7 +316,9 @@ export function ProfileDrawer({
         </div>
 
         <div className="mt-auto shrink-0 border-t border-[var(--border-default)] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
+            {/* One-tap Jerk. Report / Block stay under More. */}
+            <JerkButton userId={user.id} name={user.name} surface="pin_sheet" variant="stack" />
             <button
               type="button"
               onClick={onMessage}

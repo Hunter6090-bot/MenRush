@@ -4,7 +4,7 @@ import { notificationsAPI } from '../api/client';
 import { Layout } from '../components/Layout';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { UserAvatar } from '../components/UserAvatar';
-import { IconChat, IconClose, IconMatches, IconNotifications, IconProfile } from '../components/icons';
+import { IconChat, IconClose, IconJerk, IconMatches, IconNotifications, IconProfile } from '../components/icons';
 import { MissedCallIcon } from '../components/MissedCallIcon';
 import {
   formatRelativeTime,
@@ -362,6 +362,8 @@ function TypeIcon({ type }: { type: Notification['type'] }) {
       return <MissedCallIcon size={18} />;
     case 'profile_view':
       return <IconProfile size={18} />;
+    case 'jerk':
+      return <IconJerk size={18} />;
     default:
       return <IconNotifications size={18} />;
   }
