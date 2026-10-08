@@ -16,13 +16,28 @@
  * We never read the client-supplied X-Forwarded-For here. If X-Real-IP is
  * missing or not a valid IP we fall back to req.ip.
  *
- * Never log the values this module returns.
+ * Vercel shared secret (optional, off until configured):
+ * frontend/middleware.ts adds X-MenRush-Edge-Secret on /api requests when
+ * EDGE_PROXY_SECRET is set in Vercel. When EDGE_PROXY_SECRET is also set
+ * here AND the header matches (constant-time compare), the request really
+ * came through our Vercel rewrite, so the first X-Vercel-Forwarded-For entry
+ * (the visitor) is used. Anyone can send that header straight to Railway, so
+ * without a matching secret it is ignored and the X-Real-IP rule above
+ * applies unchanged. A secret shorter than EDGE_SECRET_MIN_LENGTH counts as
+ * unset.
+ *
+ * Never log the secret, the header, or the values this module returns.
  */
+import { createHash, timingSafeEqual } from 'crypto';
 import { isIP } from 'net';
 import type { Request } from 'express';
 import { ipKeyGenerator } from 'express-rate-limit';
 
 export const REAL_IP_HEADER = 'x-real-ip';
+export const EDGE_SECRET_HEADER = 'x-menrush-edge-secret';
+export const VERCEL_FORWARDED_FOR_HEADER = 'x-vercel-forwarded-for';
+export const EDGE_SECRET_ENV = 'EDGE_PROXY_SECRET';
+export const EDGE_SECRET_MIN_LENGTH = 16;
 
 /** Last resort so the limiter always gets a string. */
 const UNKNOWN_IP = '0.0.0.0';
@@ -79,11 +94,38 @@ export function normaliseIp(input: string | undefined | null): string {
   return canonical;
 }
 
+/** The configured edge secret, or null when unset or too short. */
+export function edgeSecretFromEnv(env: NodeJS.ProcessEnv = process.env): string | null {
+  const secret = String(env[EDGE_SECRET_ENV] ?? '').trim();
+  return secret.length >= EDGE_SECRET_MIN_LENGTH ? secret : null;
+}
+
 /**
- * The address a rate limit should count against: X-Real-IP (first value,
- * normalised) when valid, otherwise req.ip, otherwise the socket address.
+ * Constant-time secret check. Both sides are hashed to fixed-length SHA-256
+ * digests first, so timingSafeEqual never throws on a length mismatch and the
+ * compare time does not depend on where the strings differ or on length.
  */
-export function clientIp(req: Request): string {
+export function edgeSecretMatches(provided: string | string[] | undefined, expected: string | null): boolean {
+  if (!expected) return false;
+  const value = Array.isArray(provided) ? provided[0] : provided;
+  if (typeof value !== 'string' || value.length === 0) return false;
+  const a = createHash('sha256').update(value.trim(), 'utf8').digest();
+  const b = createHash('sha256').update(expected, 'utf8').digest();
+  return timingSafeEqual(a, b);
+}
+
+/**
+ * The address a rate limit should count against:
+ * 1. first X-Vercel-Forwarded-For entry, ONLY when EDGE_PROXY_SECRET is set
+ *    and the request carries the matching X-MenRush-Edge-Secret;
+ * 2. otherwise X-Real-IP (first value, normalised) when valid;
+ * 3. otherwise req.ip, otherwise the socket address.
+ */
+export function clientIp(req: Request, env: NodeJS.ProcessEnv = process.env): string {
+  if (edgeSecretMatches(req.headers[EDGE_SECRET_HEADER], edgeSecretFromEnv(env))) {
+    const visitor = normaliseIp(firstHeaderValue(req.headers[VERCEL_FORWARDED_FOR_HEADER]));
+    if (visitor) return visitor;
+  }
   const real = normaliseIp(firstHeaderValue(req.headers[REAL_IP_HEADER]));
   if (real) return real;
   return normaliseIp(req.ip) || normaliseIp(req.socket?.remoteAddress) || UNKNOWN_IP;
