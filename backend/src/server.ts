@@ -33,6 +33,7 @@ import adminRoutes from './routes/admin.routes';
 import campaignRoutes from './routes/campaigns';
 import socialRoutes from './routes/social';
 import mapFeedRoutes from './routes/map-feed';
+import locationPrivacyRoutes from './routes/location-privacy';
 import communityRoutes from './routes/community';
 import mediaDisplayRoutes from './routes/media-display';
 import { startPulseExpiryCron } from './services/pulse.service';
@@ -63,8 +64,6 @@ import { logCallMetric } from './services/call-metrics.service';
 import { mediaStorageMode } from './services/media-storage.service';
 import { warmIceServers } from './services/webrtc.service';
 import { EarlyCallIceBuffer } from './services/call-ice-buffer';
-// TEMPORARY: remove with src/middleware/proxyHopDiagnostic.ts after the answer.
-import { proxyHopDiagnosticFromEnv } from './middleware/proxyHopDiagnostic';
 
 // Transient DB disconnects must not take down login/API.
 process.on('unhandledRejection', (reason) => {
@@ -87,10 +86,6 @@ const io: any = new SocketIOServer(server, {
 });
 
 // Middleware
-// TEMPORARY proxy-hop diagnostic. Off unless PROXY_HOP_DIAGNOSTIC=1; when off
-// nothing is mounted. Logs yes/no shapes only. Remove after the answer.
-const proxyHopDiagnostic = proxyHopDiagnosticFromEnv();
-if (proxyHopDiagnostic) app.use(proxyHopDiagnostic);
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use('/api/premium/webhook', premiumWebhookRoutes);
@@ -153,6 +148,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/social', socialRoutes);
 app.use('/api/map-feed', mapFeedRoutes);
+app.use('/api/location-privacy', locationPrivacyRoutes);
 app.use('/api/community', communityRoutes);
 
 // Waitlist signup — POSTs to /api/waitlist land here; the dripRoutes router

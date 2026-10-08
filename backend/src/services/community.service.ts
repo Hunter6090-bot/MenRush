@@ -1,6 +1,7 @@
 import { query } from '../db';
 import { discoveryPhotoUrl } from '../lib/discoveryPhoto';
 import { isPublicHotSpotVisibilitySql } from './hot-spots.service';
+import { notLocationHiddenFromViewerSql } from '../lib/locationHiddenSql';
 import { PIN_PREFILTER_BUFFER_M, publicPinSql } from '../lib/mapPinSql';
 import { MAP_PIN_FUZZ_DEFAULT_M } from '../lib/mapPinFuzz';
 import { coarseMilesFromMeters, memberDistanceFields } from '../lib/memberDistance';
@@ -295,6 +296,8 @@ export const communityService = {
             OR (b.blocker_id = cp.user_id AND b.blocked_id = $4)
        )
        AND ${authorVisibleToViewerSql('cp.user_id', '$4')}
+       -- Hide my location from: a post in this radius would show the author is near.
+       AND ${notLocationHiddenFromViewerSql('cp.user_id', '$4')}
        ORDER BY cp.created_at DESC
        LIMIT $5`,
       [params.lat, params.lng, radiusM, params.viewerId, limit],

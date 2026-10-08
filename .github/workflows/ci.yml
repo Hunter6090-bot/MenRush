@@ -35,9 +35,6 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
-      # TEMPORARY: remove with the proxy-hop diagnostic.
-      - name: Proxy-hop diagnostic (no IP in logs, dedupe, cap)
-        run: npm run test:proxy-hop-diagnostic
 
   backend-adult-assurance:
     name: Adult assurance + Veriff checks
