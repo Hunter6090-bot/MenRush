@@ -57,6 +57,8 @@ jobs:
         run: npm run test:adult-assurance
       - name: Adult assurance status-poll rate limit
         run: npm run test:adult-assurance-rate-limit
+      - name: Campaigns rate-limit IPv6 key
+        run: npm run test:campaigns-rate-limit-ipv6
       - name: Veriff checks
         run: npm run test:veriff
 
