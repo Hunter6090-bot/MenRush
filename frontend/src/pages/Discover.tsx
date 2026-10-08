@@ -2631,7 +2631,7 @@ export const Discover = () => {
                   type="button"
                   onClick={handleEnableLocation}
                   data-testid="enable-location"
-                  className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[var(--copper)]/15 px-2.5 py-1 text-[11px] font-bold text-[var(--copper)] transition-colors hover:bg-[var(--copper)]/25"
+                  className="mt-2 inline-flex min-h-[44px] items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[var(--copper)]/15 px-4 py-2 text-[15px] font-bold text-[var(--copper)] transition-colors hover:bg-[var(--copper)]/25"
                 >
                   {locationNotice.startsWith('Using your last saved location') ||
                   locationNotice === INSECURE_GPS_NOTICE
