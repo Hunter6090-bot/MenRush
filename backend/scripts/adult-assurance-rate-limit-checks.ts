@@ -3,7 +3,8 @@
  *
  * Proves GET /adult-assurance/:sessionId uses a dedicated high ceiling
  * (enough for a full Register poll loop) and does not share the tight
- * mutation / auth limiters. No provider calls. No DB.
+ * mutation / auth limiters. Ceilings come from lib/authRateLimits.ts.
+ * No provider calls. No DB.
  */
 import assert from 'assert';
 import fs from 'fs';
@@ -11,6 +12,7 @@ import http from 'http';
 import path from 'path';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
+import { AUTH_LIMITS } from '../src/lib/authRateLimits';
 
 process.env.NODE_ENV = 'production';
 
@@ -83,7 +85,7 @@ async function main() {
   assert.match(authSrc, /adultAssuranceStatusPollLimiter/);
   assert.match(
     authSrc,
-    /router\.get\(\s*'\/adult-assurance\/:sessionId'\s*,\s*adultAssuranceStatusPollLimiter/,
+    /router\.get\(\s*'\/adult-assurance\/:sessionId'\s*,\s*adultAssuranceStatusPollLimiter\s*,\s*adultAssurancePollSessionLimiter/,
   );
   assert.doesNotMatch(
     authSrc,
@@ -103,42 +105,41 @@ async function main() {
   );
   assert.match(
     authSrc,
-    /router\.post\(\s*'\/register'\s*,\s*authLimiter/,
+    /router\.post\(\s*'\/register'\s*,\s*registerLimiter/,
   );
 
-  // Production ceilings in source (keep auth / mutation tight).
-  assert.match(
-    authSrc,
-    /const authLimiter = rateLimit\(\{[\s\S]*?max:\s*process\.env\.NODE_ENV === 'production' \? 10/,
-  );
-  assert.match(
-    authSrc,
-    /const adultAssuranceLimiter = rateLimit\(\{[\s\S]*?max:\s*process\.env\.NODE_ENV === 'production' \? 12/,
-  );
-  assert.match(
-    authSrc,
-    /const adultAssuranceStatusPollLimiter = rateLimit\(\{[\s\S]*?max:\s*process\.env\.NODE_ENV === 'production' \? 120/,
-  );
+  // Production ceilings (lib/authRateLimits.ts). Mutations stay the lowest
+  // signup ceiling (each start opens a Veriff session); the poll fits a full
+  // Register loop per session; register / login are loose per IP because web
+  // users share a Vercel egress IP.
+  assert.match(authSrc, /const adultAssuranceLimiter = rateLimit\(\{[\s\S]*?max: authLimit\('adultAssurance'\)/);
+  assert.match(authSrc, /const adultAssuranceStatusPollLimiter = rateLimit\(\{[\s\S]*?max: authLimit\('adultAssurancePoll'\)/);
+  assert.match(authSrc, /const adultAssurancePollSessionLimiter = accountLimiter\(\{[\s\S]*?max: authLimit\('adultAssurancePollSession'\)/);
+  assert.match(authSrc, /const registerLimiter = rateLimit\(\{[\s\S]*?max: authLimit\('register'\)/);
+  assert.equal(AUTH_LIMITS.adultAssurance, 60);
+  assert.equal(AUTH_LIMITS.adultAssurancePollSession, 120);
+  assert.ok(AUTH_LIMITS.adultAssurancePoll >= 1000);
+  assert.ok(AUTH_LIMITS.adultAssurance < AUTH_LIMITS.register, 'mutations stay below register');
 
-  // Live middleware: one full signup poll sequence (~60) must not 429;
-  // mutation bucket still trips at 13; register/login bucket still at 11.
+  // Live middleware: one full signup poll sequence (~60) must not 429 on the
+  // per-session bucket; mutation bucket trips at 61; register bucket at 151.
   const pollLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 120,
+    max: AUTH_LIMITS.adultAssurancePollSession,
     message: { error: 'Too many age-check status polls, please try again later' },
     standardHeaders: true,
     legacyHeaders: false,
   });
   const mutationLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 12,
+    max: AUTH_LIMITS.adultAssurance,
     message: { error: 'Too many adult-assurance attempts, please try again later' },
     standardHeaders: true,
     legacyHeaders: false,
   });
   const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 10,
+    max: AUTH_LIMITS.register,
     message: { error: 'Too many attempts, please try again in 15 minutes' },
     standardHeaders: true,
     legacyHeaders: false,
@@ -156,23 +157,23 @@ async function main() {
       const code = await getStatus(port, '/poll');
       assert.equal(code, 200, `status poll #${i + 1} should be 200, got ${code}`);
     }
-    // Still under 120 ceiling.
+    // Still under the per-session ceiling.
     const stillOk = await getStatus(port, '/poll');
     assert.equal(stillOk, 200);
 
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < AUTH_LIMITS.adultAssurance; i++) {
       const code = await postStatus(port, '/mutate');
       assert.equal(code, 200, `mutation #${i + 1} should be 200, got ${code}`);
     }
     const mutate429 = await postStatus(port, '/mutate');
-    assert.equal(mutate429, 429, 'mutation limiter must still 429 after 12');
+    assert.equal(mutate429, 429, `mutation limiter must still 429 after ${AUTH_LIMITS.adultAssurance}`);
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < AUTH_LIMITS.register; i++) {
       const code = await postStatus(port, '/register');
       assert.equal(code, 200, `register #${i + 1} should be 200, got ${code}`);
     }
     const register429 = await postStatus(port, '/register');
-    assert.equal(register429, 429, 'authLimiter must still 429 after 10');
+    assert.equal(register429, 429, `register limiter must still 429 after ${AUTH_LIMITS.register}`);
   } finally {
     await close();
   }
