@@ -1641,19 +1641,23 @@ export const Profile = () => {
               </p>
             </div>
 
-        <ProfileViewersCard
-          viewers={profileViewers}
-          total={profileViewsTotal}
-          isPremium={Boolean(authIsPremium || profile?.is_premium)}
-          hasMore={profileViewsHasMore}
-          hiddenCount={profileViewsHidden}
-          loading={profileViewsLoading}
-        />
+        <div id="viewed-me">
+          <ProfileViewersCard
+            viewers={profileViewers}
+            total={profileViewsTotal}
+            isPremium={Boolean(authIsPremium || profile?.is_premium)}
+            hasMore={profileViewsHasMore}
+            hiddenCount={profileViewsHidden}
+            loading={profileViewsLoading}
+          />
+        </div>
 
-        <ReferralCard />
+        <div id="invite">
+          <ReferralCard />
+        </div>
 
-        {/* ── Location card ── */}
-        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 flex items-center justify-between shadow-card">
+        {/* ── Location card (top of the privacy group; Menu > Privacy and visibility jumps here) ── */}
+        <div id="privacy" className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 flex items-center justify-between shadow-card">
           <div>
             <p className="text-[var(--cream)]/80 text-sm font-semibold">Your location</p>
             {lat && lng ? (
@@ -1675,7 +1679,7 @@ export const Profile = () => {
         </div>
 
         {/* ── Mood card ── */}
-        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 shadow-card">
+        <div id="mood" className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 shadow-card">
           <div className="flex items-end justify-between mb-3">
             <div>
               <p className="text-[var(--cream)]/80 text-sm font-semibold">Mood</p>
@@ -1696,14 +1700,16 @@ export const Profile = () => {
         </div>
 
         {/* ── Ghost mode card ── */}
-        <GhostToggle
-          isGhost={isGhost}
-          isPremium={authIsPremium}
-          betaIncluded={Boolean(
-            betaPremiumFree || user?.beta_premium_included || profile?.beta_premium_included,
-          )}
-          onToggle={handleGhost}
-        />
+        <div id="ghost">
+          <GhostToggle
+            isGhost={isGhost}
+            isPremium={authIsPremium}
+            betaIncluded={Boolean(
+              betaPremiumFree || user?.beta_premium_included || profile?.beta_premium_included,
+            )}
+            onToggle={handleGhost}
+          />
+        </div>
 
         {/* ── Albums card ── */}
         <Link

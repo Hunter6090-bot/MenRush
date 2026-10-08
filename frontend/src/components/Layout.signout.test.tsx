@@ -168,6 +168,11 @@ describe('Layout sign out', () => {
         '/settings#notifications',
         '/settings#blocked',
         '/settings#delete-account',
+        '/profile#ghost',
+        '/profile#privacy',
+        '/profile#viewed-me',
+        '/profile#invite',
+        '/profile#mood',
         '/premium',
         '/albums',
         '/matches',
@@ -185,6 +190,11 @@ describe('Layout sign out', () => {
         '/contact',
       ]),
     );
+    expect(screen.getByTestId('account-menu-ghost').tagName).toBe('A');
+    expect(screen.getByTestId('account-menu-account-security')).toHaveTextContent('Account and security');
+    expect(screen.getByTestId('account-menu-privacy-visibility')).toHaveTextContent('Privacy and visibility');
+    // The only control in the Menu besides links and Sign out is the Discretion slider.
+    expect(menu.querySelectorAll('[role="switch"], [aria-pressed], input[type="checkbox"]').length).toBe(0);
     for (const id of ['you', 'discover', 'account', 'help']) {
       expect(screen.getByTestId(`account-menu-section-${id}`)).toBeInTheDocument();
     }

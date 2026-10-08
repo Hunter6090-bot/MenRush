@@ -10,7 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { getNavItems } from './navConfig';
-import { ACCOUNT_MENU_FOOTER_LINKS, ACCOUNT_MENU_SECTIONS } from '../components/AccountMenu';
+import { ACCOUNT_MENU_FOOTER_LINKS, ACCOUNT_MENU_LINKS, ACCOUNT_MENU_SECTIONS } from '../components/AccountMenu';
 
 const src = (rel: string) => readFileSync(resolve(__dirname, '..', rel), 'utf8');
 
@@ -29,6 +29,12 @@ const MAIN_ROUTES: Record<string, string> = {
   '/albums': 'You > Albums card',
   '/premium': 'sidebar promo, Settings Membership',
   '/settings#blocked': 'You > Blocked card',
+  '/settings#account': 'Settings > Account (email, password, ID, 2FA)',
+  '/profile#ghost': 'You > Ghost mode card',
+  '/profile#privacy': 'Settings > Privacy & visibility -> You (location, visibility)',
+  '/profile#viewed-me': 'You > Who viewed you',
+  '/profile#invite': 'You > Referrals card',
+  '/profile#mood': 'You > Mood card',
   '/settings#delete-account': 'Settings > Delete account',
   '/help': 'Settings About',
   '/safety': 'Settings Safety',
@@ -76,14 +82,41 @@ describe('new shell keeps every main route reachable', () => {
     for (const l of ACCOUNT_MENU_FOOTER_LINKS) if (l.to) expect(paths.has(l.to)).toBe(true);
   });
 
-  it('Settings anchors used by the Menu exist', () => {
-    const settings = src('pages/Settings.tsx');
+  it('Settings and You page anchors used by the Menu exist', () => {
+    const pages: Record<string, string> = {
+      '/settings': src('pages/Settings.tsx'),
+      '/profile': src('pages/Profile.tsx'),
+    };
     for (const section of ACCOUNT_MENU_SECTIONS) {
       for (const l of section.links) {
-        const hash = l.to?.split('#')[1];
-        if (hash) expect(settings).toContain(`id="${hash}"`);
+        if (!l.to?.includes('#')) continue;
+        const [path, hash] = l.to.split('#');
+        expect(pages[path], `${l.to} has no page source in this test`).toBeDefined();
+        expect(pages[path]).toContain(`id="${hash}"`);
       }
     }
+  });
+
+  it('Profile anchors sit on the right cards', () => {
+    const profile = src('pages/Profile.tsx');
+    expect(profile).toMatch(/<div id="ghost">\s*<GhostToggle/);
+    expect(profile).toMatch(/<div id="viewed-me">\s*<ProfileViewersCard/);
+    expect(profile).toMatch(/<div id="invite">\s*<ReferralCard/);
+    expect(profile).toMatch(/id="mood"[\s\S]{0,400}>Mood</);
+    expect(profile).toMatch(/id="privacy"[\s\S]{0,400}>Your location</);
+  });
+
+  it('Ghost mode is a link to the existing card, not a new toggle', () => {
+    const ghost = ACCOUNT_MENU_LINKS.filter((l) => /ghost/i.test(l.label));
+    expect(ghost).toEqual([{ id: 'ghost', label: 'Ghost mode', to: '/profile#ghost' }]);
+    expect(src('components/AccountMenu.tsx')).not.toMatch(/GhostToggle|setGhost|ghostAPI/);
+  });
+
+  it('privacy rows are labelled for where they go', () => {
+    const byId = Object.fromEntries(ACCOUNT_MENU_LINKS.map((l) => [l.id, l]));
+    expect(byId['account-security']).toMatchObject({ label: 'Account and security', to: '/settings#account' });
+    expect(byId['privacy-visibility']).toMatchObject({ label: 'Privacy and visibility', to: '/profile#privacy' });
+    expect(ACCOUNT_MENU_LINKS.some((l) => l.label === 'Privacy and security')).toBe(false);
   });
 
   it('Menu copy follows the locks', () => {
@@ -93,6 +126,7 @@ describe('new shell keeps every main route reachable', () => {
     ].join(' ');
     expect(labels).not.toMatch(/beta/i);
     expect(labels).not.toMatch(/\u2014/);
-    expect(labels).not.toMatch(/ghost/i);
+    // Only "Ghost mode" may mention Ghost (a link to the existing card).
+    expect(labels.replace('Ghost mode', '')).not.toMatch(/ghost/i);
   });
 });
