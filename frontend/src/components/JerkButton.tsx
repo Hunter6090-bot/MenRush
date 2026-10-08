@@ -13,13 +13,16 @@ import {
   type JerkSurface,
 } from '../lib/jerk';
 
-type Variant = 'icon' | 'pill';
+type Variant = 'icon' | 'pill' | 'stack';
 
 interface JerkButtonProps {
   userId: string;
   name: string;
   surface: JerkSurface;
-  /** icon = square icon only (grid card); pill = icon + "Jerk" (profile, pin sheet, chat). */
+  /**
+   * icon = square icon only (grid card); pill = icon + "Jerk" (profile, chat);
+   * stack = icon over "Jerk" (pin sheet action row).
+   */
   variant?: Variant;
   className?: string;
   onSent?: (result: JerkApiResult) => void;
@@ -88,7 +91,9 @@ export function JerkButton({
   const shape =
     variant === 'icon'
       ? 'h-8 w-8 shrink-0 rounded-lg md:h-9 md:w-9 md:rounded-xl'
-      : 'min-h-[48px] rounded-xl px-5 text-lg tracking-wide';
+      : variant === 'stack'
+        ? 'min-h-[48px] flex-col !gap-0.5 rounded-2xl px-2 text-[15px] tracking-wide'
+        : 'min-h-[48px] rounded-xl px-5 text-lg tracking-wide';
 
   return (
     <>
@@ -104,7 +109,7 @@ export function JerkButton({
         className={`${base} ${tone} ${shape} ${className}`}
       >
         <IconJerk size={variant === 'icon' ? 20 : 24} filled={sent} />
-        {variant === 'pill' ? <span>{JERK_LABEL}</span> : null}
+        {variant !== 'icon' ? <span>{JERK_LABEL}</span> : null}
       </button>
       {toast && typeof document !== 'undefined'
         ? createPortal(

@@ -163,4 +163,16 @@ describe('ProfileDrawer pin sheet (redesign Step 1)', () => {
     expect(screen.getByTestId('drawer-cover-enlarge')).toBeInTheDocument();
     expect(screen.getByTestId('drawer-avatar-graham-1')).toBeInTheDocument();
   });
+
+  it('has a one-tap Jerk on the sheet face; Report / Block stay under More', () => {
+    renderDrawer();
+    const jerk = screen.getByTestId('jerk-button-pin_sheet');
+    expect(jerk).toHaveTextContent(/^Jerk$/);
+    expect(jerk).toHaveAttribute('aria-label', 'Jerk Graham');
+    const row = jerk.parentElement!;
+    expect(row).toContainElement(screen.getByTestId('pin-sheet-more'));
+    expect(row.textContent).not.toMatch(/report|block/i);
+    expect(screen.queryByTestId('chat-safety-menu')).toBeNull();
+  });
 });
+
