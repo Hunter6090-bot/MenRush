@@ -63,13 +63,12 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-base font-extrabold text-[var(--cream)]">{headline}</p>
-          <p className="mt-1 text-sm text-[var(--cream-muted)]">
-            {locationOnly || (needsLocation && fieldsComplete)
-              ? 'Others see roughly where you are, not your exact pin.'
-              : blockers.length > 0
-                ? `Missing: ${blockers.map((b) => BLOCKER_COPY[b]).join(' · ')}`
-                : 'Others see roughly where you are, not your exact pin.'}
-          </p>
+          {/* No location-privacy claims until the radius fix is live (Zoul, 8 Oct 2026). */}
+          {!(locationOnly || (needsLocation && fieldsComplete)) && blockers.length > 0 ? (
+            <p className="mt-1 text-sm text-[var(--cream-muted)]">
+              {`Missing: ${blockers.map((b) => BLOCKER_COPY[b]).join(' · ')}`}
+            </p>
+          ) : null}
           <div className="mt-2 h-1.5 w-full max-w-[200px] overflow-hidden rounded-full bg-[rgba(13,10,6,0.5)]">
             <div
               className="h-full rounded-full bg-[#C4832A] transition-all"

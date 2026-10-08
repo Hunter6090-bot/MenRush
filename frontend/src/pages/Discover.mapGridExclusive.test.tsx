@@ -139,6 +139,8 @@ describe('Discover map and grid are exclusive', () => {
     expect(screen.queryByTestId('map-discretion-slider')).not.toBeInTheDocument();
     // Cruising spot search moved to the Out tab.
     expect(screen.queryByTestId('cruising-search-bar')).not.toBeInTheDocument();
+    // No location-privacy claims until the radius fix is live (Zoul, 8 Oct 2026).
+    expect(screen.queryByTestId('map-privacy-note')).not.toBeInTheDocument();
   });
 
   it('phone swaps the whole screen to the grid and back', async () => {
