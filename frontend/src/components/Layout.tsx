@@ -15,6 +15,7 @@ import { LocationPresenceStrip } from './LocationPresenceStrip';
 import { ProfileDepthStrip } from './ProfileDepthStrip';
 import { ThemeToggle } from './ThemeToggle';
 import { AccountMenu, AccountMenuButton } from './AccountMenu';
+import { MenuDiscretion } from './MenuDiscretion';
 import { PushAlertBanner } from './PushAlertBanner';
 import { readCachedMatches, refreshMatches } from '../lib/tabListCache';
 import {
@@ -523,7 +524,9 @@ function LayoutInner({ children }: LayoutProps) {
         open={accountMenuOpen}
         onClose={() => setAccountMenuOpen(false)}
         onSignOut={requestSignOut}
-      />
+      >
+        <MenuDiscretion />
+      </AccountMenu>
 
       {signOutConfirmOpen ? (
         <div

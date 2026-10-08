@@ -9,6 +9,9 @@ interface MapDiscretionSliderProps {
   valueM: number;
   onChange: (meters: number) => void;
   className?: string;
+  /** Full-width layout for the top-right Menu. */
+  wide?: boolean;
+  disabled?: boolean;
 }
 
 /**
@@ -19,6 +22,8 @@ export function MapDiscretionSlider({
   valueM,
   onChange,
   className = '',
+  wide = false,
+  disabled = false,
 }: MapDiscretionSliderProps) {
   const steps = MAP_PIN_FUZZ_STEPS_M;
   const snapped = nearestMapPinFuzzStep(valueM);
@@ -27,7 +32,7 @@ export function MapDiscretionSlider({
 
   return (
     <div
-      className={`flex max-w-[min(100%,220px)] items-center gap-1.5 rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_88%,transparent)] px-2.5 py-1.5 shadow-lg backdrop-blur-md ${className}`}
+      className={`flex ${wide ? 'w-full min-h-[48px]' : 'max-w-[min(100%,220px)]'} items-center gap-1.5 rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_88%,transparent)] px-2.5 py-1.5 shadow-lg backdrop-blur-md ${className}`}
       data-testid="map-discretion-slider"
       title="How far others see your pin from your real spot"
     >
@@ -41,6 +46,7 @@ export function MapDiscretionSlider({
         max={steps.length - 1}
         step={1}
         value={index}
+        disabled={disabled}
         onChange={(event) => onChange(steps[Number(event.target.value)] ?? snapped)}
         aria-label={`Discretion ${label}`}
         aria-valuemin={steps[0]}

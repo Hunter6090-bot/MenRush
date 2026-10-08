@@ -135,6 +135,8 @@ describe('Discover map and grid are exclusive', () => {
     expect(screen.queryByTestId('map-hide')).not.toBeInTheDocument();
     expect(screen.queryByTestId('map-expand-toggle')).not.toBeInTheDocument();
     expect(screen.getByTestId('map-pill-filters')).toBeInTheDocument();
+    // Discretion moved to the top-right Menu.
+    expect(screen.queryByTestId('map-discretion-slider')).not.toBeInTheDocument();
   });
 
   it('phone swaps the whole screen to the grid and back', async () => {

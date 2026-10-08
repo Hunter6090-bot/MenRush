@@ -86,7 +86,7 @@ import {
 import { mapboxStyleForTheme, resolvedThemeNow, THEME_CHANGED_EVENT } from '../lib/mapTheme';
 import { readLayerVisible, writeLayerVisible } from '../lib/discoveryLayers';
 import { useIsDesktopLayout } from '../hooks/useMediaQuery';
-import { MapDiscretionSlider } from '../components/MapDiscretionSlider';
+import { MAP_PIN_FUZZ_EVENT } from '../components/MenuDiscretion';
 import { IconDiscover, IconHotSpots } from '../components/icons';
 import {
   mapPinZIndex,
@@ -129,8 +129,6 @@ const mapChromeBtnClass =
  * Nearby/live count lives in the list pill only (no map status card).
  */
 function MapFloatingChrome({
-  mapPinFuzzM,
-  onMapPinFuzzChange,
   peopleLayerOn,
   hotSpotsLayerOn,
   onTogglePeopleLayer,
@@ -139,8 +137,6 @@ function MapFloatingChrome({
   /** In-flow under MapTopPillBar children — no absolute offset, safe at 360/390/430. */
   placement = 'stacked',
 }: {
-  mapPinFuzzM: number;
-  onMapPinFuzzChange: (meters: number) => void;
   peopleLayerOn: boolean;
   hotSpotsLayerOn: boolean;
   onTogglePeopleLayer: () => void;
@@ -154,18 +150,15 @@ function MapFloatingChrome({
 
   return (
     <>
-      {/* Discretion + People/Cruise: stacked in-flow under pills so 360–430px never overlaps. */}
+      {/* People / Cruise layers: stacked in-flow under pills. Discretion is in the top-right Menu. */}
       <div
         className={
           stacked
-            ? 'pointer-events-none flex w-full items-start justify-between gap-2'
-            : 'pointer-events-none absolute inset-x-0 top-16 z-10 flex items-start justify-between gap-2 px-3'
+            ? 'pointer-events-none flex w-full items-start justify-end gap-2'
+            : 'pointer-events-none absolute inset-x-0 top-16 z-10 flex items-start justify-end gap-2 px-3'
         }
         data-testid="map-discretion-chrome"
       >
-        <div className="pointer-events-auto" data-map-chrome-corner="top-left">
-          <MapDiscretionSlider valueM={mapPinFuzzM} onChange={onMapPinFuzzChange} />
-        </div>
         <div
           className="pointer-events-auto flex items-center gap-1.5"
           data-map-chrome-corner="top-right"
@@ -1207,12 +1200,14 @@ export const Discover = () => {
     [lat, lng, discoveryFilters, fetchNearbyUsers],
   );
 
-  const handleMapPinFuzzChange = useCallback((next: number) => {
-    const snapped = nearestMapPinFuzzStep(next);
-    setMapPinFuzzM(snapped);
-    void profileMetaAPI.setMapPinFuzz(snapped).catch(() => {
-      /* keep optimistic UI; next hydrate corrects */
-    });
+  // Discretion is set from the top-right Menu; keep our own pin in step with it.
+  useEffect(() => {
+    const onFuzz = (e: Event) => {
+      const next = (e as CustomEvent<number>).detail;
+      if (typeof next === 'number') setMapPinFuzzM(nearestMapPinFuzzStep(next));
+    };
+    window.addEventListener(MAP_PIN_FUZZ_EVENT, onFuzz);
+    return () => window.removeEventListener(MAP_PIN_FUZZ_EVENT, onFuzz);
   }, []);
 
   /**
@@ -2285,8 +2280,6 @@ export const Discover = () => {
           >
             <MapFloatingChrome
               placement="stacked"
-              mapPinFuzzM={mapPinFuzzM}
-              onMapPinFuzzChange={handleMapPinFuzzChange}
               peopleLayerOn={peopleLayerOn}
               hotSpotsLayerOn={hotSpotsLayerOn}
               onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
@@ -2420,8 +2413,6 @@ export const Discover = () => {
             >
               <MapFloatingChrome
                 placement="stacked"
-                mapPinFuzzM={mapPinFuzzM}
-                onMapPinFuzzChange={handleMapPinFuzzChange}
                 peopleLayerOn={peopleLayerOn}
                 hotSpotsLayerOn={hotSpotsLayerOn}
                 onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}

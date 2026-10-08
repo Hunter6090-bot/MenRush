@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { profileMetaAPI } from '../api/client';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { Layout } from './Layout';
@@ -47,6 +48,10 @@ vi.mock('../api/client', () => ({
   },
   messagesAPI: {
     getConversations: vi.fn().mockResolvedValue({ data: [] }),
+  },
+  profileMetaAPI: {
+    getMapPinFuzz: vi.fn().mockResolvedValue({ data: { map_pin_fuzz_m: 400 } }),
+    setMapPinFuzz: vi.fn().mockResolvedValue({ data: { map_pin_fuzz_m: 640 } }),
   },
 }));
 
@@ -178,5 +183,30 @@ describe('Layout sign out', () => {
     expect(screen.queryByTestId('account-menu')).not.toBeInTheDocument();
     expect(screen.getByTestId('sign-out-confirm')).toBeInTheDocument();
     expect(logout).not.toHaveBeenCalled();
+  });
+
+  it('Discretion sits in the Menu, reads the saved value and only writes on change', async () => {
+    const user = userEvent.setup();
+    vi.mocked(profileMetaAPI.setMapPinFuzz).mockClear();
+    render(
+      <MemoryRouter>
+        <Layout>
+          <div>child</div>
+        </Layout>
+      </MemoryRouter>,
+    );
+    await user.click(screen.getAllByTestId('account-menu-button')[0]);
+    const range = (await screen.findByTestId('map-discretion-range')) as HTMLInputElement;
+    await waitFor(() => expect(range).not.toBeDisabled());
+    expect(screen.getByTestId('map-discretion-pill').textContent).toMatch(/400/);
+    expect(profileMetaAPI.setMapPinFuzz).not.toHaveBeenCalled();
+
+    const heard: number[] = [];
+    const onFuzz = (e: Event) => heard.push((e as CustomEvent<number>).detail);
+    window.addEventListener('menrush:map-pin-fuzz', onFuzz);
+    fireEvent.change(range, { target: { value: String(Number(range.value) + 1) } });
+    window.removeEventListener('menrush:map-pin-fuzz', onFuzz);
+    expect(profileMetaAPI.setMapPinFuzz).toHaveBeenCalledTimes(1);
+    expect(heard).toHaveLength(1);
   });
 });
