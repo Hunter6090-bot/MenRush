@@ -13,8 +13,8 @@ Promoter (docs only): **Bronze Apps UK Limited t/a MenRush**.
 | Code | `MR3FREE` (also accept `mr3free`). Case does not matter. No spaces (`MR 3FREE` rejected). |
 | Campaign name | `MenRush launch` (stored in `shared_promo_redemptions`). |
 | Live from | **17 September 2026** (Europe/London). |
-| Claim-by | **5 October 2026 Europe/London end of day inclusive** → `2026-10-05T22:59:59Z` (BST that day). |
-| Post-cutoff | Signups after 5 Oct with this code get nothing (code expired). |
+| Claim-by | **31 October 2026 Europe/London end of day inclusive** → `2026-10-31T23:59:59Z` (GMT that day). Al extended from 5 Oct on 8 Oct 2026. |
+| Post-cutoff | Signups after 31 Oct with this code get nothing (code expired). |
 | Stacking vs Pride / BSF26 | **No stack.** Reject if any Pride or BSF26 path exists. |
 | vs 30-day waitlist gift | **Replaces** Terms 7.2 waitlist gift. Not added on top. |
 | Beta promises | **Does not cancel 12-month beta promises.** Existing longer `premium_until` is preserved. |
@@ -30,7 +30,7 @@ Legal face: Terms **§7.9** (MenRush launch promotional offer). §7.7 and §7.8 
 
 | Redeem (Europe/London calendar day) | Premium starts | Premium duration |
 | --- | --- | --- |
-| 17 Sep 2026 through 5 Oct 2026 | **That calendar day** London (day one unlocked) | **3 calendar months** |
+| 17 Sep 2026 through 31 Oct 2026 | **That calendar day** London (day one unlocked) | **3 calendar months** |
 
 Implemented via `mr3FreePremiumWindow` / `applyMr3FreePremiumGrant`.
 
@@ -46,7 +46,7 @@ Implemented via `mr3FreePremiumWindow` / `applyMr3FreePremiumGrant`.
 
 1. Register with `?promo=MR3FREE` (or type `MR3FREE` / `mr3free`) on a fresh 18+ email.
 2. Confirm Premium: `is_premium: true`, `premium_starts_at` <= now, `premium_until` = 3 months. Confirm no stacked 30-day gift.
-3. Negatives: double-claim; Pride path + MR3FREE; BSF26 + MR3FREE; space variants `MR 3FREE`; after claim-by (after 5 Oct); referral field with `MR3FREE`.
+3. Negatives: double-claim; Pride path + MR3FREE; BSF26 + MR3FREE; space variants `MR 3FREE`; after claim-by (after 31 Oct); referral field with `MR3FREE`.
 
 ## Code map
 
