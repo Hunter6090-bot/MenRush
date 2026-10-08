@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { LocationHideError, LOCATION_HIDE_MAX, locationHideService } from '../services/location-hide.service';
 
@@ -18,6 +19,7 @@ const changeLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
   max: 60,
   message: { error: 'Too many changes. Try again in a few minutes.' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -26,6 +28,7 @@ const listLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 60,
   message: { error: 'Too many requests. Try again in a minute.' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
