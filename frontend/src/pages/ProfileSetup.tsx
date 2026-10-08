@@ -178,7 +178,7 @@ export const ProfileSetup: React.FC = () => {
         return {
           title: 'Your',
           accent: 'avatar.',
-          copy: 'Upload a recent photo so guys know who they are talking to — recommended even if you are discreet. Prefer no photo? Pick a standard avatar instead; we match it from your age, body and look tags, and several members may share the same one.',
+          copy: 'Upload a recent photo so guys know who they are talking to. Recommended even if you are discreet. Prefer no photo? Pick a standard avatar instead; we match it from your age, body and look tags, and several members may share the same one.',
         };
       case 'about':
         return {
@@ -202,7 +202,7 @@ export const ProfileSetup: React.FC = () => {
         return {
           title: 'Go',
           accent: 'live.',
-          copy: 'Your profile is ready. Allow GPS so Nearby can find men around you — or open Discover and enable location there.',
+          copy: 'Your profile is ready. Allow GPS so Nearby can find men around you, or open Discover and enable location there.',
         };
     }
   }, [step]);
@@ -407,7 +407,7 @@ export const ProfileSetup: React.FC = () => {
       return;
     }
     if (bio.trim().length < 20) {
-      setError('Write at least 20 characters in your bio — men need a reason to tap you.');
+      setError('Write at least 20 characters in your bio. Men need a reason to tap you.');
       return;
     }
     if (!lookingFor.trim() || interests.length < 3) {
@@ -457,7 +457,7 @@ export const ProfileSetup: React.FC = () => {
             <div className={publicInfoBoxClass}>
               <p className="text-[13px] leading-relaxed text-[var(--cream-muted)]">
                 <span className="font-semibold text-[var(--cream)]">Discreet?</span> A clear photo
-                still helps matches recognise you in chat — but it is your call. No photo means a
+                still helps matches recognise you in chat, but it is your call. No photo means a
                 standard avatar picked from your profile tags; only a few variants exist so you may
                 look like other guys nearby.
               </p>
@@ -509,7 +509,7 @@ export const ProfileSetup: React.FC = () => {
 
               <p className={publicMutedCopyClass}>
                 {photoChoice === 'generic'
-                  ? 'Shared avatar for now — real photos rank first nearby and get more matches.'
+                  ? 'Shared avatar for now. Real photos rank first nearby and get more matches.'
                   : 'Clear face or upper body · JPEG, PNG or WebP · max 5MB'}
               </p>
               {photoChoice === 'generic' ? (
@@ -587,7 +587,7 @@ export const ProfileSetup: React.FC = () => {
                 value={headline}
                 onChange={(e) => setHeadline(e.target.value)}
                 maxLength={100}
-                placeholder="One line — e.g. Hosting tonight in Shoreditch"
+                placeholder="One line, e.g. Hosting tonight in Shoreditch"
                 className={`${publicDarkSelectClass} mt-2`}
               />
             </div>
@@ -681,7 +681,7 @@ export const ProfileSetup: React.FC = () => {
                 />
               );
             })}
-            <p className="pt-2 text-[13px] leading-relaxed text-[var(--cream-muted)]">
+            <p className="pt-2 text-[15px] leading-relaxed text-[var(--cream-muted)]">
               Your profile fields are ready. Location unlocks Nearby.
             </p>
             {locationDenied ? (

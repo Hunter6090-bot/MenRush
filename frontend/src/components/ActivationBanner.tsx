@@ -63,7 +63,7 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-base font-extrabold text-[var(--cream)]">{headline}</p>
-          <p className="mt-1 text-sm text-[var(--cream-muted)]">
+          <p className="mt-1 text-[15px] text-[var(--cream-muted)]">
             {locationOnly || (needsLocation && fieldsComplete)
               ? "We use your location to show who's nearby."
               : blockers.length > 0

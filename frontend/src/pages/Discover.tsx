@@ -2285,7 +2285,7 @@ export const Discover = () => {
           <p id="location-gate-title" className="text-[17px] font-extrabold text-[var(--cream)]">
             Allow location to unlock Nearby
           </p>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--cream-muted)]">
+          <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-[var(--cream-muted)]">
             We use your location to show who&apos;s nearby.
           </p>
           <button
@@ -2368,7 +2368,7 @@ export const Discover = () => {
           <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
           {!needsLocationGate && !tokenMissing ? (
             <p
-              className="pointer-events-none absolute top-[4.75rem] left-1/2 z-[4] max-w-[min(78%,280px)] -translate-x-1/2 rounded-full px-2.5 py-1 text-center text-xs font-medium leading-snug"
+              className="pointer-events-none absolute top-[4.75rem] left-1/2 z-[4] max-w-[min(78%,280px)] -translate-x-1/2 rounded-full px-2.5 py-1 text-center text-[15px] font-medium leading-snug"
               style={{
                 background: 'rgba(13,10,6,0.55)',
                 color: 'rgba(240,224,192,0.65)',
@@ -2526,7 +2526,7 @@ export const Discover = () => {
 
           {mapPanelMode !== 'hidden' && !needsLocationGate && !tokenMissing ? (
             <p
-              className="pointer-events-none absolute left-1/2 z-[4] max-w-[min(78%,260px)] -translate-x-1/2 rounded-full px-2.5 py-1 text-center text-xs font-medium leading-snug"
+              className="pointer-events-none absolute left-1/2 z-[4] max-w-[min(78%,260px)] -translate-x-1/2 rounded-full px-2.5 py-1 text-center text-[15px] font-medium leading-snug"
               style={{
                 top: hotSpotsLayerOn ? '4.75rem' : '3.25rem',
                 background: 'rgba(13,10,6,0.55)',

@@ -827,7 +827,7 @@ export const Settings = () => {
               data-testid="settings-device-location"
             >
               <p className="text-[15px] font-bold text-[var(--cream)]">Device location</p>
-              <p className="mt-1 text-[13px] leading-relaxed text-[var(--cream-muted)]">
+              <p className="mt-1 text-[15px] leading-relaxed text-[var(--cream-muted)]">
                 Needed for Nearby. In chat you can send a one-time location message when you choose.
               </p>
               <p className="mt-2 text-[12px] font-semibold text-[var(--cream-muted)]">
@@ -836,12 +836,12 @@ export const Settings = () => {
                   {hasPin == null
                     ? '…'
                     : hasPin
-                      ? `Active — within ${formatRadiusMiles(savedRadius)}`
-                      : 'Off — invisible nearby'}
+                      ? `Active, within ${formatRadiusMiles(savedRadius)}`
+                      : 'Off, invisible nearby'}
                 </span>
               </p>
               {hasPin === false ? (
-                <p className="mt-1 text-[12px] leading-relaxed text-[#E0A14A]">
+                <p className="mt-1 text-[15px] leading-relaxed text-[#E0A14A]">
                   Without location you can&apos;t show up nearby.
                   On iPhone Safari: aA (or …) → Website Settings → Location → Allow. Also check Settings
                   → Privacy & Security → Location Services → Safari Websites.
@@ -1125,7 +1125,7 @@ export const Settings = () => {
               >
                 <div>
                   <p className="text-[15px] font-bold text-[var(--cream)]">Privacy policy</p>
-                  <p className="mt-0.5 text-[13px] text-[var(--cream-muted)]">
+                  <p className="mt-0.5 text-[15px] text-[var(--cream-muted)]">
                     How we handle your data.
                   </p>
                 </div>
