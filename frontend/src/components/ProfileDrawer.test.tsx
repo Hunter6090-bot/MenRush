@@ -194,6 +194,26 @@ describe('ProfileDrawer grid sheet layout', () => {
     expect(screen.queryByText(/away/i)).not.toBeInTheDocument();
   });
 
+  it('shows Nearby once (pill only) when the member hides distance', () => {
+    const hidden: NearbyUser = { ...graham };
+    delete (hidden as Partial<NearbyUser>).distance_km;
+    delete (hidden as Partial<NearbyUser>).distance_label;
+    render(
+      <MemoryRouter>
+        <ProfileDrawer
+          user={hidden}
+          liked={false}
+          onClose={vi.fn()}
+          onLike={vi.fn()}
+          onMessage={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getAllByText('Nearby')).toHaveLength(1);
+    expect(screen.queryByText(/away/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\d+ mi\b/)).not.toBeInTheDocument();
+  });
+
   it('exposes enlarge hooks on cover and avatar when photos exist', () => {
     const withPhotos: NearbyUser = {
       ...graham,

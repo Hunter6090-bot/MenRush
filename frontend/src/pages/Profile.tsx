@@ -9,6 +9,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { PulseRing } from '../components/PulseRing';
 import { MoodPicker } from '../components/MoodPicker';
 import { GhostToggle } from '../components/GhostToggle';
+import { ShowDistanceRow } from '../components/ShowDistanceRow';
 import { ProfileViewersCard, ProfileViewer } from '../components/ProfileViewersCard';
 import { normalizeProfileImageFile } from '../lib/imageUpload';
 import { CoverBanner, DEFAULT_COVER_FRAME, normalizeCoverFrame, type CoverFrame } from '../components/CoverBanner';
@@ -120,6 +121,7 @@ interface ProfileData {
   show_height?: boolean;
   show_weight?: boolean;
   show_relationship?: boolean;
+  show_distance?: boolean;
   bio?: string;
   headline?: string;
   looking_for?: string;
@@ -167,6 +169,7 @@ export const Profile = () => {
   const [showHeight, setShowHeight] = useState(true);
   const [showWeight, setShowWeight] = useState(true);
   const [showRelationship, setShowRelationship] = useState(true);
+  const [showDistance, setShowDistance] = useState(true);
   const [bio, setBio] = useState('');
   const [headline, setHeadline] = useState('');
   const [lookingFor, setLookingFor] = useState('');
@@ -219,6 +222,7 @@ export const Profile = () => {
         setShowHeight(d.show_height !== false);
         setShowWeight(d.show_weight !== false);
         setShowRelationship(d.show_relationship !== false);
+        setShowDistance(d.show_distance !== false);
         setBio(d.bio ?? '');
         setHeadline(d.headline ?? '');
         setLookingFor(d.looking_for ?? '');
@@ -539,6 +543,7 @@ export const Profile = () => {
         show_height: showHeight,
         show_weight: showWeight,
         show_relationship: showRelationship,
+        show_distance: showDistance,
       });
       setProfile((p) => (p ? { ...p, ...res.data } : p));
       if (user && token) {
@@ -566,9 +571,14 @@ export const Profile = () => {
       }
       showToast('success', 'Profile saved');
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to save. Please try again.';
+      const data = (err as { response?: { data?: { error?: string; feature?: string } } })?.response
+        ?.data;
+      if (data?.error === 'premium_required' && data.feature === 'show_distance') {
+        setShowDistance(true);
+        showToast('error', 'Premium hides distance.');
+        return;
+      }
+      const msg = data?.error || 'Failed to save. Please try again.';
       showToast('error', msg);
     } finally {
       setSaving(false);
@@ -1308,6 +1318,14 @@ export const Profile = () => {
                   testId="profile-show-age"
                 />
               </div>
+
+              <ShowDistanceRow
+                checked={showDistance}
+                onChange={setShowDistance}
+                entitled={Boolean(
+                  authIsPremium || profile?.is_premium || profile?.beta_premium_included,
+                )}
+              />
 
               <div
                 id={PROFILE_ESSENTIAL_SECTION_IDS.height}

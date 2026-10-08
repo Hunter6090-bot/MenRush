@@ -3,7 +3,7 @@ import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
 import { z } from 'zod';
-import { userService } from '../services/user.service';
+import { ShowDistancePremiumError, userService } from '../services/user.service';
 import { profileViewsService } from '../services/profile-views.service';
 import { notificationService } from '../services/notification.service';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
@@ -434,6 +434,9 @@ router.post('/profile', verifiedMiddleware, async (req: AuthRequest, res: Respon
     const user = await userService.updateProfile(req.userId!, data);
     res.json(user);
   } catch (error: any) {
+    if (error instanceof ShowDistancePremiumError) {
+      return res.status(402).json({ error: error.code, feature: error.feature });
+    }
     res.status(400).json({ error: error.message });
   }
 });

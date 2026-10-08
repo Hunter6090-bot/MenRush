@@ -4,7 +4,7 @@ import { DiscoveryPhotoFrame } from './DiscoveryPhotoFrame';
 import { NewJoinerBadge } from './NewJoinerBadge';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { formatActiveStatus, getTribeTag } from '../lib/discoveryFormat';
-import { getDistanceLabel, isUserOnlineNow } from '../lib/discovery';
+import { getDistanceLabel, isUserOnlineNow, metaAfterDistance } from '../lib/discovery';
 import { isFreshFaceNearby } from '../lib/newJoiner';
 import {
   PROFILE_TILE_GRID_CLASS,
@@ -319,8 +319,10 @@ const NearbyGridCard = memo(function NearbyGridCard({
   onMatch?: (user: NearbyUser) => void | Promise<void>;
 }) {
   // Distance shows once, in the meta line under the name (no corner chip).
+  // When distance is missing, getDistanceLabel returns "Nearby"; skip a second
+  // "Nearby" from the tribe fallback so Soft QC never sees "Nearby · Nearby".
   const distLabel = getDistanceLabel(user);
-  const metaRest = `${getTribeTag(user)} · ${formatActiveStatus(user)}`;
+  const metaRest = metaAfterDistance(distLabel, [getTribeTag(user), formatActiveStatus(user)]);
   const matchState = matchInterestState({ liked, mutual });
   const matchDisabled = matchCtaDisabled(matchState, matching);
 
@@ -416,7 +418,7 @@ const GridCardFace = memo(function GridCardFace({
         </div>
         <p className="mt-0.5 truncate text-xs font-semibold text-[var(--cream)] md:text-[13px]">
           <span data-testid={`nearby-grid-distance-${user.id}`}>{distLabel}</span>
-          {` · ${metaRest}`}
+          {metaRest ? ` · ${metaRest}` : ''}
         </p>
         {user.looking_for ? (
           <p className="mt-0.5 truncate text-xs font-bold text-[#E0A14A] md:text-[13px]">{user.looking_for}</p>
