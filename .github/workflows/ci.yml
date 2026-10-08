@@ -64,6 +64,8 @@ jobs:
         run: npm run test:rate-limit-client-ip
       - name: Vercel edge secret client IP (unset, mismatch, match)
         run: npm run test:edge-proxy-secret
+      - name: Auth and signup rate limits (loose per IP, per-account caps)
+        run: npm run test:auth-rate-limits
       - name: Veriff checks
         run: npm run test:veriff
 
