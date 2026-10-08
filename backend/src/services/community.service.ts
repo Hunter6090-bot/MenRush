@@ -2,6 +2,7 @@ import { query } from '../db';
 import { discoveryPhotoUrl } from '../lib/discoveryPhoto';
 import { isPublicHotSpotVisibilitySql } from './hot-spots.service';
 import { notLocationHiddenFromViewerSql } from '../lib/locationHiddenSql';
+import { PIN_PREFILTER_BUFFER_M, publicPinSql } from '../lib/mapPinSql';
 import { MAP_PIN_FUZZ_DEFAULT_M } from '../lib/mapPinFuzz';
 import { coarseMilesFromMeters, memberDistanceFields } from '../lib/memberDistance';
 
@@ -149,6 +150,9 @@ async function assertPostVisible(
   return result.rows[0] as { id: string; user_id: string };
 }
 
+/** Author's public pin for a post (seed map:<authorId>, author's Discretion). */
+const AUTHOR_PIN = publicPinSql('cp.lat', 'cp.lng', 'cp.user_id', 'ap.map_pin_fuzz_m');
+
 export const communityService = {
   /**
    * Create a text-only Community post at the author's current profile pin.
@@ -203,7 +207,8 @@ export const communityService = {
   },
 
   /**
-   * List nearby Community posts within radiusKm of (lat, lng).
+   * List nearby Community posts whose author pin is within radiusKm of (lat, lng).
+   * Callers pass the viewer's stored location (see viewerStoredLocation).
    * Respects blocks; never returns exact post coordinates.
    */
   async listNearby(params: {
@@ -240,7 +245,14 @@ export const communityService = {
        AND ST_DWithin(
          cp.location,
          ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography,
-         $3
+         $3::float8 + ${PIN_PREFILTER_BUFFER_M}
+       )
+       -- Radius is measured to the author's public (Discretion-fuzzed) pin for
+       -- this post, never raw GPS, so shrinking it cannot pin a real distance.
+       AND ST_DWithin(
+         ${AUTHOR_PIN.geog},
+         ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography,
+         $3::float8
        )
        AND NOT EXISTS (
          SELECT 1 FROM blocks b
