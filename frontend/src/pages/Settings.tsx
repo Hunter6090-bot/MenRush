@@ -840,7 +840,7 @@ export const Settings = () => {
               <p className="mt-1 text-[15px] leading-relaxed text-[var(--cream-muted)]">
                 Needed for Nearby. In chat you can send a one-time location message when you choose.
               </p>
-              <p className="mt-2 text-[12px] font-semibold text-[var(--cream-muted)]">
+              <p className="mt-2 text-[15px] font-semibold text-[var(--cream-muted)]">
                 Status:{' '}
                 <span className={hasPin ? 'text-[#8FC773]' : 'text-[#E0A14A]'}>
                   {hasPin == null
@@ -1009,7 +1009,7 @@ export const Settings = () => {
                     <div>
                       <p className="text-[15px] font-bold text-[var(--cream)]">Safety reports</p>
                       <p className="mt-0.5 text-[13px] text-[var(--cream-muted)]">
-                        Team inbox — new reports also email the team.
+                        Team inbox. New reports also email the team.
                       </p>
                     </div>
                     <button
