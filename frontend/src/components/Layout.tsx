@@ -433,9 +433,7 @@ function LayoutInner({ children }: LayoutProps) {
                   >
                     <ToggleIcon size={compact ? 20 : 22} className={onHome ? 'scale-110' : ''} />
                     <span
-                      className={`font-bold leading-none tracking-wide ${
-                        compact ? 'text-[11px]' : 'text-xs'
-                      }`}
+                      className="font-bold leading-none tracking-wide text-[13px]"
                     >
                       {label}
                     </span>
@@ -470,9 +468,7 @@ function LayoutInner({ children }: LayoutProps) {
                     />
                   </span>
                   <span
-                    className={`font-bold leading-none tracking-wide ${
-                      compact ? 'text-[11px]' : 'text-xs'
-                    }`}
+                    className="font-bold leading-none tracking-wide text-[13px]"
                   >
                     {item.shortLabel ?? item.label}
                   </span>
@@ -500,9 +496,7 @@ function LayoutInner({ children }: LayoutProps) {
                   className={isMoreActive || moreMenuOpen ? 'scale-110' : ''}
                 />
                 <span
-                  className={`font-bold leading-none tracking-wide ${
-                    mobileTabs.length >= 5 ? 'text-[11px]' : 'text-xs'
-                  }`}
+                  className="font-bold leading-none tracking-wide text-[13px]"
                 >
                   More
                 </span>

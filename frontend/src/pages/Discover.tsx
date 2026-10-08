@@ -152,7 +152,7 @@ function MapFloatingChrome({
             ? 'pointer-events-none flex w-full items-start justify-end gap-2'
             : 'pointer-events-none absolute inset-x-0 top-16 z-10 flex items-start justify-end gap-2 px-3'
         }
-        data-testid="map-discretion-chrome"
+        data-testid="map-layer-chrome"
       >
         <div
           className="pointer-events-auto flex items-center gap-1.5"

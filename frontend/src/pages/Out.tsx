@@ -205,7 +205,7 @@ export function Out() {
                 aria-selected={active}
                 data-testid={`out-chip-${c.id}`}
                 onClick={() => setChip(c.id)}
-                className={`inline-flex min-h-[44px] shrink-0 items-center rounded-full px-4 text-[13px] font-extrabold transition-colors ${
+                className={`inline-flex min-h-[44px] shrink-0 items-center rounded-full px-4 text-[15px] font-extrabold transition-colors ${
                   active
                     ? 'bg-[var(--copper)] text-[#1A0E03]'
                     : 'border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream)]'

@@ -833,8 +833,7 @@ export const Settings = () => {
             >
               <p className="text-[15px] font-bold text-[var(--cream)]">Device location</p>
               <p className="mt-1 text-[13px] leading-relaxed text-[var(--cream-muted)]">
-                Needed for Nearby. Others see approximate distance only — not your exact public pin.
-                In chat you can still send a one-time location message when you choose.
+                Needed for Nearby. In chat you can still send a one-time location message when you choose.
               </p>
               <p className="mt-2 text-[12px] font-semibold text-[var(--cream-muted)]">
                 Status:{' '}
@@ -1132,7 +1131,7 @@ export const Settings = () => {
                 <div>
                   <p className="text-[15px] font-bold text-[var(--cream)]">Privacy policy</p>
                   <p className="mt-0.5 text-[13px] text-[var(--cream-muted)]">
-                    How coordinates are obfuscated and data handled.
+                    How we handle your data.
                   </p>
                 </div>
                 <ChevronRight />

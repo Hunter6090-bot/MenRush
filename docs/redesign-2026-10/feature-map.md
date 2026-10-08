@@ -16,7 +16,7 @@
 | **Chat** | `/conversations` | Chat (+ unread badge) | Messages; Matches page becomes filter chip All / Matches / Unread |
 | **Rooms** | `/rooms` | Rooms | Label is **Rooms** (Video rooms lock retired); Premium gate unchanged |
 | **Out** | `/out` | Out | Cruise/Hot Spots, Events, Community; pinned **Community** entry (`community-entry`) → `/stream`; chips All / Sauna / Bar / Event / Community |
-| **You** | `/profile` | You | Profile + Settings entry, Albums, Discretion, Quiet hours, 2FA, Merch/Brands links, Sign out |
+| **You** | `/profile` | You | Profile + Settings entry, Albums, Quiet hours, 2FA, Merch/Brands links, Sign out |
 
 Desktop sidebar mirrors the same five + Settings / Notifications where needed. Mobile "More" sheet removed once Events + Settings have homes (Out / You).
 
@@ -32,7 +32,7 @@ Desktop sidebar mirrors the same five + Settings / Notifications where needed. M
 | **Map with pins** (#314 circular + green online) | `/discover` map | **Map** (home) | Cream rim; copper ring when selected |
 | **Cluster (+N)** | map markers | **Map** | Keep existing overlap/cluster logic |
 | **People / Cruise layer toggles** | map chrome | **Map** chrome below top pills (icon+short label) | Stacked under Radius/Filters/Search so all stay tappable at 390px |
-| **Discretion / pin fuzz slider** | map chrome | **Map** stacked in-flow under Radius/Filters/Search + **You → Discretion** | Visible/tappable at 360/390/430; pills nowrap; chrome is MapTopPillBar child |
+| **Discretion / pin fuzz slider** | map chrome | **Menu** (top-right three-line button), slider at the top (`menu-discretion`) | Moved off the map 8 Oct (Pete). Not on the map or the You page any more. The Menu reads the saved value first and only saves when the slider moves. |
 | **Map expand / hide / geolocate** | map BR controls | **Map** bottom-right control cluster | Design: bottom-right control |
 | **Cruising search (spots)** | CruisingSearchBar/Sheet on Discover + HotSpots | **Map** Search (spots) + **Out** | Search pill opens profile+place search; Cruise search remains reachable |
 | **Profile search (name or town/city)** (#310) | Layout header / ProfileSearchModal | **Map** top **Search** pill (+ header on desktop) | Same modal |
@@ -128,13 +128,13 @@ Desktop sidebar mirrors the same five + Settings / Notifications where needed. M
 - [x] Pin sheet: photo, name+tick, age·distance, Now, Profile; Chat / Album (#albums) / More
 - [x] More: Report, Block (red), Cancel + Match / Pulse back (wired) if live; BrandAvatar fallback
 - [ ] Empty radius: Nobody in this radius + Widen to N mi
-- [x] Map stack: pills nowrap + Discretion in-flow (360/390/430); Chat Matches + Out Community entries; Rooms=Rooms
+- [x] Map stack: pills nowrap + People/Cruise in-flow (360/390/430), Discretion in the Menu; Chat Matches + Out Community entries; Rooms=Rooms
 
 
 
 ## QC follow-ups (6 Oct 2026)
 
-- Phone map (360/390/430): Radius/Filters/Search pills (nowrap) stack **above** Discretion + People/Cruise in-flow (`map-top-stack`); no overlap.
+- Phone map (360/390/430): Radius/Filters/Search pills (nowrap) stack **above** People/Cruise in-flow (`map-top-stack`, layer row `map-layer-chrome`); no overlap. Discretion moved to the Menu on 8 Oct.
 - Chat tab: pinned Matches row (`chat-matches-entry`, `matches-entry-icon` placeholder) → `/matches`.
 - Out: pinned Community row (`community-entry`, `community-entry-icon` placeholder) → `/stream`; chips kept; 14px copy + footer 44px.
 - Rooms tab shortLabel locked to **Rooms** (Video rooms lock retired); navConfig test asserts it.
@@ -152,5 +152,5 @@ React components use `currentColor`; `filled` for active copper tab state, outli
 | Out pinned Community entry | `IconCommunity` (outline) |
 | Rooms tab | `IconRooms` outline/filled |
 | Out tab | `IconOut` outline/filled (replaces cruise ship on tab only; Cruise layer keeps `IconHotSpots`) |
-| Map Discretion slider | `IconDiscretion` outline |
+| Menu Discretion slider | `IconDiscretion` outline |
 | Map\|List home toggle | unchanged |

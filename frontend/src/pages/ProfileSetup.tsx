@@ -682,9 +682,7 @@ export const ProfileSetup: React.FC = () => {
               );
             })}
             <p className="pt-2 text-[13px] leading-relaxed text-[var(--cream-muted)]">
-              Your profile fields are ready. Location unlocks Nearby — others see approximate
-              distance only, not your exact public pin. Exact live pin with matches is optional
-              later. Shared only while you use the app.
+              Your profile fields are ready. Location unlocks Nearby.
             </p>
             {locationDenied ? (
               <p

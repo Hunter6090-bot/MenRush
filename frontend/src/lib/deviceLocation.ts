@@ -11,7 +11,7 @@
 
 /** Short line for banners / strips — privacy + necessity. */
 export const LOCATION_PRIVACY_LINE =
-  'We need your location to find men near you. Others see approximate distance only — not your exact pin.';
+  'We need your location to find men near you.';
 
 /** Slightly longer for gates and Settings. */
 export const LOCATION_PRIVACY_DETAIL =
