@@ -2,19 +2,22 @@
  * Vercel edge shared-secret checks for the rate-limit client IP.
  * No network beyond loopback. No DB.
  *
- * The first X-Vercel-Forwarded-For entry is used ONLY when EDGE_PROXY_SECRET
- * is set (16+ chars) and X-MenRush-Edge-Secret matches it. In every other
- * case the key is exactly what the X-Real-IP rule gives (PR #330).
+ * X-MenRush-Client-IP is used ONLY when EDGE_PROXY_SECRET is set (16+ chars),
+ * X-MenRush-Edge-Secret matches it, and the value is one valid IP. In every
+ * other case the key is exactly what the X-Real-IP rule gives (PR #330).
+ * X-Vercel-Forwarded-For is never read, even with the correct secret.
  *
- * - secret unset (or too short): a forged X-Vercel-Forwarded-For is ignored,
- *   even when the request also sends a secret header
+ * - secret unset (or too short): forged X-MenRush-Client-IP and
+ *   X-Vercel-Forwarded-For are ignored, even with a secret header
  * - secret mismatch (wrong value, wrong length, empty, missing): ignored
- * - secret match: visitor IP from the first X-Vercel-Forwarded-For entry;
- *   invalid entry falls back to the X-Real-IP rule
+ * - secret match: forged X-Vercel-Forwarded-For ignored; X-MenRush-Client-IP
+ *   used when it is one valid IP; a list, a repeated header or an invalid
+ *   value falls back to the X-Real-IP rule
  * - clientIp.ts never logs
  * - frontend/middleware.ts and src/lib/edgeProxySecret.ts agree with the
- *   backend on header, env name and minimum length, only match /api, and
- *   never use a VITE_ (browser-bundled) env name
+ *   backend on header names, env name and minimum length, only match /api,
+ *   strip client copies, take the IP from ipAddress(), and never use a VITE_
+ *   (browser-bundled) env name
  */
 import assert from 'assert';
 import fs from 'fs';
@@ -23,6 +26,7 @@ import path from 'path';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import {
+  CLIENT_IP_HEADER,
   EDGE_SECRET_ENV,
   EDGE_SECRET_HEADER,
   clientIp,
@@ -41,10 +45,11 @@ const FRONTEND = path.join(__dirname, '../../frontend');
  */
 type FrontendEdge = {
   EDGE_SECRET_HEADER: string;
+  CLIENT_IP_HEADER: string;
   EDGE_SECRET_ENV: string;
   EDGE_SECRET_MIN_LENGTH: number;
   edgeSecretFromEnv: (value: string | undefined | null) => string | null;
-  withEdgeSecret: (headers: Headers, secret: string | null) => Headers | null;
+  withEdgeSecret: (headers: Headers, secret: string | null, visitorIp?: string | null) => Headers | null;
 };
 function loadFrontendEdge(): FrontendEdge {
   const src = fs.readFileSync(path.join(FRONTEND, 'src/lib/edgeProxySecret.ts'), 'utf8');
@@ -74,11 +79,13 @@ function fakeReq(headers: Record<string, string | string[]>, ip = RAILWAY_HOP): 
   return { headers, ip, socket: { remoteAddress: ip } } as unknown as express.Request;
 }
 
-const viaVercel = (visitor: string, secret?: string): Record<string, string> => ({
+/** What Railway receives from the Vercel rewrite (X-Real-IP is Vercel's egress). */
+const viaVercel = (visitor: string | undefined, secret?: string, extra: Record<string, string | string[]> = {}): Record<string, string | string[]> => ({
   'x-real-ip': VERCEL_EGRESS,
   'x-forwarded-for': `${VERCEL_EGRESS}, ${RAILWAY_HOP}`,
-  'x-vercel-forwarded-for': visitor,
+  ...(visitor === undefined ? {} : { [CLIENT_IP_HEADER]: visitor }),
   ...(secret === undefined ? {} : { [EDGE_SECRET_HEADER]: secret }),
+  ...extra,
 });
 
 function unitChecks() {
@@ -107,44 +114,79 @@ function unitChecks() {
   assert.equal(clientIp(fakeReq(viaVercel('203.0.113.7')), unset), VERCEL_EGRESS);
   assert.equal(clientIp(fakeReq(viaVercel('203.0.113.7', SECRET)), unset), VERCEL_EGRESS);
   assert.equal(clientIp(fakeReq(viaVercel('203.0.113.7', 'short')), short), VERCEL_EGRESS);
+  assert.equal(clientIp(fakeReq({ [CLIENT_IP_HEADER]: '203.0.113.7' }), unset), RAILWAY_HOP);
   assert.equal(clientIp(fakeReq({ 'x-vercel-forwarded-for': '203.0.113.7' }), unset), RAILWAY_HOP);
 
-  // Secret set but mismatched or missing: forged visitor ignored.
+  // Secret set but mismatched or missing: X-MenRush-Client-IP ignored.
   assert.equal(clientIp(fakeReq(viaVercel('203.0.113.7')), set), VERCEL_EGRESS);
   assert.equal(clientIp(fakeReq(viaVercel('203.0.113.7', 'wrong')), set), VERCEL_EGRESS);
   assert.equal(clientIp(fakeReq(viaVercel('203.0.113.7', SECRET.toUpperCase())), set), VERCEL_EGRESS);
   assert.equal(clientIp(fakeReq(viaVercel('203.0.113.7', '')), set), VERCEL_EGRESS);
+  assert.equal(clientIp(fakeReq(viaVercel('203.0.113.7', `${SECRET}x`)), set), VERCEL_EGRESS);
 
-  // Secret match: first X-Vercel-Forwarded-For entry, normalised.
+  // Secret match: a forged X-Vercel-Forwarded-For is NEVER read.
+  assert.equal(clientIp(fakeReq(viaVercel(undefined, SECRET, { 'x-vercel-forwarded-for': '198.18.0.9' })), set), VERCEL_EGRESS);
+  assert.equal(
+    clientIp(fakeReq(viaVercel('203.0.113.7', SECRET, { 'x-vercel-forwarded-for': '198.18.0.9, 203.0.113.7' })), set),
+    '203.0.113.7',
+    'X-MenRush-Client-IP wins over any X-Vercel-Forwarded-For',
+  );
+
+  // Secret match: X-MenRush-Client-IP, normalised.
   assert.equal(clientIp(fakeReq(viaVercel('203.0.113.7', SECRET)), set), '203.0.113.7');
-  assert.equal(clientIp(fakeReq(viaVercel(' 203.0.113.7 , 198.51.100.1', SECRET)), set), '203.0.113.7');
+  assert.equal(clientIp(fakeReq(viaVercel(' 203.0.113.7 ', SECRET)), set), '203.0.113.7');
   assert.equal(clientIp(fakeReq(viaVercel('::ffff:203.0.113.7', SECRET)), set), '203.0.113.7');
   assert.equal(clientIp(fakeReq(viaVercel('2001:DB8::1', SECRET)), set), '2001:db8::1');
-  // Match but missing or invalid visitor: X-Real-IP rule.
+  assert.equal(clientIp(fakeReq({ ...viaVercel(undefined, SECRET), [CLIENT_IP_HEADER]: ['203.0.113.7'] }), set), '203.0.113.7');
+  // Match but a list, repeated header, missing or invalid value: X-Real-IP rule.
+  assert.equal(clientIp(fakeReq(viaVercel('203.0.113.7, 198.51.100.1', SECRET)), set), VERCEL_EGRESS);
+  assert.equal(clientIp(fakeReq(viaVercel('203.0.113.7,198.51.100.1', SECRET)), set), VERCEL_EGRESS);
+  assert.equal(clientIp(fakeReq({ ...viaVercel(undefined, SECRET), [CLIENT_IP_HEADER]: ['203.0.113.7', '198.51.100.1'] }), set), VERCEL_EGRESS);
+  assert.equal(clientIp(fakeReq(viaVercel('203.0.113.7 198.51.100.1', SECRET)), set), VERCEL_EGRESS);
   assert.equal(clientIp(fakeReq(viaVercel('not-an-ip', SECRET)), set), VERCEL_EGRESS);
-  assert.equal(clientIp(fakeReq({ 'x-real-ip': VERCEL_EGRESS, [EDGE_SECRET_HEADER]: SECRET }), set), VERCEL_EGRESS);
+  assert.equal(clientIp(fakeReq(viaVercel('999.1.1.1', SECRET)), set), VERCEL_EGRESS);
+  assert.equal(clientIp(fakeReq(viaVercel('', SECRET)), set), VERCEL_EGRESS);
+  assert.equal(clientIp(fakeReq(viaVercel(undefined, SECRET)), set), VERCEL_EGRESS);
 
   // Source: clientIp.ts never logs anything.
   const src = fs.readFileSync(path.join(__dirname, '../src/lib/clientIp.ts'), 'utf8');
   assert.doesNotMatch(src, /console\.|process\.stdout|process\.stderr/, 'clientIp.ts must not log');
   assert.match(src, /timingSafeEqual/, 'secret compare must be constant-time');
+  assert.doesNotMatch(src, /'x-vercel-forwarded-for'/i, 'clientIp.ts must never read X-Vercel-Forwarded-For');
 }
 
 function frontendChecks() {
   assert.equal(frontendEdge.EDGE_SECRET_HEADER, backendEdge.EDGE_SECRET_HEADER, 'header name matches');
+  assert.equal(frontendEdge.CLIENT_IP_HEADER, backendEdge.CLIENT_IP_HEADER, 'client-ip header name matches');
   assert.equal(frontendEdge.EDGE_SECRET_ENV, backendEdge.EDGE_SECRET_ENV, 'env name matches');
   assert.equal(frontendEdge.EDGE_SECRET_MIN_LENGTH, backendEdge.EDGE_SECRET_MIN_LENGTH, 'min length matches');
   assert.equal(frontendEdge.edgeSecretFromEnv(undefined), null);
   assert.equal(frontendEdge.edgeSecretFromEnv('short'), null);
-  assert.equal(frontendEdge.withEdgeSecret(new Headers({ a: 'b' }), null), null, 'no secret: request untouched');
-  const out = frontendEdge.withEdgeSecret(new Headers({ [EDGE_SECRET_HEADER]: 'client-forged' }), SECRET);
-  assert.equal(out?.get(EDGE_SECRET_HEADER), SECRET, 'client copy overwritten');
-  // What the middleware sends is accepted by the backend.
-  assert.equal(edgeSecretMatches(out?.get(EDGE_SECRET_HEADER) ?? undefined, edgeSecretFromEnv({ [EDGE_SECRET_ENV]: SECRET })), true);
+  assert.equal(frontendEdge.withEdgeSecret(new Headers({ a: 'b' }), null, '203.0.113.7'), null, 'no secret: request untouched');
+  const forgedIn = new Headers({
+    [EDGE_SECRET_HEADER]: 'client-forged',
+    [CLIENT_IP_HEADER]: '198.18.0.1',
+    'x-vercel-forwarded-for': '198.18.0.2',
+  });
+  const out = frontendEdge.withEdgeSecret(forgedIn, SECRET, '203.0.113.7');
+  assert.equal(out?.get(EDGE_SECRET_HEADER), SECRET, 'client secret copy overwritten');
+  assert.equal(out?.get(CLIENT_IP_HEADER), '203.0.113.7', 'client-ip comes from ipAddress()');
+  assert.equal(out?.has('x-vercel-forwarded-for'), false, 'client X-Vercel-Forwarded-For dropped');
+  const noIp = frontendEdge.withEdgeSecret(forgedIn, SECRET, undefined);
+  assert.equal(noIp?.has(CLIENT_IP_HEADER), false, 'no IP: no client-ip header, forged one dropped');
+  // What the middleware sends is accepted by the backend end to end.
+  const asNode: Record<string, string> = { 'x-real-ip': VERCEL_EGRESS };
+  out?.forEach((v, k) => {
+    asNode[k] = v;
+  });
+  asNode['x-real-ip'] = VERCEL_EGRESS; // Railway's edge overwrites X-Real-IP
+  assert.equal(clientIp(fakeReq(asNode), { [EDGE_SECRET_ENV]: SECRET }), '203.0.113.7', 'backend uses the middleware IP');
 
   const mw = fs.readFileSync(path.join(FRONTEND, 'middleware.ts'), 'utf8');
   assert.match(mw, /matcher:\s*'\/api\/:path\*'/, 'middleware only matches /api');
   assert.match(mw, /from '@vercel\/functions\/middleware'/, 'uses @vercel/functions next()');
+  assert.match(mw, /import \{ ipAddress \} from '@vercel\/functions\/headers'/, 'visitor IP comes from @vercel/functions ipAddress()');
+  assert.match(mw, /ipAddress\(request\)/, 'middleware passes ipAddress(request)');
   assert.match(mw, /if \(!headers\) return undefined;/, 'no secret: middleware returns nothing');
   assert.match(mw, /next\(\{ request: \{ headers \} \}\)/, 'forwards modified request headers');
   for (const f of [mw, fs.readFileSync(path.join(FRONTEND, 'src/lib/edgeProxySecret.ts'), 'utf8')]) {
@@ -204,31 +246,51 @@ const forged = (i: number) => `198.18.${(i >> 8) & 255}.${i & 255}`;
 const firstLimited = (codes: number[]) => codes.indexOf(429) + 1;
 
 async function behaviourChecks() {
-  // Secret unset: rotating a forged X-Vercel-Forwarded-For (even with a
-  // guessed secret header) never escapes the X-Real-IP bucket.
+  // Secret unset: rotating a forged X-MenRush-Client-IP and
+  // X-Vercel-Forwarded-For (even with a guessed secret header) never escapes
+  // the X-Real-IP bucket.
   await withLimiter(undefined, async (port) => {
     const codes: number[] = [];
-    for (let i = 0; i < 7; i += 1) codes.push(await post(port, viaVercel(forged(i), SECRET)));
+    for (let i = 0; i < 7; i += 1) {
+      codes.push(await post(port, viaVercel(forged(i), SECRET, { 'x-vercel-forwarded-for': forged(50 + i) }) as Record<string, string>));
+    }
     assert.equal(firstLimited(codes), 6, `secret unset: forged visitor ignored: ${codes}`);
   });
 
-  // Secret set, wrong header: same.
+  // Secret set, wrong or missing header: same.
   await withLimiter(SECRET, async (port) => {
     const codes: number[] = [];
-    for (let i = 0; i < 7; i += 1) codes.push(await post(port, viaVercel(forged(i), `wrong-${i}`)));
+    for (let i = 0; i < 7; i += 1) codes.push(await post(port, viaVercel(forged(i), `wrong-${i}`) as Record<string, string>));
     assert.equal(firstLimited(codes), 6, `secret mismatch: forged visitor ignored: ${codes}`);
     const noHeader: number[] = [];
-    for (let i = 0; i < 6; i += 1) noHeader.push(await post(port, { 'x-real-ip': '192.0.2.50', 'x-vercel-forwarded-for': forged(100 + i) }));
+    for (let i = 0; i < 6; i += 1) {
+      noHeader.push(await post(port, { 'x-real-ip': '192.0.2.50', [CLIENT_IP_HEADER]: forged(100 + i), 'x-vercel-forwarded-for': forged(200 + i) }));
+    }
     assert.equal(firstLimited(noHeader), 6, `secret missing: forged visitor ignored: ${noHeader}`);
+  });
+
+  // Secret match, the live bypass: a rotating forged X-Vercel-Forwarded-For
+  // with the correct secret (and the edge-set client IP) stays in one bucket.
+  await withLimiter(SECRET, async (port) => {
+    const codes: number[] = [];
+    for (let i = 0; i < 7; i += 1) {
+      codes.push(await post(port, viaVercel('203.0.113.9', SECRET, { 'x-vercel-forwarded-for': forged(300 + i) }) as Record<string, string>));
+    }
+    assert.equal(firstLimited(codes), 6, `secret match: forged X-Vercel-Forwarded-For ignored: ${codes}`);
+    const noIp: number[] = [];
+    for (let i = 0; i < 7; i += 1) {
+      noIp.push(await post(port, viaVercel(undefined, SECRET, { 'x-real-ip': '192.0.2.60', 'x-vercel-forwarded-for': forged(400 + i) }) as Record<string, string>));
+    }
+    assert.equal(firstLimited(noIp), 6, `secret match, no client-ip: forged X-Vercel-Forwarded-For ignored: ${noIp}`);
   });
 
   // Secret match: two visitors behind the same Vercel egress IP get separate
   // buckets, and one visitor is limited on request 6.
   await withLimiter(SECRET, async (port) => {
     const a: number[] = [];
-    for (let i = 0; i < 6; i += 1) a.push(await post(port, viaVercel('203.0.113.7', SECRET)));
+    for (let i = 0; i < 6; i += 1) a.push(await post(port, viaVercel('203.0.113.7', SECRET) as Record<string, string>));
     assert.equal(firstLimited(a), 6, `secret match: visitor A limited on 6: ${a}`);
-    assert.equal(await post(port, viaVercel('198.51.100.1', SECRET)), 200, 'visitor B behind same egress has own bucket');
+    assert.equal(await post(port, viaVercel('198.51.100.1', SECRET) as Record<string, string>), 200, 'visitor B behind same egress has own bucket');
   });
 }
 
@@ -237,7 +299,7 @@ async function main() {
   frontendChecks();
   await behaviourChecks();
   assert.deepEqual(erlMessages, [], `express-rate-limit validation errors logged: ${erlMessages.join(' | ')}`);
-  console.log('edge-proxy-secret-checks: ok (unset, mismatch, match, constant-time, no logs, frontend parity)');
+  console.log('edge-proxy-secret-checks: ok (unset, mismatch, match, forged x-vercel-forwarded-for ignored, list/invalid ignored, constant-time, no logs, frontend parity)');
 }
 
 main().catch((err) => {

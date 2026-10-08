@@ -17,14 +17,22 @@
  * missing or not a valid IP we fall back to req.ip.
  *
  * Vercel shared secret (optional, off until configured):
- * frontend/middleware.ts adds X-MenRush-Edge-Secret on /api requests when
- * EDGE_PROXY_SECRET is set in Vercel. When EDGE_PROXY_SECRET is also set
- * here AND the header matches (constant-time compare), the request really
- * came through our Vercel rewrite, so the first X-Vercel-Forwarded-For entry
- * (the visitor) is used. Anyone can send that header straight to Railway, so
- * without a matching secret it is ignored and the X-Real-IP rule above
- * applies unchanged. A secret shorter than EDGE_SECRET_MIN_LENGTH counts as
- * unset.
+ * frontend/middleware.ts runs on /api requests before the vercel.json
+ * rewrite to Railway. When EDGE_PROXY_SECRET is set in Vercel it strips any
+ * client-sent X-MenRush-Edge-Secret, X-MenRush-Client-IP and
+ * X-Vercel-Forwarded-For, then sets X-MenRush-Edge-Secret and
+ * X-MenRush-Client-IP (the visitor address Vercel itself puts in its own
+ * X-Real-IP, read with ipAddress() from @vercel/functions). When
+ * EDGE_PROXY_SECRET is also set here AND the secret header matches
+ * (constant-time compare), X-MenRush-Client-IP is used, but only when it is
+ * one valid IP (a list or anything invalid is ignored).
+ *
+ * X-Vercel-Forwarded-For is NEVER read: a client can send its own copy to
+ * menrush.com/api and Vercel can pass it through, which let forged addresses
+ * get their own buckets. Without a matching secret, X-MenRush-Client-IP is
+ * ignored too, since anyone can send it straight to Railway. In every
+ * fallback case the X-Real-IP rule above applies unchanged. A secret shorter
+ * than EDGE_SECRET_MIN_LENGTH counts as unset.
  *
  * Never log the secret, the header, or the values this module returns.
  */
@@ -35,7 +43,7 @@ import { ipKeyGenerator } from 'express-rate-limit';
 
 export const REAL_IP_HEADER = 'x-real-ip';
 export const EDGE_SECRET_HEADER = 'x-menrush-edge-secret';
-export const VERCEL_FORWARDED_FOR_HEADER = 'x-vercel-forwarded-for';
+export const CLIENT_IP_HEADER = 'x-menrush-client-ip';
 export const EDGE_SECRET_ENV = 'EDGE_PROXY_SECRET';
 export const EDGE_SECRET_MIN_LENGTH = 16;
 
@@ -115,15 +123,30 @@ export function edgeSecretMatches(provided: string | string[] | undefined, expec
 }
 
 /**
+ * The edge-set visitor IP: exactly one header value holding exactly one valid
+ * IP, normalised. '' for a missing header, a repeated header, a list or an
+ * invalid value. Never splits a list and picks an entry.
+ */
+export function singleHeaderIp(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    if (value.length !== 1) return '';
+    value = value[0];
+  }
+  if (typeof value !== 'string' || value.includes(',')) return '';
+  return normaliseIp(value);
+}
+
+/**
  * The address a rate limit should count against:
- * 1. first X-Vercel-Forwarded-For entry, ONLY when EDGE_PROXY_SECRET is set
- *    and the request carries the matching X-MenRush-Edge-Secret;
+ * 1. X-MenRush-Client-IP, ONLY when EDGE_PROXY_SECRET is set, the request
+ *    carries the matching X-MenRush-Edge-Secret, and the value is one valid IP;
  * 2. otherwise X-Real-IP (first value, normalised) when valid;
  * 3. otherwise req.ip, otherwise the socket address.
+ * X-Vercel-Forwarded-For and X-Forwarded-For are never read.
  */
 export function clientIp(req: Request, env: NodeJS.ProcessEnv = process.env): string {
   if (edgeSecretMatches(req.headers[EDGE_SECRET_HEADER], edgeSecretFromEnv(env))) {
-    const visitor = normaliseIp(firstHeaderValue(req.headers[VERCEL_FORWARDED_FOR_HEADER]));
+    const visitor = singleHeaderIp(req.headers[CLIENT_IP_HEADER]);
     if (visitor) return visitor;
   }
   const real = normaliseIp(firstHeaderValue(req.headers[REAL_IP_HEADER]));
