@@ -92,7 +92,7 @@ test.describe('desktop design migration @ 1440px', () => {
     // Chat stays Chat — no nested Rooms tab inside messages.
     await expect(page.getByRole('tab', { name: 'Rooms' })).toHaveCount(0);
     await expect(page.getByRole('tab', { name: 'Messages' })).toHaveCount(0);
-    await expect(page.getByRole('link', { name: 'Video rooms', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Rooms', exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Messages', exact: true })).toBeVisible();
     // Hub chrome (not the lg:hidden mobile title).
     await expect(page.locator('aside').getByText('Messages', { exact: true })).toBeVisible();
@@ -121,9 +121,9 @@ test.describe('desktop design migration @ 1440px', () => {
     const page = await ctx.newPage();
     await page.goto('/rooms');
 
-    await expect(page.getByRole('link', { name: 'Video rooms', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Rooms', exact: true })).toBeVisible();
     // Room list chrome (not the lg:hidden mobile title).
-    await expect(page.locator('aside').getByText('Video rooms', { exact: true })).toBeVisible();
+    await expect(page.locator('aside').getByText('Rooms', { exact: true })).toBeVisible();
     // Not nested inside Chat / Messages tabs.
     await expect(page.getByRole('tab', { name: 'Messages' })).toHaveCount(0);
     await expect(page.getByRole('tab', { name: 'Rooms' })).toHaveCount(0);

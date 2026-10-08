@@ -177,7 +177,7 @@ assert.match(migration, /show_distance BOOLEAN NOT NULL DEFAULT TRUE/);
 assert.strictEqual(
   read('database/migrations/072_show_distance.sql'),
   migration,
-  'backend copy of 068 matches repo root',
+  'backend copy of 072 matches repo root',
 );
 
 console.log('show-distance-checks: ok');

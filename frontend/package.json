@@ -33,7 +33,7 @@
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.18.3",
     "socket.io-client": "^4.5.4",
-    "source-map-js": "^1.2.1",
+    "source-map-js": "^1.2.2",
     "zustand": "^4.3.7"
   },
   "devDependencies": {
@@ -53,5 +53,8 @@
     "typescript": "^5.0.2",
     "vite": "^7.3.6",
     "vitest": "^5.0.2"
+  },
+  "overrides": {
+    "postcss-selector-parser": "7.1.6"
   }
 }

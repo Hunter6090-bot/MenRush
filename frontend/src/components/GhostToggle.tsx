@@ -38,7 +38,7 @@ export const GhostToggle: React.FC<GhostToggleProps> = ({
                 color: 'var(--copper)',
               }}
             >
-              {betaIncluded || entitled ? 'Included in beta' : 'Premium'}
+              {betaIncluded || entitled ? 'Included' : 'Premium'}
             </span>
           </div>
           <p className="mt-1 text-xs" style={{ color: 'var(--cream-muted)' }}>

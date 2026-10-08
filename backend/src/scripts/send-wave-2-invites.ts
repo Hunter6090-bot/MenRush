@@ -48,7 +48,7 @@ function isExcludedWaitlistEmail(row: WaitlistRow): boolean {
 }
 
 function buildInviteEmail(code: string, unsubscribeUrl: string): { subject: string; html: string; text: string } {
-  const betaUrl = 'https://menrush.com/beta';
+  const betaUrl = 'https://menrush.com/invite';
   const bodyHtml = [
     transactionalParagraph(
       'You joined the MenRush waitlist. Thank you for your patience. Wave 2 is open, and your personal invite is below.',
@@ -87,7 +87,7 @@ function buildInviteEmail(code: string, unsubscribeUrl: string): { subject: stri
     '',
     `Your invite code: ${code}`,
     '',
-    'Enter it at https://menrush.com/beta, then create your account with this email address.',
+    'Enter it at https://menrush.com/invite, then create your account with this email address.',
     'Premium is included free for now.',
     '',
     `Unsubscribe: ${unsubscribeUrl}`,

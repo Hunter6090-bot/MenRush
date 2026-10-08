@@ -73,7 +73,7 @@ function isSkip(email: string, source: string | null): boolean {
 }
 
 function buildEmail(code: string, unsubscribeUrl: string) {
-  const betaUrl = 'https://menrush.com/beta';
+  const betaUrl = 'https://menrush.com/invite';
   const bodyHtml = [
     transactionalParagraph(
       'Friendly reminder. Your MenRush invite is still open. We saved you a seat.',
@@ -83,7 +83,7 @@ function buildEmail(code: string, unsubscribeUrl: string) {
       true,
     ),
     transactionalParagraph(
-      '1) Open <a href="https://menrush.com/beta" style="color:#C4832A;">menrush.com/beta</a><br/>2) Enter the code above<br/>3) Create your account with <strong>this same email address</strong>',
+      '1) Open <a href="https://menrush.com/invite" style="color:#C4832A;">menrush.com/invite</a><br/>2) Enter the code above<br/>3) Create your account with <strong>this same email address</strong>',
       true,
     ),
     transactionalParagraph(
@@ -116,7 +116,7 @@ function buildEmail(code: string, unsubscribeUrl: string) {
     '',
     `Your invite code: ${code}`,
     '',
-    '1) https://menrush.com/beta',
+    '1) https://menrush.com/invite',
     '2) Enter the code',
     '3) Register with this same email',
     '',

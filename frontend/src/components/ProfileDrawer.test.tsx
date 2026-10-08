@@ -98,6 +98,17 @@ describe('ProfileDrawer grid sheet layout', () => {
     expect(photoBand!.textContent).toMatch(/28 mi/);
   });
 
+  it('shows distance once: the pill in the photo band, no "away" line', () => {
+    renderDrawer();
+    expect(screen.getAllByText(/28 mi/i)).toHaveLength(1);
+    expect(screen.queryByText(/away/i)).not.toBeInTheDocument();
+    const photoBand = screen
+      .getByTestId('profile-sheet-hero')
+      .querySelector('[class*="overflow-hidden"]');
+    expect(photoBand!.textContent).toMatch(/28 mi/);
+    expect(screen.getByText(/^offline$/i)).toBeInTheDocument();
+  });
+
   it('shows muted Sent when one-way pending', () => {
     render(
       <MemoryRouter>

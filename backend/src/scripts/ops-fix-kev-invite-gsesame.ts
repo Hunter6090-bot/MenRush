@@ -68,7 +68,7 @@ function loginReadyEmail(email: string, password: string) {
 }
 
 function inviteEmail(email: string, code: string) {
-  const betaUrl = 'https://menrush.com/beta';
+  const betaUrl = 'https://menrush.com/invite';
   const bodyHtml = [
     transactionalParagraph('You are invited to MenRush.'),
     transactionalParagraph(
@@ -76,7 +76,7 @@ function inviteEmail(email: string, code: string) {
       true,
     ),
     transactionalParagraph(
-      `1) Open <a href="${betaUrl}" style="color:#C4832A;">menrush.com/beta</a><br/>2) Enter the code<br/>3) Create your account with <strong>${email}</strong> (same email)`,
+      `1) Open <a href="${betaUrl}" style="color:#C4832A;">menrush.com/invite</a><br/>2) Enter the code<br/>3) Create your account with <strong>${email}</strong> (same email)`,
       true,
     ),
     transactionalParagraph(
@@ -101,7 +101,7 @@ function inviteEmail(email: string, code: string) {
     '',
     `Code: ${code}`,
     '',
-    'https://menrush.com/beta',
+    'https://menrush.com/invite',
     `Register with: ${email}`,
   ].join('\n');
 

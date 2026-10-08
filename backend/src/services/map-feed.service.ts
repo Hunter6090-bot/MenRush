@@ -71,9 +71,19 @@ export const mapFeedService = {
        LEFT JOIN profiles sp ON sp.user_id = mf.sender_id
        WHERE mf.created_at >= $3
          AND ST_DWithin(mf.location, ST_MakePoint($2, $1)::geography, $4)
+         -- Ghost / hidden members: their posts and pins are not shown to others.
+         AND (
+           mf.sender_id = $5
+           OR (COALESCE(sp.is_visible, FALSE) = TRUE AND COALESCE(sp.is_ghost, FALSE) = FALSE)
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM blocks b
+           WHERE (b.blocker_id = $5 AND b.blocked_id = mf.sender_id)
+              OR (b.blocker_id = mf.sender_id AND b.blocked_id = $5)
+         )
        ORDER BY mf.created_at DESC
        LIMIT 200`,
-      [lat, lng, fifteenMinsAgo, radiusMeters],
+      [lat, lng, fifteenMinsAgo, radiusMeters, userId],
     );
 
     return result.rows.map((row: MapFeedMessage & { sender_fuzz_m?: number | string }) => {
@@ -125,13 +135,38 @@ export const mapFeedService = {
     };
   },
 
-  async nearbyUserIds(lat: number, lng: number, radiusKm: number): Promise<string[]> {
+  /**
+   * Socket fan-out targets for a new post. With senderId, anyone the sender
+   * blocked or who blocked the sender is left out (same block lookup as Nearby),
+   * and a ghost / hidden sender only reaches themselves.
+   */
+  async nearbyUserIds(
+    lat: number,
+    lng: number,
+    radiusKm: number,
+    senderId?: string,
+  ): Promise<string[]> {
     const radiusMeters = radiusKm * 1000;
     const result = await query(
       `SELECT user_id FROM profiles
        WHERE lat IS NOT NULL
-         AND ST_DWithin(location, ST_MakePoint($2, $1)::geography, $3)`,
-      [lat, lng, radiusMeters],
+         AND ST_DWithin(location, ST_MakePoint($2, $1)::geography, $3)
+         AND (
+           $4::uuid IS NULL
+           OR profiles.user_id = $4::uuid
+           OR (
+             EXISTS (
+               SELECT 1 FROM profiles sp
+               WHERE sp.user_id = $4::uuid AND sp.is_visible = TRUE AND sp.is_ghost = FALSE
+             )
+             AND NOT EXISTS (
+               SELECT 1 FROM blocks b
+               WHERE (b.blocker_id = $4::uuid AND b.blocked_id = profiles.user_id)
+                  OR (b.blocker_id = profiles.user_id AND b.blocked_id = $4::uuid)
+             )
+           )
+         )`,
+      [lat, lng, radiusMeters, senderId ?? null],
     );
     return result.rows.map((r: { user_id: string }) => r.user_id);
   },
