@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it } from 'vitest';
 import { ipAddress } from '@vercel/functions/headers';
-import middleware, { config } from '../../middleware';
-import {
+import middleware, {
+  config,
   CLIENT_IP_HEADER,
   EDGE_SECRET_HEADER,
   STRIPPED_CLIENT_HEADERS,
@@ -10,7 +10,7 @@ import {
   overrideHeaderList,
   singleIpOrNull,
   withEdgeSecret,
-} from './edgeProxySecret';
+} from '../../middleware';
 
 const SECRET = 'test-edge-secret-0123456789abcdef';
 const VISITOR = '203.0.113.7';

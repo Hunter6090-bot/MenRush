@@ -107,6 +107,12 @@ jobs:
         run: npm ci
       - name: Edge secret middleware (no IP no secret, override list, forged copies deleted)
         run: npm run test:edge-proxy-secret
+      # vercel build, then import and call the exact built middleware.js under
+      # plain Node ESM from an isolated copy (catches ERR_MODULE_NOT_FOUND /
+      # MIDDLEWARE_INVOCATION_FAILED that vitest and tsc cannot see). No
+      # Vercel token or env: placeholder project, empty global config.
+      - name: Built middleware loads and runs on the nodejs runtime (vercel build + Node ESM import)
+        run: npm run test:middleware-artifact
 
   # Integration tests that need a real Postgres + PostGIS (map feed blocks and
   # Ghost, radius on the fuzzed pin, etc.). Throwaway DB per run.
