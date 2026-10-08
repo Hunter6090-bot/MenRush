@@ -44,7 +44,7 @@ export const SAFARI_LOCATION_HOW_TO =
   'On iPhone Safari: tap aA (or …) in the address bar → Website Settings → Location → Allow. Or Settings → Safari → Location. Also check Settings → Privacy & Security → Location Services → Safari Websites → While Using.';
 
 export const LOCATION_DENIED_NOT_INCOMPLETE =
-  'Your profile is ready — this is only location for Nearby, not an incomplete profile.';
+  'Your profile is ready. This is only location for Nearby, not an incomplete profile.';
 
 function mapGeoError(err: GeolocationPositionError | null | undefined): DeviceLocationError {
   if (!err) return 'unavailable';

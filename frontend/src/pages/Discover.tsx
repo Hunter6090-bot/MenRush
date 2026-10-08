@@ -1042,7 +1042,7 @@ export const Discover = () => {
         saved.lat,
         saved.lng,
         window.isSecureContext
-          ? 'Using your last saved location — refreshing GPS…'
+          ? 'Using your last saved location. Refreshing GPS…'
           : INSECURE_GPS_NOTICE,
         true,
       );

@@ -313,7 +313,7 @@ export const HotSpots = () => {
                       {spot.has_active_checkins || spot.live_count_exact > 0 ? 'Active' : 'Empty'}
                     </p>
                     <p className="text-lg font-extrabold text-[#E0A14A]">
-                      {spot.has_active_checkins || spot.live_count_exact > 0 ? spot.live_count : '—'}
+                      {spot.has_active_checkins || spot.live_count_exact > 0 ? spot.live_count : '0'}
                     </p>
                   </div>
                 </div>
