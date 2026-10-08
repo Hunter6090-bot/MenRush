@@ -160,6 +160,14 @@ describe('CruisingSpotCard', () => {
     expect(screen.getByTestId('cruising-last-active')).toHaveTextContent('5+ checked in now');
   });
 
+  it('activity line is 15px, including the signal note', () => {
+    render(<CruisingSpotCard spot={mockSpot} />);
+    const line = screen.getByTestId('cruising-last-active');
+    expect(line).toHaveClass('text-[15px]');
+    expect(line).not.toHaveClass('text-xs');
+    expect(line.innerHTML).not.toMatch(/text-\[(10|11|12|13|14)px\]/);
+  });
+
   it('card label ignores live_count_exact even when present', () => {
     const premiumSpot: HotSpotDTO = {
       ...mockSpot,

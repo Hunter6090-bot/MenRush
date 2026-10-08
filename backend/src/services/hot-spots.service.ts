@@ -125,6 +125,45 @@ export function formatLiveCount(exact: number, isPremium: boolean): number | str
   return exact;
 }
 
+/** Free live-sort bucket: 0 to 4 exact, then every 5 or more counts as one '5+' bucket. */
+export const FREE_LIVE_SORT_CAP = 5;
+
+/**
+ * Live-sort SQL. Free sorts on the rounded bucket, then distance, then id, so
+ * neither the order nor which rows survive LIMIT can reveal an exact count
+ * above 4. Premium keeps the exact-count sort.
+ */
+export function liveSortOrderSql(isPremium: boolean): string {
+  return isPremium
+    ? `ORDER BY live_count_exact DESC, distance_km ASC NULLS LAST, hs.name ASC`
+    : `ORDER BY LEAST(live_count_exact, ${FREE_LIVE_SORT_CAP}) DESC, distance_km ASC NULLS LAST, hs.id ASC`;
+}
+
+function distanceForSort(spot: HotSpotRow): number {
+  return spot.distance_km == null ? Number.POSITIVE_INFINITY : spot.distance_km;
+}
+
+/**
+ * Live sort applied after serialization (same keys as liveSortOrderSql).
+ * Free only sees the rounded live_count, so it sorts on that: '5+' ties, then
+ * distance ascending, then id. Premium sorts on exact count then distance; the
+ * stable sort keeps the SQL name order for remaining ties.
+ */
+export function sortSpotsLive(spots: HotSpotRow[], isPremium: boolean): HotSpotRow[] {
+  const bucket = (spot: HotSpotRow): number => {
+    if (isPremium) return Number(spot.live_count_exact ?? 0);
+    return spot.live_count === '5+' ? FREE_LIVE_SORT_CAP : Math.min(Number(spot.live_count) || 0, FREE_LIVE_SORT_CAP);
+  };
+  return [...spots].sort((a, b) => {
+    const byCount = bucket(b) - bucket(a);
+    if (byCount !== 0) return byCount;
+    const byDistance = distanceForSort(a) - distanceForSort(b);
+    if (byDistance !== 0 && !Number.isNaN(byDistance)) return byDistance;
+    if (isPremium) return 0;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+}
+
 /**
  * Single serializer for every hot-spot / cruising-spot response (list, single,
  * check-in, comment, review, event check-in). Free viewers get only the rounded
@@ -285,10 +324,11 @@ export const hotSpotsService = {
     values.push(limit);
     const limitIdx = values.length;
 
-    const orderSql =
-      opts.sortBy === 'closest' || hasQuery
-        ? `ORDER BY distance_km ASC NULLS LAST, hs.name ASC`
-        : `ORDER BY live_count_exact DESC, distance_km ASC NULLS LAST, hs.name ASC`;
+    const liveSort = !(opts.sortBy === 'closest' || hasQuery);
+    // ORDER BY runs before LIMIT, so Free's rounded sort also decides which rows make the page.
+    const orderSql = liveSort
+      ? liveSortOrderSql(isPremium)
+      : `ORDER BY distance_km ASC NULLS LAST, hs.name ASC`;
 
     const res = await query(
       `SELECT
@@ -342,7 +382,8 @@ export const hotSpotsService = {
       values,
     );
 
-    return res.rows.map((row) => mapSpotRow(row, isPremium, opts.userId));
+    const spots = res.rows.map((row) => mapSpotRow(row, isPremium, opts.userId));
+    return liveSort ? sortSpotsLive(spots, isPremium) : spots;
   },
 
   async getSpot(userId: string, spotId: string): Promise<HotSpotRow | null> {

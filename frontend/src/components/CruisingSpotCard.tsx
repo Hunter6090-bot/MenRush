@@ -98,7 +98,7 @@ export function CruisingSpotCard({
 
         {/* Last Active Time status indicator */}
         <div
-          className="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium"
+          className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[15px] font-medium leading-snug"
           data-testid="cruising-last-active"
         >
           <div className="flex items-center gap-1.5">
@@ -117,7 +117,7 @@ export function CruisingSpotCard({
             </span>
           </div>
 
-          <span className="text-[10px] text-[var(--cream-muted)]">
+          <span className="text-[15px] text-[var(--cream-muted)]">
             · {ttlHours}h signal
           </span>
         </div>
