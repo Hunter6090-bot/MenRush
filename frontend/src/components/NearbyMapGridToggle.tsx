@@ -1,7 +1,9 @@
 /**
  * Nearby Grid ↔ Map control (Brand lock 31 Aug 2026).
  * Label is the destination view only — never append Mode.
+ * Pete lock (8 Oct 2026): one control swaps the whole screen; 44px tap target.
  */
+import { IconGrid, IconMapPin } from './icons';
 export type NearbyView = 'grid' | 'map';
 
 const NEARBY_VIEW_KEY = 'menrush_nearby_view';
@@ -33,6 +35,7 @@ export function NearbyMapGridToggle({
 }) {
   const next: NearbyView = view === 'grid' ? 'map' : 'grid';
   const label = next === 'map' ? 'Map' : 'Grid';
+  const Icon = next === 'map' ? IconMapPin : IconGrid;
   return (
     <button
       type="button"
@@ -40,9 +43,10 @@ export function NearbyMapGridToggle({
       aria-label={next === 'map' ? 'Show Map' : 'Show Grid'}
       title={label}
       onClick={() => onChange(next)}
-      className="inline-flex min-h-[36px] items-center rounded-full border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.12)] px-3.5 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.22)]"
+      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-full border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.12)] px-4 py-2 text-[13px] font-extrabold uppercase tracking-[0.1em] text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.22)]"
     >
-      {label}
+      <Icon size={18} />
+      <span>{label}</span>
     </button>
   );
 }
