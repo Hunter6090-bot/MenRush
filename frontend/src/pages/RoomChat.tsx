@@ -9,7 +9,6 @@ import { PulseRing } from '../components/PulseRing';
 import { MobileBackButton } from '../components/MobileBackButton';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
-import { PanicReportButton } from '../components/PanicReportButton';
 import { getPhotoUrl } from '../components/UserAvatar';
 import { parseRoomImageMessage } from '../lib/roomMediaMessage';
 import { RoomTempIdentityGate } from '../components/RoomTempIdentityGate';
@@ -737,13 +736,6 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     setDmNotice(null);
   }, [socket, roomId, dmPeer]);
 
-  // One-tap room report needs a subject user; prefer owner, else first other member.
-  const roomReportTargetId =
-    members.find((m) => m.role === 'owner' && m.id !== user?.id)?.id ??
-    (room?.created_by && room.created_by !== user?.id ? room.created_by : undefined) ??
-    members.find((m) => m.id !== user?.id)?.id;
-
-
   const handleAddMember = async (targetId: string, targetName: string) => {
     if (!roomId || addingMemberId) return;
     setAddingMemberId(targetId);
@@ -1023,24 +1015,6 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           <GroupIcon className="w-5 h-5" />
         </button>
 
-        {roomId && roomReportTargetId ? (
-          <PanicReportButton
-            reportedUserId={roomReportTargetId}
-            threadId={`room:${roomId}`}
-            onNotice={(msg) => setSettingsNotice(msg)}
-            className="w-9 h-9"
-          />
-        ) : null}
-
-        {roomId && roomReportTargetId ? (
-          <PanicReportButton
-            reportedUserId={roomReportTargetId}
-            threadId={`room:${roomId}`}
-            onNotice={(msg) => setSettingsNotice(msg)}
-            className="w-9 h-9"
-          />
-        ) : null}
-
         {/* Settings */}
         <button
           onClick={() => setSettingsOpen((v) => !v)}
@@ -1156,6 +1130,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                       <ChatSafetyMenu
                         peerId={member.id}
                         peerName={member.name}
+                        threadId={roomId ? `room:${roomId}` : undefined}
                         onNotice={(msg) => setSettingsNotice(msg)}
                       />
                     )}

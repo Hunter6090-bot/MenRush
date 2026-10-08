@@ -51,7 +51,7 @@ function loginReadyEmail(email: string, password: string) {
     bodyHtml,
     ctaUrl: loginUrl,
     ctaLabel: 'Sign in to MenRush',
-    footerNote: 'You received this because you requested beta access help.',
+    footerNote: 'You received this because you requested access help.',
   });
 
   const text = [
@@ -70,7 +70,7 @@ function loginReadyEmail(email: string, password: string) {
 function inviteEmail(email: string, code: string) {
   const betaUrl = 'https://menrush.com/beta';
   const bodyHtml = [
-    transactionalParagraph('You are invited to the MenRush closed beta.'),
+    transactionalParagraph('You are invited to MenRush.'),
     transactionalParagraph(
       `<strong style="color:#F0E0C0;">Your invite code</strong><br/><span style="font-family:ui-monospace,monospace;font-size:20px;letter-spacing:0.08em;color:#E0A14A;">${code}</span>`,
       true,
@@ -80,24 +80,24 @@ function inviteEmail(email: string, code: string) {
       true,
     ),
     transactionalParagraph(
-      'This code is single-use and already verified on our side. Premium is free during beta. Reply if anything fails.',
+      'This code is single-use and already verified on our side. Premium is included for now. Reply if anything fails.',
     ),
   ].join('');
 
   const html = buildTransactionalEmail({
-    title: 'Your MenRush beta invite',
+    title: 'Your MenRush invite',
     preheader: `Your invite code: ${code}`,
-    eyebrow: 'Beta invite',
+    eyebrow: 'Invite',
     headlineHtml: 'You are <span style="color:#C4832A;">in.</span>',
     subheadline: 'Your personal invite code is ready.',
     bodyHtml,
     ctaUrl: betaUrl,
     ctaLabel: 'Enter your invite code',
-    footerNote: 'You received this because you were invited to the MenRush beta.',
+    footerNote: 'You received this because you were invited to MenRush.',
   });
 
   const text = [
-    'Your MenRush beta invite',
+    'Your MenRush invite',
     '',
     `Code: ${code}`,
     '',
@@ -105,7 +105,7 @@ function inviteEmail(email: string, code: string) {
     `Register with: ${email}`,
   ].join('\n');
 
-  return { subject: 'Your MenRush beta invite is here', html, text };
+  return { subject: 'Your MenRush invite is here', html, text };
 }
 
 async function fixKev() {

@@ -60,7 +60,7 @@ test('Pride invite email is claim path only (no Path 2 / public code promotion)'
     code: 'MENRUSH-A3F7-B2C1',
   });
   assert.match(mail.subject, /MENRUSH-A3F7-B2C1/);
-  assert.match(mail.text, /beta invite/i);
+  assert.match(mail.text, /your invite/i);
   assert.match(mail.text, /3 months of Premium/i);
   assert.match(mail.html, /register\?invite=/);
   assert.doesNotMatch(mail.text, /PRIDE 3MONTH FREE/);

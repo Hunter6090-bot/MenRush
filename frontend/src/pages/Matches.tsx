@@ -306,7 +306,7 @@ export const Matches = () => {
         <div className="mb-6">
           <h1 className="text-2xl font-extrabold text-[var(--cream)] lg:text-[28px]">Matches</h1>
           <p className="mt-1 text-sm text-[var(--cream-muted)]">
-            Who liked you and mutual matches. Location is only shared when you send a pin in chat.
+            Exact location is shared only when you send a pin in chat.
           </p>
         </div>
 
@@ -345,8 +345,7 @@ export const Matches = () => {
             </div>
             <h2 className="text-lg font-bold text-[var(--cream)]">No matches yet</h2>
             <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-[var(--cream-muted)]">
-              Tap Match on Nearby or Community. When it&apos;s mutual, they land here — ready to
-              chat. Be direct. Consent first.
+              Tap Match on Nearby. Be direct. Consent first.
             </p>
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
               <Link

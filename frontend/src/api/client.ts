@@ -567,20 +567,6 @@ export const messagesAPI = {
     apiClient.post<MessageDTO>(`/messages/${messageId}/withdraw`),
 };
 
-export interface MeetAgreementState {
-  my_confirmed: boolean;
-  peer_confirmed: boolean;
-  mutual: boolean;
-  my_confirmed_at: string | null;
-  peer_confirmed_at: string | null;
-}
-
-export const meetAPI = {
-  getState: (peerId: string) => apiClient.get<MeetAgreementState>(`/meet/${peerId}`),
-  confirm: (peerId: string) => apiClient.post<MeetAgreementState>(`/meet/${peerId}/confirm`),
-  revoke: (peerId: string) => apiClient.post<MeetAgreementState>(`/meet/${peerId}/revoke`),
-};
-
 export const roomsAPI = {
   createRoom: (data: any) => apiClient.post('/rooms', data),
   getRooms: () =>

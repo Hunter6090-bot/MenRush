@@ -43,7 +43,6 @@ import {
   isWaitlistEmailPaused,
   sendWelcomeEmailNow,
   subscribeToWaitlist,
-  startDripWorker,
 } from './services/drip.service';
 import { errorHandler } from './middleware/auth';
 import { authService } from './services/auth.service';
@@ -63,6 +62,7 @@ import { ensureUploadDirs, getUploadsRoot, probeUploadsWritable } from './lib/up
 import { logCallMetric } from './services/call-metrics.service';
 import { mediaStorageMode } from './services/media-storage.service';
 import { warmIceServers } from './services/webrtc.service';
+import { EarlyCallIceBuffer } from './services/call-ice-buffer';
 
 // Transient DB disconnects must not take down login/API.
 process.on('unhandledRejection', (reason) => {
@@ -175,10 +175,10 @@ app.post('/api/waitlist', async (req, res) => {
       success: true,
       already_subscribed: result.alreadySubscribed,
       message: result.alreadySubscribed
-        ? "You're already on the list. Check your inbox for the beta invite if you haven't used it yet."
+        ? "You're already on the list. Check your inbox for your invite if you haven't used it yet."
         : paused
           ? "You're on the list."
-          : "You're on the list! Check your email for a link to join the beta.",
+          : "You're on the list! Check your email for a link to join.",
     });
   } catch (err) {
     console.error('Waitlist insert error:', err);
@@ -247,6 +247,8 @@ interface PendingCall {
   timeout?: ReturnType<typeof setTimeout>;
 }
 const pendingCalls = new Map<string, PendingCall>();
+/** Caller ICE that arrives before its pending call exists (callee offline). */
+const earlyCallIce = new EarlyCallIceBuffer();
 /** How long the callee has to answer after the offer is actually delivered. */
 const CALL_RING_WAIT_MS = Number(process.env.CALL_RING_WAIT_MS) || 35_000;
 /** How long to hold an undelivered offer while the callee is offline / cold-starting. */
@@ -316,6 +318,7 @@ function clearPendingCall(callerId: string, calleeId: string) {
   const pending = pendingCalls.get(pendingCallKey(callerId, calleeId));
   if (pending?.timeout) clearTimeout(pending.timeout);
   pendingCalls.delete(pendingCallKey(callerId, calleeId));
+  earlyCallIce.clear(callerId, calleeId);
 }
 
 async function recordMissedCall(callerId: string, calleeId: string) {
@@ -434,6 +437,9 @@ io.on('connection', (socket: Socket) => {
       }
       const fromName = await userService.getDisplayName(authorized.actorId) ?? '';
       const online = isUserSocketOnline(authorized.targetId);
+      // Candidates trickled while this handler was still awaiting above. Take
+      // them before clearPendingCall, which also drops the early buffer.
+      const earlyIce = earlyCallIce.take(authorized.actorId, authorized.targetId);
       // Replace any prior pending for this pair so an old timer cannot fire late.
       clearPendingCall(authorized.actorId, authorized.targetId);
       const pending: PendingCall = {
@@ -442,7 +448,7 @@ io.on('connection', (socket: Socket) => {
         answered: false,
         offer: data.offer,
         fromName,
-        ice: [],
+        ice: earlyIce,
         deliveredIncoming: false,
       };
       pendingCalls.set(pendingCallKey(authorized.actorId, authorized.targetId), pending);
@@ -516,9 +522,12 @@ io.on('connection', (socket: Socket) => {
   socket.on('call:ice-candidate', async (data: { to: string; candidate: any }) => {
     const authorized = await authorizeCallTarget(socket, data?.to);
     if (!authorized || !data.candidate) return;
-    const pending = findPendingCall(authorized.actorId, authorized.targetId);
-    if (pending && !isUserSocketOnline(authorized.targetId)) {
-      pending.ice.push(data.candidate);
+    if (!isUserSocketOnline(authorized.targetId)) {
+      // Never drop candidates for an offline peer: hold them on the pending
+      // call, or in the early buffer if call:initiate has not created it yet.
+      const pending = pendingCalls.get(pendingCallKey(authorized.actorId, authorized.targetId));
+      if (pending) pending.ice.push(data.candidate);
+      else earlyCallIce.push(authorized.actorId, authorized.targetId, data.candidate);
       return;
     }
     io.to(`user:${authorized.targetId}`).emit('call:ice-candidate', {
@@ -960,11 +969,4 @@ server.listen(PORT, () => {
   startRoomTempIdentityPurgeCron();
   startRoomMessagePurgeCron();
   startVerificationRetentionWorker();
-  // Optional: in-process drip worker. Prefer an external cron in production
-  // (POST /api/waitlist/admin/run); only enable in-process when running a
-  // single backend instance without separate scheduling.
-  if (process.env.DRIP_WORKER_ENABLED === 'true') {
-    const minutes = parseInt(process.env.DRIP_WORKER_INTERVAL_MINUTES || '60', 10);
-    startDripWorker(Number.isFinite(minutes) && minutes > 0 ? minutes : 60);
-  }
 });

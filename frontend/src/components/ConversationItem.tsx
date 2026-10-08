@@ -159,7 +159,12 @@ export const ConversationItem = memo(function ConversationItem({
         </button>
       </div>
 
-      <ChatSafetyMenu peerId={userId} peerName={name} onBlocked={onBlocked} />
+      <ChatSafetyMenu
+        peerId={userId}
+        peerName={name}
+        threadId={selfId ? `dm:${[selfId, userId].sort().join('_')}` : `dm:${userId}`}
+        onBlocked={onBlocked}
+      />
     </div>
   );
 });

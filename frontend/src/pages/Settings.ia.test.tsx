@@ -177,7 +177,7 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
 
     // Section 8: Membership (Profile & Premium link with honest copy)
     expect(screen.getByText(/& Premium/)).toBeInTheDocument();
-    expect(screen.getByText('Beta gift active')).toBeInTheDocument();
+    expect(screen.getByText('Premium gift active')).toBeInTheDocument();
 
     // Section 9: About (Live links)
     expect(screen.getByText('Community guidelines')).toBeInTheDocument();
