@@ -7,9 +7,10 @@ import { AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
+/** Invite code checks. Per IP, shared behind a Vercel egress IP; was 30. */
 const validateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 30,
+  max: 60,
   message: { error: 'Too many attempts, please try again in 15 minutes' },
   keyGenerator: rateLimitKey,
   standardHeaders: true,

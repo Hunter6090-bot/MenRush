@@ -1,7 +1,6 @@
 import { Router, Response, Request } from 'express';
 import express from 'express';
-import rateLimit from 'express-rate-limit';
-import { rateLimitKey } from '../lib/clientIp';
+import { accountLimiter, authLimit, userAccountKey } from '../lib/authRateLimits';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 import {
   VeriffConfigError,
@@ -11,13 +10,15 @@ import {
 
 const router = Router();
 
-const sessionLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'production' ? 8 : 50,
-  message: { error: 'Too many verification attempts, please try again later' },
-  keyGenerator: rateLimitKey,
-  standardHeaders: true,
-  legacyHeaders: false,
+/**
+ * Each call opens a paid Veriff session. Signed in (authMiddleware runs
+ * first), so it is keyed per account instead of per IP: people sharing a
+ * Vercel egress IP no longer share 8 sessions between them.
+ */
+const sessionLimiter = accountLimiter({
+  max: authLimit('veriffSession'),
+  key: userAccountKey,
+  message: 'Too many verification attempts, please try again later',
 });
 
 /**
