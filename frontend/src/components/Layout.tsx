@@ -294,7 +294,7 @@ function LayoutInner({ children }: LayoutProps) {
               <button
                 type="button"
                 onClick={() => setSearchOpen(true)}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-[var(--cream-soft)] active:bg-[var(--bg-card)]"
+                className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--cream-soft)] active:bg-[var(--bg-card)]"
                 aria-label="Search profiles"
               >
                 <SearchIcon className="w-5 h-5" />

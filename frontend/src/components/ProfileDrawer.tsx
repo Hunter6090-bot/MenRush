@@ -14,8 +14,8 @@ import { profilePathForUser } from "../lib/profileLinks";
 import {
   matchCtaAriaLabel,
   matchCtaDisabled,
-  matchCtaToneClasses,
   matchInterestState,
+  type MatchInterestState,
 } from "../lib/matchCta";
 import { useAuthStore } from "../hooks/store";
 import { useIsDesktopLayout } from "../hooks/useMediaQuery";
@@ -188,7 +188,7 @@ export function ProfileDrawer({
       <div
         ref={sheetRef}
         data-testid="pin-sheet"
-        className="relative z-10 flex w-full flex-col overflow-hidden rounded-t-[1.5rem] border border-[var(--border-default)] bg-[#1E1508] shadow-2xl sm:h-full sm:max-w-[420px] sm:rounded-none sm:border-l
+        className="relative z-10 flex w-full flex-col overflow-hidden rounded-t-[1.5rem] border border-[var(--border-default)] bg-[var(--bg-card)] shadow-2xl sm:h-full sm:max-w-[420px] sm:rounded-none sm:border-l
         "
         style={{
           height: isDesktop ? "100%" : `${currentVh}vh`,
@@ -268,10 +268,10 @@ export function ProfileDrawer({
 
           <div className="min-w-0 flex-1 pt-1">
             <div className="flex flex-wrap items-center gap-1.5">
-              <h2 className="truncate font-display text-xl font-extrabold uppercase tracking-wide text-[#F0E0C0]">
+              <h2 className="truncate font-display text-xl font-extrabold uppercase tracking-wide text-[var(--cream)]">
                 {user.name}
               </h2>
-              {(user as { is_verified?: boolean }).is_verified ? <VerifiedBadge /> : null}
+              {(user as { is_verified?: boolean }).is_verified ? <VerifiedBadge tone="surface" /> : null}
             </div>
             {ageDist ? (
               <p className="mt-1 text-[15px] font-semibold text-[var(--cream-soft)]">{ageDist}</p>
@@ -279,9 +279,9 @@ export function ProfileDrawer({
               <p className="mt-1 text-[15px] font-semibold text-[var(--cream-soft)]">{user.age}</p>
             ) : null}
             {isPulsing ? (
-              <p className="mt-1 text-[15px] font-bold text-[#C4832A]">Pulse</p>
+              <p className="mt-1 text-[15px] font-bold text-[var(--nn-accent-text)]">Pulse</p>
             ) : user.online ? (
-              <p className="mt-1 text-[15px] font-bold text-[#4ADE80]" data-testid="pin-sheet-now">
+              <p className="mt-1 text-[15px] font-bold text-[var(--status-online)]" data-testid="pin-sheet-now">
                 Now
               </p>
             ) : (
@@ -290,7 +290,7 @@ export function ProfileDrawer({
             <button
               type="button"
               onClick={openProfile}
-              className="mt-2 min-h-[44px] text-left text-[15px] font-bold text-[var(--copper)]"
+              className="mt-2 min-h-[44px] text-left text-[15px] font-bold text-[var(--nn-accent-text)]"
               data-testid="pin-sheet-profile-link"
             >
               Profile &gt;
@@ -312,7 +312,7 @@ export function ProfileDrawer({
               data-testid="drawer-open-chat"
               title="Chat"
               aria-label={`Chat with ${user.name}`}
-              className="inline-flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-2xl border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] px-2 text-[15px] font-extrabold text-[var(--copper)]"
+              className="inline-flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-2xl border border-[color-mix(in_srgb,var(--copper)_55%,transparent)] bg-[color-mix(in_srgb,var(--copper)_18%,transparent)] px-2 text-[15px] font-extrabold text-[var(--nn-accent-text)]"
             >
               <IconChat size={18} />
               Chat
@@ -323,7 +323,7 @@ export function ProfileDrawer({
               data-testid="pin-sheet-album"
               title="Album"
               aria-label={`Album for ${user.name}`}
-              className="inline-flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-2 text-[15px] font-extrabold text-[#F0E0C0]"
+              className="inline-flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-2 text-[15px] font-extrabold text-[var(--cream)]"
             >
               <AlbumGlyph />
               Album
@@ -334,7 +334,7 @@ export function ProfileDrawer({
               data-testid="pin-sheet-more"
               title="More"
               aria-label="More"
-              className="inline-flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-2 text-[15px] font-extrabold text-[#F0E0C0]"
+              className="inline-flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-2 text-[15px] font-extrabold text-[var(--cream)]"
             >
               <MoreGlyph />
               More
@@ -357,7 +357,7 @@ export function ProfileDrawer({
             aria-label="Close more"
             onClick={() => setMoreOpen(false)}
           />
-          <div className="relative z-10 w-full max-w-lg rounded-t-[1.5rem] border border-[var(--border-default)] bg-[#1E1508] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 shadow-2xl">
+          <div className="relative z-10 w-full max-w-lg rounded-t-[1.5rem] border border-[var(--border-default)] bg-[var(--bg-card)] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 shadow-2xl">
             <div className="mb-3 flex items-center gap-3">
               <div className="h-10 w-10 overflow-hidden rounded-full bg-[var(--bg-elevated)]" data-testid="pin-sheet-more-avatar">
                 <BrandAvatar
@@ -367,7 +367,7 @@ export function ProfileDrawer({
                   variant="profile"
                 />
               </div>
-              <p className="truncate text-[16px] font-extrabold text-[#F0E0C0]">{user.name}</p>
+              <p className="truncate text-[16px] font-extrabold text-[var(--cream)]">{user.name}</p>
             </div>
 
             {/* Match / Unmatch / Pulse relocated into More */}
@@ -383,7 +383,7 @@ export function ProfileDrawer({
                   setMoreOpen(false);
                 }}
                 data-testid="drawer-match"
-                className={`mb-2 flex min-h-[48px] w-full items-center gap-3 rounded-2xl px-3 text-left text-[15px] font-bold ${matchCtaToneClasses(matchState)}`}
+                className={`mb-2 flex min-h-[48px] w-full items-center gap-3 rounded-2xl px-3 text-left text-[15px] font-bold ${pinSheetMatchTone(matchState)}`}
               >
                 <IconMatches size={18} />
                 <span>{matchState === "outgoing" ? "Sent" : "Match"}</span>
@@ -401,7 +401,7 @@ export function ProfileDrawer({
                   }
                 }}
                 data-testid="drawer-unmatch"
-                className="mb-2 flex min-h-[48px] w-full items-center gap-3 rounded-2xl border border-[var(--border-default)] px-3 text-left text-[15px] font-bold text-[#F0E0C0]"
+                className="mb-2 flex min-h-[48px] w-full items-center gap-3 rounded-2xl border border-[var(--border-default)] px-3 text-left text-[15px] font-bold text-[var(--cream)]"
               >
                 <IconUnmatch size={18} />
                 Unmatch
@@ -416,7 +416,7 @@ export function ProfileDrawer({
                   setMoreOpen(false);
                 }}
                 data-testid="pin-sheet-pulse"
-                className="mb-2 flex min-h-[48px] w-full items-center gap-3 rounded-2xl border border-[var(--copper)]/50 px-3 text-left text-[15px] font-bold text-[var(--copper)]"
+                className="mb-2 flex min-h-[48px] w-full items-center gap-3 rounded-2xl border border-[color-mix(in_srgb,var(--copper)_50%,transparent)] px-3 text-left text-[15px] font-bold text-[var(--nn-accent-text)]"
               >
                 <IconPulse size={16} />
                 Pulse back
@@ -445,7 +445,7 @@ export function ProfileDrawer({
               type="button"
               data-testid="pin-sheet-more-cancel"
               onClick={() => setMoreOpen(false)}
-              className="flex min-h-[48px] w-full items-center justify-center rounded-full border border-[var(--cream)]/45 text-[15px] font-extrabold text-[#F0E0C0]"
+              className="flex min-h-[48px] w-full items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--cream)_45%,transparent)] text-[15px] font-extrabold text-[var(--cream)]"
             >
               Cancel
             </button>
@@ -464,6 +464,17 @@ export function ProfileDrawer({
       ) : null}
     </div>
   );
+}
+
+/** Theme-following Match row tones for the pin sheet (contrast >= 4.5:1 in light and dark). */
+function pinSheetMatchTone(state: MatchInterestState): string {
+  if (state === 'mutual') {
+    return 'border border-[color-mix(in_srgb,var(--copper)_55%,transparent)] bg-[color-mix(in_srgb,var(--copper)_18%,transparent)] text-[var(--nn-accent-text)]';
+  }
+  if (state === 'outgoing') {
+    return 'border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream-muted)] cursor-not-allowed';
+  }
+  return 'bg-[var(--copper)] text-[var(--nn-on-copper)] hover:bg-[var(--nn-copper-bright)]';
 }
 
 function AlbumGlyph() {

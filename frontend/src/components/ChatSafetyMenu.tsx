@@ -207,7 +207,7 @@ export function ChatSafetyMenu({
           aria-label="Chat options"
           aria-haspopup="menu"
           aria-expanded={menuOpen}
-          className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[var(--bg-card)] active:scale-95 text-[var(--cream-muted)]"
+          className="w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-150 hover:bg-[var(--bg-card)] active:scale-95 text-[var(--cream-muted)]"
         >
           <MoreIcon className="w-5 h-5" />
         </button>
@@ -233,7 +233,7 @@ export function ChatSafetyMenu({
                   setMenuOpen(false);
                   setReportOpen(true);
                 }}
-                className="w-full px-4 py-2.5 text-left text-sm text-[var(--cream)] transition-colors hover:bg-[var(--bg-card)] focus-visible:outline-none focus-visible:bg-[var(--bg-card)]"
+                className="flex min-h-[44px] w-full items-center px-4 py-2.5 text-left text-[15px] text-[var(--cream)] transition-colors hover:bg-[var(--bg-card)] focus-visible:outline-none focus-visible:bg-[var(--bg-card)]"
               >
                 Report {peerName}
               </button>
@@ -244,7 +244,7 @@ export function ChatSafetyMenu({
                   setMenuOpen(false);
                   setBlockOpen(true);
                 }}
-                className="w-full px-4 py-2.5 text-left text-sm text-[var(--nn-danger)] transition-colors hover:bg-[rgba(155,58,40,0.12)] focus-visible:outline-none focus-visible:bg-[rgba(155,58,40,0.12)]"
+                className="flex min-h-[44px] w-full items-center px-4 py-2.5 text-left text-[15px] text-[var(--nn-danger-text)] transition-colors hover:bg-[var(--error-soft)] focus-visible:outline-none focus-visible:bg-[var(--error-soft)]"
               >
                 Block {peerName}
               </button>
@@ -254,7 +254,7 @@ export function ChatSafetyMenu({
                   role="menuitem"
                   data-testid="menu-hide-location"
                   onClick={() => void handleToggleLocation()}
-                  className="w-full px-4 py-2.5 text-left text-[15px] text-[var(--cream)] transition-colors hover:bg-[var(--bg-card)] focus-visible:outline-none focus-visible:bg-[var(--bg-card)]"
+                  className="flex min-h-[44px] w-full items-center px-4 py-2.5 text-left text-[15px] text-[var(--cream)] transition-colors hover:bg-[var(--bg-card)] focus-visible:outline-none focus-visible:bg-[var(--bg-card)]"
                 >
                   {locationHidden ? 'Show my location' : 'Hide my location'}
                 </button>
@@ -266,7 +266,7 @@ export function ChatSafetyMenu({
                   setMenuOpen(false);
                   navigate('/settings#blocked');
                 }}
-                className="w-full px-4 py-2.5 text-left text-sm text-[var(--cream-muted)] transition-colors hover:bg-[var(--bg-card)] focus-visible:outline-none focus-visible:bg-[var(--bg-card)]"
+                className="flex min-h-[44px] w-full items-center px-4 py-2.5 text-left text-[15px] text-[var(--cream-muted)] transition-colors hover:bg-[var(--bg-card)] focus-visible:outline-none focus-visible:bg-[var(--bg-card)]"
               >
                 Manage blocked people
               </button>

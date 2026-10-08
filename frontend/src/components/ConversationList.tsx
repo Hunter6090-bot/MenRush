@@ -265,7 +265,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           type="button"
           data-testid="chat-search-pill"
           onClick={() => window.dispatchEvent(new Event('menrush:open-search'))}
-          className="ml-auto inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded-full border border-[var(--copper)]/45 bg-[rgba(196,131,42,0.12)] px-3 text-[12px] font-extrabold text-[var(--copper)]"
+          className="ml-auto inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--copper)_45%,transparent)] bg-[color-mix(in_srgb,var(--copper)_8%,transparent)] px-3 text-[15px] font-extrabold text-[var(--nn-accent-text)]"
           aria-label="Search"
         >
           Search
