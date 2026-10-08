@@ -2,6 +2,8 @@ import { query } from '../db';
 import { discoveryPhotoUrl } from '../lib/discoveryPhoto';
 import { isPublicHotSpotVisibilitySql } from './hot-spots.service';
 import { notLocationHiddenFromViewerSql } from '../lib/locationHiddenSql';
+import { MAP_PIN_FUZZ_DEFAULT_M } from '../lib/mapPinFuzz';
+import { coarseMilesFromMeters, memberDistanceFields } from '../lib/memberDistance';
 
 export type CommunityPostRow = {
   id: string;
@@ -10,7 +12,13 @@ export type CommunityPostRow = {
   created_at: string;
   author_name: string;
   author_photo_url: string | null;
-  distance_m: number;
+  /** Where the post was made (author's stored pin at the time). Never sent to clients. */
+  post_lat?: number | string | null;
+  post_lng?: number | string | null;
+  /** Author's Discretion setting (map_pin_fuzz_m). */
+  author_fuzz_m?: number | string | null;
+  /** Author's Show distance setting. */
+  author_show_distance?: boolean | null;
   comment_count?: number | string;
 };
 
@@ -21,10 +29,13 @@ export type CommunityPostDTO = {
   created_at: string;
   author_name: string;
   author_photo_url: string | null;
-  /** Bucketed distance in km for locale formatting on the client. */
-  distance_km: string;
-  /** Approximate distance label (privacy-bucketed). */
-  distance_label: string;
+  /**
+   * Coarse bucket in km (sorting only), measured to the author's fuzzed pin.
+   * Omitted when the author has Show distance off; clients show "Nearby".
+   */
+  distance_km?: string;
+  /** "<1 mi" or whole miles. Omitted with distance_km. */
+  distance_label?: string;
   comment_count: number;
 };
 
@@ -59,28 +70,31 @@ export type CommunityMentionSuggestionDTO = {
   category_slug?: string | null;
 };
 
-function bucketDistance(distanceM: number): { distance_km: string; distance_label: string } {
-  const km = distanceM / 1000;
-  let bucketed: number;
-  let label: string;
-  if (km < 0.3) {
-    bucketed = 0.2;
-    label = '< 300 m';
-  } else if (km < 1) {
-    bucketed = Math.round(km * 10) / 10;
-    label = `${Math.round(bucketed * 1000)} m`;
-  } else if (km < 5) {
-    bucketed = Math.round(km * 2) / 2;
-    label = `${bucketed.toFixed(1)} km`;
-  } else {
-    bucketed = Math.round(km);
-    label = `${bucketed} km`;
-  }
-  return { distance_km: bucketed.toFixed(2), distance_label: label };
+type CommunityViewer = { lat: number; lng: number };
+
+/**
+ * Distance from the viewer to the post, measured to the author's FUZZED pin
+ * (same Discretion offset as the map), coarse miles. `own` = the author's own
+ * fresh post (create/edit response): "<1 mi" unless Show distance is off.
+ */
+function postDistance(
+  row: CommunityPostRow,
+  viewer: CommunityViewer | 'own',
+): ReturnType<typeof memberDistanceFields> {
+  if (row.author_show_distance === false) return {};
+  if (viewer === 'own') return coarseMilesFromMeters(0);
+  return memberDistanceFields({
+    memberId: row.user_id,
+    viewerLat: viewer.lat,
+    viewerLng: viewer.lng,
+    memberLat: row.post_lat != null ? Number(row.post_lat) : null,
+    memberLng: row.post_lng != null ? Number(row.post_lng) : null,
+    fuzzMaxM: row.author_fuzz_m != null ? Number(row.author_fuzz_m) : MAP_PIN_FUZZ_DEFAULT_M,
+    showDistance: row.author_show_distance,
+  });
 }
 
-function toDto(row: CommunityPostRow): CommunityPostDTO {
-  const { distance_km, distance_label } = bucketDistance(Number(row.distance_m) || 0);
+function toDto(row: CommunityPostRow, viewer: CommunityViewer | 'own'): CommunityPostDTO {
   const created =
     typeof row.created_at === 'string'
       ? row.created_at
@@ -92,8 +106,7 @@ function toDto(row: CommunityPostRow): CommunityPostDTO {
     created_at: created,
     author_name: row.author_name,
     author_photo_url: row.author_photo_url,
-    distance_km,
-    distance_label,
+    ...postDistance(row, viewer),
     comment_count: Math.max(0, Number(row.comment_count) || 0),
   };
 }
@@ -168,19 +181,25 @@ export const communityService = {
     );
     const post = inserted.rows[0];
 
-    const author = await query(`SELECT name, photo_url FROM users WHERE id = $1`, [userId]);
-    const authorRow = author.rows[0] ?? { name: 'Member', photo_url: null };
+    const author = await query(
+      `SELECT name, photo_url, COALESCE(show_distance, TRUE) AS show_distance FROM users WHERE id = $1`,
+      [userId],
+    );
+    const authorRow = author.rows[0] ?? { name: 'Member', photo_url: null, show_distance: true };
 
-    return toDto({
-      id: post.id,
-      user_id: post.user_id,
-      body: post.body,
-      created_at: post.created_at,
-      author_name: authorRow.name,
-      author_photo_url: authorRow.photo_url,
-      distance_m: 0,
-      comment_count: 0,
-    });
+    return toDto(
+      {
+        id: post.id,
+        user_id: post.user_id,
+        body: post.body,
+        created_at: post.created_at,
+        author_name: authorRow.name,
+        author_photo_url: authorRow.photo_url,
+        author_show_distance: authorRow.show_distance !== false,
+        comment_count: 0,
+      },
+      'own',
+    );
   },
 
   /**
@@ -206,16 +225,17 @@ export const communityService = {
          cp.created_at,
          u.name AS author_name,
          u.photo_url AS author_photo_url,
-         ST_Distance(
-           cp.location,
-           ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography
-         ) AS distance_m,
+         cp.lat AS post_lat,
+         cp.lng AS post_lng,
+         COALESCE(ap.map_pin_fuzz_m, ${MAP_PIN_FUZZ_DEFAULT_M}) AS author_fuzz_m,
+         COALESCE(u.show_distance, TRUE) AS author_show_distance,
          (
            SELECT COUNT(*)::int FROM community_post_comments c
            WHERE c.post_id = cp.id
          ) AS comment_count
        FROM community_posts cp
        JOIN users u ON u.id = cp.user_id
+       LEFT JOIN profiles ap ON ap.user_id = cp.user_id
        WHERE cp.created_at > NOW() - INTERVAL '24 hours'
        AND ST_DWithin(
          cp.location,
@@ -234,7 +254,8 @@ export const communityService = {
       [params.lat, params.lng, radiusM, params.viewerId, limit],
     );
 
-    return result.rows.map((row: CommunityPostRow) => toDto(row));
+    const viewer = { lat: params.lat, lng: params.lng };
+    return result.rows.map((row: CommunityPostRow) => toDto(row, viewer));
   },
 
   /**
@@ -337,8 +358,11 @@ export const communityService = {
     );
     const updatedPost = updated.rows[0];
 
-    const author = await query(`SELECT name, photo_url FROM users WHERE id = $1`, [userId]);
-    const authorRow = author.rows[0] ?? { name: 'Member', photo_url: null };
+    const author = await query(
+      `SELECT name, photo_url, COALESCE(show_distance, TRUE) AS show_distance FROM users WHERE id = $1`,
+      [userId],
+    );
+    const authorRow = author.rows[0] ?? { name: 'Member', photo_url: null, show_distance: true };
 
     const commentCountRes = await query(
       `SELECT COUNT(*)::int AS count FROM community_post_comments WHERE post_id = $1`,
@@ -346,16 +370,19 @@ export const communityService = {
     );
     const commentCount = Number(commentCountRes.rows[0]?.count ?? 0);
 
-    return toDto({
-      id: updatedPost.id,
-      user_id: updatedPost.user_id,
-      body: updatedPost.body,
-      created_at: updatedPost.created_at,
-      author_name: authorRow.name,
-      author_photo_url: authorRow.photo_url,
-      distance_m: 0,
-      comment_count: commentCount,
-    });
+    return toDto(
+      {
+        id: updatedPost.id,
+        user_id: updatedPost.user_id,
+        body: updatedPost.body,
+        created_at: updatedPost.created_at,
+        author_name: authorRow.name,
+        author_photo_url: authorRow.photo_url,
+        author_show_distance: authorRow.show_distance !== false,
+        comment_count: commentCount,
+      },
+      'own',
+    );
   },
 
   /**

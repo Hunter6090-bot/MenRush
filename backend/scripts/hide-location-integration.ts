@@ -95,15 +95,22 @@ async function main() {
 
     // ── Direct profile: stripped, same shape as any no-distance profile ─────
     const hiddenProfile: any = await userService.getPublicProfile(stalker, owner);
-    // No distance at all. Expect undefined (field left out, as with Show distance
-    // off). Until #327's distance_allowed is on main the field is still null, so
-    // normalise null to undefined; the key-set check below catches shape tells.
-    assert.strictEqual(hiddenProfile.distance_km ?? undefined, undefined);
-    assert.strictEqual(hiddenProfile.distance_label ?? undefined, undefined);
+    // No distance at all: fields left out, same as Show distance off.
+    assert.strictEqual(hiddenProfile.distance_km, undefined);
+    assert.strictEqual(hiddenProfile.distance_label, undefined);
+    // Same keys as a profile with Show distance off (seen by someone not hidden).
+    await query(`UPDATE users SET show_distance = FALSE WHERE id = $1`, [owner]);
+    const distanceOffProfile: any = await userService.getPublicProfile(other, owner);
+    await query(`UPDATE users SET show_distance = TRUE WHERE id = $1`, [owner]);
+    assert.strictEqual(distanceOffProfile.distance_km, undefined);
     assert.deepStrictEqual(
       Object.keys(hiddenProfile).sort(),
-      Object.keys(baselineProfile).sort(),
+      Object.keys(distanceOffProfile).sort(),
       'no extra or missing keys: nothing tells the viewer they are hidden',
+    );
+    assert.deepStrictEqual(
+      Object.keys(hiddenProfile).sort(),
+      Object.keys(baselineProfile).filter((k) => k !== 'distance_km' && k !== 'distance_label').sort(),
     );
     for (const k of Object.keys(hiddenProfile)) {
       assert.ok(!/hidden|hide|restrict/i.test(k), `no tell-tale key: ${k}`);
