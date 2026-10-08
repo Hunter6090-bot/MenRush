@@ -63,6 +63,8 @@ import { logCallMetric } from './services/call-metrics.service';
 import { mediaStorageMode } from './services/media-storage.service';
 import { warmIceServers } from './services/webrtc.service';
 import { EarlyCallIceBuffer } from './services/call-ice-buffer';
+// TEMPORARY: remove with src/middleware/proxyHopDiagnostic.ts after the answer.
+import { proxyHopDiagnosticFromEnv } from './middleware/proxyHopDiagnostic';
 
 // Transient DB disconnects must not take down login/API.
 process.on('unhandledRejection', (reason) => {
@@ -85,6 +87,10 @@ const io: any = new SocketIOServer(server, {
 });
 
 // Middleware
+// TEMPORARY proxy-hop diagnostic. Off unless PROXY_HOP_DIAGNOSTIC=1; when off
+// nothing is mounted. Logs yes/no shapes only. Remove after the answer.
+const proxyHopDiagnostic = proxyHopDiagnosticFromEnv();
+if (proxyHopDiagnostic) app.use(proxyHopDiagnostic);
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use('/api/premium/webhook', premiumWebhookRoutes);

@@ -27,6 +27,7 @@ export function LocationPresenceStrip() {
     pathname.startsWith('/profile/setup') ||
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
+    pathname.startsWith('/invite') ||
     pathname.startsWith('/beta') ||
     pathname.startsWith('/coming-soon') ||
     pathname === '/';
