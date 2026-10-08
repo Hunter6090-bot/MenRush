@@ -1755,7 +1755,7 @@ export const Profile = () => {
               <p className="text-base font-semibold" style={{ color: 'var(--cream)' }}>
                 Hide my location
               </p>
-              <p className="text-sm mt-1" style={{ color: 'var(--cream-muted)' }}>
+              <p className="text-[15px] mt-1" style={{ color: 'var(--cream-muted)' }}>
                 Pick who won't see you nearby.
               </p>
             </div>

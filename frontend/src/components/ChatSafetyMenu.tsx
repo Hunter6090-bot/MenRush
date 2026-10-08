@@ -254,7 +254,7 @@ export function ChatSafetyMenu({
                   role="menuitem"
                   data-testid="menu-hide-location"
                   onClick={() => void handleToggleLocation()}
-                  className="w-full px-4 py-2.5 text-left text-sm text-[var(--cream)] transition-colors hover:bg-[var(--bg-card)] focus-visible:outline-none focus-visible:bg-[var(--bg-card)]"
+                  className="w-full px-4 py-2.5 text-left text-[15px] text-[var(--cream)] transition-colors hover:bg-[var(--bg-card)] focus-visible:outline-none focus-visible:bg-[var(--bg-card)]"
                 >
                   {locationHidden ? 'Show my location' : 'Hide my location'}
                 </button>
