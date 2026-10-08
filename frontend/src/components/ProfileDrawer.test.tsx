@@ -97,6 +97,22 @@ describe('ProfileDrawer pin sheet (redesign Step 1)', () => {
     expect(screen.queryByText(/away/i)).not.toBeInTheDocument();
   });
 
+  it('More helper names Report, Block and Hide my location at 15px', async () => {
+    const user = userEvent.setup();
+    renderDrawer();
+    await user.click(screen.getByTestId('pin-sheet-more'));
+    const helper = screen.getByText('Report, Block and Hide my location are in the menu above.');
+    expect(helper.className).toMatch(/text-\[15px\]/);
+  });
+
+  it('pin sheet Profile link and action buttons are 15px', () => {
+    renderDrawer();
+    expect(screen.getByTestId('pin-sheet-profile-link').className).toMatch(/text-\[15px\]/);
+    for (const id of ['drawer-open-chat', 'pin-sheet-album', 'pin-sheet-more']) {
+      expect(screen.getByTestId(id).className).toMatch(/text-\[15px\]/);
+    }
+  });
+
   it('shows muted Sent in More when one-way pending', async () => {
     const user = userEvent.setup();
     render(

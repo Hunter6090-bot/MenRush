@@ -290,7 +290,7 @@ export function ProfileDrawer({
             <button
               type="button"
               onClick={openProfile}
-              className="mt-2 min-h-[44px] text-left text-[14px] font-bold text-[var(--copper)]"
+              className="mt-2 min-h-[44px] text-left text-[15px] font-bold text-[var(--copper)]"
               data-testid="pin-sheet-profile-link"
             >
               Profile &gt;
@@ -312,7 +312,7 @@ export function ProfileDrawer({
               data-testid="drawer-open-chat"
               title="Chat"
               aria-label={`Chat with ${user.name}`}
-              className="inline-flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-2xl border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] px-2 text-[12px] font-extrabold text-[var(--copper)]"
+              className="inline-flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-2xl border border-[var(--copper)]/55 bg-[rgba(196,131,42,0.18)] px-2 text-[15px] font-extrabold text-[var(--copper)]"
             >
               <IconChat size={18} />
               Chat
@@ -323,7 +323,7 @@ export function ProfileDrawer({
               data-testid="pin-sheet-album"
               title="Album"
               aria-label={`Album for ${user.name}`}
-              className="inline-flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-2 text-[12px] font-extrabold text-[#F0E0C0]"
+              className="inline-flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-2 text-[15px] font-extrabold text-[#F0E0C0]"
             >
               <AlbumGlyph />
               Album
@@ -334,7 +334,7 @@ export function ProfileDrawer({
               data-testid="pin-sheet-more"
               title="More"
               aria-label="More"
-              className="inline-flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-2 text-[12px] font-extrabold text-[#F0E0C0]"
+              className="inline-flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-2 text-[15px] font-extrabold text-[#F0E0C0]"
             >
               <MoreGlyph />
               More
@@ -438,7 +438,7 @@ export function ProfileDrawer({
               />
             </div>
             <p className="mb-3 px-1 text-[15px] leading-snug text-[var(--cream-muted)]">
-              Report and Block live in the menu above.
+              Report, Block and Hide my location are in the menu above.
             </p>
 
             <button
