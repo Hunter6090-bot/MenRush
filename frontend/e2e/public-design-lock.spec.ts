@@ -86,7 +86,7 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
 
   const inviteLink = page.getByRole('link', { name: /Enter your code/i });
   await expect(inviteLink).toBeVisible();
-  await expect(inviteLink).toHaveAttribute('href', '/beta');
+  await expect(inviteLink).toHaveAttribute('href', '/invite');
 
   // Hero + header both use the official transparent cutout (no black-plate logos).
   await expect(page.getByTestId('brand-mark')).toHaveCount(2);
@@ -144,13 +144,13 @@ test.describe('public design lock — auth pages', () => {
     expect(network.expectNoSideEffects()).toEqual([]);
   });
 
-  test('/beta keeps optional invite UI shell', async ({ page }) => {
+  test('/invite keeps optional invite UI shell', async ({ page }) => {
     const network = await guardAgainstSideEffects(page);
-    await page.goto('/beta');
+    await page.goto('/invite');
     await assertAuthShell(page);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Have an invite/i);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Enter your code/i);
-    // Period lock on /beta hero — no em dash, en dash, or hyphen-as-aside.
+    // Period lock on /invite hero: no em dash, en dash, or hyphen-as-aside.
     await expect(
       page.getByText(
         'Optional. If you have a MENRUSH invite from email, enter it here. Otherwise sign up free. No code needed.',

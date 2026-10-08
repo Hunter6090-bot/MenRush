@@ -1187,7 +1187,7 @@ async function sendPromoEmail(params: {
             <h2 style="margin:0 0 12px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#C4832A;font-weight:700;">How to redeem</h2>
             <ol style="margin:0 0 32px;padding-left:20px;color:#7a6a5a;font-size:14px;line-height:1.8;">
               <li>Keep this email — your code is locked to <strong style="color:#8a7a6a;">${to}</strong></li>
-              <li>This is a Premium promo code (PRIDE-XXXX-XXXX), not a MENRUSH invite from /beta</li>
+              <li>This is a Premium promo code (PRIDE-XXXX-XXXX), not a MENRUSH invite code</li>
               <li>Redemption is at account signup — enter this personal code (not PRIDE 3MONTH FREE)</li>
               <li>When redeemed, Premium starts on launch. If open is 1&nbsp;October&nbsp;2026, Premium ends 1&nbsp;January&nbsp;2027. If launch slips, the 3 months run from the actual open date — not still 1&nbsp;January</li>
               <li>Redeem by 31&nbsp;October&nbsp;2026. Replaces the 30-day waitlist gift. Do not stack with the public /pride code</li>
