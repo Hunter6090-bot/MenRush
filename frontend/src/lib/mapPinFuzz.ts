@@ -30,10 +30,10 @@ export function nearestMapPinFuzzStep(meters: number): number {
 }
 
 export function formatFuzzPrivacyNote(fuzzMaxM: number): string {
+  // Exact figures from fuzzRangeMeters (no rounding to 10 m), so the note
+  // matches the real offset band at every step.
   const { min, max } = fuzzRangeMeters(fuzzMaxM);
-  const lo = Math.round(min / 10) * 10;
-  const hi = Math.round(max / 10) * 10;
-  return `Your pin is moved ${lo} to ${hi} m`;
+  return `Your pin is moved ${min} to ${max} m`;
 }
 
 export function formatFuzzMetersLabel(fuzzMaxM: number): string {
