@@ -35,12 +35,16 @@ export function VerifiedBadge({ size = 'sm', className = '', tone = 'overlay' }:
         onClick={(event) => { event.stopPropagation(); setOpen(!open); }}
         onKeyDown={(event) => { event.stopPropagation(); if (event.key === 'Escape') setOpen(false); }}
         onBlur={() => setOpen(false)}
-        className={`inline-flex items-center justify-center bg-transparent p-0 ${
+        className={`${tone === 'surface' ? 'relative ' : ''}inline-flex items-center justify-center bg-transparent p-0 ${
           tone === 'surface'
             ? 'text-[var(--nn-accent-text)]'
             : 'text-[#E0A14A] drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]'
         } font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--copper)]`}
       >
+        {tone === 'surface' ? (
+          // Invisible 44x44 hit area centred on the tick; the visible tick keeps its size.
+          <span aria-hidden="true" data-testid="verified-tick-hit" className="absolute left-1/2 top-1/2 h-11 w-11 -translate-x-1/2 -translate-y-1/2" />
+        ) : null}
         <svg width={icon} height={icon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>
       </button>
       {open ? createPortal(<span id={descriptionId} role="status" className="fixed bottom-24 left-1/2 z-[200] w-64 max-w-[90vw] -translate-x-1/2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] p-3 text-xs font-medium leading-5 text-[var(--cream)] shadow-lg">Optional ID checked through Veriff. Separate from the signup 18+ selfie age gate.</span>, document.body) : null}

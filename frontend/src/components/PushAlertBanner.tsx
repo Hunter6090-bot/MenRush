@@ -119,7 +119,7 @@ export function PushAlertBanner() {
         {iosInstall ? 'Add MenRush to Home Screen' : 'Turn on alerts'}
       </p>
       {iosInstall ? (
-        <p className="mt-0.5 text-sm leading-snug text-[var(--cream-muted)]">
+        <p className="mt-0.5 text-[15px] leading-snug text-[var(--cream-muted)]">
           Share → Add to Home Screen. Open it, then allow alerts.
         </p>
       ) : null}

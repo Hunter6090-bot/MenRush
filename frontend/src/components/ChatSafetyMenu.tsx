@@ -244,7 +244,7 @@ export function ChatSafetyMenu({
                   setMenuOpen(false);
                   setBlockOpen(true);
                 }}
-                className="flex min-h-[44px] w-full items-center px-4 py-2.5 text-left text-[15px] text-[var(--nn-danger-text)] transition-colors hover:bg-[var(--error-soft)] focus-visible:outline-none focus-visible:bg-[var(--error-soft)]"
+                className="flex min-h-[44px] w-full items-center px-4 py-2.5 text-left text-[15px] text-[var(--nn-danger-text)] transition-colors hover:bg-[var(--bg-card)] focus-visible:outline-none focus-visible:bg-[var(--bg-card)]"
               >
                 Block {peerName}
               </button>

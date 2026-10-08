@@ -141,7 +141,7 @@ function SearchGlyph() {
 }
 
 const footerLinkClass =
-  'inline-flex min-h-[44px] items-center text-[14px] font-semibold text-[var(--cream-muted)] hover:text-[var(--cream)]';
+  'inline-flex min-h-[44px] items-center text-[15px] font-semibold text-[var(--cream-muted)] hover:text-[var(--cream)]';
 
 const rowClass =
   'flex min-h-[48px] w-full items-center gap-3 rounded-2xl px-4 text-left text-[17px] font-bold text-[var(--cream)] transition-colors active:bg-[var(--bg-card)] hover:bg-[var(--bg-card)]';
@@ -234,7 +234,7 @@ export function AccountMenu({
         <nav className="flex flex-col px-2" aria-label="Menu sections">
           {ACCOUNT_MENU_SECTIONS.map((section) => (
             <div key={section.id} className="pb-2" data-testid={`account-menu-section-${section.id}`}>
-              <p className="px-4 pb-1 pt-3 text-[13px] font-extrabold uppercase tracking-[0.14em] text-[var(--cream-muted)]">
+              <p className="px-4 pb-1 pt-3 text-[15px] font-extrabold uppercase tracking-[0.14em] text-[var(--cream-muted)]">
                 {section.title}
               </p>
               {section.links.map((item) => {

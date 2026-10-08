@@ -32,11 +32,11 @@ export function MapDiscretionSlider({
 
   return (
     <div
-      className={`flex ${wide ? 'w-full min-h-[48px]' : 'max-w-[min(100%,220px)]'} items-center gap-1.5 rounded-full border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_88%,transparent)] px-2.5 py-1.5 shadow-lg backdrop-blur-md ${className}`}
+      className={`flex ${wide ? 'w-full min-h-[48px] flex-wrap gap-y-2 rounded-2xl' : 'max-w-[min(100%,220px)] rounded-full'} items-center gap-1.5 border border-[rgba(196,131,42,0.4)] bg-[color-mix(in_srgb,#FFF8F0_88%,transparent)] px-2.5 py-1.5 shadow-lg backdrop-blur-md ${className}`}
       data-testid="map-discretion-slider"
       title="How far others see your pin from your real spot"
     >
-      <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#3D2B0E]/90">
+      <span className="inline-flex shrink-0 items-center gap-1 text-[15px] font-extrabold uppercase tracking-[0.12em] text-[#3D2B0E]/90">
         <IconDiscretion size={14} className="text-[#3D2B0E]" data-testid="map-discretion-icon" />
         Discretion
       </span>
@@ -53,11 +53,11 @@ export function MapDiscretionSlider({
         aria-valuemax={steps[steps.length - 1]}
         aria-valuenow={snapped}
         aria-valuetext={label}
-        className="proximity-range min-w-0 flex-1"
+        className={`proximity-range min-w-0 flex-1 ${wide ? 'order-last basis-full' : ''}`}
         data-testid="map-discretion-range"
       />
       <span
-        className="shrink-0 rounded-full border border-[rgba(196,131,42,0.45)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] px-2 py-1 text-xs font-extrabold tabular-nums tracking-wide text-[#3D2B0E]"
+        className={`${wide ? 'ml-auto ' : ''}shrink-0 rounded-full border border-[rgba(196,131,42,0.45)] bg-[color-mix(in_srgb,#FFF8F0_92%,transparent)] px-2 py-1 text-[15px] font-extrabold tabular-nums tracking-wide text-[#3D2B0E]`}
         data-testid="map-discretion-pill"
       >
         {label}

@@ -427,7 +427,7 @@ function LayoutInner({ children }: LayoutProps) {
                     }}
                     className={`${tabClass} ${
                       onHome
-                        ? 'text-[var(--copper)] bg-[var(--copper)]/10'
+                        ? 'text-[var(--nn-accent-text)] bg-[var(--copper)]/10'
                         : 'text-[var(--cream-muted)] active:scale-95'
                     }`}
                   >
@@ -450,7 +450,7 @@ function LayoutInner({ children }: LayoutProps) {
                   data-testid={`mobile-nav-${item.to.replace(/\//g, '') || 'home'}`}
                   className={`${tabClass} ${
                     active
-                      ? 'text-[var(--copper)] bg-[var(--copper)]/10'
+                      ? 'text-[var(--nn-accent-text)] bg-[var(--copper)]/10'
                       : 'text-[var(--cream-muted)] active:scale-95'
                   }`}
                 >
@@ -487,7 +487,7 @@ function LayoutInner({ children }: LayoutProps) {
                   mobileTabs.length >= 5 ? 'py-2' : 'gap-1 py-2.5'
                 } ${
                   isMoreActive || moreMenuOpen
-                    ? 'text-[var(--copper)] bg-[var(--copper)]/10'
+                    ? 'text-[var(--nn-accent-text)] bg-[var(--copper)]/10'
                     : 'text-[var(--cream-muted)] active:scale-95'
                 }`}
               >
@@ -620,7 +620,7 @@ function MobileMoreMenu({
               onClick={onClose}
               className={`flex items-center gap-3 rounded-2xl px-3.5 py-3 text-[15px] font-bold transition-colors ${
                 active
-                  ? 'text-[var(--copper)] bg-[var(--copper)]/10'
+                  ? 'text-[var(--nn-accent-text)] bg-[var(--copper)]/10'
                   : 'text-[var(--cream)] active:bg-[var(--bg-card)]'
               }`}
             >
