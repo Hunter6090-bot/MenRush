@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { rateLimitKey } from '../lib/clientIp';
 import { z } from 'zod';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
+import { privateNoStore } from '../middleware/noStore';
 import { eventService } from '../services/event.service';
 import { hotSpotsService } from '../services/hot-spots.service';
 import { LocationSchema } from '../types/validation';
@@ -44,7 +45,7 @@ router.get('/nearby', async (req: AuthRequest, res: Response) => {
 });
 
 /** Free venue check-in → temporary Hot Spot pin (4h TTL). Not a Premium action. */
-router.post('/:id/check-in', checkInLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/:id/check-in', privateNoStore, checkInLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const body = EventCheckInSchema.parse(req.body ?? {});
     const event = await eventService.getEvent(req.params.id);

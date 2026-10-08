@@ -867,8 +867,10 @@ export interface HotSpotDTO {
   category_name: string;
   category_icon: string;
   distance_km: number | null;
+  /** Display count from the server: exact for Premium; 0 to 4 exact, then '5+', for Free. */
   live_count: number | string;
-  live_count_exact: number;
+  /** Exact count, Premium only. Null for Free. Never render this; use live_count. */
+  live_count_exact: number | null;
   is_checked_in: boolean;
   my_checkin_anonymous: boolean | null;
   /** Short-lived check-in window in hours (product default: 4). */

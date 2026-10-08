@@ -17,6 +17,7 @@ import { formatDistanceFromKm } from '../lib/localeUnits';
 import { getDirectionsUrl } from '../lib/cruising';
 import { mapboxStyleForTheme, resolvedThemeNow, THEME_CHANGED_EVENT } from '../lib/mapTheme';
 import { HOT_SPOTS_PAGE_BLURB } from '../lib/cruiseCopy';
+import { hotSpotCountLabel, isHotSpotActive } from '../lib/hotSpotCounts';
 
 export const HotSpots = () => {
   const { lat, lng } = useLocationStore();
@@ -123,12 +124,17 @@ export const HotSpots = () => {
         name: spot.name,
         category_icon: spot.category_icon,
         live_count_exact: spot.live_count_exact,
+        // Server display count (rounded for Free). The pin shows only this.
+        live_count: spot.live_count,
+        has_active_checkins: spot.has_active_checkins,
       };
 
       if (existing) {
         existing.marker.setLngLat(lngLat);
         if (
           existing.spot.live_count_exact !== spot.live_count_exact ||
+          existing.spot.live_count !== spot.live_count ||
+          existing.spot.has_active_checkins !== spot.has_active_checkins ||
           existing.spot.name !== spot.name ||
           existing.spot.category_icon !== spot.category_icon
         ) {
@@ -309,11 +315,11 @@ export const HotSpots = () => {
                     </div>
                   </div>
                   <div className="rounded-full border border-[var(--border-default)] bg-[rgba(196,131,42,0.12)] px-3 py-1 text-center">
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--cream-muted)]">
-                      {spot.has_active_checkins || spot.live_count_exact > 0 ? 'Active' : 'Empty'}
+                    <p className="text-[15px] font-bold uppercase tracking-wide text-[var(--cream-muted)]">
+                      {isHotSpotActive(spot) ? 'Active' : 'Empty'}
                     </p>
                     <p className="text-lg font-extrabold text-[#E0A14A]">
-                      {spot.has_active_checkins || spot.live_count_exact > 0 ? spot.live_count : '0'}
+                      {isHotSpotActive(spot) ? hotSpotCountLabel(spot) : '0'}
                     </p>
                   </div>
                 </div>

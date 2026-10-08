@@ -63,6 +63,44 @@ describe('HotSpotPin', () => {
     expect(screen.queryByTestId('hotspot-pin-name')).not.toBeInTheDocument();
   });
 
+  it('Free pin shows the rounded 5+ from the server with no exact count', () => {
+    render(
+      <HotSpotPin
+        spot={{
+          id: 'spot-free',
+          name: 'Sauna',
+          live_count_exact: null,
+          live_count: '5+',
+          has_active_checkins: true,
+        }}
+      />,
+    );
+    expect(screen.getByTestId('hotspot-pin-solid')).toBeInTheDocument();
+    expect(screen.getByTestId('hotspot-pin-count')).toHaveTextContent('5+');
+    expect(screen.getByTestId('hotspot-pin-solid').getAttribute('title')).toBe('Sauna · 5+ checked in');
+  });
+
+  it('never derives a number from live_count_exact when no display count is sent', () => {
+    render(
+      <HotSpotPin
+        spot={{ id: 'spot-x', name: 'Park', live_count_exact: 7, has_active_checkins: true }}
+      />,
+    );
+    const pin = screen.getByTestId('hotspot-pin-solid');
+    expect(screen.getByTestId('hotspot-pin-count').textContent).toBe('');
+    expect(pin.textContent ?? '').not.toMatch(/\d/);
+    expect(pin.getAttribute('title')).toBe('Park · Active now');
+  });
+
+  it('Premium pin shows the exact server count', () => {
+    render(
+      <HotSpotPin
+        spot={{ id: 'spot-p', name: 'Bar', live_count_exact: 12, live_count: 12, has_active_checkins: true }}
+      />,
+    );
+    expect(screen.getByTestId('hotspot-pin-count')).toHaveTextContent('12');
+  });
+
   it('keeps Mapbox marker root free of position:relative (no zoomed-out vertical stack)', async () => {
     const { element, root } = createHotSpotPinElement(
       { id: 'spot-geo', name: 'Geo Lock', live_count_exact: 0, live_count: 0 },
