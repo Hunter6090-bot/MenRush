@@ -5,7 +5,7 @@
  * Covers the shared serializer plus list, single and check-in responses.
  * Live sort: Free sorts on the rounded bucket, then distance, then id; Premium on exact.
  * last_activity_at: Free floored to 15 minutes, Premium exact.
- * Cache-Control: private, no-store on hot-spot routes and event check-in.
+ * Cache-Control: private, no-store on hot-spot and events routes, 401s included.
  * Run: npm run test:hot-spot-free-counts
  */
 import assert from 'assert';
@@ -52,6 +52,8 @@ let lastSpotSql = '';
     lastSpotSql = text;
     return { rows: spotRows, rowCount: spotRows.length };
   }
+  // Event check-in: the event already has a venue pin.
+  if (text.includes('FROM hot_spots WHERE event_id = $1')) return { rows: [{ id: 'spot-0' }], rowCount: 1 };
   if (text.includes('c.slug AS category_slug')) {
     return { rows: [{ id: 'spot-0', category_slug: 'saunas' }], rowCount: 1 };
   }
@@ -240,13 +242,28 @@ async function main() {
       }
     }
     // Unauthenticated responses are not stored either.
-    const anon = await fetch(`${base}/api/hot-spots?lat=51.5&lng=-0.1`);
-    assert.strictEqual(anon.status, 401);
-    assert.strictEqual(anon.headers.get('cache-control'), 'private, no-store');
+    for (const [method, path] of [
+      ['GET', '/api/hot-spots?lat=51.5&lng=-0.1'],
+      ['GET', '/api/events/nearby?lat=51.5&lng=-0.1'],
+      ['POST', '/api/events/e1/check-in'],
+    ]) {
+      const anon = await fetch(base + path, { method });
+      assert.strictEqual(anon.status, 401, `${method} ${path}: unauthenticated is 401`);
+      assert.strictEqual(anon.headers.get('cache-control'), 'private, no-store', `${method} ${path}: 401 Cache-Control`);
+    }
+    // Authed event check-in succeeds and still carries the header.
+    const eventCheckIn = await fetch(`${base}/api/events/e1/check-in`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ anonymous: true }),
+    });
+    const eventBody = await eventCheckIn.text();
+    assert.strictEqual(eventCheckIn.status, 200, `authed event check-in: ${eventBody}`);
+    assert.strictEqual(eventCheckIn.headers.get('cache-control'), 'private, no-store', 'authed event check-in Cache-Control');
   } finally {
     server.close();
   }
-  console.log('✓ Cache-Control: private, no-store on hot-spot list, spot, check-in, reviews, event check-in');
+  console.log('✓ Cache-Control: private, no-store on hot-spot and events routes, including 401s and event check-in');
 
   console.log('hot-spot-free-counts-checks: ok');
 }
