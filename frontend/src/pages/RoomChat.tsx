@@ -15,6 +15,7 @@ import { RoomTempIdentityGate } from '../components/RoomTempIdentityGate';
 import { RoomPresentPeopleList } from '../components/RoomPresentPeopleList';
 import { RoomInRoomDm, type InRoomDmMessage } from '../components/RoomInRoomDm';
 import { FadedBrandFace } from '../components/FadedBrandFace';
+import { RoomAvatar } from '../components/RoomAvatar';
 import {
   presentOthers,
   removePresentPerson,
@@ -53,6 +54,7 @@ interface RoomInfo {
   user_role?: string | null;
   is_location_based?: boolean;
   created_by?: string;
+  official_slug?: string | null;
 }
 
 interface RoomMember {
@@ -86,15 +88,6 @@ function formatDateLabel(iso?: string): string {
 function isSameDay(a?: string, b?: string): boolean {
   if (!a || !b) return false;
   return new Date(a).toDateString() === new Date(b).toDateString();
-}
-
-function initials(name: string): string {
-  return name
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
 }
 
 // Deterministic color per sender
@@ -903,17 +896,20 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           className="-ml-1"
         />
 
-        {/* Room avatar */}
-        <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0"
-          style={{
+        {/* Room avatar: Claude Design icon, or letters when none matches */}
+        <RoomAvatar
+          name={room?.name}
+          officialSlug={room?.official_slug}
+          className="h-10 w-10 rounded-xl"
+          iconClassName="h-6 w-6"
+          letterClassName="text-sm font-bold"
+          letterStyle={{
             background: 'linear-gradient(135deg, rgba(196,131,42,0.3), rgba(139,69,19,0.2))',
             border: '1px solid rgba(196,131,42,0.3)',
             color: '#C4832A',
           }}
-        >
-          {room ? initials(room.name) : '…'}
-        </div>
+          placeholder="…"
+        />
 
         {/* Room name + members */}
         <div className="flex-1 min-w-0">

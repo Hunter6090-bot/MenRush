@@ -128,9 +128,47 @@ function toCommentDto(row: CommunityCommentRow): CommunityCommentDTO {
   };
 }
 
+/**
+ * Ghost / hidden members: their Community posts and comments are not shown to others.
+ * The author always sees their own posts. Same rule as the live map feed.
+ */
+function authorVisibleToViewerSql(authorExpr: string, viewerExpr: string): string {
+  return `(
+         ${authorExpr} = ${viewerExpr}
+         OR EXISTS (
+           SELECT 1 FROM profiles gv
+           WHERE gv.user_id = ${authorExpr}
+             AND COALESCE(gv.is_visible, FALSE) = TRUE
+             AND COALESCE(gv.is_ghost, FALSE) = FALSE
+         )
+       )`;
+}
+
+/**
+ * Comments on a post that this viewer can see: same rules as listComments
+ * (two-way blocks, Ghost / hidden commenters left out, own always counted).
+ * Every path that returns a post with comment_count must use this, so the
+ * count never gives away hidden commenters.
+ */
+function visibleCommentCountSql(postExpr: string, viewerExpr: string): string {
+  return `(
+           SELECT COUNT(*)::int FROM community_post_comments c
+           WHERE c.post_id = ${postExpr}
+             AND NOT EXISTS (
+               SELECT 1 FROM blocks cb
+               WHERE (cb.blocker_id = ${viewerExpr} AND cb.blocked_id = c.user_id)
+                  OR (cb.blocker_id = c.user_id AND cb.blocked_id = ${viewerExpr})
+             )
+             AND ${authorVisibleToViewerSql('c.user_id', viewerExpr)}
+         )`;
+}
+
 async function assertPostVisible(
   viewerId: string,
   postId: string,
+  // false only for editing / deleting your own comment, so a commenter keeps
+  // control of what they wrote if the post's author later goes Ghost.
+  hideGhostAuthors = true,
 ): Promise<{ id: string; user_id: string }> {
   const result = await query(
     `SELECT cp.id, cp.user_id
@@ -141,8 +179,9 @@ async function assertPostVisible(
          SELECT 1 FROM blocks b
          WHERE (b.blocker_id = $2 AND b.blocked_id = cp.user_id)
             OR (b.blocker_id = cp.user_id AND b.blocked_id = $2)
-       )`,
-    [postId, viewerId],
+       )
+       AND ($3::boolean = FALSE OR ${authorVisibleToViewerSql('cp.user_id', '$2')})`,
+    [postId, viewerId, hideGhostAuthors],
   );
   if (result.rows.length === 0) {
     throw new Error('post_not_found');
@@ -209,7 +248,7 @@ export const communityService = {
   /**
    * List nearby Community posts whose author pin is within radiusKm of (lat, lng).
    * Callers pass the viewer's stored location (see viewerStoredLocation).
-   * Respects blocks; never returns exact post coordinates.
+   * Respects blocks and Ghost / hidden authors; never returns exact post coordinates.
    */
   async listNearby(params: {
     viewerId: string;
@@ -234,10 +273,7 @@ export const communityService = {
          cp.lng AS post_lng,
          COALESCE(ap.map_pin_fuzz_m, ${MAP_PIN_FUZZ_DEFAULT_M}) AS author_fuzz_m,
          COALESCE(u.show_distance, TRUE) AS author_show_distance,
-         (
-           SELECT COUNT(*)::int FROM community_post_comments c
-           WHERE c.post_id = cp.id
-         ) AS comment_count
+         ${visibleCommentCountSql('cp.id', '$4')} AS comment_count
        FROM community_posts cp
        JOIN users u ON u.id = cp.user_id
        LEFT JOIN profiles ap ON ap.user_id = cp.user_id
@@ -259,6 +295,7 @@ export const communityService = {
          WHERE (b.blocker_id = $4 AND b.blocked_id = cp.user_id)
             OR (b.blocker_id = cp.user_id AND b.blocked_id = $4)
        )
+       AND ${authorVisibleToViewerSql('cp.user_id', '$4')}
        -- Hide my location from: a post in this radius would show the author is near.
        AND ${notLocationHiddenFromViewerSql('cp.user_id', '$4')}
        ORDER BY cp.created_at DESC
@@ -272,7 +309,9 @@ export const communityService = {
 
   /**
    * Comments on a Community post. Viewer must be able to see the post
-   * (exists + not blocked). Oldest first. Free — no premium gate.
+   * (exists + not blocked + author not Ghost / hidden). Comments by blocked,
+   * Ghost or hidden members are left out; your own always show. Oldest first.
+   * Free, no premium gate.
    */
   async listComments(viewerId: string, postId: string): Promise<CommunityCommentDTO[]> {
     await assertPostVisible(viewerId, postId);
@@ -293,6 +332,7 @@ export const communityService = {
            WHERE (b.blocker_id = $2 AND b.blocked_id = c.user_id)
               OR (b.blocker_id = c.user_id AND b.blocked_id = $2)
          )
+         AND ${authorVisibleToViewerSql('c.user_id', '$2')}
        ORDER BY c.created_at ASC
        LIMIT 100`,
       [postId, viewerId],
@@ -376,9 +416,10 @@ export const communityService = {
     );
     const authorRow = author.rows[0] ?? { name: 'Member', photo_url: null, show_distance: true };
 
+    // Visible count for the author (blocks, Ghost / hidden commenters), not raw COUNT(*).
     const commentCountRes = await query(
-      `SELECT COUNT(*)::int AS count FROM community_post_comments WHERE post_id = $1`,
-      [postId],
+      `SELECT ${visibleCommentCountSql('$1::uuid', '$2::uuid')} AS count`,
+      [postId, userId],
     );
     const commentCount = Number(commentCountRes.rows[0]?.count ?? 0);
 
@@ -439,7 +480,7 @@ export const communityService = {
     }
 
     // Verify parent post is visible and not expired
-    await assertPostVisible(userId, postId);
+    await assertPostVisible(userId, postId, false);
 
     const existing = await query(
       `SELECT id, post_id, user_id FROM community_post_comments WHERE id = $1 AND post_id = $2`,
@@ -485,7 +526,7 @@ export const communityService = {
     commentId: string,
   ): Promise<{ ok: boolean }> {
     // Verify parent post is visible and not expired
-    await assertPostVisible(userId, postId);
+    await assertPostVisible(userId, postId, false);
 
     const existing = await query(
       `SELECT id, post_id, user_id FROM community_post_comments WHERE id = $1 AND post_id = $2`,

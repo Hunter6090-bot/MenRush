@@ -518,3 +518,20 @@ input:-webkit-autofill:focus {
   box-shadow: 0 0 0 4px rgba(196, 131, 42, 0.25);
   cursor: pointer;
 }
+
+/* Claude Design room icons (RoomAvatar): copper line on a soft copper tile,
+   matching the design board in dark and light. */
+.room-avatar--icon {
+  color: var(--copper);
+  background: linear-gradient(135deg, rgba(196, 131, 42, 0.24), rgba(139, 69, 19, 0.14));
+  border: 1px solid rgba(196, 131, 42, 0.38);
+}
+html.theme-light .room-avatar--icon {
+  background: rgba(196, 131, 42, 0.16);
+  border-color: rgba(184, 115, 42, 0.42);
+}
+.room-avatar__icon > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
