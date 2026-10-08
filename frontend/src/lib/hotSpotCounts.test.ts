@@ -1,7 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { adjustHotSpotLiveCount, hotSpotCountLabel, isHotSpotActive } from './hotSpotCounts';
+import { activeHotSpotCountLabel, adjustHotSpotLiveCount, hotSpotCountLabel, isHotSpotActive } from './hotSpotCounts';
 
 describe('hotSpotCounts', () => {
+  it('active count label: shows any positive count, including 1; empty only with no count', () => {
+    expect(activeHotSpotCountLabel({ has_active_checkins: true, live_count: 1, live_count_exact: null })).toBe('1');
+    expect(activeHotSpotCountLabel({ has_active_checkins: true, live_count: '5+', live_count_exact: null })).toBe('5+');
+    expect(activeHotSpotCountLabel({ has_active_checkins: true, live_count: 7, live_count_exact: 7 })).toBe('7');
+    expect(activeHotSpotCountLabel({ has_active_checkins: true, live_count: null, live_count_exact: 3 })).toBe('');
+    expect(activeHotSpotCountLabel({ has_active_checkins: true, live_count: 0 })).toBe('');
+    expect(activeHotSpotCountLabel({ has_active_checkins: false, live_count: 0 })).toBe('');
+  });
+
   it('labels use the server display count only, never live_count_exact', () => {
     expect(hotSpotCountLabel({ live_count: '5+', live_count_exact: null })).toBe('5+');
     expect(hotSpotCountLabel({ live_count: 3, live_count_exact: null })).toBe('3');

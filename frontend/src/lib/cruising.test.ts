@@ -240,6 +240,14 @@ describe('Cruising Search Phase 1 helpers', () => {
           live_count: 3,
         }),
       ).toBe('3 checked in now');
+
+      // 1 matches the pin and sheet; 'Active now' is only for no count.
+      expect(
+        formatLastActiveTime({ has_active_checkins: true, live_count_exact: null, live_count: 1 }),
+      ).toBe('1 checked in now');
+      expect(
+        formatLastActiveTime({ has_active_checkins: true, live_count_exact: 1, live_count: 1 }),
+      ).toBe('1 checked in now');
     });
 
     it('uses the server display count, never live_count_exact (Free stays rounded)', () => {

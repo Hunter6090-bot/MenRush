@@ -158,6 +158,8 @@ jobs:
         run: npm run db:migrate
       - name: Map feed leaves out blocked and Ghost members
         run: npm run test:map-feed-blocks
+      - name: Hot-spot list on real PG (Free rounded sort, Premium exact)
+        run: npm run test:hot-spot-live-sort-integration
       # --if-present: these scripts arrive with their own PRs (#333, #327,
       # #328, Community Ghost). The step is a no-op until the script exists.
       - name: Radius on the fuzzed pin (oracle)

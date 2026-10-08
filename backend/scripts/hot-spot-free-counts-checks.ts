@@ -4,6 +4,8 @@
  * Premium: exact live_count and live_count_exact.
  * Covers the shared serializer plus list, single and check-in responses.
  * Live sort: Free sorts on the rounded bucket, then distance, then id; Premium on exact.
+ * last_activity_at: Free floored to 15 minutes, Premium exact.
+ * Cache-Control: private, no-store on hot-spot routes and event check-in.
  * Run: npm run test:hot-spot-free-counts
  */
 import assert from 'assert';
@@ -12,8 +14,11 @@ import { premiumService } from '../src/services/premium.service';
 import {
   formatLiveCount,
   hotSpotsService,
+  lastActivityForViewer,
   mapSpotRow,
 } from '../src/services/hot-spots.service';
+import { AddressInfo } from 'net';
+import express from 'express';
 
 const EXACTS = [0, 1, 4, 5, 6, 12];
 const FREE_EXPECTED: Array<number | string> = [0, 1, 4, '5+', '5+', '5+'];
@@ -130,8 +135,11 @@ async function main() {
   list = await hotSpotsService.listNearby({ userId: 'u1', lat: 51.5, lng: -0.1, sortBy: 'live' });
   assert.deepStrictEqual(ids(list), freeSorted, 'Free live sort: 5+ bucket ties sort by distance, then id');
   list.forEach((s) => assert.strictEqual(s.live_count_exact, null, 'Free live sort must not carry live_count_exact'));
-  assert.ok(lastSpotSql.includes('ORDER BY LEAST(live_count_exact, 5) DESC, distance_km ASC NULLS LAST, hs.id ASC'), 'Free SQL sorts on the rounded bucket');
-  assert.ok(!lastSpotSql.includes('ORDER BY live_count_exact DESC'), 'Free SQL must not sort on the exact count');
+  // Postgres cannot use an output alias inside an ORDER BY expression, so the list is wrapped as q.
+  assert.ok(/SELECT \* FROM \(\s*SELECT/.test(lastSpotSql) && /\) q\s+ORDER BY/.test(lastSpotSql), 'list query is wrapped as q');
+  assert.ok(lastSpotSql.includes('ORDER BY LEAST(q.live_count_exact, 5) DESC, q.distance_km ASC NULLS LAST, q.id ASC'), 'Free SQL sorts on the rounded bucket');
+  assert.ok(!/ORDER BY (q\.)?live_count_exact DESC/.test(lastSpotSql), 'Free SQL must not sort on the exact count');
+  assert.ok(!/LEAST\(live_count_exact/.test(lastSpotSql), 'no bare output alias inside an ORDER BY expression');
   assert.ok(lastSpotSql.indexOf('ORDER BY') < lastSpotSql.lastIndexOf('LIMIT'), 'ORDER BY runs before LIMIT so the page is picked on the rounded sort');
 
   // Same spots with exact counts above 4 shuffled: Free order must not change.
@@ -154,7 +162,7 @@ async function main() {
     ['spot-far9', 'spot-nodist', 'spot-tie-b', 'spot-near6', 'spot-tie-a', 'spot-few'],
     'Premium live sort: exact count first',
   );
-  assert.ok(lastSpotSql.includes('ORDER BY live_count_exact DESC, distance_km ASC NULLS LAST, hs.name ASC'), 'Premium SQL keeps the exact sort');
+  assert.ok(lastSpotSql.includes('ORDER BY q.live_count_exact DESC, q.distance_km ASC NULLS LAST, q.name ASC'), 'Premium SQL keeps the exact sort');
 
   // Closest sort is unchanged (distance only) for both.
   spotRows = [near6, far9];
@@ -162,9 +170,83 @@ async function main() {
     premium = p;
     list = await hotSpotsService.listNearby({ userId: 'u1', lat: 51.5, lng: -0.1, sortBy: 'closest' });
     assert.deepStrictEqual(ids(list), ['spot-near6', 'spot-far9'], 'closest keeps SQL order');
-    assert.ok(lastSpotSql.includes('ORDER BY distance_km ASC NULLS LAST, hs.name ASC'), 'closest SQL unchanged');
+    assert.ok(lastSpotSql.includes('ORDER BY q.distance_km ASC NULLS LAST, q.name ASC'), 'closest SQL sorts on distance then name');
   }
   console.log('✓ live sort: Free 5+ ties by distance then id, Premium by exact count');
+
+  // last_activity_at: Free floored to 15 minutes, Premium exact.
+  const exactTime = '2026-10-08T21:52:37.123Z';
+  assert.strictEqual(lastActivityForViewer(exactTime, false), '2026-10-08T21:45:00.000Z');
+  assert.strictEqual(lastActivityForViewer('2026-10-08T21:45:00.000Z', false), '2026-10-08T21:45:00.000Z');
+  assert.strictEqual(lastActivityForViewer('2026-10-08T21:44:59.999Z', false), '2026-10-08T21:30:00.000Z');
+  assert.strictEqual(lastActivityForViewer(exactTime, true), exactTime);
+  assert.strictEqual(lastActivityForViewer(null, false), null);
+  assert.strictEqual(lastActivityForViewer('not a date', false), null);
+  const timedRow = { ...fakeRow(6, 0), last_activity_at: new Date(exactTime) };
+  assert.strictEqual(mapSpotRow(timedRow, false, 'u1').last_activity_at, '2026-10-08T21:45:00.000Z');
+  assert.strictEqual(mapSpotRow(timedRow, true, 'u1').last_activity_at, exactTime);
+  spotRows = [timedRow];
+  premium = false;
+  assert.strictEqual((await hotSpotsService.getSpot('u1', 'spot-0'))!.last_activity_at, '2026-10-08T21:45:00.000Z');
+  assert.strictEqual((await hotSpotsService.listNearby({ userId: 'u1', lat: 51.5, lng: -0.1 }))[0].last_activity_at, '2026-10-08T21:45:00.000Z');
+  premium = true;
+  assert.strictEqual((await hotSpotsService.getSpot('u1', 'spot-0'))!.last_activity_at, exactTime);
+  console.log('✓ last_activity_at: Free floored to 15 minutes, Premium exact');
+
+  // Cache-Control: private, no-store on viewer-dependent responses.
+  // Lazy imports: auth.service needs a JWT_SECRET at load (test placeholder; tokens are stubbed below).
+  process.env.JWT_SECRET = process.env.JWT_SECRET || 'hot-spot-free-counts-test';
+  const { authService } = await import('../src/services/auth.service');
+  const { accessControl } = await import('../src/security/access');
+  const { eventService } = await import('../src/services/event.service');
+  (authService as unknown as { verifyToken: unknown }).verifyToken = () => ({ userId: 'u1' });
+  (accessControl as unknown as { requireVerified: unknown }).requireVerified = async () => undefined;
+  (eventService as unknown as { getEvent: unknown }).getEvent = async () => ({ id: 'e1', name: 'Night', venue_name: 'Club', lat: 51.5, lng: -0.1 });
+  const hotSpotsRouter = (await import('../src/routes/hot-spots')).default;
+  const eventsRouter = (await import('../src/routes/events')).default;
+  const app = express();
+  app.use(express.json());
+  app.use('/api/hot-spots', hotSpotsRouter);
+  app.use('/api/events', eventsRouter);
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((r) => server.once('listening', r));
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  spotRows = [timedRow];
+  premium = false;
+  const calls: Array<[string, string, unknown?]> = [
+    ['GET', '/api/hot-spots?lat=51.5&lng=-0.1'],
+    ['GET', '/api/hot-spots?lat=51.5&lng=-0.1&sort=live'],
+    ['GET', '/api/hot-spots/spot-0'],
+    ['POST', '/api/hot-spots/spot-0/check-in', { anonymous: true }],
+    ['POST', '/api/hot-spots/spot-0/reviews', { rating: 4, body: 'Good' }],
+    ['DELETE', '/api/hot-spots/spot-0/reviews/me'],
+    ['GET', '/api/hot-spots/spot-0/reviews'],
+    ['GET', '/api/hot-spots/me/check-in'],
+    ['POST', '/api/events/e1/check-in', { anonymous: true }],
+  ];
+  try {
+    for (const [method, path, body] of calls) {
+      const res = await fetch(base + path, {
+        method,
+        headers: { Authorization: 'Bearer test', 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      assert.strictEqual(res.headers.get('cache-control'), 'private, no-store', `${method} ${path}: Cache-Control`);
+      const text = await res.text();
+      assert.ok(res.status < 500, `${method} ${path}: status ${res.status}`);
+      if (path === '/api/hot-spots?lat=51.5&lng=-0.1' || path === '/api/hot-spots/spot-0') {
+        assert.strictEqual(res.status, 200, `${method} ${path}: ${text}`);
+        assert.ok(!text.includes('21:52:37'), `${method} ${path}: Free got the exact activity time`);
+      }
+    }
+    // Unauthenticated responses are not stored either.
+    const anon = await fetch(`${base}/api/hot-spots?lat=51.5&lng=-0.1`);
+    assert.strictEqual(anon.status, 401);
+    assert.strictEqual(anon.headers.get('cache-control'), 'private, no-store');
+  } finally {
+    server.close();
+  }
+  console.log('✓ Cache-Control: private, no-store on hot-spot list, spot, check-in, reviews, event check-in');
 
   console.log('hot-spot-free-counts-checks: ok');
 }

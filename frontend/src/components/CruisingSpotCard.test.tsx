@@ -160,6 +160,13 @@ describe('CruisingSpotCard', () => {
     expect(screen.getByTestId('cruising-last-active')).toHaveTextContent('5+ checked in now');
   });
 
+  it('card reads "1 checked in now" at count 1, matching the pin and sheet', () => {
+    render(<CruisingSpotCard spot={{ ...mockSpot, has_active_checkins: true, live_count: 1, live_count_exact: null }} />);
+    const line = screen.getByTestId('cruising-last-active');
+    expect(line).toHaveTextContent('1 checked in now');
+    expect(line).not.toHaveTextContent('Active now');
+  });
+
   it('activity line is 15px, including the signal note', () => {
     render(<CruisingSpotCard spot={mockSpot} />);
     const line = screen.getByTestId('cruising-last-active');

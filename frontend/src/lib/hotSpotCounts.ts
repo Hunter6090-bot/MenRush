@@ -41,6 +41,17 @@ export function hotSpotCountLabel(spot: HotSpotCountFields): string {
 }
 
 /**
+ * The count to show while a spot is active, or '' when the server sent no
+ * positive count. The pin, sheet and card all show this number when there is
+ * one (so 1 reads as "1 checked in"); 'Active now' is only for no count.
+ */
+export function activeHotSpotCountLabel(spot: HotSpotCountFields): string {
+  if (!isHotSpotActive(spot)) return '';
+  const label = hotSpotCountLabel(spot);
+  return label !== '' && label !== '0' ? label : '';
+}
+
+/**
  * Optimistic +1 / -1 after the viewer checks in or out (until the list refetch lands).
  * Keeps Free rounding: a Free viewer never gets an exact number above the cap.
  */

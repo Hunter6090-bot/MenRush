@@ -129,14 +129,31 @@ export function formatLiveCount(exact: number, isPremium: boolean): number | str
 export const FREE_LIVE_SORT_CAP = 5;
 
 /**
- * Live-sort SQL. Free sorts on the rounded bucket, then distance, then id, so
- * neither the order nor which rows survive LIMIT can reveal an exact count
- * above 4. Premium keeps the exact-count sort.
+ * Live-sort SQL for the wrapped list query (`SELECT * FROM (...) q`). Postgres
+ * cannot use an output alias inside an ORDER BY expression, so the list query
+ * is wrapped and these sort on the `q` columns. Free sorts on the rounded
+ * bucket, then distance, then id, so neither the order nor which rows survive
+ * LIMIT can reveal an exact count above 4. Premium keeps the exact-count sort.
  */
 export function liveSortOrderSql(isPremium: boolean): string {
   return isPremium
-    ? `ORDER BY live_count_exact DESC, distance_km ASC NULLS LAST, hs.name ASC`
-    : `ORDER BY LEAST(live_count_exact, ${FREE_LIVE_SORT_CAP}) DESC, distance_km ASC NULLS LAST, hs.id ASC`;
+    ? `ORDER BY q.live_count_exact DESC, q.distance_km ASC NULLS LAST, q.name ASC`
+    : `ORDER BY LEAST(q.live_count_exact, ${FREE_LIVE_SORT_CAP}) DESC, q.distance_km ASC NULLS LAST, q.id ASC`;
+}
+
+/** Closest sort (and text search) for the wrapped list query. */
+export const CLOSEST_SORT_ORDER_SQL = `ORDER BY q.distance_km ASC NULLS LAST, q.name ASC`;
+
+/** Free viewers get last_activity_at floored to this bucket, so it cannot time a single check-in. */
+export const FREE_LAST_ACTIVITY_BUCKET_MS = 15 * 60 * 1000;
+
+/** Exact ISO time for Premium; floored to the 15-minute bucket for Free. */
+export function lastActivityForViewer(value: unknown, isPremium: boolean): string | null {
+  if (value == null) return null;
+  const ms = new Date(value as string | Date).getTime();
+  if (!Number.isFinite(ms)) return null;
+  if (isPremium) return new Date(ms).toISOString();
+  return new Date(Math.floor(ms / FREE_LAST_ACTIVITY_BUCKET_MS) * FREE_LAST_ACTIVITY_BUCKET_MS).toISOString();
 }
 
 function distanceForSort(spot: HotSpotRow): number {
@@ -199,7 +216,7 @@ export function mapSpotRow(row: Record<string, unknown>, isPremium: boolean, cur
     venue_type: (row.venue_type as string | null) ?? null,
     source_url: (row.source_url as string | null) ?? null,
     verified_at: row.verified_at != null ? String(row.verified_at) : null,
-    last_activity_at: row.last_activity_at != null ? new Date(row.last_activity_at as string | Date).toISOString() : null,
+    last_activity_at: lastActivityForViewer(row.last_activity_at, isPremium),
     claimed_by_user_id: claimedBy,
     claim_status: claimStatus,
     is_calendar_managed: isCalendarManaged,
@@ -326,12 +343,12 @@ export const hotSpotsService = {
 
     const liveSort = !(opts.sortBy === 'closest' || hasQuery);
     // ORDER BY runs before LIMIT, so Free's rounded sort also decides which rows make the page.
-    const orderSql = liveSort
-      ? liveSortOrderSql(isPremium)
-      : `ORDER BY distance_km ASC NULLS LAST, hs.name ASC`;
+    const orderSql = liveSort ? liveSortOrderSql(isPremium) : CLOSEST_SORT_ORDER_SQL;
 
+    // Wrapped so ORDER BY can use live_count_exact and distance_km in expressions.
     const res = await query(
-      `SELECT
+      `SELECT * FROM (
+        SELECT
           ${SPOT_SELECT_COLS},
           ROUND((ST_Distance(
             ST_SetSRID(ST_MakePoint(hs.longitude, hs.latitude), 4326)::geography,
@@ -377,8 +394,9 @@ export const hotSpotsService = {
           ${distanceFilter}
           ${categoryFilter}
           ${searchFilter}
-        ${orderSql}
-        LIMIT $${limitIdx}`,
+      ) q
+      ${orderSql}
+      LIMIT $${limitIdx}`,
       values,
     );
 
