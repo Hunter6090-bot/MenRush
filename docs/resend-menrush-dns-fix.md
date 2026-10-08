@@ -37,4 +37,4 @@ Root DMARC exists:
 v=DMARC1; p=none; rua=mailto:al@menrush.com; ruf=mailto:al@menrush.com; sp=none; adkim=r; aspf=r; pct=100
 ```
 
-After DNS changes propagate, rerun the Resend domain check before sending the Beta 200 email.
+After DNS changes propagate, rerun the Resend domain check before sending the next campaign email.
