@@ -1,6 +1,7 @@
 /**
  * Out tab — venues, events, cruise spots, community.
  * Chips: All / Sauna / Bar / Event / Community.
+ * Cruising spot search lives here (moved off the map, Pete 8 Oct 2026).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -8,6 +9,9 @@ import { eventsAPI, hotSpotsAPI, type EventDTO, type HotSpotDTO } from '../api/c
 import { Layout } from '../components/Layout';
 import { PulseRing } from '../components/PulseRing';
 import { CommunityFeed } from '../components/CommunityFeed';
+import { CruisingSearchBar } from '../components/CruisingSearchBar';
+import { CruisingSearchSheet } from '../components/CruisingSearchSheet';
+import { HotSpotReviewsModal } from '../components/HotSpotReviewsModal';
 import { useLocationStore } from '../hooks/store';
 import { formatDistanceFromKm } from '../lib/localeUnits';
 import { getDirectionsUrl } from '../lib/cruising';
@@ -60,6 +64,22 @@ export function Out() {
   const [events, setEvents] = useState<EventDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [cruisingSearchOpen, setCruisingSearchOpen] = useState(false);
+  const [actingSpotId, setActingSpotId] = useState<string | null>(null);
+  const [reviewsSpot, setReviewsSpot] = useState<HotSpotDTO | null>(null);
+
+  // Same check-in / check-out calls the map used for this sheet.
+  const handleCheckIn = useCallback(async (spot: HotSpotDTO, anonymous: boolean) => {
+    setActingSpotId(spot.id);
+    try {
+      if (spot.is_checked_in) await hotSpotsAPI.checkOut(spot.id);
+      else await hotSpotsAPI.checkIn(spot.id, anonymous);
+    } catch {
+      /* card keeps its state; try again */
+    } finally {
+      setActingSpotId(null);
+    }
+  }, []);
 
   const setChip = useCallback(
     (next: OutChip) => {
@@ -162,6 +182,13 @@ export function Out() {
           </Link>
         </div>
 
+        <div className="mb-3 shrink-0" data-testid="out-cruising-search">
+          <CruisingSearchBar
+            onOpen={() => setCruisingSearchOpen(true)}
+            className="min-h-[48px] w-full"
+          />
+        </div>
+
         <div
           className="mb-4 flex gap-2 overflow-x-auto pb-1"
           data-testid="out-chips"
@@ -236,6 +263,21 @@ export function Out() {
           </div>
         )}
       </div>
+
+      <CruisingSearchSheet
+        open={cruisingSearchOpen}
+        onClose={() => setCruisingSearchOpen(false)}
+        lat={lat}
+        lng={lng}
+        onCheckIn={handleCheckIn}
+        onOpenReviews={(spot) => setReviewsSpot(spot)}
+        actingSpotId={actingSpotId}
+      />
+      <HotSpotReviewsModal
+        spot={reviewsSpot}
+        open={Boolean(reviewsSpot)}
+        onClose={() => setReviewsSpot(null)}
+      />
     </Layout>
   );
 }
