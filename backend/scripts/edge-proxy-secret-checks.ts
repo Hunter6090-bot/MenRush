@@ -14,7 +14,7 @@
  *   used when it is one valid IP; a list, a repeated header or an invalid
  *   value falls back to the X-Real-IP rule
  * - clientIp.ts never logs
- * - frontend/middleware.ts and src/lib/edgeProxySecret.ts agree with the
+ * - frontend/middleware.ts (one self-contained file) agrees with the
  *   backend on header names, env name and minimum length, only match /api,
  *   strip client copies, take the IP from ipAddress(), send the secret only
  *   with one valid IP, always list the three stripped names in
@@ -42,8 +42,14 @@ import ts from 'typescript';
 const FRONTEND = path.join(__dirname, '../../frontend');
 
 /**
- * frontend/ is an ES module package, so load its import-free helper by
- * transpiling it to CommonJS here. Only the exports below are used.
+ * frontend/ is an ES module package, so load the middleware's helpers by
+ * transpiling frontend/middleware.ts to CommonJS here. The middleware must
+ * stay one self-contained file: Vercel's nodejs runtime runs it unbundled as
+ * Node ESM, where a relative import without an extension 500s every /api
+ * request (ERR_MODULE_NOT_FOUND). Its only imports are the two
+ * @vercel/functions entry points, stubbed here because only the helper
+ * exports below are used (the frontend test and the built-artifact check
+ * call the real middleware).
  */
 type FrontendEdge = {
   EDGE_SECRET_HEADER: string;
@@ -56,12 +62,23 @@ type FrontendEdge = {
   withEdgeSecret: (headers: Headers, secret: string | null, visitorIp?: string | null) => Headers | null;
   overrideHeaderList: (headers: Headers) => string;
 };
+const MIDDLEWARE_IMPORTS = ['@vercel/functions/headers', '@vercel/functions/middleware'];
 function loadFrontendEdge(): FrontendEdge {
-  const src = fs.readFileSync(path.join(FRONTEND, 'src/lib/edgeProxySecret.ts'), 'utf8');
-  assert.doesNotMatch(src, /^\s*import\s/m, 'edgeProxySecret.ts must stay import-free');
+  const src = fs.readFileSync(path.join(FRONTEND, 'middleware.ts'), 'utf8');
+  const specifiers = [...src.matchAll(/^\s*(?:import|export)\b[^;]*?\bfrom\s*'([^']+)'/gm)].map((m) => m[1]);
+  assert.deepEqual(specifiers.sort(), [...MIDDLEWARE_IMPORTS].sort(), 'middleware.ts imports only the @vercel/functions entry points');
+  assert.doesNotMatch(src, /from\s*['"]\.{1,2}\//, 'middleware.ts must have no relative imports');
+  assert.doesNotMatch(src, /\bimport\s*\(/, 'middleware.ts must have no dynamic imports');
   const { outputText } = ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } });
+  const stub = () => {
+    throw new Error('not used by the backend checks');
+  };
+  const fakeRequire = (id: string) => {
+    assert.ok(MIDDLEWARE_IMPORTS.includes(id), `unexpected middleware import ${id}`);
+    return { ipAddress: stub, next: stub };
+  };
   const mod: { exports: Record<string, unknown> } = { exports: {} };
-  new Function('exports', 'module', outputText)(mod.exports, mod);
+  new Function('exports', 'module', 'require', outputText)(mod.exports, mod, fakeRequire);
   return mod.exports as unknown as FrontendEdge;
 }
 const frontendEdge = loadFrontendEdge();
@@ -226,7 +243,7 @@ function frontendChecks() {
     /res\.headers\.set\(OVERRIDE_HEADERS_HEADER, overrideHeaderList\(headers\)\)/,
     'override list always names the stripped headers',
   );
-  for (const f of [mw, fs.readFileSync(path.join(FRONTEND, 'src/lib/edgeProxySecret.ts'), 'utf8')]) {
+  for (const f of [mw]) {
     assert.doesNotMatch(f, /console\./, 'frontend edge code must not log');
     assert.doesNotMatch(f, /VITE_EDGE|import\.meta\.env/, 'secret must never be a VITE_ / browser env');
   }
