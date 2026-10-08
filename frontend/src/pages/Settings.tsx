@@ -24,6 +24,8 @@ import {
 } from '../lib/profileDetails';
 
 const RADIUS_KEY = 'menrush_default_radius_km';
+/** Section ids the top-right Menu links to. */
+const SETTINGS_ANCHORS = ['account', 'two-factor', 'notifications', 'blocked'];
 
 const fieldClass =
   'w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3.5 py-2.5 text-[16px] text-[var(--cream)] placeholder:text-[var(--cream-faded)] outline-none focus:border-[var(--copper)]';
@@ -401,9 +403,12 @@ export const Settings = () => {
     return () => window.clearTimeout(id);
   }, [unblockNotice]);
 
+  // Deep links from the top-right Menu: #account, #two-factor, #notifications, #blocked.
   useEffect(() => {
-    if (location.hash !== '#blocked' || blockedLoading) return;
-    const el = document.getElementById('blocked');
+    const id = location.hash.replace(/^#/, '');
+    if (!SETTINGS_ANCHORS.includes(id)) return;
+    if (id === 'blocked' && blockedLoading) return;
+    const el = document.getElementById(id);
     if (!el) return;
     window.requestAnimationFrame(() => {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -539,7 +544,7 @@ export const Settings = () => {
           </div>
 
           {/* ── ACCOUNT ── */}
-          <div>
+          <div id="account" className="scroll-mt-24">
             <SectionLabel>Account</SectionLabel>
             <div className="space-y-3">
               <div className={groupClass}>
@@ -761,7 +766,7 @@ export const Settings = () => {
               </div>
 
               {/* Two-Factor Authentication Card */}
-              <section className="mr-card p-4 sm:p-5">
+              <section id="two-factor" className="mr-card scroll-mt-24 p-4 sm:p-5">
                 <p className="text-[15px] font-bold text-[var(--cream)]">Two-factor authentication</p>
                 <p className="mt-0.5 text-[13px] text-[var(--cream-muted)]">
                   Add an authenticator app on top of your password.
@@ -904,7 +909,7 @@ export const Settings = () => {
           </div>
 
           {/* ── NOTIFICATIONS ── */}
-          <div>
+          <div id="notifications" className="scroll-mt-24">
             <SectionLabel>Notifications</SectionLabel>
             <div className={groupClass}>
               <NotificationSettings flush />

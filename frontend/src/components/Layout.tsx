@@ -14,6 +14,7 @@ import { DiscoveryShellProvider, useDiscoveryShell } from '../context/DiscoveryS
 import { LocationPresenceStrip } from './LocationPresenceStrip';
 import { ProfileDepthStrip } from './ProfileDepthStrip';
 import { ThemeToggle } from './ThemeToggle';
+import { AccountMenu, AccountMenuButton } from './AccountMenu';
 import { PushAlertBanner } from './PushAlertBanner';
 import { readCachedMatches, refreshMatches } from '../lib/tabListCache';
 import {
@@ -63,6 +64,7 @@ function LayoutInner({ children }: LayoutProps) {
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   const [matchCount, setMatchCount] = useState(0);
   const [homeView, setHomeView] = useState<HomeView>(() => readHomeView());
@@ -121,6 +123,7 @@ function LayoutInner({ children }: LayoutProps) {
 
   useEffect(() => {
     setMoreMenuOpen(false);
+    setAccountMenuOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -308,6 +311,7 @@ function LayoutInner({ children }: LayoutProps) {
                   className="-top-0.5 -right-0.5 min-w-[16px] h-4 text-[11px] bg-[var(--copper)] border-[var(--bg-primary)]"
                 />
               </Link>
+              <AccountMenuButton open={accountMenuOpen} onClick={() => setAccountMenuOpen(true)} />
             </div>
           </div>
         </header>
@@ -358,6 +362,11 @@ function LayoutInner({ children }: LayoutProps) {
               data-testid="header-own-avatar"
             />
           </Link>
+          <AccountMenuButton
+            open={accountMenuOpen}
+            onClick={() => setAccountMenuOpen(true)}
+            className="border border-nn-border bg-nn-card text-nn-muted"
+          />
         </div>
 
         {/*
@@ -509,6 +518,12 @@ function LayoutInner({ children }: LayoutProps) {
       </div>
 
       <ProfileSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
+
+      <AccountMenu
+        open={accountMenuOpen}
+        onClose={() => setAccountMenuOpen(false)}
+        onSignOut={requestSignOut}
+      />
 
       {signOutConfirmOpen ? (
         <div

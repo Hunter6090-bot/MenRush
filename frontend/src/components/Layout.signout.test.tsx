@@ -128,4 +128,55 @@ describe('Layout sign out', () => {
     expect(screen.getByTestId('mobile-nav-conversations')).toBeTruthy();
     expect(screen.getByTestId('mobile-nav-out')).toBeTruthy();
   });
+
+  it('top-right Menu opens account links and Sign out still confirms', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Layout>
+          <div>child</div>
+        </Layout>
+      </MemoryRouter>,
+    );
+
+    // Phone header + desktop top bar each carry one Menu button.
+    const buttons = screen.getAllByTestId('account-menu-button');
+    expect(buttons.length).toBe(2);
+    for (const b of buttons) {
+      expect(b).toHaveAttribute('aria-label', 'Menu');
+      expect(b.className).toMatch(/min-h-\[44px\]/);
+      expect(b.className).toMatch(/min-w-\[44px\]/);
+    }
+    // Header keeps theme, search and bell.
+    expect(screen.getAllByRole('button', { name: 'Search profiles' }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: 'Alerts' })).toBeTruthy();
+
+    expect(screen.queryByTestId('account-menu')).not.toBeInTheDocument();
+    await user.click(buttons[0]);
+    const menu = screen.getByTestId('account-menu');
+    const hrefs = Array.from(menu.querySelectorAll('a')).map((a) => a.getAttribute('href'));
+    expect(hrefs).toEqual(
+      expect.arrayContaining([
+        '/settings',
+        '/settings#account',
+        '/settings#two-factor',
+        '/settings#notifications',
+        '/settings#blocked',
+        '/premium',
+        '/safety',
+        '/help',
+        '/terms',
+        '/privacy',
+        '/guidelines',
+        '/contact',
+      ]),
+    );
+    expect(menu.textContent).not.toMatch(/beta/i);
+    expect(menu.textContent).not.toMatch(/\u2014/);
+
+    await user.click(screen.getByTestId('account-menu-sign-out'));
+    expect(screen.queryByTestId('account-menu')).not.toBeInTheDocument();
+    expect(screen.getByTestId('sign-out-confirm')).toBeInTheDocument();
+    expect(logout).not.toHaveBeenCalled();
+  });
 });
