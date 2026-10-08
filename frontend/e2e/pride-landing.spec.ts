@@ -14,7 +14,8 @@ test.describe('Pride promotion landing', () => {
     const headline = page.getByTestId('pride-headline-lock');
     await expect(headline).toContainText(/3 months/i);
     await expect(headline).toContainText(/Premium/i);
-    await expect(headline).toContainText(/from launch/i);
+    await expect(headline).toContainText(/from the day you join/i);
+    await expect(headline).not.toContainText(/launch/i);
     await expect(headline).not.toContainText(/Claim with your email/i);
     await expect(headline).not.toContainText(/closed beta/i);
     await expect(headline).not.toContainText(/Path 1/i);

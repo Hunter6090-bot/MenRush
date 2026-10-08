@@ -144,7 +144,7 @@ export const Pride = () => {
             3 months{' '}
             <span className="mr-coming-soon-accent">Premium</span>
             <br />
-            from launch
+            from the day you join
           </h1>
 
           <div className="mt-10 w-full max-w-[460px] rounded-[24px] border border-[rgba(240,224,192,0.35)] bg-[#1E1508]/96 p-6 backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.6)]" data-testid="pride-invite-path">
