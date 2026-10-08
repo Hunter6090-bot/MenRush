@@ -46,8 +46,7 @@ export function nearbyRosterSelectSql(): string {
         p.lat AS real_lat,
         p.lng AS real_lng,
         COALESCE(p.map_pin_fuzz_m, ${MAP_PIN_FUZZ_DEFAULT_M}) AS map_pin_fuzz_m,
-        COALESCE(u.show_distance, TRUE) AS show_distance,
-        ST_Distance(p.location, ST_MakePoint($2, $1)::geography) as distance_m
+        COALESCE(u.show_distance, TRUE) AS show_distance
       FROM users u
       JOIN profiles p ON u.id = p.user_id
     `;

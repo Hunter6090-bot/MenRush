@@ -216,7 +216,6 @@ export const userService = {
         map_photo_url: mapPhoto,
         map_pin_fuzz_m: _fuzz,
         show_distance: _showDistance,
-        distance_m: _exactDistance,
         ...publicRow
       } = row;
 

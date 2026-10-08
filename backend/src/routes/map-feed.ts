@@ -56,6 +56,8 @@ router.post('/', postLimiter, async (req: AuthRequest, res: Response) => {
     if (io) {
       const lat = Number(saved.lat);
       const lng = Number(saved.lng);
+      // Fan-out radius is fixed on the server at 5 km (no client input), and the
+      // centre is the sender's public (fuzzed) pin from saved.lat / saved.lng.
       const nearbyIds = await mapFeedService.nearbyUserIds(lat, lng, 5, req.userId!);
       // Hide my location from: never fan out to people the poster hides from.
       const hiddenFrom = await locationHideService.viewersHiddenBy(req.userId!, nearbyIds);
