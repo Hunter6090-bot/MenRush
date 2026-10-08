@@ -9,7 +9,8 @@ export type NotificationType =
   | 'match'
   | 'profile_view'
   | 'system'
-  | 'missed_call';
+  | 'missed_call'
+  | 'jerk';
 
 export interface NotificationRow {
   id: string;

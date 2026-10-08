@@ -13,6 +13,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { DistancePill } from '../components/DistancePill';
 import { ProfileAlbumsSection } from '../components/ProfileAlbumsSection';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
+import { JerkButton } from '../components/JerkButton';
 import { IconMatches, IconChat, IconUnmatch } from '../components/icons';
 import { formatHeight, formatWeight } from '../lib/age';
 import { formatDistanceFromKm } from '../lib/localeUnits';
@@ -495,6 +496,8 @@ export const ProfileView = () => {
               </button>
             </>
           )}
+          {/* One-tap Jerk. Report / Block stay in the three-dots menu above. */}
+          <JerkButton userId={user.id} name={user.name} surface="profile" />
         </div>
 
         <p className="text-center text-[11px] text-[var(--cream-muted)]">

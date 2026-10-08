@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useNotificationStore, Notification } from '../hooks/store';
 import { useNavigate } from 'react-router-dom';
 import { notificationsAPI } from '../api/client';
-import { IconChat, IconMatches, IconNotifications, IconProfile } from './icons';
+import { IconChat, IconJerk, IconMatches, IconNotifications, IconProfile } from './icons';
 import { MissedCallIcon } from './MissedCallIcon';
 import { notificationDestination } from '../lib/notifications';
 
@@ -66,7 +66,7 @@ export const ToastNotifications = () => {
                 ? 'bg-red-500/15 text-red-400'
                 : toast.type === 'match'
                 ? 'bg-[#C4832A]/20 text-[#C4832A]'
-                : toast.type === 'like'
+                : toast.type === 'like' || toast.type === 'jerk'
                   ? 'bg-[#A45E18]/20 text-[#C4832A]'
                   : toast.type === 'profile_view'
                     ? 'bg-[#C4832A]/15 text-[#C4832A]'
@@ -116,6 +116,8 @@ function ToastIcon({ type }: { type: Notification['type'] }) {
       return <MissedCallIcon size={20} />;
     case 'profile_view':
       return <IconProfile size={20} />;
+    case 'jerk':
+      return <IconJerk size={20} />;
     case 'like':
       return <StarIcon className="w-5 h-5 fill-current" />;
     default:

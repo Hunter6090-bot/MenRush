@@ -142,5 +142,25 @@ describe('ProfileView distance display', () => {
     expect(matchBtn).toHaveAttribute('title', 'Match');
     expect(matchBtn).toHaveTextContent('Match');
   });
+
+  it('shows a one-tap Jerk in the action row; Report and Block stay in the three-dots menu', async () => {
+    vi.mocked(usersAPI.getProfile).mockResolvedValueOnce({
+      data: { id: 'other-user-jerk', name: 'Sam', age: 31, online: true },
+    } as any);
+
+    render(
+      <MemoryRouter initialEntries={['/profile/other-user-jerk']}>
+        <Routes>
+          <Route path="/profile/:id" element={<ProfileView />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const jerk = await screen.findByTestId('jerk-button-profile');
+    expect(jerk).toHaveTextContent(/^Jerk$/);
+    const row = jerk.parentElement!;
+    expect(row).toContainElement(screen.getByTestId('profile-view-match'));
+    expect(row.textContent).not.toMatch(/report|block/i);
+  });
 });
 
