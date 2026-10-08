@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
 import { z } from 'zod';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
 import { communityService } from '../services/community.service';
@@ -19,6 +20,7 @@ const createLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   message: { error: 'Too many posts. Try again in a minute.' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -138,6 +140,7 @@ const commentLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 20,
   message: { error: 'Too many comments. Try again in a minute.' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });

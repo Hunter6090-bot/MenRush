@@ -29,6 +29,7 @@ import {
   prideInviteService,
 } from '../services/prideInvite.service';
 import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
 
 const router = Router();
 
@@ -40,11 +41,7 @@ const router = Router();
 const signupLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
   max: 5,
-  keyGenerator: (req) => {
-    const forwarded = req.headers['x-forwarded-for'];
-    const ip = Array.isArray(forwarded) ? forwarded[0] : (forwarded ?? req.ip ?? '');
-    return ip;
-  },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests. Please wait a few minutes and try again.' },
@@ -54,11 +51,7 @@ const signupLimiter = rateLimit({
 const validateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
-  keyGenerator: (req) => {
-    const forwarded = req.headers['x-forwarded-for'];
-    const ip = Array.isArray(forwarded) ? forwarded[0] : (forwarded ?? req.ip ?? '');
-    return ip;
-  },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests.' },

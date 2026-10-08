@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
 import { authService } from '../services/auth.service';
 import { twoFactorService } from '../services/two-factor.service';
 import { trustedDeviceService } from '../services/trusted-device.service';
@@ -45,6 +46,7 @@ const authLimiter = rateLimit({
   // Higher ceiling in non-production so pre-deploy / local suites don't trip the gate.
   max: process.env.NODE_ENV === 'production' ? 10 : 200,
   message: { error: 'Too many attempts, please try again in 15 minutes' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -58,6 +60,7 @@ const adultAssuranceLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: process.env.NODE_ENV === 'production' ? 12 : 100,
   message: { error: 'Too many adult-assurance attempts, please try again later' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -75,6 +78,7 @@ const adultAssuranceStatusPollLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: process.env.NODE_ENV === 'production' ? 120 : 500,
   message: { error: 'Too many age-check status polls, please try again later' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -83,6 +87,7 @@ const forgotPasswordLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
   message: { error: 'Too many reset requests, please try again in 15 minutes' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -91,6 +96,7 @@ const confirmEmailLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: process.env.NODE_ENV === 'production' ? 20 : 200,
   message: { error: 'Too many confirmation attempts, please try again in 15 minutes' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -99,6 +105,7 @@ const resendConfirmLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
   message: { error: 'Too many resend requests, please try again in 15 minutes' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
