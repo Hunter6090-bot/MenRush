@@ -6,6 +6,7 @@ import {
   MAP_PIN_FUZZ_MAX_M,
   privateMapPointAround,
 } from '../lib/mapPinFuzz';
+import { acceptLocationFix } from '../lib/locationJumpGate';
 import { accessControl } from '../security/access';
 import { ProfileInput } from '../types/validation';
 import { ageFromDateOfBirth, AGE_FILTER_MIN } from '../lib/age';
@@ -469,6 +470,16 @@ export const userService = {
   },
 
   async updateLocation(userId: string, lat: number, lng: number) {
+    // Implausible jump (teleporting the query point to triangulate someone):
+    // keep the stored location, refresh presence only.
+    if (!acceptLocationFix(userId, lat, lng)) {
+      await query(
+        `UPDATE profiles SET online = true, last_seen = NOW() WHERE user_id = $1`,
+        [userId],
+      );
+      return;
+    }
+
     // Upsert live pin + presence first.
     await query(
       `INSERT INTO profiles (user_id, location, lat, lng, online, last_seen, share_live_location_with_matches)
