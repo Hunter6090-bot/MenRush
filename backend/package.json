@@ -59,7 +59,6 @@
     "test:image-optimize": "ts-node scripts/image-optimize-checks.ts",
     "test:nearby-hotpath": "ts-node scripts/nearby-hotpath-checks.ts",
     "test:presence-window": "ts-node --transpile-only scripts/presence-window-checks.ts",
-    "test:proxy-hop-diagnostic": "ts-node --transpile-only scripts/proxy-hop-diagnostic-checks.ts",
     "test:nearby-pagination": "ts-node scripts/nearby-pagination-checks.ts",
     "test:uk-ie-all-scope": "ts-node scripts/uk-ie-all-scope-checks.ts",
     "test:place-search": "ts-node src/lib/ukIePlace.test.ts && ts-node scripts/place-search-checks.ts",
