@@ -5,16 +5,21 @@
  * - drop any client-sent X-MenRush-Edge-Secret, X-MenRush-Client-IP and
  *   X-Vercel-Forwarded-For (a client can forge them, and Vercel can pass a
  *   forged X-Vercel-Forwarded-For through);
- * - set X-MenRush-Edge-Secret;
- * - set X-MenRush-Client-IP from ipAddress(request), which in
- *   @vercel/functions reads the X-Real-IP header Vercel's proxy sets and
- *   overwrites. No IP means no client-ip header.
+ * - when ipAddress(request) is one valid IP, set X-MenRush-Edge-Secret and
+ *   X-MenRush-Client-IP to it. ipAddress() in @vercel/functions reads the
+ *   X-Real-IP header Vercel's proxy sets and overwrites. No IP, or an
+ *   invalid or multi-value one, means no secret and no client-ip, so the
+ *   backend keeps the X-Real-IP rule for that request.
  * The backend trusts X-MenRush-Client-IP only with a matching secret.
  *
  * The modified headers go upstream through next({ request: { headers } }),
  * which encodes them as x-middleware-request-* plus
  * x-middleware-override-headers; Vercel applies them to the request that the
- * vercel.json rewrite then proxies to Railway.
+ * vercel.json rewrite then proxies to Railway. next() lists only headers
+ * that are present, so the override list is then rewritten to also name the
+ * three stripped headers. A listed name with no x-middleware-request-* value
+ * is deleted upstream, so a client copy cannot survive even on a platform
+ * that keeps unlisted headers.
  *
  * If this middleware does not run for a request, no secret header is added,
  * so the backend ignores any X-MenRush-Client-IP on it and keeps the
@@ -26,7 +31,13 @@
  */
 import { ipAddress } from '@vercel/functions/headers';
 import { next } from '@vercel/functions/middleware';
-import { EDGE_SECRET_ENV, edgeSecretFromEnv, withEdgeSecret } from './src/lib/edgeProxySecret';
+import {
+  EDGE_SECRET_ENV,
+  OVERRIDE_HEADERS_HEADER,
+  edgeSecretFromEnv,
+  overrideHeaderList,
+  withEdgeSecret,
+} from './src/lib/edgeProxySecret';
 
 // Provided by the Vercel runtime; typed here because the frontend has no @types/node.
 declare const process: { env: Record<string, string | undefined> };
@@ -48,5 +59,7 @@ export default function middleware(request: Request): Response | undefined {
     ipAddress(request),
   );
   if (!headers) return undefined;
-  return next({ request: { headers } });
+  const res = next({ request: { headers } });
+  res.headers.set(OVERRIDE_HEADERS_HEADER, overrideHeaderList(headers));
+  return res;
 }
