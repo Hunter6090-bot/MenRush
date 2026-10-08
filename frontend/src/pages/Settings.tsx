@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { NotificationSettings } from '../components/NotificationSettings';
+import { HideLocationList } from '../components/HideLocationList';
 import { TwoFactorSettings } from '../components/TwoFactorSettings';
 import { PasswordInput } from '../components/PasswordInput';
 import { authAPI, usersAPI } from '../api/client';
@@ -409,6 +410,15 @@ export const Settings = () => {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }, [location.hash, blockedLoading, blocked.length]);
+
+  useEffect(() => {
+    if (location.hash !== '#hide-location') return;
+    const el = document.getElementById('hide-location');
+    if (!el) return;
+    window.requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [location.hash]);
 
   const handleReportStatus = async (
     reportId: string,
@@ -866,6 +876,9 @@ export const Settings = () => {
                 {locating ? 'Locating…' : hasPin ? 'Refresh location' : 'Allow location'}
               </button>
             </section>
+            <div className="mt-3">
+              <HideLocationList />
+            </div>
           </div>
 
           {/* ── DISCOVERY ── */}
