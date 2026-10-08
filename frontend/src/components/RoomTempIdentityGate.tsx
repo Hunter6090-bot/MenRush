@@ -238,8 +238,8 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   const showChips = loaded && !hadSavedIdentity;
   const subtitleActive =
     typeof activeCount === 'number' && activeCount > 0
-      ? `Video group · ${activeCount} active`
-      : 'Video group';
+      ? `Group room · ${activeCount} active`
+      : 'Group room';
 
   const houseRuleLines = useMemo(() => {
     if (roomRules?.trim()) {

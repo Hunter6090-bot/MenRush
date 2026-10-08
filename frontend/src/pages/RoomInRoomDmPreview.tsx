@@ -100,7 +100,7 @@ export function RoomInRoomDmPreview() {
     >
       <header className="border-b border-[var(--border-default)] px-4 py-3">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--cream-muted)]">
-          Dev preview · Video rooms
+          Dev preview · Rooms
         </p>
         <h1 className="text-lg font-semibold">In-room 1:1 side list</h1>
         <p className="mt-1 max-w-xl text-xs text-[var(--cream-muted)]">
