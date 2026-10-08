@@ -2,7 +2,8 @@
  * Integration: Ghost and hidden (is_visible = false) members' Community posts
  * are not shown to others. The author still sees their own posts. Blocks keep
  * working. Covers listNearby, the post-level gate, and comments by Ghost /
- * hidden members (left out of listComments and the comment count).
+ * hidden members (left out of listComments and of the comment count returned
+ * by listNearby and updatePost).
  * Needs a migrated DATABASE_URL (schema.sql + migrations). Skips without one.
  *   DATABASE_URL=postgresql://menrush:menrush123@localhost:5432/menrush \
  *   npx ts-node scripts/community-ghost-hidden-integration.ts
@@ -99,12 +100,20 @@ async function main() {
         ?.comment_count;
     assert.strictEqual(await countFor(viewer, controlPost.id), 1, 'comment count leaves out Ghost / hidden comments');
     assert.strictEqual(await countFor(ghost, controlPost.id), 2, 'Ghost commenter counts own comment');
+    // updatePost returns the same viewer-visible count (the feed swaps it in).
+    const editCount = async (uid: string, postId: string) =>
+      (await communityService.updatePost(uid, postId, `cgh edited ${Date.now()}`)).comment_count;
+    assert.strictEqual(await editCount(control, controlPost.id), 1, 'updatePost count leaves out Ghost / hidden comments');
+    // Own comments always count, even while Ghost.
+    await communityService.createComment(ghost, ghostPost.id, 'cgh ghost own comment');
+    assert.strictEqual(await editCount(ghost, ghostPost.id), 1, 'updatePost count includes own comment while Ghost');
 
     // Back to visible: post and comment show again (nothing was deleted).
     await setProfile(ghost, true, false);
     assert.ok((await feedFor(viewer)).has(ghostPost.id), 'post shows again when Ghost is off');
     assert.ok((await commentIds(viewer, controlPost.id)).has(ghostComment.id), 'comment shows again when Ghost is off');
     assert.strictEqual(await countFor(viewer, controlPost.id), 2, 'count includes comment again when Ghost is off');
+    assert.strictEqual(await editCount(control, controlPost.id), 2, 'updatePost count includes comment again when Ghost is off');
 
     // Blocks apply to comments too.
     await query(`INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2)`, [ghost, viewer]);
@@ -114,6 +123,8 @@ async function main() {
     // Blocks still apply on top.
     await query(`INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2)`, [control, viewer]);
     assert.ok(!(await feedFor(viewer)).has(controlPost.id), 'block still hides posts');
+    // Author blocked a commenter: updatePost count leaves that comment out.
+    assert.strictEqual(await editCount(control, controlPost.id), 1, 'updatePost count leaves out blocked comments');
 
     console.log('community-ghost-hidden-integration: OK');
   } finally {

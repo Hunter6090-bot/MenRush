@@ -143,6 +143,25 @@ function authorVisibleToViewerSql(authorExpr: string, viewerExpr: string): strin
        )`;
 }
 
+/**
+ * Comments on a post that this viewer can see: same rules as listComments
+ * (two-way blocks, Ghost / hidden commenters left out, own always counted).
+ * Every path that returns a post with comment_count must use this, so the
+ * count never gives away hidden commenters.
+ */
+function visibleCommentCountSql(postExpr: string, viewerExpr: string): string {
+  return `(
+           SELECT COUNT(*)::int FROM community_post_comments c
+           WHERE c.post_id = ${postExpr}
+             AND NOT EXISTS (
+               SELECT 1 FROM blocks cb
+               WHERE (cb.blocker_id = ${viewerExpr} AND cb.blocked_id = c.user_id)
+                  OR (cb.blocker_id = c.user_id AND cb.blocked_id = ${viewerExpr})
+             )
+             AND ${authorVisibleToViewerSql('c.user_id', viewerExpr)}
+         )`;
+}
+
 async function assertPostVisible(
   viewerId: string,
   postId: string,
@@ -253,17 +272,7 @@ export const communityService = {
          cp.lng AS post_lng,
          COALESCE(ap.map_pin_fuzz_m, ${MAP_PIN_FUZZ_DEFAULT_M}) AS author_fuzz_m,
          COALESCE(u.show_distance, TRUE) AS author_show_distance,
-         (
-           -- Count only comments this viewer can see (same rules as listComments).
-           SELECT COUNT(*)::int FROM community_post_comments c
-           WHERE c.post_id = cp.id
-             AND NOT EXISTS (
-               SELECT 1 FROM blocks cb
-               WHERE (cb.blocker_id = $4 AND cb.blocked_id = c.user_id)
-                  OR (cb.blocker_id = c.user_id AND cb.blocked_id = $4)
-             )
-             AND ${authorVisibleToViewerSql('c.user_id', '$4')}
-         ) AS comment_count
+         ${visibleCommentCountSql('cp.id', '$4')} AS comment_count
        FROM community_posts cp
        JOIN users u ON u.id = cp.user_id
        LEFT JOIN profiles ap ON ap.user_id = cp.user_id
@@ -404,9 +413,10 @@ export const communityService = {
     );
     const authorRow = author.rows[0] ?? { name: 'Member', photo_url: null, show_distance: true };
 
+    // Visible count for the author (blocks, Ghost / hidden commenters), not raw COUNT(*).
     const commentCountRes = await query(
-      `SELECT COUNT(*)::int AS count FROM community_post_comments WHERE post_id = $1`,
-      [postId],
+      `SELECT ${visibleCommentCountSql('$1::uuid', '$2::uuid')} AS count`,
+      [postId, userId],
     );
     const commentCount = Number(commentCountRes.rows[0]?.count ?? 0);
 
