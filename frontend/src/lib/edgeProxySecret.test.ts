@@ -68,8 +68,9 @@ describe('Vercel middleware', () => {
     else process.env.EDGE_PROXY_SECRET = prev;
   });
 
-  it('only matches /api', () => {
+  it('matches /api and everything below it, on the Node.js runtime', () => {
     expect(config.matcher).toBe('/api/:path*');
+    expect(config.runtime).toBe('nodejs');
   });
 
   it('ipAddress() reads the x-real-ip header Vercel sets', () => {

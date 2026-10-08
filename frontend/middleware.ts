@@ -16,6 +16,10 @@
  * x-middleware-override-headers; Vercel applies them to the request that the
  * vercel.json rewrite then proxies to Railway.
  *
+ * If this middleware does not run for a request, no secret header is added,
+ * so the backend ignores any X-MenRush-Client-IP on it and keeps the
+ * X-Real-IP rule.
+ *
  * Fail safe: when EDGE_PROXY_SECRET is unset (or shorter than 16 chars) in
  * Vercel, this returns nothing and the request continues untouched, exactly
  * as before this file existed. Never log the secret or any header.
@@ -27,8 +31,14 @@ import { EDGE_SECRET_ENV, edgeSecretFromEnv, withEdgeSecret } from './src/lib/ed
 // Provided by the Vercel runtime; typed here because the frontend has no @types/node.
 declare const process: { env: Record<string, string | undefined> };
 
+// '/api/:path*' matches /api itself and every path below it (zero or more
+// segments), the same paths the vercel.json /api rewrite sends to Railway.
+// runtime 'nodejs' is Vercel's current recommendation (the default "edge"
+// runtime is deprecated). next() uses the same x-middleware-request-* header
+// protocol on both runtimes, and this file only uses Web APIs.
 export const config = {
   matcher: '/api/:path*',
+  runtime: 'nodejs',
 };
 
 export default function middleware(request: Request): Response | undefined {

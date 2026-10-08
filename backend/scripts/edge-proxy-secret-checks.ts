@@ -183,7 +183,8 @@ function frontendChecks() {
   assert.equal(clientIp(fakeReq(asNode), { [EDGE_SECRET_ENV]: SECRET }), '203.0.113.7', 'backend uses the middleware IP');
 
   const mw = fs.readFileSync(path.join(FRONTEND, 'middleware.ts'), 'utf8');
-  assert.match(mw, /matcher:\s*'\/api\/:path\*'/, 'middleware only matches /api');
+  assert.match(mw, /matcher:\s*'\/api\/:path\*'/, 'middleware matches /api and every path below it');
+  assert.match(mw, /runtime:\s*'nodejs'/, 'middleware runs on the Node.js runtime');
   assert.match(mw, /from '@vercel\/functions\/middleware'/, 'uses @vercel/functions next()');
   assert.match(mw, /import \{ ipAddress \} from '@vercel\/functions\/headers'/, 'visitor IP comes from @vercel/functions ipAddress()');
   assert.match(mw, /ipAddress\(request\)/, 'middleware passes ipAddress(request)');
