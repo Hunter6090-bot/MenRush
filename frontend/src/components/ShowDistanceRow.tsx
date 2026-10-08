@@ -33,7 +33,7 @@ export function ShowDistanceRow({
       data-testid="profile-stats-distance"
     >
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium uppercase tracking-wide text-[var(--cream-muted)]">
+        <p className="text-sm font-medium uppercase tracking-wide text-[var(--cream-muted)]">
           Distance
         </p>
         <p className="mt-0.5 text-base text-[var(--cream)]" data-testid="profile-distance-state">
