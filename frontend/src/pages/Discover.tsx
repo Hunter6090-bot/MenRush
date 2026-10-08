@@ -98,6 +98,7 @@ import {
   nearestMapPinFuzzStep,
   privateMapPointAround,
 } from '../lib/mapPinFuzz';
+import { adjustHotSpotLiveCount, isHotSpotActive } from '../lib/hotSpotCounts';
 
 /** Map panel: swipe up to hide, swipe down to show, expand for large map. */
 type MapPanelMode = 'hidden' | 'default' | 'expanded';
@@ -1414,8 +1415,7 @@ export const Discover = () => {
           updatedSpot = {
             ...spot,
             is_checked_in: false,
-            live_count_exact: Math.max(0, spot.live_count_exact - 1),
-            has_active_checkins: Math.max(0, spot.live_count_exact - 1) > 0,
+            ...adjustHotSpotLiveCount(spot, -1),
           };
         } else {
           const res = await hotSpotsAPI.checkIn(spot.id, anonymous);
@@ -1423,8 +1423,7 @@ export const Discover = () => {
             ...spot,
             is_checked_in: true,
             my_checkin_anonymous: anonymous,
-            live_count_exact: spot.live_count_exact + 1,
-            has_active_checkins: true,
+            ...adjustHotSpotLiveCount(spot, 1),
           };
         }
         if (selectedHotSpot && selectedHotSpot.id === spot.id && updatedSpot) {
@@ -1858,8 +1857,9 @@ export const Discover = () => {
         category_icon: spot.category_icon,
         live_count_exact: spot.live_count_exact,
         live_count: spot.live_count,
+        has_active_checkins: spot.has_active_checkins,
       };
-      const occupied = spot.live_count_exact > 0;
+      const occupied = isHotSpotActive(spot);
 
       if (existing) {
         const prevLat = Number(existing.spot.latitude);
@@ -1868,7 +1868,7 @@ export const Discover = () => {
           // Keep true lng/lat — never spiderfy into a vertical column (#254).
           existing.marker.setLngLat(lngLat);
         }
-        const prevOccupied = existing.spot.live_count_exact > 0;
+        const prevOccupied = isHotSpotActive(existing.spot);
         const nextOccupied = occupied;
         const el = existing.marker.getElement();
         const labelChanged = el.dataset.showLabel !== (showLabel ? '1' : '0');
@@ -2012,7 +2012,7 @@ export const Discover = () => {
           id,
           lng: spot.longitude,
           lat: spot.latitude,
-          radiusPx: hotSpotPinHitRadiusPx(spot.live_count_exact > 0),
+          radiusPx: hotSpotPinHitRadiusPx(isHotSpotActive(spot)),
         });
       });
 

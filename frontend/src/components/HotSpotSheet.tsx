@@ -4,6 +4,7 @@ import { IconClose } from './icons';
 import { formatDistanceFromKm } from '../lib/localeUnits';
 import { HOT_SPOTS_FACE } from '../lib/cruiseCopy';
 import { getDirectionsUrl } from '../lib/cruising';
+import { activeHotSpotCountLabel, isHotSpotActive } from '../lib/hotSpotCounts';
 
 interface HotSpotSheetProps {
   spot: HotSpotDTO | null;
@@ -30,7 +31,8 @@ export function HotSpotSheet({
 }: HotSpotSheetProps) {
   if (!spot) return null;
 
-  const active = Boolean(spot.has_active_checkins ?? spot.live_count_exact > 0);
+  const active = isHotSpotActive(spot);
+  const countLabel = activeHotSpotCountLabel(spot);
 
   return (
     <div
@@ -97,8 +99,8 @@ export function HotSpotSheet({
             className="inline-flex h-2.5 w-2.5 rounded-full"
             style={{ background: active ? '#3D7A2E' : 'rgba(240,224,192,0.35)' }}
           />
-          <p className="text-[13px] font-bold text-[var(--cream)]">
-            {active ? `${spot.live_count} checked in` : 'No check-ins right now'}
+          <p className="text-[15px] font-bold text-[var(--cream)]">
+            {active ? (countLabel ? `${countLabel} checked in` : 'Active now') : 'No check-ins right now'}
           </p>
         </div>
         <p className="mt-1 text-[11px] text-[var(--cream-muted)]">

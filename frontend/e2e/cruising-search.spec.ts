@@ -105,6 +105,7 @@ test.describe('Cruising Search Phase 1', () => {
       formatLastActiveTime({
         has_active_checkins: true,
         live_count_exact: 3,
+        live_count: 3,
       }),
     ).toBe('3 checked in now');
   });
