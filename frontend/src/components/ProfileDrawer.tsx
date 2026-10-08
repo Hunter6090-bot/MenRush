@@ -10,7 +10,7 @@ import { StatusBadge } from "./StatusBadge";
 import { DistancePill } from "./DistancePill";
 import { VerifiedBadge } from "./VerifiedBadge";
 import { ChatSafetyMenu } from "./ChatSafetyMenu";
-import { getDistanceLabel, isUserPulsing } from "../lib/discovery";
+import { isUserPulsing, memberDistanceLabel } from "../lib/discovery";
 import { profilePathForUser } from "../lib/profileLinks";
 import {
   matchCtaAriaLabel,
@@ -158,19 +158,10 @@ export function ProfileDrawer({
 
   if (!user) return null;
 
-  const parsedDistance =
-    user.distance_km != null && user.distance_km !== ""
-      ? parseFloat(String(user.distance_km))
-      : user.distance_label != null && user.distance_label.trim() !== ""
-        ? parseFloat(user.distance_label.replace(/[^0-9.]/g, ""))
-        : null;
-  const distance = Number.isFinite(parsedDistance) ? parsedDistance : null;
-  const distLabel =
-    distance != null
-      ? getDistanceLabel({ ...user, distance_km: distance })
-      : user.distance_label != null && user.distance_label.trim() !== ""
-        ? user.distance_label
-        : null;
+  // Server label is coarse and Discretion-fuzzed ("<1 mi", "3 mi"). No distance
+  // (member hides it, or no location) shows "Nearby" in the pill only.
+  const distLabel = memberDistanceLabel(user);
+  const pillLabel = distLabel ?? "Nearby";
   const isPulsing = isUserPulsing(user);
   const dragging = dragVh != null;
   const matchState = matchInterestState({ liked, mutual });
@@ -312,7 +303,7 @@ export function ProfileDrawer({
               ) : user.online ? (
                 <StatusBadge online lastSeen={user.last_seen} size="xs" />
               ) : null}
-              {distLabel && <DistancePill km={distance ?? 0} label={distLabel} />}
+              <DistancePill km={0} label={pillLabel} />
             </div>
           </div>
 

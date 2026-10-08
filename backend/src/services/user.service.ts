@@ -24,9 +24,24 @@ import {
 } from '../lib/nearbyRosterSql';
 import { PRESENCE_LIVE_SQL, PRESENCE_WINDOW_SQL } from '../lib/presence';
 import { lookupUkIePlace, placeContainsPoint } from '../lib/ukIePlace';
+import { memberDistanceFields } from '../lib/memberDistance';
 
 const includeE2eFixtures = () =>
   process.env.INCLUDE_E2E_FIXTURES === 'true' || process.env.INCLUDE_E2E_FIXTURES === '1';
+
+/**
+ * Hiding distance (Show distance OFF) is Premium. Raised only when a member
+ * switches it from on to off without Premium; keeping it off is never blocked
+ * so a lapsed member can still save the rest of their profile.
+ */
+export class ShowDistancePremiumError extends Error {
+  readonly code = 'premium_required';
+  readonly feature = 'show_distance';
+  constructor() {
+    super('premium_required');
+    this.name = 'ShowDistancePremiumError';
+  }
+}
 
 export interface NearbyUsersResult {
   users: Array<any>;
@@ -166,24 +181,6 @@ export const userService = {
     const total = Number(countResult.rows[0]?.total ?? 0);
 
     const users = result.rows.map((row) => {
-      const km = row.distance_m / 1000;
-      // Distance labels stay bucketed for list privacy; map pins stay near real coords.
-      let bucketed: number;
-      let label: string;
-      if (km < 0.3) {
-        bucketed = 0.2;
-        label = '< 300 m';
-      } else if (km < 1) {
-        bucketed = Math.round(km * 10) / 10; // 0.1km steps under 1km
-        label = `${Math.round(bucketed * 1000)} m`;
-      } else if (km < 5) {
-        bucketed = Math.round(km * 2) / 2; // 0.5km steps
-        label = `${bucketed.toFixed(1)} km`;
-      } else {
-        bucketed = Math.round(km); // 1km steps above 5km
-        label = `${bucketed} km`;
-      }
-
       const realLat = Number(row.real_lat);
       const realLng = Number(row.real_lng);
       const fuzzMaxM = Number(row.map_pin_fuzz_m);
@@ -198,13 +195,27 @@ export const userService = {
             )
           : { lat: originLat, lng: originLng };
 
-      // Do not leak exact GPS or the subject's fuzz setting in the API payload —
-      // only the fuzzed map pin.
+      // Distance: coarse miles to the FUZZED pin (Discretion), omitted when the
+      // member has Show distance off. Same shape as any other no-distance case.
+      const distanceFields = memberDistanceFields({
+        memberId: String(row.id),
+        viewerLat: originLat,
+        viewerLng: originLng,
+        memberLat: realLat,
+        memberLng: realLng,
+        fuzzMaxM: Number.isFinite(fuzzMaxM) ? fuzzMaxM : MAP_PIN_FUZZ_DEFAULT_M,
+        showDistance: row.show_distance !== false,
+      });
+
+      // Do not leak exact GPS, the exact distance, or the subject's privacy
+      // settings in the API payload. Only the fuzzed map pin.
       const {
         real_lat: _rl,
         real_lng: _rg,
         map_photo_url: mapPhoto,
         map_pin_fuzz_m: _fuzz,
+        show_distance: _showDistance,
+        distance_m: _exactDistance,
         ...publicRow
       } = row;
 
@@ -235,8 +246,7 @@ export const userService = {
         photo_url: discoveryPhotoUrl(mapPhoto, publicRow.photo_url) ?? publicRow.photo_url,
         lat: mapPoint.lat,
         lng: mapPoint.lng,
-        distance_km: bucketed.toFixed(2),
-        distance_label: label,
+        ...distanceFields,
       };
     });
 
@@ -334,6 +344,7 @@ export const userService = {
       `SELECT
         u.id, u.email, u.name, u.age, u.date_of_birth::text AS date_of_birth, u.show_age,
         u.show_height, u.show_weight, u.show_relationship,
+        COALESCE(u.show_distance, TRUE) AS show_distance,
         u.bio, u.headline, u.looking_for,
         u.photo_url, u.cover_url, u.cover_position_x, u.cover_position_y, u.cover_zoom,
         u.map_photo_url, u.secondary_photo_urls, u.interests, u.created_at,
@@ -414,14 +425,18 @@ export const userService = {
           SELECT 1 FROM likes l
           WHERE l.liker_id = $2 AND l.liked_id = $1
         ) AS is_liked,
-        CASE
-          WHEN $1 = $2 THEN NULL
-          WHEN vp.is_visible = true AND vp.location IS NOT NULL
-               AND p.is_visible = true AND p.location IS NOT NULL
-               AND p.is_ghost = false
-          THEN ST_Distance(p.location, vp.location)
-          ELSE NULL
-        END AS distance_m
+        (
+          $1 <> $2
+          AND vp.is_visible = true AND vp.location IS NOT NULL
+          AND p.is_visible = true AND p.location IS NOT NULL
+          AND p.is_ghost = false
+        ) AS distance_allowed,
+        p.lat AS member_lat,
+        p.lng AS member_lng,
+        COALESCE(p.map_pin_fuzz_m, ${MAP_PIN_FUZZ_DEFAULT_M}) AS map_pin_fuzz_m,
+        COALESCE(u.show_distance, TRUE) AS show_distance,
+        vp.lat AS viewer_lat,
+        vp.lng AS viewer_lng
        FROM users u
        LEFT JOIN profiles p ON p.user_id = u.id
        LEFT JOIN profiles vp ON vp.user_id = $2
@@ -432,35 +447,34 @@ export const userService = {
     const row = result.rows[0];
     if (!row) return row;
 
-    let distance_km: string | null = null;
-    let distance_label: string | null = null;
+    // Distance to the member's fuzzed pin, coarse miles. When it is not
+    // available (Show distance off, ghost, no location) the keys are omitted,
+    // so every no-distance case has the same shape.
+    const distanceFields = row.distance_allowed
+      ? memberDistanceFields({
+          memberId: String(row.id),
+          viewerLat: row.viewer_lat != null ? Number(row.viewer_lat) : null,
+          viewerLng: row.viewer_lng != null ? Number(row.viewer_lng) : null,
+          memberLat: row.member_lat != null ? Number(row.member_lat) : null,
+          memberLng: row.member_lng != null ? Number(row.member_lng) : null,
+          fuzzMaxM: Number(row.map_pin_fuzz_m),
+          showDistance: row.show_distance !== false,
+        })
+      : {};
 
-    if (row.distance_m != null && Number.isFinite(Number(row.distance_m))) {
-      const km = Number(row.distance_m) / 1000;
-      let bucketed: number;
-      let label: string;
-      if (km < 0.3) {
-        bucketed = 0.2;
-        label = '< 300 m';
-      } else if (km < 1) {
-        bucketed = Math.round(km * 10) / 10;
-        label = `${Math.round(bucketed * 1000)} m`;
-      } else if (km < 5) {
-        bucketed = Math.round(km * 2) / 2;
-        label = `${bucketed.toFixed(1)} km`;
-      } else {
-        bucketed = Math.round(km);
-        label = `${bucketed} km`;
-      }
-      distance_km = bucketed.toFixed(2);
-      distance_label = label;
-    }
-
-    const { distance_m: _dm, ...publicRow } = row;
+    const {
+      distance_allowed: _allowed,
+      member_lat: _mlat,
+      member_lng: _mlng,
+      map_pin_fuzz_m: _fuzz,
+      show_distance: _showDistance,
+      viewer_lat: _vlat,
+      viewer_lng: _vlng,
+      ...publicRow
+    } = row;
     return {
       ...publicRow,
-      distance_km,
-      distance_label,
+      ...distanceFields,
     };
   },
 
@@ -570,6 +584,17 @@ export const userService = {
     const updates: string[] = [];
     const values: unknown[] = [userId];
 
+    if (data.show_distance === false) {
+      const current = await query(
+        `SELECT COALESCE(show_distance, TRUE) AS show_distance FROM users WHERE id = $1`,
+        [userId],
+      );
+      const currentlyOn = current.rows[0]?.show_distance !== false;
+      if (currentlyOn && !(await premiumService.isPremium(userId))) {
+        throw new ShowDistancePremiumError();
+      }
+    }
+
     if (data.name !== undefined) {
       updates.push(`name = $${values.length + 1}`);
       values.push(data.name.trim());
@@ -676,9 +701,13 @@ export const userService = {
       updates.push(`show_relationship = $${values.length + 1}`);
       values.push(data.show_relationship);
     }
+    if (data.show_distance !== undefined) {
+      updates.push(`show_distance = $${values.length + 1}`);
+      values.push(data.show_distance);
+    }
 
     const returnCols = `id, name, age, date_of_birth::text AS date_of_birth, show_age,
-      show_height, show_weight, show_relationship,
+      show_height, show_weight, show_relationship, COALESCE(show_distance, TRUE) AS show_distance,
       bio, headline, looking_for,
       photo_url, cover_url, map_photo_url, cover_position_x, cover_position_y, cover_zoom, interests,
       height_cm, weight_kg, relationship_status, hosting_status,

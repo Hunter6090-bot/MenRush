@@ -62,6 +62,7 @@ export const mapFeedService = {
       [origin.lat, origin.lng, fifteenMinsAgo, radiusMeters, userId],
     );
 
+    // lat / lng are already the sender's public pin (SENDER_PIN in SQL).
     return result.rows;
   },
 
