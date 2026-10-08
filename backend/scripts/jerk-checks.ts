@@ -2,7 +2,8 @@
  * Jerk one-tap action checks.
  *
  * Unit (always, no DB): fake deps prove block respected, daily limit, 24h
- * idempotency, no like/match writes, notification + push queued with copy.
+ * idempotency, no like/match writes, notification + push queued with copy,
+ * and push gated on the recipient's push setting (push off → in-app only).
  *
  * Integration (only when DATABASE_URL is set and JERK_CHECKS_DB=1): same rules
  * against real Postgres (jerks table, notifications CHECK, blocks, likes).
@@ -15,7 +16,7 @@ import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { SecurityError } from '../src/security/access';
-import type { PushPayload } from '../src/services/push.service';
+import { hasPushSubscription, type PushPayload } from '../src/services/push.service';
 import {
   createJerkService,
   JerkDeps,
@@ -30,7 +31,9 @@ import {
 
 type Jerk = { id: string; from: string; to: string; created_at: number };
 
-function makeFake(opts: { blocked?: Array<[string, string]>; names?: Record<string, string> } = {}) {
+function makeFake(
+  opts: { blocked?: Array<[string, string]>; names?: Record<string, string>; pushOff?: string[] } = {},
+) {
   const jerks: Jerk[] = [];
   const queries: string[] = [];
   const notifications: Array<Record<string, unknown>> = [];
@@ -38,6 +41,8 @@ function makeFake(opts: { blocked?: Array<[string, string]>; names?: Record<stri
   const events: Array<{ event: string; fields: Record<string, unknown> }> = [];
   const blocked = opts.blocked ?? [];
   const names = opts.names ?? {};
+  const pushOff = new Set(opts.pushOff ?? []);
+  const pushChecks: string[] = [];
   let clock = Date.now();
 
   const runQuery: JerkQueryFn = async (text, values = []) => {
@@ -78,6 +83,10 @@ function makeFake(opts: { blocked?: Array<[string, string]>; names?: Record<stri
     push: async (userId, payload) => {
       pushes.push({ userId, payload });
     },
+    wantsPush: async (userId) => {
+      pushChecks.push(userId);
+      return !pushOff.has(userId);
+    },
     logEvent: (event, fields) => events.push({ event, fields }),
   };
 
@@ -87,6 +96,7 @@ function makeFake(opts: { blocked?: Array<[string, string]>; names?: Record<stri
     queries,
     notifications,
     pushes,
+    pushChecks,
     events,
     advance: (ms: number) => {
       clock += ms;
@@ -242,6 +252,81 @@ async function unitChecks() {
     }
     console.log('PASS notification failure is non-fatal');
   }
+
+  // Push OFF: in-app notification still created, NO push queued.
+  {
+    const a = id();
+    const b = id();
+    const f = makeFake({ names: { [a]: 'Dan' }, pushOff: [b] });
+    const svc = createJerkService(f.deps);
+    const res = await svc.sendJerk(a, b);
+    await flush();
+    assert.strictEqual(res.status, 'sent');
+    assert.strictEqual(f.jerks.length, 1, 'jerk row still written');
+    assert.strictEqual(f.notifications.length, 1, 'in-app notification still created');
+    assert.strictEqual(f.notifications[0].userId, b);
+    assert.strictEqual(f.notifications[0].type, 'jerk');
+    assert.strictEqual(f.notifications[0].title, 'Dan jerked you 😏');
+    assert.deepStrictEqual(f.pushChecks, [b], 'push setting checked for the recipient');
+    assert.strictEqual(f.pushes.length, 0, 'no push queued when push is off');
+    assert.ok(f.events.some((e) => e.event === 'jerk_sent' && e.fields.to === b));
+    console.log('PASS push off → in-app notification created, no push queued');
+  }
+
+  // Push ON: push queued as before, alongside the in-app notification.
+  {
+    const a = id();
+    const b = id();
+    const other = id();
+    const f = makeFake({ names: { [a]: 'Dan' }, pushOff: [other] });
+    const svc = createJerkService(f.deps);
+    const res = await svc.sendJerk(a, b);
+    await flush();
+    assert.strictEqual(res.status, 'sent');
+    assert.strictEqual(f.notifications.length, 1);
+    assert.deepStrictEqual(f.pushChecks, [b]);
+    assert.strictEqual(f.pushes.length, 1, 'push queued when push is on');
+    assert.strictEqual(f.pushes[0].userId, b);
+    assert.deepStrictEqual(f.pushes[0].payload, {
+      title: 'Dan jerked you 😏',
+      body: '',
+      url: `/profile/${a}`,
+      tag: `jerk-${a}`,
+    });
+    console.log('PASS push on → push queued as before');
+  }
+
+  // Push setting check fails → fail closed: no push, in-app notification stands, send still 200.
+  {
+    const a = id();
+    const b = id();
+    const f = makeFake();
+    f.deps.wantsPush = async () => {
+      throw new Error('db down');
+    };
+    const svc = createJerkService(f.deps);
+    const res = await svc.sendJerk(a, b);
+    await flush();
+    assert.strictEqual(res.status, 'sent');
+    assert.strictEqual(f.notifications.length, 1);
+    assert.strictEqual(f.pushes.length, 0);
+    console.log('PASS push setting check failure → no push, notification kept');
+  }
+
+  // hasPushSubscription reads push_subscriptions (the Settings push toggle's table).
+  {
+    const on = id();
+    const off = id();
+    const seen: Array<{ text: string; values: unknown[] }> = [];
+    const fakeQuery = async (text: string, values: unknown[] = []) => {
+      seen.push({ text, values });
+      return { rows: values[0] === on ? [{ '?column?': 1 }] : [] };
+    };
+    assert.strictEqual(await hasPushSubscription(on, fakeQuery), true);
+    assert.strictEqual(await hasPushSubscription(off, fakeQuery), false);
+    assert.ok(seen.every((q) => /FROM push_subscriptions WHERE user_id = \$1/.test(q.text)));
+    console.log('PASS hasPushSubscription keys on push_subscriptions rows');
+  }
 }
 
 function staticChecks() {
@@ -287,6 +372,7 @@ async function integrationChecks() {
     push: async (userId, payload) => {
       pushes.push({ userId, payload });
     },
+    wantsPush: (userId) => hasPushSubscription(userId),
     logEvent: logJerkEvent,
     dailyLimit: 3,
   });
@@ -306,6 +392,12 @@ async function integrationChecks() {
         [u],
       );
     }
+
+    // b has push on (a subscription row); e has none (push off).
+    await query(
+      `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES ($1, $2, 'p', 'a')`,
+      [b, `https://push.test.menrush.local/${b}`],
+    );
 
     const likesBefore = (await query(`SELECT COUNT(*)::int AS n FROM likes WHERE liker_id = ANY($1::uuid[]) OR liked_id = ANY($1::uuid[])`, [users])).rows[0].n;
 
@@ -338,8 +430,13 @@ async function integrationChecks() {
     assert.strictEqual((await query(`SELECT COUNT(*)::int AS n FROM jerks WHERE (from_user_id = $1 AND to_user_id = $2) OR (from_user_id = $2 AND to_user_id = $1)`, [a, d])).rows[0].n, 0);
 
     // Limit 3 (injected for the DB run): a has sent to b, c → one more, then 429.
-    const r3 = await svc.sendJerk(a, e);
+    const r3 = await svc.sendJerk(a, e, { io });
+    await flush();
     assert.strictEqual(r3.status, 'sent');
+    // e has push off: in-app notification row + socket, but no push queued.
+    assert.strictEqual((await query(`SELECT COUNT(*)::int AS n FROM notifications WHERE user_id = $1 AND actor_id = $2 AND type = 'jerk'`, [e, a])).rows[0].n, 1);
+    assert.ok(emitted.some((x) => x.room === `user:${e}` && x.data.type === 'jerk'), 'socket notification emitted with push off');
+    assert.strictEqual(pushes.filter((p) => p.userId === e).length, 0, 'no push when push is off');
     await assert.rejects(svc.sendJerk(a, g), (x: any) => x instanceof JerkLimitError && x.status === 429);
 
     // Self-jerk blocked by the DB too.
@@ -355,7 +452,7 @@ async function integrationChecks() {
     assert.strictEqual(seen, 1);
     assert.ok((await query(`SELECT seen_at FROM jerks WHERE from_user_id = $1 AND to_user_id = $2`, [a, b])).rows[0].seen_at);
 
-    console.log('PASS integration: notification row + socket + push, repeat idempotent (also concurrent), blocks both ways, limit 429, no likes, seen_at');
+    console.log('PASS integration: notification row + socket + push (push on) / no push (push off), repeat idempotent (also concurrent), blocks both ways, limit 429, no likes, seen_at');
   } finally {
     await query(`DELETE FROM users WHERE id = ANY($1::uuid[])`, [users]).catch(() => undefined);
     await pool.end();

@@ -109,6 +109,18 @@ export async function deliverPush(
   return { configured: true, sent, pruned };
 }
 
+/**
+ * True when the user has push switched on: at least one row in
+ * `push_subscriptions`. That table is the app's one push preference. The
+ * Settings "Push notifications" toggle writes it (POST /api/push/subscribe) and
+ * clears it (POST /api/push/unsubscribe), and dead endpoints are pruned on 404/410.
+ * Message and call pushes go only to these rows, so "no row" means push is off.
+ */
+export async function hasPushSubscription(userId: string, runQuery: QueryFn = query): Promise<boolean> {
+  const res = await runQuery(`SELECT 1 FROM push_subscriptions WHERE user_id = $1 LIMIT 1`, [userId]);
+  return res.rows.length > 0;
+}
+
 /** Production entry point: send a push to every device a user has registered. */
 export async function sendPushToUser(userId: string, payload: PushPayload) {
   return deliverPush({ runQuery: query, sender: webpush as PushSender, enabled: configured }, userId, payload);
