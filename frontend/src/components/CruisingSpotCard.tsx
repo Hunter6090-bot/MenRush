@@ -8,6 +8,7 @@ import {
 } from '../lib/cruising';
 import { formatDistanceFromKm } from '../lib/localeUnits';
 import { CruisingSpotMapThumbnail } from './CruisingSpotMapThumbnail';
+import { isHotSpotActive } from '../lib/hotSpotCounts';
 
 interface CruisingSpotCardProps {
   spot: HotSpotDTO;
@@ -27,7 +28,7 @@ export function CruisingSpotCard({
   const category = mapToCruisingCategory(spot);
   const categoryMeta = CRUISING_CATEGORY_META[category];
   const lastActive = formatLastActiveTime(spot);
-  const isCurrentlyActive = Boolean(spot.has_active_checkins || spot.live_count_exact > 0);
+  const isCurrentlyActive = isHotSpotActive(spot);
   const directionsUrl = getDirectionsUrl(spot.latitude, spot.longitude, spot.name);
   const ttlHours = spot.checkin_ttl_hours ?? 2;
 

@@ -4,6 +4,7 @@ import { IconClose } from './icons';
 import { formatDistanceFromKm } from '../lib/localeUnits';
 import { HOT_SPOTS_FACE } from '../lib/cruiseCopy';
 import { getDirectionsUrl } from '../lib/cruising';
+import { isHotSpotActive } from '../lib/hotSpotCounts';
 
 interface HotSpotSheetProps {
   spot: HotSpotDTO | null;
@@ -30,7 +31,7 @@ export function HotSpotSheet({
 }: HotSpotSheetProps) {
   if (!spot) return null;
 
-  const active = Boolean(spot.has_active_checkins ?? spot.live_count_exact > 0);
+  const active = isHotSpotActive(spot);
 
   return (
     <div

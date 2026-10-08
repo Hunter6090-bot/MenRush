@@ -96,8 +96,10 @@ export type HotSpotRow = {
   category_name: string;
   category_icon: string;
   distance_km: number | null;
+  /** Display count: exact for Premium; 0 to 4 exact, then '5+', for Free. */
   live_count: number | string;
-  live_count_exact: number;
+  /** Exact live count, Premium viewers only. Always null for Free so the number never leaves the server. */
+  live_count_exact: number | null;
   is_checked_in: boolean;
   my_checkin_anonymous: boolean | null;
   /** Short-lived check-in window in hours (2h for outdoor cruising, 4h for commercial). */
@@ -117,13 +119,18 @@ export type HotSpotRow = {
   review_count: number;
 };
 
-function formatLiveCount(exact: number, isPremium: boolean): number | string {
+export function formatLiveCount(exact: number, isPremium: boolean): number | string {
   if (isPremium) return exact;
   if (exact >= 5) return '5+';
   return exact;
 }
 
-function mapSpotRow(row: Record<string, unknown>, isPremium: boolean, currentUserId?: string): HotSpotRow {
+/**
+ * Single serializer for every hot-spot / cruising-spot response (list, single,
+ * check-in, comment, review, event check-in). Free viewers get only the rounded
+ * live_count; live_count_exact is null for them.
+ */
+export function mapSpotRow(row: Record<string, unknown>, isPremium: boolean, currentUserId?: string): HotSpotRow {
   const exact = Number(row.live_count_exact ?? 0);
   const claimedBy = (row.claimed_by_user_id as string | null) ?? null;
   const claimStatus = (row.claim_status as string | null) ?? 'unclaimed';
@@ -143,7 +150,7 @@ function mapSpotRow(row: Record<string, unknown>, isPremium: boolean, currentUse
     category_icon: row.category_icon as string,
     distance_km: row.distance_km != null ? Number(row.distance_km) : null,
     live_count: formatLiveCount(exact, isPremium),
-    live_count_exact: exact,
+    live_count_exact: isPremium ? exact : null,
     is_checked_in: Boolean(row.is_checked_in),
     my_checkin_anonymous:
       row.my_checkin_anonymous == null ? null : Boolean(row.my_checkin_anonymous),

@@ -237,8 +237,23 @@ describe('Cruising Search Phase 1 helpers', () => {
         formatLastActiveTime({
           has_active_checkins: true,
           live_count_exact: 3,
+          live_count: 3,
         }),
       ).toBe('3 checked in now');
+    });
+
+    it('uses the server display count, never live_count_exact (Free stays rounded)', () => {
+      // Free viewer: server sends '5+' and no exact number.
+      expect(
+        formatLastActiveTime({ has_active_checkins: true, live_count_exact: null, live_count: '5+' }),
+      ).toBe('5+ checked in now');
+      // Even if an exact number were present, the label follows live_count.
+      expect(
+        formatLastActiveTime({ has_active_checkins: true, live_count_exact: 12, live_count: '5+' }),
+      ).toBe('5+ checked in now');
+      expect(
+        formatLastActiveTime({ has_active_checkins: true, live_count_exact: 3 }),
+      ).toBe('Active now');
     });
 
     it('returns relative active time if recent activity occurred', () => {

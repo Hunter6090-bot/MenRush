@@ -65,6 +65,8 @@ jobs:
         run: npm run test:auth-rate-limits
       - name: Veriff checks
         run: npm run test:veriff
+      - name: Hot-spot counts stay rounded for Free (no exact number)
+        run: npm run test:hot-spot-free-counts
 
   frontend-build:
     name: Frontend build

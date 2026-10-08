@@ -458,7 +458,8 @@ test('Free sees rounded 5+ Hot Spot count; Premium sees the exact count', async 
     });
     const freeSpot = (await freeApiRes.json()).spots.find((s: { id: string }) => s.id === TEST_HOT_SPOT.id);
     expect(freeSpot.live_count).toBe('5+');
-    expect(freeSpot.live_count_exact).toBe(5);
+    // Free never receives the exact number.
+    expect(freeSpot.live_count_exact).toBeNull();
     await freeCtx.close();
 
     const premiumCtx = await browser.newContext({ geolocation: FIXTURE_GEO, permissions: ['geolocation'] });
