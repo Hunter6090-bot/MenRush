@@ -62,6 +62,8 @@ jobs:
         run: npm run test:adult-assurance-rate-limit
       - name: Rate-limit client IP key (x-real-ip, spoofed XFF, fallback)
         run: npm run test:rate-limit-client-ip
+      - name: Vercel edge secret client IP (unset, mismatch, match)
+        run: npm run test:edge-proxy-secret
       - name: Veriff checks
         run: npm run test:veriff
 
