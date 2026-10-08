@@ -47,7 +47,7 @@ router.post('/', postLimiter, async (req: AuthRequest, res: Response) => {
     if (io) {
       const lat = Number(saved.lat);
       const lng = Number(saved.lng);
-      const nearbyIds = await mapFeedService.nearbyUserIds(lat, lng, 5);
+      const nearbyIds = await mapFeedService.nearbyUserIds(lat, lng, 5, req.userId!);
       // Include the poster: Discover dock does not optimistically render until this
       // event (or the HTTP body) lands — skipping self made own posts look undelivered.
       for (const uid of nearbyIds) {

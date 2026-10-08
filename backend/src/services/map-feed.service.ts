@@ -45,9 +45,14 @@ export const mapFeedService = {
        JOIN users u ON u.id = mf.sender_id
        WHERE mf.created_at >= $3
          AND ST_DWithin(mf.location, ST_MakePoint($2, $1)::geography, $4)
+         AND NOT EXISTS (
+           SELECT 1 FROM blocks b
+           WHERE (b.blocker_id = $5 AND b.blocked_id = mf.sender_id)
+              OR (b.blocker_id = mf.sender_id AND b.blocked_id = $5)
+         )
        ORDER BY mf.created_at DESC
        LIMIT 200`,
-      [lat, lng, fifteenMinsAgo, radiusMeters],
+      [lat, lng, fifteenMinsAgo, radiusMeters, userId],
     );
 
     return result.rows;
@@ -85,13 +90,27 @@ export const mapFeedService = {
     };
   },
 
-  async nearbyUserIds(lat: number, lng: number, radiusKm: number): Promise<string[]> {
+  /**
+   * Socket fan-out targets for a new post. With senderId, anyone the sender
+   * blocked or who blocked the sender is left out (same block lookup as Nearby).
+   */
+  async nearbyUserIds(
+    lat: number,
+    lng: number,
+    radiusKm: number,
+    senderId?: string,
+  ): Promise<string[]> {
     const radiusMeters = radiusKm * 1000;
     const result = await query(
       `SELECT user_id FROM profiles
        WHERE lat IS NOT NULL
-         AND ST_DWithin(location, ST_MakePoint($2, $1)::geography, $3)`,
-      [lat, lng, radiusMeters],
+         AND ST_DWithin(location, ST_MakePoint($2, $1)::geography, $3)
+         AND ($4::uuid IS NULL OR NOT EXISTS (
+           SELECT 1 FROM blocks b
+           WHERE (b.blocker_id = $4::uuid AND b.blocked_id = profiles.user_id)
+              OR (b.blocker_id = profiles.user_id AND b.blocked_id = $4::uuid)
+         ))`,
+      [lat, lng, radiusMeters, senderId ?? null],
     );
     return result.rows.map((r: { user_id: string }) => r.user_id);
   },
