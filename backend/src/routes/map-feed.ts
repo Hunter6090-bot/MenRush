@@ -54,7 +54,7 @@ router.post('/', postLimiter, async (req: AuthRequest, res: Response) => {
     if (io) {
       const lat = Number(saved.lat);
       const lng = Number(saved.lng);
-      const nearbyIds = await mapFeedService.nearbyUserIds(lat, lng, 5);
+      const nearbyIds = await mapFeedService.nearbyUserIds(lat, lng, 5, req.userId!);
       // Hide my location from: never fan out to people the poster hides from.
       const hiddenFrom = await locationHideService.viewersHiddenBy(req.userId!, nearbyIds);
       // Include the poster: Discover dock does not optimistically render until this

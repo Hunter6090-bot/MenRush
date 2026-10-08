@@ -375,9 +375,9 @@ export function ProfileDrawer({
             ) : null}
             {(user as { is_verified?: boolean }).is_verified ? <VerifiedBadge /> : null}
           </div>
+          {/* Distance shows once, in the pill in the photo band (no "away" repeat). */}
           <p className="text-sm font-medium text-[var(--cream-soft)] leading-snug">
             {user.online ? "Active now" : "Offline"}
-            {distLabel ? ` · ${distLabel} away` : ""}
           </p>
 
           {user.headline && (
