@@ -25,7 +25,7 @@ import {
 
 const RADIUS_KEY = 'menrush_default_radius_km';
 /** Section ids the top-right Menu links to. */
-const SETTINGS_ANCHORS = ['account', 'two-factor', 'notifications', 'blocked'];
+const SETTINGS_ANCHORS = ['account', 'two-factor', 'notifications', 'blocked', 'delete-account'];
 
 const fieldClass =
   'w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3.5 py-2.5 text-[16px] text-[var(--cream)] placeholder:text-[var(--cream-faded)] outline-none focus:border-[var(--copper)]';
@@ -403,7 +403,7 @@ export const Settings = () => {
     return () => window.clearTimeout(id);
   }, [unblockNotice]);
 
-  // Deep links from the top-right Menu: #account, #two-factor, #notifications, #blocked.
+  // Deep links from the top-right Menu: #account, #two-factor, #notifications, #blocked, #delete-account.
   useEffect(() => {
     const id = location.hash.replace(/^#/, '');
     if (!SETTINGS_ANCHORS.includes(id)) return;
@@ -1211,7 +1211,7 @@ export const Settings = () => {
           <div>
             <SectionLabel>Account actions</SectionLabel>
             <div className="space-y-3">
-              <section className="mr-card p-4 sm:p-5" data-testid="settings-delete-account">
+              <section id="delete-account" className="mr-card scroll-mt-24 p-4 sm:p-5" data-testid="settings-delete-account">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-[15px] font-bold text-[var(--cream)]">Delete account</p>

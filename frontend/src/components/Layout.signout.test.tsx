@@ -167,15 +167,30 @@ describe('Layout sign out', () => {
         '/settings#two-factor',
         '/settings#notifications',
         '/settings#blocked',
+        '/settings#delete-account',
         '/premium',
+        '/albums',
+        '/matches',
+        '/notifications',
+        '/stream',
+        '/events',
+        '/hot-spots',
         '/safety',
         '/help',
+        '/get-the-app',
         '/terms',
         '/privacy',
+        '/cookies',
         '/guidelines',
         '/contact',
       ]),
     );
+    for (const id of ['you', 'discover', 'account', 'help']) {
+      expect(screen.getByTestId(`account-menu-section-${id}`)).toBeInTheDocument();
+    }
+    for (const a of Array.from(menu.querySelectorAll('nav a'))) {
+      expect(a.className).toMatch(/min-h-\[(4[4-9]|5\d)px\]/);
+    }
     expect(menu.textContent).not.toMatch(/beta/i);
     expect(menu.textContent).not.toMatch(/\u2014/);
 

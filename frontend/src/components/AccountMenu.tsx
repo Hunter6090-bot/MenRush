@@ -4,31 +4,84 @@
  */
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { IconClose, IconNotifications, IconSettings, IconSignOut } from './icons';
+import { IconClose, IconSignOut } from './icons';
+import { ROUTE_LABELS } from '../lib/routeLabels';
 
 export interface AccountMenuLink {
   id: string;
   label: string;
-  to: string;
+  /** In-app route. */
+  to?: string;
+  /** External link (opens a new tab). */
+  href?: string;
 }
 
-/** Order follows docs/redesign-2026-10/feature-map.md (You / Settings rows). */
-export const ACCOUNT_MENU_LINKS: AccountMenuLink[] = [
-  { id: 'settings', label: 'Settings', to: '/settings' },
-  { id: 'privacy-security', label: 'Privacy and security', to: '/settings#account' },
-  { id: 'two-factor', label: 'Two-factor', to: '/settings#two-factor' },
-  { id: 'notifications', label: 'Notifications', to: '/settings#notifications' },
-  { id: 'blocked', label: 'Blocked', to: '/settings#blocked' },
-  { id: 'premium', label: 'Premium', to: '/premium' },
-  { id: 'safety', label: 'Safety', to: '/safety' },
-  { id: 'help', label: 'Help', to: '/help' },
+export interface AccountMenuSection {
+  id: string;
+  title: string;
+  links: AccountMenuLink[];
+}
+
+/**
+ * Pete (8 Oct 2026): nothing is lost in the new design. Every screen that is
+ * not a bottom tab or on the map is reachable from here. Placement follows
+ * docs/redesign-2026-10/feature-map.md (You / Out / Settings rows).
+ */
+export const ACCOUNT_MENU_SECTIONS: AccountMenuSection[] = [
+  {
+    id: 'you',
+    title: 'You',
+    links: [
+      { id: 'albums', label: 'Albums', to: '/albums' },
+      { id: 'matches', label: ROUTE_LABELS.matches, to: '/matches' },
+      { id: 'alerts', label: ROUTE_LABELS.alerts, to: '/notifications' },
+      { id: 'premium', label: 'Premium', to: '/premium' },
+      { id: 'verify', label: 'Verify ID', to: '/profile' },
+    ],
+  },
+  {
+    id: 'discover',
+    title: 'Discover',
+    links: [
+      { id: 'community', label: ROUTE_LABELS.community, to: '/stream' },
+      { id: 'events', label: ROUTE_LABELS.events, to: '/events' },
+      { id: 'cruise', label: `${ROUTE_LABELS.hotSpots} map`, to: '/hot-spots' },
+    ],
+  },
+  {
+    id: 'account',
+    title: 'Account',
+    links: [
+      { id: 'settings', label: ROUTE_LABELS.settings, to: '/settings' },
+      { id: 'privacy-security', label: 'Privacy and security', to: '/settings#account' },
+      { id: 'two-factor', label: 'Two-factor', to: '/settings#two-factor' },
+      { id: 'notifications', label: 'Notifications', to: '/settings#notifications' },
+      { id: 'blocked', label: 'Blocked', to: '/settings#blocked' },
+      { id: 'delete-account', label: 'Delete account', to: '/settings#delete-account' },
+    ],
+  },
+  {
+    id: 'help',
+    title: 'Help',
+    links: [
+      { id: 'help', label: 'Help', to: '/help' },
+      { id: 'safety', label: 'Safety', to: '/safety' },
+      { id: 'contact', label: 'Contact', to: '/contact' },
+      { id: 'get-the-app', label: 'Get the app', to: '/get-the-app' },
+    ],
+  },
 ];
+
+/** Back-compat flat list (tests, audits). */
+export const ACCOUNT_MENU_LINKS: AccountMenuLink[] = ACCOUNT_MENU_SECTIONS.flatMap((s) => s.links);
 
 export const ACCOUNT_MENU_FOOTER_LINKS: AccountMenuLink[] = [
   { id: 'terms', label: 'Terms', to: '/terms' },
   { id: 'privacy-policy', label: 'Privacy policy', to: '/privacy' },
+  { id: 'cookies', label: 'Cookies', to: '/cookies' },
   { id: 'guidelines', label: 'Guidelines', to: '/guidelines' },
-  { id: 'contact', label: 'Contact', to: '/contact' },
+  { id: 'instagram', label: 'Instagram', href: 'https://www.instagram.com/menrushsocial/' },
+  { id: 'bluesky', label: 'Bluesky', href: 'https://bsky.app/profile/menrush.bsky.social' },
 ];
 
 export function MenuGlyph({ size = 24 }: { size?: number }) {
@@ -72,14 +125,11 @@ export function AccountMenuButton({
   );
 }
 
-const rowClass =
-  'flex min-h-[52px] w-full items-center gap-3 rounded-2xl px-4 text-left text-[17px] font-bold text-[var(--cream)] transition-colors active:bg-[var(--bg-card)] hover:bg-[var(--bg-card)]';
+const footerLinkClass =
+  'inline-flex min-h-[44px] items-center text-[14px] font-semibold text-[var(--cream-muted)] hover:text-[var(--cream)]';
 
-function rowIcon(id: string): ReactNode {
-  if (id === 'settings') return <IconSettings size={20} />;
-  if (id === 'notifications') return <IconNotifications size={20} />;
-  return null;
-}
+const rowClass =
+  'flex min-h-[48px] w-full items-center gap-3 rounded-2xl px-4 text-left text-[17px] font-bold text-[var(--cream)] transition-colors active:bg-[var(--bg-card)] hover:bg-[var(--bg-card)]';
 
 export function AccountMenu({
   open,
@@ -144,23 +194,29 @@ export function AccountMenu({
 
         {children ? <div className="px-3 pb-2">{children}</div> : null}
 
-        <nav className="flex flex-col gap-0.5 px-2" aria-label="Account">
-          {ACCOUNT_MENU_LINKS.map((item) => {
-            const active = isActive(item.to);
-            return (
-              <Link
-                key={item.id}
-                to={item.to}
-                onClick={onClose}
-                data-testid={`account-menu-${item.id}`}
-                aria-current={active ? 'page' : undefined}
-                className={`${rowClass} ${active ? 'text-[var(--copper)]' : ''}`}
-              >
-                <span className="flex w-5 shrink-0 justify-center text-[var(--cream-muted)]">{rowIcon(item.id)}</span>
-                {item.label}
-              </Link>
-            );
-          })}
+        <nav className="flex flex-col px-2" aria-label="Menu sections">
+          {ACCOUNT_MENU_SECTIONS.map((section) => (
+            <div key={section.id} className="pb-2" data-testid={`account-menu-section-${section.id}`}>
+              <p className="px-4 pb-1 pt-3 text-[13px] font-extrabold uppercase tracking-[0.14em] text-[var(--cream-muted)]">
+                {section.title}
+              </p>
+              {section.links.map((item) => {
+                const active = item.to ? isActive(item.to) : false;
+                return (
+                  <Link
+                    key={item.id}
+                    to={item.to ?? '/'}
+                    onClick={onClose}
+                    data-testid={`account-menu-${item.id}`}
+                    aria-current={active ? 'page' : undefined}
+                    className={`${rowClass} ${active ? 'text-[var(--copper)]' : ''}`}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
           <button
             type="button"
             onClick={() => {
@@ -178,17 +234,30 @@ export function AccountMenu({
         </nav>
 
         <div className="mt-auto flex flex-wrap gap-x-4 gap-y-1 px-6 pt-6">
-          {ACCOUNT_MENU_FOOTER_LINKS.map((item) => (
-            <Link
-              key={item.id}
-              to={item.to}
-              onClick={onClose}
-              data-testid={`account-menu-${item.id}`}
-              className="inline-flex min-h-[44px] items-center text-[14px] font-semibold text-[var(--cream-muted)] hover:text-[var(--cream)]"
-            >
-              {item.label}
-            </Link>
-          ))}
+          {ACCOUNT_MENU_FOOTER_LINKS.map((item) =>
+            item.href ? (
+              <a
+                key={item.id}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid={`account-menu-${item.id}`}
+                className={footerLinkClass}
+              >
+                {item.label}
+              </a>
+            ) : (
+              <Link
+                key={item.id}
+                to={item.to ?? '/'}
+                onClick={onClose}
+                data-testid={`account-menu-${item.id}`}
+                className={footerLinkClass}
+              >
+                {item.label}
+              </Link>
+            ),
+          )}
         </div>
       </div>
     </div>
