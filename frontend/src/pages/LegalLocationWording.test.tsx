@@ -6,7 +6,7 @@ import { Privacy } from './Privacy';
 
 /** Legal ruling 10 Oct 2026, word for word. Written out here, not imported, so a drift in the copy fails. */
 const RETENTION =
-  "We keep your current location while your account is open. It's replaced each time your device sends a new one, including when you use Ghost mode, and we delete it when you delete your account. We also keep the location from when you first joined. When you post to the map or the community, we automatically save your exact location with that post. We keep it until the post is deleted, even after a map post stops showing. Locations you choose to share in a chat are kept until that chat content is deleted. We're shortening how long we keep location data and will update this section when that's in place.";
+  "We keep your current location while your account is open. It's replaced each time your device sends a new one, including when you use Ghost mode, and we delete it when you delete your account. We also keep the location from when you first joined. When you post to the map or the community, we automatically save your exact location with that post. We keep it with the post until you delete your account, even after the post stops showing. Locations you choose to share in a chat are kept until that chat content is deleted. We're shortening how long we keep location data and will update this section when that's in place.";
 
 /** Rendered text with whitespace collapsed, so JSX line breaks do not matter. */
 function pageText(ui: React.ReactElement): string {
@@ -91,4 +91,37 @@ describe('Legal location wording (Legal, Oct 2026)', () => {
     expect(text).toContain('To send transactional emails and service notices.');
     expect(text).toContain('To improve product reliability and performance.');
   });
+
+  it('post locations are stated as kept until you delete your account', () => {
+    for (const text of [pageText(<Terms />), pageText(<Privacy />)]) {
+      expect(text).toContain(
+        'We keep it with the post until you delete your account, even after the post stops showing.',
+      );
+      expect(text).not.toContain('until the post is deleted');
+    }
+  });
+
+  it('Terms 7.x has no waitlist, launch-date Premium or effective-at-launch wording', () => {
+    const text = pageText(<Terms />);
+    expect(text).not.toMatch(/waitlist/i);
+    expect(text).not.toMatch(/public launch|Premium from launch|before launch|launch slips/i);
+    expect(text).not.toContain('Effective:');
+    expect(text).toContain('Members who registered before 1 October 2026 received 30 days of Premium free');
+  });
+
+  it('Terms 7.7: both kinds of unused Pride code stop after 31 October 2026', () => {
+    const text = pageText(<Terms />);
+    expect(text).toContain(
+      'All other Pride codes work at register up to and including 31 October 2026 (23:59:59 UK time) and are refused from 1 November 2026.',
+    );
+    expect(text).toContain('Brighton Pride personal promo codes sent by email, and MenRush Pride invites (MENRUSH codes)');
+    expect(text).toContain('register by 31 October 2026');
+    expect(text).not.toContain('A personal code from an earlier email');
+  });
+
+  it('Terms and Privacy have no em dashes', () => {
+    expect(pageText(<Terms />)).not.toContain('\u2014');
+    expect(pageText(<Privacy />)).not.toContain('\u2014');
+  });
 });
+
