@@ -10,7 +10,7 @@ const RETENTION =
 
 /** Travel trip retention (#359 and #384), written out so a drift in the copy fails. */
 const TRAVEL_RETENTION =
-  "Travel: when you plan a trip, we keep the city and dates you choose. If you end the trip with End trip, or replace it with a new one, we delete it straight away. Otherwise we delete it automatically 30 days after the trip ends, or sooner if you delete your account.";
+  "Travel: when you plan a trip, we keep the city and dates you choose, along with the city's country and its area on the map (worked out from the city, never from your location). If you end the trip with End trip, or replace it with a new one, we delete it straight away. Otherwise we delete it automatically 30 days after the trip ends, or sooner if you delete your account.";
 
 /** Rendered text with whitespace collapsed, so JSX line breaks do not matter. */
 function pageText(ui: React.ReactElement): string {
@@ -98,6 +98,8 @@ describe('Legal location wording (Legal, Oct 2026)', () => {
     unmount();
     expect(travel).toBe(TRAVEL_RETENTION);
     expect(travel).toContain('we keep the city and dates you choose');
+    expect(travel).toContain("along with the city's country and its area on the map");
+    expect(travel).toContain('worked out from the city, never from your location');
     expect(travel).toContain('End trip');
     expect(travel).toContain('we delete it straight away');
     expect(travel).toContain('30 days after the trip ends');

@@ -14,4 +14,4 @@ export const LOCATION_RETENTION_TEXT =
  * removed with the account (ON DELETE CASCADE). Only true once those merge.
  */
 export const TRAVEL_TRIP_RETENTION_TEXT =
-  "Travel: when you plan a trip, we keep the city and dates you choose. If you end the trip with End trip, or replace it with a new one, we delete it straight away. Otherwise we delete it automatically 30 days after the trip ends, or sooner if you delete your account.";
+  "Travel: when you plan a trip, we keep the city and dates you choose, along with the city's country and its area on the map (worked out from the city, never from your location). If you end the trip with End trip, or replace it with a new one, we delete it straight away. Otherwise we delete it automatically 30 days after the trip ends, or sooner if you delete your account.";
