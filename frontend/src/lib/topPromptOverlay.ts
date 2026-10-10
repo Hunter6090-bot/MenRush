@@ -8,9 +8,9 @@
  * bottom edge (viewport px) while it is on screen; null when it is not.
  *
  * `settled` is false while the banner is still deciding (async push check).
- * Map chrome stays hidden until then so pills never paint at y70 and jump.
- * A short timeout (or an error) always releases them so a hung check cannot
- * hide Radius / Filters / Pulse for good.
+ * Chrome stays painted at offset 0 and animates when the banner arrives so
+ * a late measure does not snap. A short timeout (or an error) always
+ * releases them so a hung check cannot hide Radius / Filters / Pulse.
  */
 import { useLayoutEffect, useState, useSyncExternalStore, type RefObject } from 'react';
 
@@ -112,17 +112,21 @@ export function offsetBelowTopPrompt(containerTop: number, bannerBottom: number 
 }
 
 /**
- * Space reserved at the bottom of the map so pinned chrome (empty card, notes)
- * and the scrolling top stack stay above the tab bar, PULSE FAB, chat dock
- * and Mapbox locate control.
+ * Space reserved at the bottom of the map so the compact footer stays above
+ * the tab bar, PULSE FAB and chat dock. Locate is cleared by the footer's
+ * side inset (the pill is not full-width). This spacer can shrink on a short
+ * map so Radius / Filters always keep a row.
  */
 export const MAP_OVERLAY_BOTTOM_CLEARANCE_CLASS =
-  'pb-[calc(var(--fab-size,4rem)+var(--fab-offset,1rem)+1.75rem)]';
+  'h-[calc(var(--fab-size,4rem)+var(--fab-offset,1rem)+2.25rem)]';
+
+/** Pinned footer may not eat the top stack on a short or landscape map. */
+export const MAP_OVERLAY_PINNED_MAX_CLASS = 'max-h-[25%]';
 
 /**
  * How far `anchorRef` must move down to clear the banner. Re-measures when the
- * banner changes and whenever the anchor or its parent resizes. Pills stay
- * hidden until the banner has settled, so a late mount cannot flash y70→y221.
+ * banner changes and whenever the anchor or its parent resizes. Chrome stays
+ * painted; the shift animates so a late banner does not snap or flicker.
  */
 export function useClearanceBelowTopPrompt(anchorRef: RefObject<HTMLElement | null>): {
   offset: number;
@@ -130,14 +134,9 @@ export function useClearanceBelowTopPrompt(anchorRef: RefObject<HTMLElement | nu
 } {
   const { bottom: bannerBottom, settled } = useTopPromptSnapshot();
   const [offset, setOffset] = useState(0);
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(true);
 
   useLayoutEffect(() => {
-    if (!settled) {
-      setReady(false);
-      return;
-    }
-
     const anchor = anchorRef.current;
     if (!anchor) {
       setOffset(0);
@@ -146,7 +145,7 @@ export function useClearanceBelowTopPrompt(anchorRef: RefObject<HTMLElement | nu
     }
 
     const measure = () => {
-      const live = getTopPromptBottom();
+      const live = settled ? getTopPromptBottom() : null;
       setOffset(offsetBelowTopPrompt(anchor.getBoundingClientRect().top, live));
       setReady(true);
     };

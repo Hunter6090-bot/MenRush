@@ -35,6 +35,7 @@ import { NearbyMapGridToggle, readNearbyView, writeNearbyView, type NearbyView }
 import { HOME_VIEW_EVENT, homeViewToNearby, nearbyToHomeView, readHomeView, writeHomeView, type HomeView } from '../lib/homeView';
 import { MapTopPillBar } from '../components/MapTopPillBar';
 import { MapEmptyRadius } from '../components/MapEmptyRadius';
+import { MapPrivacyNote } from '../components/MapPrivacyNote';
 import { ClearTopPrompt } from '../components/ClearTopPrompt';
 import { RedesignFiltersSheet } from '../components/RedesignFiltersSheet';
 import { NearbySortToggle } from '../components/NearbySortToggle';
@@ -2326,22 +2327,12 @@ export const Discover = () => {
             }
             notes={
               !needsLocationGate && !tokenMissing ? (
-                <p
-                  className="mx-auto mb-1 w-fit max-w-[min(90%,320px)] rounded-full px-3 py-1 text-center text-[15px] font-medium leading-snug"
-                  style={{
-                    background: 'rgba(13,10,6,0.72)',
-                    color: 'rgba(240,224,192,0.85)',
-                    border: '1px solid rgba(196,131,42,0.25)',
-                  }}
-                  data-testid="map-privacy-note"
-                >
-                  {formatFuzzPrivacyNote(mapPinFuzzM)}
-                </p>
+                <MapPrivacyNote text={formatFuzzPrivacyNote(mapPinFuzzM)} />
               ) : null
             }
             footer={
               !loading && nearbyCount === 0 && !allScope && !needsLocationGate ? (
-                <MapEmptyRadius nextRadiusKm={nextWidenRadiusKm} onWiden={handleRadiusCycle} />
+                <MapEmptyRadius compact nextRadiusKm={nextWidenRadiusKm} onWiden={handleRadiusCycle} />
               ) : null
             }
           >
@@ -2467,22 +2458,12 @@ export const Discover = () => {
               }
               notes={
                 !needsLocationGate && !tokenMissing ? (
-                  <p
-                    className="mx-auto mb-1 w-fit max-w-[min(90%,320px)] rounded-full px-3 py-1 text-center text-[15px] font-medium leading-snug"
-                    style={{
-                      background: 'rgba(13,10,6,0.72)',
-                      color: 'rgba(240,224,192,0.85)',
-                      border: '1px solid rgba(196,131,42,0.25)',
-                    }}
-                    data-testid="map-privacy-note"
-                  >
-                    {formatFuzzPrivacyNote(mapPinFuzzM)}
-                  </p>
+                  <MapPrivacyNote text={formatFuzzPrivacyNote(mapPinFuzzM)} />
                 ) : null
               }
               footer={
                 !loading && nearbyCount === 0 && !allScope && !needsLocationGate ? (
-                  <MapEmptyRadius nextRadiusKm={nextWidenRadiusKm} onWiden={handleRadiusCycle} />
+                  <MapEmptyRadius compact nextRadiusKm={nextWidenRadiusKm} onWiden={handleRadiusCycle} />
                 ) : null
               }
             >

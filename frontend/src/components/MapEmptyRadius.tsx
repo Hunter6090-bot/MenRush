@@ -1,17 +1,41 @@
 /**
- * Empty map radius state: "Nobody in this radius" + Widen to N mi.
- * In-flow footer of the map overlay column so it cannot slide under the pills.
+ * Empty map radius state. The pinned footer is a single-line pill so short
+ * and landscape maps keep room for Radius / Filters. The taller card stays
+ * available for the scrolling top stack if a caller wants it.
  */
 import { formatRadiusControlLabel } from '../lib/discoveryFormat';
 
 export function MapEmptyRadius({
   nextRadiusKm,
   onWiden,
+  compact = false,
 }: {
   nextRadiusKm: number;
   onWiden: () => void;
+  /** Single-line "Nobody nearby" + Widen. Used as the pinned footer. */
+  compact?: boolean;
 }) {
   const label = formatRadiusControlLabel(nextRadiusKm);
+  if (compact) {
+    return (
+      <div className="pointer-events-none flex justify-center px-2 py-1">
+        <div
+          className="pointer-events-auto inline-flex min-h-[44px] max-w-[calc(100%-7.5rem)] flex-nowrap items-center gap-2 rounded-full border border-[var(--border-default)] bg-[rgba(30,21,8,0.95)] py-0 pl-3 pr-1 shadow-lg backdrop-blur-md"
+          data-testid="map-empty-radius"
+        >
+          <span className="truncate text-[15px] font-extrabold text-[#F0E0C0]">Nobody nearby</span>
+          <button
+            type="button"
+            data-testid="map-widen-radius"
+            onClick={onWiden}
+            className="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-full bg-[var(--copper)] px-3.5 text-[15px] font-extrabold text-[var(--nn-on-copper)]"
+          >
+            Widen to {label}
+          </button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="pointer-events-none flex justify-center px-4 pb-2 pt-1">
       <div

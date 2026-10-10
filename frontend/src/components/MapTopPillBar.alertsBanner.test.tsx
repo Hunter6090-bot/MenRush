@@ -9,12 +9,14 @@ import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MapTopPillBar } from './MapTopPillBar';
 import { MapEmptyRadius } from './MapEmptyRadius';
+import { MapPrivacyNote } from './MapPrivacyNote';
 import { PushAlertBanner } from './PushAlertBanner';
 import { useAuthStore } from '../hooks/store';
 import { resetPromptPrefsSyncForTests } from '../lib/promptDismissal';
 import { resetPromptSlotsForTests } from '../lib/promptSlot';
 import {
   MAP_OVERLAY_BOTTOM_CLEARANCE_CLASS,
+  MAP_OVERLAY_PINNED_MAX_CLASS,
   offsetBelowTopPrompt,
   resetTopPromptOverlayForTests,
   TOP_PROMPT_GAP_PX,
@@ -53,8 +55,9 @@ const DEFAULT_MAP_HEIGHT = 560;
 const SHORT_MAP_HEIGHT = 400;
 const PILL_ROW_HEIGHT = 44;
 const MAP_SPOTS_HEIGHT = 72;
-const EMPTY_HEIGHT = 124;
-const EMPTY_BOTTOM_PAD = 112;
+const EMPTY_HEIGHT = 48;
+const EMPTY_BOTTOM_PAD = 116;
+const LAYER_HEIGHT = 44;
 const NOTE_HEIGHT = 28;
 const TICK_PX = 44;
 const TAB_BAR_HEIGHT = 64;
@@ -80,6 +83,7 @@ function boxFor(width: number, top: number, height: number, left = 0): DOMRect {
 }
 
 function overlap(a: DOMRect, b: DOMRect): boolean {
+  if (a.width <= 0 || a.height <= 0 || b.width <= 0 || b.height <= 0) return false;
   return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 }
 
@@ -107,11 +111,12 @@ function mockLayout(state: LayoutState) {
     const bannerBottom = state.banner ? state.bannerTop + state.bannerHeight : null;
     const offset = offsetBelowTopPrompt(state.mapTop, bannerBottom);
     const stackTop = state.mapTop;
-    const pulseTop = stackTop + PILL_ROW_PADDING_PX + offset;
-    const pillsTop = state.pulse ? pulseTop + PULSE_CARD_HEIGHT + 8 : stackTop + PILL_ROW_PADDING_PX + offset;
-    const spotsTop = pillsTop + PILL_ROW_HEIGHT + 8;
+    const pillsTop = stackTop + PILL_ROW_PADDING_PX + offset;
+    const layersTop = pillsTop + PILL_ROW_HEIGHT + 8;
+    const spotsTop = layersTop + LAYER_HEIGHT + 8;
+    const pulseTop = state.pulse ? spotsTop + MAP_SPOTS_HEIGHT + 8 : spotsTop;
     const emptyTop = mapBottom(state) - EMPTY_BOTTOM_PAD - EMPTY_HEIGHT;
-    const noteTop = emptyTop - NOTE_HEIGHT - 4;
+    const noteTop = Math.min(pulseTop + (state.pulse ? PULSE_CARD_HEIGHT + 8 : 0), emptyTop - NOTE_HEIGHT - 4);
     const clampTop = (top: number, height: number) => {
       const limit = mapBottom(state) - height;
       return Math.min(Math.max(top, state.mapTop), limit);
@@ -137,12 +142,20 @@ function mockLayout(state: LayoutState) {
     if (id === 'discover-map-panel' || id === 'map-overlay-column') {
       return boxFor(state.width, state.mapTop, state.mapHeight);
     }
+    if (id === 'map-overlay-shift') {
+      return boxFor(state.width, stackTop, offset);
+    }
     if (id === 'map-top-stack') {
-      const height = PILL_ROW_PADDING_PX + offset + (state.pulse ? PULSE_CARD_HEIGHT + 8 : 0) + PILL_ROW_HEIGHT + 8 + MAP_SPOTS_HEIGHT;
-      return boxFor(state.width, stackTop, height);
+      return boxFor(state.width, stackTop + offset, PILL_ROW_PADDING_PX + PILL_ROW_HEIGHT);
     }
     if (id === 'map-top-pill-bar' || id === 'map-pill-radius' || id === 'map-pill-filters') {
       return boxFor(id === 'map-top-pill-bar' ? state.width : 140, clampTop(pillsTop, PILL_ROW_HEIGHT), PILL_ROW_HEIGHT);
+    }
+    if (id === 'map-layer-chrome' || id === 'layer-toggle-people' || id === 'layer-toggle-hotspots') {
+      return boxFor(id === 'map-layer-chrome' ? 120 : 44, clampTop(layersTop, LAYER_HEIGHT), LAYER_HEIGHT, state.width - 140);
+    }
+    if (id === 'hotspots-map-helper-dismiss') {
+      return boxFor(44, clampTop(spotsTop, 44), 44, state.width - 72);
     }
     if (id === 'map-privacy-note') {
       return boxFor(state.width - 48, noteTop, NOTE_HEIGHT);
@@ -151,18 +164,26 @@ function mockLayout(state: LayoutState) {
       return boxFor(state.width - 32, spotsTop, MAP_SPOTS_HEIGHT);
     }
     if (id === 'map-overlay-pinned') {
-      return boxFor(state.width, noteTop, mapBottom(state) - EMPTY_BOTTOM_PAD - noteTop);
+      return boxFor(state.width, emptyTop, EMPTY_HEIGHT);
     }
     if (id === 'map-overlay-top') {
-      return boxFor(state.width, state.mapTop, Math.max(0, noteTop - state.mapTop));
+      return boxFor(state.width, state.mapTop, Math.max(44, emptyTop - state.mapTop));
+    }
+    if (id === 'map-overlay-scroll') {
+      return boxFor(state.width, pillsTop + PILL_ROW_HEIGHT, Math.max(0, emptyTop - (pillsTop + PILL_ROW_HEIGHT)));
+    }
+    if (id === 'map-overlay-clearance') {
+      return boxFor(state.width, mapBottom(state) - EMPTY_BOTTOM_PAD, EMPTY_BOTTOM_PAD);
     }
     if (id === 'mapbox-locate') {
       return boxFor(40, mapBottom(state) - 56, 40, state.width - 56);
     }
     if (id === 'map-empty-radius' || id === 'map-widen-radius') {
-      const top = id === 'map-widen-radius' ? emptyTop + EMPTY_HEIGHT - 44 : emptyTop;
-      const height = id === 'map-widen-radius' ? 44 : EMPTY_HEIGHT;
-      return boxFor(state.width - 32, clampTop(top, height), height);
+      const top = emptyTop;
+      const height = 44;
+      const width = Math.min(240, state.width - 120);
+      const left = (state.width - width) / 2;
+      return boxFor(id === 'map-widen-radius' ? 120 : width, clampTop(top, height), height, left);
     }
     if (id === 'alerts-prompt-never') {
       return boxFor(TICK_PX, state.bannerTop + 80, TICK_PX);
@@ -185,6 +206,27 @@ async function settle() {
     roCallbacks.forEach((cb) => cb([] as never, {} as ResizeObserver));
     await new Promise((r) => setTimeout(r, 0));
   });
+}
+
+function LayerAndSpotsNote() {
+  return (
+    <>
+      <div data-testid="map-layer-chrome">
+        <button type="button" data-testid="layer-toggle-people" className="min-h-[44px] min-w-[44px]">
+          People
+        </button>
+        <button type="button" data-testid="layer-toggle-hotspots" className="min-h-[44px] min-w-[44px]">
+          Spots
+        </button>
+      </div>
+      <div data-testid="hotspots-map-helper">
+        <p data-testid="hotspots-map-helper-copy">Map spots include independent venues and outdoor locations. 18+ only.</p>
+        <button type="button" data-testid="hotspots-map-helper-dismiss" className="h-11 w-11 min-h-[44px] min-w-[44px]">
+          ×
+        </button>
+      </div>
+    </>
+  );
 }
 
 function QuietPulseCard() {
@@ -235,10 +277,10 @@ function renderNearby(opts: { pulse?: boolean } = {}) {
           onRadiusClick={vi.fn()}
           onFiltersClick={vi.fn()}
           leading={opts.pulse ? <QuietPulseCard /> : null}
-          notes={<p data-testid="map-privacy-note">Your pin is moved 80 to 320 m</p>}
-          footer={<MapEmptyRadius nextRadiusKm={10} onWiden={vi.fn()} />}
+          notes={<MapPrivacyNote text="Your pin is moved 80 to 320 m" />}
+          footer={<MapEmptyRadius compact nextRadiusKm={10} onWiden={vi.fn()} />}
         >
-          <p data-testid="hotspots-map-helper">Map spots include independent venues and outdoor locations.</p>
+          <LayerAndSpotsNote />
         </MapTopPillBar>
       </div>
       <BottomChrome />
@@ -322,7 +364,9 @@ describe.each(phones)('Map overlays never overlap ($width px)', (p) => {
     const bannerBottom = p.bannerTop + p.bannerHeight;
     const expected = bannerBottom + TOP_PROMPT_GAP_PX - p.mapTop;
     expect(stack.getAttribute('data-offset-for-banner')).toBe(String(expected));
-    expect(stack.style.paddingTop).toBe(`${PILL_ROW_PADDING_PX + expected}px`);
+    const shift = screen.getByTestId('map-overlay-shift');
+    expect(Number.parseFloat(shift.style.height)).toBe(expected);
+    expect(shift.style.transition).toMatch(/transform/);
     expect(screen.getByTestId('map-overlay-column').getAttribute('data-overlay-ready')).toBe('true');
     const pillsTop = p.mapTop + expected + PILL_ROW_PADDING_PX;
     expect(pillsTop).toBeGreaterThan(bannerBottom);
@@ -334,7 +378,7 @@ describe.each(phones)('Map overlays never overlap ($width px)', (p) => {
     await user.click(screen.getByTestId('alerts-prompt-close'));
     await settle();
     expect(screen.queryByTestId('push-alert-banner')).toBeNull();
-    expect(stack.style.paddingTop).toBe('');
+    expect(Number.parseFloat(screen.getByTestId('map-overlay-shift').style.height) || 0).toBe(0);
     expect(stack.getAttribute('data-offset-for-banner')).toBe('0');
   });
 
@@ -359,10 +403,10 @@ describe.each(phones)('Map overlays never overlap ($width px)', (p) => {
             onRadiusClick={vi.fn()}
             onFiltersClick={vi.fn()}
             leading={<QuietPulseCard />}
-            notes={<p data-testid="map-privacy-note">Your pin is moved 80 to 320 m</p>}
-            footer={<MapEmptyRadius nextRadiusKm={10} onWiden={vi.fn()} />}
+            notes={<MapPrivacyNote text="Your pin is moved 80 to 320 m" />}
+            footer={<MapEmptyRadius compact nextRadiusKm={10} onWiden={vi.fn()} />}
           >
-            <p data-testid="hotspots-map-helper">Map spots include independent venues and outdoor locations.</p>
+            <LayerAndSpotsNote />
           </MapTopPillBar>
         </div>
         <BottomChrome />
@@ -432,8 +476,9 @@ describe('overlay column taller than the map (360 px, banner on)', () => {
     const column = screen.getByTestId('map-overlay-column');
     const map = screen.getByTestId('discover-map-panel').getBoundingClientRect();
     const tab = screen.getByTestId('mobile-tab-bar').getBoundingClientRect();
-    expect(screen.getByTestId('map-overlay-top').className).toMatch(/overflow-y-auto/);
+    expect(screen.getByTestId('map-overlay-scroll').className).toMatch(/overflow-y-auto/);
     expect(column.className).toMatch(/overflow-hidden/);
+    expect(screen.getByTestId('map-overlay-pinned').className).toMatch(/max-h-\[25%\]/);
     expect(column.getBoundingClientRect().height).toBe(SHORT_MAP_HEIGHT);
     expect(column.getBoundingClientRect().bottom).toBeLessThanOrEqual(map.bottom);
     expect(column.getBoundingClientRect().bottom).toBeLessThanOrEqual(tab.top);
@@ -480,14 +525,26 @@ function mockElementFromPoint() {
     configurable: true,
     writable: true,
     value: (x: number, y: number) => {
-    const blockers = ['mobile-tab-bar', 'pulse-fab', 'discover-chat-dock-toggle', 'mapbox-locate'];
-    for (const id of blockers) {
-      const el = screen.queryByTestId(id);
-      if (el && pointIn(x, y, el.getBoundingClientRect())) return el;
-    }
-    const widen = screen.queryByTestId('map-widen-radius');
-    if (widen && pointIn(x, y, widen.getBoundingClientRect())) return widen;
-    return null;
+      const overlay = [
+        'push-alert-banner',
+        'map-pill-radius',
+        'map-pill-filters',
+        'layer-toggle-people',
+        'layer-toggle-hotspots',
+        'hotspots-map-helper-dismiss',
+        'map-privacy-note-close',
+        'map-widen-radius',
+      ];
+      for (const id of overlay) {
+        const el = screen.queryByTestId(id);
+        if (el && pointIn(x, y, el.getBoundingClientRect())) return el;
+      }
+      const chrome = ['mapbox-locate', 'pulse-fab', 'discover-chat-dock-toggle', 'mobile-tab-bar'];
+      for (const id of chrome) {
+        const el = screen.queryByTestId(id);
+        if (el && pointIn(x, y, el.getBoundingClientRect())) return el;
+      }
+      return null;
     },
   });
 }
@@ -524,10 +581,16 @@ function classSpace(cls: string, prefixes: string[]): number {
 
 function overlayPadBottom(el: Element): number {
   const cls = (el as HTMLElement).className || '';
-  if (cls.includes(MAP_OVERLAY_BOTTOM_CLEARANCE_CLASS) || cls.includes('pb-[calc(var(--fab-size')) {
-    return 64 + 16 + 28;
+  if (
+    cls.includes(MAP_OVERLAY_BOTTOM_CLEARANCE_CLASS) ||
+    cls.includes('h-[calc(var(--fab-size') ||
+    cls.includes('pb-[calc(var(--fab-size')
+  ) {
+    return 64 + 16 + 36;
   }
-  return classSpace(cls, ['pb', 'py']);
+  const clearance = el.querySelector?.('[data-testid="map-overlay-clearance"]');
+  if (clearance) return overlayPadBottom(clearance);
+  return classSpace(cls, ['pb', 'py', 'h']);
 }
 
 function estimateHeight(el: Element): number {
@@ -620,12 +683,31 @@ function measureRendered(el: Element, memo: WeakMap<Element, DOMRect>): DOMRect 
     return containing;
   }
 
+  if (id === 'map-overlay-clearance') {
+    const col = html.parentElement ?? html;
+    const colBox = measureRendered(col, memo);
+    const h = overlayPadBottom(html);
+    const box = boxFor(colBox.width, colBox.bottom - h, h, colBox.left);
+    memo.set(el, box);
+    return box;
+  }
+
   if (id === 'map-overlay-pinned') {
     const col = html.parentElement ?? html;
     const colBox = measureRendered(col, memo);
     const pad = overlayPadBottom(col);
-    const h = estimateHeight(html);
+    const natural = Math.max(44, estimateHeight(html));
+    const h = Math.min(natural, Math.max(44, colBox.height * 0.25));
     const box = boxFor(colBox.width, colBox.bottom - pad - h, h, colBox.left);
+    memo.set(el, box);
+    return box;
+  }
+
+  if (id === 'map-overlay-shift') {
+    const col = html.parentElement ?? html;
+    const colBox = measureRendered(col, memo);
+    const h = Number(html.getAttribute('data-offset-for-banner') || 0);
+    const box = boxFor(colBox.width, colBox.top, h, colBox.left);
     memo.set(el, box);
     return box;
   }
@@ -633,33 +715,79 @@ function measureRendered(el: Element, memo: WeakMap<Element, DOMRect>): DOMRect 
   if (id === 'map-overlay-top') {
     const col = html.parentElement ?? html;
     const colBox = measureRendered(col, memo);
+    const gap = col.querySelector('[data-testid="map-overlay-shift"]');
+    const gapH = gap ? measureRendered(gap, memo).height : 0;
     const pinned = col.querySelector('[data-testid="map-overlay-pinned"]');
-    const pinnedBottom = pinned ? measureRendered(pinned, memo).top : colBox.bottom - overlayPadBottom(col);
-    const box = boxFor(colBox.width, colBox.top, Math.max(0, pinnedBottom - colBox.top), colBox.left);
+    const pinnedTop = pinned ? measureRendered(pinned, memo).top : colBox.bottom - overlayPadBottom(col);
+    const box = boxFor(colBox.width, colBox.top + gapH, Math.max(44, pinnedTop - (colBox.top + gapH)), colBox.left);
     memo.set(el, box);
     return box;
   }
 
-  if (id === 'map-empty-radius' || id === 'map-widen-radius' || id === 'map-privacy-note') {
+  if (id === 'map-top-stack' || id === 'map-top-pill-bar' || id === 'map-pill-radius' || id === 'map-pill-filters') {
+    const top = html.closest('[data-testid="map-overlay-top"]') ?? html;
+    const topBox = measureRendered(top, memo);
+    const t = topBox.top + PILL_ROW_PADDING_PX;
+    const w = id === 'map-top-pill-bar' || id === 'map-top-stack' ? topBox.width : 140;
+    const left = id === 'map-pill-filters' ? topBox.left + topBox.width / 2 : topBox.left + 24;
+    const box = boxFor(w, t, PILL_ROW_HEIGHT, id.startsWith('map-pill') ? left : topBox.left);
+    memo.set(el, box);
+    return box;
+  }
+
+  if (
+    id === 'map-layer-chrome' ||
+    id === 'layer-toggle-people' ||
+    id === 'layer-toggle-hotspots' ||
+    id === 'hotspots-map-helper' ||
+    id === 'hotspots-map-helper-dismiss'
+  ) {
+    const top = html.closest('[data-testid="map-overlay-top"]') ?? html;
+    const topBox = measureRendered(top, memo);
+    const col = html.closest('[data-testid="map-overlay-column"]') ?? html;
+    const pinned = col.querySelector('[data-testid="map-overlay-pinned"]');
+    const pinnedTop = pinned ? measureRendered(pinned, memo).top : topBox.bottom;
+    const t = Math.min(topBox.top + PILL_ROW_PADDING_PX + PILL_ROW_HEIGHT + 8, pinnedTop - 48);
+    const size = id === 'hotspots-map-helper' ? 72 : 44;
+    const left =
+      id === 'hotspots-map-helper-dismiss'
+        ? topBox.left + topBox.width - 56
+        : id === 'layer-toggle-hotspots'
+          ? topBox.left + topBox.width - 100
+          : topBox.left + topBox.width - 148;
+    const box = boxFor(id === 'hotspots-map-helper' || id === 'map-layer-chrome' ? 160 : 44, t, size, left);
+    memo.set(el, box);
+    return box;
+  }
+
+  if (id === 'map-privacy-note' || id === 'map-privacy-note-close') {
+    const top = html.closest('[data-testid="map-overlay-top"]') ?? html;
+    const topBox = measureRendered(top, memo);
+    const col = html.closest('[data-testid="map-overlay-column"]') ?? html;
+    const pinned = col.querySelector('[data-testid="map-overlay-pinned"]');
+    const pinnedTop = pinned ? measureRendered(pinned, memo).top : topBox.bottom;
+    const t = Math.max(topBox.top + 12 + 44, Math.min(topBox.top + 12 + 44 + 8 + 44 + 8, pinnedTop - 48));
+    const box =
+      id === 'map-privacy-note-close'
+        ? boxFor(44, t, 44, topBox.left + 180)
+        : boxFor(160, t, 44, topBox.left + 24);
+    memo.set(el, box);
+    return box;
+  }
+
+  if (id === 'map-empty-radius' || id === 'map-widen-radius') {
     const pinned = html.closest('[data-testid="map-overlay-pinned"]');
-    if (pinned) {
-      const p = measureRendered(pinned, memo);
-      if (id === 'map-privacy-note') {
-        const box = boxFor(Math.max(0, p.width - 48), p.top, estimateHeight(html), p.left + 24);
-        memo.set(el, box);
-        return box;
-      }
-      if (id === 'map-empty-radius') {
-        const note = pinned.querySelector('[data-testid="map-privacy-note"]');
-        const noteH = note ? measureRendered(note, memo).height : 0;
-        const box = boxFor(Math.max(0, p.width - 32), p.top + noteH, Math.max(44, p.height - noteH), p.left + 16);
-        memo.set(el, box);
-        return box;
-      }
-      const box = boxFor(Math.max(0, p.width - 32), p.bottom - 8 - 44, 44, p.left + 16);
-      memo.set(el, box);
-      return box;
-    }
+    const p = pinned
+      ? measureRendered(pinned, memo)
+      : boxFor(containing.width, containing.bottom - 60, 48, containing.left);
+    const width = Math.min(240, Math.max(120, p.width - 120));
+    const left = p.left + (p.width - width) / 2;
+    const box =
+      id === 'map-widen-radius'
+        ? boxFor(120, p.top + 2, 44, left + width - 124)
+        : boxFor(width, p.top + 2, 44, left);
+    memo.set(el, box);
+    return box;
   }
 
   const box = realRect.call(html);
@@ -672,22 +800,26 @@ function InteractiveQuietMap({
   pulse = true,
   width = 360,
   height = 780,
+  header = 56,
+  tabHeight = 71,
+  banner = true,
 }: {
   theme: 'light' | 'dark';
   pulse?: boolean;
   width?: number;
   height?: number;
+  header?: number;
+  tabHeight?: number;
+  banner?: boolean;
 }) {
   const [radius, setRadius] = useState(5);
-  const header = 56;
-  const tabHeight = 71;
   return (
     <div
       data-theme={theme}
       data-testid="theme-root"
       style={{ position: 'relative', width, height, overflow: 'hidden' }}
     >
-      <PushAlertBanner />
+      {banner ? <PushAlertBanner /> : null}
       <div
         className="relative overflow-hidden"
         data-testid="discover-map-panel"
@@ -698,14 +830,11 @@ function InteractiveQuietMap({
           onRadiusClick={vi.fn()}
           onFiltersClick={vi.fn()}
           leading={pulse ? <QuietPulseCard /> : null}
-          notes={<p data-testid="map-privacy-note">Your pin is moved 80 to 320 m</p>}
-          footer={
-            <MapEmptyRadius
-              nextRadiusKm={16}
-              onWiden={() => setRadius(16)}
-            />
-          }
-        />
+          notes={<MapPrivacyNote text="Your pin is moved 80 to 320 m" />}
+          footer={<MapEmptyRadius compact nextRadiusKm={16} onWiden={() => setRadius(16)} />}
+        >
+          <LayerAndSpotsNote />
+        </MapTopPillBar>
         <button
           type="button"
           data-testid="discover-chat-dock-toggle"
@@ -814,14 +943,13 @@ describe('pills wait for the banner to settle', () => {
     const { isPushConfigured } = await import('../lib/push');
     vi.mocked(isPushConfigured).mockReturnValue(new Promise<boolean>(() => {}));
     renderNearby({ pulse: true });
-    expect(screen.getByTestId('map-overlay-column').getAttribute('data-overlay-ready')).toBe('false');
-    expect(screen.getByTestId('map-overlay-top').style.visibility).toBe('hidden');
+    expect(screen.getByTestId('map-pill-radius')).toBeVisible();
+    expect(screen.getByTestId('map-overlay-column').getAttribute('data-overlay-ready')).toBe('true');
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(TOP_PROMPT_SETTLE_TIMEOUT_MS);
     });
     expect(screen.getByTestId('map-overlay-column').getAttribute('data-overlay-ready')).toBe('true');
-    expect(screen.getByTestId('map-overlay-top').style.visibility).toBe('visible');
     expect(screen.getByTestId('map-pill-radius')).toBeVisible();
     expect(screen.getByTestId('map-pill-filters')).toBeVisible();
     expect(screen.getByTestId('pulse-nudge')).toBeVisible();
@@ -839,7 +967,6 @@ describe('pills wait for the banner to settle', () => {
     });
     expect(screen.queryByTestId('push-alert-banner')).toBeNull();
     expect(screen.getByTestId('map-overlay-column').getAttribute('data-overlay-ready')).toBe('true');
-    expect(screen.getByTestId('map-overlay-top').style.visibility).toBe('visible');
     expect(screen.getByTestId('map-pill-radius')).toBeVisible();
     expect(screen.getByTestId('map-pill-filters')).toBeVisible();
     expect(screen.getByTestId('pulse-nudge')).toBeVisible();
@@ -856,8 +983,8 @@ describe('pills wait for the banner to settle', () => {
       }),
     );
     renderNearby({ pulse: true });
-    expect(screen.getByTestId('map-overlay-column').getAttribute('data-overlay-ready')).toBe('false');
-    expect(screen.getByTestId('map-overlay-top').style.visibility).toBe('hidden');
+    expect(screen.getByTestId('map-pill-radius')).toBeVisible();
+    expect(screen.getByTestId('map-overlay-shift').style.transition).toMatch(/transform/);
 
     await act(async () => {
       release(true);
@@ -865,9 +992,107 @@ describe('pills wait for the banner to settle', () => {
     });
     expect(await screen.findByTestId('push-alert-banner')).toBeInTheDocument();
     expect(screen.getByTestId('map-overlay-column').getAttribute('data-overlay-ready')).toBe('true');
-    expect(screen.getByTestId('map-overlay-top').style.visibility).toBe('visible');
     const pillsTop = screen.getByTestId('map-top-pill-bar').getBoundingClientRect().top;
     expect(pillsTop).toBeGreaterThan(p.bannerTop + p.bannerHeight);
+  });
+});
+
+const VIEWPORTS = [
+  { width: 844, height: 390, header: 52, tabHeight: 64, name: '844x390' },
+  { width: 640, height: 360, header: 48, tabHeight: 48, name: '640x360' },
+  { width: 360, height: 640, header: 56, tabHeight: 64, name: '360x640' },
+  { width: 360, height: 780, header: 56, tabHeight: 71, name: '360x780' },
+  { width: 390, height: 844, header: 56, tabHeight: 71, name: '390x844' },
+] as const;
+
+function hitCentre(id: string): Element | null {
+  const el = screen.getByTestId(id);
+  const box = el.getBoundingClientRect();
+  return document.elementFromPoint((box.left + box.right) / 2, (box.top + box.bottom) / 2);
+}
+
+describe('360x640 banner and Pulse keep pills on screen', () => {
+  it('puts Radius / Filters first and shows a fade when Pulse overflows', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 360 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 640 });
+    installRenderedLayoutRects();
+    mockElementFromPoint();
+    render(
+      <InteractiveQuietMap
+        theme="dark"
+        pulse
+        banner
+        width={360}
+        height={640}
+        header={56}
+        tabHeight={64}
+      />,
+    );
+    expect(await screen.findByTestId('push-alert-banner')).toBeInTheDocument();
+
+    const pills = screen.getByTestId('map-top-pill-bar');
+    const pulse = screen.getByTestId('map-top-stack-leading');
+    const scroll = screen.getByTestId('map-overlay-scroll');
+    expect(pills.compareDocumentPosition(pulse) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(pills.closest('[data-testid="map-overlay-scroll"]')).toBeNull();
+    expect(scroll.contains(pulse)).toBe(true);
+    expect(scroll.className).toMatch(/overflow-y-auto/);
+
+    Object.defineProperty(scroll, 'scrollHeight', { configurable: true, value: 420 });
+    Object.defineProperty(scroll, 'clientHeight', { configurable: true, value: 96 });
+    Object.defineProperty(scroll, 'scrollTop', { configurable: true, value: 0 });
+    await settle();
+    expect(screen.getByTestId('map-overlay-scroll-cue')).toBeInTheDocument();
+  });
+});
+
+describe.each(VIEWPORTS)('overlay hit targets $name', (vp) => {
+  describe.each([true, false] as const)('banner %s', (bannerOn) => {
+    it('keeps Radius, Filters, Widen, locate, layers and the note close tappable', async () => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: vp.width });
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: vp.height });
+      installRenderedLayoutRects();
+      mockElementFromPoint();
+      render(
+        <InteractiveQuietMap
+          theme="dark"
+          pulse
+          banner={bannerOn}
+          width={vp.width}
+          height={vp.height}
+          header={vp.header}
+          tabHeight={vp.tabHeight}
+        />,
+      );
+      if (bannerOn) {
+        expect(await screen.findByTestId('push-alert-banner')).toBeInTheDocument();
+      }
+
+      const top = screen.getByTestId('map-overlay-top').getBoundingClientRect();
+      expect(top.height).toBeGreaterThanOrEqual(44);
+      expect(screen.getByTestId('map-overlay-pinned').className).toContain(MAP_OVERLAY_PINNED_MAX_CLASS);
+
+      const radius = screen.getByTestId('map-pill-radius').getBoundingClientRect();
+      expect(radius.height).toBeGreaterThanOrEqual(44);
+      expect(radius.bottom).toBeLessThanOrEqual(top.bottom + 1);
+
+      const widen = screen.getByTestId('map-widen-radius').getBoundingClientRect();
+      const locate = screen.getByTestId('mapbox-locate').getBoundingClientRect();
+      expect(overlap(widen, locate)).toBe(false);
+
+      for (const id of [
+        'map-pill-radius',
+        'map-pill-filters',
+        'map-widen-radius',
+        'mapbox-locate',
+        'layer-toggle-people',
+        'layer-toggle-hotspots',
+        'hotspots-map-helper-dismiss',
+        'map-privacy-note-close',
+      ]) {
+        expect(hitCentre(id), `${id} is covered`).toBe(screen.getByTestId(id));
+      }
+    });
   });
 });
 

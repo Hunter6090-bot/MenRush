@@ -84,7 +84,7 @@ export function ThemeToggle({
         <BulbIcon className="h-5 w-5" />
       )}
       <span className="sr-only">
-        {label} theme — tap for {nextHint}
+        {label} theme. Tap for {nextHint}
       </span>
     </button>
   );

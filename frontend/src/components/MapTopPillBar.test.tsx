@@ -29,12 +29,11 @@ describe('MapTopPillBar stacking', () => {
     expect(pills.className).toMatch(/flex-nowrap/);
     expect(pills.className).not.toMatch(/flex-wrap/);
     expect(below).toContainElement(screen.getByTestId('map-layer-chrome'));
-    // Stack order: pills then below
     expect(stack.compareDocumentPosition(pills) & Node.DOCUMENT_POSITION_CONTAINED_BY).toBeTruthy();
     expect(pills.compareDocumentPosition(below) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('floats leading chrome above the pills and scrolls inside the map', () => {
+  it('keeps Radius / Filters first and scrolls Pulse under them', () => {
     render(
       <MapTopPillBar
         radiusKm={5}
@@ -49,10 +48,24 @@ describe('MapTopPillBar stacking', () => {
     const column = screen.getByTestId('map-overlay-column');
     const leading = screen.getByTestId('map-top-stack-leading');
     const pills = screen.getByTestId('map-top-pill-bar');
-    expect(screen.getByTestId('map-overlay-top').className).toMatch(/overflow-y-auto/);
+    expect(screen.getByTestId('map-overlay-scroll').className).toMatch(/overflow-y-auto/);
     expect(column.className).toMatch(/overflow-hidden/);
     expect(leading).toContainElement(screen.getByTestId('pulse-nudge'));
-    expect(leading.compareDocumentPosition(pills) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(pills.compareDocumentPosition(leading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+describe('compact empty pill', () => {
+  it('is a single 44px / 15px line with Nobody nearby and Widen', () => {
+    render(<MapEmptyRadius compact nextRadiusKm={16} onWiden={vi.fn()} />);
+    const card = screen.getByTestId('map-empty-radius');
+    const widen = screen.getByTestId('map-widen-radius');
+    expect(card.textContent).toMatch(/Nobody nearby/);
+    expect(card.className).toMatch(/min-h-\[44px\]/);
+    expect(card.className).toMatch(/max-w-\[calc\(100%-7\.5rem\)\]/);
+    expect(widen.className).toMatch(/min-h-\[44px\]/);
+    expect(widen.className).toMatch(/text-\[15px\]/);
+    expect(widen.className).toMatch(/bg-\[var\(--copper\)\]/);
   });
 });
 
@@ -69,11 +82,20 @@ describe('Discover quiet-map Pulse card', () => {
 
 describe.each(['dark', 'light'] as Theme[])('Widen uses the theme accent (%s)', (theme) => {
   it('fills with --copper and keeps 4.5:1 text on the accent', () => {
-    render(<MapEmptyRadius nextRadiusKm={10} onWiden={vi.fn()} />);
+    render(<MapEmptyRadius compact nextRadiusKm={10} onWiden={vi.fn()} />);
     const widen = screen.getByTestId('map-widen-radius');
     expect(widen.className).toMatch(/bg-\[var\(--copper\)\]/);
     expect(widen.className).toMatch(/text-\[var\(--nn-on-copper\)\]/);
     expect(widen.className).not.toMatch(/#C4832A|#1A0E03/);
     expect(tokenContrast('var(--nn-on-copper)', 'var(--copper)', theme)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe('ThemeToggle label', () => {
+  it('uses a full stop, not an em dash', async () => {
+    const { ThemeToggle } = await import('./ThemeToggle');
+    render(<ThemeToggle />);
+    expect(screen.getByText(/theme\. Tap for/)).toBeInTheDocument();
+    expect(screen.getByText(/theme\. Tap for/).textContent).not.toMatch(/—/);
   });
 });
