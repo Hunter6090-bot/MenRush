@@ -21,6 +21,11 @@ import {
 import { premiumService, PREMIUM_PAID_PRICE } from '../src/services/premium.service';
 import { isAlwaysPremiumName } from '../src/lib/always-premium';
 
+// These checks assert real end dates, so run as after free Premium ends.
+// Banking while Premium is free for everyone is covered in
+// referral-earned-months-integration.ts.
+process.env.BETA_PREMIUM_FREE = 'false';
+
 async function insertUser(opts: {
   id?: string;
   email: string;
@@ -233,8 +238,13 @@ async function main() {
       premiumUntil: null,
     });
     ids.push(alwaysId);
-    const grant = await premiumService.grantReferralMonth(alwaysId, 1);
-    assert.strictEqual(grant.skippedLifetime, true);
+    const grantRow = await query(
+      `INSERT INTO referral_premium_grants (user_id, milestone, verified_count_at_grant, months_granted)
+       VALUES ($1, 1, 3, 1) RETURNING id`,
+      [alwaysId],
+    );
+    const grant = await premiumService.grantReferralMonth(alwaysId, grantRow.rows[0].id, 1);
+    assert.strictEqual(grant.state, 'banked', 'open-ended Premium: month is banked, not an end date');
     const alwaysRow = await query(
       `SELECT is_premium, premium_until FROM users WHERE id = $1`,
       [alwaysId],

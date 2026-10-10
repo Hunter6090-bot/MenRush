@@ -733,6 +733,14 @@ export const authService = {
       throw new Error(EMAIL_NOT_CONFIRMED_MESSAGE);
     }
 
+    // Earned referral months: start saved months once free Premium has ended,
+    // and grant a month the cap held back. Best effort: never blocks login.
+    try {
+      await referralService.syncEarnedMonths(user.id as string);
+    } catch (err) {
+      console.error('[auth] referral earned-months sync on login failed', err);
+    }
+
     const publicUser = {
       id: user.id,
       email: user.email,

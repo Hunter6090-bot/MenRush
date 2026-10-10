@@ -25,6 +25,9 @@ process.env.JWT_SECRET ||= 'referral-grant-integration-placeholder';
 process.env.ADULT_ASSURANCE_SIGNUP_REQUIRED = 'false';
 // As in prod: new members must confirm their email before they count.
 process.env.EMAIL_CONFIRM_MAIL_OPEN = 'true';
+// This file asserts real end dates (free Premium for everyone has ended).
+// Banking while it is on: referral-earned-months-integration.ts.
+process.env.BETA_PREMIUM_FREE = 'false';
 
 async function main() {
   const { default: pool, query } = await import('../src/db');

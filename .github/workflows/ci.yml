@@ -176,6 +176,8 @@ jobs:
         run: npm run test:referral-grant-integration
       - name: Referral checks (real PG)
         run: npm run test:referrals
+      - name: Earned referral months survive renewal and cancel, cap, Gmail dedupe, read-only card (real PG)
+        run: npm run test:referral-earned-months-integration
       # --if-present: these scripts arrive with their own PRs (#333, #327,
       # #328, Community Ghost). The step is a no-op until the script exists.
       - name: Radius on the fuzzed pin (oracle)

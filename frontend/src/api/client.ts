@@ -203,6 +203,10 @@ export const usersAPI = {
       unlock_every: number;
       progress_to_unlock: number;
       unlocks_earned: number;
+      months_saved?: number;
+      reward_mode?: 'free_for_everyone' | 'open_ended' | 'paid' | 'end_date' | 'no_end_date';
+      max_months_per_12_months?: number;
+      at_cap?: boolean;
       referrals: Array<{
         referred_user_id: string;
         name: string | null;
