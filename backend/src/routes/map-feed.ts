@@ -3,10 +3,13 @@ import rateLimit from 'express-rate-limit';
 import { rateLimitKey } from '../lib/clientIp';
 import { z } from 'zod';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
+import { privateNoStore } from '../middleware/noStore';
 import { mapFeedService } from '../services/map-feed.service';
+import { MAP_PIN_FUZZ_MAX_M } from '../lib/mapPinFuzz';
 
 const router = Router();
-router.use(authMiddleware, verifiedMiddleware);
+// privateNoStore first so 401s carry Cache-Control too (same as events, #348).
+router.use(privateNoStore, authMiddleware, verifiedMiddleware);
 
 const postLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -75,6 +78,73 @@ router.post('/', postLimiter, async (req: AuthRequest, res: Response) => {
     }
     const message = err instanceof Error ? err.message : 'Internal server error';
     res.status(500).json({ error: message });
+  }
+});
+
+const PostIdParam = z.string().uuid();
+
+/**
+ * Tell docks that may still show these posts to drop them: map:feed:deleted
+ * { id } to the author and everyone near each post. Only the id goes out.
+ * Radius covers the 5 km fan-out from the fuzzed pin plus the widest fuzz.
+ * Best-effort: a fan-out failure never fails the delete.
+ */
+async function emitDeleted(
+  req: AuthRequest,
+  removed: Array<{ id: string; lat: number; lng: number }>,
+): Promise<void> {
+  const io = req.app.get('io');
+  if (!io || removed.length === 0) return;
+  for (const post of removed) {
+    try {
+      const ids = await mapFeedService.nearbyUserIds(post.lat, post.lng, 5 + MAP_PIN_FUZZ_MAX_M / 1000);
+      const targets = new Set([...ids, req.userId!]);
+      for (const uid of targets) io.to(`user:${uid}`).emit('map:feed:deleted', { id: post.id });
+    } catch (fanoutErr) {
+      console.error('[map-feed] delete fan-out', fanoutErr);
+    }
+  }
+}
+
+// GET /mine/count — how many map feed posts this member has (any age).
+router.get('/mine/count', async (req: AuthRequest, res: Response) => {
+  try {
+    res.json({ count: await mapFeedService.countOwn(req.userId!) });
+  } catch (err: unknown) {
+    console.error('[map-feed] count own', err);
+    res.status(500).json({ error: 'Could not count your posts' });
+  }
+});
+
+// DELETE /mine — delete every map feed post this member has made (any age).
+// Declared before /:id so 'mine' is never read as a post id.
+router.delete('/mine', async (req: AuthRequest, res: Response) => {
+  try {
+    const { deleted, removed } = await mapFeedService.deleteAllOwn(req.userId!);
+    // Same as a single delete: every removed post drops out of other docks.
+    await emitDeleted(req, removed);
+    res.json({ ok: true, deleted });
+  } catch (err: unknown) {
+    console.error('[map-feed] delete all own', err);
+    res.status(500).json({ error: 'Could not delete your posts' });
+  }
+});
+
+// DELETE /:id — the author deletes their own map feed post, at any age.
+// The row (and its saved coordinates) is removed. Someone else's post, or one
+// that does not exist, is 404 either way.
+router.delete('/:id', async (req: AuthRequest, res: Response) => {
+  const parsed = PostIdParam.safeParse(req.params.id);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid post' });
+  try {
+    const removed = await mapFeedService.deleteOwn(req.userId!, parsed.data);
+    if (!removed) return res.status(404).json({ error: 'Post not found' });
+
+    await emitDeleted(req, [removed]);
+    res.json({ ok: true });
+  } catch (err: unknown) {
+    console.error('[map-feed] delete', err);
+    res.status(500).json({ error: 'Could not delete post' });
   }
 });
 

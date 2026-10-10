@@ -183,6 +183,36 @@ export function assertRouterGuard(route: string, source: string, strip: (s: stri
   assert.ok(!ROUTER_BRACKET.test(code), `${route}: bracket access on router (router['...']) is not allowed`);
 }
 
+const AUTH_ONLY_GUARD_LINE = /^router\.use\(privateNoStore,\s*authMiddleware\);?[ \t]*$/m;
+
+/**
+ * Auth-only routers: owner data that is safe before verification, so no
+ * verifiedMiddleware. Each one is listed here on purpose with its reason.
+ * The router must apply privateNoStore then authMiddleware once, before any
+ * route, never read a member id from the URL, body or query, and use only the
+ * id from the token.
+ */
+export const AUTH_ONLY_ROUTERS: Record<string, string> = {
+  // The caller's own "Don't show again" choices. Nothing about any other member,
+  // and the prompts show before verification finishes (#357).
+  'prompt-prefs': 'own prompt choices only, shown before verification',
+};
+
+export function assertAuthOnlyRouterGuard(route: string, source: string): void {
+  const code = stripComments(source);
+  const uses = code.match(/\brouter\s*\.\s*use\s*\(/g) ?? [];
+  assert.equal(uses.length, 1, `${route}: expected exactly one router.use, found ${uses.length}`);
+  const guard = AUTH_ONLY_GUARD_LINE.exec(code);
+  assert.ok(guard, `${route}: router.use must start a line and apply privateNoStore then authMiddleware`);
+  const firstRoute = FIRST_ROUTE.exec(code);
+  assert.ok(firstRoute, `${route}: no routes found`);
+  assert.ok(guard.index < firstRoute.index, `${route}: router.use must come before the first route`);
+  assert.ok(!/\b(?:const|let|var)\s+\w+\s*=\s*router\b/.test(code), `${route}: no aliases of router`);
+  assert.ok(!/req\s*\.\s*(?:params|body|query)\s*\.\s*user(?:_?id|Id)\b/i.test(code), `${route}: member id must come from the token`);
+  // stripComments blanks string contents, so the route path check reads the raw source.
+  assert.ok(!/['"`]\/:user(?:_?id|Id)\b/i.test(source), `${route}: no member id in the path`);
+}
+
 type Test = { name: string; run: () => void | Promise<void> };
 const tests: Test[] = [];
 
@@ -428,18 +458,43 @@ test('source guard helpers reject commented, hidden, extra, late or indented rou
   assert.match(stripped, /^ *e\(\);$/m);
 });
 
+test('auth-only guard helper rejects missing no-store, extra use, aliases and member ids from the request', () => {
+  const ok = "const router = Router();\nrouter.use(privateNoStore, authMiddleware);\nrouter.get('/', (req, res) => res.json(req.userId));\n";
+  assertAuthOnlyRouterGuard('ok', ok);
+  const bad: Record<string, string> = {
+    'no no-store': ok.replace('privateNoStore, ', ''),
+    'commented': ok.replace('router.use(', '// router.use('),
+    'extra router.use': ok + 'router.use(evilMw);\n',
+    'after first route': "const router = Router();\nrouter.get('/', h);\nrouter.use(privateNoStore, authMiddleware);\n",
+    'alias': ok + "const r = router;\nr.get('/x', h);\n",
+    'id from params': ok.replace('req.userId', 'req.params.userId'),
+    'id from body': ok.replace('req.userId', 'req.body.user_id'),
+    'id in path': ok + "router.get('/:userId', h);\n",
+  };
+  for (const [name, source] of Object.entries(bad)) {
+    assert.throws(() => assertAuthOnlyRouterGuard(name, source), assert.AssertionError, name);
+  }
+});
+
 test('source guards preserve location, push, socket, and media privacy boundaries', () => {
   const root = path.resolve(__dirname, '..');
   const server = fs.readFileSync(path.join(root, 'src/server.ts'), 'utf8');
   const users = fs.readFileSync(path.join(root, 'src/services/user.service.ts'), 'utf8');
   const messages = fs.readFileSync(path.join(root, 'src/routes/messages.ts'), 'utf8');
   const albums = fs.readFileSync(path.join(root, 'src/routes/albums.ts'), 'utf8');
-  for (const route of ['rooms', 'events', 'pulse', 'profile-meta']) {
+  for (const route of ['rooms', 'events', 'pulse', 'profile-meta', 'travel']) {
     assertRouterGuard(route, fs.readFileSync(path.join(root, `src/routes/${route}.ts`), 'utf8'));
+  }
+  for (const route of Object.keys(AUTH_ONLY_ROUTERS)) {
+    assertAuthOnlyRouterGuard(route, fs.readFileSync(path.join(root, `src/routes/${route}.ts`), 'utf8'));
+    assert.match(server, new RegExp(`app\\.use\\('/api/${route}',`), `${route}: mounted under /api/${route}`);
   }
   // Events: keep no-store at router level ahead of auth, so nearby, check-in and their 401s are never cached.
   const events = stripComments(fs.readFileSync(path.join(root, 'src/routes/events.ts'), 'utf8'));
   assert.match(events, /^router\.use\(privateNoStore,\s*authMiddleware,\s*verifiedMiddleware\);?[ \t]*$/m);
+  // Travel: same, so Look around and trip reads (and their 401s) are never cached.
+  const travel = stripComments(fs.readFileSync(path.join(root, 'src/routes/travel.ts'), 'utf8'));
+  assert.match(travel, /^router\.use\(privateNoStore,\s*authMiddleware,\s*verifiedMiddleware\);?[ \t]*$/m);
 
   assert.equal(server.includes("app.use('/uploads', express.static"), false);
   assert.equal(server.includes('ST_DWithin(p.location::geography'), false);

@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { HideLocationList } from '../components/HideLocationList';
+import { ShowInLookAroundRow } from '../components/ShowInLookAroundRow';
 import { TwoFactorSettings } from '../components/TwoFactorSettings';
 import { PasswordInput } from '../components/PasswordInput';
 import { authAPI, usersAPI } from '../api/client';
@@ -19,6 +20,7 @@ import {
 import { clearDeviceTrustToken } from '../lib/deviceTrust';
 import { isGenericAvatarUrl } from '../lib/genericAvatar';
 import { IconBluesky, IconInstagram } from '../components/icons';
+import { DeleteMyPostsRow } from '../components/DeleteMyPostsRow';
 import {
   profileCompletionScore,
   type ProfileEssentialItem,
@@ -884,6 +886,9 @@ export const Settings = () => {
             <div className="mt-3">
               <HideLocationList />
             </div>
+            <div className="mt-3">
+              <ShowInLookAroundRow />
+            </div>
           </div>
 
           {/* ── DISCOVERY ── */}
@@ -918,6 +923,8 @@ export const Settings = () => {
                   <ChevronRight />
                 </div>
               </Link>
+
+              <DeleteMyPostsRow />
             </div>
           </div>
 
@@ -926,6 +933,20 @@ export const Settings = () => {
             <SectionLabel>Notifications</SectionLabel>
             <div className={groupClass}>
               <NotificationSettings flush />
+
+              <Link
+                to="/get-the-app"
+                className={rowActionClass}
+                data-testid="settings-get-the-app"
+              >
+                <div>
+                  <p className="text-[15px] font-bold text-[var(--cream)]">Get the app</p>
+                  <p className="mt-0.5 text-[15px] text-[var(--cream-muted)]">
+                    Put MenRush on your Home Screen.
+                  </p>
+                </div>
+                <ChevronRight />
+              </Link>
 
               <Link
                 to="/notifications"

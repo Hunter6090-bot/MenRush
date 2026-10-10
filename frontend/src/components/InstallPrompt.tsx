@@ -1,12 +1,13 @@
+import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { isPhoneDevice } from '../lib/device';
 import {
   clearDeferredInstallPrompt,
   useDeferredInstallPrompt,
 } from '../lib/installPromptStore';
-import { useEffect, useState } from 'react';
-
-const DISMISS_KEY = 'menrush_install_prompt_dismissed';
+import { usePromptDismissal } from '../lib/promptDismissal';
+import { usePromptSlot } from '../lib/promptSlot';
+import { PromptDismissControls } from './PromptDismissControls';
 
 function isStandalone() {
   return (
@@ -23,7 +24,8 @@ function isIos() {
 export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
   const location = useLocation();
   const deferred = useDeferredInstallPrompt();
-  const [hidden, setHidden] = useState(true);
+  // One "Don't show again" rule for every phone (owner ask, 10 Oct 2026).
+  const dismissal = usePromptDismissal('install');
 
   // Never cover chat/room composers or Settings Sign out — sheet sits at z-60.
   const blocksChrome =
@@ -32,38 +34,35 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
     location.pathname.startsWith('/settings') ||
     /^\/rooms\/[^/]+/.test(location.pathname);
 
+  // Worked out during render (not in an effect) so the prompt order knows on the
+  // first paint whether the sheet wants to show.
+  const eligible =
+    typeof window !== 'undefined' &&
+    isPhoneDevice() &&
+    !isStandalone() &&
+    location.pathname !== '/get-the-app' &&
+    location.pathname !== '/install' &&
+    !blocksChrome;
+
+  // One prompt at a time: the Get the app sheet comes first, then alerts, then
+  // Finish profile. The sign in page card has nothing to share the screen with.
+  // On a new device, wait for the member's server prefs (or the short timeout)
+  // so a prompt they already turned off never flashes up.
+  const wants = eligible && !dismissal.hidden && dismissal.ready;
+  const waiting = eligible && !dismissal.hidden && !dismissal.ready;
+  const onTop = usePromptSlot(
+    'install-sheet',
+    variant !== 'sheet' ? 'none' : wants ? 'want' : waiting ? 'pending' : 'none',
+  );
+
+  const visible = wants && (variant !== 'sheet' || onTop);
+  const { markShown } = dismissal;
+  // Once on screen it stays until closed, whatever the server prefs say later.
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!isPhoneDevice()) {
-      setHidden(true);
-      return;
-    }
-    if (isStandalone()) {
-      setHidden(true);
-      return;
-    }
-    if (location.pathname === '/get-the-app' || location.pathname === '/install') {
-      setHidden(true);
-      return;
-    }
-    if (blocksChrome) {
-      setHidden(true);
-      return;
-    }
-    if (variant === 'sheet' && localStorage.getItem(DISMISS_KEY) === '1') {
-      setHidden(true);
-      return;
-    }
+    if (visible) markShown();
+  }, [visible, markShown]);
 
-    setHidden(false);
-  }, [location.pathname, variant, blocksChrome]);
-
-  if (hidden || blocksChrome) return null;
-
-  const dismiss = () => {
-    localStorage.setItem(DISMISS_KEY, '1');
-    setHidden(true);
-  };
+  if (!visible) return null;
 
   // Android Chrome can one-tap install when we still hold the deferred event.
   // iPhone / Safari cannot — keep Show me how. Android without a prompt falls
@@ -75,19 +74,26 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
     await deferred.prompt();
     await deferred.userChoice;
     clearDeferredInstallPrompt();
-    dismiss();
+    dismissal.close(true);
   };
 
   const wrap =
     variant === 'sheet'
-      ? 'fixed inset-x-0 bottom-0 z-[60] border-t border-[rgba(196,131,42,0.35)] bg-[#140E08] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4'
-      : 'mt-4 rounded-2xl border border-[rgba(196,131,42,0.35)] bg-[rgba(20,14,8,0.72)] px-4 py-4';
+      ? // Sits on top of the phone tab bar, never over it (tab bar is fixed bottom-0, z-50,
+        // and already pads the home-indicator safe area).
+        'fixed inset-x-0 bottom-[var(--mobile-tab-bar-height)] z-[60] border-y border-[var(--border-default)] bg-[var(--bg-card)] px-4 pb-4 pt-4'
+      : 'mt-4 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-4 py-4';
 
   return (
     <aside className={wrap} role="dialog" aria-label="Install MenRush">
-      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#C4832A]">Get the app</p>
-      <p className="mt-1 text-[17px] font-extrabold leading-tight text-[#F0E0C0]">Put MenRush on your Home Screen.</p>
-      <p className="mt-1 text-[15px] leading-snug text-[#A89070]">
+      <p
+        className="text-[15px] font-bold uppercase tracking-[0.12em] text-[var(--nn-accent-text)]"
+        data-testid="install-prompt-label"
+      >
+        Get the app
+      </p>
+      <p className="mt-1 text-[17px] font-extrabold leading-tight text-[var(--cream)]">Put MenRush on your Home Screen.</p>
+      <p className="mt-1 text-[15px] leading-snug text-[var(--cream-muted)]">
         {isIos()
           ? 'Safari only. Share, then Add to Home Screen.'
           : 'Opens like an app. No store. No extra download.'}
@@ -97,26 +103,27 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
           <button
             type="button"
             onClick={() => void install()}
-            className="flex-1 rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3 text-[14px] font-bold text-[#FFF6E6]"
+            data-testid="install-prompt-install"
+            className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-full bg-[var(--copper)] px-4 py-3 text-[15px] font-bold text-[var(--nn-on-copper)]"
           >
             Install app
           </button>
         ) : (
           <Link
             to="/get-the-app"
-            className="flex-1 rounded-full bg-gradient-to-r from-[#C4832A] to-[#A45E18] px-4 py-3 text-center text-[14px] font-bold text-[#FFF6E6]"
+            data-testid="install-prompt-how"
+            className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-full bg-[var(--copper)] px-4 py-3 text-center text-[15px] font-bold text-[var(--nn-on-copper)]"
           >
             Show me how
           </Link>
         )}
-        <button
-          type="button"
-          onClick={dismiss}
-          className="rounded-full border border-[rgba(196,131,42,0.35)] px-4 py-3 text-[14px] font-bold text-[#F0E0C0]"
-        >
-          Not now
-        </button>
       </div>
+      <PromptDismissControls
+        onClose={dismissal.close}
+        closeLabel="Close get the app"
+        testIdPrefix="install-prompt"
+        className="mt-2"
+      />
     </aside>
   );
 }

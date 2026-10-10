@@ -42,6 +42,202 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+/**
+ * Short timeout for the small requests that gate the top prompts (QC P1 on
+ * #354). A hung /push/vapid-public or /prompt-prefs used to hold the alerts
+ * banner in "still checking" for ever, and with it Finish profile behind it.
+ *
+ * Scoped on purpose rather than a client-wide default: sign up, Veriff, map
+ * reads after a cold start and every upload can take longer than 4s, and
+ * uploads already set their own long timeouts (60s to 180s) or none. A call
+ * that passes its own timeout keeps it.
+ */
+export const SHORT_REQUEST_TIMEOUT_MS = 4000;
+const SHORT_TIMEOUT_PATHS: readonly RegExp[] = [/^\/?push\/vapid-public(?:[?#]|$)/, /^\/?prompt-prefs(?:[/?#]|$)/];
+
+export function shortTimeoutFor(url: string | undefined): number | undefined {
+  if (!url) return undefined;
+  return SHORT_TIMEOUT_PATHS.some((re) => re.test(url)) ? SHORT_REQUEST_TIMEOUT_MS : undefined;
+}
+
+apiClient.interceptors.request.use((config) => {
+  if (!config.timeout) {
+    const short = shortTimeoutFor(config.url);
+    if (short) config.timeout = short;
+  }
+  return config;
+});
+
+/**
+ * Coordinates never travel in a URL: query strings end up in proxy logs
+ * (Vercel runtime logs keep the search params of every /api request). The
+ * device fix goes only in the body of POST /users/location, and every read
+ * uses the stored location on the server, which strips and ignores any URL
+ * coordinates (a later server flag will reject them).
+ */
+export const URL_COORDINATE_KEYS = ['lat', 'lng', 'lon', 'latitude', 'longitude', 'll', 'coords'] as const;
+
+/** Same rule as the server: lat, lat[], lat[0], filter[lat], ll, coords (any case). */
+export function isCoordinateKey(key: string): boolean {
+  return key
+    .toLowerCase()
+    .split(/[[\]]/)
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .some((seg) => (URL_COORDINATE_KEYS as readonly string[]).includes(seg));
+}
+
+/** Safety net: drop any coordinate key from a request's params and URL query. */
+export function stripCoordinatesFromRequest<T extends { url?: string; params?: unknown }>(config: T): T {
+  if (config.params && typeof config.params === 'object') {
+    const params = { ...(config.params as Record<string, unknown>) };
+    for (const key of Object.keys(params)) {
+      if (isCoordinateKey(key)) delete params[key];
+    }
+    config.params = params;
+  }
+  if (config.url && config.url.includes('?')) {
+    const [path, qs] = config.url.split('?', 2);
+    const kept = new URLSearchParams(qs);
+    for (const key of Array.from(kept.keys())) {
+      if (isCoordinateKey(key)) kept.delete(key);
+    }
+    const rest = kept.toString();
+    config.url = rest ? `${path}?${rest}` : path;
+  }
+  return config;
+}
+
+apiClient.interceptors.request.use((config) => stripCoordinatesFromRequest(config));
+
+/** Re-send the same fix at most this often before a read. */
+const LOCATION_SYNC_FRESH_MS = 60_000;
+/** A device fix older than this is never sent by a read. */
+export const SESSION_FIX_MAX_AGE_MS = 2 * 60_000;
+let lastLocationSync: { lat: number; lng: number; at: number } | null = null;
+let locationSyncInFlight: Promise<void> | null = null;
+
+/**
+ * The last fix the DEVICE produced in this session, recorded only by
+ * useLiveLocationPublisher, so it carries that publisher's gates: signed in,
+ * ID verification when required, OS permission granted, a real GPS result.
+ * Never seeded from localStorage (menrush_last_location) or the location
+ * store, so a stale or cached point is never sent.
+ */
+let sessionFix: { lat: number; lng: number; at: number } | null = null;
+
+export function recordSessionFix(lat: number, lng: number, at: number = Date.now()): void {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+  sessionFix = { lat, lng, at };
+}
+
+/** Permission denied or revoked, signed out, or the publisher stopped. */
+export function clearSessionFix(): void {
+  sessionFix = null;
+}
+
+function freshSessionFix(): { lat: number; lng: number } | null {
+  if (!sessionFix) return null;
+  if (Date.now() - sessionFix.at > SESSION_FIX_MAX_AGE_MS) return null;
+  return { lat: sessionFix.lat, lng: sessionFix.lng };
+}
+
+/**
+ * Before a location-based read, make sure the server has this session's
+ * device fix: POST it in the body of /users/location (jump gate applies on
+ * the server). Sends nothing when there is no fresh device fix from this
+ * session (location off, permission denied, unverified, cold start from a
+ * cached point): the read then uses the stored location. Skips a fix already
+ * stored in the last minute unless forced. Never throws. Resolves true when a
+ * fix was stored by this call.
+ */
+export async function syncLocationForRead(opts?: { force?: boolean }): Promise<boolean> {
+  const fix = freshSessionFix();
+  if (!fix) return false;
+  const { lat, lng } = fix;
+  const fresh = () =>
+    !opts?.force &&
+    lastLocationSync != null &&
+    lastLocationSync.lat === lat &&
+    lastLocationSync.lng === lng &&
+    Date.now() - lastLocationSync.at < LOCATION_SYNC_FRESH_MS;
+  if (fresh()) return false;
+  if (locationSyncInFlight) {
+    await locationSyncInFlight;
+    if (fresh()) return false;
+  }
+  let stored = false;
+  const run = apiClient
+    .post('/users/location', { lat, lng })
+    .then((res) => {
+      // Only a stored fix counts as synced (the server answers success:false
+      // when it refused the fix).
+      if ((res?.data as { success?: boolean } | undefined)?.success === false) return;
+      stored = true;
+      markLocationStored(lat, lng);
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      if (locationSyncInFlight === run) locationSyncInFlight = null;
+    });
+  locationSyncInFlight = run;
+  await run;
+  return stored;
+}
+
+function markLocationStored(lat: number, lng: number): void {
+  lastLocationSync = { lat, lng, at: Date.now() };
+  notifyLocationSaved();
+}
+
+/**
+ * "The server now has a location for me." Fired after any POST /users/location
+ * the server stored (the read sync and the live publisher). A screen whose
+ * last read came back empty for lack of a stored location (a brand-new
+ * member) reloads once on this.
+ */
+const locationSavedListeners = new Set<() => void>();
+export function onLocationSaved(cb: () => void): () => void {
+  locationSavedListeners.add(cb);
+  return () => {
+    locationSavedListeners.delete(cb);
+  };
+}
+function notifyLocationSaved(): void {
+  for (const cb of Array.from(locationSavedListeners)) {
+    try {
+      cb();
+    } catch {
+      /* a listener must not break the save */
+    }
+  }
+}
+
+/**
+ * Hot Spot reads answer { spots: [], location_required: true } when the server
+ * has no stored location yet (the read landed before the first save). Re-send
+ * this session's fresh device fix (bypassing the one-minute skip) and retry
+ * once, only if that fix was stored.
+ */
+async function getHotSpotsWithLocationRetry(params: Record<string, unknown>) {
+  await syncLocationForRead();
+  const res = await apiClient.get<{ spots: HotSpotDTO[]; location_required?: boolean }>('/hot-spots', { params });
+  if (!res.data?.location_required) return res;
+  // Retry only when a fresh session fix was actually stored just now; with no
+  // device fix there is nothing to send (Out reloads on onLocationSaved).
+  const stored = await syncLocationForRead({ force: true });
+  if (!stored) return res;
+  return apiClient.get<{ spots: HotSpotDTO[]; location_required?: boolean }>('/hot-spots', { params });
+}
+
+/** Tests only. */
+export function resetLocationSyncForTests(): void {
+  lastLocationSync = null;
+  sessionFix = null;
+  locationSyncInFlight = null;
+  locationSavedListeners.clear();
+}
+
 /** Paths that legitimately return 401 without meaning "session dead". */
 const AUTH_CHALLENGE_PATHS = [
   '/auth/login',
@@ -203,13 +399,15 @@ export const usersAPI = {
       unlock_every: number;
       progress_to_unlock: number;
       unlocks_earned: number;
-      pending_payout_total: number;
+      months_saved?: number;
+      reward_mode?: 'free_for_everyone' | 'open_ended' | 'paid' | 'end_date' | 'no_end_date';
+      max_months_per_12_months?: number;
+      at_cap?: boolean;
       referrals: Array<{
         referred_user_id: string;
         name: string | null;
+        qualified: boolean;
         status: 'pending' | 'verified' | 'credited';
-        payout_amount: number;
-        payout_status: 'none' | 'pending' | 'paid';
         created_at: string;
         verified_at: string | null;
         credited_at: string | null;
@@ -235,10 +433,9 @@ export const usersAPI = {
       scope?: 'uk_ie';
     }
   ) =>
+    syncLocationForRead().then(() =>
     apiClient.get<NearbyRosterResponse | any[]>('/users/nearby', {
       params: {
-        lat,
-        lng,
         radius,
         minAge: filters?.minAge,
         maxAge: filters?.maxAge,
@@ -254,21 +451,19 @@ export const usersAPI = {
         offset: filters?.offset,
         scope: filters?.scope,
       },
-    }),
+    })),
   getProfile: (id: string, coords?: { lat?: number | null; lng?: number | null }) =>
-    apiClient.get(`/users/profile/${id}`, {
-      params:
-        coords?.lat != null && coords?.lng != null
-          ? { lat: coords.lat, lng: coords.lng }
-          : undefined,
-    }),
+    syncLocationForRead().then(() => apiClient.get(`/users/profile/${id}`)),
   searchProfiles: (q: string, by: 'name' | 'place' = 'name') =>
     apiClient.get<Array<{ id: string; name: string; age?: number; photo_url?: string; bio?: string; headline?: string }>>(
       '/users/search',
       { params: { q, by } },
     ),
   updateLocation: (lat: number, lng: number) =>
-    apiClient.post('/users/location', { lat, lng }),
+    apiClient.post('/users/location', { lat, lng }).then((res) => {
+      if ((res?.data as { success?: boolean } | undefined)?.success !== false) markLocationStored(lat, lng);
+      return res;
+    }),
   updateProfile: (data: {
     name?: string;
     date_of_birth?: string | null;
@@ -644,6 +839,7 @@ export const roomsAPI = {
 // ── Map feed (Sniffies-style location chat on Discover map) ─────────────────
 export interface MapFeedMessage {
   id: string;
+  sender_id?: string;
   display_name: string;
   photo_url?: string | null;
   message: string;
@@ -654,11 +850,19 @@ export interface MapFeedMessage {
 
 export const mapFeedAPI = {
   list: (lat?: number, lng?: number, limit = 20) =>
-    apiClient.get<{ messages: MapFeedMessage[] }>('/map-feed', {
-      params: { lat, lng, limit },
-    }),
+    syncLocationForRead().then(() =>
+      apiClient.get<{ messages: MapFeedMessage[] }>('/map-feed', {
+        params: { limit },
+      }),
+    ),
   post: (data: { message: string; lat?: number; lng?: number; display_name?: string }) =>
     apiClient.post<MapFeedMessage>('/map-feed', data),
+  /** Delete your own map post (any age). The saved location goes with it. */
+  deleteMessage: (id: string) => apiClient.delete<{ ok: boolean }>(`/map-feed/${id}`),
+  /** How many map posts you have (any age). */
+  countMine: () => apiClient.get<{ count: number }>('/map-feed/mine/count'),
+  /** Delete every map post you have made. */
+  deleteAllMine: () => apiClient.delete<{ ok: boolean; deleted: number }>('/map-feed/mine'),
 };
 
 export type ContactSubmitPayload = {
@@ -840,9 +1044,11 @@ export interface EventDTO {
 
 export const eventsAPI = {
   getNearby: (lat: number, lng: number, radiusKm?: number, limit?: number) =>
-    apiClient.get<EventDTO[]>('/events/nearby', {
-      params: { lat, lng, radius: radiusKm, limit },
-    }),
+    syncLocationForRead().then(() =>
+      apiClient.get<EventDTO[]>('/events/nearby', {
+        params: { radius: radiusKm, limit },
+      }),
+    ),
   /** Free venue check-in — creates/uses a Cruise (Hot Spot) pin that expires after 4 hours. */
   checkIn: (id: string, anonymous = false) =>
     apiClient.post<{ ok: boolean; spot: HotSpotDTO | null; deferred?: boolean }>(`/events/${id}/check-in`, {
@@ -1019,17 +1225,13 @@ export const hotSpotsAPI = {
     category?: string,
     options?: { outdoor?: boolean; q?: string; sort?: 'closest' | 'live'; limit?: number },
   ) =>
-    apiClient.get<{ spots: HotSpotDTO[] }>('/hot-spots', {
-      params: {
-        lat,
-        lng,
-        radiusKm,
-        category,
-        outdoor: options?.outdoor,
-        q: options?.q,
-        sort: options?.sort,
-        limit: options?.limit,
-      },
+    getHotSpotsWithLocationRetry({
+      radiusKm,
+      category,
+      outdoor: options?.outdoor,
+      q: options?.q,
+      sort: options?.sort,
+      limit: options?.limit,
     }),
   searchCruising: (
     lat: number,
@@ -1037,23 +1239,19 @@ export const hotSpotsAPI = {
     query?: string,
     radiusKm?: number,
   ) =>
-    apiClient.get<{ spots: HotSpotDTO[] }>('/hot-spots', {
-      params: {
-        lat,
-        lng,
-        cruising: true,
-        sort: 'closest',
-        q: query?.trim() || undefined,
-        radiusKm: radiusKm || (query?.trim() ? undefined : 100),
-      },
+    getHotSpotsWithLocationRetry({
+      cruising: true,
+      sort: 'closest',
+      q: query?.trim() || undefined,
+      radiusKm: radiusKm || (query?.trim() ? undefined : 100),
     }),
   getSpot: (id: string) => apiClient.get<{ spot: HotSpotDTO }>(`/hot-spots/${id}`),
   checkIn: (id: string, anonymous = false) =>
     apiClient.post<{ ok: boolean; spot: HotSpotDTO }>(`/hot-spots/${id}/check-in`, { anonymous }),
   checkOut: (id?: string) =>
     id
-      ? apiClient.post<{ ok: boolean }>(`/hot-spots/${id}/check-out`)
-      : apiClient.post<{ ok: boolean }>('/hot-spots/check-out'),
+      ? apiClient.post<{ ok: boolean; spot?: HotSpotDTO | null }>(`/hot-spots/${id}/check-out`)
+      : apiClient.post<{ ok: boolean; spot?: HotSpotDTO | null }>('/hot-spots/check-out'),
   getMyCheckIn: () =>
     apiClient.get<{ check_in: unknown | null }>('/hot-spots/me/check-in'),
 
@@ -1202,15 +1400,22 @@ export interface CommunityMentionSuggestionDTO {
 
 export const communityAPI = {
   listPosts: (lat: number, lng: number, radiusKm?: number) =>
-    apiClient.get<{ posts: CommunityPostDTO[] }>('/community/posts', {
-      params: { lat, lng, radiusKm },
-    }),
+    syncLocationForRead().then(() =>
+      apiClient.get<{ posts: CommunityPostDTO[] }>('/community/posts', {
+        params: { radiusKm },
+      }),
+    ),
   createPost: (body: string) =>
     apiClient.post<{ post: CommunityPostDTO }>('/community/posts', { body }),
   updatePost: (postId: string, body: string) =>
     apiClient.put<{ post: CommunityPostDTO }>(`/community/posts/${postId}`, { body }),
   deletePost: (postId: string) =>
     apiClient.delete<{ ok: boolean }>(`/community/posts/${postId}`),
+  /** How many Community posts you have (any age). */
+  countMyPosts: () => apiClient.get<{ count: number }>('/community/posts/mine/count'),
+  /** Delete every Community post you have made (any age). */
+  deleteAllMyPosts: () =>
+    apiClient.delete<{ ok: boolean; deleted: number }>('/community/posts/mine'),
   listComments: (postId: string) =>
     apiClient.get<{ comments: CommunityCommentDTO[] }>(`/community/posts/${postId}/comments`),
   createComment: (postId: string, body: string) =>
@@ -1258,6 +1463,22 @@ export const locationPrivacyAPI = {
     apiClient.delete<{ hidden: false }>(`/location-privacy/hidden/${encodeURIComponent(id)}`),
 };
 
+/** Travel (Premium). No call sends your location: Travel never moves you. */
+export const travelAPI = {
+  lookAround: (city: string) =>
+    apiClient.get<{ place: import('../lib/travel').TravelPlace; members: import('../lib/travel').LookAroundMember[] }>(
+      '/travel/look-around',
+      { params: { city } },
+    ),
+  getTrip: () => apiClient.get<{ trip: import('../lib/travel').TravelTrip | null }>('/travel/trip'),
+  planTrip: (body: { city: string; startsOn: string; endsOn: string }) =>
+    apiClient.post<{ trip: import('../lib/travel').TravelTrip }>('/travel/trip', body),
+  endTrip: () => apiClient.delete<{ ended: boolean }>('/travel/trip'),
+  getSettings: () => apiClient.get<{ show_in_look_around: boolean }>('/travel/settings'),
+  setShowInLookAround: (value: boolean) =>
+    apiClient.put<{ show_in_look_around: boolean }>('/travel/settings', { show_in_look_around: value }),
+};
+
 export { apiClient };
 
 function resolveSocketUrl(): string {
@@ -1276,3 +1497,12 @@ function resolveSocketUrl(): string {
 // Keep signalling on the same host as the API when deployed separately from
 // the static frontend (e.g. Railway backend + Vercel frontend).
 export const SOCKET_URL = resolveSocketUrl();
+
+/** "Don't show again" across devices. Keys: install, alerts, profile. */
+export type PromptPrefKey = 'install' | 'alerts' | 'profile';
+
+export const promptPrefsAPI = {
+  get: () => apiClient.get<{ never: PromptPrefKey[] }>('/prompt-prefs'),
+  setNever: (prompt: PromptPrefKey) =>
+    apiClient.put<{ never: PromptPrefKey[] }>(`/prompt-prefs/${encodeURIComponent(prompt)}/never`),
+};

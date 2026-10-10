@@ -4,24 +4,23 @@ import {
   getPushSupport,
   iosNeedsHomeScreenForPush,
   isPushConfigured,
-  isStandalonePwa,
 } from '../lib/push';
+import { usePromptDismissal } from '../lib/promptDismissal';
+import { usePromptSlot, type PromptSlotState } from '../lib/promptSlot';
+import { PromptDismissControls } from './PromptDismissControls';
 
-const SNOOZE_KEY = 'menrush_push_banner_snooze_until';
-/** "Later" hides the banner briefly — never permanently while permission is still default. */
-const SNOOZE_MS = 12 * 60 * 60 * 1000;
 /**
- * "Add MenRush to Home Screen" card only (Pete, 8 Oct 2026): "Don't show again"
- * hides it for good on this device. No server-side pref exists for this card.
- * Never cleared by any other code path.
+ * Device-wide "Don't show again" key from the redesign (#316). Still honoured as
+ * already dismissed (see lib/promptDismissal LEGACY_NEVER_KEYS); never written now.
  */
 export const HOME_SCREEN_CARD_NEVER_KEY = 'menrush_home_screen_card_never';
-/** The separate Get the app sheet (InstallPrompt) honours its own dismiss key. */
-const INSTALL_PROMPT_DISMISS_KEY = 'menrush_install_prompt_dismissed';
 
-function readFlag(key: string): boolean {
+/** Older 12h "Later" snooze. Still honoured until it runs out; never written now. */
+const LEGACY_SNOOZE_KEY = 'menrush_push_banner_snooze_until';
+
+function legacySnoozed(): boolean {
   try {
-    return localStorage.getItem(key) === '1';
+    return Number(localStorage.getItem(LEGACY_SNOOZE_KEY) || 0) > Date.now();
   } catch {
     return false;
   }
@@ -29,145 +28,114 @@ function readFlag(key: string): boolean {
 
 /**
  * Logged-in nudge so people actually get rings when the app is closed.
- * Never auto-prompts — iOS Safari would ignore it, and e2e forbids a silent
+ * Never auto-prompts: iOS Safari would ignore it, and e2e forbids a silent
  * Notification.requestPermission on page load.
  *
- * Must stay visible in the installed PWA until alerts are granted or blocked.
- * A permanent dismiss while permission is still `default` hid call rings.
+ * Two prompts share this slot:
+ * - iPhone Safari tab: "Add MenRush to Home Screen" (the get-the-app prompt).
+ * - Everywhere else with permission still default: "Turn on alerts".
+ * Each has "Don't show again" (owner ask, 10 Oct 2026). The same rule on
+ * every phone. Alerts stay available in Settings, the app on /get-the-app.
  */
 export function PushAlertBanner() {
-  const [visible, setVisible] = useState(false);
-  const [iosInstall, setIosInstall] = useState(false);
+  // undefined while still checking; null once we know nothing should show.
+  const [eligible, setEligible] = useState<'install' | 'alerts' | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
-  const [neverAgain, setNeverAgain] = useState(() => readFlag(HOME_SCREEN_CARD_NEVER_KEY));
+  const install = usePromptDismissal('install');
+  const alerts = usePromptDismissal('alerts');
 
   useEffect(() => {
+    let cancelled = false;
+    const decide = (value: 'install' | 'alerts' | null) => {
+      if (!cancelled) setEligible(value);
+    };
     void (async () => {
-      const configured = await isPushConfigured();
-      if (!configured) return;
-      if (iosNeedsHomeScreenForPush()) {
-        if (readFlag(HOME_SCREEN_CARD_NEVER_KEY)) return;
-        try {
-          const until = Number(localStorage.getItem(SNOOZE_KEY) || 0);
-          if (until > Date.now()) return;
-        } catch {
-          /* ignore */
-        }
-        setIosInstall(true);
-        setVisible(true);
-        return;
-      }
-      const support = getPushSupport();
-      if (support !== 'default') return;
       try {
-        localStorage.removeItem('menrush_push_banner_dismissed');
-        const until = Number(localStorage.getItem(SNOOZE_KEY) || 0);
-        // Installed PWA: never hide for long — call rings depend on permission.
-        if (until > Date.now() && !isStandalonePwa()) return;
+        const configured = await isPushConfigured();
+        if (!configured || legacySnoozed()) return decide(null);
+        if (iosNeedsHomeScreenForPush()) return decide('install');
+        if (getPushSupport() !== 'default') return decide(null);
+        decide('alerts');
       } catch {
-        /* ignore */
+        decide(null);
       }
-      setVisible(true);
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
+  // One prompt at a time. While still checking, hold back Finish profile so it
+  // does not flash up and then get replaced.
+  // On a new device also wait for the member's server prefs (or the short
+  // timeout), so the banner never shows and then vanishes.
+  const ready = install.ready && alerts.ready;
+  const slotState = (kind: 'install' | 'alerts', hidden: boolean): PromptSlotState => {
+    if (eligible === undefined || !ready) return kind === 'install' ? 'pending' : 'none';
+    if (eligible !== kind) return 'none';
+    return hidden ? 'none' : 'want';
+  };
+  const installOnTop = usePromptSlot('install-banner', slotState('install', install.hidden));
+  const alertsOnTop = usePromptSlot('alerts', slotState('alerts', alerts.hidden));
+
+  const iosInstall = eligible === 'install';
+  const prompt = iosInstall ? install : alerts;
+  const visible = Boolean(eligible) && ready && !prompt.hidden && (iosInstall ? installOnTop : alertsOnTop);
+  const { markShown } = prompt;
+  // Once on screen it stays until closed, whatever the server prefs say later.
+  useEffect(() => {
+    if (visible) markShown();
+  }, [visible, markShown]);
+
   if (!visible) return null;
-
-  const dismiss = () => {
-    try {
-      localStorage.setItem(SNOOZE_KEY, String(Date.now() + SNOOZE_MS));
-      // Clear legacy permanent dismiss so older installs recover.
-      localStorage.removeItem('menrush_push_banner_dismissed');
-    } catch {
-      /* ignore */
-    }
-    setVisible(false);
-  };
-
-  const setNeverAgainPref = (next: boolean) => {
-    setNeverAgain(next);
-    try {
-      if (next) {
-        localStorage.setItem(HOME_SCREEN_CARD_NEVER_KEY, '1');
-        localStorage.setItem(INSTALL_PROMPT_DISMISS_KEY, '1');
-      } else {
-        localStorage.removeItem(HOME_SCREEN_CARD_NEVER_KEY);
-      }
-    } catch {
-      /* ignore */
-    }
-  };
 
   const enable = async () => {
     if (busy) return;
     setBusy(true);
     try {
       const result = await enablePushNotifications();
-      if (result === 'granted') setVisible(false);
+      if (result === 'granted') setEligible(null);
     } finally {
       setBusy(false);
     }
   };
 
+  // Overlays the top of the page instead of pushing it down, so content does
+  // not jump when the banner appears or closes (QC P2). The wrapper takes no
+  // height; the card floats over the page's top edge.
   return (
-    <div
-      className="mx-3 mb-2 mt-2 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2.5 shadow-card"
-      data-testid="push-alert-banner"
-      role="status"
-    >
-      <p className="text-base font-semibold text-[var(--cream)]">
-        {iosInstall ? 'Add MenRush to Home Screen' : 'Turn on alerts'}
-      </p>
-      {iosInstall ? (
-        <p className="mt-0.5 text-[15px] leading-snug text-[var(--cream-muted)]">
-          Share → Add to Home Screen. Open it, then allow alerts.
+    <div className="relative z-40 h-0" data-testid="push-alert-banner-slot">
+      <div
+        className="absolute inset-x-0 top-0 mx-3 mt-2 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2.5 shadow-card"
+        data-testid="push-alert-banner"
+        role="status"
+      >
+        <p className="text-base font-semibold text-[var(--cream)]">
+          {iosInstall ? 'Add MenRush to Home Screen' : 'Turn on alerts'}
         </p>
-      ) : null}
-      <div className="mt-2 flex items-center justify-end gap-2">
         {iosInstall ? (
-          <>
-            <label
-              className="mr-auto inline-flex min-h-[44px] cursor-pointer items-center gap-2.5 text-[15px] font-semibold text-[var(--cream)]"
-              data-testid="home-screen-card-never-label"
-            >
-              <input
-                type="checkbox"
-                checked={neverAgain}
-                onChange={(e) => setNeverAgainPref(e.target.checked)}
-                data-testid="home-screen-card-never"
-                className="h-5 w-5 accent-[#C4832A]"
-              />
-              Don&apos;t show again
-            </label>
+          <p className="mt-0.5 text-[15px] leading-snug text-[var(--cream-muted)]">
+            Share, then Add to Home Screen. Open it, then allow alerts.
+          </p>
+        ) : null}
+        <PromptDismissControls
+          onClose={prompt.close}
+          closeLabel={iosInstall ? 'Close Add to Home Screen' : 'Close turn on alerts'}
+          testIdPrefix={iosInstall ? 'install-prompt' : 'alerts-prompt'}
+          className="mt-1"
+        >
+          {iosInstall ? null : (
             <button
               type="button"
-              onClick={() => (neverAgain ? setVisible(false) : dismiss())}
-              data-testid="home-screen-card-close"
-              className="min-h-[44px] rounded-xl px-4 text-[15px] font-bold text-[var(--cream)]"
+              onClick={() => void enable()}
+              disabled={busy}
+              data-testid="push-alert-banner-enable"
+              className="min-h-[44px] rounded-xl bg-[var(--copper)] px-4 text-[15px] font-bold text-[var(--nn-on-copper)] disabled:opacity-50"
             >
-              Close
+              Turn on
             </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={dismiss}
-            className="rounded-xl px-3 py-1.5 text-sm font-semibold text-[var(--cream-muted)]"
-          >
-            Later
-          </button>
-        )}
-        {iosInstall ? null : (
-          <button
-            type="button"
-            onClick={() => void enable()}
-            disabled={busy}
-            data-testid="push-alert-banner-enable"
-            className="rounded-xl bg-[#C4832A] px-3 py-1.5 text-sm font-bold text-[#0D0A06] disabled:opacity-50"
-          >
-            Turn on
-          </button>
-        )}
+          )}
+        </PromptDismissControls>
       </div>
     </div>
   );

@@ -35,6 +35,10 @@ vi.mock('../api/client', () => ({
     getTwoFactorStatus: vi.fn().mockResolvedValue({ data: { enabled: false } }),
     listTrustedDevices: vi.fn().mockResolvedValue({ data: { devices: [] } }),
   },
+  travelAPI: {
+    getSettings: vi.fn().mockResolvedValue({ data: { show_in_look_around: true } }),
+    setShowInLookAround: vi.fn(),
+  },
   locationPrivacyAPI: {
     listHidden: vi.fn().mockResolvedValue({ data: { hidden: [], limit: 500 } }),
     hide: vi.fn(),

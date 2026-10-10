@@ -2,6 +2,7 @@ import { query } from '../db';
 import { discoveryPhotoUrl } from '../lib/discoveryPhoto';
 import { isPublicHotSpotVisibilitySql } from './hot-spots.service';
 import { notLocationHiddenFromViewerSql } from '../lib/locationHiddenSql';
+import { liveTripExistsSql } from '../lib/travel';
 import { PIN_PREFILTER_BUFFER_M, publicPinSql } from '../lib/mapPinSql';
 import { MAP_PIN_FUZZ_DEFAULT_M } from '../lib/mapPinFuzz';
 import { coarseMilesFromMeters, memberDistanceFields } from '../lib/memberDistance';
@@ -298,6 +299,9 @@ export const communityService = {
        AND ${authorVisibleToViewerSql('cp.user_id', '$4')}
        -- Hide my location from: a post in this radius would show the author is near.
        AND ${notLocationHiddenFromViewerSql('cp.user_id', '$4')}
+       -- Travel: an author on a live trip is not at home. Their posts here would
+       -- show a distance to their home pin, so leave them out (same as Nearby).
+       AND (cp.user_id = $4 OR NOT ${liveTripExistsSql('cp.user_id')})
        ORDER BY cp.created_at DESC
        LIMIT $5`,
       [params.lat, params.lng, radiusM, params.viewerId, limit],
@@ -439,20 +443,15 @@ export const communityService = {
   },
 
   /**
-   * Delete author's own Community post.
-   * Enforces author ownership and 24h expiry (expired post fails with post_not_found).
-   * Cascades comments via DB foreign key constraint.
+   * Delete author's own Community post, at any age (not only inside the 24h
+   * feed window). The row goes, so its saved lat / lng / location go with it.
+   * Comments cascade via the post_id foreign key.
    */
   async deletePost(
     userId: string,
     postId: string,
   ): Promise<{ ok: boolean }> {
-    const existing = await query(
-      `SELECT id, user_id FROM community_posts
-       WHERE id = $1
-         AND created_at > NOW() - INTERVAL '24 hours'`,
-      [postId],
-    );
+    const existing = await query(`SELECT id, user_id FROM community_posts WHERE id = $1`, [postId]);
     if (existing.rows.length === 0) {
       throw new Error('post_not_found');
     }
@@ -460,8 +459,24 @@ export const communityService = {
       throw new Error('forbidden');
     }
 
-    await query(`DELETE FROM community_posts WHERE id = $1`, [postId]);
+    // user_id in the WHERE as well, so ownership is enforced in the same statement.
+    await query(`DELETE FROM community_posts WHERE id = $1 AND user_id = $2`, [postId, userId]);
     return { ok: true };
+  },
+
+  /** How many Community posts this member has (any age), for the delete-all confirm. */
+  async countOwnPosts(userId: string): Promise<number> {
+    const res = await query(`SELECT COUNT(*)::int AS n FROM community_posts WHERE user_id = $1`, [userId]);
+    return res.rows[0]?.n ?? 0;
+  },
+
+  /**
+   * Delete every Community post this member has ever made (any age), with
+   * their saved coordinates and comments. Returns how many were removed.
+   */
+  async deleteAllOwnPosts(userId: string): Promise<{ deleted: number }> {
+    const res = await query(`DELETE FROM community_posts WHERE user_id = $1`, [userId]);
+    return { deleted: res.rowCount ?? 0 };
   },
 
   /**

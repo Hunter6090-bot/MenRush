@@ -17,7 +17,8 @@ import {
   AdultAssuranceFlow,
   ADULT_ASSURANCE_COPY,
 } from '../components/AdultAssuranceFlow';
-import { registerErrorMessage } from '../lib/authErrors';
+import { isInvalidReferralError, registerErrorMessage, REFERRAL_IGNORED_NOTE } from '../lib/authErrors';
+import { getParamIgnoreCase, REFERRAL_PARAM } from '../lib/trackingParams';
 import {
   readStoredInviteCode,
   storeInviteCode,
@@ -91,7 +92,8 @@ export const Register = () => {
     if (fromQuery) return fromQuery.trim().toUpperCase().replace(/\s+/g, ' ');
     return fromStore || '';
   });
-  const referralFromQuery = searchParams.get('ref')?.trim() || '';
+  // Case-insensitive so ?REF=CODE from a shared link still credits the referrer.
+  const referralFromQuery = getParamIgnoreCase(searchParams, REFERRAL_PARAM)?.trim() || '';
   const [referralCode, setReferralCode] = useState(() => referralFromQuery.toUpperCase());
   const [form, setForm] = useState<FormState>({
     displayName: '',
@@ -109,6 +111,7 @@ export const Register = () => {
   const [dobMode, setDobMode] = useState<'select' | 'text'>('select');
   const yearOptions = useMemo(() => dobYearOptions(), []);
   const [error, setError] = useState('');
+  const [referralIgnored, setReferralIgnored] = useState(false);
   const [isDuplicateEmail, setIsDuplicateEmail] = useState(false);
   const [assuranceSkipped, setAssuranceSkipped] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -276,7 +279,7 @@ export const Register = () => {
       if (trimmedPromo) {
         clearStoredPridePromoCode();
       }
-      const res = await authAPI.register({
+      const basePayload = {
         name: form.displayName,
         email: form.email,
         age: nextAge,
@@ -284,9 +287,21 @@ export const Register = () => {
         password: form.password,
         ...(inviteCode ? { invite_code: inviteCode } : {}),
         ...(trimmedPromo ? { promo_code: trimmedPromo } : {}),
-        ...(trimmedReferral ? { referral_code: trimmedReferral } : {}),
         ...(adultToken ? { adult_assurance_token: adultToken } : {}),
-      });
+      };
+      let res;
+      try {
+        res = await authAPI.register({
+          ...basePayload,
+          ...(trimmedReferral ? { referral_code: trimmedReferral } : {}),
+        });
+      } catch (firstErr) {
+        // A referral never gates sign up: drop an unknown or invalid code and go on.
+        if (!trimmedReferral || !isInvalidReferralError(firstErr)) throw firstErr;
+        setReferralCode('');
+        setReferralIgnored(true);
+        res = await authAPI.register(basePayload);
+      }
       if (res.data.requiresEmailConfirm) {
         const confirmEmail =
           typeof res.data.email === 'string' ? res.data.email : form.email.trim().toLowerCase();
@@ -317,7 +332,7 @@ export const Register = () => {
     clearError();
 
     if (!/^[A-Za-z0-9_-]{2,24}$/.test(form.displayName)) {
-      setError('Display name must be 2–24 chars: letters, numbers, _ or -.');
+      setError('Display name must be 2 to 24 characters: letters, numbers, _ or -.');
       return;
     }
     if (!dobIso) {
@@ -732,6 +747,11 @@ export const Register = () => {
               <p className={helperClass} data-testid="register-referral-note">
                 Optional. Not required to sign up.
               </p>
+              {referralIgnored ? (
+                <p className={helperClass} role="status" data-testid="register-referral-ignored">
+                  {REFERRAL_IGNORED_NOTE}
+                </p>
+              ) : null}
             </div>
 
             {adultRequired && !assuranceSkipped ? (

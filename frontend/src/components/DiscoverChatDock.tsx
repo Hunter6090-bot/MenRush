@@ -4,6 +4,7 @@ import { useSocket } from '../hooks/useSocket';
 import { useAuthStore, useLocationStore } from '../hooks/store';
 import { IconClose } from './icons';
 import { FadedBrandFace } from './FadedBrandFace';
+import { OwnPostMenu } from './OwnPostMenu';
 
 const DOCK_STORAGE_KEY = 'menrush_discover_chat_dock';
 const MAX_VISIBLE = 6;
@@ -12,7 +13,7 @@ const POLL_INTERVAL_MS = 30_000;
 
 export function readDockOpen(): boolean {
   try {
-    // Default closed — collapsed toggle never steals map pan/zoom.
+    // Default closed: collapsed toggle never steals map pan/zoom.
     return localStorage.getItem(DOCK_STORAGE_KEY) === '1';
   } catch {
     return false;
@@ -79,7 +80,7 @@ export function DiscoverChatDock({
       const fresh = (res.data.messages ?? []).filter((m) => msgAge(m) < FADE_AFTER_MS);
       setMessages(fresh.slice(-MAX_VISIBLE * 3)); // keep buffer
     } catch {
-      /* silent — map feed is best-effort */
+      /* silent: map feed is best-effort */
     }
   }, [lat, lng]);
 
@@ -107,9 +108,16 @@ export function DiscoverChatDock({
         setHasNewMsg(true);
       }
     };
+    // A post deleted by its author drops out of every dock that still shows it.
+    const onFeedDeleted = (data: { id?: string }) => {
+      if (!data?.id) return;
+      setMessages((prev) => prev.filter((m) => m.id !== data.id));
+    };
     socket.on('map:feed:message', onFeedMsg);
+    socket.on('map:feed:deleted', onFeedDeleted);
     return () => {
       socket.off('map:feed:message', onFeedMsg);
+      socket.off('map:feed:deleted', onFeedDeleted);
     };
   }, [socket, open, onOpenChange]);
 
@@ -159,6 +167,28 @@ export function DiscoverChatDock({
     } finally {
       setSending(false);
       inputRef.current?.focus();
+    }
+  };
+
+  const [deleteError, setDeleteError] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const focusMenuTrigger = (id: string) => {
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLButtonElement>(`[data-testid="map-feed-more-${id}"]`)?.focus();
+    });
+  };
+  const handleDelete = async (id: string) => {
+    setDeleteError('');
+    setDeletingId(id);
+    try {
+      await mapFeedAPI.deleteMessage(id);
+      setMessages((prev) => prev.filter((m) => m.id !== id));
+      setConfirmDeleteId(null);
+    } catch {
+      setDeleteError('Could not delete that post. Try again.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -216,20 +246,21 @@ export function DiscoverChatDock({
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2" style={{ scrollbarWidth: 'none' }}>
         {visible.length === 0 ? (
           <p className="py-8 text-center text-[11px] text-[#6B5035]">
-            No nearby messages yet — say something!
+            No nearby messages yet. Say something!
           </p>
         ) : (
           <div className="flex flex-col gap-1.5">
             {visible.map((msg) => {
               const opacity = msgOpacity(msg);
-              const isMine = msg.display_name === user?.name;
+              // sender_id, not display name: two members can share a name.
+              const isMine = !!user?.id && msg.sender_id === user.id;
               return (
                 <div
                   key={msg.id}
                   className={`flex gap-2 ${isMine ? 'flex-row-reverse' : ''}`}
                   style={{ opacity }}
                 >
-                  {/* Map-feed has no photos — ONE Brand placeholder face (no initials). */}
+                  {/* Map-feed has no photos: ONE Brand placeholder face (no initials). */}
                   <div
                     className="mt-0.5 h-8 w-8 shrink-0 overflow-hidden rounded-full"
                     style={{ border: '1px solid rgba(196,131,42,0.3)' }}
@@ -242,6 +273,7 @@ export function DiscoverChatDock({
                       {isMine ? 'You' : msg.display_name}
                       {msg.distance_label ? ` · ${msg.distance_label}` : ''}
                     </span>
+                    <div className={`flex items-start gap-1 ${isMine ? 'flex-row-reverse' : ''}`}>
                     <div
                       className="rounded-2xl px-3 py-1.5 text-base leading-snug"
                       style={
@@ -261,11 +293,68 @@ export function DiscoverChatDock({
                     >
                       {msg.message}
                     </div>
+                    {isMine ? (
+                      <OwnPostMenu
+                        tone="dark"
+                        label="Options for your map post"
+                        testId={`map-feed-more-${msg.id}`}
+                        items={[
+                          {
+                            label: 'Delete post',
+                            danger: true,
+                            testId: `map-feed-delete-${msg.id}`,
+                            onSelect: () => setConfirmDeleteId(msg.id),
+                          },
+                        ]}
+                      />
+                    ) : null}
+                    </div>
+                    {isMine && confirmDeleteId === msg.id ? (
+                      <div
+                        data-testid={`map-feed-delete-confirm-${msg.id}`}
+                        role="group"
+                        aria-label="Delete this post?"
+                        className="mt-1.5 w-full rounded-xl border border-[#FF9A8A] bg-[#1A130B] p-2.5"
+                      >
+                        <p className="text-[15px] font-bold text-[#FF9A8A]">Delete this post?</p>
+                        <p className="mt-0.5 text-[15px] leading-snug text-[#F0DFC0]">
+                          You can&apos;t undo this. The location saved with it goes too.
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            data-testid={`map-feed-delete-btn-${msg.id}`}
+                            disabled={deletingId === msg.id}
+                            onClick={() => void handleDelete(msg.id)}
+                            className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-[#FF9A8A] px-4 text-[15px] font-bold text-[#1A0E03] disabled:opacity-50"
+                          >
+                            {deletingId === msg.id ? 'Deleting…' : 'Delete post'}
+                          </button>
+                          <button
+                            type="button"
+                            data-testid={`map-feed-delete-cancel-${msg.id}`}
+                            disabled={deletingId === msg.id}
+                            onClick={() => {
+                              setConfirmDeleteId(null);
+                              focusMenuTrigger(msg.id);
+                            }}
+                            className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-[rgba(240,223,192,0.5)] px-4 text-[15px] font-bold text-[#F0DFC0]"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                     <span className="mt-0.5 text-xs text-[#4A3520]">{formatTime(msg.created_at)}</span>
                   </div>
                 </div>
               );
             })}
+            {deleteError ? (
+              <p role="alert" className="text-[15px] font-semibold text-[#FF9A8A]">
+                {deleteError}
+              </p>
+            ) : null}
             <div ref={bottomRef} />
           </div>
         )}

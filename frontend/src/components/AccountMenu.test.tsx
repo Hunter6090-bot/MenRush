@@ -29,3 +29,20 @@ describe('AccountMenu search', () => {
     expect(screen.queryByTestId('account-menu-search')).not.toBeInTheDocument();
   });
 });
+
+describe('AccountMenu Travel row', () => {
+  it('shows the plane icon on the Travel row (Al spec)', () => {
+    render(
+      <MemoryRouter>
+        <AccountMenu open onClose={vi.fn()} onSignOut={vi.fn()} />
+      </MemoryRouter>,
+    );
+    const row = screen.getByTestId('account-menu-travel');
+    expect(row).toHaveTextContent('Travel');
+    const icon = screen.getByTestId('account-menu-travel-icon');
+    expect(row).toContainElement(icon);
+    const svg = icon.querySelector('svg');
+    expect(svg).not.toBeNull();
+    expect(svg?.getAttribute('width')).toBe('24');
+  });
+});

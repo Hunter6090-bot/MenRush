@@ -1,3 +1,4 @@
+import { storedHomeCoord } from '../config/locationRetention';
 import { query } from '../db';
 import { defaultGenericAvatarUrl } from '../lib/genericAvatar';
 import { discoveryPhotoUrl } from '../lib/discoveryPhoto';
@@ -21,7 +22,10 @@ import {
   nearbyRosterCountSql,
   nearbyRosterListSql,
   nearbyRosterWhereSql,
+  nearbyVisitorsCountSql,
+  nearbyVisitorsListSql,
 } from '../lib/nearbyRosterSql';
+import { liveTripExistsSql, travelPremiumSql, visitingLabel } from '../lib/travel';
 import { PRESENCE_LIVE_SQL, PRESENCE_WINDOW_SQL } from '../lib/presence';
 import { lookupUkIePlace, placeContainsPoint } from '../lib/ukIePlace';
 import { notLocationHiddenFromViewerSql } from '../lib/locationHiddenSql';
@@ -50,6 +54,45 @@ export interface NearbyUsersResult {
   page: number;
   limit: number;
   has_more: boolean;
+}
+
+/**
+ * A member on a live trip, as locals see them: at the trip's coarse city centre,
+ * labelled "Visiting <city>", with no distance number. Never their GPS.
+ */
+export function travelVisitorRow(row: Record<string, any>) {
+  const {
+    real_lat: _rl,
+    real_lng: _rg,
+    map_photo_url: mapPhoto,
+    map_pin_fuzz_m: _fuzz,
+    show_distance: _showDistance,
+    visit_city: city,
+    visit_lat: visitLat,
+    visit_lng: visitLng,
+    visit_starts_at: startsAt,
+    visit_ends_at: endsAt,
+    visitor_expires_at: _visitorExpires,
+    is_visitor: _isVisitor,
+    ...publicRow
+  } = row;
+  const iso = (v: unknown) =>
+    v instanceof Date ? v.toISOString() : typeof v === 'string' ? v : null;
+  return {
+    ...publicRow,
+    created_at: iso(row.created_at) ?? undefined,
+    is_visitor: false,
+    visitor_expires_at: null,
+    photo_url: discoveryPhotoUrl(mapPhoto, publicRow.photo_url) ?? publicRow.photo_url,
+    lat: Number(visitLat),
+    lng: Number(visitLng),
+    distance_label: visitingLabel(String(city)),
+    visiting: {
+      city: String(city),
+      starts_at: iso(startsAt),
+      ends_at: iso(endsAt),
+    },
+  };
 }
 
 export const userService = {
@@ -115,7 +158,8 @@ export const userService = {
     const radiusMeters = discoveryScope === 'uk_ie' ? 0 : radiusKm * 1000;
     const values: any[] = nearbyRosterBaseValues(originLat, originLng, userId, radiusMeters);
 
-    let whereClause = nearbyRosterWhereSql(discoveryScope, includeE2eFixtures());
+    const homeBaseWhere = nearbyRosterWhereSql(discoveryScope, includeE2eFixtures());
+    let whereClause = homeBaseWhere;
 
     if (filters?.onlyPulse) {
       // Honour either the new (users.is_pulsing) or legacy (profiles.available_until)
@@ -174,14 +218,28 @@ export const userService = {
     const offsetIndex = values.length + 2;
     const queryStr = nearbyRosterListSql(whereClause, limitIndex, offsetIndex);
 
-    const [countResult, result] = await Promise.all([
+    // Travel: members on a live trip here. Same filters as the home roster (the
+    // suffix after the base WHERE), but placed at the trip's coarse city centre.
+    // Shown on the first page only; they are left out of the home roster above.
+    const filtersSuffix = whereClause.slice(homeBaseWhere.length);
+    const visitorWhere =
+      nearbyRosterWhereSql(discoveryScope, includeE2eFixtures(), 'visitors') + filtersSuffix;
+    const VISITOR_LIMIT = 50;
+    const wantVisitors = offset === 0;
+
+    const [countResult, result, visitorCountResult, visitorResult] = await Promise.all([
       query(countSql, values),
       query(queryStr, [...values, limit, offset]),
+      query(nearbyVisitorsCountSql(visitorWhere), values),
+      wantVisitors
+        ? query(nearbyVisitorsListSql(visitorWhere, values.length + 1), [...values, VISITOR_LIMIT])
+        : Promise.resolve({ rows: [] as any[] }),
     ]);
 
-    const total = Number(countResult.rows[0]?.total ?? 0);
+    const visitorTotal = Math.min(Number(visitorCountResult.rows[0]?.total ?? 0), VISITOR_LIMIT);
+    const total = Number(countResult.rows[0]?.total ?? 0) + visitorTotal;
 
-    const users = result.rows.map((row) => {
+    const homeUsers = result.rows.map((row) => {
       const realLat = Number(row.real_lat);
       const realLng = Number(row.real_lng);
       const fuzzMaxM = Number(row.map_pin_fuzz_m);
@@ -250,12 +308,16 @@ export const userService = {
       };
     });
 
+    // Visitors first (page 1 only), then the home roster.
+    const visitors = visitorResult.rows.map((row: any) => travelVisitorRow(row));
+    const users = visitors.length > 0 ? [...visitors, ...homeUsers] : homeUsers;
+
     return {
       users,
       total,
       page,
       limit,
-      has_more: offset + users.length < total,
+      has_more: offset + homeUsers.length < total - visitorTotal,
     };
   },
 
@@ -438,10 +500,22 @@ export const userService = {
         COALESCE(p.map_pin_fuzz_m, ${MAP_PIN_FUZZ_DEFAULT_M}) AS map_pin_fuzz_m,
         COALESCE(u.show_distance, TRUE) AS show_distance,
         vp.lat AS viewer_lat,
-        vp.lng AS viewer_lng
+        vp.lng AS viewer_lng,
+        trip.city_name AS visit_city,
+        trip.starts_at AS visit_starts_at,
+        trip.ends_at AS visit_ends_at
        FROM users u
        LEFT JOIN profiles p ON p.user_id = u.id
        LEFT JOIN profiles vp ON vp.user_id = $2
+       -- Travel: a live trip replaces the distance with "Visiting <city>".
+       LEFT JOIN LATERAL (
+         SELECT t.city_name, t.starts_at, t.ends_at
+           FROM travel_trips t
+          WHERE t.user_id = u.id AND t.ended_at IS NULL
+            AND t.starts_at <= NOW() AND t.ends_at > NOW()
+            AND ${travelPremiumSql('t.user_id')}
+          LIMIT 1
+       ) trip ON TRUE
        WHERE u.id = $1`,
       [targetId, viewerId],
     );
@@ -452,7 +526,15 @@ export const userService = {
     // Distance to the member's fuzzed pin, coarse miles. When it is not
     // available (Show distance off, ghost, no location) the keys are omitted,
     // so every no-distance case has the same shape.
-    const distanceFields = row.distance_allowed
+    // Travel fields follow the same rule as distance: only when the viewer may
+    // see this member's location (visible, not ghost, and the viewer is not on
+    // their "Hide my location from" list). A hidden viewer gets no trip city,
+    // no dates and no "Visiting" label, shaped like any no-distance profile.
+    const visitCity =
+      row.distance_allowed === true && row.visit_city != null ? String(row.visit_city) : null;
+    const distanceFields = visitCity
+      ? {}
+      : row.distance_allowed
       ? memberDistanceFields({
           memberId: String(row.id),
           viewerLat: row.viewer_lat != null ? Number(row.viewer_lat) : null,
@@ -472,11 +554,26 @@ export const userService = {
       show_distance: _showDistance,
       viewer_lat: _vlat,
       viewer_lng: _vlng,
+      visit_city: _vc,
+      visit_starts_at: visitStartsAt,
+      visit_ends_at: visitEndsAt,
       ...publicRow
     } = row;
+    const iso = (v: unknown) =>
+      v instanceof Date ? v.toISOString() : typeof v === 'string' ? v : null;
     return {
       ...publicRow,
       ...distanceFields,
+      ...(visitCity
+        ? {
+            distance_label: visitingLabel(visitCity),
+            visiting: {
+              city: visitCity,
+              starts_at: iso(visitStartsAt),
+              ends_at: iso(visitEndsAt),
+            },
+          }
+        : {}),
     };
   },
 
@@ -499,12 +596,13 @@ export const userService = {
 
     // Upsert live pin + presence first.
     await query(
-      `INSERT INTO profiles (user_id, location, lat, lng, online, last_seen, share_live_location_with_matches)
-       VALUES ($1, ST_MakePoint($3, $2), $2, $3, true, NOW(), TRUE)
+      `INSERT INTO profiles (user_id, location, lat, lng, location_updated_at, online, last_seen, share_live_location_with_matches)
+       VALUES ($1, ST_MakePoint($3, $2), $2, $3, NOW(), true, NOW(), TRUE)
        ON CONFLICT (user_id) DO UPDATE SET
          location = ST_MakePoint($3, $2),
          lat = $2,
          lng = $3,
+         location_updated_at = NOW(),
          online = true,
          last_seen = NOW()`,
       [userId, lat, lng],
@@ -545,7 +643,8 @@ export const userService = {
                 visitor_anchor_lng = NULL
           WHERE user_id = $1
             AND home_lat IS NULL`,
-        [userId, plan.homeLat, plan.homeLng],
+        // About 1 km (2 dp) only when LOCATION_PURGE_ENABLED=true; precise otherwise.
+        [userId, storedHomeCoord(plan.homeLat), storedHomeCoord(plan.homeLng)],
       );
       return true;
     }
@@ -571,7 +670,7 @@ export const userService = {
                 visitor_anchor_lat = $4,
                 visitor_anchor_lng = $5
           WHERE user_id = $1`,
-        [userId, plan.since, plan.expiresAt, plan.anchorLat, plan.anchorLng],
+        [userId, plan.since, plan.expiresAt, storedHomeCoord(plan.anchorLat), storedHomeCoord(plan.anchorLng)],
       );
     }
     return true;
@@ -1061,6 +1160,8 @@ export const userService = {
            AND p.lat IS NOT NULL
            AND p.lng IS NOT NULL
            AND ST_DWithin(p.location, ${placeGeogSql}, $2)
+           -- Travel: a member on a live trip shows at the destination only.
+           AND NOT ${liveTripExistsSql('u.id')}
            AND NOT EXISTS (
              SELECT 1 FROM blocks b
              WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
