@@ -3,7 +3,6 @@ import { Link, useLocation } from 'react-router-dom';
 import { BrandMark } from '../components/BrandMark';
 import { SiteFooter } from '../components/SiteFooter';
 import { trackEventOnce, getAttributionParams } from '../observability/analytics';
-import { publicNavLinkPrimary } from '../lib/publicStyles';
 import '../styles/home-surface.css';
 
 const COMING_SOON_BG = '/images/menrush/31-london-rooftop-dusk.jpeg';
@@ -45,10 +44,6 @@ export const ComingSoon = () => {
         <Link to="/" aria-label="MenRush" className="inline-flex shrink-0 items-center">
           <BrandMark size="sm" />
         </Link>
-        <div className="flex-1" aria-hidden />
-        <Link to="/login" className={publicNavLinkPrimary}>
-          Sign in
-        </Link>
       </header>
 
       <main className="relative z-10 flex flex-1 flex-col">
@@ -75,6 +70,16 @@ export const ComingSoon = () => {
             >
               Sign up free
             </Link>
+            {/* Secondary to Sign up free: plain text with an underlined link, 15px, 44px tap area. */}
+            <p className="mt-3 text-[15px] text-[var(--cream-muted)]" data-testid="hero-sign-in">
+              Already a member?{' '}
+              <Link
+                to="/login"
+                className="inline-flex min-h-[44px] items-center px-1 font-semibold text-[var(--nn-accent-text)] underline underline-offset-4 transition-colors hover:text-[var(--nn-text)]"
+              >
+                Sign in
+              </Link>
+            </p>
           </div>
         </section>
 

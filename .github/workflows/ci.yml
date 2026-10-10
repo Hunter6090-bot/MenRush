@@ -14,8 +14,10 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Pushes to main group by commit so every main commit gets a full run; PRs group by ref and
+  # cancel superseded runs.
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   backend-build:
@@ -73,6 +75,8 @@ jobs:
         run: npm run test:veriff
       - name: Hot-spot counts stay rounded for Free (no exact number)
         run: npm run test:hot-spot-free-counts
+      - name: Welcome emails use the official mark (no typed wordmark)
+        run: npm run test:welcome-email-brand
 
   frontend-build:
     name: Frontend build
@@ -164,10 +168,14 @@ jobs:
         run: npm run db:migrate
       - name: Map feed leaves out blocked and Ghost members
         run: npm run test:map-feed-blocks
+      - name: Map feed respects Hide my location from (before LIMIT)
+        run: npm run test:map-feed-hide-location
       - name: Hot-spot list on real PG (Free rounded sort, Premium exact)
         run: npm run test:hot-spot-live-sort-integration
       - name: Pride code holders can register (real PG)
         run: npm run test:pride-invite-register-integration
+      - name: Deleting a member who created a room works (real PG)
+        run: npm run test:delete-room-creator-integration
       # --if-present: these scripts arrive with their own PRs (#333, #327,
       # #328, Community Ghost). The step is a no-op until the script exists.
       - name: Radius on the fuzzed pin (oracle)

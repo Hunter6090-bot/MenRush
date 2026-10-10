@@ -1153,7 +1153,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             <button
               onClick={() => void handleStartVideoCall()}
               aria-label="Start video call"
-              className="mr-cta-gradient flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl transition-all duration-150 active:scale-95 sm:h-[42px] sm:w-[42px]"
+              className="mr-cta-gradient flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl transition-all duration-150 active:scale-95 sm:h-11 sm:w-11"
               style={{
                 boxShadow: '0 2px 12px rgba(196,131,42,0.35)',
               }}
@@ -1309,7 +1309,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 handleStopRecording();
               }}
               aria-label="Cancel recording"
-              className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
+              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center"
               style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', color: 'var(--cream-muted)' }}
             >
               <CloseIcon className="w-4 h-4" />
@@ -1330,7 +1330,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               type="button"
               onClick={handleStopRecording}
               aria-label="Send voice note"
-              className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center active:scale-95"
+              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95"
               style={{
                 background: 'linear-gradient(135deg, #C4832A, #A45E18)',
                 boxShadow: '0 2px 12px rgba(196,131,42,0.4)',
@@ -1347,7 +1347,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               disabled={uploadingMedia || sharingLocation || !!pendingImage || !!pendingLibraryPhotos}
               aria-label="Send current location"
               title="Send current location"
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
             >
               <LocationPinIcon className="h-4 w-4" />
             </button>
@@ -1360,7 +1360,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               aria-label="Open camera"
               title="Take a picture or video"
               data-testid="chat-camera-button"
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
             >
               <CameraIcon className="h-4 w-4" />
             </button>
@@ -1373,7 +1373,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               aria-label="Attach from My Photos"
               title="Attach from My Photos"
               data-testid="chat-attach-button"
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
             >
               <AttachIcon className="h-4 w-4" />
             </button>
@@ -1434,7 +1434,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 aria-label="Record voice note"
                 title="Record voice note"
                 data-testid="chat-voice-button"
-                className="mr-cta-gradient flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-[#FFF6E6] shadow-[0_2px_12px_rgba(196,131,42,0.4)] active:scale-95 disabled:opacity-40 sm:h-[46px] sm:w-[46px]"
+                className="mr-cta-gradient flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-[#FFF6E6] shadow-[0_2px_12px_rgba(196,131,42,0.4)] active:scale-95 disabled:opacity-40 sm:h-[46px] sm:w-[46px]"
               >
                 <MicIcon className="h-4 w-4" />
               </button>
@@ -2948,7 +2948,7 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                   <div className="flex items-center gap-3 my-5">
                     <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
                     <span
-                      className="text-xs font-semibold px-3 py-1 rounded-full"
+                      className="text-[15px] font-semibold px-3 py-1 rounded-full"
                       style={{
                         background: 'var(--bg-card)',
                         border: '1px solid var(--border-default)',
@@ -2971,9 +2971,9 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                     }}
                   >
                     <MissedCallIcon size={14} className="shrink-0" />
-                    <span className="text-xs font-semibold">{MISSED_CALL_PREVIEW}</span>
+                    <span className="text-[15px] font-semibold">{MISSED_CALL_PREVIEW}</span>
                     {msg.created_at && (
-                      <span className="text-[10px] opacity-80">{formatTime(msg.created_at)}</span>
+                      <span className="text-[15px] opacity-80">{formatTime(msg.created_at)}</span>
                     )}
                   </div>
                 </div>
@@ -2988,7 +2988,7 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                 <div className="flex items-center gap-3 my-5">
                   <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
                   <span
-                    className="text-xs font-semibold px-3 py-1 rounded-full"
+                    className="text-[15px] font-semibold px-3 py-1 rounded-full"
                     style={{
                       background: 'var(--bg-card)',
                       border: '1px solid var(--border-default)',
@@ -3112,7 +3112,7 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                   {/* Timestamp & double ticks */}
                   {showTail && (
                     <span
-                      className="inline-flex items-center text-xs mt-1 px-1 text-[var(--cream-muted)]"
+                      className="inline-flex items-center text-[15px] mt-1 px-1 text-[var(--cream-muted)]"
                     >
                       {formatTime(msg.created_at)}
                       {isMine && (

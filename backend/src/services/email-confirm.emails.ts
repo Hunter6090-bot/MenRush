@@ -76,9 +76,6 @@ export function buildWelcomeEmailHtml(): string {
       transactionalParagraph('Here is what you can use now:'),
       `<ul style="margin:0 0 24px 0; padding:0 0 0 22px;">${bulletsHtml}</ul>`,
       transactionalParagraph(
-        'Sign up is free. No code. 30 days Premium before 1 October.',
-      ),
-      transactionalParagraph(
         '<strong style="color:#F0E0C0;">LIVE NOW. UK OPEN.</strong>',
       ),
       transactionalParagraph(
@@ -101,7 +98,6 @@ export function buildWelcomeEmailText(): string {
     'Here is what you can use now:',
     bullets,
     '',
-    'Sign up is free. No code. 30 days Premium before 1 October.',
     'LIVE NOW. UK OPEN.',
     'https://menrush.com',
     '',
