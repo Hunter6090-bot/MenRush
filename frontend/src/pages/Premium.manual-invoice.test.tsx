@@ -406,4 +406,21 @@ describe('Premium manual invoice stopgap and password step', () => {
     expect(await screen.findByText('Current password is incorrect')).toBeInTheDocument();
     expect(mocks.setTokens).not.toHaveBeenCalled();
   });
+
+  it("customer copy on the Premium page says '14 day' as Legal writes it, never '14-day'", async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    for (const file of ['./Premium.tsx', '../lib/premiumStart.ts']) {
+      const src = readFileSync(resolve(__dirname, file), 'utf8');
+      expect(src, file).not.toMatch(/14-day/i);
+    }
+    render(
+      <MemoryRouter>
+        <Premium />
+      </MemoryRouter>,
+    );
+    await screen.findByTestId('start-options');
+    expect(document.body.textContent ?? '').not.toMatch(/14-day/i);
+    expect(document.body.textContent ?? '').toMatch(/14 day cancellation period/);
+  });
 });

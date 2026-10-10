@@ -128,10 +128,103 @@ export function premiumOnCancellationLines(params: {
   }
   const when = params.premiumStartsAt ? `on ${londonDate(params.premiumStartsAt)}` : 'once that period has ended';
   return [
-    `As you chose not to start straight away, your Premium starts ${when}, after the 14-day cancellation period.`,
+    `As you chose not to start straight away, your Premium starts ${when}, after the 14 day cancellation period.`,
     `If you change your mind before then, just email support@menrush.com with your invoice reference, ${params.invoiceNumber}, and we will give you a full refund within 14 days of hearing from you, to the account you paid from.`,
   ];
 }
+
+/** In-app notice when a payment is confirmed. Matches the email and the member's choice. */
+export function buildPremiumPaidNotification(params: {
+  invoiceNumber: string;
+  /** Set only when Premium starts later (no immediate start chosen). */
+  premiumStartsAt: Date | null;
+}): { title: string; body: string } {
+  if (params.premiumStartsAt) {
+    return {
+      title: 'Your payment has arrived',
+      body: `Thanks, your payment for invoice ${params.invoiceNumber} has arrived. Your Premium starts on ${londonDate(params.premiumStartsAt)}, after the 14 day cancellation period.`,
+    };
+  }
+  return {
+    title: 'Your Premium is on',
+    body: `Thanks, your payment for invoice ${params.invoiceNumber} has arrived and your Premium is on.`,
+  };
+}
+
+/**
+ * Refund email, sent once when ops record the refund as paid. Janet's voice,
+ * sentence case labels, no dashes, signed "All the best, MenRush".
+ */
+export function buildRefundPaidEmail(params: {
+  name: string | null;
+  refundPence: number;
+  invoiceNumber: string;
+  /** When the Premium bought with this invoice ended (the cancellation time). */
+  premiumEndedAt: Date;
+  /** False if Premium from this purchase had not started yet. */
+  premiumHadStarted: boolean;
+}): { subject: string; html: string; text: string } {
+  const amount = `£${(params.refundPence / 100).toFixed(2)}`;
+  const ended = londonDate(params.premiumEndedAt);
+  const greetingName = escapeEmailHtml(params.name || 'there');
+  const subject = 'Your MenRush refund is on its way';
+  const sentLine = `We have sent your refund of ${amount} by bank transfer to the account you paid from.`;
+  const endedLine = params.premiumHadStarted
+    ? `The Premium you bought with this invoice ended on ${ended}, when you cancelled.`
+    : `The Premium you bought with this invoice had not started yet, so it ended on ${ended}, when you cancelled.`;
+  const timing = 'Bank transfers can take a few working days to show in your account.';
+  const help = "If anything doesn't look quite right, please get in touch at support@menrush.com and we'll sort it out.";
+
+  const html = buildTransactionalEmail({
+    title: subject,
+    preheader: `Your refund of ${amount} is on its way.`,
+    headlineHtml: 'Your <span style="color:#C4832A;">refund</span> is on its way',
+    subheadline: `We have sent you ${amount}.`,
+    bodyHtml:
+      transactionalParagraph(`Hello ${greetingName},`) +
+      transactionalParagraph(escapeEmailHtml(sentLine)) +
+      transactionalParagraph(escapeEmailHtml(endedLine)) +
+      transactionalParagraph(escapeEmailHtml(timing)) +
+      transactionalParagraph(help) +
+      transactionalParagraph(
+        `<span style="color:#A89070; font-size:14px;">Invoice number: ${escapeEmailHtml(params.invoiceNumber)}<br>Refund amount: ${escapeEmailHtml(amount)}</span>`,
+      ) +
+      transactionalParagraph('All the best,<br>MenRush'),
+    ctaUrl: `${process.env.FRONTEND_URL || 'https://menrush.com'}/premium`,
+    ctaLabel: 'Open MenRush',
+  });
+
+  const text = [
+    `Hello ${params.name || 'there'},`,
+    '',
+    sentLine,
+    '',
+    endedLine,
+    '',
+    timing,
+    '',
+    help,
+    '',
+    `Invoice number: ${params.invoiceNumber}`,
+    `Refund amount: ${amount}`,
+    '',
+    'All the best,',
+    'MenRush',
+  ].join('\n');
+
+  return { subject, html, text };
+}
+
+/**
+ * Mailer used for invoice emails. Tests replace `send` with a mock; the default
+ * never sends in NODE_ENV=test or to test addresses.
+ */
+export const invoiceMailer: { send: (msg: { to: string; subject: string; html: string; text: string }) => Promise<unknown> } = {
+  async send(msg) {
+    if (process.env.NODE_ENV === 'test' || msg.to.endsWith('@test.menrush.local')) return undefined;
+    return sendTransactionalEmail(msg);
+  },
+};
 
 export function buildPremiumOnEmail(params: {
   name: string | null;
@@ -461,10 +554,10 @@ export const invoiceService = {
         await notificationService.create({
           userId: invoice.user_id,
           type: 'system',
-          title: startsLater ? 'Your payment has arrived' : 'Your Premium is on',
-          body: startsLater
-            ? `Thanks, your payment for invoice ${invoice.invoice_number} has arrived. Your Premium starts on ${londonDate(premiumStartsAt)}, after the 14-day cancellation period.`
-            : `Thanks, your payment for invoice ${invoice.invoice_number} has arrived and your Premium is on.`,
+          ...buildPremiumPaidNotification({
+            invoiceNumber: invoice.invoice_number,
+            premiumStartsAt: startsLater ? premiumStartsAt : null,
+          }),
           linkPath: '/premium',
         });
       } catch (err) {
@@ -561,13 +654,13 @@ export const invoiceService = {
       const DAY = 24 * 60 * 60 * 1000;
       const paidStart = new Date(sub.current_period_start);
       const started = paidStart.getTime() <= now.getTime();
+      // Completed days only: a part day always goes in the member's favour.
       const daysHad = started
-        ? Math.min(invoice.plan_days, Math.max(1, Math.ceil((now.getTime() - paidStart.getTime()) / DAY)))
+        ? Math.min(invoice.plan_days, Math.floor((now.getTime() - paidStart.getTime()) / DAY))
         : 0;
-      const refundPence = Math.max(
-        0,
-        invoice.amount_pence - Math.round((invoice.amount_pence * daysHad) / invoice.plan_days),
-      );
+      // Integer pence. The deduction is floored, so the refund is never rounded against the member.
+      const deductionPence = Math.floor((invoice.amount_pence * daysHad) / invoice.plan_days);
+      const refundPence = Math.max(0, invoice.amount_pence - deductionPence);
 
       // Put back what the member had before this invoice, never shortening it.
       const meta = (sub.metadata ?? {}) as { prior_premium_until?: string | null; prior_premium_starts_at?: string | null };
@@ -607,10 +700,11 @@ export const invoiceService = {
       const upd = await client.query(
         `UPDATE premium_invoices
             SET status = 'refunded', cancelled_at = $2, cancelled_by = $3,
-                refund_amount_pence = $4, refund_days_had = $5, updated_at = NOW()
+                refund_amount_pence = $4, refund_days_had = $5, updated_at = NOW(),
+                metadata = metadata || jsonb_build_object('premium_had_started', $6::boolean)
           WHERE id = $1
           RETURNING *`,
-        [invoice.id, now, adminActor, refundPence, daysHad],
+        [invoice.id, now, adminActor, refundPence, daysHad, started],
       );
       await client.query('COMMIT');
 
@@ -639,10 +733,33 @@ export const invoiceService = {
       [invoiceIdOrNumber, now, adminActor],
     );
     const row: PremiumInvoiceRow | undefined = res.rows[0];
+    // Already recorded (or never refunded): nothing changes and no email goes out.
     if (!row) throw new InvoiceActionError(409, 'refund_not_due');
     console.log(
       `[invoice] refund-paid invoice=${row.id} admin=${adminActor} refund_pence=${row.refund_amount_pence} at=${now.toISOString()}`,
     );
+
+    // Sent once: only the call that set refund_paid_at reaches here.
+    try {
+      const u = await query(`SELECT email, name FROM users WHERE id = $1`, [row.user_id]);
+      const user = u.rows[0];
+      if (user?.email) {
+        const email = buildRefundPaidEmail({
+          name: user.name ?? null,
+          refundPence: row.refund_amount_pence ?? 0,
+          invoiceNumber: row.invoice_number,
+          premiumEndedAt: new Date(row.cancelled_at ?? now),
+          premiumHadStarted: Boolean((row.metadata as { premium_had_started?: boolean })?.premium_had_started),
+        });
+        await invoiceMailer.send({ to: user.email, ...email });
+        await query(
+          `UPDATE premium_invoices SET metadata = metadata || jsonb_build_object('refund_email_sent_at', $2::text) WHERE id = $1`,
+          [row.id, now.toISOString()],
+        );
+      }
+    } catch (err) {
+      console.error(`[invoice] refund email failed invoice=${row.id}`);
+    }
     return row;
   },
 
