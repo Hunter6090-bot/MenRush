@@ -83,3 +83,20 @@ export function adjustHotSpotLiveCount<T extends HotSpotCountFields>(
     has_active_checkins: displayCountIsPositive(nextLive),
   } as Pick<T, 'live_count' | 'live_count_exact' | 'has_active_checkins'>;
 }
+
+/**
+ * The spot to show right after the viewer checks in or out. Uses the spot the server
+ * returned (its count already leaves out Ghost and hidden members, the viewer included).
+ * With no server spot, only the viewer's own check-in state flips and the count is left
+ * alone until the list refetch lands: a client-side +1 / -1 is wrong for a Ghost or hidden
+ * viewer, who was never counted (#368).
+ */
+export function spotAfterCheckToggle<T extends HotSpotCountFields & { is_checked_in?: boolean }>(
+  spot: T,
+  serverSpot: T | null | undefined,
+  checkedIn: boolean,
+  extra: Partial<T> = {},
+): T {
+  if (serverSpot) return serverSpot;
+  return { ...spot, ...extra, is_checked_in: checkedIn };
+}
