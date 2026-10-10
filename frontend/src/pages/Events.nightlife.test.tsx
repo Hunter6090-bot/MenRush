@@ -108,4 +108,19 @@ describe('Events nightlife check-in', () => {
     });
     expect(await screen.findByTestId('event-checkin-notice')).toHaveTextContent(/4 hours/i);
   });
+
+  it('says no pin was added when a Ghost or hidden check-in is deferred', async () => {
+    checkIn.mockResolvedValue({ data: { ok: true, spot: null, deferred: true } });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Events />
+      </MemoryRouter>,
+    );
+    await user.click(await screen.findByTestId('event-checkin-evt-uk-1'));
+    const notice = await screen.findByTestId('event-checkin-notice');
+    expect(notice).toHaveTextContent("You're in Ghost or hidden, so no pin was added at The Copper Bar.");
+    expect(notice).not.toHaveTextContent(/4 hours|pin stays/i);
+    expect(notice.className).toContain('text-[15px]');
+  });
 });
