@@ -121,6 +121,7 @@ describe('Legal location wording (Legal, Oct 2026)', () => {
     );
     expect(text).toContain('Brighton Pride personal promo codes sent by email, and MenRush Pride invites (MENRUSH codes)');
     expect(text).toContain('The claim form closes at the same time.');
+    expect(text).toContain('So if you have an unused Pride code, register by 31 October 2026.');
     expect(text).not.toContain('A personal code from an earlier email');
   });
 
