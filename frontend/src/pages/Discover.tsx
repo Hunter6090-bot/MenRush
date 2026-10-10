@@ -213,7 +213,7 @@ function MapFloatingChrome({
           data-testid="hotspots-map-helper"
         >
           <div
-            className="pointer-events-auto relative max-w-sm rounded-lg border py-1 pl-2.5 pr-6"
+            className="pointer-events-auto relative max-w-sm rounded-lg border py-1.5 pl-3 pr-11"
             style={{
               background: 'rgba(13,10,6,0.82)',
               borderColor: 'rgba(196,131,42,0.28)',
@@ -221,7 +221,7 @@ function MapFloatingChrome({
             role="status"
           >
             <p
-              className="text-center text-xs font-semibold leading-snug tracking-wide"
+              className="text-center text-[15px] font-semibold leading-snug tracking-wide"
               style={{ color: 'rgba(240,224,192,0.82)' }}
               data-testid="hotspots-map-helper-copy"
             >
@@ -236,7 +236,7 @@ function MapFloatingChrome({
                 setMapBannerDismissed(true);
                 dismissHotSpotsMapBanner();
               }}
-              className="absolute -right-0.5 -top-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[15px] leading-none text-[rgba(240,224,192,0.85)] transition-colors hover:bg-[rgba(196,131,42,0.18)] hover:text-[rgba(240,224,192,1)]"
+              className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-full text-[20px] leading-none text-[rgba(240,224,192,0.85)] transition-colors hover:bg-[rgba(196,131,42,0.18)] hover:text-[rgba(240,224,192,1)]"
             >
               ×
             </button>
