@@ -3,7 +3,7 @@
  * Chips: All / Sauna / Bar / Event / Community.
  * Cruising spot search lives here (moved off the map, Pete 8 Oct 2026).
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { eventsAPI, hotSpotsAPI, onLocationSaved, type EventDTO, type HotSpotDTO } from '../api/client';
 import { Layout } from '../components/Layout';
@@ -74,14 +74,33 @@ export function Out() {
   const [sheetError, setSheetError] = useState('');
   const isPremium = useAuthStore((s) => Boolean(s.user?.is_premium));
   const navigate = useNavigate();
-  const sheetSpot = useMemo(
-    () => (sheetSpotId ? spots.find((s) => s.id === sheetSpotId) ?? null : null),
-    [spots, sheetSpotId],
-  );
+  // Last copy of the open spot, so a list refresh that drops it does not slam the sheet shut.
+  const sheetSnapshotRef = useRef<HotSpotDTO | null>(null);
+  const sheetSpot = useMemo(() => {
+    if (!sheetSpotId) {
+      sheetSnapshotRef.current = null;
+      return null;
+    }
+    const live = spots.find((s) => s.id === sheetSpotId) ?? null;
+    if (live) sheetSnapshotRef.current = live;
+    return live ?? (sheetSnapshotRef.current?.id === sheetSpotId ? sheetSnapshotRef.current : null);
+  }, [spots, sheetSpotId]);
 
   const replaceSpot = useCallback((updated: HotSpotDTO) => {
     setSpots((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));
   }, []);
+
+  // Quiet re-read of the list after a check-in or check-out (no spinner, the sheet stays
+  // open). Counts come from the server, which leaves out Ghost and hidden members (#368).
+  const refreshSpots = useCallback(async () => {
+    if (lat == null || lng == null || chip === 'community' || chip === 'event') return;
+    try {
+      const res = await hotSpotsAPI.listNearby(lat, lng, 80);
+      setSpots(res.data.spots ?? []);
+    } catch {
+      /* keep the server spot we already merged */
+    }
+  }, [lat, lng, chip]);
 
   // Same check-in / check-out calls the map sheet uses (Discover handleHotSpotCheckIn).
   const handleCheckIn = useCallback(
@@ -98,13 +117,15 @@ export function Out() {
           const res = await hotSpotsAPI.checkIn(spot.id, anonymous);
           replaceSpot(spotAfterCheckToggle(spot, res.data?.spot, true, { my_checkin_anonymous: anonymous }));
         }
+        // Refresh the Out list so every card shows the server's updated count.
+        await refreshSpots();
       } catch {
         setSheetError('Check-in failed. Try again.');
       } finally {
         setActingSpotId(null);
       }
     },
-    [replaceSpot],
+    [replaceSpot, refreshSpots],
   );
 
   const setChip = useCallback(
