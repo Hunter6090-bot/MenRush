@@ -5,7 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { eventsAPI, hotSpotsAPI, type EventDTO, type HotSpotDTO } from '../api/client';
+import { eventsAPI, hotSpotsAPI, onLocationSaved, type EventDTO, type HotSpotDTO } from '../api/client';
 import { Layout } from '../components/Layout';
 import { PulseRing } from '../components/PulseRing';
 import { CommunityFeed } from '../components/CommunityFeed';
@@ -95,6 +95,18 @@ export function Out() {
     [params, setParams],
   );
 
+  // A brand-new member's first read can land before the server has their
+  // location (empty list, location_required). Reload once when it is saved.
+  const [needsLocation, setNeedsLocation] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  useEffect(() => {
+    if (!needsLocation) return;
+    return onLocationSaved(() => {
+      setNeedsLocation(false);
+      setReloadKey((k) => k + 1);
+    });
+  }, [needsLocation]);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -110,7 +122,10 @@ export function Out() {
                 return;
               }
               const res = await hotSpotsAPI.listNearby(lat, lng, 80);
-              if (!cancelled) setSpots(res.data.spots ?? []);
+              if (!cancelled) {
+                setSpots(res.data.spots ?? []);
+                setNeedsLocation(Boolean((res.data as { location_required?: boolean }).location_required));
+              }
             })(),
           );
         } else if (!cancelled) {
@@ -141,7 +156,7 @@ export function Out() {
     return () => {
       cancelled = true;
     };
-  }, [chip, lat, lng]);
+  }, [chip, lat, lng, reloadKey]);
 
   const visibleSpots = useMemo(
     () => spots.filter((s) => spotMatchesChip(s, chip)),

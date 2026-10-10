@@ -158,8 +158,8 @@ router.post('/:id/check-in', checkInLimiter, async (req: AuthRequest, res: Respo
 
 router.post('/:id/check-out', async (req: AuthRequest, res: Response) => {
   try {
-    await hotSpotsService.checkOut(req.userId!, req.params.id);
-    res.json({ ok: true });
+    const result = await hotSpotsService.checkOut(req.userId!, req.params.id);
+    res.json({ ok: true, spot: result.spot ?? null });
   } catch (err: unknown) {
     res.status(400).json({ error: 'Check-out failed' });
   }
