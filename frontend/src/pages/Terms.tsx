@@ -425,11 +425,9 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>7.6</Strong> Subscriptions auto-renew unless cancelled at least 24 hours
-                  before the renewal date. You can cancel at any time through your account
-                  settings. Premium paid by manual invoice covers the period shown on the invoice
-                  and does not renew automatically. You can cancel an unpaid invoice on the Premium
-                  page.
+                  <Strong>7.6</Strong> Premium runs for the period you have paid for and does not
+                  renew automatically. When that period ends, Premium stops unless you pay a new
+                  invoice. You can cancel an unpaid invoice on the Premium page.
                 </>,
               )}
               {para(
