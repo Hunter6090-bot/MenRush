@@ -30,6 +30,7 @@
     "test:security": "ts-node scripts/security-checks.ts",
     "test:veriff": "ts-node --transpile-only scripts/veriff-checks.ts",
     "test:adult-assurance": "ts-node --transpile-only scripts/adult-assurance-checks.ts",
+    "test:adult-assurance-signup-flag": "ts-node --transpile-only scripts/adult-assurance-signup-flag-checks.ts",
     "test:adult-assurance-rate-limit": "ts-node --transpile-only scripts/adult-assurance-rate-limit-checks.ts",
     "test:rate-limit-client-ip": "ts-node --transpile-only scripts/rate-limit-client-ip-checks.ts",
     "test:edge-proxy-secret": "ts-node --transpile-only scripts/edge-proxy-secret-checks.ts",

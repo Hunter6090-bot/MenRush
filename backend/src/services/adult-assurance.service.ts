@@ -85,13 +85,13 @@ export function isAdultAssuranceTestFixtureAllowed(): boolean {
 }
 
 /**
- * Signup requires a redeemed Veriff adult-assurance token when Veriff is configured,
- * unless explicitly disabled (local / CI without keys).
+ * Signup requires a redeemed Veriff adult-assurance token ONLY when
+ * ADULT_ASSURANCE_SIGNUP_REQUIRED is exactly 'true'. Unset, empty, 'false' or any
+ * other value means OFF, even when Veriff keys are configured (Veriff keys alone
+ * power the optional ID check for the Verified badge, not a signup gate).
  */
 export function isAdultAssuranceRequiredAtSignup(): boolean {
-  if (process.env.ADULT_ASSURANCE_SIGNUP_REQUIRED === 'false') return false;
-  if (process.env.ADULT_ASSURANCE_SIGNUP_REQUIRED === 'true') return true;
-  return isVeriffConfigured();
+  return process.env.ADULT_ASSURANCE_SIGNUP_REQUIRED === 'true';
 }
 
 function hashToken(raw: string): string {
