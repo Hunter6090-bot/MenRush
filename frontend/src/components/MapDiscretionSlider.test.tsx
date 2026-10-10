@@ -3,7 +3,7 @@
  * hears the real distance ('~250 m') and the visible value stays in metres.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MapDiscretionSlider } from './MapDiscretionSlider';
 import { MAP_PIN_FUZZ_STEPS_M } from '../lib/mapPinFuzz';
 
@@ -67,5 +67,58 @@ describe('MapDiscretionSlider reads metres', () => {
     const { range } = setup(250);
     expect(range.getAttribute('aria-valuetext')).not.toMatch(/^\d+$/);
     expect(range.getAttribute('aria-valuetext')).not.toBe(range.value);
+  });
+});
+
+describe('MapDiscretionSlider tooltip', () => {
+  it('says exactly what the setting does', () => {
+    setup(250);
+    expect(screen.getByTestId('map-discretion-slider')).toHaveAttribute(
+      'title',
+      'Your pin moves up to this far from your real spot.',
+    );
+  });
+});
+
+describe('MapDiscretionSlider saves on release, not on every drag move', () => {
+  it('a drag updates the thumb and value live but reports once, on release', () => {
+    const { range, onChange } = setup(250);
+    const start = STEPS.indexOf(250);
+    fireEvent.pointerDown(range);
+    for (const i of [start + 1, start + 2, start + 3]) {
+      fireEvent.change(range, { target: { value: String(i) } });
+      expect(range.value).toBe(String(i));
+      expect(range).toHaveAttribute('aria-valuetext', `~${STEPS[i]} m`);
+      expect(screen.getByTestId('map-discretion-pill')).toHaveTextContent(`~${STEPS[i]} m`);
+    }
+    expect(onChange).not.toHaveBeenCalled();
+    act(() => {
+      window.dispatchEvent(new Event('pointerup'));
+    });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(STEPS[start + 3]);
+  });
+
+  it('a drag that ends where it started does not report', () => {
+    const { range, onChange } = setup(250);
+    const start = STEPS.indexOf(250);
+    fireEvent.pointerDown(range);
+    fireEvent.change(range, { target: { value: String(start + 1) } });
+    fireEvent.change(range, { target: { value: String(start) } });
+    act(() => {
+      window.dispatchEvent(new Event('pointercancel'));
+    });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('keyboard and assistive tech steps report once per step', () => {
+    const { range, onChange } = setup(250);
+    const start = STEPS.indexOf(250);
+    fireEvent.change(range, { target: { value: String(start + 1) } });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenLastCalledWith(STEPS[start + 1]);
+    fireEvent.change(range, { target: { value: String(start - 1) } });
+    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(onChange).toHaveBeenLastCalledWith(STEPS[start - 1]);
   });
 });
