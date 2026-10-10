@@ -227,11 +227,30 @@ async function main() {
     await place(viewer, realLat + 600 / M_PER_DEG_LAT, realLng);
     resetLocationJumpGate();
     const toPinFixed = distanceMeters(realLat + 600 / M_PER_DEG_LAT, realLng, pin.lat, pin.lng);
+    const toRealFixed = distanceMeters(realLat + 600 / M_PER_DEG_LAT, realLng, realLat, realLng);
+    // Pin-only prediction: the first radius on the 10 m grid that reaches the pin.
+    const predictedAppearM = Math.max(800, Math.ceil(toPinFixed / 10) * 10);
+    let firstSeenM = -1;
     for (let rM = 800; rM <= 2400; rM += 10) {
       const res = await userService.getNearbyUsers(viewer, rM / 1000, { discoveryScope: 'radius' }, undefined, { limit: 200 });
       const seen = res.users.some((u: any) => u.id === member);
+      if (seen && firstSeenM < 0) firstSeenM = rM;
       if (Math.abs(toPinFixed - rM) > 5) assert.strictEqual(seen, toPinFixed <= rM, `radius ${rM} m decided by pin`);
     }
+    assert.ok(
+      Math.abs(firstSeenM - predictedAppearM) <= 10,
+      `shrinking radius: member appears at the pin-predicted radius (db ${firstSeenM} m, predicted ${predictedAppearM} m)`,
+    );
+    console.log(
+      `Shrinking radius: member appears at ${firstSeenM} m (pin-predicted ${predictedAppearM} m); ` +
+        `real distance ${toRealFixed.toFixed(0)} m.`,
+    );
+    // Seeded pin: the appear radius is far from his real distance, so the walk
+    // learns the pin, not the real point.
+    assert.ok(
+      Math.abs(firstSeenM - toRealFixed) > 100,
+      `shrinking radius does not reveal the real distance (appears ${firstSeenM} m, real ${toRealFixed.toFixed(0)} m)`,
+    );
 
     // Each member's own Discretion sets the bound (80 m member: tight but still the pin).
     const lowId = seededUuid('radius-oracle:low-discretion');
