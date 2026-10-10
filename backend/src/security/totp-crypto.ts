@@ -12,20 +12,37 @@ import crypto from 'crypto';
  *
  * Keys
  * - Current: TOTP_ENCRYPTION_KEY, or JWT_SECRET when that is unset (unchanged fallback).
- * - Previous (rotation only): TOTP_ENCRYPTION_KEY_PREVIOUS. Decrypt tries current, then previous.
+ * - Previous (rotation or key rollback only): TOTP_ENCRYPTION_KEY_PREVIOUS. Decrypt tries
+ *   current, then previous, so both keys stay readable for the whole window.
+ *
+ * Write format
+ * - Default: v2 under the current key.
+ * - TOTP_WRITE_FORMAT=v1 (code rollback only): every write, and every lazy re-encrypt, is v1
+ *   under the current key, which the pre-v2 code reads. Set it BEFORE `totp:rotate --reverse`
+ *   and keep it until the code revert is live, so no login can write v2 in between.
+ *
+ * Ciphertext checks: the IV must decode to exactly 12 bytes and the tag to exactly 16 bytes,
+ * from strict base64; anything else is rejected before any decrypt is attempted.
  *
  * Never log or return a secret, a key, or the OpenSSL error text.
  */
 
 const ALGO = 'aes-256-gcm';
-const IV_BYTES = 12;
+export const TOTP_IV_BYTES = 12;
+export const TOTP_TAG_BYTES = 16;
 export const TOTP_V2_PREFIX = 'v2:';
 
-/** The only text a client ever sees when a stored secret cannot be read. */
+/**
+ * The only text a client ever sees when a stored secret cannot be read. Honest: the fault is
+ * ours and the member's code may be right. Points only at things that work without 2FA.
+ */
 export const TOTP_DECRYPT_FAILED_MESSAGE =
-  'Could not verify your authenticator code. Try again, or use a trusted device.';
+  "We couldn't check your code because of a problem on our side, so your code may be right. " +
+  'Please try again in a few minutes. If it keeps happening, email support@menrush.com and we will help.';
 /** Shown if no wrap key is configured at all (setup cannot start). */
-export const TOTP_UNAVAILABLE_MESSAGE = 'Two-factor authentication is unavailable right now. Try again later.';
+export const TOTP_UNAVAILABLE_MESSAGE =
+  'Two-factor authentication is unavailable right now because of a problem on our side. ' +
+  'Please try again in a few minutes, or email support@menrush.com.';
 
 export type TotpFailure = 'format' | 'key' | 'config';
 
@@ -74,24 +91,55 @@ export function hasPreviousTotpKey(): boolean {
   return previousRaw() != null;
 }
 
+/** v1 only while a code rollback is in progress (TOTP_WRITE_FORMAT=v1); otherwise v2. */
+export function totpWriteFormat(): TotpVersion {
+  return (process.env.TOTP_WRITE_FORMAT || '').trim().toLowerCase() === 'v1' ? 'v1' : 'v2';
+}
+
 export function totpVersionOf(payload: string): TotpVersion {
   return payload.startsWith(TOTP_V2_PREFIX) ? 'v2' : 'v1';
 }
 
 function seal(secret: string, key: Buffer): string {
-  const iv = crypto.randomBytes(IV_BYTES);
+  const iv = crypto.randomBytes(TOTP_IV_BYTES);
   const cipher = crypto.createCipheriv(ALGO, key, iv);
   const encrypted = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()]);
   const tag = cipher.getAuthTag();
   return `${iv.toString('base64')}.${tag.toString('base64')}.${encrypted.toString('base64')}`;
 }
 
-function open(body: string, key: Buffer): string {
+const STRICT_B64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+
+/** Strict base64 to bytes, or null (Buffer.from would silently skip bad characters). */
+function b64(part: string): Buffer | null {
+  if (!part || !STRICT_B64.test(part)) return null;
+  return Buffer.from(part, 'base64');
+}
+
+interface SealedParts {
+  iv: Buffer;
+  tag: Buffer;
+  ct: Buffer;
+}
+
+/** iv.tag.ct with a 12-byte IV, a 16-byte tag and a non-empty ciphertext, or 'format'. */
+export function parseSealed(body: string): SealedParts {
   const parts = body.split('.');
-  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) throw new TotpCryptoError('format');
-  const decipher = crypto.createDecipheriv(ALGO, key, Buffer.from(parts[0], 'base64'));
-  decipher.setAuthTag(Buffer.from(parts[1], 'base64'));
-  return Buffer.concat([decipher.update(Buffer.from(parts[2], 'base64')), decipher.final()]).toString('utf8');
+  if (parts.length !== 3) throw new TotpCryptoError('format');
+  const iv = b64(parts[0]);
+  const tag = b64(parts[1]);
+  const ct = b64(parts[2]);
+  if (!iv || iv.length !== TOTP_IV_BYTES) throw new TotpCryptoError('format');
+  if (!tag || tag.length !== TOTP_TAG_BYTES) throw new TotpCryptoError('format');
+  if (!ct || ct.length === 0) throw new TotpCryptoError('format');
+  return { iv, tag, ct };
+}
+
+function open(body: string, key: Buffer): string {
+  const { iv, tag, ct } = parseSealed(body);
+  const decipher = crypto.createDecipheriv(ALGO, key, iv, { authTagLength: TOTP_TAG_BYTES });
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(ct), decipher.final()]).toString('utf8');
 }
 
 /** Encrypt with an explicit raw key value (used by the rotation script). */
@@ -113,11 +161,11 @@ export function decryptTotpSecretWith(payload: string, raw: string): string {
   }
 }
 
-/** All new ciphertext: v2 under the current key. */
+/** All new ciphertext: the write format (v2 by default) under the current key. */
 export function encryptTotpSecret(secret: string): string {
   const raw = currentRaw();
   if (!raw) throw new TotpCryptoError('config');
-  return encryptTotpSecretWith(secret, raw, 'v2');
+  return encryptTotpSecretWith(secret, raw, totpWriteFormat());
 }
 
 export interface TotpDecryptResult {
@@ -125,9 +173,10 @@ export interface TotpDecryptResult {
   version: TotpVersion;
   keySlot: TotpKeySlot;
   /**
-   * Re-encrypt to v2 under the current key after a successful verify. Only during a
-   * rotation (previous key configured): read via the previous key, or still v1.
-   * With today's variables (no previous key) this is always false.
+   * Re-encrypt in the write format under the current key after a successful verify.
+   * - v2 (default): only while a previous key is set, and the row is not already
+   *   v2 under the current key. With today's variables (no previous key) always false.
+   * - v1 (code rollback): any row that is not already v1 under the current key.
    */
   needsReencrypt: boolean;
 }
@@ -135,17 +184,21 @@ export interface TotpDecryptResult {
 export function decryptTotpSecretDetailed(payload: string): TotpDecryptResult {
   const version = totpVersionOf(payload);
   const body = version === 'v2' ? payload.slice(TOTP_V2_PREFIX.length) : payload;
-  const parts = body.split('.');
-  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) throw new TotpCryptoError('format');
+  parseSealed(body); // shape, IV and tag length first: 'format' before any key is tried
 
   const current = currentRaw();
   const previous = previousRaw();
   if (!current && !previous) throw new TotpCryptoError('config');
+  const target = totpWriteFormat();
+  const stale = (slot: TotpKeySlot) =>
+    target === 'v1'
+      ? slot !== 'current' || version !== 'v1'
+      : previous != null && (slot !== 'current' || version !== 'v2');
 
   if (current) {
     try {
       const secret = decryptTotpSecretWith(payload, current);
-      return { secret, version, keySlot: 'current', needsReencrypt: previous != null && version === 'v1' };
+      return { secret, version, keySlot: 'current', needsReencrypt: stale('current') };
     } catch {
       /* try the previous key */
     }
@@ -153,7 +206,7 @@ export function decryptTotpSecretDetailed(payload: string): TotpDecryptResult {
   if (previous) {
     try {
       const secret = decryptTotpSecretWith(payload, previous);
-      return { secret, version, keySlot: 'previous', needsReencrypt: true };
+      return { secret, version, keySlot: 'previous', needsReencrypt: stale('previous') };
     } catch {
       /* fall through */
     }

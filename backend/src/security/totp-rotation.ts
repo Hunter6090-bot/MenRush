@@ -8,10 +8,15 @@
  *            previous key), re-encrypted to v2 under the current key, and the new value is
  *            decrypted with the current key alone and compared before the UPDATE. Any failure
  *            rolls the whole transaction back.
- * - verify:  every row must be v2 and decrypt with the CURRENT key alone (previous ignored).
- * - reverse: one transaction, FOR UPDATE. Rewrites every row as v1 under the rollback target:
- *            TOTP_ENCRYPTION_KEY_PREVIOUS when set, else the current key. Checked before commit.
- *            Use before rolling the code back below v2, or before swapping the key back.
+ * - verify:  every row must be in the write format (v2, or v1 during a code rollback) and
+ *            decrypt with the CURRENT key alone (previous ignored).
+ * - reverse: code rollback only. Refuses unless TOTP_WRITE_FORMAT=v1 is set, so the running
+ *            app cannot write v2 again behind it. One transaction, FOR UPDATE: every row is
+ *            rewritten as v1 under the CURRENT key (the key the pre-v2 code will use), checked
+ *            before commit.
+ *
+ * A key rollback (back to the old key, same code) is not "reverse": swap the two variables
+ * (TOTP_ENCRYPTION_KEY=old, TOTP_ENCRYPTION_KEY_PREVIOUS=new) and run apply, then verify.
  */
 import type { Pool, PoolClient } from 'pg';
 import {
@@ -19,6 +24,8 @@ import {
   decryptTotpSecretWith,
   encryptTotpSecretWith,
   totpVersionOf,
+  totpWriteFormat,
+  type TotpVersion,
 } from './totp-crypto';
 
 export type RotationMode = 'dry-run' | 'apply' | 'verify' | 'reverse';
@@ -35,8 +42,10 @@ export interface RotationReport {
   unreadable: number;
   written: number;
   committed: boolean;
-  /** reverse only: which key the v1 rows were written under. */
-  reverseTarget?: 'previous' | 'current';
+  /** The format this run writes or verifies (TOTP_WRITE_FORMAT, default v2). */
+  format: TotpVersion;
+  /** Why a run refused before reading any row (counts are then zero). */
+  refused?: 'reverse-needs-write-format-v1' | 'apply-needs-write-format-v2' | 'no-current-key';
   ok: boolean;
 }
 
@@ -74,7 +83,7 @@ function emptyReport(mode: RotationMode): RotationReport {
   return {
     mode, total: 0, enabled: 0, pending: 0, v1: 0, v2: 0,
     readableWithCurrent: 0, readableOnlyWithPrevious: 0, unreadable: 0,
-    written: 0, committed: false, ok: false,
+    written: 0, committed: false, format: totpWriteFormat(), ok: false,
   };
 }
 
@@ -93,7 +102,20 @@ export async function runTotpRotation(
 ): Promise<RotationReport> {
   const report = emptyReport(mode);
   const current = currentRaw();
-  const previous = process.env.TOTP_ENCRYPTION_KEY_PREVIOUS || null;
+  const format = report.format;
+  // Refuse before touching the DB when the run would fight the running app.
+  if (mode === 'reverse' && format !== 'v1') {
+    report.refused = 'reverse-needs-write-format-v1';
+    return report;
+  }
+  if (mode === 'apply' && format !== 'v2') {
+    report.refused = 'apply-needs-write-format-v2';
+    return report;
+  }
+  if ((mode === 'apply' || mode === 'reverse' || mode === 'verify') && !current) {
+    report.refused = 'no-current-key';
+    return report;
+  }
   const client = await pool.connect();
   const writes = mode === 'apply' || mode === 'reverse';
   try {
@@ -107,8 +129,7 @@ export async function runTotpRotation(
 
       if (mode === 'verify') {
         try {
-          if (!current) throw new Error('no current key');
-          decryptTotpSecretWith(stored, current);
+          decryptTotpSecretWith(stored, current as string);
           report.readableWithCurrent += 1;
         } catch {
           report.unreadable += 1;
@@ -128,18 +149,9 @@ export async function runTotpRotation(
       }
       if (!writes) continue;
 
-      let next: string;
-      if (mode === 'apply') {
-        if (!current) throw new Error('No current TOTP key configured');
-        next = encryptTotpSecretWith(secret, current, 'v2');
-        if (decryptTotpSecretWith(next, current) !== secret) throw new Error('Re-encrypt check failed');
-      } else {
-        const target = previous ?? current;
-        if (!target) throw new Error('No TOTP key configured for reverse');
-        report.reverseTarget = previous ? 'previous' : 'current';
-        next = encryptTotpSecretWith(secret, target, 'v1');
-        if (decryptTotpSecretWith(next, target) !== secret) throw new Error('Reverse check failed');
-      }
+      // apply writes v2, reverse writes v1; both under the current key, checked with it alone.
+      const next = encryptTotpSecretWith(secret, current as string, mode === 'apply' ? 'v2' : 'v1');
+      if (decryptTotpSecretWith(next, current as string) !== secret) throw new Error('Re-encrypt check failed');
       const upd = await client.query(
         `UPDATE users SET totp_secret_encrypted = $1 WHERE id = $2 AND totp_secret_encrypted = $3`,
         [next, row.id, stored],
@@ -148,7 +160,8 @@ export async function runTotpRotation(
     }
 
     if (mode === 'verify') {
-      report.ok = report.unreadable === 0 && report.v1 === 0;
+      const wrongFormat = format === 'v2' ? report.v1 : report.v2;
+      report.ok = report.unreadable === 0 && wrongFormat === 0;
       await client.query('ROLLBACK');
       return report;
     }
@@ -182,16 +195,16 @@ export async function runTotpRotation(
 /** Counts only, one line per field, for the CLI. */
 export function formatRotationReport(r: RotationReport): string {
   const lines = [
-    `mode=${r.mode}`,
+    `mode=${r.mode} format=${r.format}`,
     `rows=${r.total} enabled=${r.enabled} pending=${r.pending}`,
     `format v1=${r.v1} v2=${r.v2}`,
     r.mode === 'verify'
       ? `readable_with_new_key_alone=${r.readableWithCurrent} unreadable=${r.unreadable}`
       : `readable current=${r.readableWithCurrent} previous_only=${r.readableOnlyWithPrevious} unreadable=${r.unreadable}`,
   ];
+  if (r.refused) lines.push(`refused=${r.refused}`);
   if (r.mode === 'apply' || r.mode === 'reverse') {
     lines.push(`written=${r.written} committed=${r.committed}`);
-    if (r.reverseTarget) lines.push(`reverse_target=${r.reverseTarget}_key`);
   }
   lines.push(`result=${r.ok ? 'OK' : 'NOT OK'}`);
   return lines.join('\n');

@@ -226,7 +226,11 @@ export const Login = () => {
             </div>
           )}
 
-          {error ? <p className={publicErrorClass}>{error}</p> : null}
+          {error ? (
+            <p className={pendingToken ? 'text-[15px] font-semibold leading-snug text-[#B0432E]' : publicErrorClass}>
+              {error}
+            </p>
+          ) : null}
 
           <button type="submit" disabled={loading} className={publicPrimaryButtonClass}>
             {loading ? (

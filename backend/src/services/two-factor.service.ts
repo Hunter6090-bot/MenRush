@@ -1,7 +1,6 @@
 import { authenticator } from 'otplib';
 import { query } from '../db';
 import {
-  TOTP_DECRYPT_FAILED_MESSAGE,
   TotpCryptoError,
   decryptTotpSecretDetailed,
   encryptTotpSecret,
@@ -14,14 +13,15 @@ const ISSUER = 'MenRush';
 
 type StoredSecret = TotpDecryptResult & { stored: string };
 
-/** Decrypt a stored secret. Logs carry the user id and failure type only. */
-function openStored(userId: string, stored: string): StoredSecret {
+/** Decrypt a stored secret. Logs carry the failure type only: never a member id or value. */
+function openStored(stored: string): StoredSecret {
   try {
     return { ...decryptTotpSecretDetailed(stored), stored };
   } catch (err) {
     const failure = err instanceof TotpCryptoError ? err.failure : 'unknown';
-    console.warn(`[2fa] decrypt failed user=${userId} failure=${failure}`);
-    throw new Error(TOTP_DECRYPT_FAILED_MESSAGE);
+    console.warn(`[2fa] decrypt failed failure=${failure}`);
+    // TotpCryptoError carries only the fixed friendly text; anything else becomes it too.
+    throw err instanceof TotpCryptoError ? err : new TotpCryptoError('key');
   }
 }
 
@@ -40,7 +40,7 @@ async function reencryptIfNeeded(userId: string, opened: StoredSecret): Promise<
     );
   } catch (err) {
     const failure = err instanceof TotpCryptoError ? err.failure : 'reencrypt';
-    console.warn(`[2fa] re-encrypt skipped user=${userId} failure=${failure}`);
+    console.warn(`[2fa] re-encrypt skipped failure=${failure}`);
   }
 }
 
@@ -74,8 +74,8 @@ export const twoFactorService = {
       encrypted = encryptTotpSecret(secret);
     } catch (err) {
       const failure = err instanceof TotpCryptoError ? err.failure : 'unknown';
-      console.warn(`[2fa] encrypt failed user=${userId} failure=${failure}`);
-      throw err instanceof TotpCryptoError ? err : new Error(TOTP_DECRYPT_FAILED_MESSAGE);
+      console.warn(`[2fa] encrypt failed failure=${failure}`);
+      throw err instanceof TotpCryptoError ? err : new TotpCryptoError('config');
     }
 
     await query(
@@ -176,7 +176,7 @@ export const twoFactorService = {
     if (row.totp_enabled) {
       throw new Error('Two-factor authentication is already enabled');
     }
-    return openStored(userId, row.totp_secret_encrypted);
+    return openStored(row.totp_secret_encrypted);
   },
 
   async requireEnabledSecret(userId: string): Promise<string> {
@@ -193,6 +193,6 @@ export const twoFactorService = {
     if (!row.totp_enabled || !row.totp_secret_encrypted) {
       throw new Error('Two-factor authentication is not enabled');
     }
-    return openStored(userId, row.totp_secret_encrypted);
+    return openStored(row.totp_secret_encrypted);
   },
 };
