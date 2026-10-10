@@ -51,7 +51,7 @@ export function CruisingSpotCard({
         <div className="flex flex-wrap items-center gap-1.5">
           <span
             data-testid="cruising-category-badge"
-            className="inline-flex items-center gap-1 rounded-full border border-[#C4832A]/30 bg-[#C4832A]/10 px-2.5 py-0.5 text-[15px] font-bold text-[#E0A14A]"
+            className="inline-flex items-center gap-1 rounded-full border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--nn-accent-text)_10%,transparent)] px-2.5 py-0.5 text-[15px] font-bold text-[var(--nn-accent-text)]"
           >
             <SpotTypeIcon type={spotTypeKey(category)} size={16} />
             <span>{categoryMeta.label}</span>
