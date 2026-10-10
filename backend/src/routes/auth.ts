@@ -395,15 +395,32 @@ router.post('/reset-password', resetPasswordLimiter, async (req: AuthRequest, re
 });
 
 router.post('/change-password', authMiddleware, accountChangeLimiter, async (req: AuthRequest, res: Response) => {
+  // A wrong or missing current password is a form error, not an expired
+  // session: never 401 here, or the client interceptor signs the member out.
+  const currentRaw = req.body?.current_password;
+  if (typeof currentRaw !== 'string' || currentRaw.length === 0) {
+    return res
+      .status(400)
+      .json({ error: 'Current password is required', code: 'current_password_required' });
+  }
   try {
     const data = ChangePasswordSchema.parse(req.body);
     await authService.changePassword(req.userId!, data);
-    res.json({ ok: true, message: 'Password updated.' });
+    // changePassword signs out every session. Give this browser a fresh one so
+    // the member stays signed in here; other devices sign in again.
+    const refreshToken = await authSessionService.create(req.userId!, req.get('user-agent'));
+    res.json({
+      ok: true,
+      message: 'Password updated.',
+      token: authService.issueAccessToken(req.userId!),
+      refresh_token: refreshToken,
+    });
   } catch (error: any) {
     const msg = error?.message || 'Could not change password';
-    const status =
-      msg === 'Current password is incorrect' || msg === 'User not found' ? 401 : 400;
-    res.status(status).json({ error: msg });
+    if (msg === 'Current password is incorrect') {
+      return res.status(400).json({ error: msg, code: 'wrong_current_password' });
+    }
+    res.status(msg === 'User not found' ? 401 : 400).json({ error: msg });
   }
 });
 

@@ -35,6 +35,7 @@
     "test:edge-proxy-secret": "ts-node --transpile-only scripts/edge-proxy-secret-checks.ts",
     "test:auth-rate-limits": "ts-node --transpile-only scripts/auth-rate-limits-checks.ts",
     "test:auth-token-hardening": "ts-node --transpile-only scripts/auth-token-hardening-checks.ts",
+    "test:change-password-integration": "ts-node --transpile-only scripts/change-password-integration.ts",
     "test:auth-token-hardening-integration": "ts-node --transpile-only scripts/auth-token-hardening-integration.ts",
     "test:video-note-mime": "ts-node scripts/video-note-mime-checks.ts",
     "test:discovery-age-filter": "ts-node scripts/discovery-age-filter-checks.ts",

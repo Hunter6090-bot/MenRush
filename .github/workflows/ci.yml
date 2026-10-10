@@ -194,6 +194,8 @@ jobs:
         run: npm run test:pride-invite-register-integration
       - name: Auth token hardening on protected routes (real PG)
         run: npm run test:auth-token-hardening-integration
+      - name: Settings change password keeps the member signed in (real PG)
+        run: npm run test:change-password-integration
       - name: Referrals grant 1 month Premium every 3 (real PG)
         run: npm run test:referral-grant-integration
       - name: Referral checks (real PG)

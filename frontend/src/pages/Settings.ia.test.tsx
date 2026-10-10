@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   getAccount: vi.fn(),
   changeEmail: vi.fn(),
   changePassword: vi.fn(),
+  setTokens: vi.fn(),
   deleteAccount: vi.fn(),
   getBlockedUsers: vi.fn(),
   unblockUser: vi.fn(),
@@ -69,6 +70,7 @@ vi.mock('../hooks/store', () => ({
       refreshToken: 'refresh-token-123',
       logout: mocks.logout,
       patchUser: mocks.patchUser,
+      setTokens: mocks.setTokens,
     };
     return typeof sel === 'function' ? sel(state) : state;
   },
@@ -432,5 +434,51 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     expect(shell.querySelector('a[href*="x.com"]')).not.toBeInTheDocument();
     expect(shell.querySelector('a[href*="tiktok.com"]')).not.toBeInTheDocument();
     expect(shell.querySelector('a[href*="facebook.com"]')).not.toBeInTheDocument();
+  });
+  function openPasswordForm() {
+    const pwCard = screen.getByTestId('settings-change-password');
+    fireEvent.click(pwCard.querySelector('button')!);
+    fireEvent.change(screen.getByLabelText('Current password'), { target: { value: 'OldPass123!' } });
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'NewPass123!' } });
+    fireEvent.change(screen.getByLabelText('Confirm new password'), { target: { value: 'NewPass123!' } });
+  }
+
+  it('change password keeps this session: stores fresh tokens and shows 15px copy', async () => {
+    mocks.changePassword.mockResolvedValue({
+      data: { ok: true, message: 'Password updated.', token: 'fresh-access', refresh_token: 'fresh-refresh' },
+    });
+    render(
+      <MemoryRouter>
+        <Settings />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByTestId('settings-change-password')).toBeInTheDocument());
+    openPasswordForm();
+    fireEvent.click(screen.getByRole('button', { name: 'Update password' }));
+
+    await waitFor(() => expect(mocks.setTokens).toHaveBeenCalledWith('fresh-access', 'fresh-refresh'));
+    const ok = await screen.findByTestId('password-updated');
+    expect(ok).toHaveTextContent(/You are still signed in here/i);
+    expect(ok).toHaveTextContent(/other devices you will need to sign in again/i);
+    expect(ok.className).toContain('text-[15px]');
+    expect(mocks.logout).not.toHaveBeenCalled();
+  });
+
+  it('wrong current password shows a form error and does not sign out', async () => {
+    mocks.changePassword.mockRejectedValue({
+      response: { status: 400, data: { error: 'Current password is incorrect', code: 'wrong_current_password' } },
+    });
+    render(
+      <MemoryRouter>
+        <Settings />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByTestId('settings-change-password')).toBeInTheDocument());
+    openPasswordForm();
+    fireEvent.click(screen.getByRole('button', { name: 'Update password' }));
+
+    expect(await screen.findByText('Current password is incorrect')).toBeInTheDocument();
+    expect(mocks.setTokens).not.toHaveBeenCalled();
+    expect(mocks.logout).not.toHaveBeenCalled();
   });
 });

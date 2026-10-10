@@ -69,6 +69,7 @@ export const Settings = () => {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const refreshToken = useAuthStore((s) => s.refreshToken);
+  const setTokens = useAuthStore((s) => s.setTokens);
   const patchUser = useAuthStore((s) => s.patchUser);
   const storeEmail = useAuthStore((s) => s.user?.email);
   const setLocation = useLocationStore((s) => s.setLocation);
@@ -320,12 +321,18 @@ export const Settings = () => {
 
     setPwBusy(true);
     try {
-      await authAPI.changePassword({
+      const res = await authAPI.changePassword({
         current_password: currentPassword,
         new_password: newPassword,
       });
       clearDeviceTrustToken();
-      setPwSuccess('Password updated.');
+      // The server signs out every other session and hands this one a fresh token.
+      if (res?.data?.token && res?.data?.refresh_token) {
+        setTokens(res.data.token, res.data.refresh_token);
+      }
+      setPwSuccess(
+        'Password updated. You are still signed in here. On your other devices you will need to sign in again with your new password.',
+      );
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -677,7 +684,9 @@ export const Settings = () => {
                   </div>
 
                   {pwSuccess && !showChangePassword ? (
-                    <p className="mt-3 text-[13px] font-semibold text-[#8FC773]">{pwSuccess}</p>
+                    <p data-testid="password-updated" role="status" className="mt-3 text-[15px] font-semibold text-[#8FC773]">
+                      {pwSuccess}
+                    </p>
                   ) : null}
 
                   {showChangePassword ? (
