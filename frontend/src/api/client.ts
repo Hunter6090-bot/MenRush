@@ -589,20 +589,36 @@ export const usersAPI = {
         reason: string;
         details?: string | null;
         status: string;
+        legal_hold?: boolean;
         created_at: string;
         resolved_at?: string | null;
-        reporter_id: string;
-        reporter_name: string;
-        reporter_email: string;
+        closed_at?: string | null;
+        reporter_id?: string | null;
+        reporter_name?: string | null;
+        reporter_email?: string | null;
+        reporter_account_deleted_at?: string | null;
         reported_id?: string | null;
         reported_name?: string | null;
         /** Set when the reported member deleted their account (report kept). */
         reported_account_deleted_at?: string | null;
         reported_email?: string | null;
+        evidence_unavailable?: boolean;
+        evidence?: Array<{
+          id?: string;
+          kind: string;
+          body?: string | null;
+          media_type?: string | null;
+          media_ref?: string | null;
+          media_available?: boolean;
+          from_reported?: boolean;
+          sent_at?: string | null;
+        }>;
       }>;
     }>('/users/reports'),
   updateReportStatus: (id: string, status: 'open' | 'reviewing' | 'actioned' | 'dismissed') =>
     apiClient.patch(`/users/reports/${id}`, { status }),
+  getReportEvidenceMedia: (reportId: string, evidenceId: string) =>
+    apiClient.get(`/users/reports/${reportId}/evidence/${evidenceId}/media`, { responseType: 'blob' }),
 };
 
 export const notificationsAPI = {

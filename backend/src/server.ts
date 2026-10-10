@@ -992,6 +992,6 @@ server.listen(PORT, () => {
   startTravelTripRetentionWorker();
   // Off unless LOCATION_PURGE_ENABLED=true (periods TBD, see config/locationRetention.ts).
   startLocationRetentionWorker();
-  // Off unless REPORT_RETENTION_PURGE_ENABLED=true (period pending Al).
+  // Off unless REPORT_PURGE_ENABLED=true (period pending Al).
   startReportRetentionWorker();
 });

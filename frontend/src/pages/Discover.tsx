@@ -2403,7 +2403,7 @@ export const Discover = () => {
                     <>
                       <span className="font-extrabold text-[var(--cream-soft)]">Men nearby</span>
                       {liveCount > 0 ? (
-                        <span className="ml-1.5 font-semibold text-[var(--status-online)]" data-testid="nearby-live-count">
+                        <span className="ml-1.5 font-semibold text-[var(--status-online-text)]" data-testid="nearby-live-count">
                           · {liveCount} live
                         </span>
                       ) : nearbyCount > 0 ? (
@@ -2588,7 +2588,7 @@ export const Discover = () => {
                     <>
                       <span className="font-extrabold text-[var(--cream-soft)]">Men nearby</span>
                       {liveCount > 0 ? (
-                        <span className="ml-1.5 font-semibold text-[var(--status-online)]" data-testid="nearby-live-count">
+                        <span className="ml-1.5 font-semibold text-[var(--status-online-text)]" data-testid="nearby-live-count">
                           · {liveCount} live
                         </span>
                       ) : nearbyCount > 0 ? (
