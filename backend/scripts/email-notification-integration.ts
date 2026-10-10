@@ -35,13 +35,21 @@ async function main() {
     `SELECT column_name FROM information_schema.columns
       WHERE table_name = 'users'
         AND column_name IN (
-          'email_notify_messages', 'email_notify_matches', 'email_notify_jerks', 'email_unsub_version'
+          'email_notify_messages', 'email_notify_matches', 'email_notify_jerks',
+          'email_unsub_version_message', 'email_unsub_version_match', 'email_unsub_version_jerk'
         )
       ORDER BY column_name`,
   );
   assert.deepStrictEqual(
     col.rows.map((r: { column_name: string }) => r.column_name),
-    ['email_notify_jerks', 'email_notify_matches', 'email_notify_messages', 'email_unsub_version'],
+    [
+      'email_notify_jerks',
+      'email_notify_matches',
+      'email_notify_messages',
+      'email_unsub_version_jerk',
+      'email_unsub_version_match',
+      'email_unsub_version_message',
+    ],
   );
   const table = await query(
     `SELECT 1 FROM information_schema.tables WHERE table_name = 'email_notification_sends'`,
@@ -224,10 +232,37 @@ async function main() {
     });
     assert.deepStrictEqual(result, { status: 'skipped', reason: 'opt_out' });
 
+    assert.ok(!/\u2014|\u2013/.test(confirmPage), 'confirm page has no em/en dash');
+    assert.match(confirmPage, /<title>Stop these emails\? MenRush<\/title>/);
+
     const replay = await fetch(`http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(token)}`, {
       method: 'POST',
     });
     assert.strictEqual(replay.status, 400, 'version bump revokes the used token');
+
+    // Per-type version: opting out of messages leaves the matches link working.
+    const typed = await makeUser('UnsubTyped');
+    const messageTok = await svc.issueUnsubscribeToken(typed.id, 'message');
+    const matchTok = await svc.issueUnsubscribeToken(typed.id, 'match');
+    const unsubMessages = await fetch(
+      `http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(messageTok)}`,
+      { method: 'POST' },
+    );
+    assert.strictEqual(unsubMessages.status, 200);
+    prefs = await svc.getEmailNotifyPrefs(typed.id);
+    assert.deepStrictEqual(prefs, { messages: false, matches: true, jerks: true });
+    const matchStill = await fetch(
+      `http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(matchTok)}`,
+      { method: 'POST' },
+    );
+    assert.strictEqual(matchStill.status, 200, 'matches link still works after messages opt-out');
+    prefs = await svc.getEmailNotifyPrefs(typed.id);
+    assert.deepStrictEqual(prefs, { messages: false, matches: false, jerks: true });
+    const messageReplay = await fetch(
+      `http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(messageTok)}`,
+      { method: 'POST' },
+    );
+    assert.strictEqual(messageReplay.status, 400);
 
     // Unsub token is not a login.
     const loginProbe = await svc.issueUnsubscribeToken(unsubUser.id, 'message');

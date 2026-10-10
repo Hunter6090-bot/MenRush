@@ -128,6 +128,13 @@ async function main() {
   assert.match(svcSrc, /EMAIL_UNSUB_SECRET/);
   assert.match(svcSrc, /email-unsub-v1/);
   assert.ok(!/JWT_SECRET \|\|/.test(svcSrc), 'unsub must not fall back to JWT_SECRET as the HMAC key');
+  assert.match(svcSrc, /email_unsub_version_message/);
+  assert.match(svcSrc, /email_unsub_version_match/);
+  assert.match(svcSrc, /email_unsub_version_jerk/);
+
+  const unsubSrc = fs.readFileSync(path.join(__dirname, '../src/routes/email-unsubscribe.ts'), 'utf8');
+  assert.ok(!/\u2014|\u2013/.test(unsubSrc), 'unsubscribe page copy has no em/en dash');
+  assert.match(unsubSrc, /Stop these emails\? MenRush/);
 
   assert.strictEqual(svc.isEmailNotificationsEnabled(), false);
   assert.strictEqual(svc.showSenderName(), false);

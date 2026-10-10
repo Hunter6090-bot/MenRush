@@ -65,6 +65,12 @@ const PREF_COLUMN: Record<EmailNotifyType, string> = {
   jerk: 'email_notify_jerks',
 };
 
+const UNSUB_VERSION_COLUMN: Record<EmailNotifyType, string> = {
+  message: 'email_unsub_version_message',
+  match: 'email_unsub_version_match',
+  jerk: 'email_unsub_version_jerk',
+};
+
 type Sender = (params: SendEmailParams) => Promise<{ id: string }>;
 
 let senderOverride: Sender | null = null;
@@ -121,7 +127,7 @@ export function settingsEmailNotificationsUrl(): string {
 /** Distinct from login tokens. The hotfix that rejects purpose on login is not required. */
 export const EMAIL_UNSUB_PURPOSE = 'email-unsub-v1' as const;
 export const EMAIL_UNSUB_KEY_INFO = 'email-unsub-v1';
-/** 90 days — short-lived relative to a login, and revocable via email_unsub_version. */
+/** 90 days. Short-lived relative to a login, and revocable per type. */
 export const EMAIL_UNSUB_TTL_SECONDS = 90 * 24 * 60 * 60;
 
 /**
@@ -200,20 +206,21 @@ export function verifyUnsubscribeToken(token: string): UnsubscribePayload {
   return payload;
 }
 
-export async function currentUnsubVersion(userId: string): Promise<number | null> {
-  const result = await query(
-    `SELECT email_unsub_version AS v FROM users WHERE id = $1`,
-    [userId],
-  );
+export async function currentUnsubVersion(
+  userId: string,
+  type: EmailNotifyType,
+): Promise<number | null> {
+  const col = UNSUB_VERSION_COLUMN[type];
+  const result = await query(`SELECT ${col} AS v FROM users WHERE id = $1`, [userId]);
   if (!result.rows[0]) return null;
   const v = Number(result.rows[0].v);
   return Number.isInteger(v) ? v : 1;
 }
 
-/** Verify signature, purpose, expiry, and the live per-user version. */
+/** Verify signature, purpose, expiry, and the live version for that type. */
 export async function readValidUnsubscribeToken(token: string): Promise<UnsubscribePayload> {
   const payload = verifyUnsubscribeToken(token);
-  const version = await currentUnsubVersion(payload.userId);
+  const version = await currentUnsubVersion(payload.userId, payload.type);
   if (version === null || version !== payload.v) {
     throw new Error('revoked_token');
   }
@@ -225,7 +232,7 @@ export async function issueUnsubscribeToken(
   type: EmailNotifyType,
   ttlSeconds = EMAIL_UNSUB_TTL_SECONDS,
 ): Promise<string> {
-  const version = (await currentUnsubVersion(userId)) ?? 1;
+  const version = (await currentUnsubVersion(userId, type)) ?? 1;
   return signUnsubscribeToken(userId, type, { ttlSeconds, version });
 }
 
@@ -291,10 +298,11 @@ export async function setEmailNotifyPrefs(
 
 export async function optOutType(userId: string, type: EmailNotifyType): Promise<boolean> {
   const col = PREF_COLUMN[type];
+  const versionCol = UNSUB_VERSION_COLUMN[type];
   const result = await query(
     `UPDATE users
         SET ${col} = FALSE,
-            email_unsub_version = email_unsub_version + 1,
+            ${versionCol} = ${versionCol} + 1,
             updated_at = NOW()
       WHERE id = $1
       RETURNING id`,

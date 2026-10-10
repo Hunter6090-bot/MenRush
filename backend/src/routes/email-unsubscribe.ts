@@ -84,7 +84,7 @@ function confirmHtml(action: string): string {
       <button type="submit">Stop these emails</button>
     </form>
     <p><a href="https://menrush.com/settings#email-notifications">Email notifications in Settings</a></p>`,
-    'Stop these emails? — MenRush',
+    'Stop these emails? MenRush',
   );
 }
 
