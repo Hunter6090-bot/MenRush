@@ -12,7 +12,7 @@ export const requirePremium =
         throw new PremiumRequiredError(
           'premium_required',
           'unlimited_photos',
-          'Premium subscription required',
+          'Premium required',
         );
       }
       next();

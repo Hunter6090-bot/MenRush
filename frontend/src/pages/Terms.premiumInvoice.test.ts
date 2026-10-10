@@ -17,7 +17,15 @@ const S73 =
   '7.3</Strong> Card payments are not available yet. Before card payment opens, we will update these Terms and tell you who processes card payments. For now, you can buy Premium by manual invoice from the Premium page.';
 
 const S75 =
-  '7.5</Strong> Prices are shown in pounds sterling (GBP). The price shown on your invoice or at checkout is the full amount you pay us, and if VAT applies it is shown there. If we change the price of Premium, the new price applies only to Premium you buy after the change, and you will see it before you pay.';
+  '7.5</Strong> Prices are shown in pounds sterling (GBP). The price shown on your invoice is the full amount you pay us, and if VAT applies it is shown there. If we change the price of Premium, the new price applies only to Premium you buy after the change, and you will see it before you pay.';
+
+const S8: Array<[string, string]> = [
+  ['8.1', 'You can cancel a Premium purchase within 14 days of buying it, as set out in section 7.6A. If you asked for Premium to start as soon as your payment was confirmed, your refund is reduced for the days of Premium you have had. Otherwise you get a full refund.'],
+  ['8.2', 'After those 14 days, we do not refund the rest of a Premium period you have started, unless the law gives you a right to a refund or we have made a mistake.'],
+  ['8.3', 'If Premium does not work as described, or we charged you wrongly, please email support@menrush.com and we will put it right, which may include a refund. Nothing in these Terms affects your legal rights.'],
+  ['8.4', 'We send refunds to the account you paid from, within 14 days of agreeing them.'],
+  ['8.5', 'If we close your account because you broke these Terms, we may not refund unused Premium, except where the law says we must.'],
+];
 
 const section7 = () => {
   const start = terms.indexOf('{/* 7. Premium');
@@ -40,6 +48,22 @@ describe('Terms section 7 manual invoice wording', () => {
     expect(s7).toMatch(/does not renew automatically/);
     expect(terms).toMatch(/title: 'Premium' \}/);
     expect(s7).toContain('You buy Premium as a one-off purchase for a fixed period.');
+  });
+
+  it('section 8 is Legal wording exactly, titled Refunds and cancellation, with nothing else in it', () => {
+    expect(terms).toMatch(/\{ id: 'refunds', number: '8', title: 'Refunds and cancellation' \}/);
+    const start = terms.indexOf('{/* 8. Refunds and cancellation */}');
+    const end = terms.indexOf('{/* 9.');
+    expect(start).toBeGreaterThan(-1);
+    const s8 = terms.slice(start, end);
+    for (const [n, text] of S8) expect(s8).toContain(`<Strong>${n}</Strong> ${text}`);
+    expect((s8.match(/<Strong>8\.\d+<\/Strong>/g) ?? []).length).toBe(S8.length);
+  });
+
+  it("no 'non-refundable' or 'waived' anywhere in the Terms, and no 'checkout' in section 7", () => {
+    expect(terms).not.toMatch(/non-?refundable/i);
+    expect(terms).not.toMatch(/waived?/i);
+    expect(section7()).not.toMatch(/checkout/i);
   });
 
   it('section 7 has no em or en dashes', () => {

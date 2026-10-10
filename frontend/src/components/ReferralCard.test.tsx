@@ -97,6 +97,8 @@ describe('ReferralCard', () => {
     );
     for (const line of Object.values(REFERRAL_WHEN_COPY)) {
       expect(line).not.toMatch(/beta|[\u2013\u2014]|£|\$|payout/i);
+      // Premium is a one-off purchase: nothing renews and there is no subscription to cancel.
+      expect(line).not.toMatch(/renew|subscri|cancel/i);
     }
   });
 

@@ -363,7 +363,7 @@ export const premiumService = {
       throw new PremiumRequiredError(
         'premium_required',
         feature,
-        'Premium subscription required',
+        'Premium required',
       );
     }
   },

@@ -12,7 +12,7 @@ export const REFERRAL_WHEN_COPY: Record<RewardMode, string> = {
   free_for_everyone:
     'While Premium is free for everyone, your earned months are saved and start when free Premium ends.',
   open_ended: 'Your Premium has no end date, so your earned months are saved and start only if it ends.',
-  paid: 'Each month you earn is added after your current paid period and stays if you renew or cancel.',
+  paid: 'Each month you earn is added after the end of the Premium you have paid for. You keep it when that Premium ends, and if you buy more Premium.',
   end_date: 'Each month you earn is added after your current Premium end date.',
   no_end_date: 'Each month you earn starts the day you earn it.',
 };

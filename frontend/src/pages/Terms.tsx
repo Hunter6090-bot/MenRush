@@ -16,7 +16,7 @@ const SECTIONS: Section[] = [
   { id: 'user-content', number: '5', title: 'User Content' },
   { id: 'location-services', number: '6', title: 'Location Services' },
   { id: 'premium-subscription', number: '7', title: 'Premium' },
-  { id: 'refunds', number: '8', title: 'Refunds' },
+  { id: 'refunds', number: '8', title: 'Refunds and cancellation' },
   { id: 'intellectual-property', number: '9', title: 'Intellectual Property' },
   { id: 'privacy', number: '10', title: 'Privacy' },
   { id: 'disclaimers', number: '11', title: 'Disclaimers' },
@@ -418,9 +418,9 @@ export const Terms = () => {
               {para(
                 <>
                   <Strong>7.5</Strong> Prices are shown in pounds sterling (GBP). The price shown on
-                  your invoice or at checkout is the full amount you pay us, and if VAT applies it is
-                  shown there. If we change the price of Premium, the new price applies only to Premium
-                  you buy after the change, and you will see it before you pay.
+                  your invoice is the full amount you pay us, and if VAT applies it is shown there. If
+                  we change the price of Premium, the new price applies only to Premium you buy after
+                  the change, and you will see it before you pay.
                 </>,
               )}
               {para(
@@ -490,27 +490,41 @@ export const Terms = () => {
               )}
             </section>
 
-            {/* 8. Refunds */}
+            {/* 8. Refunds and cancellation */}
             <section>
               {sectionHeading(SECTIONS[7])}
               {para(
                 <>
-                  <Strong>8.1</Strong> All subscription payments are non-refundable except where
-                  required by applicable law.
+                  <Strong>8.1</Strong> You can cancel a Premium purchase within 14 days of buying it,
+                  as set out in section 7.6A. If you asked for Premium to start as soon as your
+                  payment was confirmed, your refund is reduced for the days of Premium you have had.
+                  Otherwise you get a full refund.
                 </>,
               )}
               {para(
                 <>
-                  <Strong>8.2</Strong> If you believe a charge was made in error, contact us at{' '}
-                  <A href="mailto:support@menrush.com">support@menrush.com</A> within 14 days of
-                  the charge.
+                  <Strong>8.2</Strong> After those 14 days, we do not refund the rest of a Premium
+                  period you have started, unless the law gives you a right to a refund or we have
+                  made a mistake.
                 </>,
               )}
               {para(
                 <>
-                  <Strong>8.3</Strong> Under UK consumer law, you have a 14-day cooling-off period
-                  for digital services. By accessing Premium features immediately after purchase,
-                  you acknowledge that this right may be waived.
+                  <Strong>8.3</Strong> If Premium does not work as described, or we charged you
+                  wrongly, please email support@menrush.com and we will put it right, which may
+                  include a refund. Nothing in these Terms affects your legal rights.
+                </>,
+              )}
+              {para(
+                <>
+                  <Strong>8.4</Strong> We send refunds to the account you paid from, within 14 days of
+                  agreeing them.
+                </>,
+              )}
+              {para(
+                <>
+                  <Strong>8.5</Strong> If we close your account because you broke these Terms, we may
+                  not refund unused Premium, except where the law says we must.
                 </>,
               )}
             </section>
