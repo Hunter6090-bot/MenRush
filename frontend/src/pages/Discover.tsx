@@ -2354,6 +2354,7 @@ export const Discover = () => {
             pinNoteText={
               !needsLocationGate && !tokenMissing ? formatFuzzPrivacyNote(mapPinFuzzM) : null
             }
+            spotsLayerOn={hotSpotsLayerOn}
             footer={
               !loading && nearbyCount === 0 && !allScope && !needsLocationGate ? (
                 <MapEmptyRadius compact nextRadiusKm={nextWidenRadiusKm} onWiden={handleRadiusCycle} />
@@ -2500,6 +2501,7 @@ export const Discover = () => {
               pinNoteText={
                 !needsLocationGate && !tokenMissing ? formatFuzzPrivacyNote(mapPinFuzzM) : null
               }
+              spotsLayerOn={hotSpotsLayerOn}
               footer={
                 !loading && nearbyCount === 0 && !allScope && !needsLocationGate ? (
                   <MapEmptyRadius compact nextRadiusKm={nextWidenRadiusKm} onWiden={handleRadiusCycle} />

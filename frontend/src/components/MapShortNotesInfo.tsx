@@ -1,36 +1,77 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { dismissHotSpotsMapBanner, isHotSpotsMapBannerDismissed } from '../lib/hotSpotsMapBanner';
 import { dismissMapPrivacyNote, isMapPrivacyNoteDismissed } from './MapPrivacyNote';
 
 /**
  * Short-map access to the 18+ spots note and Discretion pin note.
- * One 44px info button on the pills row; a copper dot while either note
- * is still unread. Closes write the same dismiss keys as the tall-map cards.
+ * One 44px info button on the pills row. The copper unread dot includes
+ * the 18+ note only while the Spots layer is on. Closes write the same
+ * dismiss keys as the tall-map cards. Escape and an outside tap close
+ * the sheet and return focus to the button.
  */
 export function MapShortNotesInfo({
   spotsText,
   pinText,
+  spotsLayerOn = true,
 }: {
   spotsText?: string | null;
   pinText?: string | null;
+  /** 18+ unread / sheet copy only while the Spots layer is on. */
+  spotsLayerOn?: boolean;
 }) {
   const [spotsOn, setSpotsOn] = useState(() => Boolean(spotsText) && !isHotSpotsMapBannerDismissed());
   const [pinOn, setPinOn] = useState(() => Boolean(pinText) && !isMapPrivacyNoteDismissed());
   const [open, setOpen] = useState(false);
+  const infoRef = useRef<HTMLButtonElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
 
-  const unread = spotsOn || pinOn;
+  const spotsUnread = Boolean(spotsText) && spotsLayerOn && spotsOn;
+  const pinUnread = Boolean(pinText) && pinOn;
+  const unread = spotsUnread || pinUnread;
+
+  const closeSheet = (refocus = true) => {
+    setOpen(false);
+    if (refocus) {
+      queueMicrotask(() => infoRef.current?.focus());
+    }
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeSheet(true);
+      }
+    };
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (infoRef.current?.contains(target) || sheetRef.current?.contains(target)) return;
+      e.preventDefault();
+      closeSheet(true);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('touchstart', onDown);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('touchstart', onDown);
+    };
+  }, [open]);
+
   if (!unread && !open) return null;
 
   const closeSpots = () => {
     dismissHotSpotsMapBanner();
     setSpotsOn(false);
-    if (!pinOn) setOpen(false);
+    if (!pinUnread) closeSheet(true);
   };
   const closePin = () => {
     dismissMapPrivacyNote();
     setPinOn(false);
-    if (!spotsOn) setOpen(false);
+    if (!spotsUnread) closeSheet(true);
   };
 
   const stack = typeof document !== 'undefined'
@@ -39,12 +80,13 @@ export function MapShortNotesInfo({
 
   const sheet = open ? (
     <div
-      className="pointer-events-auto absolute left-3 right-14 top-full z-30 mt-2 max-h-[min(14rem,40vh)] overflow-y-auto rounded-2xl border border-[var(--border-default)] bg-[rgba(30,21,8,0.96)] p-2 shadow-lg"
+      ref={sheetRef}
+      className="pointer-events-auto absolute left-1/2 top-full z-40 mt-2 w-[min(26rem,calc(100%-5.5rem))] max-h-[min(11rem,32vh)] -translate-x-1/2 overflow-y-auto rounded-2xl border border-[var(--border-default)] bg-[rgba(30,21,8,0.96)] p-2 shadow-lg"
       data-testid="map-short-notes-sheet"
       role="dialog"
       aria-label="Map notes"
     >
-      {spotsOn && spotsText ? (
+      {spotsUnread && spotsText ? (
         <div className="relative mb-2 rounded-xl border border-[rgba(196,131,42,0.28)] px-3 py-2 pr-12 last:mb-0">
           <p
             className="whitespace-normal text-left text-[15px] font-semibold leading-snug text-[rgba(240,224,192,0.88)]"
@@ -64,7 +106,7 @@ export function MapShortNotesInfo({
           </button>
         </div>
       ) : null}
-      {pinOn && pinText ? (
+      {pinUnread && pinText ? (
         <div className="relative rounded-xl border border-[rgba(196,131,42,0.28)] px-3 py-2 pr-12">
           <p
             className="whitespace-normal text-left text-[15px] font-medium leading-snug text-[rgba(240,224,192,0.88)]"
@@ -90,6 +132,7 @@ export function MapShortNotesInfo({
   return (
     <div className="relative shrink-0" data-testid="map-short-notes">
       <button
+        ref={infoRef}
         type="button"
         data-testid="map-short-notes-info"
         aria-label="Map notes"

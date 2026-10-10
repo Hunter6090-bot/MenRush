@@ -28,6 +28,7 @@ export function MapTopPillBar({
   footer,
   spotsNoteText,
   pinNoteText,
+  spotsLayerOn = true,
 }: {
   radiusKm: number;
   onRadiusClick: () => void;
@@ -47,6 +48,8 @@ export function MapTopPillBar({
   spotsNoteText?: string | null;
   /** Discretion pin copy. Short maps open this from the info button. */
   pinNoteText?: string | null;
+  /** 18+ unread dot / sheet copy only while the Spots layer is on. */
+  spotsLayerOn?: boolean;
 }) {
   const radiusLabel = formatRadiusControlLabel(radiusKm);
   const columnRef = useRef<HTMLDivElement | null>(null);
@@ -132,8 +135,8 @@ export function MapTopPillBar({
           transition: animate ? 'height 200ms ease-out, transform 200ms ease-out' : 'none',
         }}
       />
-      <div
-        className="flex min-h-[44px] min-w-0 flex-1 flex-col overflow-hidden"
+        <div
+        className={`flex min-h-[44px] min-w-0 flex-1 flex-col ${short ? 'overflow-visible' : 'overflow-hidden'}`}
         data-testid="map-overlay-top"
       >
         <div
@@ -155,7 +158,13 @@ export function MapTopPillBar({
                   {layers}
                 </div>
               ) : null}
-              {short ? <MapShortNotesInfo spotsText={spotsNoteText} pinText={pinNoteText} /> : null}
+              {short ? (
+                <MapShortNotesInfo
+                  spotsText={spotsNoteText}
+                  pinText={pinNoteText}
+                  spotsLayerOn={spotsLayerOn}
+                />
+              ) : null}
             </div>
           </div>
         </div>
