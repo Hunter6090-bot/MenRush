@@ -22,7 +22,7 @@ export function NearbySortToggle({
       role="group"
       aria-label="Nearby sort"
       data-testid="nearby-sort-toggle"
-      className="inline-flex min-h-[36px] items-stretch overflow-hidden rounded-full border border-[color-mix(in_srgb,var(--copper)_55%,transparent)] bg-[color-mix(in_srgb,var(--copper)_8%,transparent)]"
+      className="inline-flex min-h-[44px] items-stretch overflow-hidden rounded-full border border-[color-mix(in_srgb,var(--copper)_55%,transparent)] bg-[color-mix(in_srgb,var(--copper)_8%,transparent)]"
     >
       {MODES.map((id) => {
         const active = mode === id;
@@ -38,8 +38,8 @@ export function NearbySortToggle({
             onClick={() => onChange(id)}
             className={
               active
-                ? 'min-h-[36px] px-3 py-1.5 text-[15px] font-extrabold uppercase tracking-[0.14em] text-[var(--nn-on-copper)] bg-[var(--copper)] transition-colors'
-                : 'min-h-[36px] px-3 py-1.5 text-[15px] font-extrabold uppercase tracking-[0.14em] text-[var(--nn-accent-text)] transition-colors hover:bg-[color-mix(in_srgb,var(--copper)_18%,transparent)]'
+                ? 'min-h-[44px] px-3 py-1.5 text-[15px] font-extrabold uppercase tracking-[0.14em] text-[var(--nn-on-copper)] bg-[var(--copper)] transition-colors'
+                : 'min-h-[44px] px-3 py-1.5 text-[15px] font-extrabold uppercase tracking-[0.14em] text-[var(--nn-accent-text)] transition-colors hover:bg-[color-mix(in_srgb,var(--copper)_18%,transparent)]'
             }
           >
             {label}

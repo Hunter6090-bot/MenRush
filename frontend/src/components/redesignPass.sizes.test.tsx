@@ -78,6 +78,17 @@ describe('44px tap targets', () => {
 });
 
 describe('You header', () => {
+  it('Active now on the You page is 15px', () => {
+    const src = read('../pages/Profile.tsx');
+    expect(src.match(/<StatusBadge online=\{!!profile\.online\} lastSeen=\{profile\.last_seen\} size="md" \/>/g)).toHaveLength(2);
+    expect(read('StatusBadge.tsx')).toContain("size === 'md' ? 'px-3 py-1 text-[15px]'");
+  });
+
+  it('Nearby sort chips are 44px tall', () => {
+    expect(read('NearbySortToggle.tsx')).not.toContain('min-h-[36px]');
+    expect(read('NearbySortToggle.tsx').match(/min-h-\[44px\]/g)).toHaveLength(3);
+  });
+
   it('"Tap Adjust cover" sits below the avatar row, not under the overlapping avatar', () => {
     const src = read('../pages/Profile.tsx');
     const row = src.indexOf('data-testid="profile-avatar-row"');

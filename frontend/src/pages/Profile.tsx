@@ -802,7 +802,7 @@ export const Profile = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-2xl font-extrabold text-[var(--cream)]">{displayName || profile.name}</h2>
                     {verification.status?.is_verified ? <VerifiedBadge /> : null}
-                    <StatusBadge online={!!profile.online} lastSeen={profile.last_seen} />
+                    <StatusBadge online={!!profile.online} lastSeen={profile.last_seen} size="md" />
                   </div>
                   <p className="mt-1 text-[15px] text-[var(--cream-muted)]">
                     {showAge
@@ -1029,7 +1029,7 @@ export const Profile = () => {
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                <StatusBadge online={!!profile.online} lastSeen={profile.last_seen} />
+                <StatusBadge online={!!profile.online} lastSeen={profile.last_seen} size="md" />
                 <Link
                   to="/settings"
                   aria-label="Open settings"

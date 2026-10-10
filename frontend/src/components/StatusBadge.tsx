@@ -5,7 +5,8 @@ interface StatusBadgeProps {
   lastSeen?: string;
   pulsing?: boolean;
   className?: string;
-  size?: 'xs' | 'sm';
+  /** md: 15px text for the You page header. */
+  size?: 'xs' | 'sm' | 'md';
 }
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({
@@ -15,7 +16,8 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   className = '',
   size = 'sm',
 }) => {
-  const pad = size === 'xs' ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-[11.5px]';
+  const pad =
+    size === 'xs' ? 'px-2 py-0.5 text-[10px]' : size === 'md' ? 'px-3 py-1 text-[15px]' : 'px-2.5 py-1 text-[11.5px]';
 
   if (pulsing) {
     return (
