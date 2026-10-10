@@ -6,7 +6,7 @@ type SiteFooterProps = {
 };
 
 /**
- * Public-site footer: Contact, Privacy, Cookies, Terms — MenRush brand colours.
+ * Public-site footer: Contact, Privacy, Cookies, Terms. 15px links with 44px tap targets.
  */
 export const SiteFooter: React.FC<SiteFooterProps> = ({ className = '' }) => {
   return (
@@ -15,52 +15,52 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ className = '' }) => {
       role="contentinfo"
     >
       <nav
-        className="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-x-[34px] gap-y-[18px] text-[13px] font-semibold uppercase tracking-[0.18em] text-[var(--cream-muted)]"
+        className="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-x-[28px] gap-y-1 text-[15px] font-semibold uppercase tracking-[0.14em] text-[var(--cream-muted)]"
         aria-label="Site links"
       >
-        <Link to="/contact" className="transition-colors hover:text-[#c8861c]">
+        <Link to="/contact" className="inline-flex min-h-[44px] items-center transition-colors hover:text-[var(--nn-accent-text)]">
           Contact
         </Link>
         <span className="hidden text-[#3D2B0E] sm:inline" aria-hidden>
           ·
         </span>
-        <Link to="/safety" className="transition-colors hover:text-[#c8861c]">
+        <Link to="/safety" className="inline-flex min-h-[44px] items-center transition-colors hover:text-[var(--nn-accent-text)]">
           Safety
         </Link>
         <span className="hidden text-[#3D2B0E] sm:inline" aria-hidden>
           ·
         </span>
-        <Link to="/guidelines" className="transition-colors hover:text-[#c8861c]">
+        <Link to="/guidelines" className="inline-flex min-h-[44px] items-center transition-colors hover:text-[var(--nn-accent-text)]">
           Guidelines
         </Link>
         <span className="hidden text-[#3D2B0E] sm:inline" aria-hidden>
           ·
         </span>
-        <Link to="/help" className="transition-colors hover:text-[#c8861c]">
+        <Link to="/help" className="inline-flex min-h-[44px] items-center transition-colors hover:text-[var(--nn-accent-text)]">
           Help
         </Link>
         <span className="hidden text-[#3D2B0E] sm:inline" aria-hidden>
           ·
         </span>
-        <Link to="/get-the-app" className="transition-colors hover:text-[#c8861c]">
+        <Link to="/get-the-app" className="inline-flex min-h-[44px] items-center transition-colors hover:text-[var(--nn-accent-text)]">
           Get the app
         </Link>
         <span className="hidden text-[#3D2B0E] sm:inline" aria-hidden>
           ·
         </span>
-        <Link to="/privacy" className="transition-colors hover:text-[#c8861c]">
+        <Link to="/privacy" className="inline-flex min-h-[44px] items-center transition-colors hover:text-[var(--nn-accent-text)]">
           Privacy
         </Link>
         <span className="hidden text-[#3D2B0E] sm:inline" aria-hidden>
           ·
         </span>
-        <Link to="/cookies" className="transition-colors hover:text-[#c8861c]">
+        <Link to="/cookies" className="inline-flex min-h-[44px] items-center transition-colors hover:text-[var(--nn-accent-text)]">
           Cookie Policy
         </Link>
         <span className="hidden text-[#3D2B0E] sm:inline" aria-hidden>
           ·
         </span>
-        <Link to="/terms" className="transition-colors hover:text-[#c8861c]">
+        <Link to="/terms" className="inline-flex min-h-[44px] items-center transition-colors hover:text-[var(--nn-accent-text)]">
           Terms &amp; Conditions
         </Link>
       </nav>
