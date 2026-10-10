@@ -272,6 +272,7 @@ describe('RoomTempIdentityGate', () => {
     expect(screen.queryByTestId('room-temp-camera-input')).not.toBeInTheDocument();
     expect(screen.queryByTestId('room-temp-selfie-modal')).not.toBeInTheDocument();
 
+    await user.click(screen.getByTestId('room-temp-photo-tile'));
     await user.click(screen.getByTestId('room-temp-take-photo'));
     expect(screen.getByTestId('room-temp-selfie-modal')).toBeInTheDocument();
   });
@@ -308,6 +309,7 @@ describe('RoomTempIdentityGate', () => {
     renderGate();
     await waitFor(() => expect(mockedGet).toHaveBeenCalled());
 
+    await user.click(screen.getByTestId('room-temp-photo-tile'));
     await user.click(screen.getByTestId('room-temp-take-photo'));
     await user.click(screen.getByTestId('room-temp-selfie-capture'));
 
