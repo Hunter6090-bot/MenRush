@@ -1,5 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { setTopPromptBottom } from '../lib/topPromptOverlay';
+import { useEffect, useState } from 'react';
 import {
   enablePushNotifications,
   getPushSupport,
@@ -88,27 +87,6 @@ export function PushAlertBanner() {
     if (visible) markShown();
   }, [visible, markShown]);
 
-  // Publish where the floating card ends, so the map's top controls can move
-  // below it instead of being covered (QC P2 on #357).
-  const cardRef = useRef<HTMLDivElement | null>(null);
-  useLayoutEffect(() => {
-    const card = cardRef.current;
-    if (!visible || !card) {
-      setTopPromptBottom(null);
-      return;
-    }
-    const publish = () => setTopPromptBottom(card.getBoundingClientRect().bottom);
-    publish();
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(publish) : null;
-    ro?.observe(card);
-    window.addEventListener('resize', publish);
-    return () => {
-      ro?.disconnect();
-      window.removeEventListener('resize', publish);
-      setTopPromptBottom(null);
-    };
-  }, [visible]);
-
   if (!visible) return null;
 
   const enable = async () => {
@@ -128,7 +106,6 @@ export function PushAlertBanner() {
   return (
     <div className="relative z-40 h-0" data-testid="push-alert-banner-slot">
       <div
-        ref={cardRef}
         className="absolute inset-x-0 top-0 mx-3 mt-2 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2.5 shadow-card"
         data-testid="push-alert-banner"
         role="status"

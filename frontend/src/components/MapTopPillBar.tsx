@@ -1,5 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { offsetBelowTopPrompt, useTopPromptBottom } from '../lib/topPromptOverlay';
+import type { ReactNode } from 'react';
 /**
  * Map-first top chrome: Radius / Filters (icon + short label). App-wide search
  * lives in the top-right Menu and on the Chat list, not on the map.
@@ -25,30 +24,9 @@ export function MapTopPillBar({
   children?: ReactNode;
 }) {
   const radiusLabel = formatRadiusControlLabel(radiusKm);
-  // While the floating alerts banner is on screen, move the pills below it so
-  // Radius and Filters stay visible and tappable. Measured against the map
-  // panel (this stack's positioned parent), which does not move.
-  const stackRef = useRef<HTMLDivElement | null>(null);
-  const bannerBottom = useTopPromptBottom();
-  const [offset, setOffset] = useState(0);
-  useLayoutEffect(() => {
-    const panel = stackRef.current?.parentElement;
-    if (!panel || bannerBottom == null) {
-      setOffset(0);
-      return;
-    }
-    const measure = () => setOffset(offsetBelowTopPrompt(panel.getBoundingClientRect().top, bannerBottom));
-    measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, [bannerBottom]);
-
   return (
     <div
-      ref={stackRef}
       className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col gap-2 px-3 pt-3"
-      style={offset > 0 ? { top: `${offset}px` } : undefined}
-      data-offset-for-banner={offset}
       data-testid="map-top-stack"
     >
       {/* flex-nowrap: wrapping at 360px covered Discretion; one scrollable row keeps height stable. */}
