@@ -30,6 +30,7 @@ CREATE TABLE users (
   show_height BOOLEAN NOT NULL DEFAULT TRUE,
   show_weight BOOLEAN NOT NULL DEFAULT TRUE,
   show_relationship BOOLEAN NOT NULL DEFAULT TRUE,
+  show_distance BOOLEAN NOT NULL DEFAULT TRUE,
   email_confirmed BOOLEAN NOT NULL DEFAULT TRUE,
   welcome_email_sent_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW(),
@@ -95,7 +96,7 @@ CREATE TABLE IF NOT EXISTS rooms (
   name VARCHAR(100) NOT NULL,
   description TEXT,
   avatar_url TEXT,
-  created_by UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
   is_location_based BOOLEAN DEFAULT false,
   is_official BOOLEAN NOT NULL DEFAULT false,
   official_slug TEXT,
@@ -342,3 +343,14 @@ CREATE TABLE IF NOT EXISTS veriff_sessions (
 
 CREATE INDEX IF NOT EXISTS idx_veriff_sessions_user_id ON veriff_sessions (user_id);
 CREATE INDEX IF NOT EXISTS idx_veriff_sessions_status ON veriff_sessions (status);
+
+-- "Hide my location from" list (migration 073).
+CREATE TABLE IF NOT EXISTS location_hidden_from (
+  owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  hidden_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (owner_id, hidden_user_id),
+  CONSTRAINT location_hidden_from_not_self CHECK (owner_id <> hidden_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_location_hidden_from_hidden_user
+  ON location_hidden_from (hidden_user_id, owner_id);

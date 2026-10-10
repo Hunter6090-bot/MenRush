@@ -8,6 +8,8 @@ import {
 } from '../lib/cruising';
 import { formatDistanceFromKm } from '../lib/localeUnits';
 import { CruisingSpotMapThumbnail } from './CruisingSpotMapThumbnail';
+import { isHotSpotActive } from '../lib/hotSpotCounts';
+import { SpotTypeIcon, spotTypeKey } from './icons';
 
 interface CruisingSpotCardProps {
   spot: HotSpotDTO;
@@ -27,7 +29,7 @@ export function CruisingSpotCard({
   const category = mapToCruisingCategory(spot);
   const categoryMeta = CRUISING_CATEGORY_META[category];
   const lastActive = formatLastActiveTime(spot);
-  const isCurrentlyActive = Boolean(spot.has_active_checkins || spot.live_count_exact > 0);
+  const isCurrentlyActive = isHotSpotActive(spot);
   const directionsUrl = getDirectionsUrl(spot.latitude, spot.longitude, spot.name);
   const ttlHours = spot.checkin_ttl_hours ?? 2;
 
@@ -49,33 +51,33 @@ export function CruisingSpotCard({
         <div className="flex flex-wrap items-center gap-1.5">
           <span
             data-testid="cruising-category-badge"
-            className="inline-flex items-center gap-1 rounded-full border border-[#C4832A]/30 bg-[#C4832A]/10 px-2.5 py-0.5 text-[11px] font-bold text-[#E0A14A]"
+            className="inline-flex items-center gap-1 rounded-full border border-[var(--border-default)] bg-[color-mix(in_srgb,var(--nn-accent-text)_10%,transparent)] px-2.5 py-0.5 text-[15px] font-bold text-[var(--nn-accent-text)]"
           >
-            <span aria-hidden="true">{categoryMeta.icon}</span>
+            <SpotTypeIcon type={spotTypeKey(category)} size={16} />
             <span>{categoryMeta.label}</span>
           </span>
 
           {spot.distance_km != null ? (
             <span
               data-testid="cruising-distance"
-              className="inline-flex items-center rounded-full border border-[var(--border-default)] bg-black/25 px-2 py-0.5 text-[11px] font-semibold text-[var(--cream-soft)]"
+              className="inline-flex items-center rounded-full border border-[var(--border-default)] bg-black/25 px-2 py-0.5 text-[15px] font-semibold text-[var(--cream-soft)]"
             >
               {formatDistanceFromKm(Number(spot.distance_km))}
             </span>
           ) : null}
 
           {spot.city ? (
-            <span className="text-[11px] text-[var(--cream-muted)]">· {spot.city}</span>
+            <span className="text-[15px] text-[var(--cream-muted)]">· {spot.city}</span>
           ) : null}
 
           {/* Review rating badge if reviews exist */}
           {spot.rating_avg != null && (spot.review_count ?? 0) > 0 ? (
             <span
               data-testid="cruising-card-rating"
-              className="inline-flex items-center gap-0.5 text-[11px] font-bold text-[#E0A14A]"
+              className="inline-flex items-center gap-0.5 text-[15px] font-bold text-[#E0A14A]"
             >
               ★ {spot.rating_avg}
-              <span className="text-[10px] text-[var(--cream-muted)]">({spot.review_count})</span>
+              <span className="text-[15px] text-[var(--cream-muted)]">({spot.review_count})</span>
             </span>
           ) : null}
         </div>
@@ -90,14 +92,14 @@ export function CruisingSpotCard({
 
         {/* Description if present */}
         {spot.description ? (
-          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[var(--cream-muted)]">
+          <p className="mt-1 line-clamp-2 text-[15px] leading-relaxed text-[var(--cream-muted)]">
             {spot.description}
           </p>
         ) : null}
 
         {/* Last Active Time status indicator */}
         <div
-          className="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium"
+          className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[15px] font-medium leading-snug"
           data-testid="cruising-last-active"
         >
           <div className="flex items-center gap-1.5">
@@ -116,7 +118,7 @@ export function CruisingSpotCard({
             </span>
           </div>
 
-          <span className="text-[10px] text-[var(--cream-muted)]">
+          <span className="text-[15px] text-[var(--cream-muted)]">
             · {ttlHours}h signal
           </span>
         </div>
@@ -129,7 +131,7 @@ export function CruisingSpotCard({
             target="_blank"
             rel="noopener noreferrer"
             data-testid="cruising-get-directions"
-            className="inline-flex items-center gap-1.5 rounded-full bg-[#C4832A] px-3.5 py-1.5 text-xs font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#C4832A] px-3.5 py-1.5 text-[15px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
             onClick={(e) => e.stopPropagation()}
           >
             <svg
@@ -159,7 +161,7 @@ export function CruisingSpotCard({
                   void onCheckIn(spot, false);
                 }}
                 data-testid={`cruising-checkout-${spot.id}`}
-                className="inline-flex items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[#C4832A]/10 px-3 py-1.5 text-xs font-bold text-[#E0A14A] transition-colors hover:bg-[#C4832A]/20"
+                className="inline-flex items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[#C4832A]/10 px-3 py-1.5 text-[15px] font-bold text-[#E0A14A] transition-colors hover:bg-[#C4832A]/20"
               >
                 {acting ? 'Updating…' : 'Checked in (Leave)'}
               </button>
@@ -172,7 +174,7 @@ export function CruisingSpotCard({
                   void onCheckIn(spot, true);
                 }}
                 data-testid={`cruising-checkin-anon-${spot.id}`}
-                className="inline-flex items-center gap-1 rounded-full border border-[var(--border-default)] bg-black/25 px-3 py-1.5 text-xs font-bold text-[var(--cream)] transition-colors hover:border-[var(--copper)]/50 hover:bg-[#C4832A]/10"
+                className="inline-flex items-center gap-1 rounded-full border border-[var(--border-default)] bg-black/25 px-3 py-1.5 text-[15px] font-bold text-[var(--cream)] transition-colors hover:border-[var(--copper)]/50 hover:bg-[#C4832A]/10"
               >
                 {acting ? 'Checking in…' : 'Check in anonymously'}
               </button>
@@ -188,11 +190,11 @@ export function CruisingSpotCard({
                 onOpenReviews(spot);
               }}
               data-testid={`cruising-reviews-btn-${spot.id}`}
-              className="inline-flex items-center gap-1 rounded-full border border-[var(--border-default)] bg-black/20 px-3 py-1.5 text-xs font-bold text-[var(--cream-soft)] transition-colors hover:border-[var(--copper)]/50 hover:text-[var(--cream)]"
+              className="inline-flex items-center gap-1 rounded-full border border-[var(--border-default)] bg-black/20 px-3 py-1.5 text-[15px] font-bold text-[var(--cream-soft)] transition-colors hover:border-[var(--copper)]/50 hover:text-[var(--cream)]"
             >
               <span>Reviews</span>
               {(spot.review_count ?? 0) > 0 ? (
-                <span className="rounded-full bg-black/40 px-1.5 py-0.2 text-[10px] text-[#E0A14A]">
+                <span className="rounded-full bg-black/40 px-1.5 py-0.2 text-[15px] text-[#E0A14A]">
                   {spot.review_count}
                 </span>
               ) : null}
@@ -205,7 +207,7 @@ export function CruisingSpotCard({
               type="button"
               onClick={() => onSelect(spot)}
               data-testid="cruising-view-on-map"
-              className="inline-flex items-center gap-1 rounded-full border border-[var(--border-default)] bg-black/20 px-3 py-1.5 text-xs font-bold text-[var(--cream-soft)] transition-colors hover:border-[var(--copper)]/50 hover:text-[var(--cream)]"
+              className="inline-flex items-center gap-1 rounded-full border border-[var(--border-default)] bg-black/20 px-3 py-1.5 text-[15px] font-bold text-[var(--cream-soft)] transition-colors hover:border-[var(--copper)]/50 hover:text-[var(--cream)]"
             >
               <svg
                 width="13"

@@ -1,40 +1,48 @@
 import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
 import { z } from 'zod';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
+import { privateNoStore } from '../middleware/noStore';
 import { communityService } from '../services/community.service';
+import { viewerStoredLocation } from '../lib/viewerOrigin';
 import {
   CommunityCreateCommentSchema,
   CommunityCreatePostSchema,
-  LocationSchema,
+  CommunityMentionSuggestionsQuerySchema,
+  CommunityUpdateCommentSchema,
+  CommunityUpdatePostSchema,
 } from '../types/validation';
 
 const router = Router();
-router.use(authMiddleware, verifiedMiddleware);
+// privateNoStore first so 401s carry Cache-Control too (same as events, #348).
+router.use(privateNoStore, authMiddleware, verifiedMiddleware);
 
 const createLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   message: { error: 'Too many posts. Try again in a minute.' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
 
 /**
- * GET /api/community/posts?lat=&lng=&radiusKm=
+ * GET /api/community/posts?radiusKm=
  * Nearby text-only Community feed. Free for all verified members.
  */
 router.get('/posts', async (req: AuthRequest, res: Response) => {
   try {
-    const location = LocationSchema.parse({
-      lat: parseFloat(String(req.query.lat)),
-      lng: parseFloat(String(req.query.lng)),
-    });
+    // Query point is the viewer's stored location (kept fresh by the live
+    // location publisher). Coordinates never travel in the URL; any lat/lng
+    // in the query string is stripped upstream and never read.
+    const origin = await viewerStoredLocation(req.userId!);
+    if (!origin) return res.json({ posts: [] });
     const radiusKm = req.query.radiusKm != null ? parseFloat(String(req.query.radiusKm)) : 10;
     const posts = await communityService.listNearby({
       viewerId: req.userId!,
-      lat: location.lat,
-      lng: location.lng,
+      lat: origin.lat,
+      lng: origin.lng,
       radiusKm: Number.isFinite(radiusKm) ? radiusKm : 10,
     });
     res.json({ posts });
@@ -76,10 +84,93 @@ router.post('/posts', createLimiter, async (req: AuthRequest, res: Response) => 
   }
 });
 
+/**
+ * PUT /api/community/posts/:id { body }
+ * Update author's own Community post (≤280).
+ */
+router.put('/posts/:id', createLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const postId = PostIdParam.parse(req.params.id);
+    const parsed = CommunityUpdatePostSchema.parse(req.body ?? {});
+    const post = await communityService.updatePost(req.userId!, postId, parsed.body);
+    res.json({ post });
+  } catch (err: unknown) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Post must be 1–280 characters' });
+    }
+    const message = err instanceof Error ? err.message : '';
+    if (message === 'post_not_found') {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    if (message === 'forbidden') {
+      return res.status(403).json({ error: 'You can only edit your own posts' });
+    }
+    if (message === 'invalid_body') {
+      return res.status(400).json({ error: 'Post must be 1–280 characters' });
+    }
+    console.error('[community] update post', err);
+    res.status(500).json({ error: 'Could not update post' });
+  }
+});
+
+/**
+ * GET /api/community/posts/mine/count
+ * How many Community posts this member has (any age), for the delete-all confirm.
+ */
+router.get('/posts/mine/count', async (req: AuthRequest, res: Response) => {
+  try {
+    res.json({ count: await communityService.countOwnPosts(req.userId!) });
+  } catch (err: unknown) {
+    console.error('[community] count own posts', err);
+    res.status(500).json({ error: 'Could not count your posts' });
+  }
+});
+
+/**
+ * DELETE /api/community/posts/mine
+ * Delete every Community post this member has made (any age), with their
+ * saved coordinates and comments. Declared before /posts/:id.
+ */
+router.delete('/posts/mine', async (req: AuthRequest, res: Response) => {
+  try {
+    const { deleted } = await communityService.deleteAllOwnPosts(req.userId!);
+    res.json({ ok: true, deleted });
+  } catch (err: unknown) {
+    console.error('[community] delete all own posts', err);
+    res.status(500).json({ error: 'Could not delete your posts' });
+  }
+});
+
+/**
+ * DELETE /api/community/posts/:id
+ * Delete author's own Community post, at any age (not only within 24h).
+ */
+router.delete('/posts/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const postId = PostIdParam.parse(req.params.id);
+    await communityService.deletePost(req.userId!, postId);
+    res.json({ ok: true });
+  } catch (err: unknown) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid post' });
+    }
+    const message = err instanceof Error ? err.message : '';
+    if (message === 'post_not_found') {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    if (message === 'forbidden') {
+      return res.status(403).json({ error: 'You can only delete your own posts' });
+    }
+    console.error('[community] delete post', err);
+    res.status(500).json({ error: 'Could not delete post' });
+  }
+});
+
 const commentLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 20,
   message: { error: 'Too many comments. Try again in a minute.' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -98,6 +189,35 @@ function handleCommentAccessError(err: unknown, res: Response): boolean {
   }
   return false;
 }
+
+/**
+ * GET /api/community/mention-suggestions?q=&limit=
+ * Autocomplete suggestions for @ mentions in Community posts and comments.
+ * Limited strictly to:
+ * 1. Live public Hot Spots (commercial venues + ops-curated outdoor)
+ * 2. Mutual matches of the viewer
+ * Never strangers, never un-matched nearby users.
+ */
+router.get('/mention-suggestions', async (req: AuthRequest, res: Response) => {
+  try {
+    const parsed = CommunityMentionSuggestionsQuerySchema.parse({
+      q: req.query.q != null ? String(req.query.q) : '',
+      limit: req.query.limit != null ? req.query.limit : 10,
+    });
+    const suggestions = await communityService.getMentionSuggestions(
+      req.userId!,
+      parsed.q,
+      parsed.limit,
+    );
+    res.json({ suggestions });
+  } catch (err: unknown) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid mention query parameters' });
+    }
+    console.error('[community] mention-suggestions', err);
+    res.status(500).json({ error: 'Could not load mention suggestions' });
+  }
+});
 
 /**
  * GET /api/community/posts/:id/comments
@@ -135,6 +255,70 @@ router.post('/posts/:id/comments', commentLimiter, async (req: AuthRequest, res:
     if (handleCommentAccessError(err, res)) return;
     console.error('[community] create comment', err);
     res.status(500).json({ error: 'Could not add comment' });
+  }
+});
+
+const CommentIdParam = z.string().uuid();
+
+/**
+ * PUT /api/community/posts/:id/comments/:commentId { body }
+ * Update author's own comment (≤280).
+ */
+router.put('/posts/:id/comments/:commentId', commentLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const postId = PostIdParam.parse(req.params.id);
+    const commentId = CommentIdParam.parse(req.params.commentId);
+    const parsed = CommunityUpdateCommentSchema.parse(req.body ?? {});
+    const comment = await communityService.updateComment(req.userId!, postId, commentId, parsed.body);
+    res.json({ comment });
+  } catch (err: unknown) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Comment must be 1–280 characters' });
+    }
+    const message = err instanceof Error ? err.message : '';
+    if (message === 'post_not_found') {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    if (message === 'comment_not_found') {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+    if (message === 'forbidden') {
+      return res.status(403).json({ error: 'You can only edit your own comments' });
+    }
+    if (message === 'invalid_body') {
+      return res.status(400).json({ error: 'Comment must be 1–280 characters' });
+    }
+    console.error('[community] update comment', err);
+    res.status(500).json({ error: 'Could not update comment' });
+  }
+});
+
+/**
+ * DELETE /api/community/posts/:id/comments/:commentId
+ * Delete author's own comment.
+ */
+router.delete('/posts/:id/comments/:commentId', async (req: AuthRequest, res: Response) => {
+  try {
+    const postId = PostIdParam.parse(req.params.id);
+    const commentId = CommentIdParam.parse(req.params.commentId);
+    await communityService.deleteComment(req.userId!, postId, commentId);
+    res.json({ ok: true });
+  } catch (err: unknown) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid request' });
+    }
+    const message = err instanceof Error ? err.message : '';
+    if (message === 'post_not_found') {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    if (message === 'comment_not_found') {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+    if (message === 'forbidden') {
+      return res.status(403).json({ error: 'You can only delete your own comments' });
+    }
+    console.error('[community] delete comment', err);
+    res.status(500).json({ error: 'Could not delete comment' });
   }
 });
 

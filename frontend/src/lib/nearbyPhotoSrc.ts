@@ -10,11 +10,12 @@
  * 2. Otherwise fetch upload candidates (Railway production → same-origin → …),
  *    `createImageBitmap` resize to ~480px, blob URL.
  * 3. Cap concurrent fetches so one Discover open does not decode 10× multi‑MB files.
- * 4. Fail fast → age-based generic avatar (never leave a blank tile).
+ * 4. Fail fast → phase `fallback` + no src → ONE Brand placeholder (FadedBrandFace).
+ *    Legacy generic `/avatars/*` defaults are treated as empty (Pete lock 6 Oct 2026).
  */
 import { useEffect, useState } from 'react';
+import { isLegacyDefaultAvatarUrl } from './avatarFallback';
 import {
-  fallbackAvatarForAge,
   getApiOrigin,
   resolveAssetUrl,
   resolveDisplayThumbCandidates,
@@ -224,35 +225,37 @@ export type GridPhotoPhase = 'loading' | 'ready' | 'fallback' | 'empty';
  */
 export function useGridPhotoSrc(
   photoUrl?: string | null,
-  age?: number,
+  _age?: number,
 ): { src: string | undefined; phase: GridPhotoPhase } {
+  const normalized = (() => {
+    const t = photoUrl?.trim() || '';
+    // Legacy generic defaults → empty so the Brand placeholder renders.
+    return t && !isLegacyDefaultAvatarUrl(t) ? t : '';
+  })();
   const [src, setSrc] = useState<string | undefined>(() => {
-    if (!photoUrl) return undefined;
-    const trimmed = photoUrl.trim();
-    if (!trimmed) return undefined;
-    if (trimmed.startsWith('/avatars/') || trimmed.startsWith('data:') || /^https?:/i.test(trimmed)) {
-      return resolveAssetUrl(trimmed);
+    if (!normalized) return undefined;
+    if (normalized.startsWith('data:') || /^https?:/i.test(normalized)) {
+      return resolveAssetUrl(normalized);
     }
     return undefined;
   });
   const [phase, setPhase] = useState<GridPhotoPhase>(() => {
-    if (!photoUrl?.trim()) return 'empty';
-    const t = photoUrl.trim();
-    if (t.startsWith('/avatars/') || t.startsWith('data:') || /^https?:/i.test(t)) return 'ready';
-    if (isUploadPath(t)) return 'loading';
-    return resolveAssetUrl(t) ? 'ready' : 'empty';
+    if (!normalized) return 'empty';
+    if (normalized.startsWith('data:') || /^https?:/i.test(normalized)) return 'ready';
+    if (isUploadPath(normalized)) return 'loading';
+    return resolveAssetUrl(normalized) ? 'ready' : 'empty';
   });
 
   useEffect(() => {
     let cancelled = false;
-    const trimmed = photoUrl?.trim() || '';
+    const trimmed = normalized;
     if (!trimmed) {
       setSrc(undefined);
       setPhase('empty');
       return;
     }
 
-    if (trimmed.startsWith('/avatars/') || trimmed.startsWith('data:') || /^https?:/i.test(trimmed)) {
+    if (trimmed.startsWith('data:') || /^https?:/i.test(trimmed)) {
       setSrc(resolveAssetUrl(trimmed));
       setPhase('ready');
       return;
@@ -274,15 +277,15 @@ export function useGridPhotoSrc(
         setPhase('ready');
         return;
       }
-      const generic = resolveAssetUrl(fallbackAvatarForAge(age));
-      setSrc(generic);
-      setPhase(generic ? 'fallback' : 'empty');
+      // Upload unreachable → Brand placeholder (no generic SVG). Media lock: path untouched.
+      setSrc(undefined);
+      setPhase('fallback');
     });
 
     return () => {
       cancelled = true;
     };
-  }, [photoUrl, age]);
+  }, [normalized]);
 
   return { src, phase };
 }

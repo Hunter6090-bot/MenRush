@@ -102,7 +102,7 @@ export function resolveAssetUrl(url?: string | null): string | undefined {
 /**
  * Candidate URLs for an upload path — same-origin rewrite first on Vercel
  * (avoids failed Railway walks on iPhone), then API origin / fallbacks.
- * Image components should walk these on onError before falling back to generic SVG.
+ * Image components should walk these on onError before falling back to the Brand placeholder.
  */
 export function resolveUploadUrlCandidates(url?: string | null): string[] {
   if (!url) return [];
@@ -203,9 +203,3 @@ export function isUploadPath(url?: string | null): boolean {
   return url.startsWith('/uploads/') || url.includes('/uploads/');
 }
 
-/** Prefer a working generic if we know the upload is broken (client-side after onError). */
-export function fallbackAvatarForAge(age?: number): string {
-  if (age != null && age >= 45) return '/avatars/generic/09.svg';
-  if (age != null && age >= 30) return '/avatars/generic/05.svg';
-  return '/avatars/generic/02.svg';
-}

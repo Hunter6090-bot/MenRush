@@ -4,6 +4,7 @@ import { RoomPresentPeopleList } from './RoomPresentPeopleList';
 
 vi.mock('./UserAvatar', () => ({
   getPhotoUrl: (url?: string) => url,
+  useResolvingPhotoSrc: (url?: string | null) => ({ src: url || undefined, onError: () => {} }),
 }));
 
 describe('RoomPresentPeopleList', () => {
@@ -22,6 +23,13 @@ describe('RoomPresentPeopleList', () => {
     expect(screen.getByTestId('room-present-people')).toBeTruthy();
     expect(screen.getByText('Quiet Fox')).toBeTruthy();
     expect(screen.getByText('Cub NW')).toBeTruthy();
+    // Missing photo → ONE Brand placeholder (no letter avatar).
+    const faces = screen.getAllByTestId('faded-brand-face');
+    expect(faces).toHaveLength(1);
+    expect(faces[0].querySelector('img')?.getAttribute('src')).toBe(
+      '/brand/medallion-transparent.png',
+    );
+    expect(screen.queryByText('C')).toBeNull();
     // No profile deep-links in this surface.
     expect(screen.queryByRole('link')).toBeNull();
 

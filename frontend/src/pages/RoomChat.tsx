@@ -9,12 +9,13 @@ import { PulseRing } from '../components/PulseRing';
 import { MobileBackButton } from '../components/MobileBackButton';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
-import { PanicReportButton } from '../components/PanicReportButton';
 import { getPhotoUrl } from '../components/UserAvatar';
 import { parseRoomImageMessage } from '../lib/roomMediaMessage';
 import { RoomTempIdentityGate } from '../components/RoomTempIdentityGate';
 import { RoomPresentPeopleList } from '../components/RoomPresentPeopleList';
 import { RoomInRoomDm, type InRoomDmMessage } from '../components/RoomInRoomDm';
+import { FadedBrandFace } from '../components/FadedBrandFace';
+import { RoomAvatar } from '../components/RoomAvatar';
 import {
   presentOthers,
   removePresentPerson,
@@ -53,6 +54,7 @@ interface RoomInfo {
   user_role?: string | null;
   is_location_based?: boolean;
   created_by?: string;
+  official_slug?: string | null;
 }
 
 interface RoomMember {
@@ -86,15 +88,6 @@ function formatDateLabel(iso?: string): string {
 function isSameDay(a?: string, b?: string): boolean {
   if (!a || !b) return false;
   return new Date(a).toDateString() === new Date(b).toDateString();
-}
-
-function initials(name: string): string {
-  return name
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
 }
 
 // Deterministic color per sender
@@ -440,13 +433,20 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
       });
     };
 
+    const onOccupancy = (data: { room_id?: string; count?: number }) => {
+      if (!data?.room_id || data.room_id !== roomId || typeof data.count !== 'number') return;
+      setRoom((prev) => (prev ? { ...prev, member_count: data.count! } : prev));
+    };
+
     socket.on('room:message', onMessage);
     socket.on('room:presence', onPresence);
     socket.on('room:presence-sync', onPresenceSync);
     socket.on('room:typing', onTyping);
+    socket.on('room:occupancy', onOccupancy);
     return () => {
       socket.off('room:message', onMessage);
       socket.off('room:presence', onPresence);
+      socket.off('room:occupancy', onOccupancy);
       socket.off('room:presence-sync', onPresenceSync);
       socket.off('room:typing', onTyping);
     };
@@ -729,13 +729,6 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
     setDmNotice(null);
   }, [socket, roomId, dmPeer]);
 
-  // One-tap room report needs a subject user; prefer owner, else first other member.
-  const roomReportTargetId =
-    members.find((m) => m.role === 'owner' && m.id !== user?.id)?.id ??
-    (room?.created_by && room.created_by !== user?.id ? room.created_by : undefined) ??
-    members.find((m) => m.id !== user?.id)?.id;
-
-
   const handleAddMember = async (targetId: string, targetName: string) => {
     if (!roomId || addingMemberId) return;
     setAddingMemberId(targetId);
@@ -903,24 +896,27 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
           className="-ml-1"
         />
 
-        {/* Room avatar */}
-        <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0"
-          style={{
+        {/* Room avatar: Claude Design icon, or letters when none matches */}
+        <RoomAvatar
+          name={room?.name}
+          officialSlug={room?.official_slug}
+          className="h-10 w-10 rounded-xl"
+          iconClassName="h-6 w-6"
+          letterClassName="text-sm font-bold"
+          letterStyle={{
             background: 'linear-gradient(135deg, rgba(196,131,42,0.3), rgba(139,69,19,0.2))',
             border: '1px solid rgba(196,131,42,0.3)',
             color: '#C4832A',
           }}
-        >
-          {room ? initials(room.name) : '…'}
-        </div>
+          placeholder="…"
+        />
 
         {/* Room name + members */}
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm leading-tight truncate text-[var(--cream)]">
+          <p className="font-semibold text-base leading-tight truncate text-[var(--cream)]">
             {room?.name ?? 'Room'}
           </p>
-          <p className="text-[10px] mt-0.5 text-[var(--cream-muted)]">
+          <p className="text-xs mt-0.5 text-[var(--cream-muted)]">
             <GroupIcon className="w-3 h-3 inline mr-0.5" />
             {presentCount > 0 ? `${presentCount} here` : 'Waiting…'}
           </p>
@@ -1014,24 +1010,6 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
         >
           <GroupIcon className="w-5 h-5" />
         </button>
-
-        {roomId && roomReportTargetId ? (
-          <PanicReportButton
-            reportedUserId={roomReportTargetId}
-            threadId={`room:${roomId}`}
-            onNotice={(msg) => setSettingsNotice(msg)}
-            className="w-9 h-9"
-          />
-        ) : null}
-
-        {roomId && roomReportTargetId ? (
-          <PanicReportButton
-            reportedUserId={roomReportTargetId}
-            threadId={`room:${roomId}`}
-            onNotice={(msg) => setSettingsNotice(msg)}
-            className="w-9 h-9"
-          />
-        ) : null}
 
         {/* Settings */}
         <button
@@ -1148,6 +1126,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                       <ChatSafetyMenu
                         peerId={member.id}
                         peerName={member.name}
+                        threadId={roomId ? `room:${roomId}` : undefined}
                         onNotice={(msg) => setSettingsNotice(msg)}
                       />
                     )}
@@ -1295,10 +1274,10 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
             >
               <BubbleIcon className="w-8 h-8" style={{ color: '#C4832A', opacity: 0.5 }} />
             </div>
-            <p className="font-medium text-sm" style={{ color: '#A89070' }}>
+            <p className="font-medium text-base" style={{ color: '#A89070' }}>
               No messages yet
             </p>
-            <p className="text-xs mt-1" style={{ color: '#6B5035' }}>
+            <p className="text-sm mt-1" style={{ color: '#6B5035' }}>
               Be the first to say something
             </p>
           </div>
@@ -1321,7 +1300,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                 <div className="flex items-center gap-3 my-5">
                   <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
                   <span
-                    className="text-[10px] font-semibold px-3 py-1 rounded-full"
+                    className="text-xs font-semibold px-3 py-1 rounded-full"
                     style={{
                       background: 'var(--bg-card)',
                       border: '1px solid var(--border-default)',
@@ -1347,27 +1326,18 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                     {showTail && (
                       // Room chat avatars never deep-link to the real profile.
                       <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                        className="w-8 h-8 rounded-full overflow-hidden"
                         style={{
-                          background: `${color}22`,
                           border: `1px solid ${color}44`,
-                          color,
                           flexShrink: 0,
                         }}
                         data-testid={`room-msg-avatar-${msg.sender_id}`}
                         aria-hidden
                       >
-                        <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                          style={{
-                            background: `${color}22`,
-                            border: `1px solid ${color}44`,
-                            color,
-                            flexShrink: 0,
-                          }}
-                        >
-                          {initials(msg.sender_name)}
-                        </div>
+                        {/* ONE Brand placeholder — no initials (Pete lock 6 Oct 2026). */}
+                        <span className="block h-full w-full overflow-hidden rounded-full">
+                          <FadedBrandFace variant="profile" size={30} label={msg.sender_name} />
+                        </span>
                       </div>
                     )}
                   </div>
@@ -1379,7 +1349,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                   {/* Sender name — shown for others, first in a group */}
                   {showSenderName && (
                     <span
-                      className="text-[10px] font-semibold mb-1 px-1"
+                      className="text-xs font-semibold mb-1 px-1"
                       style={{ color }}
                     >
                       {msg.sender_name}
@@ -1387,7 +1357,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                   )}
 
                   <div
-                    className="relative px-4 py-2.5 text-sm leading-relaxed"
+                    className="relative px-4 py-2.5 text-base leading-relaxed"
                     style={
                       isMine
                         ? {
@@ -1429,7 +1399,7 @@ export const RoomChat: React.FC<{ embedded?: boolean }> = ({ embedded = false })
                     })()}
                   </div>
                   {showTail && (
-                    <span className="text-[10px] mt-1 px-1" style={{ color: '#6B5035' }}>
+                    <span className="text-xs mt-1 px-1" style={{ color: '#6B5035' }}>
                       {formatTime(msg.created_at)}
                     </span>
                   )}

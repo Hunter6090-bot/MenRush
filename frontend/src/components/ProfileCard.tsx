@@ -4,7 +4,7 @@ import { useResolvingPhotoSrc } from './UserAvatar';
 import { ProfilePhotoLink } from './ProfilePhotoLink';
 import { StatusBadge } from './StatusBadge';
 import { FadedBrandFace, isNearbyPlaceholderFace } from './FadedBrandFace';
-import { IconMatches } from './icons';
+import { IconMatches, IconChat } from './icons';
 import { usersAPI } from '../api/client';
 import { VerifiedBadge } from './VerifiedBadge';
 import { MoodBadge } from './MoodPicker';
@@ -28,9 +28,10 @@ export interface NearbyUser {
   cover_url?: string;
   interests?: string[];
   online: boolean;
-  distance_km: string | number;
-  /** Bucketed/privacy-safe distance label produced by the backend, e.g. "< 300 m", "1.5 km". */
-  distance_label?: string;
+  /** Coarse bucket (sorting). Absent when the member hides distance. */
+  distance_km?: string | number | null;
+  /** Coarse, Discretion-fuzzed label from the backend, e.g. "<1 mi", "3 mi". */
+  distance_label?: string | null;
   last_seen?: string;
   lat?: number;
   lng?: number;
@@ -193,6 +194,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           disabled={matchDisabled}
           aria-disabled={matchDisabled}
           aria-label={matchCtaAriaLabel(matchState, user.name, { mutualOpensChat: true })}
+          title={matchState === 'mutual' ? 'Chat' : matchState === 'outgoing' ? 'Sent' : 'Match'}
           data-testid={`profile-card-match-${user.id}`}
           className={`absolute bottom-3 left-3 z-10 flex h-11 w-11 items-center justify-center rounded-full transition-all ${
             matchState === 'outgoing'
@@ -202,8 +204,9 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 : 'bg-black/50 backdrop-blur-sm text-nn-copper-bright hover:bg-nn-copper/20 hover:scale-110 border border-nn-border'
           }`}
         >
-          <IconMatches size={20} />
+          {matchState === 'mutual' ? <IconChat size={20} /> : <IconMatches size={20} />}
         </button>
+
       </div>
 
       {/* Content */}
@@ -226,7 +229,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           </p>
         ) : null}
 
-        {user.mood ? (
+        {/* redesign cut mood on cards */ false && user.mood ? (
           <div className="mb-1.5">
             <MoodBadge mood={user.mood} small />
           </div>
@@ -262,6 +265,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           disabled={matchDisabled}
           aria-disabled={matchDisabled}
           aria-label={matchCtaAriaLabel(matchState, user.name, { mutualOpensChat: true })}
+          title={liking ? 'Sending…' : matchState === 'mutual' ? 'Chat' : matchState === 'outgoing' ? 'Sent' : 'Match'}
           data-testid={`profile-card-match-cta-${user.id}`}
           onClick={
             matchState === 'mutual'
@@ -271,17 +275,21 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 }
               : handleLike
           }
-          className={`mt-4 w-full py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+          className={`mt-4 w-full py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
             matchState === 'none'
               ? 'bg-gradient-to-r from-[#C4832A] to-[#A45E18] hover:from-[#D4943B] hover:to-[#C4832A] text-white hover:shadow-glow-blue active:scale-95'
               : matchCtaToneClasses(matchState)
           }`}
         >
-          {matchCtaLabel(matchState, user.name, {
-            sending: liking,
-            mutualLabel: 'open_chat',
-          })}
+          {matchState === 'mutual' ? <IconChat size={18} /> : <IconMatches size={18} />}
+          <span>
+            {matchCtaLabel(matchState, user.name, {
+              sending: liking,
+              mutualLabel: 'chat',
+            })}
+          </span>
         </button>
+
         {likeHint ? (
           <p className="mt-2 text-center text-[11px] text-[var(--cream-muted)]" role="status">
             {likeHint}

@@ -10,6 +10,7 @@ import {
   buildTransactionalEmail,
   transactionalParagraph,
 } from '../services/transactional-email.template';
+import { privateNoStore } from '../middleware/noStore';
 
 const router = Router();
 
@@ -558,7 +559,7 @@ router.post('/venue-claims/:id/freeze', async (req: Request, res: Response) => {
  * GET /api/admin/premium/invoices
  * Ops list all invoices (optional ?status=unpaid|paid|cancelled).
  */
-router.get('/premium/invoices', async (req: Request, res: Response) => {
+router.get('/premium/invoices', privateNoStore, async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   try {
     const { invoiceService } = await import('../services/invoice.service');
@@ -576,7 +577,7 @@ router.get('/premium/invoices', async (req: Request, res: Response) => {
  * GET /api/admin/premium/invoices/:id
  * Ops view single invoice by ID or invoice number.
  */
-router.get('/premium/invoices/:id', async (req: Request, res: Response) => {
+router.get('/premium/invoices/:id', privateNoStore, async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   try {
     const { invoiceService } = await import('../services/invoice.service');
@@ -593,7 +594,7 @@ router.get('/premium/invoices/:id', async (req: Request, res: Response) => {
  * POST /api/admin/premium/invoices
  * Ops generate/create invoice for a user.
  */
-router.post('/premium/invoices', async (req: Request, res: Response) => {
+router.post('/premium/invoices', privateNoStore, async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   const { AdminCreateInvoiceSchema } = await import('../types/validation');
   const parsed = AdminCreateInvoiceSchema.safeParse(req.body ?? {});
@@ -623,7 +624,7 @@ router.post('/premium/invoices', async (req: Request, res: Response) => {
  * Ops mark invoice paid after real payment received (bank transfer / manual).
  * Activates / extends Premium with entitlement stacking.
  */
-router.post('/premium/invoices/:id/confirm-payment', async (req: Request, res: Response) => {
+router.post('/premium/invoices/:id/confirm-payment', privateNoStore, async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   const { AdminConfirmInvoiceSchema } = await import('../types/validation');
   const parsed = AdminConfirmInvoiceSchema.safeParse(req.body ?? {});
@@ -654,7 +655,7 @@ router.post('/premium/invoices/:id/confirm-payment', async (req: Request, res: R
  * POST /api/admin/premium/invoices/:id/cancel
  * Ops cancel an unpaid invoice.
  */
-router.post('/premium/invoices/:id/cancel', async (req: Request, res: Response) => {
+router.post('/premium/invoices/:id/cancel', privateNoStore, async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   try {
     const { invoiceService } = await import('../services/invoice.service');

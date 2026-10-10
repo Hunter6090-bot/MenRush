@@ -3,7 +3,7 @@ import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
 import { z } from 'zod';
-import { userService } from '../services/user.service';
+import { ShowDistancePremiumError, userService } from '../services/user.service';
 import { profileViewsService } from '../services/profile-views.service';
 import { notificationService } from '../services/notification.service';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
@@ -175,10 +175,17 @@ router.get('/me/referrals', async (req: AuthRequest, res: Response) => {
 router.get('/search', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const q = typeof req.query.q === 'string' ? req.query.q : '';
-    const users = await userService.searchProfiles(req.userId!, q);
+    const by = req.query.by === 'place' ? 'place' : 'name';
+    const users = await userService.searchProfiles(req.userId!, q, by);
     res.json(users);
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    const { PlaceLookupError, PLACE_LOOKUP_FAILED_MESSAGE } = await import('../lib/ukIePlace');
+    if (error instanceof PlaceLookupError || error?.name === 'PlaceLookupError') {
+      res.status(400).json({ error: PLACE_LOOKUP_FAILED_MESSAGE });
+      return;
+    }
+    // Never surface raw codes / stack internals to the client.
+    res.status(400).json({ error: 'Search failed. Please try again.' });
   }
 });
 
@@ -199,10 +206,12 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
       limit,
       offset,
       format,
+      scope,
     } = req.query;
 
+    const discoveryScope: 'radius' | 'uk_ie' = scope === 'uk_ie' ? 'uk_ie' : 'radius';
     const requestedRadius = radius ? Number.parseFloat(radius as string) : 5;
-    if (!Number.isFinite(requestedRadius)) {
+    if (discoveryScope === 'radius' && !Number.isFinite(requestedRadius)) {
       return res.status(400).json({ error: 'Invalid radius' });
     }
 
@@ -220,15 +229,11 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
       new: isNew === 'true' || isNew === '1',
       lookingFor: typeof lookingFor === 'string' ? lookingFor : undefined,
       mood: typeof mood === 'string' ? mood : undefined,
+      discoveryScope,
     };
 
-    const queryLat = typeof req.query.lat === 'string' ? Number.parseFloat(req.query.lat) : NaN;
-    const queryLng = typeof req.query.lng === 'string' ? Number.parseFloat(req.query.lng) : NaN;
-    const clientLocation =
-      Number.isFinite(queryLat) && Number.isFinite(queryLng)
-        ? { lat: queryLat, lng: queryLng }
-        : undefined;
-
+    // Origin is the stored location only (POST /api/users/location sets it,
+    // through the jump gate). Coordinates in the URL are stripped upstream and never read.
     const pageNum = page ? Math.max(1, Number.parseInt(String(page), 10) || 1) : 1;
     const limitNum = limit
       ? Math.min(Math.max(1, Number.parseInt(String(limit), 10) || 60), 200)
@@ -239,9 +244,9 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
 
     const result = await userService.getNearbyUsers(
       req.userId!,
-      Math.min(Math.max(requestedRadius, 0.8), 161),
+      discoveryScope === 'uk_ie' ? 0 : Math.min(Math.max(requestedRadius, 0.8), 161),
       filters,
-      clientLocation,
+      undefined,
       { page: pageNum, limit: limitNum, offset: offsetNum },
     );
 
@@ -268,14 +273,8 @@ router.get('/profile/:id', verifiedMiddleware, async (req: AuthRequest, res: Res
   try {
     const viewerId = req.userId!;
     const targetId = req.params.id;
-    const queryLat = typeof req.query.lat === 'string' ? Number.parseFloat(req.query.lat) : NaN;
-    const queryLng = typeof req.query.lng === 'string' ? Number.parseFloat(req.query.lng) : NaN;
-    const clientLocation =
-      Number.isFinite(queryLat) && Number.isFinite(queryLng)
-        ? { lat: queryLat, lng: queryLng }
-        : undefined;
-
-    const user = await userService.getPublicProfile(viewerId, targetId, clientLocation);
+    // Distance uses the viewer's stored location (set by POST /api/users/location).
+    const user = await userService.getPublicProfile(viewerId, targetId);
     if (!user) {
       return res.status(404).json({ error: 'User not found', code: 'user_not_found' });
     }
@@ -294,7 +293,7 @@ router.get('/profile/:id', verifiedMiddleware, async (req: AuthRequest, res: Res
             type: 'profile_view',
             title: `${viewerName} viewed your profile`,
             body: 'See who checked you out.',
-            linkPath: '/profile',
+            linkPath: `/profile/${viewerId}`,
           });
         } catch (sideEffectError) {
           console.error('[profile-view-side-effect]', sideEffectError);
@@ -409,9 +408,14 @@ router.get('/likes/sent', verifiedMiddleware, async (req: AuthRequest, res: Resp
 router.post('/location', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const data = LocationSchema.parse(req.body);
-    await userService.updateLocation(req.userId!, data.lat, data.lng);
+    const accepted = await userService.updateLocation(req.userId!, data.lat, data.lng);
     // Privacy: location updates power Nearby distance only.
     // Do not fan out continuous live pins to matches — chat uses one-shot location messages.
+    if (!accepted) {
+      // Jump gate refused the fix: nothing stored, the last location stands.
+      // 200 so old app builds treat it like a skipped update, not an error.
+      return res.json({ success: false, code: 'location_not_accepted' });
+    }
     res.json({ success: true });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -424,6 +428,9 @@ router.post('/profile', verifiedMiddleware, async (req: AuthRequest, res: Respon
     const user = await userService.updateProfile(req.userId!, data);
     res.json(user);
   } catch (error: any) {
+    if (error instanceof ShowDistancePremiumError) {
+      return res.status(402).json({ error: error.code, feature: error.feature });
+    }
     res.status(400).json({ error: error.message });
   }
 });

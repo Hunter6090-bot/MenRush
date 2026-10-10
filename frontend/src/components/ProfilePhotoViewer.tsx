@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeftIcon } from './MobileBackButton';
 import { armOverlayBack } from '../lib/overlayBack';
 import { CHAT_IMAGE_VIEWER_FRAME } from '../lib/chatImageViewerFrame';
+import { isPlaceholderAvatarUrl } from '../lib/avatarFallback';
+import { FadedBrandFace } from './FadedBrandFace';
 
 const PROFILE_PHOTO_OVERLAY_ID = 'profile-photo-viewer';
 
@@ -17,7 +19,12 @@ export interface ProfilePhotoViewerProps {
  * view-once consume logic.
  */
 export function ProfilePhotoViewer({ src, alt = 'Photo', onClose }: ProfilePhotoViewerProps) {
-  const [status, setStatus] = useState<'loading' | 'shown' | 'error'>('loading');
+  // Legacy default (generic SVG / logo plate / empty) is never enlarged — show the
+  // ONE Brand placeholder instead (Pete lock 6 Oct 2026). Real photos unchanged.
+  const isPlaceholder = isPlaceholderAvatarUrl(src);
+  const [status, setStatus] = useState<'loading' | 'shown' | 'error'>(
+    isPlaceholder ? 'error' : 'loading',
+  );
   const [attempt, setAttempt] = useState(0);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -109,21 +116,32 @@ export function ProfilePhotoViewer({ src, alt = 'Photo', onClose }: ProfilePhoto
       >
         {status === 'error' ? (
           <div className="flex flex-col items-center gap-3 px-8 text-center">
-            <p className="text-sm" style={{ color: 'var(--cream)' }}>
-              Couldn’t load this photo.
-            </p>
-            <button
-              type="button"
-              data-testid="profile-photo-viewer-retry"
-              onClick={() => {
-                setStatus('loading');
-                setAttempt((n) => n + 1);
-              }}
-              className="mt-1 rounded-full px-5 py-2 text-xs font-semibold"
-              style={{ background: 'linear-gradient(135deg, #C4832A, #A45E18)', color: '#FFF5E6' }}
+            <span
+              className="block overflow-hidden rounded-full"
+              style={{ width: 'min(60vw, 240px)', height: 'min(60vw, 240px)' }}
+              data-testid="profile-photo-viewer-brand-face"
             >
-              Retry
-            </button>
+              <FadedBrandFace variant="profile" label={alt} />
+            </span>
+            {isPlaceholder ? null : (
+              <>
+                <p className="text-sm" style={{ color: 'var(--cream)' }}>
+                  Couldn’t load this photo.
+                </p>
+                <button
+                  type="button"
+                  data-testid="profile-photo-viewer-retry"
+                  onClick={() => {
+                    setStatus('loading');
+                    setAttempt((n) => n + 1);
+                  }}
+                  className="mt-1 rounded-full px-5 py-2 text-xs font-semibold"
+                  style={{ background: 'linear-gradient(135deg, #C4832A, #A45E18)', color: '#FFF5E6' }}
+                >
+                  Retry
+                </button>
+              </>
+            )}
           </div>
         ) : (
           <>

@@ -64,8 +64,8 @@ export function getManualPaymentInstructions(reference: string): ManualPaymentIn
   const instructions =
     process.env.MANUAL_PAYMENT_INSTRUCTIONS?.trim() ||
     (bank_configured
-      ? 'Use your payment reference as the bank transfer reference. Premium will be activated upon ops confirmation.'
-      : 'Bank transfer details are being provisioned by ops. Use your payment reference when contacting ops.');
+      ? 'Use your payment reference as the bank transfer reference. Premium switches on once we have confirmed your payment.'
+      : 'Bank details are not shown here yet. Email support@menrush.com with your payment reference and we will reply with how to pay.');
 
   return {
     account_name,
@@ -275,8 +275,8 @@ export const invoiceService = {
         await notificationService.create({
           userId: invoice.user_id,
           type: 'system',
-          title: 'Premium Activated',
-          body: `Payment for invoice ${invoice.invoice_number} received. MenRush Premium is active.`,
+          title: 'Your Premium is on',
+          body: `Thanks, your payment for invoice ${invoice.invoice_number} has arrived and your Premium is on.`,
           linkPath: '/premium',
         });
       } catch (err) {
@@ -293,27 +293,27 @@ export const invoiceService = {
             : 'Active';
 
           const html = buildTransactionalEmail({
-            title: 'MenRush Premium Activated',
-            preheader: `Payment confirmed for ${invoice.invoice_number}.`,
-            headlineHtml: 'MenRush <span style="color:#C4832A;">Premium</span> Active',
-            subheadline: `Payment of £${formattedAmount} confirmed.`,
+            title: 'Your MenRush Premium is on',
+            preheader: `Thanks, your payment for ${invoice.invoice_number} has arrived.`,
+            headlineHtml: 'Your <span style="color:#C4832A;">Premium</span> is on',
+            subheadline: `We have your payment of £${formattedAmount}.`,
             bodyHtml:
-              transactionalParagraph(`Hi ${user.name || 'there'} — your manual payment has been confirmed.`) +
+              transactionalParagraph(`Hi ${user.name || 'there'}, thank you. Your bank transfer has come through and we have checked it.`) +
               transactionalParagraph(
-                `Your Premium perks are active${grantResult.premiumUntil ? ` until <strong style="color:#F0E0C0;">${untilStr}</strong>` : ''}.`,
+                `Your Premium perks are on now${grantResult.premiumUntil ? ` and run until <strong style="color:#F0E0C0;">${untilStr}</strong>` : ''}. If anything looks wrong, just reply to this email.`,
               ) +
               transactionalParagraph(
                 `<span style="color:#A89070; font-size:13px;">Invoice: ${invoice.invoice_number} &bull; Reference: ${invoice.payment_reference}</span>`,
               ),
             ctaUrl: `${process.env.FRONTEND_URL || 'https://menrush.com'}/premium`,
-            ctaLabel: 'View Premium status',
+            ctaLabel: 'Open MenRush',
           });
 
           await sendTransactionalEmail({
             to: user.email,
-            subject: 'MenRush Premium Activated — Payment Confirmed',
+            subject: 'Your MenRush Premium is on',
             html,
-            text: `Hi ${user.name || 'there'} — your payment of £${formattedAmount} for invoice ${invoice.invoice_number} is confirmed. Premium is active until ${untilStr}.`,
+            text: `Hi ${user.name || 'there'}, thank you. Your payment of £${formattedAmount} for invoice ${invoice.invoice_number} has come through and your Premium is on${grantResult.premiumUntil ? ` until ${untilStr}` : ''}. If anything looks wrong, just reply to this email.`,
           });
         }
       } catch (err) {

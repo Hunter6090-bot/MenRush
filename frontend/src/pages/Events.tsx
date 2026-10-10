@@ -99,7 +99,7 @@ export const Events = () => {
           <p
             role="status"
             data-testid="event-checkin-notice"
-            className="mb-4 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--cream)]"
+            className="mb-4 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2 text-[15px] text-[var(--cream)]"
           >
             {checkInNotice}
           </p>
@@ -129,9 +129,8 @@ export const Events = () => {
                 <p className="text-[16px] font-extrabold text-[var(--cream)]">
                   We need your location for Events
                 </p>
-                <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--cream-muted)]">
-                  Not broadcasting an exact public pin — we need GPS privately to show what&apos;s near
-                  you. Shared only while you use the app.
+                <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-[var(--cream-muted)]">
+                  We use your location to show what&apos;s near you.
                 </p>
                 <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
                   <Link
@@ -252,9 +251,11 @@ export const Events = () => {
                             setCheckInNotice('');
                             void eventsAPI
                               .checkIn(ev.id)
-                              .then(() => {
+                              .then((res) => {
                                 setCheckInNotice(
-                                  `Checked in at ${ev.venue_name || ev.name}. Pin stays on the map for ${CHECKIN_TTL_HOURS} hours.`,
+                                  res.data.spot
+                                    ? `Checked in at ${ev.venue_name || ev.name}. Pin stays on the map for ${CHECKIN_TTL_HOURS} hours.`
+                                    : `You're in Ghost or hidden, so no pin was added at ${ev.venue_name || ev.name}.`,
                                 );
                               })
                               .catch((err: { response?: { data?: { error?: string } } }) => {

@@ -16,6 +16,46 @@ function mockUser(overrides: Partial<NearbyUser> = {}): NearbyUser {
   };
 }
 
+describe('NearbyProfileGrid online square border', () => {
+  it('paints a green border on the square photo when online', () => {
+    const user = mockUser({ id: 'u-online', name: 'James', online: true });
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid users={[user]} loading={false} />
+      </MemoryRouter>,
+    );
+
+    const frame = screen.getByTestId('discovery-photo-frame');
+    expect(frame).toHaveAttribute('data-online', 'true');
+    expect(screen.getByTestId('online-photo-border')).toBeInTheDocument();
+  });
+
+  it('does not paint the green border when offline', () => {
+    const user = mockUser({ id: 'u-off', name: 'Dave', online: false });
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid users={[user]} loading={false} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId('discovery-photo-frame')).toHaveAttribute('data-online', 'false');
+    expect(screen.queryByTestId('online-photo-border')).not.toBeInTheDocument();
+  });
+
+  it('shows verified tick without a circular badge', () => {
+    const user = mockUser({ id: 'u-ver', name: 'Kev', online: true, is_verified: true });
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid users={[user]} loading={false} />
+      </MemoryRouter>,
+    );
+
+    const tick = screen.getByRole('button', { name: /Verified/ });
+    expect(tick.className).not.toMatch(/rounded-full/);
+    expect(tick.className).not.toMatch(/bg-\[#C4832A\]/);
+  });
+});
+
 describe('NearbyProfileGrid distance chips', () => {
   it('renders distance chip in miles on grid profile card', () => {
     const user = mockUser({ id: 'u1', name: 'James', distance_km: 1.93 });
@@ -61,6 +101,35 @@ describe('NearbyProfileGrid distance chips', () => {
 
     const distanceChip = screen.getByTestId('nearby-grid-distance-u3');
     expect(distanceChip.textContent).toContain('Nearby');
+  });
+});
+
+describe('NearbyProfileGrid distance shows once per card', () => {
+  it('renders each card distance exactly once, in miles, in the meta line (no corner chip)', () => {
+    const users = [
+      mockUser({ id: 'd1', name: 'James', distance_km: 1.93 }),
+      mockUser({ id: 'd2', name: 'Alex', distance_km: 8.05 }),
+    ];
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid users={users} loading={false} />
+      </MemoryRouter>,
+    );
+
+    const cards = screen.getAllByTestId('nearby-grid-card');
+    expect(cards).toHaveLength(2);
+    const expected = ['1.2 mi', '5.0 mi'];
+    cards.forEach((card, i) => {
+      const text = card.textContent ?? '';
+      const label = expected[i];
+      expect(text.split(label).length - 1).toBe(1);
+      // No km anywhere on the card — UK miles only.
+      expect(text).not.toMatch(/\bkm\b/);
+      // Exactly one distance node per card, and it sits in the meta line.
+      expect(card.querySelectorAll('[data-testid^="nearby-grid-distance-"]')).toHaveLength(1);
+      const dist = card.querySelector('[data-testid^="nearby-grid-distance-"]') as HTMLElement;
+      expect(dist.closest('p')?.textContent).toMatch(new RegExp(`^${label} · `));
+    });
   });
 });
 
@@ -121,6 +190,118 @@ describe('NearbyProfileGrid pagination', () => {
     expect(loadMoreBtn).toHaveTextContent('Loading more men…');
   });
 
+  it('renders sentinel element when hasMore is true and triggers onLoadMore on intersection', () => {
+    let observerCallback: (entries: IntersectionObserverEntry[]) => void = () => {};
+    const observeMock = vi.fn();
+    const disconnectMock = vi.fn();
+
+    class MockIntersectionObserver {
+      constructor(callback: (entries: IntersectionObserverEntry[]) => void) {
+        observerCallback = callback;
+      }
+      observe = observeMock;
+      disconnect = disconnectMock;
+      unobserve = vi.fn();
+    }
+
+    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
+
+    const user = mockUser({ id: 'u1', name: 'James' });
+    const onLoadMore = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid
+          users={[user]}
+          loading={false}
+          hasMore={true}
+          onLoadMore={onLoadMore}
+        />
+      </MemoryRouter>,
+    );
+
+    const sentinel = screen.getByTestId('nearby-grid-sentinel');
+    expect(sentinel).toBeInTheDocument();
+    expect(observeMock).toHaveBeenCalled();
+
+    // Trigger intersection
+    observerCallback([
+      {
+        isIntersecting: true,
+        target: sentinel,
+      } as unknown as IntersectionObserverEntry,
+    ]);
+
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
+
+    vi.unstubAllGlobals();
+  });
+
+  it('renders "End of this range · Widen search" CTA when !hasMore, users exist, and canExpandRadius is true', () => {
+    const user = mockUser({ id: 'u1', name: 'James' });
+    const onExpandRadius = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid
+          users={[user]}
+          loading={false}
+          hasMore={false}
+          canExpandRadius={true}
+          onExpandRadius={onExpandRadius}
+        />
+      </MemoryRouter>,
+    );
+
+    const widenBtn = screen.getByTestId('nearby-widen-search');
+    expect(widenBtn).toBeInTheDocument();
+    expect(widenBtn).toHaveTextContent('End of this range · Widen search');
+    expect(widenBtn.textContent).not.toMatch(/[—–]/); // No em dashes
+    expect(screen.getByText('Show men farther away')).toBeInTheDocument();
+
+    widenBtn.click();
+    expect(onExpandRadius).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides widen search CTA when canExpandRadius is false (at max radius)', () => {
+    const user = mockUser({ id: 'u1', name: 'James' });
+    const onExpandRadius = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid
+          users={[user]}
+          loading={false}
+          hasMore={false}
+          canExpandRadius={false}
+          onExpandRadius={onExpandRadius}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByTestId('nearby-widen-search')).not.toBeInTheDocument();
+  });
+
+  it('hides widen search CTA when loadingMore is true', () => {
+    const user = mockUser({ id: 'u1', name: 'James' });
+    const onExpandRadius = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid
+          users={[user]}
+          loading={false}
+          hasMore={false}
+          loadingMore={true}
+          canExpandRadius={true}
+          onExpandRadius={onExpandRadius}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByTestId('nearby-widen-search')).not.toBeInTheDocument();
+  });
+
   it('renders neutral "Men are farther out" without revealing exact count when empty radius', () => {
     render(
       <MemoryRouter>
@@ -135,5 +316,49 @@ describe('NearbyProfileGrid pagination', () => {
 
     expect(screen.getByText('Men are farther out')).toBeInTheDocument();
     expect(screen.queryByText(/14/)).not.toBeInTheDocument();
+  });
+
+  it('hides Expand radius when All (UK + Ireland) is selected', () => {
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid
+          users={[]}
+          loading={false}
+          hideExpandRadius
+          onExpandRadius={() => {}}
+          radiusLabel="All"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('No men in the UK and Ireland yet')).toBeInTheDocument();
+    expect(screen.queryByTestId('empty-expand-radius')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Expand radius/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('NearbyProfileGrid hidden distance', () => {
+  it('shows Nearby once when distance is hidden and there is no tribe tag', () => {
+    const user = mockUser({ id: 'h1', name: 'Rob', interests: [], online: true });
+    delete (user as Partial<NearbyUser>).distance_km;
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid users={[user]} loading={false} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('nearby-grid-distance-h1').textContent).toBe('Nearby');
+    const line = screen.getByTestId('nearby-grid-distance-h1').parentElement!.textContent ?? '';
+    expect(line).not.toMatch(/Nearby\s*·\s*Nearby/);
+    expect(line.match(/Nearby/g)).toHaveLength(1);
+  });
+
+  it('shows the coarse server label on the card', () => {
+    const user = mockUser({ id: 'h2', name: 'Al', distance_km: '0.80', distance_label: '<1 mi' });
+    render(
+      <MemoryRouter>
+        <NearbyProfileGrid users={[user]} loading={false} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('nearby-grid-distance-h2').textContent).toBe('<1 mi');
   });
 });

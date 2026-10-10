@@ -86,6 +86,27 @@ async function main() {
     responses = [[{ is_verified: true, veriff_status: 'approved' }]];
     await assert.rejects(() => veriffService.createSession('user-1'), /already_verified/);
     assert.equal(fetchCount, 0);
+    // #385: Veriff returns members to the Edit screen's Verify section, not /profile.
+    {
+      const { veriffCallbackUrl, VERIFF_RETURN_PATH } = await import('../src/services/veriff.service');
+      assert.equal(VERIFF_RETURN_PATH, '/profile/edit#verify');
+      const prevFrontend = process.env.FRONTEND_URL;
+      process.env.FRONTEND_URL = 'https://menrush.com/,https://www.menrush.com';
+      assert.equal(veriffCallbackUrl(), 'https://menrush.com/profile/edit#verify');
+      let sentCallback = '';
+      responses = [[{ is_verified: false, veriff_status: null, session_id: null, session_url: null }], [], []];
+      __setVeriffDepsForTests({
+        fetch: async (_url, options) => {
+          sentCallback = JSON.parse(String(options?.body)).verification.callback;
+          return new Response(JSON.stringify({ verification: { id: 'session-new', url: 'https://magic.veriff.me/new' } }), { status: 201 });
+        },
+        query: db.query,
+      });
+      assert.deepEqual(await veriffService.createSession('user-1'), { sessionId: 'session-new', sessionUrl: 'https://magic.veriff.me/new' });
+      assert.equal(sentCallback, 'https://menrush.com/profile/edit#verify', 'Veriff callback goes to /profile/edit#verify');
+      __setVeriffDepsForTests({ fetch: globalThis.fetch, query: db.query });
+      if (prevFrontend === undefined) delete process.env.FRONTEND_URL; else process.env.FRONTEND_URL = prevFrontend;
+    }
     for (const decision of ['approved', 'declined', 'review', 'resubmission_requested']) {
       responses = [
         [{ id: 'session-1', user_id: 'user-1', status: 'submitted' }],
@@ -105,6 +126,6 @@ async function main() {
     const legacy = await import('../src/services/verification');
     await assert.rejects(() => legacy.verificationService.markVerified('user-1'), /veriff_approval_required/);
   } finally { globalThis.fetch = fetchOriginal; }
-  console.log('Veriff checks passed: signatures, all decisions, under-18 DOB block, stale/unknown sessions, resume, pending, and legacy badge protection.');
+  console.log('Veriff checks passed: signatures, all decisions, under-18 DOB block, stale/unknown sessions, resume, pending, and legacy badge protection, and the /profile/edit#verify callback.');
 }
 main().catch((err) => { console.error(err); process.exitCode = 1; });

@@ -163,7 +163,7 @@ describe('Premium manual invoice stopgap and password step', () => {
           bank_name: null,
           currency: 'GBP',
           payment_reference: 'MR-87654321',
-          instructions: 'Bank transfer details are being provisioned by ops.',
+          instructions: 'Bank details are not shown here yet.',
           bank_configured: false,
         },
       },
@@ -190,7 +190,7 @@ describe('Premium manual invoice stopgap and password step', () => {
     // Verifies no mock bank coordinates appear
     expect(screen.queryByText('Sort Code:')).not.toBeInTheDocument();
     expect(screen.queryByText('Account No:')).not.toBeInTheDocument();
-    expect(screen.getByText(/Bank transfer coordinates are being provisioned by ops/i)).toBeInTheDocument();
+    expect(screen.getByText(/Bank details are not shown here yet/i)).toBeInTheDocument();
   });
 
   it('includes set/change password step in the manual payment journey', async () => {

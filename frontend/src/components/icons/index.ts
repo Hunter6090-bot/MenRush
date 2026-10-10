@@ -6,7 +6,7 @@
  * Usage:
  *   import { IconDiscover, IconPulse } from "@/components/icons";
  *   <IconDiscover className="text-copper" size={28} />  // Nearby — two silhouettes
- *   <IconMatches className="text-copper" size={28} />   // Matches — interlocking rings
+ *   <IconMatches className="text-copper" size={28} filled />  // Claude Design pack
  */
 export { IconDiscover } from "./IconDiscover";
 export { IconPulse } from "./IconPulse";
@@ -15,6 +15,8 @@ export { IconChat } from "./IconChat";
 export { IconCommunity } from "./IconCommunity";
 export { IconNotifications } from "./IconNotifications";
 export { IconRooms } from "./IconRooms";
+export { IconOut } from "./IconOut";
+export { IconDiscretion } from "./IconDiscretion";
 export { IconProfile } from "./IconProfile";
 export { IconClose } from "./IconClose";
 export { IconEvents } from "./IconEvents";
@@ -23,3 +25,11 @@ export { IconSettings } from "./IconSettings";
 export { IconMapExpand } from "./IconMapExpand";
 export { IconMore } from "./IconMore";
 export { IconSignOut } from "./IconSignOut";
+export { IconUnmatch } from "./IconUnmatch";
+export { IconInstagram } from "./IconInstagram";
+export { IconBluesky } from "./IconBluesky";
+
+export { IconGrid } from "./IconGrid";
+export { IconMapPin } from "./IconMapPin";
+export { IconPlane } from "./IconPlane";
+export { SpotTypeIcon, spotTypeKey, type SpotTypeKey } from "./SpotTypeIcon";

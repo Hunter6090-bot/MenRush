@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { usersAPI } from '../api/client';
+import { isYouRowsPath } from '../lib/youRows';
 import { LOCATION_PRIVACY_LINE, requestDeviceLocation } from '../lib/deviceLocation';
 import { useLocationStore } from '../hooks/store';
-import { formatRadiusControlLabel, clampRadiusKm } from '../lib/discoveryFormat';
+import { formatRadiusControlLabel, migrateStoredRadiusKm } from '../lib/discoveryFormat';
 
 const RADIUS_KEY = 'menrush_default_radius_km';
 
@@ -27,8 +28,9 @@ export function LocationPresenceStrip() {
     pathname.startsWith('/profile/setup') ||
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
-    pathname.startsWith('/beta') ||
+    pathname.startsWith('/invite') ||
     pathname.startsWith('/coming-soon') ||
+    isYouRowsPath(pathname) ||
     pathname === '/';
 
   const storeReady =
@@ -74,7 +76,7 @@ export function LocationPresenceStrip() {
         setLocation(result.lat, result.lng);
         setMissing(false);
         setNotice('');
-        const km = clampRadiusKm(Number(localStorage.getItem(RADIUS_KEY) ?? 5));
+        const km = migrateStoredRadiusKm(Number(localStorage.getItem(RADIUS_KEY) ?? 5));
         setSuccess(`Location is active. Showing people within ${formatRadiusControlLabel(km)}.`);
         window.setTimeout(() => setSuccess(''), 5000);
       } catch {
@@ -111,7 +113,7 @@ export function LocationPresenceStrip() {
         role="status"
         data-testid="location-presence-success"
       >
-        <p className="mx-auto max-w-3xl text-[13px] font-semibold text-[#8FC773]">{success}</p>
+        <p className="mx-auto max-w-3xl text-sm font-semibold text-[#8FC773]">{success}</p>
       </div>
     );
   }
@@ -126,12 +128,12 @@ export function LocationPresenceStrip() {
     >
       <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-extrabold text-[var(--cream)]">Turn on location for Nearby</p>
-          <p className="text-[11px] leading-relaxed text-[var(--cream-muted)]">
+          <p className="text-base font-extrabold text-[var(--cream)]">Turn on location for Nearby</p>
+          <p className="text-[15px] leading-snug text-[var(--cream-muted)]">
             {LOCATION_PRIVACY_LINE}
           </p>
           {notice ? (
-            <p className="mt-1 text-[11px] font-semibold text-[#E0A14A]" data-testid="location-strip-error">
+            <p className="mt-1 text-sm font-semibold text-[#E0A14A]" data-testid="location-strip-error">
               {notice}
             </p>
           ) : null}
@@ -140,7 +142,7 @@ export function LocationPresenceStrip() {
           type="button"
           disabled={busy}
           onClick={() => void enableLocation()}
-          className="min-h-[44px] shrink-0 rounded-full bg-[#C4832A] px-4 py-2 text-[11px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] disabled:opacity-60"
+          className="min-h-[44px] shrink-0 rounded-full bg-[#C4832A] px-4 py-2 text-sm font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A] disabled:opacity-60"
         >
           {busy ? 'Locating…' : 'Enable location'}
         </button>

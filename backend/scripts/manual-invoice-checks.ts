@@ -22,6 +22,7 @@ import pool, { query } from '../src/db';
 import { authService } from '../src/services/auth.service';
 import { invoiceService, getManualPaymentInstructions } from '../src/services/invoice.service';
 import { premiumService } from '../src/services/premium.service';
+import { ALWAYS_PREMIUM_NAMES } from '../src/lib/always-premium';
 
 type Test = { name: string; run: () => void | Promise<void> };
 const tests: Test[] = [];
@@ -33,7 +34,8 @@ function test(name: string, run: Test['run']) {
 async function createTestUser(emailSuffix: string, name = 'TestUser', isAlways = false) {
   const id = randomUUID();
   const email = `invoice-test-${emailSuffix}-${randomUUID().slice(0, 6)}@test.menrush.local`;
-  const userName = isAlways ? 'BOA90' : name;
+  // Uses the shared always-Premium list so no member name is hard coded here.
+  const userName = isAlways ? ALWAYS_PREMIUM_NAMES[0] : name;
   await query(
     `INSERT INTO users (id, email, password_hash, name, age, is_verified, verification_status)
      VALUES ($1, $2, '', $3, 25, TRUE, 'verified')`,
@@ -159,7 +161,7 @@ test('Stacking rules: Paid invoice does not shorten longer existing entitlement'
 });
 
 test('Stacking rules: Always-premium accounts never lose open-ended status', async () => {
-  const user = await createTestUser('always-owner', 'BOA90', true);
+  const user = await createTestUser('always-owner', 'AlwaysOwnerFixture', true);
   await query(
     `UPDATE users SET is_premium = TRUE, premium_tier = 'premium', premium_until = NULL WHERE id = $1`,
     [user.id],
@@ -428,11 +430,11 @@ test('HTTP API routes: invoice create -> unpaid view -> admin confirm -> status 
   }
 });
 
-test('Migration 067 is tracked in schema_migrations', async () => {
+test('Migration 085 is tracked in schema_migrations', async () => {
   const migRes = await query(
-    `SELECT version FROM schema_migrations WHERE version = '067_premium_invoices.sql'`,
+    `SELECT version FROM schema_migrations WHERE version = '085_premium_invoices.sql'`,
   );
-  assert.ok(migRes.rows.length >= 1, 'Migration for premium_invoices recorded as 067');
+  assert.ok(migRes.rows.length >= 1, 'Migration for premium_invoices recorded as 085');
 });
 
 async function main() {

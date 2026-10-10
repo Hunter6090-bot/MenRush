@@ -6,6 +6,20 @@ import { isAlwaysPremiumName } from '../lib/always-premium';
 
 type Queryable = PoolClient | typeof pool;
 
+/** Options for the no-stack checks when run inside the register transaction. */
+export interface ThreeMonthCheckOptions {
+  /** Transaction client, so rows written earlier in the same transaction are seen. */
+  client?: Queryable;
+  /** Pride invite being redeemed right now: never counted against its own holder. */
+  excludeInviteId?: string;
+  /**
+   * Redeeming a Pride invite for this email: the holder's other UNUSED Pride
+   * invites for the same email are theirs too, so they do not block. They are
+   * revoked once this one is redeemed (one grant per person).
+   */
+  excludeOwnPendingPrideInvites?: boolean;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -121,14 +135,14 @@ export const BSF26_LAUNCH_YMD_LONDON = '2026-10-01';
 
 /**
  * MenRush launch ad campaign — code MR3FREE (Al P0 BLOCKING).
- * Live from 17 Sep 2026 until 23:59 Europe/London on 5 October 2026.
+ * Live from 17 Sep 2026 until 23:59 Europe/London on 31 October 2026 (Al extended 8 Oct 2026; was 5 Oct).
  * Grants 3 months of Premium free, unlocked from day one.
  *
  * Locked:
  * - Code: MR3FREE (accept mr3free; case-insensitive, no spaces)
  * - Campaign name: MenRush launch
- * - Claim-by: end of 5 October 2026 Europe/London inclusive
- *   (BST that day = UTC+1 → 23:59:59 London = 2026-10-05T22:59:59Z)
+ * - Claim-by: end of 31 October 2026 Europe/London inclusive
+ *   (GMT that day, BST ends 25 Oct → 23:59:59 London = 2026-10-31T23:59:59Z)
  * - Live from: 17 September 2026 Europe/London (00:00 BST = 2026-09-16T23:00:00Z)
  * - One use per account (campaign + email_hash / user_id unique in shared_promo_redemptions)
  * - Does not cancel 12-month beta promises (preserves longer premium_until)
@@ -141,12 +155,12 @@ export const SHARED_MR3FREE_NORMALIZED = 'MR3FREE';
 export const SHARED_MR3FREE_CAMPAIGN = 'menrush_launch';
 export const SHARED_MR3FREE_CAMPAIGN_NAME = 'MenRush launch';
 export const SHARED_MR3FREE_MONTHS_FREE = 3;
-/** Claim-by: end of day 5 Oct 2026 Europe/London (inclusive). */
-export const SHARED_MR3FREE_ENTER_BY = new Date('2026-10-05T22:59:59Z');
+/** Claim-by: end of day 31 Oct 2026 Europe/London (inclusive, GMT). Al extended from 5 Oct on 8 Oct 2026. */
+export const SHARED_MR3FREE_ENTER_BY = new Date('2026-10-31T23:59:59Z');
 /** Live from: 17 Sep 2026 Europe/London (00:00 BST = 2026-09-16T23:00:00Z). */
 export const SHARED_MR3FREE_LIVE_FROM = new Date('2026-09-16T23:00:00Z');
 export const SHARED_MR3FREE_EXPIRED_MESSAGE =
-  'This promo expired on 5 October 2026.';
+  'This promo expired on 31 October 2026.';
 const EUROPE_LONDON = 'Europe/London';
 
 export function isPrideInviteIssueOpen(now = new Date()): boolean {
@@ -181,13 +195,34 @@ export function europeLondonYmd(d: Date): string {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
+/** Europe/London offset from UTC at instant t, in ms (BST 3600000, GMT 0). */
+function londonUtcOffsetMs(t: number): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: EUROPE_LONDON,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(new Date(t));
+  const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value);
+  const wall = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
+  return wall - t;
+}
+
 /**
- * Start of a Europe/London calendar day as a UTC Date.
- * Claim window (1–5 Oct 2026) is BST (UTC+1); midnight London = previous day 23:00Z.
+ * Start of a Europe/London calendar day as a UTC Date, using the zone's own
+ * rules for that date: BST days start at 23:00Z the day before, GMT days at
+ * 00:00Z. No fixed offset.
  */
 export function startOfEuropeLondonDay(ymd: string): Date {
-  // Oct 2026 claim window is BST. Explicit offset matches Al's Europe/London calendar lock.
-  return new Date(`${ymd}T00:00:00+01:00`);
+  const [y, m, d] = ymd.split('-').map(Number);
+  const guess = Date.UTC(y, m - 1, d, 0, 0, 0);
+  let t = guess - londonUtcOffsetMs(guess);
+  t = guess - londonUtcOffsetMs(t);
+  return new Date(t);
 }
 
 /**
@@ -338,9 +373,9 @@ export type SharedMr3FreeValidateResult =
 
 export const promoService = {
   /** True if this email was issued a legacy personal Pride code (closed claim form). */
-  async emailHasBrightonPrideClaim(email: string): Promise<boolean> {
+  async emailHasBrightonPrideClaim(email: string, db: Queryable = pool): Promise<boolean> {
     const emailHash = hashEmail(email);
-    const result = await query(
+    const result = await db.query(
       `SELECT 1 FROM promo_codes
        WHERE campaign = $1 AND email_hash = $2
        LIMIT 1`,
@@ -349,9 +384,9 @@ export const promoService = {
     return result.rows.length > 0;
   },
 
-  async emailHasPublicPrideRedeem(email: string): Promise<boolean> {
+  async emailHasPublicPrideRedeem(email: string, db: Queryable = pool): Promise<boolean> {
     const emailHash = hashEmail(email);
-    const result = await query(
+    const result = await db.query(
       `SELECT 1 FROM shared_promo_redemptions
        WHERE campaign = $1 AND email_hash = $2
        LIMIT 1`,
@@ -361,9 +396,9 @@ export const promoService = {
   },
 
   /** True if this email already booked Pride via a Pride-flagged MENRUSH invite. */
-  async emailHasPrideInviteRedeem(email: string): Promise<boolean> {
+  async emailHasPrideInviteRedeem(email: string, db: Queryable = pool): Promise<boolean> {
     const emailHash = hashEmail(email);
-    const result = await query(
+    const result = await db.query(
       `SELECT 1 FROM shared_promo_redemptions
        WHERE campaign = $1 AND email_hash = $2
        LIMIT 1`,
@@ -373,9 +408,9 @@ export const promoService = {
   },
 
   /** True if this email already redeemed BSF26 (one account, no re-use). */
-  async emailHasBsf26Redeem(email: string): Promise<boolean> {
+  async emailHasBsf26Redeem(email: string, db: Queryable = pool): Promise<boolean> {
     const emailHash = hashEmail(email);
-    const result = await query(
+    const result = await db.query(
       `SELECT 1 FROM shared_promo_redemptions
        WHERE campaign = $1 AND email_hash = $2
        LIMIT 1`,
@@ -385,9 +420,9 @@ export const promoService = {
   },
 
   /** True if this email already redeemed MR3FREE (one account, no re-use). */
-  async emailHasMr3FreeRedeem(email: string): Promise<boolean> {
+  async emailHasMr3FreeRedeem(email: string, db: Queryable = pool): Promise<boolean> {
     const emailHash = hashEmail(email);
-    const result = await query(
+    const result = await db.query(
       `SELECT 1 FROM shared_promo_redemptions
        WHERE campaign IN ($1, $2) AND email_hash = $3
        LIMIT 1`,
@@ -396,18 +431,28 @@ export const promoService = {
     return result.rows.length > 0;
   },
 
-  /** Outstanding unused Pride-flagged invite for this email. */
-  async emailHasPendingPrideInvite(email: string): Promise<boolean> {
+  /**
+   * Outstanding unused Pride-flagged invite for this email.
+   * Pass the register transaction client and the invite being redeemed so a
+   * holder's own code is never counted against them (it is marked used inside
+   * that transaction, which a separate pool connection cannot see).
+   */
+  async emailHasPendingPrideInvite(email: string, opts: ThreeMonthCheckOptions = {}): Promise<boolean> {
+    // Every row this query can find is issued to this same email, so when the
+    // holder is redeeming one of their own Pride invites none of them count.
+    if (opts.excludeOwnPendingPrideInvites) return false;
+    const db: Queryable = opts.client ?? pool;
     const normalised = email.trim().toLowerCase();
-    const pendingInvite = await query(
+    const pendingInvite = await db.query(
       `SELECT 1 FROM beta_invite_codes
        WHERE LOWER(issued_email) = $1
          AND pride_months_free IS NOT NULL
          AND revoked_at IS NULL
          AND use_count < max_uses
          AND (expires_at IS NULL OR expires_at > NOW())
+         AND ($2::text IS NULL OR id::text <> $2::text)
        LIMIT 1`,
-      [normalised],
+      [normalised, opts.excludeInviteId ?? null],
     );
     return pendingInvite.rows.length > 0;
   },
@@ -415,21 +460,23 @@ export const promoService = {
   /**
    * Any Pride path already claimed or outstanding (one grant, no stack).
    */
-  async emailHasAnyPridePath(email: string): Promise<boolean> {
-    if (await this.emailHasPublicPrideRedeem(email)) return true;
-    if (await this.emailHasPrideInviteRedeem(email)) return true;
-    if (await this.emailHasBrightonPrideClaim(email)) return true;
-    if (await this.emailHasPendingPrideInvite(email)) return true;
+  async emailHasAnyPridePath(email: string, opts: ThreeMonthCheckOptions = {}): Promise<boolean> {
+    const db: Queryable = opts.client ?? pool;
+    if (await this.emailHasPublicPrideRedeem(email, db)) return true;
+    if (await this.emailHasPrideInviteRedeem(email, db)) return true;
+    if (await this.emailHasBrightonPrideClaim(email, db)) return true;
+    if (await this.emailHasPendingPrideInvite(email, opts)) return true;
     return false;
   },
 
   /**
-   * Any 3-month promo already claimed or outstanding (Pride, BSF26, or MR3FREE — no stack).
+   * Any 3-month promo already claimed or outstanding (Pride, BSF26 or MR3FREE, no stack).
    */
-  async emailHasAnyThreeMonthPromo(email: string): Promise<boolean> {
-    if (await this.emailHasAnyPridePath(email)) return true;
-    if (await this.emailHasBsf26Redeem(email)) return true;
-    if (await this.emailHasMr3FreeRedeem(email)) return true;
+  async emailHasAnyThreeMonthPromo(email: string, opts: ThreeMonthCheckOptions = {}): Promise<boolean> {
+    const db: Queryable = opts.client ?? pool;
+    if (await this.emailHasAnyPridePath(email, opts)) return true;
+    if (await this.emailHasBsf26Redeem(email, db)) return true;
+    if (await this.emailHasMr3FreeRedeem(email, db)) return true;
     return false;
   },
 
@@ -551,11 +598,18 @@ export const promoService = {
     userId: string,
     monthsFree: number,
     client?: PoolClient,
+    redeemingInviteId?: string,
   ): Promise<{ monthsFree: number; premiumUntil: Date }> {
     const db: Queryable = client ?? pool;
     const emailHash = hashEmail(email);
 
-    if (await this.emailHasAnyThreeMonthPromo(email)) {
+    if (
+      await this.emailHasAnyThreeMonthPromo(email, {
+        client: db,
+        excludeInviteId: redeemingInviteId,
+        excludeOwnPendingPrideInvites: true,
+      })
+    ) {
       throw new Error(
         'This email already has a 3-month Premium grant. The code cannot be stacked.',
       );
@@ -577,6 +631,19 @@ export const promoService = {
       }
       throw err;
     }
+
+    // One grant per person: any other unused Pride invites for this email are
+    // revoked in the same transaction, so they cannot be used later.
+    await db.query(
+      `UPDATE beta_invite_codes
+          SET revoked_at = NOW()
+        WHERE LOWER(issued_email) = $1
+          AND pride_months_free IS NOT NULL
+          AND revoked_at IS NULL
+          AND use_count < max_uses
+          AND ($2::text IS NULL OR id::text <> $2::text)`,
+      [email.trim().toLowerCase(), redeemingInviteId ?? null],
+    );
 
     const { premiumUntil } = await this.applyPridePremiumGrant(userId, monthsFree, client);
     return { monthsFree, premiumUntil };
@@ -788,7 +855,7 @@ export const promoService = {
 
   /**
    * Validate MenRush launch promo code MR3FREE.
-   * Case-insensitive, no spaces. Claim through end of 5 October 2026 Europe/London inclusive.
+   * Case-insensitive, no spaces. Claim through end of 31 October 2026 Europe/London inclusive.
    * One per email. Does not stack with Pride or BSF26. Replaces 30-day waitlist gift.
    */
   async validateSharedMr3Free(
@@ -1153,7 +1220,7 @@ async function sendPromoEmail(params: {
             </h1>
             <p style="margin:0 0 32px;font-size:15px;color:#7a6a5a;line-height:1.6;">
               You're on the list. Your personal code is below (format PRIDE-XXXX-XXXX).
-              It is <strong style="color:#8a7a6a;">not</strong> a beta invite (MENRUSH-XXXX).
+              It is <strong style="color:#8a7a6a;">not</strong> an invite code (MENRUSH-XXXX).
               Enter this code at account signup on the same email — do not enter the public
               code PRIDE&nbsp;3MONTH&nbsp;FREE. Your ${campaign.monthsFree}&nbsp;months of Premium
               start on launch (1&nbsp;October&nbsp;2026), not the day you claimed this email.
@@ -1187,7 +1254,7 @@ async function sendPromoEmail(params: {
             <h2 style="margin:0 0 12px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#C4832A;font-weight:700;">How to redeem</h2>
             <ol style="margin:0 0 32px;padding-left:20px;color:#7a6a5a;font-size:14px;line-height:1.8;">
               <li>Keep this email — your code is locked to <strong style="color:#8a7a6a;">${to}</strong></li>
-              <li>This is a Premium promo code (PRIDE-XXXX-XXXX), not a /beta MENRUSH invite</li>
+              <li>This is a Premium promo code (PRIDE-XXXX-XXXX), not a MENRUSH invite code</li>
               <li>Redemption is at account signup — enter this personal code (not PRIDE 3MONTH FREE)</li>
               <li>When redeemed, Premium starts on launch. If open is 1&nbsp;October&nbsp;2026, Premium ends 1&nbsp;January&nbsp;2027. If launch slips, the 3 months run from the actual open date — not still 1&nbsp;January</li>
               <li>Redeem by 31&nbsp;October&nbsp;2026. Replaces the 30-day waitlist gift. Do not stack with the public /pride code</li>
@@ -1224,7 +1291,7 @@ ${campaign.monthsFree} months free Premium starting 1 October 2026 (not the day 
 
 YOUR CODE: ${formattedCode}
 
-This code is locked to ${to}. Format PRIDE-XXXX-XXXX — not a beta MENRUSH invite.
+This code is locked to ${to}. Format PRIDE-XXXX-XXXX. Not a MENRUSH invite.
 
 How to redeem:
 1. Keep this email

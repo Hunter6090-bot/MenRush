@@ -9,6 +9,21 @@ describe('Live presence honesty', () => {
     expect(isUserOnlineNow({ online: null })).toBe(false);
   });
 
+  it('keeps last_seen within 1 hour live after they leave', () => {
+    expect(
+      isUserOnlineNow({
+        online: false,
+        last_seen: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+      }),
+    ).toBe(true);
+    expect(
+      isUserOnlineNow({
+        online: false,
+        last_seen: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      }),
+    ).toBe(false);
+  });
+
   it('counts only online-now users among a nearby roster', () => {
     expect(
       countLiveOnline([

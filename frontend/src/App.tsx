@@ -1,5 +1,6 @@
 import { lazy, Suspense, type ComponentType, type ReactElement, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { LegacyInviteRedirect } from './components/LegacyInviteRedirect';
 import { useEffect } from 'react';
 import { RequireProfileSetup } from './components/RequireProfileSetup';
 import { useAuthStore } from './hooks/store';
@@ -19,6 +20,7 @@ import { savePostAuthRedirect } from './lib/profileLinks';
 import { prefetchAppRouteChunks } from './lib/routeChunks';
 import { warmTabListCaches } from './lib/tabListCache';
 import { readStoredToken } from './lib/authSession';
+import { VERIFY_HOME_PATH } from './lib/youRows';
 
 /**
  * Named-export pages → lazy defaults. Keeps Mapbox / heavy screens out of the
@@ -50,6 +52,7 @@ const ConfirmEmail = lazyNamed(() => import('./pages/ConfirmEmail'), 'ConfirmEma
 const Discover = lazyNamed(() => import('./pages/Discover'), 'Discover');
 const Stream = lazyNamed(() => import('./pages/Stream'), 'Stream');
 const Profile = lazyNamed(() => import('./pages/Profile'), 'Profile');
+const You = lazyNamed(() => import('./pages/You'), 'You');
 const ProfileSetup = lazyNamed(() => import('./pages/ProfileSetup'), 'ProfileSetup');
 const ProfileView = lazyNamed(() => import('./pages/ProfileView'), 'ProfileView');
 const Albums = lazyNamed(() => import('./pages/Albums'), 'Albums');
@@ -71,6 +74,9 @@ const RoomsRoute = lazyNamed(() => import('./components/RoomsRoute'), 'RoomsRout
 const Premium = lazyNamed(() => import('./pages/Premium'), 'Premium');
 const Events = lazyNamed(() => import('./pages/Events'), 'Events');
 const HotSpots = lazyNamed(() => import('./pages/HotSpots'), 'HotSpots');
+const TravelPage = lazyNamed(() => import('./pages/Travel'), 'TravelPage');
+const LookAroundPage = lazyNamed(() => import('./pages/Travel'), 'LookAroundPage');
+const Out = lazyNamed(() => import('./pages/Out'), 'Out');
 const AdminVenueClaims = lazyNamed(() => import('./pages/AdminVenueClaims'), 'AdminVenueClaims');
 const Settings = lazyNamed(() => import('./pages/Settings'), 'Settings');
 const Notifications = lazyNamed(() => import('./pages/Notifications'), 'Notifications');
@@ -259,7 +265,9 @@ function AppShell() {
           <Route path="/brightonpride" element={<Navigate to="/pride" replace />} />
           <Route path="/brightonpride26" element={<Navigate to="/pride" replace />} />
           <Route path="/pride" element={<Pride />} />
-          <Route path="/beta" element={<BetaAccess />} />
+          <Route path="/invite" element={<BetaAccess />} />
+          {/* Old preview address: goes home (an ?invite= code still goes to /invite). */}
+          <Route path="/beta" element={<LegacyInviteRedirect />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/register/underage" element={<RegisterUnderage />} />
@@ -275,7 +283,7 @@ function AppShell() {
           <Route path="/guidelines" element={<CommunityGuidelines />} />
           <Route path="/help" element={<Help />} />
           {/* Absolute Navigate only — no relative links under this splat, so keep path+/splat. */}
-          <Route path="/verify/*" element={<ProtectedRoute><Navigate to="/profile" replace /></ProtectedRoute>} />
+          <Route path="/verify/*" element={<ProtectedRoute><Navigate to={VERIFY_HOME_PATH} replace /></ProtectedRoute>} />
           <Route
             path="/premium"
             element={
@@ -318,10 +326,34 @@ function AppShell() {
             }
           />
           <Route
+            path="/out"
+            element={
+              <RequireVerified>
+                <Out />
+              </RequireVerified>
+            }
+          />
+          <Route
             path="/hot-spots"
             element={
               <RequireVerified>
                 <HotSpots />
+              </RequireVerified>
+            }
+          />
+          <Route
+            path="/travel"
+            element={
+              <RequireVerified>
+                <TravelPage />
+              </RequireVerified>
+            }
+          />
+          <Route
+            path="/travel/look"
+            element={
+              <RequireVerified>
+                <LookAroundPage />
               </RequireVerified>
             }
           />
@@ -351,6 +383,14 @@ function AppShell() {
           />
           <Route
             path="/profile"
+            element={
+              <RequireVerified allowIncompleteProfile>
+                <You />
+              </RequireVerified>
+            }
+          />
+          <Route
+            path="/profile/edit"
             element={
               <RequireVerified allowIncompleteProfile>
                 <Profile />

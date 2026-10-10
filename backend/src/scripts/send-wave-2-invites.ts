@@ -48,17 +48,17 @@ function isExcludedWaitlistEmail(row: WaitlistRow): boolean {
 }
 
 function buildInviteEmail(code: string, unsubscribeUrl: string): { subject: string; html: string; text: string } {
-  const betaUrl = 'https://menrush.com/beta';
+  const betaUrl = 'https://menrush.com/invite';
   const bodyHtml = [
     transactionalParagraph(
-      'You joined the MenRush waitlist — thank you for your patience. Wave 2 of the closed beta is open, and your personal invite is below.',
+      'You joined the MenRush waitlist. Thank you for your patience. Wave 2 is open, and your personal invite is below.',
     ),
     transactionalParagraph(
       `<strong style="color:#F0E0C0;">Your invite code</strong><br/><span style="font-family:ui-monospace,monospace;font-size:20px;letter-spacing:0.08em;color:#E0A14A;">${code}</span>`,
       true,
     ),
     transactionalParagraph(
-      'This code is single-use. Enter it at the beta gate, then create your account with the email this message was sent to. Premium is included free during the beta.',
+      'This code is single-use. Enter it at the invite page, then create your account with the email this message was sent to. Premium is included free for now.',
     ),
     transactionalParagraph(
       `Questions? Reply to this email or write to <a href="mailto:hello@menrush.com" style="color:#C4832A;">hello@menrush.com</a>.`,
@@ -66,9 +66,9 @@ function buildInviteEmail(code: string, unsubscribeUrl: string): { subject: stri
   ].join('');
 
   const html = buildTransactionalEmail({
-    title: 'Your MenRush beta invite',
+    title: 'Your MenRush invite',
     preheader: `Your invite code: ${code}`,
-    eyebrow: 'Beta wave 2',
+    eyebrow: 'Wave 2 invite',
     headlineHtml: 'You&apos;re <span style="color:#C4832A;">in.</span>',
     subheadline: 'Your personal invite code is ready.',
     bodyHtml,
@@ -83,18 +83,18 @@ function buildInviteEmail(code: string, unsubscribeUrl: string): { subject: stri
   );
 
   const text = [
-    "You're in — MenRush beta wave 2",
+    "You're in. MenRush wave 2",
     '',
     `Your invite code: ${code}`,
     '',
-    'Enter it at https://menrush.com/beta, then create your account with this email address.',
-    'Premium is included free during the beta.',
+    'Enter it at https://menrush.com/invite, then create your account with this email address.',
+    'Premium is included free for now.',
     '',
     `Unsubscribe: ${unsubscribeUrl}`,
   ].join('\n');
 
   return {
-    subject: 'Your MenRush beta invite is here',
+    subject: 'Your MenRush invite is here',
     html,
     text,
   };

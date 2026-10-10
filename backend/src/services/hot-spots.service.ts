@@ -96,8 +96,10 @@ export type HotSpotRow = {
   category_name: string;
   category_icon: string;
   distance_km: number | null;
+  /** Display count: exact for Premium; 0 to 4 exact, then '5+', for Free. */
   live_count: number | string;
-  live_count_exact: number;
+  /** Exact live count, Premium viewers only. Always null for Free so the number never leaves the server. */
+  live_count_exact: number | null;
   is_checked_in: boolean;
   my_checkin_anonymous: boolean | null;
   /** Short-lived check-in window in hours (2h for outdoor cruising, 4h for commercial). */
@@ -117,13 +119,74 @@ export type HotSpotRow = {
   review_count: number;
 };
 
-function formatLiveCount(exact: number, isPremium: boolean): number | string {
+export function formatLiveCount(exact: number, isPremium: boolean): number | string {
   if (isPremium) return exact;
   if (exact >= 5) return '5+';
   return exact;
 }
 
-function mapSpotRow(row: Record<string, unknown>, isPremium: boolean, currentUserId?: string): HotSpotRow {
+/** Free live-sort bucket: 0 to 4 exact, then every 5 or more counts as one '5+' bucket. */
+export const FREE_LIVE_SORT_CAP = 5;
+
+/**
+ * Live-sort SQL for the wrapped list query (`SELECT * FROM (...) q`). Postgres
+ * cannot use an output alias inside an ORDER BY expression, so the list query
+ * is wrapped and these sort on the `q` columns. Free sorts on the rounded
+ * bucket, then distance, then id, so neither the order nor which rows survive
+ * LIMIT can reveal an exact count above 4. Premium keeps the exact-count sort.
+ */
+export function liveSortOrderSql(isPremium: boolean): string {
+  return isPremium
+    ? `ORDER BY q.live_count_exact DESC, q.distance_km ASC NULLS LAST, q.name ASC`
+    : `ORDER BY LEAST(q.live_count_exact, ${FREE_LIVE_SORT_CAP}) DESC, q.distance_km ASC NULLS LAST, q.id ASC`;
+}
+
+/** Closest sort (and text search) for the wrapped list query. */
+export const CLOSEST_SORT_ORDER_SQL = `ORDER BY q.distance_km ASC NULLS LAST, q.name ASC`;
+
+/** Free viewers get last_activity_at floored to this bucket, so it cannot time a single check-in. */
+export const FREE_LAST_ACTIVITY_BUCKET_MS = 15 * 60 * 1000;
+
+/** Exact ISO time for Premium; floored to the 15-minute bucket for Free. */
+export function lastActivityForViewer(value: unknown, isPremium: boolean): string | null {
+  if (value == null) return null;
+  const ms = new Date(value as string | Date).getTime();
+  if (!Number.isFinite(ms)) return null;
+  if (isPremium) return new Date(ms).toISOString();
+  return new Date(Math.floor(ms / FREE_LAST_ACTIVITY_BUCKET_MS) * FREE_LAST_ACTIVITY_BUCKET_MS).toISOString();
+}
+
+function distanceForSort(spot: HotSpotRow): number {
+  return spot.distance_km == null ? Number.POSITIVE_INFINITY : spot.distance_km;
+}
+
+/**
+ * Live sort applied after serialization (same keys as liveSortOrderSql).
+ * Free only sees the rounded live_count, so it sorts on that: '5+' ties, then
+ * distance ascending, then id. Premium sorts on exact count then distance; the
+ * stable sort keeps the SQL name order for remaining ties.
+ */
+export function sortSpotsLive(spots: HotSpotRow[], isPremium: boolean): HotSpotRow[] {
+  const bucket = (spot: HotSpotRow): number => {
+    if (isPremium) return Number(spot.live_count_exact ?? 0);
+    return spot.live_count === '5+' ? FREE_LIVE_SORT_CAP : Math.min(Number(spot.live_count) || 0, FREE_LIVE_SORT_CAP);
+  };
+  return [...spots].sort((a, b) => {
+    const byCount = bucket(b) - bucket(a);
+    if (byCount !== 0) return byCount;
+    const byDistance = distanceForSort(a) - distanceForSort(b);
+    if (byDistance !== 0 && !Number.isNaN(byDistance)) return byDistance;
+    if (isPremium) return 0;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+}
+
+/**
+ * Single serializer for every hot-spot / cruising-spot response (list, single,
+ * check-in, comment, review, event check-in). Free viewers get only the rounded
+ * live_count; live_count_exact is null for them.
+ */
+export function mapSpotRow(row: Record<string, unknown>, isPremium: boolean, currentUserId?: string): HotSpotRow {
   const exact = Number(row.live_count_exact ?? 0);
   const claimedBy = (row.claimed_by_user_id as string | null) ?? null;
   const claimStatus = (row.claim_status as string | null) ?? 'unclaimed';
@@ -143,7 +206,7 @@ function mapSpotRow(row: Record<string, unknown>, isPremium: boolean, currentUse
     category_icon: row.category_icon as string,
     distance_km: row.distance_km != null ? Number(row.distance_km) : null,
     live_count: formatLiveCount(exact, isPremium),
-    live_count_exact: exact,
+    live_count_exact: isPremium ? exact : null,
     is_checked_in: Boolean(row.is_checked_in),
     my_checkin_anonymous:
       row.my_checkin_anonymous == null ? null : Boolean(row.my_checkin_anonymous),
@@ -153,7 +216,7 @@ function mapSpotRow(row: Record<string, unknown>, isPremium: boolean, currentUse
     venue_type: (row.venue_type as string | null) ?? null,
     source_url: (row.source_url as string | null) ?? null,
     verified_at: row.verified_at != null ? String(row.verified_at) : null,
-    last_activity_at: row.last_activity_at != null ? new Date(row.last_activity_at as string | Date).toISOString() : null,
+    last_activity_at: lastActivityForViewer(row.last_activity_at, isPremium),
     claimed_by_user_id: claimedBy,
     claim_status: claimStatus,
     is_calendar_managed: isCalendarManaged,
@@ -182,6 +245,21 @@ const SPOT_SELECT_COLS = `
           c.slug AS category_slug,
           c.name AS category_name,
           c.icon AS category_icon`;
+
+/**
+ * A check-in only adds to a spot's (or event's) live count while its member is
+ * neither in Ghost nor hidden. Read at query time, so leaving Ghost while still
+ * checked in counts them again. Members with no profile row count, as before.
+ * Ghost members can still check in for themselves (is_checked_in stays true),
+ * but nobody, free or Premium, sees them in the number, themselves included.
+ */
+export function countableCheckinSql(ciAlias: string): string {
+  return `NOT EXISTS (
+                SELECT 1 FROM profiles gp
+                 WHERE gp.user_id = ${ciAlias}.user_id
+                   AND (gp.is_ghost IS TRUE OR gp.is_visible IS FALSE)
+               )`;
+}
 
 const CHECKIN_INTERVAL_SQL = `(
   CASE WHEN c.slug IN ('parks-trails', 'open-spaces', 'parking') THEN '${OUTDOOR_CHECKIN_TTL_HOURS} hours'::interval
@@ -278,13 +356,14 @@ export const hotSpotsService = {
     values.push(limit);
     const limitIdx = values.length;
 
-    const orderSql =
-      opts.sortBy === 'closest' || hasQuery
-        ? `ORDER BY distance_km ASC NULLS LAST, hs.name ASC`
-        : `ORDER BY live_count_exact DESC, distance_km ASC NULLS LAST, hs.name ASC`;
+    const liveSort = !(opts.sortBy === 'closest' || hasQuery);
+    // ORDER BY runs before LIMIT, so Free's rounded sort also decides which rows make the page.
+    const orderSql = liveSort ? liveSortOrderSql(isPremium) : CLOSEST_SORT_ORDER_SQL;
 
+    // Wrapped so ORDER BY can use live_count_exact and distance_km in expressions.
     const res = await query(
-      `SELECT
+      `SELECT * FROM (
+        SELECT
           ${SPOT_SELECT_COLS},
           ROUND((ST_Distance(
             ST_SetSRID(ST_MakePoint(hs.longitude, hs.latitude), 4326)::geography,
@@ -296,6 +375,7 @@ export const hotSpotsService = {
              WHERE ci.spot_id = hs.id
                AND ci.checked_out_at IS NULL
                AND ci.checked_in_at > NOW() - ${CHECKIN_INTERVAL_SQL}
+               AND ${countableCheckinSql('ci')}
           ) AS live_count_exact,
           EXISTS (
             SELECT 1 FROM hot_spot_checkins mine
@@ -330,12 +410,14 @@ export const hotSpotsService = {
           ${distanceFilter}
           ${categoryFilter}
           ${searchFilter}
-        ${orderSql}
-        LIMIT $${limitIdx}`,
+      ) q
+      ${orderSql}
+      LIMIT $${limitIdx}`,
       values,
     );
 
-    return res.rows.map((row) => mapSpotRow(row, isPremium, opts.userId));
+    const spots = res.rows.map((row) => mapSpotRow(row, isPremium, opts.userId));
+    return liveSort ? sortSpotsLive(spots, isPremium) : spots;
   },
 
   async getSpot(userId: string, spotId: string): Promise<HotSpotRow | null> {
@@ -350,6 +432,7 @@ export const hotSpotsService = {
              WHERE ci.spot_id = hs.id
                AND ci.checked_out_at IS NULL
                AND ci.checked_in_at > NOW() - ${CHECKIN_INTERVAL_SQL}
+               AND ${countableCheckinSql('ci')}
           ) AS live_count_exact,
           EXISTS (
             SELECT 1 FROM hot_spot_checkins mine
@@ -426,10 +509,18 @@ export const hotSpotsService = {
       [spotId, userId, anonymous],
     );
 
-    await query(
-      `UPDATE hot_spots SET last_activity_at = NOW() WHERE id = $1`,
-      [spotId],
+    // A Ghost / hidden check-in does not count, so it must not freshen the spot either
+    // (last_activity_at would otherwise show that someone just arrived).
+    const me = await query(
+      `SELECT (is_ghost IS TRUE OR is_visible IS FALSE) AS unseen FROM profiles WHERE user_id = $1`,
+      [userId],
     );
+    if (!me.rows[0]?.unseen) {
+      await query(
+        `UPDATE hot_spots SET last_activity_at = NOW() WHERE id = $1`,
+        [spotId],
+      );
+    }
 
     return this.getSpot(userId, spotId);
   },
@@ -468,15 +559,18 @@ export const hotSpotsService = {
           WHERE user_id = $1 AND spot_id = $2 AND checked_out_at IS NULL`,
         [userId, spotId],
       );
-    } else {
-      await query(
-        `UPDATE hot_spot_checkins
-            SET checked_out_at = NOW()
-          WHERE user_id = $1 AND checked_out_at IS NULL`,
-        [userId],
-      );
+      // The server's own count after leaving, so clients never guess it (a Ghost or
+      // hidden member was never counted, so their check-out must not lower it).
+      const spot = await this.getSpot(userId, spotId);
+      return { ok: true, spot };
     }
-    return { ok: true };
+    await query(
+      `UPDATE hot_spot_checkins
+          SET checked_out_at = NOW()
+        WHERE user_id = $1 AND checked_out_at IS NULL`,
+      [userId],
+    );
+    return { ok: true, spot: null };
   },
 
   async getMyCheckIn(userId: string) {
@@ -615,6 +709,12 @@ export const hotSpotsService = {
    * Nightlife Integration: find or create a Hot Spot pin for an event venue,
    * then check in. Pin activity uses the same 4-hour TTL as other Hot Spots.
    * Check-in is free (no premium gate).
+   *
+   * A Ghost or hidden member never creates the pin: a brand-new public spot
+   * appearing at the venue would reveal that someone hidden just arrived. If no
+   * spot exists yet, their check-in is deferred (returns null, nothing written)
+   * and the pin is created by the first visible check-in instead. Where a spot
+   * already exists they check in as usual.
    */
   async checkInAtEvent(
     userId: string,
@@ -656,6 +756,13 @@ export const hotSpotsService = {
     }
 
     if (!spotId) {
+      // Members with no profile row count as visible, as elsewhere.
+      const me = await query(
+        `SELECT (is_ghost IS TRUE OR is_visible IS FALSE) AS unseen FROM profiles WHERE user_id = $1`,
+        [userId],
+      );
+      if (me.rows[0]?.unseen) return null;
+
       const cat = await query(`SELECT id FROM hot_spot_categories WHERE slug = 'nightlife'`);
       const categoryId = cat.rows[0]?.id;
       if (!categoryId) throw new Error('Nightlife category missing');

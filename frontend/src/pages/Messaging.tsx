@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, memo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { messagesAPI, usersAPI, meetAPI, MediaKind, MessageMediaKind, MessageDTO, MeetAgreementState, LibraryPhotoDTO } from '../api/client';
+import { messagesAPI, usersAPI, MediaKind, MessageMediaKind, MessageDTO, LibraryPhotoDTO } from '../api/client';
 import { trackEventOnce } from '../observability/analytics';
 import { useSocket } from '../hooks/useSocket';
 import { useAuthStore, useCallStore, useUnreadStore } from '../hooks/store';
@@ -15,7 +15,6 @@ import { VideoNoteCaptureModal } from '../components/VideoNoteCaptureModal';
 import { videoFileFromRecorderBlob } from '../lib/mediaMime';
 import { ChatAttachLibrarySheet } from '../components/ChatAttachLibrarySheet';
 import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
-import { PanicReportButton } from '../components/PanicReportButton';
 import { placeOutgoingCall } from '../lib/callBridge';
 import { mapCallMediaError } from '../lib/callMedia';
 import { ChevronLeftIcon, MobileBackButton } from '../components/MobileBackButton';
@@ -60,6 +59,8 @@ import {
   threadLikelyHasHistory,
   writeCachedThread,
 } from '../lib/conversationHistoryCache';
+import { refreshNotifications } from '../hooks/useNotificationSync';
+import { useNotificationStore } from '../hooks/store';
 import type { ThreadOpenState } from '../components/ConversationItem';
 
 /** Local message shape — matches MessageDTO but tolerates partial server payloads. */
@@ -80,6 +81,8 @@ interface Message extends Partial<MessageDTO> {
   remaining_views?: number | null;
   expired?: boolean;
   media_clear?: boolean;
+  read?: boolean;
+  delivered?: boolean;
 }
 
 function seedThreadForOpen(
@@ -171,7 +174,11 @@ function isSameDay(a?: string, b?: string): boolean {
 }
 
 function isWithdrawnMedia(msg: Message): boolean {
-  return !!msg.withdrawn_at || (!!msg.expired && /withdrawn/i.test(msg.message || ''));
+  return (
+    !!msg.withdrawn_at ||
+    (!!msg.expired && /withdrawn/i.test(msg.message || '')) ||
+    (!!msg.media_type && /withdrawn/i.test(msg.message || ''))
+  );
 }
 
 function canWithdrawMedia(msg: Message, userId?: string): boolean {
@@ -180,7 +187,7 @@ function canWithdrawMedia(msg: Message, userId?: string): boolean {
     msg.sender_id === userId &&
     !!msg.media_type &&
     !isWithdrawnMedia(msg) &&
-    (!!msg.media_url || !!msg.is_disappearing)
+    (!!msg.media_url || !!msg.is_disappearing || msg.media_type === 'location')
   );
 }
 
@@ -235,10 +242,11 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
   const [attachLibraryOpen, setAttachLibraryOpen] = useState(false);
   const [selfieOpen, setSelfieOpen] = useState(false);
   const [videoNoteOpen, setVideoNoteOpen] = useState(false);
-  const [meetState, setMeetState] = useState<MeetAgreementState | null>(null);
-  const [meetSubmitting, setMeetSubmitting] = useState(false);
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
   const [safetyNotice, setSafetyNotice] = useState<{ msg: string; tone: 'success' | 'error' } | null>(null);
+  const [canJerk, setCanJerk] = useState(false);
+  const [jerkSent, setJerkSent] = useState(false);
+  const [jerking, setJerking] = useState(false);
   // Disappearing countdown lives in ImageViewer only — do not 1Hz re-render the whole thread.
   const socket = useSocket();
   const { setCalling, setCallSetupError, resetCall } = useCallStore();
@@ -317,6 +325,18 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
           });
           setHasMoreOlder(false);
           setHistoryReady(true);
+        }
+      })
+      .finally(() => {
+        // Ticket 4: Thread opened / read messages clear related notifications for this user
+        if (otherId) {
+          const notifState = useNotificationStore.getState();
+          const hasRelated = notifState.notifications.some(
+            (n) => n.userId === otherId && !n.read && (n.type === 'message' || n.type === 'photo' || n.type === 'voice' || n.type === 'missed_call')
+          );
+          if (hasRelated) {
+            void refreshNotifications();
+          }
         }
       });
   }, [otherId]);
@@ -426,7 +446,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         }
       })
       .catch(() => {});
-    meetAPI.getState(otherId).then((r) => setMeetState(r.data)).catch(() => setMeetState(null));
     useUnreadStore.getState().clearUnreadFrom(otherId);
   }, [otherId, loadConversation]);
 
@@ -566,30 +585,17 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         prev.map((m) => (m.id === data.id ? { ...m, ...data } : m)),
       );
     };
-    const onMeetUpdated = (data: MeetAgreementState & { peer_id?: string }) => {
-      if (data.peer_id === otherId || !data.peer_id) {
-        setMeetState({
-          my_confirmed: data.my_confirmed,
-          peer_confirmed: data.peer_confirmed,
-          mutual: data.mutual,
-          my_confirmed_at: data.my_confirmed_at,
-          peer_confirmed_at: data.peer_confirmed_at,
-        });
-      }
-    };
 
     socket.on('message', onMessage);
     socket.on('typing', onTyping);
     socket.on('message:viewed', onViewed);
     socket.on('message:withdrawn', onWithdrawn);
-    socket.on('meet:updated', onMeetUpdated);
 
     return () => {
       socket.off('message', onMessage);
       socket.off('typing', onTyping);
       socket.off('message:viewed', onViewed);
       socket.off('message:withdrawn', onWithdrawn);
-      socket.off('meet:updated', onMeetUpdated);
     };
   }, [socket, otherId]);
 
@@ -932,8 +938,10 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         const msg = data?.error;
         if (code === 'match_required' || /mutual match/i.test(msg || '')) {
           setMediaError('You need a mutual match before messaging.');
+          setCanJerk(true);
         } else if (code === 'interaction_blocked' || /blocked/i.test(msg || '')) {
           setMediaError('You cannot message this person.');
+          setCanJerk(false);
         } else if (
           (err as { code?: string })?.code === 'ECONNABORTED' ||
           /timeout/i.test(String((err as { message?: string })?.message || ''))
@@ -949,6 +957,20 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
     },
     [otherId, user, emitTyping, markOwnSendStick, commitThreadMessage],
   );
+
+  const handleSendJerk = async () => {
+    if (!otherId || jerking || jerkSent) return;
+    setJerking(true);
+    try {
+      await usersAPI.likeUser(otherId);
+      setJerkSent(true);
+      setMediaError('');
+    } catch {
+      setMediaError('Could not send a jerk. Try again.');
+    } finally {
+      setJerking(false);
+    }
+  };
 
   const handleSend = async (e?: React.FormEvent | React.KeyboardEvent) => {
     e?.preventDefault?.();
@@ -1033,32 +1055,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     );
-  };
-
-  const handleMeetConfirm = async () => {
-    if (!otherId || meetSubmitting) return;
-    setMeetSubmitting(true);
-    try {
-      const res = await meetAPI.confirm(otherId);
-      setMeetState(res.data);
-    } catch {
-      setMediaError('Could not confirm meet readiness.');
-    } finally {
-      setMeetSubmitting(false);
-    }
-  };
-
-  const handleMeetRevoke = async () => {
-    if (!otherId || meetSubmitting) return;
-    setMeetSubmitting(true);
-    try {
-      const res = await meetAPI.revoke(otherId);
-      setMeetState(res.data);
-    } catch {
-      setMediaError('Could not update meet readiness.');
-    } finally {
-      setMeetSubmitting(false);
-    }
   };
 
   const handleStartVideoCall = async () => {
@@ -1157,7 +1153,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
             <button
               onClick={() => void handleStartVideoCall()}
               aria-label="Start video call"
-              className="mr-cta-gradient flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl transition-all duration-150 active:scale-95 sm:h-[42px] sm:w-[42px]"
+              className="mr-cta-gradient flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl transition-all duration-150 active:scale-95 sm:h-11 sm:w-11"
               style={{
                 boxShadow: '0 2px 12px rgba(196,131,42,0.35)',
               }}
@@ -1177,18 +1173,14 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
 
         {otherId && (
           <>
-            <PanicReportButton
-              reportedUserId={otherId}
+            <ChatSafetyMenu
+              peerId={otherId}
+              peerName={otherUser?.name ?? 'this user'}
               threadId={
                 user?.id
                   ? `dm:${[user.id, otherId].sort().join('_')}`
                   : `dm:${otherId}`
               }
-              onNotice={(msg, tone = 'success') => setSafetyNotice({ msg, tone })}
-            />
-            <ChatSafetyMenu
-              peerId={otherId}
-              peerName={otherUser?.name ?? 'this user'}
               onNotice={(msg, tone = 'success') => setSafetyNotice({ msg, tone })}
               onBlocked={() => {
                 // Land on the unblock list so the action is obvious.
@@ -1211,16 +1203,6 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
         >
           {safetyNotice.msg}
         </div>
-      )}
-
-      {otherId && meetState && (
-        <MeetConsentBar
-          state={meetState}
-          peerName={otherUser?.name ?? 'them'}
-          submitting={meetSubmitting}
-          onConfirm={handleMeetConfirm}
-          onRevoke={handleMeetRevoke}
-        />
       )}
 
       {/* ── Messages area — memoized so composer keystrokes do not redraw bubbles ─ */}
@@ -1250,14 +1232,39 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
       >
         {mediaError && (
           <div
-            className="mb-2 text-[11px] px-3 py-2 rounded-lg"
+            className="mb-2 flex items-center justify-between gap-2 text-[11px] px-3 py-2 rounded-lg"
             style={{
               background: 'rgba(196,131,42,0.12)',
               border: '1px solid rgba(196,131,42,0.35)',
               color: 'var(--cream)',
             }}
           >
-            {mediaError}
+            <span>{mediaError}</span>
+            {canJerk && (
+              <button
+                type="button"
+                onClick={handleSendJerk}
+                disabled={jerking || jerkSent}
+                data-testid="chat-jerk-button"
+                aria-label={jerkSent ? 'Jerk sent' : jerking ? 'Sending jerk' : 'Send a jerk'}
+                title={jerkSent ? 'Jerk sent' : 'Send a jerk'}
+                className="shrink-0 rounded-full bg-[#C4832A] px-3 py-1 text-[11px] font-bold text-[#1A0E03] transition-transform active:scale-95 disabled:opacity-50"
+              >
+                {jerkSent ? 'Jerk sent' : jerking ? 'Sending…' : 'Send a jerk'}
+              </button>
+            )}
+          </div>
+        )}
+        {jerkSent && !mediaError && (
+          <div
+            className="mb-2 text-[11px] px-3 py-1.5 rounded-lg text-center"
+            style={{
+              background: 'rgba(196,131,42,0.12)',
+              border: '1px solid rgba(196,131,42,0.35)',
+              color: 'var(--cream)',
+            }}
+          >
+            Jerk sent.
           </div>
         )}
 
@@ -1302,7 +1309,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 handleStopRecording();
               }}
               aria-label="Cancel recording"
-              className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
+              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center"
               style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', color: 'var(--cream-muted)' }}
             >
               <CloseIcon className="w-4 h-4" />
@@ -1323,7 +1330,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               type="button"
               onClick={handleStopRecording}
               aria-label="Send voice note"
-              className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center active:scale-95"
+              className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:scale-95"
               style={{
                 background: 'linear-gradient(135deg, #C4832A, #A45E18)',
                 boxShadow: '0 2px 12px rgba(196,131,42,0.4)',
@@ -1340,7 +1347,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               disabled={uploadingMedia || sharingLocation || !!pendingImage || !!pendingLibraryPhotos}
               aria-label="Send current location"
               title="Send current location"
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
             >
               <LocationPinIcon className="h-4 w-4" />
             </button>
@@ -1353,7 +1360,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               aria-label="Open camera"
               title="Take a picture or video"
               data-testid="chat-camera-button"
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
             >
               <CameraIcon className="h-4 w-4" />
             </button>
@@ -1366,7 +1373,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
               aria-label="Attach from My Photos"
               title="Attach from My Photos"
               data-testid="chat-attach-button"
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full border border-nn-border bg-nn-card text-nn-copper active:scale-95 disabled:opacity-40 sm:h-11 sm:w-11"
             >
               <AttachIcon className="h-4 w-4" />
             </button>
@@ -1427,7 +1434,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 aria-label="Record voice note"
                 title="Record voice note"
                 data-testid="chat-voice-button"
-                className="mr-cta-gradient flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-[#FFF6E6] shadow-[0_2px_12px_rgba(196,131,42,0.4)] active:scale-95 disabled:opacity-40 sm:h-[46px] sm:w-[46px]"
+                className="mr-cta-gradient flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-[#FFF6E6] shadow-[0_2px_12px_rgba(196,131,42,0.4)] active:scale-95 disabled:opacity-40 sm:h-[46px] sm:w-[46px]"
               >
                 <MicIcon className="h-4 w-4" />
               </button>
@@ -1494,54 +1501,94 @@ interface LocationBubbleProps {
   isMine: boolean;
   showTail: boolean;
   peerName?: string;
+  onWithdraw?: () => void;
+  withdrawing?: boolean;
 }
 
-const LocationBubble: React.FC<LocationBubbleProps> = ({ msg, isMine, showTail, peerName }) => {
-  const coords = parseLocationPayload(msg.media_type, msg.message);
+const LocationBubble: React.FC<LocationBubbleProps> = ({
+  msg,
+  isMine,
+  showTail,
+  peerName,
+  onWithdraw,
+  withdrawing,
+}) => {
+  const radius = showTail
+    ? isMine
+      ? '18px 18px 4px 18px'
+      : '18px 18px 18px 4px'
+    : '18px';
+
+  if (isWithdrawnMedia(msg)) {
+    return (
+      <div className={`flex max-w-full flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
+        <div
+          className="flex max-w-full items-center gap-2 px-4 py-3 text-xs break-words [overflow-wrap:anywhere]"
+          data-testid="media-withdrawn"
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-default)',
+            color: 'var(--cream-muted)',
+            borderRadius: radius,
+          }}
+        >
+          <FlameIcon className="h-4 w-4 shrink-0" />
+          <span>{msg.message || 'Location withdrawn'}</span>
+        </div>
+      </div>
+    );
+  }
+
+  const coords = parseLocationPayload(msg.media_type, msg.message, msg.withdrawn_at);
   const label = isMine ? 'Shared location' : `${peerName ?? 'Match'}'s location`;
 
   const bubbleStyle = isMine
     ? {
         background: 'linear-gradient(135deg, #C4832A, #A45E18)',
         color: '#FFF5E6',
-        borderRadius: showTail ? '18px 18px 4px 18px' : '18px',
+        borderRadius: radius,
         boxShadow: '0 2px 12px rgba(196,131,42,0.28)',
       }
     : {
         background: 'var(--bg-card)',
         border: '1px solid var(--border-default)',
         color: 'var(--cream)',
-        borderRadius: showTail ? '18px 18px 18px 4px' : '18px',
+        borderRadius: radius,
       };
 
   return (
-    <div className="relative max-w-full px-4 py-3 text-sm leading-relaxed break-words [overflow-wrap:anywhere]" style={bubbleStyle}>
-      <div className="flex min-w-0 items-start gap-2">
-        <LocationPinIcon className="mt-0.5 h-5 w-5 shrink-0" />
-        <div className="min-w-0">
-          <p className="font-semibold">{label}</p>
-          {coords ? (
-            <p className="mt-1 text-[11px] opacity-80">
-              {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
-            </p>
-          ) : null}
+    <div className={`flex max-w-full flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
+      <div className="relative max-w-full px-4 py-3 text-base leading-relaxed break-words [overflow-wrap:anywhere]" style={bubbleStyle}>
+        <div className="flex min-w-0 items-start gap-2">
+          <LocationPinIcon className="mt-0.5 h-5 w-5 shrink-0" />
+          <div className="min-w-0">
+            <p className="font-semibold">{label}</p>
+            {coords ? (
+              <p className="mt-1 text-[11px] opacity-80">
+                {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
+              </p>
+            ) : null}
+          </div>
         </div>
+        {coords ? (
+          <button
+            type="button"
+            onClick={() => openMapsDirections(coords.lat, coords.lng, label)}
+            className="mt-3 w-full rounded-lg px-3 py-2 text-xs font-bold"
+            style={
+              isMine
+                ? { background: 'rgba(13,10,6,0.22)', color: '#FFF5E6' }
+                : { background: 'rgba(196,131,42,0.16)', color: '#C4832A', border: '1px solid rgba(196,131,42,0.35)' }
+            }
+          >
+            Get directions
+          </button>
+        ) : (
+          <p className="mt-2 text-[11px] opacity-70">Location unavailable</p>
+        )}
       </div>
-      {coords ? (
-        <button
-          type="button"
-          onClick={() => openMapsDirections(coords.lat, coords.lng, label)}
-          className="mt-3 w-full rounded-lg px-3 py-2 text-xs font-bold"
-          style={
-            isMine
-              ? { background: 'rgba(13,10,6,0.22)', color: '#FFF5E6' }
-              : { background: 'rgba(196,131,42,0.16)', color: '#C4832A', border: '1px solid rgba(196,131,42,0.35)' }
-          }
-        >
-          Get directions
-        </button>
-      ) : (
-        <p className="mt-2 text-[11px] opacity-70">Location unavailable</p>
+      {onWithdraw && isMine && (
+        <WithdrawMediaButton onClick={onWithdraw} loading={withdrawing} label="Withdraw location" />
       )}
     </div>
   );
@@ -1549,99 +1596,25 @@ const LocationBubble: React.FC<LocationBubbleProps> = ({ msg, isMine, showTail, 
 
 // ── SVG Icons ────────────────────────────────────────────────────────────────
 
-interface MeetConsentBarProps {
-  state: MeetAgreementState;
-  peerName: string;
-  submitting: boolean;
-  onConfirm: () => void;
-  onRevoke: () => void;
-}
-
-const MeetConsentBar: React.FC<MeetConsentBarProps> = ({
-  state,
-  peerName,
-  submitting,
-  onConfirm,
-  onRevoke,
-}) => {
-  if (state.mutual) {
-    return (
-      <div
-        className="flex-shrink-0 px-4 py-2.5 border-b text-center"
-        style={{ borderColor: 'var(--border-default)', background: 'rgba(22,163,74,0.12)' }}
-        data-testid="meet-consent-mutual"
-      >
-        <p className="text-xs font-semibold" style={{ color: '#86EFAC' }}>
-          You both confirmed you&apos;re ready to meet — coordinate safely in public.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="flex-shrink-0 max-w-full overflow-x-clip border-b px-3 py-3 sm:px-4"
-      style={{ borderColor: 'var(--border-default)', background: 'color-mix(in srgb, var(--bg-card) 95%, transparent)' }}
-      data-testid="meet-consent-bar"
-    >
-      <p className="text-xs font-semibold break-words" style={{ color: 'var(--cream)' }}>
-        Ready to meet?
-      </p>
-      <p className="mt-1 text-[11px] leading-relaxed break-words [overflow-wrap:anywhere]" style={{ color: 'var(--cream-muted)' }}>
-        Confirm only when you&apos;re happy to arrange a meet-up with {peerName}. Both of you must
-        agree before this shows as mutual.
-      </p>
-      <div className="mt-2 flex min-w-0 max-w-full flex-wrap items-center gap-2">
-        {state.my_confirmed ? (
-          <>
-            <span className="text-[11px] font-medium" style={{ color: '#C4832A' }}>
-              You confirmed · waiting for {peerName}
-              {state.peer_confirmed ? '' : '…'}
-            </span>
-            <button
-              type="button"
-              onClick={onRevoke}
-              disabled={submitting}
-              className="text-[11px] font-semibold underline disabled:opacity-50"
-              style={{ color: 'var(--cream-muted)' }}
-            >
-              Undo
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={submitting}
-            className="rounded-xl px-3 py-2 text-[11px] font-bold disabled:opacity-50"
-            style={{ background: '#C4832A', color: 'var(--nn-on-copper)' }}
-          >
-            {submitting ? 'Saving…' : "I'm ready to meet"}
-          </button>
-        )}
-        {state.peer_confirmed && !state.my_confirmed && (
-          <span className="text-[11px]" style={{ color: '#86EFAC' }}>
-            {peerName} is ready — your turn
-          </span>
-        )}
-      </div>
-    </div>
-  );
-};
-
-const WithdrawMediaButton: React.FC<{ onClick: () => void; loading?: boolean }> = ({
+const WithdrawMediaButton: React.FC<{
+  onClick: () => void;
+  loading?: boolean;
+  label?: string;
+}> = ({
   onClick,
   loading,
+  label = 'Withdraw media',
 }) => (
   <button
     type="button"
     onClick={onClick}
     disabled={loading}
     data-testid="withdraw-media"
+    aria-label={label}
     className="text-[10px] font-semibold underline disabled:opacity-50"
     style={{ color: 'var(--cream-muted)' }}
   >
-    {loading ? 'Withdrawing…' : 'Withdraw media'}
+    {loading ? 'Withdrawing…' : label}
   </button>
 );
 
@@ -1748,6 +1721,33 @@ const FlameIcon = ({
     <path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14a8 8 0 0 0 16 0c0-4.16-2-7.86-6.5-13.33z" />
   </svg>
 );
+
+const MessageReceiptTicks = ({
+  read,
+  isMine: _isMine,
+}: {
+  read?: boolean;
+  isMine?: boolean;
+}) => {
+  // Brand Soft lock for ticket 6 (double ticks) — exact rules:
+  // - Light ticks on dark skins: cream #F0E0C0 delivered, copper #E0A14A read
+  // - Dark ticks on light skins: night/card ink #1E1508 delivered, dark copper #8B5A1A read
+  // - No grey-on-grey
+  // Wires to real app theme mechanism (data-theme="light" / html.theme-light) via CSS variables:
+  // --mr-tick-delivered and --mr-tick-read defined in menrush-tokens.css.
+  return (
+    <span
+      className={`inline-flex items-center ml-1 align-baseline tracking-[-0.22em] text-[11px] font-bold ${
+        read ? 'mr-receipt-tick-read' : 'mr-receipt-tick-delivered'
+      }`}
+      title={read ? 'Read' : 'Delivered'}
+      aria-label={read ? 'Read' : 'Delivered'}
+      data-testid={read ? 'message-tick-read' : 'message-tick-delivered'}
+    >
+      ✓✓
+    </span>
+  );
+};
 
 function formatDuration(ms?: number | null): string {
   if (!ms || ms < 0) return '0:00';
@@ -2911,10 +2911,10 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
             >
               <BubbleIcon className="w-8 h-8" style={{ color: 'var(--copper)', opacity: 0.5 }} />
             </div>
-            <p className="font-medium text-sm text-[var(--cream-muted)]">
+            <p className="font-medium text-base text-[var(--cream-muted)]">
               No messages yet
             </p>
-            <p className="text-xs mt-1 mb-4 text-center text-[var(--cream-muted)]">
+            <p className="text-sm mt-1 mb-4 text-center text-[var(--cream-muted)]">
               Be direct. Consent first.
             </p>
             <div className="flex flex-col gap-2 w-full max-w-sm">
@@ -2924,7 +2924,7 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                   type="button"
                   disabled={sending}
                   onClick={() => void onSendIcebreaker(line)}
-                  className="rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-4 py-3 text-left text-[13px] font-medium text-[var(--cream)] transition-colors hover:bg-[rgba(196,131,42,0.2)] disabled:opacity-50"
+                  className="rounded-2xl border border-[rgba(196,131,42,0.4)] bg-[rgba(196,131,42,0.1)] px-4 py-3 text-left text-base font-medium text-[var(--cream)] transition-colors hover:bg-[rgba(196,131,42,0.2)] disabled:opacity-50"
                 >
                   {line}
                 </button>
@@ -2948,7 +2948,7 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                   <div className="flex items-center gap-3 my-5">
                     <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
                     <span
-                      className="text-[10px] font-semibold px-3 py-1 rounded-full"
+                      className="text-[15px] font-semibold px-3 py-1 rounded-full"
                       style={{
                         background: 'var(--bg-card)',
                         border: '1px solid var(--border-default)',
@@ -2971,9 +2971,9 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                     }}
                   >
                     <MissedCallIcon size={14} className="shrink-0" />
-                    <span className="text-xs font-semibold">{MISSED_CALL_PREVIEW}</span>
+                    <span className="text-[15px] font-semibold">{MISSED_CALL_PREVIEW}</span>
                     {msg.created_at && (
-                      <span className="text-[10px] opacity-80">{formatTime(msg.created_at)}</span>
+                      <span className="text-[15px] opacity-80">{formatTime(msg.created_at)}</span>
                     )}
                   </div>
                 </div>
@@ -2988,7 +2988,7 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                 <div className="flex items-center gap-3 my-5">
                   <div className="flex-1 h-px" style={{ background: 'var(--border-default)' }} />
                   <span
-                    className="text-[10px] font-semibold px-3 py-1 rounded-full"
+                    className="text-[15px] font-semibold px-3 py-1 rounded-full"
                     style={{
                       background: 'var(--bg-card)',
                       border: '1px solid var(--border-default)',
@@ -3076,10 +3076,16 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                       isMine={isMine}
                       showTail={showTail}
                       peerName={otherUser?.name}
+                      onWithdraw={
+                        canWithdrawMedia(msg, userId)
+                          ? () => msg.id && void onWithdrawMedia(msg.id)
+                          : undefined
+                      }
+                      withdrawing={withdrawingId === msg.id}
                     />
                   ) : (
                     <div
-                      className="relative max-w-full break-words px-4 py-2.5 text-sm leading-relaxed [overflow-wrap:anywhere]"
+                      className="relative max-w-full break-words px-4 py-2.5 text-base leading-relaxed [overflow-wrap:anywhere]"
                       style={
                         isMine
                           ? {
@@ -3103,13 +3109,15 @@ const ChatThreadScroll = memo(function ChatThreadScroll({
                       {msg.message}
                     </div>
                   )}
-                  {/* Timestamp */}
+                  {/* Timestamp & double ticks */}
                   {showTail && (
                     <span
-                      className="text-[10px] mt-1 px-1"
-                      style={{ color: '#6B5035' }}
+                      className="inline-flex items-center text-[15px] mt-1 px-1 text-[var(--cream-muted)]"
                     >
                       {formatTime(msg.created_at)}
+                      {isMine && (
+                        <MessageReceiptTicks read={msg.read} isMine={isMine} />
+                      )}
                     </span>
                   )}
                 </div>

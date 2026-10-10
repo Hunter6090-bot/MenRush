@@ -518,3 +518,71 @@ input:-webkit-autofill:focus {
   box-shadow: 0 0 0 4px rgba(196, 131, 42, 0.25);
   cursor: pointer;
 }
+
+/* Menu Discretion slider: 44px tall drag area (transparent), 6px track, tokens only.
+   Fill left of the thumb is --cream, the empty track --nn-range-track, both >= 3:1 vs --bg-card
+   and vs each other. Thumb is --nn-accent-text inside a --bg-card ring, so it reads >= 3:1
+   against the ring, and the ring against the fill, track and box, in both themes. */
+.proximity-range--tall {
+  height: 44px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.proximity-range--tall::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    var(--cream) 0 var(--range-pct, 0%),
+    var(--nn-range-track) var(--range-pct, 0%) 100%
+  );
+}
+
+.proximity-range--tall::-webkit-slider-thumb {
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  margin-top: -9px;
+  border: 4px solid var(--bg-card);
+  background: var(--nn-accent-text);
+  box-shadow: none;
+}
+
+.proximity-range--tall::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--nn-range-track);
+}
+
+.proximity-range--tall::-moz-range-progress {
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--cream);
+}
+
+.proximity-range--tall::-moz-range-thumb {
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  border: 4px solid var(--bg-card);
+  background: var(--nn-accent-text);
+  box-shadow: none;
+}
+
+/* Claude Design room icons (RoomAvatar): copper line on a soft copper tile,
+   matching the design board in dark and light. */
+.room-avatar--icon {
+  color: var(--copper);
+  background: linear-gradient(135deg, rgba(196, 131, 42, 0.24), rgba(139, 69, 19, 0.14));
+  border: 1px solid rgba(196, 131, 42, 0.38);
+}
+html.theme-light .room-avatar--icon {
+  background: rgba(196, 131, 42, 0.16);
+  border-color: rgba(184, 115, 42, 0.42);
+}
+.room-avatar__icon > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

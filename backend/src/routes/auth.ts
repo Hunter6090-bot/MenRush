@@ -1,5 +1,15 @@
 import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
+import {
+  AUTH_WINDOW_MS,
+  accountLimiter,
+  authLimit,
+  emailAccountKey,
+  sessionParamKey,
+  twoFactorAccountKey,
+  userAccountKey,
+} from '../lib/authRateLimits';
 import { authService } from '../services/auth.service';
 import { twoFactorService } from '../services/two-factor.service';
 import { trustedDeviceService } from '../services/trusted-device.service';
@@ -28,6 +38,7 @@ import {
   isAdultAssuranceTestFixtureAllowed,
 } from '../services/adult-assurance.service';
 import { VeriffConfigError } from '../services/veriff.service';
+import { privateNoStore } from '../middleware/noStore';
 
 const router = Router();
 
@@ -41,67 +52,151 @@ async function withBrowserSession<T extends { user?: { id?: string }; token?: st
   return { ...result, refresh_token: refreshToken };
 }
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  // Higher ceiling in non-production so pre-deploy / local suites don't trip the gate.
-  max: process.env.NODE_ENV === 'production' ? 10 : 200,
-  message: { error: 'Too many attempts, please try again in 15 minutes' },
+// Rate limits. Ceilings live in lib/authRateLimits.ts (AUTH_LIMITS) with the
+// reasoning: per-IP limits are loose because web users share a Vercel egress
+// IP; brute-force protection comes from the account-keyed limiters.
+const TRY_AGAIN_15 = 'Too many attempts, please try again in 15 minutes';
+
+const loginLimiter = rateLimit({
+  windowMs: AUTH_WINDOW_MS,
+  max: authLimit('login'),
+  message: { error: TRY_AGAIN_15 },
+  keyGenerator: rateLimitKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+/** Failed sign-ins per email, from any IP. */
+const loginAccountLimiter = accountLimiter({
+  max: authLimit('loginAccountFailures'),
+  key: emailAccountKey,
+  message: TRY_AGAIN_15,
+  failedOnly: true,
+});
+
+const registerLimiter = rateLimit({
+  windowMs: AUTH_WINDOW_MS,
+  max: authLimit('register'),
+  message: { error: TRY_AGAIN_15 },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
 
+const twoFactorLimiter = rateLimit({
+  windowMs: AUTH_WINDOW_MS,
+  max: authLimit('twoFactorVerify'),
+  message: { error: TRY_AGAIN_15 },
+  keyGenerator: rateLimitKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+/** Wrong 2FA codes per account (verified pending token), from any IP. */
+const twoFactorAccountLimiter = accountLimiter({
+  max: authLimit('twoFactorAccountFailures'),
+  key: twoFactorAccountKey((token) => authService.verifyTwoFactorPendingToken(token)),
+  message: TRY_AGAIN_15,
+  failedOnly: true,
+});
+
+/** Every signed-in app refreshes here; refresh tokens are long random values. */
+const refreshLimiter = rateLimit({
+  windowMs: AUTH_WINDOW_MS,
+  max: authLimit('refresh'),
+  message: { error: TRY_AGAIN_15 },
+  keyGenerator: rateLimitKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/** Reset tokens are long random values, so the IP limit is only a flood guard. */
+const resetPasswordLimiter = rateLimit({
+  windowMs: AUTH_WINDOW_MS,
+  max: authLimit('resetPassword'),
+  message: { error: TRY_AGAIN_15 },
+  keyGenerator: rateLimitKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/** change-password, change-email, delete-account: signed in, so keyed per account. */
+const accountChangeLimiter = accountLimiter({
+  max: authLimit('accountChange'),
+  key: userAccountKey,
+  message: TRY_AGAIN_15,
+});
+
 /**
- * Tight limiter for adult-assurance *mutations* (start / submitted / fixture).
- * Must stay low — each start opens a Veriff session. Do not put the status
- * poll on this bucket: Register polls every 2s for up to 120s (~60 GETs).
+ * Adult-assurance *mutations* (start / start-id / submitted / fixture). Each
+ * start opens a Veriff session, so this stays the lowest signup ceiling. Do
+ * not put the status poll on this bucket: Register polls every 2s for up to
+ * 120s (~60 GETs).
  */
 const adultAssuranceLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'production' ? 12 : 100,
+  windowMs: AUTH_WINDOW_MS,
+  max: authLimit('adultAssurance'),
   message: { error: 'Too many adult-assurance attempts, please try again later' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
 
 /**
- * Dedicated status-poll limiter for GET /adult-assurance/:sessionId.
- *
- * Why 120 / 15 min (prod): frontend polls every ADULT_POLL_MS=2s for at most
- * ADULT_POLL_MAX_MS=120s → ≤60 GETs per gate attempt. Ceiling 120 allows one
- * full timeout + one retry (or a slow Veriff webhook) without HTTP 429, while
- * still capping runaway clients. Must not share adultAssuranceLimiter (12) or
- * authLimiter (register/login stay at 10 / 15 min).
+ * Status poll for GET /adult-assurance/:sessionId. The frontend polls every
+ * ADULT_POLL_MS=2s for at most ADULT_POLL_MAX_MS=120s, so at most 60 GETs per
+ * gate attempt. Per session the ceiling is 120 (one full timeout plus a
+ * retry); per IP it is high because many people sign up behind one egress IP.
  */
 const adultAssuranceStatusPollLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'production' ? 120 : 500,
+  windowMs: AUTH_WINDOW_MS,
+  max: authLimit('adultAssurancePoll'),
   message: { error: 'Too many age-check status polls, please try again later' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
+});
+const adultAssurancePollSessionLimiter = accountLimiter({
+  max: authLimit('adultAssurancePollSession'),
+  key: sessionParamKey,
+  message: 'Too many age-check status polls, please try again later',
 });
 
 const forgotPasswordLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
+  windowMs: AUTH_WINDOW_MS,
+  max: authLimit('forgotPassword'),
   message: { error: 'Too many reset requests, please try again in 15 minutes' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
+/** Reset emails per address, from any IP (protects the inbox). */
+const forgotPasswordAccountLimiter = accountLimiter({
+  max: authLimit('forgotPasswordAccount'),
+  key: emailAccountKey,
+  message: 'Too many reset requests, please try again in 15 minutes',
+});
 
 const confirmEmailLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'production' ? 20 : 200,
+  windowMs: AUTH_WINDOW_MS,
+  max: authLimit('confirmEmail'),
   message: { error: 'Too many confirmation attempts, please try again in 15 minutes' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
 
 const resendConfirmLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
+  windowMs: AUTH_WINDOW_MS,
+  max: authLimit('resendConfirm'),
   message: { error: 'Too many resend requests, please try again in 15 minutes' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
+});
+/** Confirmation emails per address, from any IP. */
+const resendConfirmAccountLimiter = accountLimiter({
+  max: authLimit('resendConfirmAccount'),
+  key: emailAccountKey,
+  message: 'Too many resend requests, please try again in 15 minutes',
 });
 
 /**
@@ -170,7 +265,7 @@ router.post('/adult-assurance/:sessionId/start-id', adultAssuranceLimiter, async
  * Poll decision. When passed, returns a one-time assurance_token for register.
  * Uses adultAssuranceStatusPollLimiter (not the tight mutation limiter).
  */
-router.get('/adult-assurance/:sessionId', adultAssuranceStatusPollLimiter, async (req, res: Response) => {
+router.get('/adult-assurance/:sessionId', adultAssuranceStatusPollLimiter, adultAssurancePollSessionLimiter, async (req, res: Response) => {
   try {
     const sessionId = String(req.params.sessionId || '').trim();
     if (!/^[0-9a-f-]{36}$/i.test(sessionId)) {
@@ -223,7 +318,7 @@ router.post('/adult-assurance/fixture', adultAssuranceLimiter, async (req, res: 
   }
 });
 
-router.post('/register', authLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/register', registerLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = RegisterSchema.parse(req.body);
     const result = await authService.register(data);
@@ -233,7 +328,7 @@ router.post('/register', authLimiter, async (req: AuthRequest, res: Response) =>
   }
 });
 
-router.post('/login', authLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/login', loginLimiter, loginAccountLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = LoginSchema.parse(req.body);
     const result = await authService.login(data);
@@ -253,7 +348,7 @@ router.post('/confirm-email', confirmEmailLimiter, async (req: AuthRequest, res:
   }
 });
 
-router.post('/resend-confirm', resendConfirmLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/resend-confirm', resendConfirmLimiter, resendConfirmAccountLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = ResendConfirmEmailSchema.parse(req.body);
     const result = await authService.resendConfirmEmail(data);
@@ -269,7 +364,7 @@ router.post('/resend-confirm', resendConfirmLimiter, async (req: AuthRequest, re
   }
 });
 
-router.post('/forgot-password', forgotPasswordLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/forgot-password', forgotPasswordLimiter, forgotPasswordAccountLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const { email } = ForgotPasswordSchema.parse(req.body);
     try {
@@ -291,7 +386,7 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req: AuthRequest, 
   }
 });
 
-router.post('/reset-password', authLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/reset-password', resetPasswordLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = ResetPasswordSchema.parse(req.body);
     await authService.resetPassword(data);
@@ -301,7 +396,7 @@ router.post('/reset-password', authLimiter, async (req: AuthRequest, res: Respon
   }
 });
 
-router.post('/change-password', authMiddleware, authLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/change-password', authMiddleware, accountChangeLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = ChangePasswordSchema.parse(req.body);
     await authService.changePassword(req.userId!, data);
@@ -314,7 +409,7 @@ router.post('/change-password', authMiddleware, authLimiter, async (req: AuthReq
   }
 });
 
-router.get('/password-status', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/password-status', privateNoStore, authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const hasPassword = await authService.hasPassword(req.userId!);
     res.json({ has_password: hasPassword });
@@ -323,7 +418,7 @@ router.get('/password-status', authMiddleware, async (req: AuthRequest, res: Res
   }
 });
 
-router.post('/set-password', authMiddleware, authLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/set-password', privateNoStore, authMiddleware, accountChangeLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = SetPasswordSchema.parse(req.body);
     const result = await authService.setOrChangePassword(req.userId!, data);
@@ -348,7 +443,7 @@ router.get('/account', authMiddleware, async (req: AuthRequest, res: Response) =
   }
 });
 
-router.post('/change-email', authMiddleware, authLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/change-email', authMiddleware, accountChangeLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = ChangeEmailSchema.parse(req.body);
     const result = await authService.changeEmail(req.userId!, data);
@@ -361,7 +456,7 @@ router.post('/change-email', authMiddleware, authLimiter, async (req: AuthReques
   }
 });
 
-router.post('/delete-account', authMiddleware, authLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/delete-account', authMiddleware, accountChangeLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = DeleteAccountSchema.parse(req.body);
     await authService.deleteAccount(req.userId!, data);
@@ -373,7 +468,7 @@ router.post('/delete-account', authMiddleware, authLimiter, async (req: AuthRequ
   }
 });
 
-router.post('/2fa/verify', authLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/2fa/verify', twoFactorLimiter, twoFactorAccountLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const data = TwoFactorVerifyLoginSchema.parse(req.body);
     const result = await authService.completeTwoFactorLogin(data.pendingToken, data.code, {
@@ -381,12 +476,12 @@ router.post('/2fa/verify', authLimiter, async (req: AuthRequest, res: Response) 
       userAgent: req.get('user-agent') || undefined,
     });
     res.json(await withBrowserSession(result, req.get('user-agent') || undefined));
-  } catch (error: any) {
-    res.status(401).json({ error: error.message });
+  } catch {
+    res.status(401).json({ error: 'Invalid code or token' });
   }
 });
 
-router.post('/refresh', authLimiter, async (req: AuthRequest, res: Response) => {
+router.post('/refresh', refreshLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const { refresh_token: refreshToken } = z
       .object({ refresh_token: z.string().min(32).max(512) })

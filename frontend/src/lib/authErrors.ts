@@ -8,6 +8,17 @@ export function extractApiErrorMessage(err: unknown): string | null {
   return null;
 }
 
+/**
+ * True when register failed only because the referral code is unknown or
+ * malformed. A referral never gates sign up, so the caller retries without it.
+ */
+export function isInvalidReferralError(err: unknown): boolean {
+  const apiError = extractApiErrorMessage(err);
+  return !!apiError && /referral code is not valid/i.test(apiError);
+}
+
+export const REFERRAL_IGNORED_NOTE = "That referral link didn't work, but you can still join free.";
+
 export function registerErrorMessage(err: unknown): {
   message: string;
   isDuplicateEmail?: boolean;

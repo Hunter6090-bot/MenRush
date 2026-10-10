@@ -367,6 +367,10 @@ test('Hot Spot sheet: select, check in, check in anonymously, check out, close â
   await expect(sheet).toBeVisible();
   await expect(sheet).toContainText(TEST_HOT_SPOT.name);
   await expect(page).toHaveURL(/\/discover$/);
+  // Same sheet as the Out card: reviews, anonymous check-in, directions and View on map.
+  await expect(sheet.getByTestId('hotspot-reviews-panel')).toBeVisible();
+  await expect(sheet.getByTestId('hotspot-sheet-directions')).toBeVisible();
+  await expect(sheet.getByTestId('hotspot-sheet-view-on-map')).toBeVisible();
 
   // 2. Normal check-in.
   await page.getByTestId('hotspot-sheet-checkin').click();
@@ -450,7 +454,7 @@ test('Free sees rounded 5+ Hot Spot count; Premium sees the exact count', async 
     const freePin = freePage.locator(`[data-hotspot-id="${TEST_HOT_SPOT.id}"]`);
     await expect(freePin).toBeVisible({ timeout: 30_000 });
     await freePin.click();
-    await expect(freePage.getByTestId('hotspot-sheet')).toContainText('5+ live');
+    await expect(freePage.getByTestId('hotspot-sheet-activity')).toHaveText('5+ checked in');
 
     const freeApiRes = await freePage.request.get('/api/hot-spots', {
       headers: { Authorization: `Bearer ${alice.token}` },
@@ -458,7 +462,8 @@ test('Free sees rounded 5+ Hot Spot count; Premium sees the exact count', async 
     });
     const freeSpot = (await freeApiRes.json()).spots.find((s: { id: string }) => s.id === TEST_HOT_SPOT.id);
     expect(freeSpot.live_count).toBe('5+');
-    expect(freeSpot.live_count_exact).toBe(5);
+    // Free never receives the exact number.
+    expect(freeSpot.live_count_exact).toBeNull();
     await freeCtx.close();
 
     const premiumCtx = await browser.newContext({ geolocation: FIXTURE_GEO, permissions: ['geolocation'] });
@@ -472,7 +477,7 @@ test('Free sees rounded 5+ Hot Spot count; Premium sees the exact count', async 
     const premiumPin = premiumPage.locator(`[data-hotspot-id="${TEST_HOT_SPOT.id}"]`);
     await expect(premiumPin).toBeVisible({ timeout: 30_000 });
     await premiumPin.click();
-    await expect(premiumPage.getByTestId('hotspot-sheet')).toContainText('5 live');
+    await expect(premiumPage.getByTestId('hotspot-sheet-activity')).toHaveText('5 checked in');
 
     const premiumApiRes = await premiumPage.request.get('/api/hot-spots', {
       headers: { Authorization: `Bearer ${premium.token}` },

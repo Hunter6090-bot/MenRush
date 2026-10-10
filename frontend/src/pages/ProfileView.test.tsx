@@ -41,14 +41,14 @@ vi.mock('../api/client', () => ({
 }));
 
 describe('ProfileView distance display', () => {
-  it('renders distance badge when distance_km is present on another user profile', async () => {
+  it('renders the server distance label as-is (coarse, fuzzed miles)', async () => {
     vi.mocked(usersAPI.getProfile).mockResolvedValueOnce({
       data: {
         id: 'other-user-1',
         name: 'James',
         age: 34,
-        distance_km: '2.5',
-        distance_label: '2.5 km',
+        distance_km: '3.22',
+        distance_label: '2 mi',
         online: true,
       },
     } as any);
@@ -66,8 +66,34 @@ describe('ProfileView distance display', () => {
     });
 
     expect(screen.getByText(/Age 34/i)).toBeInTheDocument();
-    // Distance badge should be rendered with 1.6 mi (localeUnits imperial converts 2.5km -> 1.6 mi)
-    expect(screen.getByText('1.6 mi')).toBeInTheDocument();
+    // Server label wins: the client never re-derives a finer distance from km.
+    expect(screen.getByText('2 mi')).toBeInTheDocument();
+    expect(screen.queryByText('2.0 mi')).not.toBeInTheDocument();
+  });
+
+  it('shows Nearby when the member hides distance (no distance keys at all)', async () => {
+    vi.mocked(usersAPI.getProfile).mockResolvedValueOnce({
+      data: {
+        id: 'other-user-3',
+        name: 'Rob',
+        age: 41,
+        online: true,
+      },
+    } as any);
+
+    render(
+      <MemoryRouter initialEntries={['/profile/other-user-3']}>
+        <Routes>
+          <Route path="/profile/:id" element={<ProfileView />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /rob/i })).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('profile-distance')).toHaveTextContent('Nearby');
+    expect(screen.queryByText(/\d+ mi\b/)).not.toBeInTheDocument();
   });
 
   it('omits distance badge when distance is absent or null', async () => {
@@ -96,8 +122,8 @@ describe('ProfileView distance display', () => {
 
     expect(screen.getByText(/Age 28/i)).toBeInTheDocument();
     expect(screen.queryByText(/away/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/mi/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/km/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/(^|[\d\s])mi\b/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/(^|[\d\s])km\b/i)).not.toBeInTheDocument();
   });
 
   it('redirects to /profile for own profile ID', async () => {
@@ -114,4 +140,33 @@ describe('ProfileView distance display', () => {
       expect(screen.getByText('Own Profile Page')).toBeInTheDocument();
     });
   });
+
+  it('renders icon-driven Match action and does not show Pass button', async () => {
+    vi.mocked(usersAPI.getProfile).mockResolvedValueOnce({
+      data: {
+        id: 'other-user-3',
+        name: 'Chris',
+        age: 31,
+        online: true,
+      },
+    } as any);
+
+    render(
+      <MemoryRouter initialEntries={['/profile/other-user-3']}>
+        <Routes>
+          <Route path="/profile/:id" element={<ProfileView />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /chris/i })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('button', { name: /^pass$/i })).toBeNull();
+    const matchBtn = screen.getByTestId('profile-view-match');
+    expect(matchBtn).toHaveAttribute('title', 'Match');
+    expect(matchBtn).toHaveTextContent('Match');
+  });
 });
+

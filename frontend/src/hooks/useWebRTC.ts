@@ -58,6 +58,13 @@ export function useWebRTC() {
   /** Only the caller creates offers — prevents glare if both somehow initiate. */
   const isCallerRef = useRef(false);
   const iceRestartAttemptedRef = useRef(false);
+  /**
+   * Caller's own candidates for the current offer. Re-sent once the callee has
+   * answered: anything trickled while he was offline / still opening the app
+   * may never have reached him, and without them ICE cannot complete across
+   * networks (remote video stays black, #73).
+   */
+  const sentIceRef = useRef<RTCIceCandidateInit[]>([]);
 
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -115,6 +122,7 @@ export function useWebRTC() {
     remoteStreamRef.current = null;
     remotePeerRef.current = null;
     pendingIceRef.current = [];
+    sentIceRef.current = [];
     isCallerRef.current = false;
     iceRestartAttemptedRef.current = false;
     setLocalStream(null);
@@ -154,6 +162,8 @@ export function useWebRTC() {
 
     iceRestartAttemptedRef.current = true;
     try {
+      // New ICE generation — earlier candidates no longer apply.
+      sentIceRef.current = [];
       const offer = await pc.createOffer({ iceRestart: true });
       await pc.setLocalDescription(offer);
       activeSocket.emit('call:initiate', {
@@ -169,6 +179,7 @@ export function useWebRTC() {
     (remotePeerId: string, activeSocket: Socket, iceServers: RTCIceServer[]) => {
       remotePeerRef.current = remotePeerId;
       pendingIceRef.current = [];
+      sentIceRef.current = [];
       iceRestartAttemptedRef.current = false;
 
       const pc = createPeerConnection(iceServers);
@@ -199,10 +210,9 @@ export function useWebRTC() {
 
       pc.onicecandidate = (ev) => {
         if (!ev.candidate || !isUsableIceCandidate(iceCandidatePayload(ev.candidate))) return;
-        activeSocket.emit('call:ice-candidate', {
-          to: remotePeerId,
-          candidate: iceCandidatePayload(ev.candidate),
-        });
+        const candidate = iceCandidatePayload(ev.candidate);
+        if (isCallerRef.current) sentIceRef.current.push(candidate);
+        activeSocket.emit('call:ice-candidate', { to: remotePeerId, candidate });
       };
 
       pc.onconnectionstatechange = () => {
@@ -395,6 +405,12 @@ export function useWebRTC() {
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
         const peer = remotePeerRef.current;
         await flushPendingIce(pc, peer ?? undefined);
+        // He is definitely online now — make sure he has every candidate of ours.
+        if (peer) {
+          for (const candidate of sentIceRef.current) {
+            socket.emit('call:ice-candidate', { to: peer, candidate });
+          }
+        }
         setConnected();
       } catch (err) {
         console.error('[webrtc] setRemoteDescription(answer) failed', err);

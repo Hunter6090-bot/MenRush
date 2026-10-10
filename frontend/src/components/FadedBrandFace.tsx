@@ -1,5 +1,6 @@
 import { BRAND_MEDALLION_CUTOUT } from '../lib/brand';
 import type { GridPhotoPhase } from '../lib/nearbyPhotoSrc';
+import { isPlaceholderAvatarUrl } from '../lib/avatarFallback';
 
 /**
  * Brand empty face — transparent two-men cutout only (`/brand/medallion-transparent.png`).
@@ -30,10 +31,8 @@ export function isNearbyPlaceholderFace(
   // Real user media still loading — not an empty Brand face (media lock).
   if (phase === 'loading' && trimmed.startsWith('/uploads/')) return false;
   if (phase === 'loading' || phase === 'empty' || phase === 'fallback') return true;
-  if (!trimmed) return true;
-  // Profile-setup generic SVGs and other /avatars/* are placeholders, not user media.
-  if (trimmed.startsWith('/avatars/')) return true;
-  return false;
+  // Empty, generic /avatars/*, logo plates, initials services → Brand placeholder.
+  return isPlaceholderAvatarUrl(trimmed);
 }
 
 export type FadedBrandFaceVariant = 'tile' | 'pin' | 'profile';

@@ -46,6 +46,7 @@ describe('InstallPrompt phone-only gate', () => {
 
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     resetInstallPromptStoreForTests();
     startInstallPromptCapture();
     Object.defineProperty(window, 'matchMedia', {

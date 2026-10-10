@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { roomsAPI } from '../api/client';
 import { useMediaQuery } from '../hooks/useMediaQuery';
-import { roomLetterAvatar } from '../lib/roomLetterAvatar';
 import { getPhotoUrl } from './UserAvatar';
+import { BrandAvatar } from './BrandAvatar';
+import { FadedBrandFace } from './FadedBrandFace';
+import { isPlaceholderAvatarUrl } from '../lib/avatarFallback';
 import { SelfieCaptureModal } from './SelfieCaptureModal';
 
 /** Gate result: explicit profile path, or temp name (+ optional photo). */
@@ -40,7 +42,6 @@ interface RoomTempIdentityGateProps {
   onCancel?: () => void;
 }
 
-const DANGER = '#B0432E';
 const NAME_MAX = 40;
 const NAME_MIN = 2;
 
@@ -59,17 +60,6 @@ const THEME_CHIP_MAP: Array<{ match: RegExp; chips: string[] }> = [
   { match: /host/i, chips: ['Hosting', 'Guest Anon', 'Drop In'] },
 ];
 
-function roomInitials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter((w) => /[A-Za-z0-9]/.test(w))
-    .map((w) => w.replace(/[^A-Za-z0-9]/g, '')[0])
-    .filter(Boolean)
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-}
-
 /** Build 3 suggestion labels; Shuffle draws from an expanded pool. */
 export function buildNameSuggestions(theme?: string | null): string[] {
   const source = theme?.trim() || '';
@@ -86,7 +76,7 @@ function shufflePool(theme?: string | null): string[] {
   const pool = matched
     ? [...matched.chips, 'Anon Guest', 'Quiet One', 'Just Watching']
     : [...GENERIC_SUGGESTIONS, 'Quiet One', 'Just Watching', 'Pass Through'];
-  // Fisher–Yates
+  // Fisher Yates shuffle
   const arr = [...pool];
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -97,7 +87,7 @@ function shufflePool(theme?: string | null): string[] {
 
 function defaultHouseRules(): string[] {
   return [
-    'Be respectful — harassment gets you removed.',
+    'Be respectful. Harassment gets you removed.',
     'No sharing personal info (numbers, addresses).',
     'Adults only. Your account stays accountable.',
   ];
@@ -124,8 +114,10 @@ export function resolveTempPhotoSrc(url?: string | null): string | undefined {
 /**
  * Gate before entering a group video room.
  * Clear choice: keep real profile, OR use a temporary name (photo optional).
- * Missing temp photo → letter avatar from the temp name — never blocks join.
- * Layout: mobile bottom sheet; ≥1280px two-column centred dialog (1a).
+ * Missing temp photo → ONE Brand placeholder face — never blocks join.
+ * Layout matches the Claude Design board (Room pre-join): Rooms back, room name,
+ * "N in room", big preview card, photo tiles, temp name row, copper Join.
+ * Phone: full screen. 1280px and up: two-column dialog. Logic unchanged.
  */
 export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   roomId,
@@ -234,11 +226,6 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
 
   const canEnter = !nameInvalid && !uploading && !submitting;
   const showChips = loaded && !hadSavedIdentity;
-  const subtitleActive =
-    typeof activeCount === 'number' && activeCount > 0
-      ? `Video group · ${activeCount} active`
-      : 'Video group';
-
   const houseRuleLines = useMemo(() => {
     if (roomRules?.trim()) {
       return roomRules
@@ -350,21 +337,22 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   const profileCtaLabel = `Keep using ${resolvedProfileName}`;
 
   const ctaLabel = hadSavedIdentity && trimmed.length >= NAME_MIN
-    ? `Enter as ${trimmed}`
-    : 'Enter group';
+    ? `Join as ${trimmed}`
+    : 'Join';
 
   const avatarContent = () => {
     if (uploading) {
       return (
-        <span className="flex flex-col items-center justify-center gap-1" aria-live="polite">
+        <span className="flex h-full w-full flex-col items-center justify-center gap-2" aria-live="polite">
           <span
-            className="h-6 w-6 animate-spin rounded-full border-2 border-[rgba(196,131,42,0.25)] border-t-[#C4832A]"
+            className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--border-default)] border-t-[var(--copper)]"
             aria-hidden
           />
+          <span className="text-[15px] font-semibold text-[var(--cream)]">Uploading photo…</span>
         </span>
       );
     }
-    if (photoPreview || photoUrl) {
+    if (photoPreview || (photoUrl && !isPlaceholderAvatarUrl(photoUrl))) {
       return (
         <img
           src={photoPreview || resolveTempPhotoSrc(photoUrl)}
@@ -374,60 +362,20 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
         />
       );
     }
-    if (trimmed) {
-      return <span className="text-2xl font-bold text-[#C4832A]">{roomLetterAvatar(trimmed)}</span>;
-    }
-    return <span className="text-2xl font-semibold text-[#A89070]">?</span>;
+    // No temp photo → ONE Brand placeholder (never letter / "?" avatar).
+    return (
+      <span className="block h-full w-full" data-testid="room-temp-photo-brand-face">
+        <FadedBrandFace variant="profile" label={trimmed || 'MenRush'} />
+      </span>
+    );
   };
 
+  /** Board caption under the Join button. */
   const anonymityLine = (
-    <p className="flex items-center justify-center gap-1.5 text-[11px] leading-snug text-[#A89070]">
-      <LockIcon className="h-3.5 w-3.5 shrink-0 opacity-80" />
+    <p className="flex items-center justify-center gap-1.5 text-center text-[15px] leading-snug text-[var(--cream-muted)]">
+      <LockIcon className="h-4 w-4 shrink-0" />
       <span>Temporary name stays in this room only. Photo optional.</span>
     </p>
-  );
-
-  const profileChoice = (
-    <div data-testid="room-identity-profile-choice">
-      <button
-        type="button"
-        data-testid="room-use-real-profile"
-        disabled={submitting || uploading}
-        onClick={() => void handleUseProfile()}
-        className="flex w-full items-center gap-3 rounded-xl border border-[rgba(196,131,42,0.4)] px-3 py-3 text-left transition-colors hover:bg-[rgba(196,131,42,0.1)] disabled:opacity-50"
-        style={{ background: 'rgba(196,131,42,0.06)' }}
-      >
-        <span
-          className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full text-base font-bold"
-          style={{
-            background: 'var(--bg-primary)',
-            border: '1px solid rgba(196,131,42,0.35)',
-            color: '#C4832A',
-          }}
-          aria-hidden
-        >
-          {resolvedProfilePhoto ? (
-            <img src={resolvedProfilePhoto} alt="" className="h-full w-full object-cover" />
-          ) : (
-            roomLetterAvatar(resolvedProfileName)
-          )}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-[14px] font-bold text-[var(--cream)]">{profileCtaLabel}</span>
-          <span className="mt-0.5 block text-[11px] text-[#A89070]">
-            Enter with your real name and photo
-          </span>
-        </span>
-      </button>
-      <div className="my-4 flex items-center gap-3" aria-hidden>
-        <span className="h-px flex-1 bg-[var(--border-default)]" />
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#A89070]">or</span>
-        <span className="h-px flex-1 bg-[var(--border-default)]" />
-      </div>
-      <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[#C4832A]">
-        Use a temporary name
-      </p>
-    </div>
   );
 
   const overflowMenu = (
@@ -437,14 +385,13 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
         aria-label="More options"
         aria-expanded={menuOpen}
         onClick={() => setMenuOpen((v) => !v)}
-        className="flex h-9 w-9 items-center justify-center rounded-full text-[#A89070] transition-colors hover:bg-[rgba(196,131,42,0.1)] hover:text-[var(--cream)]"
+        className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--cream-muted)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--cream)]"
       >
         <MoreVertIcon className="h-5 w-5" />
       </button>
       {menuOpen ? (
         <div
-          className="absolute right-0 z-20 mt-1 w-52 overflow-hidden rounded-xl border border-[var(--border-default)] py-1 shadow-lg"
-          style={{ background: 'var(--bg-card)' }}
+          className="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] py-1 shadow-lg"
           role="menu"
         >
           <button
@@ -452,7 +399,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
             role="menuitem"
             data-testid="room-temp-clear-saved"
             onClick={() => void handleClearSaved()}
-            className="w-full px-3 py-2.5 text-left text-[13px] text-[var(--cream)] transition-colors hover:bg-[rgba(176,67,46,0.12)] hover:text-[#B0432E]"
+            className="flex min-h-[44px] w-full items-center px-4 text-left text-[15px] text-[var(--cream)] transition-colors hover:bg-[var(--bg-elevated)]"
           >
             Clear saved identity
           </button>
@@ -461,156 +408,75 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
     </div>
   );
 
+  /** Board: "‹ Rooms" back, room name, "N in room". */
   const headerBlock = (
-    <div className="relative flex items-start gap-3">
-      <div
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold"
-        style={{
-          background: 'linear-gradient(135deg,rgba(196,131,42,0.35),rgba(139,69,19,0.25))',
-          border: '1px solid rgba(196,131,42,0.45)',
-          color: '#C4832A',
-        }}
-        aria-hidden
-      >
-        {roomInitials(roomName)}
-      </div>
-      <div className="min-w-0 flex-1 pr-2">
-        <p className="truncate text-[15px] font-bold leading-tight text-[var(--cream)]">{roomName}</p>
-        <p className="mt-0.5 text-[12px] text-[#A89070]">{subtitleActive}</p>
-      </div>
-      {overflowMenu}
-    </div>
-  );
-
-  const identityPreview = (
-    <div className="flex items-center gap-3">
-      <div
-        className="relative flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-full"
-        style={{
-          background: 'var(--bg-primary)',
-          border: '1px solid rgba(196,131,42,0.35)',
-        }}
-        aria-label={uploading ? 'Uploading photo' : 'Temporary avatar preview'}
-      >
-        {avatarContent()}
-      </div>
-      <div className="min-w-0 flex-1">
-        {uploading ? (
-          <p className="text-[15px] font-semibold text-[var(--cream)]">Uploading photo…</p>
-        ) : hadSavedIdentity && trimmed ? (
-          <>
-            <div className="flex items-center gap-2">
-              <p className="truncate text-[16px] font-bold text-[var(--cream)]">{trimmed}</p>
-              <button
-                type="button"
-                onClick={() => {
-                  nameRef.current?.focus();
-                  nameRef.current?.select();
-                }}
-                className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-[#C4832A] hover:bg-[rgba(196,131,42,0.12)]"
-              >
-                Edit
-              </button>
-            </div>
-            <p className="mt-0.5 text-[12px] text-[#A89070]">Temporary · gone when you leave</p>
-          </>
-        ) : (
-          <>
-            <p className="text-[15px] font-bold text-[var(--cream)]">
-              {trimmed || 'Pick a name'}
-            </p>
-            <p className="mt-0.5 text-[12px] leading-snug text-[#A89070]">
-              Optional photo — without one, peers see your letter avatar.
-            </p>
-          </>
-        )}
-      </div>
-    </div>
-  );
-
-  const nameField = (
     <div>
-      <label
-        htmlFor="room-temp-name"
-        className="mb-1.5 block text-[11px] font-semibold text-[#A89070]"
-      >
-        Temporary name
-      </label>
-      <div className="relative">
-        <input
-          id="room-temp-name"
-          ref={nameRef}
-          type="text"
-          value={displayName}
-          onChange={(e) => {
-            setDisplayName(e.target.value.slice(0, NAME_MAX));
-            setFormError(null);
-          }}
-          onBlur={() => setNameTouched(true)}
-          placeholder="e.g. Anon Bear"
-          maxLength={NAME_MAX}
-          autoComplete="off"
-          enterKeyHint="done"
-          data-testid="room-temp-name"
-          className="w-full rounded-xl py-3 pl-4 pr-14 text-[16px] text-[var(--cream)] placeholder-[#4A3520] outline-none transition-shadow"
-          style={{
-            background: 'var(--bg-primary)',
-            border: showNameError
-              ? `1px solid ${DANGER}`
-              : '1px solid var(--border-default)',
-            caretColor: '#C4832A',
-            fontSize: '16px',
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              void handleEnter();
-            }
-          }}
-        />
-        <span
-          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] tabular-nums text-[#A89070]"
-          aria-live="polite"
-        >
-          {displayName.length}/{NAME_MAX}
-        </span>
+      <div className="flex items-center justify-between gap-2">
+        {onCancel ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            data-testid="room-temp-not-now"
+            aria-label="Not now, back to rooms"
+            className="-ml-2 inline-flex min-h-[44px] items-center gap-1 rounded-full px-2 text-[15px] font-semibold text-[var(--cream-muted)] transition-colors hover:text-[var(--cream)]"
+          >
+            <ChevronLeftIcon className="h-5 w-5" />
+            Rooms
+          </button>
+        ) : (
+          <span />
+        )}
+        {overflowMenu}
       </div>
-      {showNameError && nameErrorText ? (
-        <p className="mt-1.5 text-[12px] font-medium" style={{ color: DANGER }} role="alert">
-          {nameErrorText}
-        </p>
+      <div className="mt-1 flex items-end justify-between gap-3">
+        <h1 className="min-w-0 truncate text-[26px] font-black leading-tight text-[var(--cream)]">{roomName}</h1>
+        {typeof activeCount === 'number' && activeCount > 0 ? (
+          <p
+            className="flex shrink-0 items-center gap-1.5 pb-1 text-[15px] font-bold text-[var(--nn-accent-text)]"
+            data-testid="room-temp-active-count"
+          >
+            <PersonIcon className="h-4 w-4" />
+            {activeCount} in room
+          </p>
+        ) : null}
+      </div>
+      {roomDescription ? (
+        <p className="mt-1 text-[15px] leading-snug text-[var(--cream-muted)]">{roomDescription}</p>
       ) : null}
     </div>
   );
 
-  const suggestionChips = showChips ? (
-    <div className="flex flex-wrap gap-2" data-testid="room-temp-suggestions">
-      {suggestions.map((label) => (
-        <button
-          key={label}
-          type="button"
-          onClick={() => {
-            setDisplayName(label.slice(0, NAME_MAX));
-            setNameTouched(true);
-            setFormError(null);
-          }}
-          className="rounded-full border border-[rgba(196,131,42,0.35)] px-3 py-1.5 text-[13px] font-medium text-[var(--cream)] transition-colors hover:border-[#C4832A] hover:bg-[rgba(196,131,42,0.1)]"
-        >
-          {label}
-        </button>
-      ))}
-      <button
-        type="button"
-        aria-label="Shuffle name suggestions"
-        onClick={() => setSuggestions(shufflePool(roomTheme || roomName))}
-        className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(196,131,42,0.35)] px-3 py-1.5 text-[13px] font-medium text-[#C4832A] transition-colors hover:bg-[rgba(196,131,42,0.1)]"
+  /** Board: big preview card with "Preview" and the temp name on chips. */
+  const previewCard = (
+    <div
+      className="relative aspect-square max-h-[44dvh] w-full overflow-hidden rounded-[22px] border border-[var(--border-default)] bg-[var(--bg-primary)] min-[1280px]:max-h-none"
+      aria-label={uploading ? 'Uploading photo' : 'Temporary avatar preview'}
+      data-testid="room-temp-preview-card"
+    >
+      {avatarContent()}
+      <span className="absolute left-3 top-3 rounded-full bg-[var(--bg-primary)] px-3 py-1 text-[15px] font-bold text-[var(--cream)]">
+        Preview
+      </span>
+      <span
+        className="absolute bottom-3 left-3 max-w-[60%] truncate rounded-full bg-[var(--bg-primary)] px-3 py-1 text-[15px] font-bold text-[var(--cream)]"
+        data-testid="room-temp-preview-name"
       >
-        <ShuffleIcon className="h-3.5 w-3.5" />
-        Shuffle
-      </button>
+        {trimmed || 'Pick a name'}
+      </span>
+      {photoUrl || photoPreview ? (
+        <button
+          type="button"
+          data-testid="room-temp-remove-photo"
+          onClick={handleRemovePhoto}
+          className="absolute bottom-2 right-2 inline-flex min-h-[44px] items-center rounded-full bg-[var(--bg-primary)] px-3 text-[15px] font-semibold text-[var(--cream)]"
+        >
+          Remove photo
+        </button>
+      ) : null}
     </div>
-  ) : null;
+  );
 
+  /** Board tiles: Camera / Temp photo. Upload kept so nothing is lost. */
   const photoControls = (
     <div>
       <input
@@ -630,9 +496,9 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
             setFormError(null);
             setCameraOpen(true);
           }}
-          className="inline-flex h-[46px] items-center justify-center gap-2 rounded-xl border border-[var(--border-default)] text-[14px] font-semibold text-[var(--cream)] transition-colors hover:border-[#C4832A] disabled:opacity-50"
+          className="flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[15px] font-bold text-[var(--cream)] transition-colors hover:border-[var(--copper)] disabled:opacity-60"
         >
-          <CameraIcon className="h-4 w-4 text-[#C4832A]" />
+          <CameraIcon className="h-5 w-5 text-[var(--nn-accent-text)]" />
           Take photo
         </button>
         <button
@@ -640,62 +506,128 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
           disabled={uploading}
           data-testid="room-temp-upload"
           onClick={() => galleryInputRef.current?.click()}
-          className="inline-flex h-[46px] items-center justify-center gap-2 rounded-xl border border-[var(--border-default)] text-[14px] font-semibold text-[var(--cream)] transition-colors hover:border-[#C4832A] disabled:opacity-50"
+          className="flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[15px] font-bold text-[var(--cream)] transition-colors hover:border-[var(--copper)] disabled:opacity-60"
         >
-          {uploading ? (
-            <>
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-[rgba(196,131,42,0.25)] border-t-[#C4832A]" />
-              Upload…
-            </>
-          ) : (
-            <>
-              <UploadIcon className="h-4 w-4 text-[#C4832A]" />
-              Upload
-            </>
-          )}
+          <ImageIcon className="h-5 w-5 text-[var(--nn-accent-text)]" />
+          {uploading ? 'Uploading…' : 'Temp photo'}
         </button>
       </div>
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <p className="text-[11px] text-[#A89070]">
-          Optional temporary photo — never your profile face.
-        </p>
-        {photoUrl || photoPreview ? (
-          <button
-            type="button"
-            data-testid="room-temp-remove-photo"
-            onClick={handleRemovePhoto}
-            className="shrink-0 text-[11px] font-semibold text-[#A89070] underline-offset-2 hover:text-[var(--cream)] hover:underline"
-          >
-            Remove photo
-          </button>
-        ) : null}
+      <p className="mt-2 text-[15px] leading-snug text-[var(--cream-muted)]">
+        Optional temporary photo, never your profile face. You choose camera and mic inside the room.
+      </p>
+    </div>
+  );
+
+  /** Board row: icon, "Temp name", value. */
+  const nameField = (
+    <div>
+      <p className="mb-2 text-[15px] font-bold text-[var(--nn-accent-text)]">Use a temporary name</p>
+      <div
+        className={`flex min-h-[52px] items-center gap-3 rounded-2xl border bg-[var(--bg-elevated)] px-4 ${
+          showNameError ? 'border-[var(--nn-danger)]' : 'border-[var(--border-default)]'
+        }`}
+      >
+        <TagIcon className="h-5 w-5 shrink-0 text-[var(--nn-accent-text)]" />
+        <label htmlFor="room-temp-name" className="shrink-0 text-[15px] text-[var(--cream-muted)]">
+          Temporary name
+        </label>
+        <input
+          id="room-temp-name"
+          ref={nameRef}
+          type="text"
+          value={displayName}
+          onChange={(e) => {
+            setDisplayName(e.target.value.slice(0, NAME_MAX));
+            setFormError(null);
+          }}
+          onBlur={() => setNameTouched(true)}
+          placeholder="e.g. Anon Bear"
+          maxLength={NAME_MAX}
+          autoComplete="off"
+          enterKeyHint="done"
+          data-testid="room-temp-name"
+          className="min-w-0 flex-1 bg-transparent py-3 text-right text-[16px] font-bold text-[var(--cream)] outline-none placeholder:font-normal placeholder:text-[var(--cream-muted)]"
+          style={{ caretColor: 'var(--copper)', fontSize: '16px' }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void handleEnter();
+            }
+          }}
+        />
+      </div>
+      <div className="mt-1.5 flex items-start justify-between gap-3">
+        {showNameError && nameErrorText ? (
+          <p className="text-[15px] font-medium text-[var(--nn-danger-text)]" role="alert">
+            {nameErrorText}
+          </p>
+        ) : (
+          <span />
+        )}
+        <span className="shrink-0 text-[15px] tabular-nums text-[var(--cream-muted)]" aria-live="polite">
+          {displayName.length}/{NAME_MAX}
+        </span>
       </div>
     </div>
   );
 
+  const suggestionChips = showChips ? (
+    <div className="flex flex-wrap gap-2" data-testid="room-temp-suggestions">
+      {suggestions.map((label) => (
+        <button
+          key={label}
+          type="button"
+          onClick={() => {
+            setDisplayName(label.slice(0, NAME_MAX));
+            setNameTouched(true);
+            setFormError(null);
+          }}
+          className="inline-flex min-h-[44px] items-center rounded-full border border-[var(--border-default)] px-4 text-[15px] font-medium text-[var(--cream)] transition-colors hover:border-[var(--copper)]"
+        >
+          {label}
+        </button>
+      ))}
+      <button
+        type="button"
+        aria-label="Shuffle name suggestions"
+        onClick={() => setSuggestions(shufflePool(roomTheme || roomName))}
+        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-[var(--border-default)] px-4 text-[15px] font-semibold text-[var(--nn-accent-text)] transition-colors hover:border-[var(--copper)]"
+      >
+        <ShuffleIcon className="h-4 w-4" />
+        Shuffle
+      </button>
+    </div>
+  ) : null;
+
   const saveToggle = (
-    <div className="flex items-start justify-between gap-3">
+    <div className="flex items-center justify-between gap-3">
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-semibold leading-snug text-[var(--cream)]">
+        <p className="text-[15px] font-semibold leading-snug text-[var(--cream)]">
           Save your group profile name and picture for next time
         </p>
-        <p className="mt-0.5 text-[11px] text-[#A89070]">Kept 30 days. Clear anytime.</p>
+        <p className="mt-0.5 text-[15px] text-[var(--cream-muted)]">Kept 30 days. Clear anytime.</p>
       </div>
       <button
         type="button"
         role="switch"
         aria-checked={saveForNext}
         onClick={() => setSaveBoth(!saveForNext)}
-        className="relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C4832A]"
-        style={{ background: saveForNext ? '#C4832A' : 'var(--border-default)' }}
+        className={`relative inline-flex h-11 w-14 shrink-0 items-center justify-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--copper)]`}
         data-testid="room-temp-save-name"
         aria-label="Save your group profile name and picture for next time"
       >
         <span
-          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-            saveForNext ? 'translate-x-6' : 'translate-x-1'
+          className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 ${
+            saveForNext ? 'bg-[var(--copper)]' : 'bg-[var(--border-strong)]'
           }`}
-        />
+          aria-hidden
+        >
+          <span
+            className={`inline-block h-5 w-5 transform rounded-full bg-[var(--cream)] shadow-sm transition-transform duration-200 ${
+              saveForNext ? 'translate-x-6' : 'translate-x-1'
+            }`}
+          />
+        </span>
       </button>
       {/* Mirror test-id for savePhoto — same single toggle controls both flags */}
       <input
@@ -711,26 +643,20 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   );
 
   const houseRulesAccordion = (
-    <div
-      className="rounded-xl border border-[rgba(196,131,42,0.2)]"
-      style={{ background: 'rgba(196,131,42,0.05)' }}
-    >
+    <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)]">
       <button
         type="button"
         aria-expanded={rulesOpen}
         onClick={() => setRulesOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-2 px-3 py-3 text-left"
+        className="flex min-h-[48px] w-full items-center justify-between gap-2 px-4 text-left"
         data-testid="room-temp-house-rules-toggle"
       >
-        <span className="text-[13px] font-bold text-[var(--cream)]">House rules</span>
-        <ChevronIcon className={`h-4 w-4 text-[#A89070] transition-transform ${rulesOpen ? 'rotate-180' : ''}`} />
+        <span className="text-[15px] font-bold text-[var(--cream)]">House rules</span>
+        <ChevronIcon className={`h-5 w-5 text-[var(--cream-muted)] transition-transform ${rulesOpen ? 'rotate-180' : ''}`} />
       </button>
       {rulesOpen ? (
-        <div className="border-t border-[rgba(196,131,42,0.15)] px-3 pb-3 pt-2" data-testid="room-temp-house-rules">
-          {roomDescription ? (
-            <p className="mb-2 text-[12px] leading-relaxed text-[#A89070]">{roomDescription}</p>
-          ) : null}
-          <ul className="list-disc space-y-1 pl-4 text-[12px] leading-relaxed text-[var(--cream-muted)]">
+        <div className="border-t border-[var(--border-default)] px-4 pb-3 pt-2" data-testid="room-temp-house-rules">
+          <ul className="list-disc space-y-1 pl-4 text-[15px] leading-relaxed text-[var(--cream-muted)]">
             {houseRuleLines.map((line) => (
               <li key={line}>{line}</li>
             ))}
@@ -740,140 +666,87 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
     </div>
   );
 
+  /** Real-profile path kept (one tap), below the temp form like a secondary row. */
+  const profileChoice = (
+    <div data-testid="room-identity-profile-choice">
+      <div className="mb-3 flex items-center gap-3" aria-hidden>
+        <span className="h-px flex-1 bg-[var(--border-default)]" />
+        <span className="text-[15px] font-semibold text-[var(--cream-muted)]">or</span>
+        <span className="h-px flex-1 bg-[var(--border-default)]" />
+      </div>
+      <button
+        type="button"
+        data-testid="room-use-real-profile"
+        disabled={submitting || uploading}
+        onClick={() => void handleUseProfile()}
+        className="flex min-h-[64px] w-full items-center gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2 text-left transition-colors hover:border-[var(--copper)] disabled:opacity-60"
+      >
+        <span
+          className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--border-default)] bg-[var(--bg-primary)]"
+          aria-hidden
+        >
+          <BrandAvatar photoUrl={resolvedProfilePhoto} name={resolvedProfileName} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[15px] font-bold text-[var(--cream)]">{profileCtaLabel}</span>
+          <span className="mt-0.5 block text-[15px] text-[var(--cream-muted)]">
+            Enter with your real name and photo
+          </span>
+        </span>
+      </button>
+    </div>
+  );
+
   const formErrorBanner = formError ? (
-    <p className="rounded-lg px-3 py-2 text-[12px] font-medium" style={{ color: DANGER, background: 'rgba(176,67,46,0.1)', border: `1px solid ${DANGER}` }} role="alert">
+    <p
+      className="rounded-xl border border-[var(--nn-danger)] bg-[var(--error-soft)] px-3 py-2 text-[15px] font-medium text-[var(--nn-danger-text)]"
+      role="alert"
+    >
       {formError}
     </p>
   ) : null;
 
+  /** Board: full width copper "Join" with an arrow-in icon. */
   const enterButton = (
     <button
       type="button"
       onClick={() => void handleEnter()}
       disabled={!canEnter}
       data-testid="room-temp-enter"
-      className="w-full rounded-xl py-3.5 text-[15px] font-bold transition-all active:scale-[0.98] disabled:cursor-not-allowed"
-      style={
+      className={`inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-full px-6 text-[17px] font-black transition-all active:scale-[0.98] disabled:cursor-not-allowed ${
         canEnter
-          ? {
-              background: 'linear-gradient(135deg,#C4832A,#A45E18)',
-              color: '#1A0E03',
-              boxShadow: '0 4px 16px rgba(196,131,42,0.35)',
-            }
-          : {
-              background: 'rgba(74,53,32,0.55)',
-              color: '#6B5840',
-              boxShadow: 'none',
-            }
-      }
+          ? 'bg-[var(--copper)] text-[var(--nn-on-copper)] shadow-[0_4px_16px_rgba(196,131,42,0.35)]'
+          : 'bg-[var(--bg-elevated)] text-[var(--cream-muted)]'
+      }`}
     >
-      {submitting ? 'Entering…' : ctaLabel}
+      <JoinIcon className="h-5 w-5" />
+      {submitting ? 'Joining…' : ctaLabel}
     </button>
   );
 
-  const notNowButton = onCancel ? (
-    <button
-      type="button"
-      onClick={onCancel}
-      data-testid="room-temp-not-now"
-      className="w-full py-2 text-center text-[13px] font-medium text-[#A89070] transition-colors hover:text-[var(--cream)] min-[1280px]:w-auto min-[1280px]:rounded-xl min-[1280px]:border min-[1280px]:border-[var(--border-default)] min-[1280px]:bg-[rgba(0,0,0,0.25)] min-[1280px]:px-5 min-[1280px]:py-3"
-    >
-      Not now
-    </button>
-  ) : null;
-
-  /* ── Mobile form body (scrollable) ─────────────────────────────────────── */
-  const mobileFormBody = (
-    <div className="flex flex-col gap-4 px-5 pb-4 pt-2">
-      {profileChoice}
-      {identityPreview}
+  const formBlocks = (
+    <>
+      {photoControls}
       {nameField}
       {suggestionChips}
-      {photoControls}
       {saveToggle}
       {houseRulesAccordion}
+      {profileChoice}
       {formErrorBanner}
-    </div>
-  );
-
-  /* ── Web left column ───────────────────────────────────────────────────── */
-  const webLeftColumn = (
-    <div
-      className="flex h-full flex-col justify-between gap-6 p-7"
-      style={{ background: 'rgba(0,0,0,0.28)' }}
-    >
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center gap-3">
-          <div
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold"
-            style={{
-              background: 'linear-gradient(135deg,rgba(196,131,42,0.35),rgba(139,69,19,0.25))',
-              border: '1px solid rgba(196,131,42,0.45)',
-              color: '#C4832A',
-            }}
-          >
-            {roomInitials(roomName)}
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-[17px] font-bold text-[var(--cream)]">{roomName}</p>
-            <p className="text-[12px] text-[#A89070]">{subtitleActive}</p>
-          </div>
-        </div>
-        {roomDescription ? (
-          <p className="text-[13px] leading-relaxed text-[#A89070]">{roomDescription}</p>
-        ) : null}
-        <div>
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#C4832A]">
-            House rules
-          </p>
-          <ul className="list-disc space-y-1.5 pl-4 text-[13px] leading-relaxed text-[var(--cream-muted)]">
-            {houseRuleLines.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        </div>
-      </div>
-      <div className="pt-2">{anonymityLine}</div>
-    </div>
-  );
-
-  /* ── Web right form ────────────────────────────────────────────────────── */
-  const webRightForm = (
-    <div className="flex h-full flex-col">
-      <div className="relative flex-1 space-y-4 overflow-y-auto p-7">
-        <div className="absolute right-4 top-4">{overflowMenu}</div>
-        {profileChoice}
-        {identityPreview}
-        {nameField}
-        {suggestionChips}
-        {photoControls}
-        {saveToggle}
-        {formErrorBanner}
-      </div>
-      <div
-        className="flex shrink-0 items-center justify-end gap-3 border-t border-[var(--border-default)] px-7 py-4"
-        style={{ background: 'rgba(0,0,0,0.12)' }}
-      >
-        {notNowButton}
-        <div className="min-w-[160px]">{enterButton}</div>
-      </div>
-    </div>
+    </>
   );
 
   return (
     <div
-      className="flex min-h-0 flex-1 flex-col"
+      className="flex min-h-0 flex-1 flex-col bg-[var(--bg-primary)]"
       data-testid="room-temp-identity-gate"
-      style={{ background: 'var(--bg-primary)' }}
     >
       {isWide ? (
         <div className="relative flex min-h-0 flex-1 items-center justify-center p-8">
-          <div className="pointer-events-none absolute inset-0 bg-black/50" aria-hidden />
           <div
-            className="relative grid w-full max-w-[920px] overflow-hidden rounded-2xl border border-[rgba(196,131,42,0.3)] shadow-[0_24px_64px_rgba(0,0,0,0.55)]"
+            className="relative grid w-full max-w-[920px] overflow-hidden rounded-[28px] border border-[var(--border-default)] bg-[var(--bg-card)] shadow-[0_24px_64px_rgba(0,0,0,0.45)]"
             style={{
-              background: 'var(--bg-card)',
-              gridTemplateColumns: 'minmax(280px, 0.92fr) minmax(340px, 1.08fr)',
+              gridTemplateColumns: 'minmax(300px, 0.95fr) minmax(340px, 1.05fr)',
               minHeight: '520px',
               maxHeight: 'min(860px, 90vh)',
             }}
@@ -881,42 +754,43 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
             aria-modal="true"
             aria-label="Temporary identity"
           >
-            {webLeftColumn}
-            {webRightForm}
+            <div className="flex flex-col gap-4 p-7">
+              {headerBlock}
+              {previewCard}
+            </div>
+            <div className="flex min-h-0 flex-col border-l border-[var(--border-default)]">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-7">{formBlocks}</div>
+              <div className="shrink-0 space-y-2 border-t border-[var(--border-default)] px-7 py-4">
+                {enterButton}
+                {anonymityLine}
+              </div>
+            </div>
           </div>
         </div>
       ) : (
-        <div className="relative flex min-h-0 flex-1 flex-col justify-end">
+        <div
+          className="flex min-h-0 flex-1 flex-col"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Temporary identity"
+        >
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <div className="flex flex-col gap-4 px-5 pb-4 pt-2">
+              {headerBlock}
+              {previewCard}
+              {formBlocks}
+            </div>
+          </div>
           <div
-            className="pointer-events-none absolute inset-0 bg-black/45"
-            aria-hidden
-          />
-          <div
-            className="relative flex max-h-[min(92dvh,920px)] min-h-[min(72dvh,680px)] w-full flex-col rounded-t-[28px] border border-b-0 border-[rgba(196,131,42,0.28)] shadow-[0_-12px_48px_rgba(0,0,0,0.55)]"
-            style={{
-              background: 'var(--bg-card)',
-              paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-            }}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Temporary identity"
+            className="shrink-0 space-y-2 border-t border-[var(--border-default)] bg-[var(--bg-primary)] px-5 pt-3"
+            style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
           >
-            <div className="flex shrink-0 justify-center pb-1 pt-3" aria-hidden>
-              <span className="h-1 w-10 rounded-full bg-[rgba(168,144,112,0.45)]" />
-            </div>
-            <div className="shrink-0 px-5 pb-3 pt-1">{headerBlock}</div>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{mobileFormBody}</div>
-            <div
-              className="shrink-0 space-y-2 border-t border-[var(--border-default)] px-5 pb-3 pt-3"
-              style={{ background: 'var(--bg-card)' }}
-            >
-              {enterButton}
-              {notNowButton}
-              {anonymityLine}
-            </div>
+            {enterButton}
+            {anonymityLine}
           </div>
         </div>
       )}
+
 
       <SelfieCaptureModal
         variant="compact"
@@ -977,12 +851,47 @@ function CameraIcon({ className }: { className?: string }) {
   );
 }
 
-function UploadIcon({ className }: { className?: string }) {
+function ChevronLeftIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function PersonIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5 20c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ImageIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <path d="M12 16V4" strokeLinecap="round" />
-      <path d="M7 9l5-5 5 5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M4 20h16" strokeLinecap="round" />
+      <rect x="3" y="4" width="18" height="16" rx="2.5" />
+      <circle cx="9" cy="10" r="1.75" />
+      <path d="M21 16l-5-5-8 9" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function TagIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M3 12V4h8l10 10-8 8L3 12z" strokeLinejoin="round" />
+      <circle cx="7.5" cy="8.5" r="1.25" />
+    </svg>
+  );
+}
+
+function JoinIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" strokeLinecap="round" />
+      <path d="M10 8l4 4-4 4M14 12H4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

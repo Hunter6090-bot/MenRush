@@ -3,11 +3,12 @@ import { authMiddleware, AuthRequest, verifiedMiddleware } from '../middleware/a
 import { FREE_LIMITS, premiumService } from '../services/premium.service';
 import { invoiceService, getManualPaymentInstructions } from '../services/invoice.service';
 import { CreateInvoiceSchema } from '../types/validation';
+import { privateNoStore } from '../middleware/noStore';
 
 const router = Router();
 
 router.get('/plans', (_req: Request, res: Response) => {
-  // Quiet face: Verotel MID pending as primary merchant path when MID lands.
+  // Quiet face: no card processor is live yet; manual invoice is the paid path.
   // Manual invoice / bank transfer available as stopgap.
   res.json({
     processor: 'manual_invoice',
@@ -16,7 +17,7 @@ router.get('/plans', (_req: Request, res: Response) => {
   });
 });
 
-router.use(authMiddleware, verifiedMiddleware);
+router.use(privateNoStore, authMiddleware, verifiedMiddleware);
 
 router.get('/status', async (req: AuthRequest, res: Response) => {
   try {
@@ -94,7 +95,7 @@ router.post('/invoices/:id/cancel', async (req: AuthRequest, res: Response) => {
 });
 
 router.post('/subscribe', async (_req: AuthRequest, res: Response) => {
-  // Fail closed while Verotel MID is pending merchant approval.
+  // Fail closed until a card processor is fully configured.
   // Use manual invoice payment (/api/premium/invoices).
   return res.status(503).json({
     error: 'billing_not_configured',

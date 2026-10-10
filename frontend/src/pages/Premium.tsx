@@ -181,17 +181,17 @@ export const Premium: React.FC = () => {
           </h1>
           <p className="text-sm text-[var(--cream-muted)] text-center mb-5">
             {BETA_INVITE_REQUIRED
-              ? 'Premium perks are included free during the private beta.'
-              : 'Direct nearby discovery. Real perks. No subscription traps.'}
+              ? 'Premium perks are included free while this offer lasts.'
+              : 'Direct proximity edge. Full features, no swiping theatre.'}
           </p>
 
           <div className="rounded-xl border border-[#C4832A]/40 bg-[#C4832A]/10 p-4 text-center mb-5">
             <p className="text-[#C4832A] font-bold">
-              {BETA_INVITE_REQUIRED ? 'Beta access includes Premium' : 'In-app card billing is under merchant review'}
+              {BETA_INVITE_REQUIRED ? 'Your access includes Premium' : 'In-app card billing is being set up'}
             </p>
             <p className="text-xs text-[var(--cream-muted)] mt-1">
-              We are not taking card payments in-app yet while Verotel processor review is pending.
-              Use the manual bank invoice below for early activation, or contact{' '}
+              We are not taking card payments in the app yet. Use the bank invoice below to pay for
+              Premium, or contact{' '}
               <a href="mailto:support@menrush.com" className="text-[#C4832A] underline hover:text-[#E0A040]">
                 support@menrush.com
               </a>.
@@ -307,13 +307,13 @@ export const Premium: React.FC = () => {
                           </div>
                         </div>
                         <p className="text-[var(--cream-muted)] leading-relaxed">
-                          Bank transfer coordinates are being provisioned by ops. Use payment reference <strong className="text-[#E0A14A] font-mono">{paymentInstructions.payment_reference}</strong> to complete payment with ops.
+                          Bank details are not shown here yet. Email support@menrush.com with your payment reference <strong className="text-[#E0A14A] font-mono">{paymentInstructions.payment_reference}</strong> and we will reply with how to pay.
                         </p>
                       </div>
                     )}
                     {paymentInstructions.bank_configured && (
                       <p className="text-[11px] text-[var(--cream-muted)] mt-2 leading-relaxed">
-                        Please include reference <strong className="text-[#E0A14A] font-mono">{paymentInstructions.payment_reference}</strong> on your transfer. Premium is activated once payment is confirmed by ops.
+                        Please include reference <strong className="text-[#E0A14A] font-mono">{paymentInstructions.payment_reference}</strong> on your transfer. Premium switches on once we have confirmed your payment.
                       </p>
                     )}
                   </div>
@@ -446,7 +446,7 @@ export const Premium: React.FC = () => {
 
           {/* Quiet face notice */}
           <p className="text-[10px] text-[#7A6A50] text-center mt-4 leading-relaxed">
-            In-app card billing is under merchant review. Manual bank invoices are processed directly by MenRush upon receipt.
+            Card payments are not available in the app yet. MenRush checks bank invoices by hand once your payment arrives.
           </p>
 
           <button

@@ -8,6 +8,9 @@ describe('VerifiedBadge', () => {
     const button = screen.getByRole('button', { name: /Verified/ });
     expect(button.textContent).toBe('');
     expect(button.querySelector('svg')).toBeTruthy();
+    expect(button.className).not.toMatch(/rounded-full/);
+    expect(button.className).not.toMatch(/border-2/);
+    expect(button.className).not.toMatch(/bg-\[#C4832A\]/);
     fireEvent.click(button);
     expect(screen.getByRole('status')).toHaveTextContent(/Veriff/i);
     fireEvent.keyDown(button, { key: 'Escape' });
