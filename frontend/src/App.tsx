@@ -262,7 +262,7 @@ function AppShell() {
           <Route path="/brightonpride26" element={<Navigate to="/pride" replace />} />
           <Route path="/pride" element={<Pride />} />
           <Route path="/invite" element={<BetaAccess />} />
-          {/* Old invite links in sent emails: keep working, show /invite. */}
+          {/* Old preview address: goes home (an ?invite= code still goes to /invite). */}
           <Route path="/beta" element={<LegacyInviteRedirect />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
