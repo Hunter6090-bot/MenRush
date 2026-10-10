@@ -122,6 +122,15 @@ describe('Out spot card opens the spot sheet', () => {
     expect(await screen.findByTestId('hotspot-sheet-checkout')).toHaveTextContent('Checked in anonymously');
   });
 
+  it('with no server spot the count is left alone (#368: Ghost viewers are never counted)', async () => {
+    vi.mocked(hotSpotsAPI.checkIn).mockResolvedValue({ data: { ok: true } } as never);
+    renderOut();
+    fireEvent.click(await screen.findByTestId(`out-spot-open-${spot.id}`));
+    fireEvent.click(await screen.findByTestId('hotspot-sheet-checkin-anon'));
+    await screen.findByTestId('hotspot-sheet-checkout');
+    expect(screen.getByTestId('hotspot-sheet-activity')).toHaveTextContent('2 checked in');
+  });
+
   it('Escape closes the sheet and returns focus to the card', async () => {
     renderOut();
     const open = await screen.findByTestId(`out-spot-open-${spot.id}`);

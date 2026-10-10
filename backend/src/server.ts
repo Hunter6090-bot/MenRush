@@ -34,10 +34,12 @@ import campaignRoutes from './routes/campaigns';
 import socialRoutes from './routes/social';
 import mapFeedRoutes from './routes/map-feed';
 import locationPrivacyRoutes from './routes/location-privacy';
+import travelRoutes from './routes/travel';
 import communityRoutes from './routes/community';
 import mediaDisplayRoutes from './routes/media-display';
 import { startPulseExpiryCron } from './services/pulse.service';
 import { startRoomMessagePurgeCron, startRoomTempIdentityPurgeCron } from './services/room.service';
+import { startTravelCleanupCron } from './services/travel.service';
 import { noteRoomEnter, noteRoomExit } from './services/room-presence';
 import {
   hasWelcomeBeenSent,
@@ -56,8 +58,11 @@ import { messageService } from './services/message.service';
 import { accessControl } from './security/access';
 import { logResendMailerStatus } from './services/mailer.service';
 import { startVerificationRetentionWorker } from './services/verification/retention.worker';
+import { startLocationRetentionWorker } from './services/location-retention.service';
+import { startReportRetentionWorker } from './services/report-retention.service';
 import { Sentry } from './observability/sentry';
 import { corsOrigin } from './security/cors';
+import { noQueryCoordinates } from './middleware/noQueryCoordinates';
 import { query } from './db';
 import { ensureUploadDirs, getUploadsRoot, probeUploadsWritable } from './lib/uploads-root';
 import { logCallMetric } from './services/call-metrics.service';
@@ -88,6 +93,10 @@ const io: any = new SocketIOServer(server, {
 // Middleware
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: corsOrigin, credentials: true }));
+// Coordinates never travel in a URL (query strings land in proxy logs).
+// Lenient by default: coordinate keys are stripped from the query before any
+// route sees them. STRICT_NO_URL_COORDINATES=true rejects with 400 instead.
+app.use('/api', noQueryCoordinates);
 app.use('/api/premium/webhook', premiumWebhookRoutes);
 // Veriff decision webhook needs the raw body for HMAC (before express.json).
 app.use('/api/verify/veriff', veriffRoutes);
@@ -149,6 +158,7 @@ app.use('/api/campaigns', campaignRoutes);
 app.use('/api/social', socialRoutes);
 app.use('/api/map-feed', mapFeedRoutes);
 app.use('/api/location-privacy', locationPrivacyRoutes);
+app.use('/api/travel', travelRoutes);
 app.use('/api/community', communityRoutes);
 
 // Waitlist signup — POSTs to /api/waitlist land here; the dripRoutes router
@@ -970,5 +980,10 @@ server.listen(PORT, () => {
   startPulseExpiryCron();
   startRoomTempIdentityPurgeCron();
   startRoomMessagePurgeCron();
+  startTravelCleanupCron();
   startVerificationRetentionWorker();
+  // Off unless LOCATION_PURGE_ENABLED=true (periods TBD, see config/locationRetention.ts).
+  startLocationRetentionWorker();
+  // Off unless REPORT_RETENTION_PURGE_ENABLED=true (period pending Al).
+  startReportRetentionWorker();
 });

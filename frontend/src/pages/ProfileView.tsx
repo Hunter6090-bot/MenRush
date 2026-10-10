@@ -16,6 +16,8 @@ import { ChatSafetyMenu } from '../components/ChatSafetyMenu';
 import { IconMatches, IconChat, IconUnmatch } from '../components/icons';
 import { formatHeight, formatWeight } from '../lib/age';
 import { getDistanceLabel } from '../lib/discovery';
+import { VisitingBadge } from '../components/VisitingBadge';
+import type { TravelVisiting } from '../lib/travel';
 import {
   matchCtaAriaLabel,
   matchCtaDisabled,
@@ -39,8 +41,10 @@ interface ViewableUser {
   cover_zoom?: number;
   /** Bucketed distance in km for locale formatting on the client. */
   distance_km?: string | number | null;
-  /** Approximate distance label (privacy-bucketed). */
+  /** Approximate distance label (privacy-bucketed). "Visiting <city>" for a visitor. */
   distance_label?: string | null;
+  /** Travel: live trip, shown as "Visiting <city>, <dates>". */
+  visiting?: TravelVisiting | null;
   interests?: string[];
   height_cm?: number | null;
   weight_kg?: number | null;
@@ -364,7 +368,7 @@ export const ProfileView = () => {
               {typeof user.age === 'number' && (
                 <span className="text-[var(--cream-muted)]">Age {user.age}</span>
               )}
-              {distLabel && (
+              {distLabel && !user.visiting && (
                 <DistancePill
                   km={0}
                   label={distLabel}
@@ -373,6 +377,7 @@ export const ProfileView = () => {
                 />
               )}
             </div>
+            {user.visiting ? <VisitingBadge visiting={user.visiting} /> : null}
             {(user.height_cm != null ||
               user.weight_kg != null ||
               user.relationship_status ||

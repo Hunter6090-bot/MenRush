@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { HideLocationList } from '../components/HideLocationList';
+import { ShowInLookAroundRow } from '../components/ShowInLookAroundRow';
 import { TwoFactorSettings } from '../components/TwoFactorSettings';
 import { PasswordInput } from '../components/PasswordInput';
 import { authAPI, usersAPI } from '../api/client';
@@ -115,6 +116,7 @@ export const Settings = () => {
       reporter_email: string;
       reported_name?: string | null;
       reported_email?: string | null;
+      reported_account_deleted_at?: string | null;
     }>
   >([]);
   const [reportsLoading, setReportsLoading] = useState(false);
@@ -883,6 +885,9 @@ export const Settings = () => {
             <div className="mt-3">
               <HideLocationList />
             </div>
+            <div className="mt-3">
+              <ShowInLookAroundRow />
+            </div>
           </div>
 
           {/* ── DISCOVERY ── */}
@@ -925,6 +930,20 @@ export const Settings = () => {
             <SectionLabel>Notifications</SectionLabel>
             <div className={groupClass}>
               <NotificationSettings flush />
+
+              <Link
+                to="/get-the-app"
+                className={rowActionClass}
+                data-testid="settings-get-the-app"
+              >
+                <div>
+                  <p className="text-[15px] font-bold text-[var(--cream)]">Get the app</p>
+                  <p className="mt-0.5 text-[15px] text-[var(--cream-muted)]">
+                    Put MenRush on your Home Screen.
+                  </p>
+                </div>
+                <ChevronRight />
+              </Link>
 
               <Link
                 to="/notifications"
@@ -1048,7 +1067,7 @@ export const Settings = () => {
                             </p>
                           </div>
                           <p className="mt-1 text-[12px] text-[var(--cream-muted)]">
-                            {report.reporter_name} → {report.reported_name ?? 'unknown'}
+                            {report.reporter_name} → {report.reported_name ?? (report.reported_account_deleted_at ? 'Deleted account' : 'unknown')}
                           </p>
                           {report.details ? (
                             <p className="mt-1 text-[12px] text-[var(--cream)]">{report.details}</p>

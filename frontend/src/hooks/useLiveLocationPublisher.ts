@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { usersAPI } from '../api/client';
+import { clearSessionFix, recordSessionFix, usersAPI } from '../api/client';
 import { FEATURES } from '../lib/featureFlags';
 import { isGeolocationPermissionGranted, requestDeviceLocation } from '../lib/deviceLocation';
 import { useAuthStore, useLocationStore } from './store';
@@ -35,13 +35,17 @@ export function useLiveLocationPublisher() {
   const deniedRef = useRef(false);
 
   useEffect(() => {
-    if (!token) return;
-    if (FEATURES.requireIdVerification && !isVerified) return;
+    if (!token || (FEATURES.requireIdVerification && !isVerified)) {
+      clearSessionFix();
+      return;
+    }
     if (typeof window === 'undefined') return;
 
     deniedRef.current = false;
 
     const pushCoords = (latitude: number, longitude: number, force = false) => {
+      // A real device fix from this session: the only point a read may sync.
+      recordSessionFix(latitude, longitude);
       const last = lastPushRef.current;
       const now = Date.now();
       const movedEnough =
@@ -63,13 +67,19 @@ export function useLiveLocationPublisher() {
       // User may have granted location in Settings after an earlier deny — re-check.
       if (deniedRef.current) {
         const granted = await isGeolocationPermissionGranted();
-        if (!granted) return;
+        if (!granted) {
+          clearSessionFix();
+          return;
+        }
         deniedRef.current = false;
       }
 
       const result = await requestDeviceLocation();
       if (!result.ok) {
-        if (result.error === 'denied') deniedRef.current = true;
+        if (result.error === 'denied') {
+          deniedRef.current = true;
+          clearSessionFix();
+        }
         return;
       }
       deniedRef.current = false;
@@ -87,7 +97,10 @@ export function useLiveLocationPublisher() {
           pushCoords(coords.latitude, coords.longitude);
         },
         (err) => {
-          if (err.code === err.PERMISSION_DENIED) deniedRef.current = true;
+          if (err.code === err.PERMISSION_DENIED) {
+            deniedRef.current = true;
+            clearSessionFix();
+          }
         },
         { enableHighAccuracy: true, timeout: 20_000, maximumAge: 10_000 },
       );
@@ -117,6 +130,8 @@ export function useLiveLocationPublisher() {
     document.addEventListener('visibilitychange', onVisible);
 
     return () => {
+      // Signed out, verification lost or unmounted: no session fix survives.
+      clearSessionFix();
       if (watchId != null) navigator.geolocation.clearWatch(watchId);
       window.clearInterval(heartbeatId);
       window.clearInterval(retryId);

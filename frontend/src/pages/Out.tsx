@@ -5,7 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { eventsAPI, hotSpotsAPI, type EventDTO, type HotSpotDTO } from '../api/client';
+import { eventsAPI, hotSpotsAPI, onLocationSaved, type EventDTO, type HotSpotDTO } from '../api/client';
 import { Layout } from '../components/Layout';
 import { PulseRing } from '../components/PulseRing';
 import { CommunityFeed } from '../components/CommunityFeed';
@@ -14,7 +14,7 @@ import { CruisingSearchSheet } from '../components/CruisingSearchSheet';
 import { HotSpotReviewsModal } from '../components/HotSpotReviewsModal';
 import { HotSpotSheet } from '../components/HotSpotSheet';
 import { useAuthStore, useLocationStore } from '../hooks/store';
-import { adjustHotSpotLiveCount } from '../lib/hotSpotCounts';
+import { spotAfterCheckToggle } from '../lib/hotSpotCounts';
 import { formatDistanceFromKm } from '../lib/localeUnits';
 import { getDirectionsUrl } from '../lib/cruising';
 import { IconCommunity, SpotTypeIcon, spotTypeKey } from '../components/icons';
@@ -89,19 +89,14 @@ export function Out() {
       setActingSpotId(spot.id);
       setSheetError('');
       try {
+        // Server count only, same as the map sheet: no client +1 / -1, which is
+        // wrong for a Ghost or hidden viewer who is never counted (#368).
         if (spot.is_checked_in) {
-          await hotSpotsAPI.checkOut(spot.id);
-          replaceSpot({ ...spot, is_checked_in: false, ...adjustHotSpotLiveCount(spot, -1) });
+          const res = await hotSpotsAPI.checkOut(spot.id);
+          replaceSpot(spotAfterCheckToggle(spot, res.data?.spot, false));
         } else {
           const res = await hotSpotsAPI.checkIn(spot.id, anonymous);
-          replaceSpot(
-            res.data?.spot ?? {
-              ...spot,
-              is_checked_in: true,
-              my_checkin_anonymous: anonymous,
-              ...adjustHotSpotLiveCount(spot, 1),
-            },
-          );
+          replaceSpot(spotAfterCheckToggle(spot, res.data?.spot, true, { my_checkin_anonymous: anonymous }));
         }
       } catch {
         setSheetError('Check-in failed. Try again.');
@@ -126,6 +121,18 @@ export function Out() {
     [params, setParams],
   );
 
+  // A brand-new member's first read can land before the server has their
+  // location (empty list, location_required). Reload once when it is saved.
+  const [needsLocation, setNeedsLocation] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  useEffect(() => {
+    if (!needsLocation) return;
+    return onLocationSaved(() => {
+      setNeedsLocation(false);
+      setReloadKey((k) => k + 1);
+    });
+  }, [needsLocation]);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -141,7 +148,10 @@ export function Out() {
                 return;
               }
               const res = await hotSpotsAPI.listNearby(lat, lng, 80);
-              if (!cancelled) setSpots(res.data.spots ?? []);
+              if (!cancelled) {
+                setSpots(res.data.spots ?? []);
+                setNeedsLocation(Boolean((res.data as { location_required?: boolean }).location_required));
+              }
             })(),
           );
         } else if (!cancelled) {
@@ -172,7 +182,7 @@ export function Out() {
     return () => {
       cancelled = true;
     };
-  }, [chip, lat, lng]);
+  }, [chip, lat, lng, reloadKey]);
 
   const visibleSpots = useMemo(
     () => spots.filter((s) => spotMatchesChip(s, chip)),
