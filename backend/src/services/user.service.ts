@@ -966,6 +966,7 @@ export const userService = {
 
     const client = await pool.connect();
     let report: { id: string; created_at: string };
+    let copiedKeys: string[] = [];
     try {
       await client.query('BEGIN');
       const result = await client.query(
@@ -978,7 +979,7 @@ export const userService = {
       await client.query('SAVEPOINT evidence_snapshot');
       try {
         const { snapshotReportEvidence } = await import('./report-evidence.service');
-        await snapshotReportEvidence(
+        copiedKeys = await snapshotReportEvidence(
           {
             reportId: report.id,
             reporterId,
@@ -989,13 +990,19 @@ export const userService = {
           (text, params) => client.query(text, params),
         );
       } catch {
+        copiedKeys = [];
         await client.query('ROLLBACK TO SAVEPOINT evidence_snapshot');
+        await client.query(`UPDATE reports SET evidence_unavailable = TRUE WHERE id = $1`, [report.id]);
         // No report id, member id, or details — the report itself is kept.
         console.error('[reports] evidence snapshot failed');
       }
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK').catch(() => undefined);
+      if (copiedKeys.length) {
+        const { unlinkEvidenceMedia } = await import('./report-evidence.service');
+        unlinkEvidenceMedia(copiedKeys);
+      }
       throw err;
     } finally {
       client.release();
@@ -1040,6 +1047,7 @@ export const userService = {
          r.details,
          r.status,
          r.legal_hold,
+         r.evidence_unavailable,
          r.created_at,
          r.resolved_at,
          r.closed_at,

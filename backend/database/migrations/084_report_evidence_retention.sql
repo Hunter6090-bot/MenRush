@@ -17,6 +17,7 @@ SET LOCAL lock_timeout = '5s';
 ALTER TABLE reports ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ;
 ALTER TABLE reports ADD COLUMN IF NOT EXISTS legal_hold BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE reports ADD COLUMN IF NOT EXISTS reporter_account_deleted_at TIMESTAMPTZ;
+ALTER TABLE reports ADD COLUMN IF NOT EXISTS evidence_unavailable BOOLEAN NOT NULL DEFAULT FALSE;
 
 UPDATE reports
    SET closed_at = resolved_at

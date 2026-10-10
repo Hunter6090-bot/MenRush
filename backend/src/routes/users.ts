@@ -550,11 +550,16 @@ router.get('/me/team', async (req: AuthRequest, res: Response) => {
   }
 });
 
+const EvidenceIdParam = z.string().uuid();
+
 router.get('/reports/:id/evidence/:evidenceId/media', async (req: AuthRequest, res: Response) => {
   try {
     const isTeam = await userService.isTeamMember(req.userId!);
     if (!isTeam) {
       return res.status(403).json({ error: 'team_only' });
+    }
+    if (!EvidenceIdParam.safeParse(req.params.id).success || !EvidenceIdParam.safeParse(req.params.evidenceId).success) {
+      return res.status(404).json({ error: 'not_found' });
     }
     const { getEvidenceMediaPath } = await import('../services/report-evidence.service');
     const absolute = await getEvidenceMediaPath(req.params.id, req.params.evidenceId);
@@ -564,8 +569,8 @@ router.get('/reports/:id/evidence/:evidenceId/media', async (req: AuthRequest, r
       if (!err || res.headersSent) return;
       res.status(404).json({ error: 'not_found' });
     });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch {
+    res.status(404).json({ error: 'not_found' });
   }
 });
 

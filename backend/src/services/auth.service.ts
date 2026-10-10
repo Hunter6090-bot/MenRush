@@ -1185,6 +1185,7 @@ export const authService = {
     const { unlinkMessageMedia } = await import('./report-evidence.service');
     const client = await pool.connect();
     let messageMediaKeys: string[] = [];
+    let committed = false;
     try {
       await client.query('BEGIN');
       await client.query(`SET LOCAL lock_timeout = '5s'`);
@@ -1200,7 +1201,7 @@ export const authService = {
       await locationRetentionService.eraseAccountLocationData(userId, (text, params) => client.query(text, params));
       // Live chat rows cascade with the user. Collect storage keys first so
       // we can unlink the originals after COMMIT and not leave orphans.
-      // Report evidence copies (re-*) live under report-evidence/ and stay.
+      // Direction (sender / both) is waiting on Al — do not change this query.
       const media = await client.query(
         `SELECT DISTINCT media_storage_key AS key
            FROM messages
@@ -1213,13 +1214,14 @@ export const authService = {
         .filter((key: string | null | undefined): key is string => Boolean(key));
       await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
       await client.query('COMMIT');
+      committed = true;
     } catch (err) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw err;
     } finally {
       client.release();
     }
-    unlinkMessageMedia(messageMediaKeys);
+    if (committed) unlinkMessageMedia(messageMediaKeys);
     return { ok: true };
   },
 };

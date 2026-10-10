@@ -144,7 +144,7 @@ export async function snapshotReportEvidence(
     messageIds?: string[];
   },
   sql: SqlFn = query,
-): Promise<void> {
+): Promise<string[]> {
   const messageIds = (opts.messageIds ?? []).filter(Boolean).slice(0, EVIDENCE_CAP);
   const roomId = parseRoomId(opts.threadId);
   const copiedKeys: string[] = [];
@@ -175,10 +175,10 @@ export async function snapshotReportEvidence(
           sent_at: (row.created_at as string | undefined) ?? null,
         })),
       );
-      return;
+      return copiedKeys;
     }
 
-    if (!opts.threadId && !messageIds.length) return;
+    if (!opts.threadId && !messageIds.length) return copiedKeys;
 
     // Only the reported member's outbound messages. A thread snapshot used
     // to take the last 50 in both directions (including the reporter); a
@@ -213,6 +213,7 @@ export async function snapshotReportEvidence(
         };
       }),
     );
+    return copiedKeys;
   } catch (err) {
     unlinkEvidenceMedia(copiedKeys);
     throw err;

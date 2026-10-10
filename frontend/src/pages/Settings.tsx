@@ -119,6 +119,7 @@ export const Settings = () => {
       reported_name?: string | null;
       reported_email?: string | null;
       reported_account_deleted_at?: string | null;
+      evidence_unavailable?: boolean;
       evidence?: Array<{
         id?: string;
         kind: string;
@@ -457,13 +458,21 @@ export const Settings = () => {
   };
 
   const openEvidenceMedia = async (reportId: string, evidenceId: string) => {
+    // Open first, on the tap. iPhone Safari blocks window.open after an await.
+    const popup = window.open('about:blank', '_blank');
     try {
       const res = await usersAPI.getReportEvidenceMedia(reportId, evidenceId);
-      const blob = res.data as Blob;
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank', 'noopener,noreferrer');
+      const url = URL.createObjectURL(res.data as Blob);
+      if (!popup || popup.closed) {
+        URL.revokeObjectURL(url);
+        return;
+      }
+      popup.location.href = url;
+      const revoke = () => URL.revokeObjectURL(url);
+      popup.addEventListener?.('load', revoke, { once: true });
+      window.setTimeout(revoke, 0);
     } catch {
-      /* team-only file may already be gone */
+      popup?.close();
     }
   };
 
@@ -1101,12 +1110,15 @@ export const Settings = () => {
                           {report.details ? (
                             <p className="mt-1 text-[12px] text-[var(--cream)]">{report.details}</p>
                           ) : null}
+                          {report.evidence_unavailable ? (
+                            <p className="mt-2 text-[15px] text-[var(--cream-muted)]">Evidence unavailable</p>
+                          ) : null}
                           {report.evidence && report.evidence.length > 0 ? (
                             <ul className="mt-2 space-y-1">
                               {report.evidence.map((item, index) => (
                                 <li
                                   key={item.id ?? `${report.id}-ev-${index}`}
-                                  className="text-[12px] text-[var(--cream-muted)]"
+                                  className="text-[15px] text-[var(--cream-muted)]"
                                 >
                                   {item.from_reported !== false ? 'From reported · ' : ''}
                                   {item.sent_at
@@ -1122,7 +1134,7 @@ export const Settings = () => {
                                     <button
                                       type="button"
                                       onClick={() => void openEvidenceMedia(report.id, item.id as string)}
-                                      className="ml-2 text-[11px] font-bold text-[var(--copper)]"
+                                      className="ml-2 inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-[15px] font-bold text-[var(--nn-accent-text)]"
                                     >
                                       Open
                                     </button>

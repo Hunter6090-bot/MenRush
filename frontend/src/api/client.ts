@@ -602,6 +602,7 @@ export const usersAPI = {
         /** Set when the reported member deleted their account (report kept). */
         reported_account_deleted_at?: string | null;
         reported_email?: string | null;
+        evidence_unavailable?: boolean;
         evidence?: Array<{
           id?: string;
           kind: string;

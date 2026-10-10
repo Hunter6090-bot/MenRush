@@ -55,6 +55,9 @@ async function main() {
   await query(
     `ALTER TABLE report_evidence ADD COLUMN IF NOT EXISTS from_reported BOOLEAN NOT NULL DEFAULT TRUE`,
   );
+  await query(
+    `ALTER TABLE reports ADD COLUMN IF NOT EXISTS evidence_unavailable BOOLEAN NOT NULL DEFAULT FALSE`,
+  );
 
   const ids: string[] = [];
   const reportIds: string[] = [];
@@ -184,11 +187,62 @@ async function main() {
       'room:not-a-uuid',
     );
     reportIds.push(failedSnap.id);
-    const failedRow = (await query(`SELECT id, details FROM reports WHERE id = $1`, [failedSnap.id])).rows[0];
+    const failedRow = (
+      await query(`SELECT id, details, evidence_unavailable FROM reports WHERE id = $1`, [failedSnap.id])
+    ).rows[0];
     assert.ok(failedRow, 'failed snapshot keeps the report');
     assert.equal(failedRow.details, 'failed snapshot still keeps the report');
+    assert.equal(failedRow.evidence_unavailable, true, 'failed snapshot is flagged evidence unavailable');
     const failedEvidence = await query(`SELECT 1 FROM report_evidence WHERE report_id = $1`, [failedSnap.id]);
     assert.equal(failedEvidence.rows.length, 0, 'failed snapshot stores no evidence rows');
+
+    // COMMIT fail after a successful copy must not leave orphan evidence files.
+    {
+      const beforeCopies = new Set(fs.readdirSync(evidenceDir).filter((name) => name.startsWith('re-')));
+      const realConnect = pool.connect.bind(pool);
+      pool.connect = (async () => {
+        const client = await realConnect();
+        const origQuery = client.query.bind(client);
+        const origRelease = client.release.bind(client);
+        const wrapped = ((text: unknown, values?: unknown) => {
+          if (typeof text === 'string' && text.trim().toUpperCase() === 'COMMIT') {
+            return Promise.reject(new Error('forced commit fail'));
+          }
+          return origQuery(text as never, values as never);
+        }) as typeof client.query;
+        client.query = wrapped;
+        client.release = ((err?: Error | boolean) => {
+          client.query = origQuery as typeof client.query;
+          return origRelease(err);
+        }) as typeof client.release;
+        return client;
+      }) as typeof pool.connect;
+      try {
+        await assert.rejects(
+          () =>
+            userService.reportUser(
+              reporter.id,
+              reported.id,
+              'spam',
+              undefined,
+              `dm:${[reporter.id, reported.id].sort().join('_')}`,
+              [mediaMessageId],
+            ),
+          /forced commit fail/,
+        );
+      } finally {
+        pool.connect = realConnect;
+      }
+      const afterCopies = fs.readdirSync(evidenceDir).filter((name) => name.startsWith('re-'));
+      for (const name of afterCopies) {
+        assert.ok(beforeCopies.has(name), `COMMIT fail must not leave orphan ${name}`);
+      }
+      const stray = await query(
+        `SELECT id FROM reports WHERE reporter_id = $1 AND reported_id = $2 AND id <> ALL($3::uuid[])`,
+        [reporter.id, reported.id, reportIds],
+      );
+      assert.equal(stray.rows.length, 0, 'COMMIT fail does not keep the report');
+    }
 
     const brief = buildOwnerReportBrief('harassment');
     const briefBlob = `${brief.subject}\n${brief.html}\n${brief.text}`;
@@ -254,6 +308,15 @@ async function main() {
       headers: { Authorization: `Bearer ${other.token}` },
     });
     assert.equal(mediaAsMember.status, 403);
+    const badId = await fetch(`${base}/api/users/reports/${created.id}/evidence/not-a-uuid/media`, {
+      headers: { Authorization: `Bearer ${moderator.token}` },
+    });
+    assert.equal(badId.status, 404, 'non-UUID evidence id is a plain 404');
+    const badBody = (await badId.json()) as { error?: string };
+    assert.equal(badBody.error, 'not_found');
+    assert.ok(!JSON.stringify(badBody).includes('invalid input syntax'), 'no raw DB error');
+    const failedSeen = asMod.body.reports?.find((r) => r.id === failedSnap.id);
+    assert.equal(failedSeen?.evidence_unavailable, true, 'mods see evidence unavailable');
 
     const asMember = await getReports(other.token);
     assert.equal(asMember.status, 403);
@@ -365,6 +428,49 @@ async function main() {
     const released = await userService.updateReportLegalHold(holdId, false);
     assert.equal(released?.legal_hold, false);
     assert.equal(released?.reporter_id, null, 'releasing legal hold drops the kept reporter link');
+
+    // Rollback of deleteAccount must not unlink collected chat files.
+    {
+      const rollbackUser = await makeUser('RER Rollback Media');
+      const rollbackName = `rer-rollback-${randomUUID().slice(0, 8)}.jpg`;
+      const rollbackPath = path.join(messagesDir, rollbackName);
+      fs.writeFileSync(rollbackPath, Buffer.from('rollback-bytes'));
+      tempFiles.push(rollbackPath);
+      const rollbackMsg = randomUUID();
+      messageIds.push(rollbackMsg);
+      await query(
+        `INSERT INTO messages (id, sender_id, receiver_id, message, media_type, media_storage_key)
+         VALUES ($1, $2, $3, 'photo', 'image', $4)`,
+        [rollbackMsg, rollbackUser.id, moderator.id, rollbackName],
+      );
+      await query(`
+        CREATE OR REPLACE FUNCTION rer_block_account_delete() RETURNS trigger AS $$
+        BEGIN
+          RAISE EXCEPTION 'rer_block_account_delete';
+        END;
+        $$ LANGUAGE plpgsql;
+      `);
+      await query(`DROP TRIGGER IF EXISTS rer_block_account_delete ON users`);
+      await query(
+        `CREATE TRIGGER rer_block_account_delete
+           BEFORE DELETE ON users
+           FOR EACH ROW
+           WHEN (OLD.id = '${rollbackUser.id}'::uuid)
+           EXECUTE FUNCTION rer_block_account_delete()`,
+      );
+      await assert.rejects(
+        () =>
+          authService.deleteAccount(rollbackUser.id, {
+            current_password: 'pw-123456',
+            confirmation: 'DELETE',
+          } as never),
+        /rer_block_account_delete/,
+      );
+      assert.ok(fs.existsSync(rollbackPath), 'rollback deletes no media files');
+      assert.equal((await query(`SELECT 1 FROM users WHERE id = $1`, [rollbackUser.id])).rows.length, 1);
+      await query(`DROP TRIGGER IF EXISTS rer_block_account_delete ON users`);
+      await query(`DROP FUNCTION IF EXISTS rer_block_account_delete()`);
+    }
 
     // ── Retention purge: off does nothing; on deletes only eligible rows ──
     assert.equal(reportRetentionMonths({}), 12);
