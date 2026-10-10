@@ -223,6 +223,33 @@ async function main() {
     await query(`UPDATE profiles SET is_ghost = FALSE WHERE user_id = $1`, [traveller]);
     ok('blocks, the hide list and Ghost are respected in the destination');
 
+    // Direct profile: trip fields follow the distance rule. A (traveller) hides
+    // from B (local); B opening A's profile directly sees no trip at all, while
+    // an allowed viewer C (londoner) still sees "Visiting Manchester".
+    await query(`INSERT INTO location_hidden_from (owner_id, hidden_user_id) VALUES ($1, $2)`, [traveller, local]);
+    const hiddenProfile: any = await userService.getPublicProfile(local, traveller);
+    assert.ok(hiddenProfile, 'B can still open the profile');
+    assert.strictEqual(hiddenProfile.visiting, undefined, 'hidden viewer: no visiting');
+    assert.strictEqual(hiddenProfile.distance_label, undefined, 'hidden viewer: no Visiting label');
+    assert.strictEqual(hiddenProfile.distance_km, undefined, 'hidden viewer: no distance');
+    for (const k of ['visit_city', 'visit_starts_at', 'visit_ends_at', 'starts_at', 'ends_at']) {
+      assert.ok(!(k in hiddenProfile), `hidden viewer: no ${k}`);
+    }
+    assert.ok(!JSON.stringify(hiddenProfile).includes('Manchester'), 'hidden viewer: city never in the payload');
+    const allowedProfile: any = await userService.getPublicProfile(londoner, traveller);
+    assert.strictEqual(allowedProfile.distance_label, 'Visiting Manchester', 'allowed viewer sees the trip');
+    assert.strictEqual(allowedProfile.visiting.city, 'Manchester');
+    assert.ok(allowedProfile.visiting.starts_at && allowedProfile.visiting.ends_at, 'allowed viewer sees the dates');
+    await query(`DELETE FROM location_hidden_from WHERE owner_id = $1`, [traveller]);
+    const unhiddenProfile: any = await userService.getPublicProfile(local, traveller);
+    assert.strictEqual(unhiddenProfile.visiting?.city, 'Manchester', 'un-hiding restores the trip');
+    await query(`UPDATE profiles SET is_ghost = TRUE WHERE user_id = $1`, [traveller]);
+    // Ghost: the profile is unavailable, or at least shows no trip.
+    const ghostProfile: any = await userService.getPublicProfile(londoner, traveller).catch(() => null);
+    assert.strictEqual(ghostProfile?.visiting, undefined, 'Ghost: no trip on the profile');
+    await query(`UPDATE profiles SET is_ghost = FALSE WHERE user_id = $1`, [traveller]);
+    ok('direct profile: a hidden viewer sees no trip; an allowed viewer does');
+
     // ── Hidden at home: map feed and Community ──────────────────────────────
     const feedPost = await mapFeedService.post(traveller, 'tr feed post');
     const commPost = await communityService.create(traveller, 'tr community post');

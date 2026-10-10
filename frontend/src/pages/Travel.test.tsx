@@ -140,6 +140,13 @@ describe('Look around', () => {
     const verified = await screen.findByTestId('look-member-l1');
     expect(within(verified).getByRole('button', { name: /verified/i })).toBeInTheDocument();
     expect(within(screen.getByTestId('look-member-v1')).queryByRole('button', { name: /verified/i })).toBeNull();
+    // 44x44 tap target, fully inside the tile (overflow-hidden would clip a smaller inset).
+    const tick = within(verified).getByRole('button', { name: /verified/i });
+    expect(tick.className).toMatch(/\bh-11\b/);
+    expect(tick.className).toMatch(/\bw-11\b/);
+    const wrapper = tick.parentElement as HTMLElement;
+    expect(wrapper.className).toContain('right-[13px]');
+    expect(wrapper.className).toContain('top-[13px]');
   });
 
   it('a long city name wraps instead of being cut off', async () => {
@@ -148,5 +155,15 @@ describe('Look around', () => {
     expect(label.className).not.toMatch(/\btruncate\b/);
     expect(label.className).toMatch(/whitespace-normal/);
     expect(label.className).toMatch(/text-\[15px\]/);
+  });
+});
+
+describe('Travel glyph on the map', () => {
+  it('the map Travel button uses the plane at 24px (Pete spec)', () => {
+    const src = readFileSync(resolve(__dirname, './Discover.tsx'), 'utf8');
+    const start = src.indexOf('data-testid="map-travel"');
+    expect(start).toBeGreaterThan(-1);
+    const button = src.slice(start, src.indexOf('</button>', start));
+    expect(button).toMatch(/<IconPlane size=\{24\} \/>/);
   });
 });

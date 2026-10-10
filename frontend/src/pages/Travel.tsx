@@ -60,8 +60,12 @@ function MemberTile({ m, city }: { m: LookAroundMember; city: string }) {
           </p>
         </div>
       </Link>
-      {/* Same tick as the Nearby grid (ProfileCard), outside the link so it stays its own button. */}
-      {m.is_verified ? <VerifiedBadge compact className="absolute right-2 top-2 z-10" /> : null}
+      {/* Same tick as the Nearby grid (ProfileCard), outside the link so it stays its own button.
+          The button is 44x44 (VerifiedBadge); 13px insets keep the whole hit area inside the
+          tile's overflow-hidden edge, so the tap target is never clipped below 44px. */}
+      {m.is_verified ? (
+        <VerifiedBadge compact className="absolute right-[13px] top-[13px] z-10" />
+      ) : null}
     </div>
   );
 }

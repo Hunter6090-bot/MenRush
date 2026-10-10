@@ -77,6 +77,8 @@ jobs:
         run: npm run test:hot-spot-free-counts
       - name: Travel (dates, coarse centre, one place at a time)
         run: npm run test:travel
+      - name: Travel GETs keep 'private, no-store'
+        run: npm run test:travel-cache-headers
       - name: Welcome emails use the official mark (no typed wordmark)
         run: npm run test:welcome-email-brand
 

@@ -2,9 +2,9 @@
  * Top-right account menu (Pete, 8 Oct 2026). Links only: every row opens a
  * screen that already exists. No new features live here.
  */
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type ComponentType, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { IconClose, IconSignOut } from './icons';
+import { IconClose, IconPlane, IconSignOut } from './icons';
 import { ROUTE_LABELS } from '../lib/routeLabels';
 
 export interface AccountMenuLink {
@@ -14,6 +14,8 @@ export interface AccountMenuLink {
   to?: string;
   /** External link (opens a new tab). */
   href?: string;
+  /** Optional row glyph (e.g. the plane on Travel, per Al's spec). */
+  icon?: ComponentType<{ size?: number; className?: string }>;
 }
 
 export interface AccountMenuSection {
@@ -52,7 +54,7 @@ export const ACCOUNT_MENU_SECTIONS: AccountMenuSection[] = [
       { id: 'community', label: ROUTE_LABELS.community, to: '/stream' },
       { id: 'events', label: ROUTE_LABELS.events, to: '/events' },
       { id: 'cruise', label: `${ROUTE_LABELS.hotSpots} map`, to: '/hot-spots' },
-      { id: 'travel', label: 'Travel', to: '/travel' },
+      { id: 'travel', label: 'Travel', to: '/travel', icon: IconPlane },
     ],
   },
   {
@@ -277,6 +279,11 @@ export function AccountMenu({
                     aria-current={active ? 'page' : undefined}
                     className={`${rowBaseClass} ${active ? 'text-[var(--nn-accent-text)]' : 'text-[var(--cream)]'}`}
                   >
+                    {item.icon ? (
+                      <span className="flex w-6 shrink-0 justify-center" data-testid={`account-menu-${item.id}-icon`}>
+                        <item.icon size={24} />
+                      </span>
+                    ) : null}
                     {item.label}
                   </Link>
                 );

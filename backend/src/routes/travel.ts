@@ -53,7 +53,6 @@ function sendError(res: Response, error: unknown) {
 
 router.get('/look-around', lookLimiter, async (req: AuthRequest, res: Response) => {
   try {
-    res.setHeader('Cache-Control', 'no-store');
     res.json(await travelService.lookAround(req.userId!, req.query.city));
   } catch (error) {
     sendError(res, error);
@@ -62,7 +61,6 @@ router.get('/look-around', lookLimiter, async (req: AuthRequest, res: Response) 
 
 router.get('/trip', async (req: AuthRequest, res: Response) => {
   try {
-    res.setHeader('Cache-Control', 'no-store');
     res.json({ trip: await travelService.getTrip(req.userId!) });
   } catch (error) {
     sendError(res, error);

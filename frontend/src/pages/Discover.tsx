@@ -198,7 +198,8 @@ function MapFloatingChrome({
               title="Travel"
               className={mapChromeBtnClass}
             >
-              <IconPlane size={18} />
+              {/* Pete's spec: Travel glyph at 24px. */}
+              <IconPlane size={24} />
             </button>
           ) : null}
         </div>

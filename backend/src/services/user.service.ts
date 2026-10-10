@@ -525,7 +525,12 @@ export const userService = {
     // Distance to the member's fuzzed pin, coarse miles. When it is not
     // available (Show distance off, ghost, no location) the keys are omitted,
     // so every no-distance case has the same shape.
-    const visitCity = row.visit_city != null ? String(row.visit_city) : null;
+    // Travel fields follow the same rule as distance: only when the viewer may
+    // see this member's location (visible, not ghost, and the viewer is not on
+    // their "Hide my location from" list). A hidden viewer gets no trip city,
+    // no dates and no "Visiting" label, shaped like any no-distance profile.
+    const visitCity =
+      row.distance_allowed === true && row.visit_city != null ? String(row.visit_city) : null;
     const distanceFields = visitCity
       ? {}
       : row.distance_allowed
