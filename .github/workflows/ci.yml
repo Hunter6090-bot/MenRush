@@ -192,3 +192,5 @@ jobs:
         run: npm run --if-present test:hide-location-integration
       - name: Community leaves out Ghost and hidden members
         run: npm run --if-present test:community-ghost-hidden
+      - name: Reports survive when the reported member deletes their account (real PG)
+        run: npm run test:reports-survive-deletion-integration
