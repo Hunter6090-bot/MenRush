@@ -64,9 +64,12 @@ describe('ComingSoon homepage', () => {
   it('keeps the sign-up and sign-in routes', () => {
     renderHome();
     expect(screen.getByRole('link', { name: 'Sign up free' })).toHaveAttribute('href', '/register');
-    for (const link of screen.getAllByRole('link', { name: 'Sign in' })) {
-      expect(link).toHaveAttribute('href', '/login');
-    }
+    // The hero line is the only sign-in entry on the homepage (no header Sign in).
+    const signIns = screen.getAllByRole('link', { name: /sign in/i });
+    expect(signIns).toHaveLength(1);
+    expect(signIns[0]).toHaveAttribute('href', '/login');
+    expect(screen.getByTestId('hero-sign-in')).toContainElement(signIns[0]);
+    expect(screen.getByRole('banner')).not.toHaveTextContent(/sign in/i);
   });
 
   it('offers Sign in directly under Sign up free in the hero', () => {

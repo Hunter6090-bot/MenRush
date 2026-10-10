@@ -3,7 +3,6 @@ import { Link, useLocation } from 'react-router-dom';
 import { BrandMark } from '../components/BrandMark';
 import { SiteFooter } from '../components/SiteFooter';
 import { trackEventOnce, getAttributionParams } from '../observability/analytics';
-import { publicNavLinkPrimary } from '../lib/publicStyles';
 import '../styles/home-surface.css';
 
 const COMING_SOON_BG = '/images/menrush/31-london-rooftop-dusk.jpeg';
@@ -44,10 +43,6 @@ export const ComingSoon = () => {
       <header className="relative z-20 flex h-16 shrink-0 items-center px-5 sm:px-8">
         <Link to="/" aria-label="MenRush" className="inline-flex shrink-0 items-center">
           <BrandMark size="sm" />
-        </Link>
-        <div className="flex-1" aria-hidden />
-        <Link to="/login" className={publicNavLinkPrimary}>
-          Sign in
         </Link>
       </header>
 
