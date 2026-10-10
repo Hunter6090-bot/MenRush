@@ -24,13 +24,12 @@ const PostMapFeedSchema = z.object({
 // GET / — list nearby map feed messages
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
-    const lat = req.query.lat !== undefined ? parseFloat(req.query.lat as string) : undefined;
-    const lng = req.query.lng !== undefined ? parseFloat(req.query.lng as string) : undefined;
+    // Origin is the viewer's stored location inside listNearby.
     const radiusKm =
       req.query.radius !== undefined ? parseFloat(req.query.radius as string) : undefined;
 
     // Blocks, Ghost and "Hide my location from" are all applied in SQL before LIMIT.
-    const messages = await mapFeedService.listNearby(req.userId!, { lat, lng, radiusKm });
+    const messages = await mapFeedService.listNearby(req.userId!, { radiusKm });
     res.json({ messages });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Internal server error';
