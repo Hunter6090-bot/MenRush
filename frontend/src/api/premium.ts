@@ -67,11 +67,9 @@ export const premiumAPI = {
       invoice: PremiumInvoice | null;
       payment_instructions?: ManualPaymentInstructions;
     }>('/premium/invoices/unpaid'),
-  createInvoice: (data?: {
-    plan_tier?: 'premium' | 'premium_plus';
-    plan_days?: number;
-    amount_pence?: number;
-    notes?: string;
+  // The server sets the amount and days from its price list; sending them is refused (400).
+  createInvoice: (data: {
+    plan_tier?: 'premium';
     /** Required: the member ticked "Start my Premium as soon as my payment is confirmed". */
     immediate_start_consent: true;
   }) =>

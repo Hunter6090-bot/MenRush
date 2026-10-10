@@ -9,6 +9,10 @@ import {
 } from './transactional-email.template';
 import { sendTransactionalEmail } from './mailer.service';
 import { IMMEDIATE_START_CONSENT_TEXT } from '../types/validation';
+import {
+  PREMIUM_PRICE_LIST,
+  paidPremiumStartsAt,
+} from '../lib/premiumPriceList';
 
 export interface PremiumInvoiceRow {
   id: string;
@@ -90,20 +94,36 @@ export function getManualPaymentInstructions(reference: string): ManualPaymentIn
   };
 }
 
+function londonDate(d: Date): string {
+  return d.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'Europe/London',
+  });
+}
+
 /**
- * 14-day cancellation lines for the "Your MenRush Premium is now on" email (Terms 7.6A).
- * Janet's voice: kind, relaxed, professional British. No dashes.
+ * 14-day cancellation lines for the payment confirmation email (Terms 7.6A, 8.1).
+ * Always present, and they match the member's choice. Janet's voice. No dashes.
  */
-export function premiumOnCancellationLines(invoiceNumber: string, startedStraightAway: boolean): string[] {
-  const lines = [
-    `If you change your mind, you can cancel within 14 days of buying. Just email support@menrush.com with your invoice reference, ${invoiceNumber}, and we will refund you within 14 days of hearing from you, to the account you paid from.`,
-  ];
-  if (startedStraightAway) {
-    lines.push(
+export function premiumOnCancellationLines(params: {
+  invoiceNumber: string;
+  startedStraightAway: boolean;
+  /** When Premium starts if they did not ask to start straight away. */
+  premiumStartsAt: Date | null;
+}): string[] {
+  if (params.startedStraightAway) {
+    return [
+      `If you change your mind, you can cancel within 14 days of buying. Just email support@menrush.com with your invoice reference, ${params.invoiceNumber}, and we will refund you within 14 days of hearing from you, to the account you paid from.`,
       'As you asked for your Premium to start as soon as your payment was confirmed, your refund would be what you paid less an amount for the days of Premium you have had.',
-    );
+    ];
   }
-  return lines;
+  const when = params.premiumStartsAt ? `on ${londonDate(params.premiumStartsAt)}` : 'once that period has ended';
+  return [
+    `As you chose not to start straight away, your Premium starts ${when}, after the 14-day cancellation period.`,
+    `If you change your mind before then, just email support@menrush.com with your invoice reference, ${params.invoiceNumber}, and we will give you a full refund within 14 days of hearing from you, to the account you paid from.`,
+  ];
 }
 
 export function buildPremiumOnEmail(params: {
@@ -113,37 +133,47 @@ export function buildPremiumOnEmail(params: {
   invoiceNumber: string;
   paymentReference: string;
   startedStraightAway: boolean;
+  /** Start of paid Premium. Later than now only when the member did not ask to start straight away. */
+  premiumStartsAt?: Date | null;
+  now?: Date;
 }): { subject: string; html: string; text: string } {
+  const now = params.now ?? new Date();
+  const startsLater = Boolean(
+    !params.startedStraightAway && params.premiumStartsAt && params.premiumStartsAt.getTime() > now.getTime(),
+  );
   const formattedAmount = (params.amountPence / 100).toFixed(2);
-  const untilStr = params.premiumUntil
-    ? params.premiumUntil.toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        timeZone: 'Europe/London',
-      })
-    : 'Active';
+  const untilStr = params.premiumUntil ? londonDate(params.premiumUntil) : null;
   const greetingName = escapeEmailHtml(params.name || 'there');
-  const untilHtml = params.premiumUntil
-    ? ` until <strong style="color:#F0E0C0;">${untilStr}</strong>`
-    : '';
-  const cancellation = premiumOnCancellationLines(params.invoiceNumber, params.startedStraightAway);
-  const subject = 'Your MenRush Premium is now on';
+  const cancellation = premiumOnCancellationLines({
+    invoiceNumber: params.invoiceNumber,
+    startedStraightAway: params.startedStraightAway,
+    premiumStartsAt: params.premiumStartsAt ?? null,
+  });
+
+  const subject = startsLater ? 'Your MenRush payment has arrived' : 'Your MenRush Premium is now on';
+  const headlineHtml = startsLater
+    ? 'Your payment has <span style="color:#C4832A;">arrived</span>'
+    : 'Your <span style="color:#C4832A;">Premium</span> is now on';
+  const statusText = startsLater
+    ? `Thank you for your bank transfer. It has arrived safely, and your Premium will run${untilStr ? ` until ${untilStr}` : ''}.`
+    : `Thank you for your bank transfer. It has arrived safely, and your Premium is now switched on${untilStr ? ` until ${untilStr}` : ''}.`;
+  const untilHtml = untilStr ? ` until <strong style="color:#F0E0C0;">${escapeEmailHtml(untilStr)}</strong>` : '';
+  const statusHtml = startsLater
+    ? `Thank you for your bank transfer. It has arrived safely, and your Premium will run${untilHtml}.`
+    : `Thank you for your bank transfer. It has arrived safely, and your Premium is now switched on${untilHtml}.`;
+  const help =
+    "There's nothing more you need to do. If anything doesn't look quite right, please get in touch at support@menrush.com and we'll sort it out.";
 
   const html = buildTransactionalEmail({
     title: subject,
     preheader: "Thank you, we've received your payment.",
-    headlineHtml: 'Your <span style="color:#C4832A;">Premium</span> is now on',
+    headlineHtml,
     subheadline: `We've received your payment of £${formattedAmount}.`,
     bodyHtml:
       transactionalParagraph(`Hello ${greetingName},`) +
-      transactionalParagraph(
-        `Thank you for your bank transfer. It has arrived safely, and your Premium is now switched on${untilHtml}.`,
-      ) +
-      transactionalParagraph(
-        "There's nothing more you need to do. If anything doesn't look quite right, please get in touch at support@menrush.com and we'll sort it out.",
-      ) +
+      transactionalParagraph(statusHtml) +
       transactionalParagraph(escapeEmailHtml(cancellation.join(' '))) +
+      transactionalParagraph(help) +
       transactionalParagraph(
         `<span style="color:#A89070; font-size:14px;">Invoice number: ${escapeEmailHtml(params.invoiceNumber)}<br>Payment reference: ${escapeEmailHtml(params.paymentReference)}</span>`,
       ) +
@@ -155,11 +185,11 @@ export function buildPremiumOnEmail(params: {
   const text = [
     `Hello ${params.name || 'there'},`,
     '',
-    `Thank you for your bank transfer. It has arrived safely, and your Premium is now switched on${params.premiumUntil ? ` until ${untilStr}` : ''}.`,
-    '',
-    "There's nothing more you need to do. If anything doesn't look quite right, please get in touch at support@menrush.com and we'll sort it out.",
+    statusText,
     '',
     cancellation.join(' '),
+    '',
+    help,
     '',
     `Invoice number: ${params.invoiceNumber}`,
     `Payment reference: ${params.paymentReference}`,
@@ -182,13 +212,19 @@ export const invoiceService = {
     planDays?: number;
     amountPence?: number;
     notes?: string;
+    /** Set only on the ops path: who in ops created it (free text, no member data). */
     createdByAdminId?: string;
-    /** True only when the member ticked the immediate start box on /premium. */
+    /** True only when the member said yes to starting Premium as soon as payment is confirmed. */
     immediateStartConsent?: boolean;
   }): Promise<PremiumInvoiceRow> {
-    const planTier = params.planTier || 'premium';
-    const planDays = params.planDays || 30;
-    const amountPence = params.amountPence ?? 699;
+    const planTier = 'premium' as const;
+    const listed = PREMIUM_PRICE_LIST[planTier];
+    const isOps = Boolean(params.createdByAdminId);
+    // Members always get the price list. Only the ops path may override it.
+    const planDays = isOps && params.planDays !== undefined ? params.planDays : listed.planDays;
+    const amountPence = isOps && params.amountPence !== undefined ? params.amountPence : listed.amountPence;
+    const overridden = planDays !== listed.planDays || amountPence !== listed.amountPence;
+    const overriddenAt = new Date();
 
     // Check if user already has an active unpaid invoice
     const existing = await query(
@@ -228,7 +264,17 @@ export const invoiceService = {
         invoiceNumber,
         params.notes ?? null,
         JSON.stringify({
-          created_by_admin: Boolean(params.createdByAdminId),
+          created_by_admin: isOps,
+          ...(overridden
+            ? {
+                price_override: {
+                  by: params.createdByAdminId,
+                  at: overriddenAt.toISOString(),
+                  from: { amount_pence: listed.amountPence, plan_days: listed.planDays },
+                  to: { amount_pence: amountPence, plan_days: planDays },
+                },
+              }
+            : {}),
           ...(params.immediateStartConsent === true
             ? { immediate_start_consent_text: IMMEDIATE_START_CONSENT_TEXT }
             : {}),
@@ -237,7 +283,16 @@ export const invoiceService = {
       ],
     );
 
-    return result.rows[0];
+    const created: PremiumInvoiceRow = result.rows[0];
+    if (overridden) {
+      // Invoice id and ops actor only: no member data in logs.
+      console.log(
+        `[invoice] price override invoice=${created.id} admin=${params.createdByAdminId} ` +
+          `amount_pence ${listed.amountPence}->${amountPence} plan_days ${listed.planDays}->${planDays} ` +
+          `at=${overriddenAt.toISOString()}`,
+      );
+    }
+    return created;
   },
 
   async getInvoiceById(idOrNumber: string): Promise<PremiumInvoiceRow | null> {
@@ -304,7 +359,7 @@ export const invoiceService = {
     notes?: string,
   ): Promise<{
     invoice: PremiumInvoiceRow;
-    userPremium: { premiumUntil: Date | null; isPremium: boolean };
+    userPremium: { premiumUntil: Date | null; premiumStartsAt?: Date | null; isPremium: boolean };
     alreadyPaid?: boolean;
   }> {
     const client: PoolClient = await pool.connect();
@@ -359,6 +414,16 @@ export const invoiceService = {
       );
       const updatedInvoice: PremiumInvoiceRow = updateResult.rows[0];
 
+      // Terms 7.6A: without the immediate start choice, paid Premium starts only once
+      // the 14-day cancellation period from buying (invoice issue) has ended.
+      const confirmedAt = new Date();
+      const startedStraightAway = Boolean(invoice.immediate_start_consent_at);
+      const premiumStartsAt = paidPremiumStartsAt({
+        boughtAt: new Date(invoice.created_at),
+        confirmedAt,
+        immediateStartConsent: startedStraightAway,
+      });
+
       // Grant / extend Premium using stacking rules
       const grantResult = await premiumService.grantPaidInvoice(
         invoice.user_id,
@@ -367,7 +432,10 @@ export const invoiceService = {
         invoice.invoice_number,
         invoice.amount_pence,
         client,
+        confirmedAt,
+        { startAt: premiumStartsAt },
       );
+      const startsLater = premiumStartsAt.getTime() > confirmedAt.getTime();
 
       await client.query('COMMIT');
 
@@ -376,8 +444,10 @@ export const invoiceService = {
         await notificationService.create({
           userId: invoice.user_id,
           type: 'system',
-          title: 'Your Premium is on',
-          body: `Thanks, your payment for invoice ${invoice.invoice_number} has arrived and your Premium is on.`,
+          title: startsLater ? 'Your payment has arrived' : 'Your Premium is on',
+          body: startsLater
+            ? `Thanks, your payment for invoice ${invoice.invoice_number} has arrived. Your Premium starts on ${londonDate(premiumStartsAt)}, after the 14-day cancellation period.`
+            : `Thanks, your payment for invoice ${invoice.invoice_number} has arrived and your Premium is on.`,
           linkPath: '/premium',
         });
       } catch (err) {
@@ -394,7 +464,9 @@ export const invoiceService = {
             premiumUntil: grantResult.premiumUntil,
             invoiceNumber: invoice.invoice_number,
             paymentReference: invoice.payment_reference,
-            startedStraightAway: Boolean(invoice.immediate_start_consent_at),
+            startedStraightAway,
+            premiumStartsAt,
+            now: confirmedAt,
           });
           await sendTransactionalEmail({ to: user.email, ...email });
         }
@@ -406,7 +478,8 @@ export const invoiceService = {
         invoice: updatedInvoice,
         userPremium: {
           premiumUntil: grantResult.premiumUntil,
-          isPremium: true,
+          premiumStartsAt: grantResult.premiumStartsAt,
+          isPremium: !startsLater || grantResult.premiumActiveNow,
         },
       };
     } catch (err) {

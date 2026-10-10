@@ -29,6 +29,11 @@ import {
   buildPremiumOnEmail,
 } from '../src/services/invoice.service';
 import { IMMEDIATE_START_CONSENT_TEXT } from '../src/types/validation';
+import {
+  PREMIUM_PRICE_LIST,
+  cancellationPeriodEnd,
+  paidPremiumStartsAt,
+} from '../src/lib/premiumPriceList';
 import { premiumService } from '../src/services/premium.service';
 import { ALWAYS_PREMIUM_NAMES } from '../src/lib/always-premium';
 
@@ -59,6 +64,7 @@ test('Invoice generation creates unpaid invoice with clear reference and instruc
     planTier: 'premium',
     planDays: 30,
     amountPence: 699,
+    immediateStartConsent: true,
   });
 
   assert.strictEqual(invoice.user_id, user.id);
@@ -88,10 +94,16 @@ test('Invoice generation creates unpaid invoice with clear reference and instruc
 
 test('Creating a second invoice cancels previous unpaid invoice so only one active invoice exists', async () => {
   const user = await createTestUser('multi-inv');
-  const inv1 = await invoiceService.createInvoice({ userId: user.id, planDays: 30 });
+  const inv1 = await invoiceService.createInvoice({ userId: user.id, immediateStartConsent: true });
   assert.strictEqual(inv1.status, 'unpaid');
 
-  const inv2 = await invoiceService.createInvoice({ userId: user.id, planDays: 60, amountPence: 1299 });
+  const inv2 = await invoiceService.createInvoice({
+    userId: user.id,
+    planDays: 60,
+    amountPence: 1299,
+    createdByAdminId: 'ops-test',
+    immediateStartConsent: true,
+  });
   assert.strictEqual(inv2.status, 'unpaid');
 
   const inv1Updated = await invoiceService.getInvoiceById(inv1.id);
@@ -108,6 +120,7 @@ test('Confirm payment activates Premium, updates status, and records subscriptio
     planTier: 'premium',
     planDays: 30,
     amountPence: 699,
+    immediateStartConsent: true,
   });
 
   const confirmRes = await invoiceService.confirmPayment(invoice.invoice_number, 'admin-uuid-1', 'Bank transfer verified');
@@ -151,6 +164,7 @@ test('Stacking rules: Paid invoice does not shorten longer existing entitlement'
     planTier: 'premium',
     planDays: 30,
     amountPence: 699,
+    immediateStartConsent: true,
   });
 
   const confirmRes = await invoiceService.confirmPayment(invoice.id);
@@ -175,7 +189,7 @@ test('Stacking rules: Always-premium accounts never lose open-ended status', asy
     [user.id],
   );
 
-  const invoice = await invoiceService.createInvoice({ userId: user.id, planDays: 30 });
+  const invoice = await invoiceService.createInvoice({ userId: user.id, immediateStartConsent: true });
   const confirmRes = await invoiceService.confirmPayment(invoice.id);
   assert.strictEqual(confirmRes.userPremium.premiumUntil, null, 'Lifetime open-ended null until is preserved');
 
@@ -186,7 +200,7 @@ test('Stacking rules: Always-premium accounts never lose open-ended status', asy
 
 test('Cancelled invoices cannot be paid', async () => {
   const user = await createTestUser('cancel-test');
-  const invoice = await invoiceService.createInvoice({ userId: user.id, planDays: 30 });
+  const invoice = await invoiceService.createInvoice({ userId: user.id, immediateStartConsent: true });
 
   await invoiceService.cancelInvoice(invoice.id, 'User changed mind');
   const updated = await invoiceService.getInvoiceById(invoice.id);
@@ -318,12 +332,7 @@ test('HTTP API routes: invoice create -> unpaid view -> admin confirm -> status 
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        plan_tier: 'premium',
-        plan_days: 30,
-        amount_pence: 699,
-        immediate_start_consent: true,
-      }),
+      body: JSON.stringify({ plan_tier: 'premium', immediate_start_consent: true }),
     });
     assert.strictEqual(res2.status, 201);
     const body2 = (await res2.json()) as any;
@@ -507,16 +516,26 @@ test('Email: "Your MenRush Premium is now on" carries the 14-day cancellation de
   assert.doesNotMatch(email.text, /[\u2013\u2014]| - /);
   assert.doesNotMatch(email.text, /\blove\b|beta/i);
 
+  const now = new Date('2026-10-11T09:00:00Z');
   const noTick = buildPremiumOnEmail({
     name: null,
     amountPence: 699,
-    premiumUntil: null,
+    premiumUntil: new Date('2026-11-24T09:00:00Z'),
     invoiceNumber: 'MR-INV-20261010-DEF456',
     paymentReference: 'MR-5678EFAB',
     startedStraightAway: false,
+    premiumStartsAt: new Date('2026-10-25T09:00:00Z'),
+    now,
   });
-  assert.match(noTick.text, /cancel within 14 days of buying/);
-  assert.doesNotMatch(noTick.text, /less an amount/);
+  assert.strictEqual(noTick.subject, 'Your MenRush payment has arrived');
+  for (const body of [noTick.text, noTick.html]) {
+    assert.match(body, /your Premium starts on 25 October 2026, after the 14-day cancellation period/);
+    assert.match(body, /before then, just email support@menrush\.com with your invoice reference, MR-INV-20261010-DEF456/);
+    assert.match(body, /full refund within 14 days of hearing from you, to the account you paid from/);
+    assert.doesNotMatch(body, /less an amount|is now switched on/);
+    assert.match(body, /All the best,/);
+  }
+  assert.doesNotMatch(noTick.text, /[\u2013\u2014]| - |\blove\b|beta/i);
 });
 
 test('HTTP: invoice is refused (400) unless the immediate start box is ticked, and the tick is recorded', async () => {
@@ -540,9 +559,9 @@ test('HTTP: invoice is refused (400) unless the immediate start box is ticked, a
 
   try {
     for (const body of [
-      { plan_tier: 'premium', plan_days: 30, amount_pence: 699 },
-      { plan_tier: 'premium', plan_days: 30, amount_pence: 699, immediate_start_consent: false },
-      { plan_tier: 'premium', plan_days: 30, amount_pence: 699, immediate_start_consent: 'true' },
+      { plan_tier: 'premium' },
+      { plan_tier: 'premium', immediate_start_consent: false },
+      { plan_tier: 'premium', immediate_start_consent: 'true' },
     ]) {
       const res = await post(body);
       assert.strictEqual(res.status, 400, `refused: ${JSON.stringify(body)}`);
@@ -553,7 +572,7 @@ test('HTTP: invoice is refused (400) unless the immediate start box is ticked, a
     assert.strictEqual(none.rows[0].n, 0, 'no invoice row is created without the tick');
 
     const before = Date.now();
-    const ok = await post({ plan_tier: 'premium', plan_days: 30, amount_pence: 699, immediate_start_consent: true });
+    const ok = await post({ plan_tier: 'premium', immediate_start_consent: true });
     assert.strictEqual(ok.status, 201);
     const okJson = (await ok.json()) as any;
     const row = await query(
@@ -567,6 +586,188 @@ test('HTTP: invoice is refused (400) unless the immediate start box is ticked, a
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
+});
+
+async function withServer<T>(run: (baseUrl: string) => Promise<T>): Promise<T> {
+  const express = (await import('express')).default;
+  const http = (await import('http')).default;
+  const app = express();
+  app.use(express.json());
+  app.use('/api/premium', (await import('../src/routes/premium')).default);
+  app.use('/api/admin', (await import('../src/routes/admin.routes')).default);
+  process.env.ADMIN_TOKEN = 'test-admin-secret-token';
+  const server = http.createServer(app);
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  try {
+    return await run(`http://127.0.0.1:${(server.address() as { port: number }).port}`);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+}
+
+test('Price list: the member API refuses any amount, days or notes (400) and always uses the server price', async () => {
+  const user = await createTestUser('price-list');
+  const token = authService.issueAccessToken(user.id);
+  await withServer(async (baseUrl) => {
+    const post = (body: unknown) =>
+      fetch(`${baseUrl}/api/premium/invoices`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    for (const extra of [{ amount_pence: 1 }, { amount_pence: 699 }, { plan_days: 3650 }, { notes: 'x' }, { plan_tier: 'premium_plus' }]) {
+      const res = await post({ immediate_start_consent: true, ...extra });
+      assert.strictEqual(res.status, 400, `refused: ${JSON.stringify(extra)}`);
+    }
+    const none = await query(`SELECT COUNT(*)::int AS n FROM premium_invoices WHERE user_id = $1`, [user.id]);
+    assert.strictEqual(none.rows[0].n, 0);
+    const ok = await post({ immediate_start_consent: true });
+    assert.strictEqual(ok.status, 201);
+    const body = (await ok.json()) as any;
+    assert.strictEqual(body.invoice.amount_pence, PREMIUM_PRICE_LIST.premium.amountPence);
+    assert.strictEqual(body.invoice.plan_days, PREMIUM_PRICE_LIST.premium.planDays);
+  });
+  // The service ignores member-path amounts too (only the ops path may override).
+  const direct = await invoiceService.createInvoice({ userId: user.id, amountPence: 1, planDays: 999, immediateStartConsent: true });
+  assert.strictEqual(direct.amount_pence, PREMIUM_PRICE_LIST.premium.amountPence);
+  assert.strictEqual(direct.plan_days, PREMIUM_PRICE_LIST.premium.planDays);
+});
+
+test('Ops price override: admin only, needs admin_actor, logged with invoice id, old and new values and time', async () => {
+  const user = await createTestUser('override');
+  const memberToken = authService.issueAccessToken(user.id);
+  const logs: string[] = [];
+  const origLog = console.log;
+  console.log = (...args: unknown[]) => {
+    logs.push(args.map(String).join(' '));
+  };
+  try {
+    await withServer(async (baseUrl) => {
+      const adminPost = (body: unknown, token = 'test-admin-secret-token') =>
+        fetch(`${baseUrl}/api/admin/premium/invoices`, {
+          method: 'POST',
+          headers: { 'x-admin-token': token, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      // Not admin: refused.
+      const asMember = await fetch(`${baseUrl}/api/admin/premium/invoices`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${memberToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.id, amount_pence: 100, admin_actor: 'ops-a' }),
+      });
+      assert.strictEqual(asMember.status, 401);
+      // Override without naming who: refused.
+      const noActor = await adminPost({ user_id: user.id, amount_pence: 100 });
+      assert.strictEqual(noActor.status, 400);
+
+      const res = await adminPost({ user_id: user.id, amount_pence: 100, plan_days: 7, admin_actor: 'ops-a' });
+      assert.strictEqual(res.status, 201);
+      const body = (await res.json()) as any;
+      assert.strictEqual(body.invoice.amount_pence, 100);
+      assert.strictEqual(body.invoice.plan_days, 7);
+      const ov = body.invoice.metadata.price_override;
+      assert.strictEqual(ov.by, 'ops-a');
+      assert.deepStrictEqual(ov.from, { amount_pence: 699, plan_days: 30 });
+      assert.deepStrictEqual(ov.to, { amount_pence: 100, plan_days: 7 });
+      assert.ok(!Number.isNaN(Date.parse(ov.at)));
+
+      const line = logs.find((l) => l.includes('[invoice] price override'));
+      assert.ok(line, 'override is logged');
+      assert.match(line!, new RegExp(`invoice=${body.invoice.id} admin=ops-a amount_pence 699->100 plan_days 30->7 at=\\d{4}-`));
+      assert.ok(!line!.includes(user.id) && !line!.includes(user.email), 'no member data in the log line');
+
+      // Price list invoice from ops: no override, nothing logged.
+      const before = logs.length;
+      const plain = await adminPost({ user_id: user.id });
+      assert.strictEqual(plain.status, 201);
+      const plainBody = (await plain.json()) as any;
+      assert.strictEqual(plainBody.invoice.metadata.price_override, undefined);
+      assert.ok(!logs.slice(before).some((l) => l.includes('price override')));
+    });
+  } finally {
+    console.log = origLog;
+  }
+});
+
+test('Ops-created invoices record the member choice: consent with time and wording, or null by default', async () => {
+  const user = await createTestUser('ops-consent');
+  await withServer(async (baseUrl) => {
+    const adminPost = (body: unknown) =>
+      fetch(`${baseUrl}/api/admin/premium/invoices`, {
+        method: 'POST',
+        headers: { 'x-admin-token': 'test-admin-secret-token', 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    const withNo = await adminPost({ user_id: user.id });
+    const noBody = (await withNo.json()) as any;
+    assert.strictEqual(withNo.status, 201);
+    assert.strictEqual(noBody.invoice.immediate_start_consent_at, null, 'default is not given');
+    assert.strictEqual(noBody.invoice.metadata.immediate_start_consent_text, undefined);
+
+    const withYes = await adminPost({ user_id: user.id, immediate_start_consent: true, admin_actor: 'ops-b' });
+    const yesBody = (await withYes.json()) as any;
+    assert.strictEqual(withYes.status, 201);
+    assert.ok(yesBody.invoice.immediate_start_consent_at, 'tick time recorded');
+    assert.strictEqual(yesBody.invoice.metadata.immediate_start_consent_text, IMMEDIATE_START_CONSENT_TEXT);
+  });
+});
+
+test('Start rule: with no immediate start choice, paid Premium starts only after the 14-day cancellation period', async () => {
+  const user = await createTestUser('delayed');
+  const invoice = await invoiceService.createInvoice({ userId: user.id, createdByAdminId: 'ops-c' });
+  assert.strictEqual(invoice.immediate_start_consent_at, null);
+  const res = await invoiceService.confirmPayment(invoice.id);
+  const expectedStart = cancellationPeriodEnd(new Date(invoice.created_at));
+  assert.strictEqual(res.userPremium.isPremium, false, 'not on yet');
+  assert.strictEqual(res.userPremium.premiumStartsAt?.getTime(), expectedStart.getTime());
+  assert.strictEqual(
+    res.userPremium.premiumUntil?.getTime(),
+    expectedStart.getTime() + PREMIUM_PRICE_LIST.premium.planDays * 86_400_000,
+  );
+  const status = await premiumService.getStatus(user.id);
+  if (!premiumService.isBetaPremiumFree()) {
+    assert.strictEqual(status?.is_premium, false, 'Premium features are not usable during the 14 days');
+  }
+  assert.strictEqual(new Date(status!.premium_starts_at!).getTime(), expectedStart.getTime());
+
+  // With the choice, Premium starts at confirmation.
+  const user2 = await createTestUser('immediate');
+  const inv2 = await invoiceService.createInvoice({ userId: user2.id, immediateStartConsent: true });
+  const before = Date.now();
+  const res2 = await invoiceService.confirmPayment(inv2.id);
+  assert.strictEqual(res2.userPremium.isPremium, true);
+  assert.ok(Math.abs((res2.userPremium.premiumStartsAt?.getTime() ?? 0) - before) < 60_000);
+
+  // Pure rule.
+  const bought = new Date('2026-10-01T10:00:00Z');
+  assert.strictEqual(
+    paidPremiumStartsAt({ boughtAt: bought, confirmedAt: new Date('2026-10-03T10:00:00Z'), immediateStartConsent: false }).toISOString(),
+    '2026-10-15T10:00:00.000Z',
+  );
+  assert.strictEqual(
+    paidPremiumStartsAt({ boughtAt: bought, confirmedAt: new Date('2026-10-20T10:00:00Z'), immediateStartConsent: false }).toISOString(),
+    '2026-10-20T10:00:00.000Z',
+  );
+  assert.strictEqual(
+    paidPremiumStartsAt({ boughtAt: bought, confirmedAt: new Date('2026-10-03T10:00:00Z'), immediateStartConsent: true }).toISOString(),
+    '2026-10-03T10:00:00.000Z',
+  );
+});
+
+test('Start rule with Premium already running: paid days follow it and nothing is shortened', async () => {
+  const user = await createTestUser('delayed-stack');
+  const longUntil = new Date(Date.now() + 60 * 86_400_000);
+  await query(
+    `UPDATE users SET is_premium = TRUE, premium_tier = 'premium', premium_starts_at = NOW() - INTERVAL '1 day', premium_until = $2 WHERE id = $1`,
+    [user.id, longUntil],
+  );
+  const invoice = await invoiceService.createInvoice({ userId: user.id, createdByAdminId: 'ops-d' });
+  const res = await invoiceService.confirmPayment(invoice.id);
+  assert.strictEqual(res.userPremium.isPremium, true, 'running Premium carries on');
+  assert.strictEqual(
+    res.userPremium.premiumUntil?.getTime(),
+    longUntil.getTime() + PREMIUM_PRICE_LIST.premium.planDays * 86_400_000,
+  );
 });
 
 test('Migration 085 is tracked in schema_migrations', async () => {

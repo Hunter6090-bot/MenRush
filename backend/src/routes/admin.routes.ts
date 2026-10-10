@@ -610,7 +610,9 @@ router.post('/premium/invoices', privateNoStore, async (req: Request, res: Respo
       planDays: parsed.data.plan_days,
       amountPence: parsed.data.amount_pence,
       notes: parsed.data.notes,
-      createdByAdminId: 'ops-admin',
+      createdByAdminId: parsed.data.admin_actor || 'ops-admin',
+      // The member's own choice as they told ops; not given unless they said yes.
+      immediateStartConsent: parsed.data.immediate_start_consent,
     });
     return res.status(201).json({ ok: true, invoice });
   } catch (err) {

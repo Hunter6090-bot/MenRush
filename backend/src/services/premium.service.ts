@@ -10,6 +10,7 @@ import {
   placeEarnedGrant,
   referralExtendedEnd,
 } from './referral-earned-months';
+import { PREMIUM_PRICE_LIST } from '../lib/premiumPriceList';
 
 // Kept here for existing importers; the rule lives in referral-earned-months.
 export { referralExtendedEnd };
@@ -245,7 +246,19 @@ export const premiumService = {
     amountPence?: number,
     client?: PoolClient,
     now = new Date(),
-  ): Promise<{ premiumUntil: Date | null; skippedLifetime: boolean }> {
+    opts: {
+      /**
+       * When the paid days may start (Terms 7.6A). Later than `now` when the member did
+       * not ask to start straight away: then nothing paid is usable before this time.
+       */
+      startAt?: Date;
+    } = {},
+  ): Promise<{
+    premiumUntil: Date | null;
+    premiumStartsAt: Date | null;
+    premiumActiveNow: boolean;
+    skippedLifetime: boolean;
+  }> {
     const db: Queryable = client ?? pool;
     const row = await db.query(
       `SELECT name, is_premium, premium_until, premium_starts_at
@@ -259,26 +272,41 @@ export const premiumService = {
     const currentUntil = user.premium_until ? new Date(user.premium_until) : null;
 
     if (always && Boolean(user.is_premium) && !currentUntil) {
-      return { premiumUntil: null, skippedLifetime: true };
+      return { premiumUntil: null, premiumStartsAt: null, premiumActiveNow: true, skippedLifetime: true };
     }
 
-    const base = currentUntil && currentUntil.getTime() > now.getTime() ? currentUntil : now;
-    const candidateUntil = new Date(base.getTime() + planDays * 24 * 60 * 60 * 1000);
-
-    // Stacking guarantee: never shorten longer existing entitlement (e.g. 12-month beta promise)
-    const effectiveUntil =
-      currentUntil && currentUntil.getTime() > candidateUntil.getTime()
-        ? currentUntil
-        : candidateUntil;
-
+    const startAt = opts.startAt && opts.startAt.getTime() > now.getTime() ? opts.startAt : now;
     const existingStarts = user.premium_starts_at ? new Date(user.premium_starts_at) : null;
-    const effectiveStart = existingStarts && existingStarts.getTime() < now.getTime() ? existingStarts : now;
+    const startedAlready = !existingStarts || existingStarts.getTime() <= now.getTime();
+    const runningUntilLater = Boolean(currentUntil && currentUntil.getTime() > now.getTime());
+    const activeNow = Boolean(user.is_premium) && startedAlready && runningUntilLater;
+    // Premium already set to begin later (a promo or another delayed invoice).
+    const pendingLater = Boolean(user.is_premium) && !startedAlready && runningUntilLater;
+
+    // Paid days start at the later of startAt and the end of any Premium already running
+    // or booked. Existing Premium (12-month promo, waitlist gift) is never shortened.
+    const base = runningUntilLater && currentUntil!.getTime() > startAt.getTime() ? currentUntil! : startAt;
+    const candidateUntil = new Date(base.getTime() + planDays * 24 * 60 * 60 * 1000);
+    const effectiveUntil =
+      currentUntil && currentUntil.getTime() > candidateUntil.getTime() ? currentUntil : candidateUntil;
+
+    // Start of the member's Premium window. Running Premium keeps its start (any gap
+    // between it and a delayed paid start stays covered, in the member's favour).
+    // Otherwise the window starts at startAt, so a delayed paid start is not usable early.
+    let effectiveStart: Date;
+    if (activeNow) {
+      effectiveStart = existingStarts ?? now;
+    } else if (pendingLater) {
+      effectiveStart = existingStarts!.getTime() < startAt.getTime() ? existingStarts! : startAt;
+    } else {
+      effectiveStart = startAt;
+    }
 
     await db.query(
       `UPDATE users
        SET is_premium = TRUE,
            premium_tier = $2,
-           premium_starts_at = COALESCE(premium_starts_at, $3),
+           premium_starts_at = $3,
            premium_until = $4,
            updated_at = NOW()
        WHERE id = $1`,
@@ -303,13 +331,14 @@ export const premiumService = {
         userId,
         planTier,
         invoiceNumber || null,
-        effectiveStart,
+        base,
         effectiveUntil,
         JSON.stringify({
           plan_days: planDays,
           amount_pence: amountPence,
           invoice_number: invoiceNumber,
           source: 'manual_invoice',
+          paid_days_start: base.toISOString(),
         }),
       ],
     );
@@ -323,7 +352,12 @@ export const premiumService = {
       }
     }
 
-    return { premiumUntil: effectiveUntil, skippedLifetime: false };
+    return {
+      premiumUntil: effectiveUntil,
+      premiumStartsAt: effectiveStart,
+      premiumActiveNow: effectiveStart.getTime() <= now.getTime(),
+      skippedLifetime: false,
+    };
   },
 
   /** Parse billed amount from a webhook body; fallback to list price. */
@@ -398,8 +432,8 @@ export const premiumService = {
         id: 'premium' as const,
         name: 'MenRush Premium',
         tagline: 'See who matched you. Boost. Ghost browse. No caps.',
-        price: '6.99',
-        period_days: 30,
+        price: (PREMIUM_PRICE_LIST.premium.amountPence / 100).toFixed(2),
+        period_days: PREMIUM_PRICE_LIST.premium.planDays,
       },
     ];
   },

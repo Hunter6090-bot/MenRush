@@ -86,8 +86,6 @@ export const Premium: React.FC = () => {
     try {
       const res = await premiumAPI.createInvoice({
         plan_tier: 'premium',
-        plan_days: 30,
-        amount_pence: 699,
         immediate_start_consent: true,
       });
       setUnpaidInvoice(res.data.invoice);
