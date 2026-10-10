@@ -322,7 +322,7 @@ Join the waitlist at menrush.com",2026-08-21,19:30:00,TRUE,FALSE,FALSE,FALSE,FAL
 ```bash
 cd backend
 npm run db:migrate
-npm run db:seed-social-oct1   # idempotent.  safe to re-run
+npm run db:seed-social-launch-pack   # idempotent.  safe to re-run
 ```
 
 - List drafts: `GET /api/social/posts?campaign=oct1-2026` with `X-Admin-Token`

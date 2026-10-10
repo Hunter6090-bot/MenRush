@@ -477,11 +477,13 @@ export const authService = {
 
     // Post-COMMIT work is best-effort only. Never throw "registration failed"
     // after the user row exists — that was the orphan path.
-    if (autoVerify && resolvedReferrer) {
+    // Referral counts once the new member's email is confirmed (already true
+    // here when the confirm mail is held). Best effort: never fails signup.
+    if (resolvedReferrer) {
       try {
-        await referralService.onUserVerified(user!.id as string);
+        await referralService.onReferralMaybeQualified(user!.id as string);
       } catch (err) {
-        console.error('[auth] referral verify-on-register hook failed', err);
+        console.error('[auth] referral qualify-on-register hook failed', err);
       }
     }
 
@@ -641,6 +643,13 @@ export const authService = {
       [row.user_id],
     );
 
+    // Email confirmed: their referral may now count for the referrer.
+    try {
+      await referralService.onReferralMaybeQualified(row.user_id as string);
+    } catch (refErr) {
+      console.error('[auth] referral qualify-on-confirm hook failed', refErr);
+    }
+
     try {
       await this.sendWelcomeEmailOnce(row.user_id as string, row.email as string);
     } catch (welcomeErr) {
@@ -722,6 +731,14 @@ export const authService = {
 
     if (!user.email_confirmed) {
       throw new Error(EMAIL_NOT_CONFIRMED_MESSAGE);
+    }
+
+    // Earned referral months: start saved months once free Premium has ended,
+    // and grant a month the cap held back. Best effort: never blocks login.
+    try {
+      await referralService.syncEarnedMonths(user.id as string);
+    } catch (err) {
+      console.error('[auth] referral earned-months sync on login failed', err);
     }
 
     const publicUser = {

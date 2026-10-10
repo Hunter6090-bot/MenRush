@@ -6,11 +6,19 @@ import { ProfileDepthStrip } from './ProfileDepthStrip';
 import { ActivationBanner } from './ActivationBanner';
 import { usersAPI } from '../api/client';
 import { useAuthStore } from '../hooks/store';
+import { resetPromptPrefsSyncForTests } from '../lib/promptDismissal';
 import type { ProfileSetupSnapshot } from '../lib/profileSetup';
 
 vi.mock('../api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/client')>();
-  return { ...actual, usersAPI: { ...actual.usersAPI, getMe: vi.fn() } };
+  return {
+    ...actual,
+    usersAPI: { ...actual.usersAPI, getMe: vi.fn() },
+    promptPrefsAPI: {
+      get: vi.fn().mockResolvedValue({ data: { never: [] } }),
+      setNever: vi.fn().mockResolvedValue({ data: { never: [] } }),
+    },
+  };
 });
 
 const complete: ProfileSetupSnapshot = {
@@ -47,6 +55,7 @@ describe("Finish your profile: Don't show again", () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    resetPromptPrefsSyncForTests();
     vi.mocked(usersAPI.getMe).mockReset();
     useAuthStore.setState({ user: { id: 'member-a', name: 'Member' } as never, token: 't' });
   });
@@ -113,7 +122,7 @@ describe("Finish your profile: Don't show again", () => {
         <ActivationBanner profile={incomplete} />
       </MemoryRouter>,
     );
-    expect(screen.getByTestId('activation-finish-profile')).toBeInTheDocument();
+    expect(await screen.findByTestId('activation-finish-profile')).toBeInTheDocument();
     await user.click(screen.getByLabelText("Don't show again"));
     await user.click(screen.getByTestId('profile-prompt-close'));
     expect(screen.queryByTestId('activation-banner')).toBeNull();

@@ -1,4 +1,5 @@
 import { StatsigClient } from '@statsig/js-client';
+import { pickTrackingParams } from '../lib/trackingParams';
 
 type AnalyticsEvent =
   | 'landing_viewed'
@@ -13,7 +14,14 @@ type AnalyticsEvent =
 type MetadataValue = string | number | boolean;
 type EventMetadata = Record<string, MetadataValue | undefined>;
 
-const ATTRIBUTION_METADATA_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content'] as const;
+const ATTRIBUTION_METADATA_KEYS = [
+  'utm_source',
+  'utm_medium',
+  'utm_campaign',
+  'utm_content',
+  'utm_term',
+  'utm_id',
+] as const;
 
 const ALLOWED_METADATA: Record<AnalyticsEvent, ReadonlySet<string>> = {
   landing_viewed: new Set(['surface', ...ATTRIBUTION_METADATA_KEYS]),
@@ -113,7 +121,8 @@ export function getAttributionParams(): Partial<Record<(typeof ATTRIBUTION_METAD
     // fall through to read from URL
   }
 
-  const params = new URLSearchParams(window.location.search);
+  // Keys are matched case-insensitively (UTM_Source counts as utm_source).
+  const params = pickTrackingParams(window.location.search);
   const captured: Record<string, string> = {};
   for (const key of ATTRIBUTION_METADATA_KEYS) {
     const value = params.get(key);

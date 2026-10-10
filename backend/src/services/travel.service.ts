@@ -35,6 +35,9 @@ import {
   type TripStatus,
 } from '../lib/travel';
 
+/** Trips (place and dates) are deleted this many days after they end (Zoul / Legal, 10 Oct 2026). */
+export const TRAVEL_TRIP_RETENTION_DAYS = 30;
+
 const includeE2eFixtures = () =>
   process.env.INCLUDE_E2E_FIXTURES === 'true' || process.env.INCLUDE_E2E_FIXTURES === '1';
 
@@ -303,10 +306,9 @@ export const travelService = {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query(
-        `UPDATE travel_trips SET ended_at = NOW() WHERE user_id = $1 AND ended_at IS NULL`,
-        [userId],
-      );
+      // Retention: the trip being replaced is deleted, not just ended, so its
+      // place and dates go at once (the member replaced it themselves).
+      await client.query(`DELETE FROM travel_trips WHERE user_id = $1 AND ended_at IS NULL`, [userId]);
       const res = await client.query(
         `INSERT INTO travel_trips
            (user_id, city_name, country_code, centre_lat, centre_lng,
@@ -339,13 +341,29 @@ export const travelService = {
     }
   },
 
-  /** Always allowed, Premium or not. */
+  /**
+   * Always allowed, Premium or not. The member ending (deleting) their trip
+   * deletes the row at once, so the trip's place and dates are gone straight
+   * away rather than waiting for the 30-day purge.
+   */
   async endTrip(userId: string): Promise<{ ended: boolean }> {
-    const res = await query(
-      `UPDATE travel_trips SET ended_at = NOW() WHERE user_id = $1 AND ended_at IS NULL`,
-      [userId],
-    );
+    const res = await query(`DELETE FROM travel_trips WHERE user_id = $1 AND ended_at IS NULL`, [userId]);
     return { ended: (res.rowCount ?? 0) > 0 };
+  },
+
+  /**
+   * Retention: delete trips (place and dates) TRAVEL_TRIP_RETENTION_DAYS after
+   * they ended. A trip ends at ends_at, or earlier at ended_at (Premium lapse).
+   * Open trips whose ends_at passed count as ended at ends_at, so the purge
+   * does not depend on the tidy-up having run. Returns how many were deleted.
+   */
+  async purgeEndedTrips(days: number = TRAVEL_TRIP_RETENTION_DAYS): Promise<number> {
+    const res = await query(
+      `DELETE FROM travel_trips
+        WHERE LEAST(ends_at, COALESCE(ended_at, ends_at)) < NOW() - make_interval(days => $1::int)`,
+      [days],
+    );
+    return res.rowCount ?? 0;
   },
 
   async getShowInLookAround(userId: string): Promise<boolean> {
@@ -376,4 +394,20 @@ export function startTravelCleanupCron(): NodeJS.Timeout {
       .catch((err) => console.error('[travel] cleanup failed:', err instanceof Error ? err.message : 'error'));
   run();
   return setInterval(run, TRAVEL_CLEANUP_MS);
+}
+
+let tripRetentionHandle: NodeJS.Timeout | null = null;
+
+/** Hourly: delete trips 30 days after they end. On by default (Travel ships with it). */
+export function startTravelTripRetentionWorker() {
+  if (tripRetentionHandle) return;
+  const run = async () => {
+    const n = await travelService.purgeEndedTrips();
+    if (n) console.log(`[travel-retention] deleted ${n} trip(s) ended over ${TRAVEL_TRIP_RETENTION_DAYS} days ago`);
+  };
+  void run().catch((err) => console.error('[travel-retention] initial purge failed:', err));
+  tripRetentionHandle = setInterval(() => {
+    void run().catch((err) => console.error('[travel-retention] purge failed:', err));
+  }, 60 * 60 * 1000);
+  tripRetentionHandle.unref?.();
 }
