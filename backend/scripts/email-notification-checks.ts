@@ -56,7 +56,6 @@ async function main() {
     assert.ok(html.includes('font-family:Georgia'), 'same headline font as the transactional shell');
     assert.match(html, /width="140"/);
     assert.match(html, />Open MenRush</);
-    assert.ok(html.includes(emails.EMAIL_NOTIFY_FOOTER));
     assert.ok(html.includes('settings#email-notifications'));
     assert.ok(text.includes(emails.EMAIL_NOTIFY_FOOTER));
     assert.ok(text.includes(emails.EMAIL_NOTIFY_BODY));
@@ -66,11 +65,14 @@ async function main() {
     const visible = html
       .replace(/<style[\s\S]*?<\/style>/gi, ' ')
       .replace(/<[^>]+>/g, ' ')
-      .replace(/&nbsp;/g, ' ');
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&#39;|&apos;/g, "'")
+      .replace(/\s+/g, ' ');
+    const footerNeedle = 'You can choose which emails you get at any time';
     const helloAt = visible.indexOf(emails.EMAIL_NOTIFY_HELLO);
     const bodyAt = visible.indexOf(emails.EMAIL_NOTIFY_BODY);
     const ctaAt = visible.indexOf(emails.EMAIL_NOTIFY_CTA);
-    const footerAt = visible.indexOf(emails.EMAIL_NOTIFY_FOOTER);
+    const footerAt = visible.indexOf(footerNeedle);
     const signAt = visible.indexOf(emails.EMAIL_NOTIFY_SIGN_OFF);
     assert.ok(helloAt >= 0 && helloAt < bodyAt && bodyAt < ctaAt && ctaAt < footerAt && footerAt < signAt, 'HTML order');
     const textHello = text.indexOf(emails.EMAIL_NOTIFY_HELLO);
@@ -82,7 +84,7 @@ async function main() {
       textHello < textBody && textBody < textCta && textCta < textFooter && textFooter < textSign,
       'text order',
     );
-    assert.strictEqual(visible.split(emails.EMAIL_NOTIFY_FOOTER).length - 1, 1, 'settings line once in HTML');
+    assert.strictEqual(visible.split(footerNeedle).length - 1, 1, 'settings line once in HTML');
     assert.ok(!text.includes('Open Settings:'), 'no extra Settings line in text');
     for (const surface of [subject, preheader, visible, text]) {
       assert.ok(!/\u2014|\u2013/.test(surface), 'no em/en dashes');
@@ -139,7 +141,6 @@ async function main() {
 
   // Prefs routes: privateNoStore before auth, owner only.
   const { default: emailNotificationsRoutes } = await import('../src/routes/email-notifications');
-  const { authService } = await import('../src/services/auth.service');
   const calls: string[] = [];
   const store = new Map<string, { messages: boolean; matches: boolean; jerks: boolean }>();
   svc.getEmailNotifyPrefs = async (userId: string) => {

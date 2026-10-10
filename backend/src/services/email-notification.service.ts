@@ -125,8 +125,8 @@ export const EMAIL_UNSUB_KEY_INFO = 'email-unsub-v1';
 export const EMAIL_UNSUB_TTL_SECONDS = 90 * 24 * 60 * 60;
 
 /**
- * Signing key for unsubscribe tokens. Never JWT_SECRET itself, and never the
- * 'your-secret-key' fallback. EMAIL_UNSUB_SECRET if set; otherwise
+ * Signing key for unsubscribe tokens. Never JWT_SECRET itself, and never a
+ * hardcoded default secret. EMAIL_UNSUB_SECRET if set; otherwise
  * HMAC-SHA256(JWT_SECRET, 'email-unsub-v1').
  */
 export function unsubSigningKey(): Buffer {
