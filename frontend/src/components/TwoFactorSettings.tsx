@@ -265,7 +265,7 @@ export function TwoFactorSettings() {
               type="button"
               onClick={() => void confirmDisable()}
               disabled={busy}
-              className="rounded-full border border-[#B0432E] px-4 py-2 text-sm font-bold text-[#B0432E] transition-colors hover:bg-[#B0432E]/10 disabled:opacity-50"
+              className="min-h-[44px] rounded-full border border-[var(--nn-danger-text)] px-4 py-2 text-[15px] font-bold text-[var(--nn-danger-text)] transition-colors hover:bg-[var(--error-soft)] disabled:opacity-50"
             >
               {busy ? 'Turning off…' : 'Turn off 2FA'}
             </button>
@@ -280,7 +280,7 @@ export function TwoFactorSettings() {
         </div>
       ) : null}
 
-      {error ? <p className="text-[15px] leading-snug text-[#B0432E]">{error}</p> : null}
+      {error ? <p role="alert" className="text-[15px] leading-snug text-[var(--nn-danger-text)]">{error}</p> : null}
 
       {mode === 'idle' ? (
         <div>
@@ -292,7 +292,7 @@ export function TwoFactorSettings() {
                 setCode('');
                 setError('');
               }}
-              className="text-sm font-semibold text-[#B0432E] transition-colors hover:text-[#D96A52]"
+              className="inline-flex min-h-[44px] items-center text-[15px] font-semibold text-[var(--nn-danger-text)] transition-opacity hover:opacity-80"
             >
               Turn off two-factor authentication
             </button>
@@ -348,7 +348,7 @@ export function TwoFactorSettings() {
                     type="button"
                     disabled={busy}
                     onClick={() => void revokeDevice(device)}
-                    className="shrink-0 text-[12px] font-semibold text-[#B0432E] transition-colors hover:text-[#D96A52] disabled:opacity-50"
+                    className="inline-flex min-h-[44px] shrink-0 items-center text-[15px] font-semibold text-[var(--nn-danger-text)] transition-opacity hover:opacity-80 disabled:opacity-50"
                   >
                     Revoke
                   </button>

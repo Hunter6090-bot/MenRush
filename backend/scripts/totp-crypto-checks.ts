@@ -245,9 +245,32 @@ const tests: [string, () => void][] = [
     const fs = require('fs') as typeof import('fs');
     const path = require('path') as typeof import('path');
     const login = fs.readFileSync(path.join(__dirname, '../../frontend/src/pages/Login.tsx'), 'utf8');
-    assert.ok(/pendingToken \? 'text-\[15px\]/.test(login), '2FA step error is 15px');
+    assert.ok(/'text-\[15px\] font-semibold leading-snug text-\[var\(--nn-danger-light\)\]'/.test(login), '2FA step error: 15px, danger token');
     const settings = fs.readFileSync(path.join(__dirname, '../../frontend/src/components/TwoFactorSettings.tsx'), 'utf8');
-    assert.ok(/\{error \? <p className="text-\[15px\]/.test(settings), '2FA settings error is 15px');
+    assert.ok(/\{error \? <p role="alert" className="text-\[15px\] leading-snug text-\[var\(--nn-danger-text\)\]"/.test(settings), '2FA settings error: 15px, danger token');
+    assert.ok(!/#B0432E/.test(settings), 'no 3.16:1 hex in 2FA settings');
+    // Contrast from the real tokens: 4.5:1 or better on every surface each error can sit on.
+    const css = fs.readFileSync(path.join(__dirname, '../../frontend/src/styles/menrush-tokens.css'), 'utf8');
+    const rootBlock = css.slice(css.indexOf(':root {'), css.indexOf('}', css.indexOf(':root {')));
+    const lightStart = css.indexOf("html[data-theme='light']");
+    const lightBlock = css.slice(lightStart, css.indexOf('}', lightStart));
+    const tok = (block: string, name: string): string | undefined => {
+      const m = block.match(new RegExp(`${name}:\\s*(#[0-9A-Fa-f]{6}|var\\((--[a-z-]+)\\))`));
+      if (!m) return undefined;
+      return m[1].startsWith('#') ? m[1] : tok(block, m[2]) ?? tok(rootBlock, m[2]);
+    };
+    const lum = (hex: string) => {
+      const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
+      return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    };
+    const ratio = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+    assert.equal(tok(lightBlock, '--nn-danger-light'), undefined, 'danger-light is not re-themed (the auth panel is always dark)');
+    const panel = '#1E1508'; // publicPanelClass background, fixed in every theme
+    assert.ok(ratio(tok(rootBlock, '--nn-danger-light')!, panel) >= 4.5, 'login 2FA error >= 4.5:1 on the auth panel');
+    for (const surface of ['--nn-bg', '--nn-card', '--nn-elevated']) {
+      assert.ok(ratio(tok(rootBlock, '--nn-danger-text')!, tok(rootBlock, surface)!) >= 4.5, `dark settings error >= 4.5:1 on ${surface}`);
+      assert.ok(ratio(tok(lightBlock, '--nn-danger-text')!, tok(lightBlock, surface)!) >= 4.5, `light settings error >= 4.5:1 on ${surface}`);
+    }
   }],
   ['rotate script needs NODE_ENV set explicitly, production for Railway, and --confirm-production to write there', () => {
     const fs = require('fs') as typeof import('fs');
@@ -305,6 +328,10 @@ const tests: [string, () => void][] = [
     const revert = code.indexOf('Revert the code');
     assert.ok(v1 > 0 && reverse > v1 && revert > reverse, 'code rollback: v1 writes, then --reverse, then revert');
     assert.ok(!/[\u2013\u2014]/.test(doc), 'no en or em dashes');
+    const warning = doc.match(/\*\*Railway warning:[\s\S]*?\*\*/);
+    assert.ok(warning && /\$\{\{/.test(warning[0]) && /locked out/.test(warning[0]), 'the Railway ${{VAR}} reference warning is bold');
+    assert.ok(doc.indexOf('**Railway warning') < doc.indexOf('## 2. Rotate'), 'the warning comes before any key change');
+    assert.ok(/openssl rand -hex 32/.test(doc) && !/openssl rand -base64/.test(doc), 'only openssl rand -hex 32 is recommended');
   }],
 ];
 
