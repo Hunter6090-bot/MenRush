@@ -12,8 +12,10 @@ import { MoodPicker } from '../components/MoodPicker';
 import {
   DEFAULT_RADIUS_KM,
   MAX_RADIUS_KM,
-  clampRadiusKm,
+  RADIUS_ALL_KM,
   formatRadiusControlLabel,
+  isDiscoveryAllScope,
+  migrateStoredRadiusKm,
   normalizeRadiusKm,
   radiusStepOptionsKm,
 } from '../lib/discoveryFormat';
@@ -48,7 +50,7 @@ import {
   type DiscoveryFilterState,
 } from '../lib/discoveryFilters';
 import { EventsRail } from '../components/EventsRail';
-import { countLiveOnline, isUserPulsing, distanceMeters } from '../lib/discovery';
+import { countLiveOnline, isUserOnlineNow, isUserPulsing, distanceMeters } from '../lib/discovery';
 import { isFreshFaceNearby } from '../lib/newJoiner';
 import {
   readNearbySort,
@@ -88,12 +90,19 @@ import {
   nearestMapPinFuzzStep,
   privateMapPointAround,
 } from '../lib/mapPinFuzz';
+import { adjustHotSpotLiveCount, isHotSpotActive } from '../lib/hotSpotCounts';
 
 /** Map panel: swipe up to hide, swipe down to show, expand for large map. */
 type MapPanelMode = 'hidden' | 'default' | 'expanded';
 const MAP_PANEL_STORAGE_KEY = 'menrush_nearby_map_panel';
 const DESKTOP_MAP_EXPAND_KEY = 'menrush_desktop_map_expanded';
 const DISCOVER_RADIUS_KEY = 'menrush_default_radius_km';
+
+/** Cruise/hot-spot fetch stays a radius even when people All is UK+Ireland. */
+function cruiseSearchRadiusKm(discoveryKm: number): number {
+  const nearbyKm = isDiscoveryAllScope(discoveryKm) ? MAX_RADIUS_KM : discoveryKm;
+  return Math.max(nearbyKm, 25);
+}
 
 function readDesktopMapExpanded(): boolean {
   try {
@@ -407,13 +416,14 @@ export const Discover = () => {
     try {
       const saved = Number(localStorage.getItem(DISCOVER_RADIUS_KEY));
       if (Number.isFinite(saved) && saved > 0) {
-        return normalizeRadiusKm(clampRadiusKm(saved), resolveDistanceUnitSystem());
+        return normalizeRadiusKm(migrateStoredRadiusKm(saved), resolveDistanceUnitSystem());
       }
     } catch {
       /* ignore */
     }
     return DEFAULT_RADIUS_KM;
   });
+  const allScope = isDiscoveryAllScope(radius);
   /** How far others see your pin — profiles.map_pin_fuzz_m (not search radius). */
   const [mapPinFuzzM, setMapPinFuzzM] = useState<number>(MAP_PIN_FUZZ_DEFAULT_M);
   const [nearbyView, setNearbyView] = useState<NearbyView>(() => readNearbyView());
@@ -636,8 +646,10 @@ export const Discover = () => {
         const apiFilters = {
           ...buildNearbyApiFilters(filters),
           page: targetPage,
+          scope: isDiscoveryAllScope(r) ? ('uk_ie' as const) : undefined,
         };
-        const res = await usersAPI.getNearby(latitude, longitude, r, apiFilters);
+        const requestRadius = isDiscoveryAllScope(r) ? MAX_RADIUS_KM : r;
+        const res = await usersAPI.getNearby(latitude, longitude, requestRadius, apiFilters);
         const { users: incomingUsers, total: incomingTotal, hasMore: incomingHasMore, page: incomingPage } =
           unpackNearbyResponse(res.data, (res as any).headers);
 
@@ -667,9 +679,12 @@ export const Discover = () => {
         }
 
         // Cold density: count men outside current radius so Expand is intentional.
-        if (incomingTotal === 0 && r < MAX_RADIUS_KM - 0.5) {
+        if (incomingTotal === 0 && !isDiscoveryAllScope(r)) {
           try {
-            const wider = await usersAPI.getNearby(latitude, longitude, MAX_RADIUS_KM, apiFilters);
+            const wider = await usersAPI.getNearby(latitude, longitude, MAX_RADIUS_KM, {
+              ...apiFilters,
+              scope: 'uk_ie',
+            });
             const unpackedWider = unpackNearbyResponse(wider.data, (wider as any).headers);
             setBeyondRadiusCount(unpackedWider.total);
           } catch {
@@ -868,7 +883,7 @@ export const Discover = () => {
         saved.lat,
         saved.lng,
         window.isSecureContext
-          ? 'Using your last saved location — refreshing GPS…'
+          ? 'Using your last saved location. Refreshing GPS…'
           : INSECURE_GPS_NOTICE,
         true,
       );
@@ -1045,7 +1060,7 @@ export const Discover = () => {
 
   const handleRadiusChange = useCallback(
     (next: number) => {
-      const clamped = normalizeRadiusKm(clampRadiusKm(next), resolveDistanceUnitSystem());
+      const clamped = normalizeRadiusKm(migrateStoredRadiusKm(next), resolveDistanceUnitSystem());
       setRadius(clamped);
       try {
         localStorage.setItem(DISCOVER_RADIUS_KEY, String(clamped));
@@ -1072,15 +1087,15 @@ export const Discover = () => {
    * If we already know men exist farther out, jump to max. Otherwise big steps.
    */
   const handleRadiusCycle = useCallback(() => {
-    if (radius >= MAX_RADIUS_KM - 0.5) return;
+    if (isDiscoveryAllScope(radius)) return;
 
     if (beyondRadiusCount > 0) {
-      handleRadiusChange(MAX_RADIUS_KM);
+      handleRadiusChange(RADIUS_ALL_KM);
       return;
     }
 
     const stepsKm = radiusStepOptionsKm(resolveDistanceUnitSystem());
-    const next = stepsKm.find((km) => km > radius + 0.4) ?? MAX_RADIUS_KM;
+    const next = stepsKm.find((km) => km > radius + 0.4) ?? RADIUS_ALL_KM;
     handleRadiusChange(next);
   }, [radius, beyondRadiusCount, handleRadiusChange]);
 
@@ -1242,8 +1257,7 @@ export const Discover = () => {
           updatedSpot = {
             ...spot,
             is_checked_in: false,
-            live_count_exact: Math.max(0, spot.live_count_exact - 1),
-            has_active_checkins: Math.max(0, spot.live_count_exact - 1) > 0,
+            ...adjustHotSpotLiveCount(spot, -1),
           };
         } else {
           const res = await hotSpotsAPI.checkIn(spot.id, anonymous);
@@ -1251,15 +1265,14 @@ export const Discover = () => {
             ...spot,
             is_checked_in: true,
             my_checkin_anonymous: anonymous,
-            live_count_exact: spot.live_count_exact + 1,
-            has_active_checkins: true,
+            ...adjustHotSpotLiveCount(spot, 1),
           };
         }
         if (selectedHotSpot && selectedHotSpot.id === spot.id && updatedSpot) {
           setSelectedHotSpot(updatedSpot);
         }
         if (lat != null && lng != null) {
-          const res = await hotSpotsAPI.listNearby(lat, lng, Math.max(radius, 25));
+          const res = await hotSpotsAPI.listNearby(lat, lng, cruiseSearchRadiusKm(radius));
           setHotSpots(res.data.spots ?? []);
         }
       } catch {
@@ -1578,6 +1591,8 @@ export const Discover = () => {
         isPulsing,
         isVerified: !!(user as any).is_verified,
         isNew,
+        online: isUserOnlineNow(user),
+        last_seen: user.last_seen,
       };
       const lngLat: [number, number] = [Number(user.lng), Number(user.lat)];
       const existing = markersRef.current.get(user.id);
@@ -1600,7 +1615,8 @@ export const Discover = () => {
           prev.photo_url !== user.photo_url ||
           isUserPulsing(prev) !== isPulsing ||
           !!(prev as any).is_verified !== !!(user as any).is_verified ||
-          isFreshFaceNearby(prev) !== isNew;
+          isFreshFaceNearby(prev) !== isNew ||
+          isUserOnlineNow(prev) !== isUserOnlineNow(user);
         if (visualChanged) {
           const markerSize = isPulsing ? 52 : 44;
           existing.root.render(<MapMarker user={markerUser} size={markerSize} />);
@@ -1651,7 +1667,7 @@ export const Discover = () => {
     let cancelled = false;
     const load = async () => {
       try {
-        const res = await hotSpotsAPI.listNearby(lat, lng, Math.max(radius, 25));
+        const res = await hotSpotsAPI.listNearby(lat, lng, cruiseSearchRadiusKm(radius));
         if (!cancelled) setHotSpots(res.data.spots ?? []);
       } catch {
         if (!cancelled) setHotSpots([]);
@@ -1683,8 +1699,9 @@ export const Discover = () => {
         category_icon: spot.category_icon,
         live_count_exact: spot.live_count_exact,
         live_count: spot.live_count,
+        has_active_checkins: spot.has_active_checkins,
       };
-      const occupied = spot.live_count_exact > 0;
+      const occupied = isHotSpotActive(spot);
 
       if (existing) {
         const prevLat = Number(existing.spot.latitude);
@@ -1693,7 +1710,7 @@ export const Discover = () => {
           // Keep true lng/lat — never spiderfy into a vertical column (#254).
           existing.marker.setLngLat(lngLat);
         }
-        const prevOccupied = existing.spot.live_count_exact > 0;
+        const prevOccupied = isHotSpotActive(existing.spot);
         const nextOccupied = occupied;
         const el = existing.marker.getElement();
         const labelChanged = el.dataset.showLabel !== (showLabel ? '1' : '0');
@@ -1837,7 +1854,7 @@ export const Discover = () => {
           id,
           lng: spot.longitude,
           lat: spot.latitude,
-          radiusPx: hotSpotPinHitRadiusPx(spot.live_count_exact > 0),
+          radiusPx: hotSpotPinHitRadiusPx(isHotSpotActive(spot)),
         });
       });
 
@@ -1872,6 +1889,12 @@ export const Discover = () => {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || lat == null || lng == null) return;
+
+    if (isDiscoveryAllScope(radius)) {
+      if (map.getLayer(RADIUS_CIRCLE_LAYER)) map.removeLayer(RADIUS_CIRCLE_LAYER);
+      if (map.getSource(RADIUS_CIRCLE_SOURCE)) map.removeSource(RADIUS_CIRCLE_SOURCE);
+      return;
+    }
 
     const data = geoJsonCircle(lng, lat, radius);
     const existing = map.getSource(RADIUS_CIRCLE_SOURCE) as mapboxgl.GeoJSONSource | undefined;
@@ -1969,12 +1992,11 @@ export const Discover = () => {
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-extrabold text-[var(--cream)]">
-                Men nearby — tap Match on a card
+              <p className="text-base font-extrabold text-[var(--cream)]">
+                Tap Match on a card
               </p>
-              <p className="mt-1 text-[12px] text-[var(--cream-muted)]">
-                No swiping. Tap Match to show interest. Chat and calling unlock when it&apos;s mutual · consent
-               .
+              <p className="mt-1 text-sm text-[var(--cream-muted)]">
+                Both tap. Chat opens. Consent first.
               </p>
             </div>
             <button
@@ -2018,10 +2040,8 @@ export const Discover = () => {
           className="mx-3 mb-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] px-4 py-3 shadow-[0_12px_28px_rgba(0,0,0,0.4)]"
         >
           <div>
-            <p className="text-[14px] font-extrabold text-[var(--cream)]">Match with {matchToast.name}</p>
-            <p className="mt-0.5 text-[12px] text-[var(--cream-muted)]">
-              You both said yes. Chat when ready — consent first. Pulse to get seen by more men nearby.
-            </p>
+            <p className="text-base font-extrabold text-[var(--cream)]">Match with {matchToast.name}</p>
+            <p className="mt-0.5 text-sm text-[var(--cream-muted)]">Consent first.</p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <button
@@ -2066,10 +2086,8 @@ export const Discover = () => {
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-extrabold text-[var(--cream)]">Quiet map? Start Pulse</p>
-              <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
-                Get 90 minutes of priority visibility and appear first to men nearby.
-              </p>
+              <p className="text-base font-extrabold text-[var(--cream)]">Quiet map? Start Pulse</p>
+              <p className="mt-1 text-sm text-[var(--cream-muted)]">Seen first for 90 minutes.</p>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
               <button
@@ -2109,10 +2127,8 @@ export const Discover = () => {
           <p id="location-gate-title" className="text-[17px] font-extrabold text-[var(--cream)]">
             Allow location to unlock Nearby
           </p>
-          <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--cream-muted)]">
-            We need your device location to show men near you. Your exact pin is not shown to others
-            — they only see approximate distance. You can adjust your search radius once location is
-            on. Shared only while you use the app.
+          <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-[var(--cream-muted)]">
+            We use your location to show who&apos;s nearby.
           </p>
           <button
             type="button"
@@ -2122,7 +2138,7 @@ export const Discover = () => {
             Allow location
           </button>
           {locationNotice ? (
-            <p className="mt-3 text-[11px] text-[var(--cream-muted)]">{locationNotice}</p>
+            <p className="mt-3 text-[15px] leading-snug text-[var(--cream-muted)]">{locationNotice}</p>
           ) : null}
         </div>
       ) : null}
@@ -2205,9 +2221,11 @@ export const Discover = () => {
                 data-live-count={liveCount}
                 className="mb-3 inline-flex min-h-[36px] items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
               >
-                <p className="text-[11px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
+                <p className="text-[13px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
                   {loading && nearbyCount === 0 ? (
                     <span className="text-[var(--cream-muted)]">Scanning…</span>
+                  ) : nearbyCount === 0 && allScope ? (
+                    <span className="font-extrabold text-[var(--cream-soft)]">Men nearby</span>
                   ) : nearbyCount === 0 ? (
                     <button
                       type="button"
@@ -2245,6 +2263,8 @@ export const Discover = () => {
                 mutualUserIds={matchedUsers}
                 matchingUserId={matchingUserId}
                 onExpandRadius={handleRadiusCycle}
+                canExpandRadius={!allScope && radius < MAX_RADIUS_KM - 0.5}
+                hideExpandRadius={allScope}
                 onFinishProfile={
                   showFinishProfileEmptyCta ? () => navigate('/profile/setup') : undefined
                 }
@@ -2297,10 +2317,7 @@ export const Discover = () => {
             <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center bg-[var(--bg-primary)]/90 px-5 text-center backdrop-blur-sm">
               {needsLocationGate ? (
                 <>
-                  <p className="text-sm font-extrabold text-[var(--cream)]">Location required</p>
-                  <p className="mt-2 max-w-xs text-xs leading-relaxed text-[var(--cream-muted)]">
-                    Grant location to load the map around you.
-                  </p>
+                  <p className="text-base font-extrabold text-[var(--cream)]">Location required</p>
                   <button
                     type="button"
                     onClick={handleEnableLocation}
@@ -2393,9 +2410,11 @@ export const Discover = () => {
                 data-live-count={liveCount}
                 className="inline-flex min-h-[36px] max-w-full items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
               >
-                <p className="text-[11px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
+                <p className="text-[13px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
                   {loading && nearbyCount === 0 ? (
                     <span className="text-[var(--cream-muted)]">Scanning…</span>
+                  ) : nearbyCount === 0 && allScope ? (
+                    <span className="font-extrabold text-[var(--cream-soft)]">Men nearby</span>
                   ) : nearbyCount === 0 ? (
                     <button
                       type="button"
@@ -2432,14 +2451,14 @@ export const Discover = () => {
               <div
                 role="status"
                 data-testid="location-notice"
-                className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-3 py-2 text-[11px] font-medium leading-snug text-[var(--cream-soft)] shadow-md backdrop-blur-sm"
+                className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/90 px-3.5 py-2.5 text-[15px] font-medium leading-snug text-[var(--cream-soft)] shadow-md backdrop-blur-sm"
               >
                 <p>{locationNotice}</p>
                 <button
                   type="button"
                   onClick={handleEnableLocation}
                   data-testid="enable-location"
-                  className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[var(--copper)]/15 px-2.5 py-1 text-[11px] font-bold text-[var(--copper)] transition-colors hover:bg-[var(--copper)]/25"
+                  className="mt-2 inline-flex min-h-[44px] items-center gap-1 rounded-full border border-[var(--copper)]/50 bg-[var(--copper)]/15 px-4 py-2 text-[15px] font-bold text-[var(--copper)] transition-colors hover:bg-[var(--copper)]/25"
                 >
                   {locationNotice.startsWith('Using your last saved location') ||
                   locationNotice === INSECURE_GPS_NOTICE
@@ -2492,6 +2511,8 @@ export const Discover = () => {
                   mutualUserIds={matchedUsers}
                   matchingUserId={matchingUserId}
                   onExpandRadius={handleRadiusCycle}
+                  canExpandRadius={!allScope && radius < MAX_RADIUS_KM - 0.5}
+                  hideExpandRadius={allScope}
                   onFinishProfile={
                     showFinishProfileEmptyCta ? () => navigate('/profile/setup') : undefined
                   }

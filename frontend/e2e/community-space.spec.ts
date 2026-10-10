@@ -188,3 +188,56 @@ test('signed-in user can create a ≤280 char Community post', async ({ browser 
 
   await ctx.close();
 });
+
+test('community feed client excludes stale posts older than 24 hours', async ({ browser }) => {
+  const ctx = await browser.newContext({
+    geolocation: { latitude: 51.5074, longitude: -0.1278 },
+    permissions: ['geolocation'],
+    viewport: { width: 390, height: 844 },
+  });
+  await authenticate(ctx, alice);
+  const page = await ctx.newPage();
+
+  // Mock /api/community/posts with one fresh post and one 48h stale post
+  const now = Date.now();
+  await page.route('**/api/community/posts*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        posts: [
+          {
+            id: 'mock-fresh-id',
+            user_id: alice.user.id,
+            body: 'Fresh post within 24 hours',
+            created_at: new Date(now - 2 * 60 * 60 * 1000).toISOString(),
+            author_name: 'Alice',
+            author_photo_url: null,
+            distance_km: '0.20',
+            distance_label: '< 300 m',
+            comment_count: 0,
+          },
+          {
+            id: 'mock-stale-id',
+            user_id: 'user-old',
+            body: 'Stale post older than 24h',
+            created_at: new Date(now - 48 * 60 * 60 * 1000).toISOString(),
+            author_name: 'Old User',
+            author_photo_url: null,
+            distance_km: '0.50',
+            distance_label: '500 m',
+            comment_count: 0,
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.goto('/stream');
+  await expect(page.getByTestId('community-feed')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Fresh post within 24 hours')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Stale post older than 24h')).toHaveCount(0);
+
+  await ctx.close();
+});
+

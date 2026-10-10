@@ -121,14 +121,14 @@ export const BSF26_LAUNCH_YMD_LONDON = '2026-10-01';
 
 /**
  * MenRush launch ad campaign — code MR3FREE (Al P0 BLOCKING).
- * Live from 17 Sep 2026 until 23:59 Europe/London on 5 October 2026.
+ * Live from 17 Sep 2026 until 23:59 Europe/London on 31 October 2026 (Al extended 8 Oct 2026; was 5 Oct).
  * Grants 3 months of Premium free, unlocked from day one.
  *
  * Locked:
  * - Code: MR3FREE (accept mr3free; case-insensitive, no spaces)
  * - Campaign name: MenRush launch
- * - Claim-by: end of 5 October 2026 Europe/London inclusive
- *   (BST that day = UTC+1 → 23:59:59 London = 2026-10-05T22:59:59Z)
+ * - Claim-by: end of 31 October 2026 Europe/London inclusive
+ *   (GMT that day, BST ends 25 Oct → 23:59:59 London = 2026-10-31T23:59:59Z)
  * - Live from: 17 September 2026 Europe/London (00:00 BST = 2026-09-16T23:00:00Z)
  * - One use per account (campaign + email_hash / user_id unique in shared_promo_redemptions)
  * - Does not cancel 12-month beta promises (preserves longer premium_until)
@@ -141,12 +141,12 @@ export const SHARED_MR3FREE_NORMALIZED = 'MR3FREE';
 export const SHARED_MR3FREE_CAMPAIGN = 'menrush_launch';
 export const SHARED_MR3FREE_CAMPAIGN_NAME = 'MenRush launch';
 export const SHARED_MR3FREE_MONTHS_FREE = 3;
-/** Claim-by: end of day 5 Oct 2026 Europe/London (inclusive). */
-export const SHARED_MR3FREE_ENTER_BY = new Date('2026-10-05T22:59:59Z');
+/** Claim-by: end of day 31 Oct 2026 Europe/London (inclusive, GMT). Al extended from 5 Oct on 8 Oct 2026. */
+export const SHARED_MR3FREE_ENTER_BY = new Date('2026-10-31T23:59:59Z');
 /** Live from: 17 Sep 2026 Europe/London (00:00 BST = 2026-09-16T23:00:00Z). */
 export const SHARED_MR3FREE_LIVE_FROM = new Date('2026-09-16T23:00:00Z');
 export const SHARED_MR3FREE_EXPIRED_MESSAGE =
-  'This promo expired on 5 October 2026.';
+  'This promo expired on 31 October 2026.';
 const EUROPE_LONDON = 'Europe/London';
 
 export function isPrideInviteIssueOpen(now = new Date()): boolean {
@@ -788,7 +788,7 @@ export const promoService = {
 
   /**
    * Validate MenRush launch promo code MR3FREE.
-   * Case-insensitive, no spaces. Claim through end of 5 October 2026 Europe/London inclusive.
+   * Case-insensitive, no spaces. Claim through end of 31 October 2026 Europe/London inclusive.
    * One per email. Does not stack with Pride or BSF26. Replaces 30-day waitlist gift.
    */
   async validateSharedMr3Free(
@@ -1153,7 +1153,7 @@ async function sendPromoEmail(params: {
             </h1>
             <p style="margin:0 0 32px;font-size:15px;color:#7a6a5a;line-height:1.6;">
               You're on the list. Your personal code is below (format PRIDE-XXXX-XXXX).
-              It is <strong style="color:#8a7a6a;">not</strong> a beta invite (MENRUSH-XXXX).
+              It is <strong style="color:#8a7a6a;">not</strong> an invite code (MENRUSH-XXXX).
               Enter this code at account signup on the same email — do not enter the public
               code PRIDE&nbsp;3MONTH&nbsp;FREE. Your ${campaign.monthsFree}&nbsp;months of Premium
               start on launch (1&nbsp;October&nbsp;2026), not the day you claimed this email.
@@ -1187,7 +1187,7 @@ async function sendPromoEmail(params: {
             <h2 style="margin:0 0 12px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#C4832A;font-weight:700;">How to redeem</h2>
             <ol style="margin:0 0 32px;padding-left:20px;color:#7a6a5a;font-size:14px;line-height:1.8;">
               <li>Keep this email — your code is locked to <strong style="color:#8a7a6a;">${to}</strong></li>
-              <li>This is a Premium promo code (PRIDE-XXXX-XXXX), not a /beta MENRUSH invite</li>
+              <li>This is a Premium promo code (PRIDE-XXXX-XXXX), not a MENRUSH invite code</li>
               <li>Redemption is at account signup — enter this personal code (not PRIDE 3MONTH FREE)</li>
               <li>When redeemed, Premium starts on launch. If open is 1&nbsp;October&nbsp;2026, Premium ends 1&nbsp;January&nbsp;2027. If launch slips, the 3 months run from the actual open date — not still 1&nbsp;January</li>
               <li>Redeem by 31&nbsp;October&nbsp;2026. Replaces the 30-day waitlist gift. Do not stack with the public /pride code</li>
@@ -1224,7 +1224,7 @@ ${campaign.monthsFree} months free Premium starting 1 October 2026 (not the day 
 
 YOUR CODE: ${formattedCode}
 
-This code is locked to ${to}. Format PRIDE-XXXX-XXXX — not a beta MENRUSH invite.
+This code is locked to ${to}. Format PRIDE-XXXX-XXXX. Not a MENRUSH invite.
 
 How to redeem:
 1. Keep this email

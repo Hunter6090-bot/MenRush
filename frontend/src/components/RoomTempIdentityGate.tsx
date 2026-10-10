@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { roomsAPI } from '../api/client';
 import { useMediaQuery } from '../hooks/useMediaQuery';
-import { roomLetterAvatar } from '../lib/roomLetterAvatar';
 import { getPhotoUrl } from './UserAvatar';
+import { BrandAvatar } from './BrandAvatar';
+import { FadedBrandFace } from './FadedBrandFace';
+import { RoomAvatar } from './RoomAvatar';
+import { isPlaceholderAvatarUrl } from '../lib/avatarFallback';
 import { SelfieCaptureModal } from './SelfieCaptureModal';
 
 /** Gate result: explicit profile path, or temp name (+ optional photo). */
@@ -59,16 +62,12 @@ const THEME_CHIP_MAP: Array<{ match: RegExp; chips: string[] }> = [
   { match: /host/i, chips: ['Hosting', 'Guest Anon', 'Drop In'] },
 ];
 
-function roomInitials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter((w) => /[A-Za-z0-9]/.test(w))
-    .map((w) => w.replace(/[^A-Za-z0-9]/g, '')[0])
-    .filter(Boolean)
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-}
+/** Letter-square look kept for rooms without a Claude Design icon. */
+const GATE_LETTER_STYLE: React.CSSProperties = {
+  background: 'linear-gradient(135deg,rgba(196,131,42,0.35),rgba(139,69,19,0.25))',
+  border: '1px solid rgba(196,131,42,0.45)',
+  color: '#C4832A',
+};
 
 /** Build 3 suggestion labels; Shuffle draws from an expanded pool. */
 export function buildNameSuggestions(theme?: string | null): string[] {
@@ -124,7 +123,7 @@ export function resolveTempPhotoSrc(url?: string | null): string | undefined {
 /**
  * Gate before entering a group video room.
  * Clear choice: keep real profile, OR use a temporary name (photo optional).
- * Missing temp photo → letter avatar from the temp name — never blocks join.
+ * Missing temp photo → ONE Brand placeholder face — never blocks join.
  * Layout: mobile bottom sheet; ≥1280px two-column centred dialog (1a).
  */
 export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
@@ -236,8 +235,8 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
   const showChips = loaded && !hadSavedIdentity;
   const subtitleActive =
     typeof activeCount === 'number' && activeCount > 0
-      ? `Video group · ${activeCount} active`
-      : 'Video group';
+      ? `Group room · ${activeCount} active`
+      : 'Group room';
 
   const houseRuleLines = useMemo(() => {
     if (roomRules?.trim()) {
@@ -364,7 +363,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
         </span>
       );
     }
-    if (photoPreview || photoUrl) {
+    if (photoPreview || (photoUrl && !isPlaceholderAvatarUrl(photoUrl))) {
       return (
         <img
           src={photoPreview || resolveTempPhotoSrc(photoUrl)}
@@ -374,10 +373,12 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
         />
       );
     }
-    if (trimmed) {
-      return <span className="text-2xl font-bold text-[#C4832A]">{roomLetterAvatar(trimmed)}</span>;
-    }
-    return <span className="text-2xl font-semibold text-[#A89070]">?</span>;
+    // No temp photo → ONE Brand placeholder (never letter / "?" avatar).
+    return (
+      <span className="block h-full w-full" data-testid="room-temp-photo-brand-face">
+        <FadedBrandFace variant="profile" label={trimmed || 'MenRush'} />
+      </span>
+    );
   };
 
   const anonymityLine = (
@@ -406,11 +407,7 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
           }}
           aria-hidden
         >
-          {resolvedProfilePhoto ? (
-            <img src={resolvedProfilePhoto} alt="" className="h-full w-full object-cover" />
-          ) : (
-            roomLetterAvatar(resolvedProfileName)
-          )}
+          <BrandAvatar photoUrl={resolvedProfilePhoto} name={resolvedProfileName} />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-[14px] font-bold text-[var(--cream)]">{profileCtaLabel}</span>
@@ -463,17 +460,13 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
 
   const headerBlock = (
     <div className="relative flex items-start gap-3">
-      <div
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold"
-        style={{
-          background: 'linear-gradient(135deg,rgba(196,131,42,0.35),rgba(139,69,19,0.25))',
-          border: '1px solid rgba(196,131,42,0.45)',
-          color: '#C4832A',
-        }}
-        aria-hidden
-      >
-        {roomInitials(roomName)}
-      </div>
+      <RoomAvatar
+        name={roomName}
+        className="h-12 w-12 rounded-full"
+        iconClassName="h-6 w-6"
+        letterClassName="text-sm font-bold"
+        letterStyle={GATE_LETTER_STYLE}
+      />
       <div className="min-w-0 flex-1 pr-2">
         <p className="truncate text-[15px] font-bold leading-tight text-[var(--cream)]">{roomName}</p>
         <p className="mt-0.5 text-[12px] text-[#A89070]">{subtitleActive}</p>
@@ -804,16 +797,13 @@ export const RoomTempIdentityGate: React.FC<RoomTempIdentityGateProps> = ({
     >
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
-          <div
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold"
-            style={{
-              background: 'linear-gradient(135deg,rgba(196,131,42,0.35),rgba(139,69,19,0.25))',
-              border: '1px solid rgba(196,131,42,0.45)',
-              color: '#C4832A',
-            }}
-          >
-            {roomInitials(roomName)}
-          </div>
+          <RoomAvatar
+            name={roomName}
+            className="h-14 w-14 rounded-full"
+            iconClassName="h-7 w-7"
+            letterClassName="text-sm font-bold"
+            letterStyle={GATE_LETTER_STYLE}
+          />
           <div className="min-w-0">
             <p className="truncate text-[17px] font-bold text-[var(--cream)]">{roomName}</p>
             <p className="text-[12px] text-[#A89070]">{subtitleActive}</p>

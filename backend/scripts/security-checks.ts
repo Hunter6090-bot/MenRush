@@ -216,8 +216,17 @@ test('source guards preserve location, push, socket, and media privacy boundarie
   const albums = fs.readFileSync(path.join(root, 'src/routes/albums.ts'), 'utf8');
   for (const route of ['rooms', 'events', 'pulse', 'profile-meta']) {
     const source = fs.readFileSync(path.join(root, `src/routes/${route}.ts`), 'utf8');
-    assert.match(source, /router\.use\(authMiddleware,\s*verifiedMiddleware\)/);
+    // Router-level auth and verification. A router-level privateNoStore may sit ahead of auth on
+    // purpose (#348) so 401 responses carry Cache-Control: private, no-store as well.
+    assert.match(
+      source,
+      /router\.use\((?:privateNoStore,\s*)?authMiddleware,\s*verifiedMiddleware\)/,
+      `${route}: router.use must apply authMiddleware then verifiedMiddleware (optionally after privateNoStore)`,
+    );
   }
+  // Events: keep no-store at router level ahead of auth, so nearby, check-in and their 401s are never cached.
+  const events = fs.readFileSync(path.join(root, 'src/routes/events.ts'), 'utf8');
+  assert.match(events, /router\.use\(privateNoStore,\s*authMiddleware,\s*verifiedMiddleware\)/);
 
   assert.equal(server.includes("app.use('/uploads', express.static"), false);
   assert.equal(server.includes('ST_DWithin(p.location::geography'), false);

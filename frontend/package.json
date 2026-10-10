@@ -11,7 +11,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:unit": "node --experimental-strip-types --test src/lib/notificationToasts.test.ts src/lib/profileLinks.test.ts src/lib/profileTileGrid.test.ts src/lib/nearbyGridFirst.test.ts src/lib/notifications.destination.test.ts src/lib/receiptTicks.test.ts",
+    "test:edge-proxy-secret": "vitest run src/lib/edgeProxySecret.test.ts",
+    "test:middleware-artifact": "node scripts/check-middleware-artifact.mjs",
+    "test:unit": "node --experimental-strip-types --test src/lib/notificationToasts.test.ts src/lib/profileLinks.test.ts src/lib/profileTileGrid.test.ts src/lib/nearbyGridFirst.test.ts src/lib/notifications.destination.test.ts src/lib/receiptTicks.test.ts src/lib/mentions.test.ts src/lib/mentionsAutocomplete.test.ts src/lib/communityExpiry.test.ts src/lib/mentionsCrud.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:install": "playwright install chromium",
@@ -22,8 +24,9 @@
     "@statsig/js-client": "^3.33.2",
     "@tanstack/react-query": "^4.44.0",
     "@types/mapbox-gl": "^3.4.1",
+    "@vercel/functions": "^3.9.11",
     "@veriff/incontext-sdk": "^2.5.0",
-    "axios": "^1.18.0",
+    "axios": "^1.20.0",
     "heic2any": "^0.0.4",
     "leaflet": "^1.9.3",
     "mapbox-gl": "^3.20.0",
@@ -34,7 +37,7 @@
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.18.3",
     "socket.io-client": "^4.5.4",
-    "source-map-js": "^1.2.1",
+    "source-map-js": "^1.2.2",
     "zustand": "^4.3.7"
   },
   "devDependencies": {
@@ -53,6 +56,9 @@
     "tailwindcss": "^3.3.0",
     "typescript": "^5.0.2",
     "vite": "^7.3.6",
-    "vitest": "^4.1.10"
+    "vitest": "^5.0.2"
+  },
+  "overrides": {
+    "postcss-selector-parser": "7.1.6"
   }
 }

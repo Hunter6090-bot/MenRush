@@ -31,7 +31,7 @@ export function CruisingSearchBar({ onOpen, className = '' }: CruisingSearchBarP
       <span className="text-[12px] font-bold tracking-wide text-[var(--cream-soft)] group-hover:text-[var(--cream)]">
         Search cruising spots…
       </span>
-      <span className="ml-1 rounded bg-[#C4832A]/20 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-[#E0A14A]">
+      <span className="ml-1 rounded bg-[#C4832A]/20 px-1.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wider text-[#E0A14A]">
         Outdoor
       </span>
     </button>

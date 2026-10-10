@@ -22,6 +22,11 @@ assert.match(service, /listComments/);
 assert.match(service, /createComment/);
 assert.match(service, /comment_count/);
 assert.match(service, /trimmed\.length > 280/);
+assert.match(
+  service,
+  /cp\.created_at\s*>\s*NOW\(\)\s*-\s*INTERVAL\s*'24 hours'/,
+  'listNearby and assertPostVisible must filter posts to 24 hours',
+);
 
 const routes = readFileSync(join(root, 'src/routes/community.ts'), 'utf8');
 assert.match(routes, /\/posts\/:id\/comments/);

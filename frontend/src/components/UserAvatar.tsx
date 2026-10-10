@@ -9,6 +9,7 @@ import { FadedBrandFace } from './FadedBrandFace';
 import { isPlaceholderAvatar } from '../lib/profileMedia';
 import { profilePathForUser } from '../lib/profileLinks';
 import { useAuthStore } from '../hooks/store';
+import { realAvatarUrl } from '../lib/avatarFallback';
 
 type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
@@ -48,8 +49,13 @@ export type ResolvingPhotoOptions = {
 };
 
 /**
- * Walk upload URL candidates (API host ↔ same-origin rewrite) before the current no-photo fallback.
+ * Walk upload URL candidates (API host ↔ same-origin rewrite) before giving up.
  * Keeps real /uploads photos visible when Vercel rewrite and VITE_API_URL disagree.
+ *
+ * Empty / legacy default (generic `/avatars/*`, logo plates) → `src` undefined.
+ * Every candidate failed → `src` undefined. Callers then render the ONE Brand
+ * placeholder (`FadedBrandFace`). No generic SVG / initials fallback (Pete lock).
+ * Media lock: the stored photo path is never rewritten — this is display-only.
  */
 export function useResolvingPhotoSrc(
   photoUrl?: string | null,
@@ -57,29 +63,33 @@ export function useResolvingPhotoSrc(
   options?: ResolvingPhotoOptions,
 ): { src: string | undefined; onError: () => void } {
   const [candidateIdx, setCandidateIdx] = useState(0);
-  const [phase, setPhase] = useState<'candidates' | 'empty'>('candidates');
+  const [failed, setFailed] = useState(false);
   const displayWidth = options?.displayWidth;
+  const realUrl = realAvatarUrl(photoUrl);
 
   const candidates =
-    displayWidth != null
-      ? resolveDisplayThumbCandidates(photoUrl, displayWidth)
-      : resolveUploadUrlCandidates(photoUrl);
+    realUrl == null
+      ? []
+      : displayWidth != null
+        ? resolveDisplayThumbCandidates(realUrl, displayWidth)
+        : resolveUploadUrlCandidates(realUrl);
 
   useEffect(() => {
     setCandidateIdx(0);
-    setPhase('candidates');
-  }, [photoUrl, displayWidth]);
+    setFailed(false);
+  }, [realUrl, displayWidth]);
 
   let src: string | undefined;
-  if (phase === 'empty' || isPlaceholderAvatar(photoUrl)) src = undefined;
-  else src = candidates[candidateIdx] ?? resolveAssetUrl(photoUrl);
+  if (failed || realUrl == null) src = undefined;
+  else src = candidates[candidateIdx] ?? resolveAssetUrl(realUrl);
 
   const onError = () => {
-    if (phase === 'candidates' && candidateIdx + 1 < candidates.length) {
+    if (candidateIdx + 1 < candidates.length) {
       setCandidateIdx((i) => i + 1);
       return;
     }
-    setPhase('empty');
+    // Broken /uploads (volume wipe, 404) → Brand placeholder, never a legacy default.
+    setFailed(true);
   };
 
   return { src, onError };
@@ -126,7 +136,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
             loading="lazy"
           />
         ) : (
-          <FadedBrandFace variant="profile" label={name} />
+          <FadedBrandFace variant="profile" label={name || 'MenRush'} />
         )}
       </div>
       {showStatus && online !== undefined && (

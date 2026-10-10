@@ -6,9 +6,12 @@ const BODY_SLIM = new Set(['Slim', 'Athletic', 'Smooth']);
 const BODY_STOCKY = new Set(['Chubby', 'Hairy', 'Stocky']);
 
 /**
- * Small preset pool — users with similar age, tribe & body tags share the same avatar.
- * Artwork lives at these stable paths; swap SVG files to restyle.
- * Do NOT migrate users.photo_url when redesigning — custom uploads must never be overwritten.
+ * Legacy "shared avatar" marker paths — still stored on profiles that chose a shared
+ * avatar (Discover/setup gates read them as "avatar chosen").
+ * Pete lock 6 Oct 2026: they are NEVER painted as the old silhouette. UI treats them as
+ * placeholders (`lib/avatarFallback`) → ONE Brand faded cutout, and the SVG files
+ * themselves now paint that same cutout as a last-resort safety net.
+ * Do NOT migrate users.photo_url — custom uploads must never be overwritten (media lock).
  */
 export const GENERIC_AVATAR_VARIANTS = [
   '/avatars/generic/01.svg',

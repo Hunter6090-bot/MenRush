@@ -10,9 +10,12 @@ export function formatLocationPayload(lat: number, lng: number): string {
 export function parseLocationPayload(
   mediaType: string | null | undefined,
   message: string | null | undefined,
+  withdrawnAt?: string | null,
 ): SharedLocation | null {
+  if (withdrawnAt) return null;
   if (mediaType !== 'location') return null;
   if (message == null || typeof message !== 'string') return null;
+  if (/withdrawn/i.test(message)) return null;
   try {
     const data = JSON.parse(message) as { lat?: unknown; lng?: unknown };
     if (typeof data.lat !== 'number' || typeof data.lng !== 'number') return null;

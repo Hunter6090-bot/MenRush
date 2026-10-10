@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { RoomGalleryGrid } from './RoomGalleryGrid';
+import {
+  galleryGridClass,
+  galleryTileIsSolo,
+  galleryTilesFillStage,
+  RoomGalleryGrid,
+  SOLO_TILE_CLASS,
+} from './RoomGalleryGrid';
 import type { RoomParticipant } from '../hooks/useRoomVideo';
 
 vi.mock('../lib/callMedia', () => ({
@@ -12,12 +18,58 @@ vi.mock('../lib/callMedia', () => ({
   videoElementHasFrames: vi.fn(() => false),
 }));
 
+describe('galleryGridClass', () => {
+  it('centres one person in a single column without filling the stage', () => {
+    expect(galleryGridClass(1)).toContain('grid-cols-1');
+    expect(galleryGridClass(1)).toContain('place-items-center');
+    expect(galleryTilesFillStage(1)).toBe(false);
+    expect(galleryTileIsSolo(1)).toBe(true);
+    expect(galleryTileIsSolo(2)).toBe(false);
+  });
+
+  it('keeps two-to-four people on a large grid, not six tiny columns', () => {
+    expect(galleryGridClass(2)).toContain('sm:grid-cols-2');
+    expect(galleryGridClass(4)).toContain('grid-cols-2');
+    expect(galleryGridClass(4)).not.toContain('xl:grid-cols-6');
+    expect(galleryTilesFillStage(2)).toBe(true);
+    expect(galleryTilesFillStage(4)).toBe(true);
+  });
+
+  it('caps dense rooms at four columns', () => {
+    expect(galleryGridClass(12)).toContain('lg:grid-cols-4');
+    expect(galleryGridClass(12)).not.toContain('xl:grid-cols-6');
+    expect(galleryTilesFillStage(12)).toBe(false);
+  });
+});
+
 describe('RoomGalleryGrid', () => {
   const participants: RoomParticipant[] = [
     { user_id: 'user-1', name: 'Alex', photo_url: null, isLive: true, isSelf: true },
     { user_id: 'user-2', name: 'Brett', photo_url: '/brett.jpg', isLive: true, isSelf: false },
     { user_id: 'user-3', name: 'Chris', photo_url: null, isLive: false, isSelf: false },
   ];
+
+  it('renders a solo live tile large but not full-stage', () => {
+    render(
+      <RoomGalleryGrid
+        participants={[participants[0]]}
+        pinnedId={null}
+        onPin={() => {}}
+        getStreamFor={() => null}
+        photoUrl={(url) => url || undefined}
+        cameraOnForSelf={false}
+      />,
+    );
+
+    const grid = screen.getByTestId('room-gallery-grid');
+    expect(grid.getAttribute('data-tile-count')).toBe('1');
+    expect(grid.className).toContain('grid-cols-1');
+    const tile = screen.getByTestId('room-gallery-tile');
+    expect(tile.className).toContain(SOLO_TILE_CLASS);
+    expect(tile.classList.contains('h-full')).toBe(false);
+    expect(tile.classList.contains('w-full')).toBe(false);
+    expect(screen.getByText('Alex')).toBeTruthy();
+  });
 
   it('renders all participants in grid when nobody is pinned', () => {
     const onPin = vi.fn();
@@ -36,13 +88,14 @@ describe('RoomGalleryGrid', () => {
     expect(screen.getByText('Brett')).toBeTruthy();
     expect(screen.getByText('Chris')).toBeTruthy();
     expect(screen.queryByTestId('room-spotlight-container')).toBeNull();
+    expect(screen.getByTestId('room-gallery-grid').className).toContain('grid-cols-2');
+    expect(screen.getByTestId('room-gallery-grid').className).not.toContain('xl:grid-cols-6');
 
-    // Clicking a tile invokes onPin with their user_id
     fireEvent.click(screen.getByText('Brett'));
     expect(onPin).toHaveBeenCalledWith('user-2');
   });
 
-  it('renders spotlight container with w-full and proper sizing when pinnedId is set', () => {
+  it('renders a large spotlight container when pinnedId is set', () => {
     const onPin = vi.fn();
     render(
       <RoomGalleryGrid
@@ -58,19 +111,16 @@ describe('RoomGalleryGrid', () => {
     const spotlight = screen.getByTestId('room-spotlight-container');
     expect(spotlight).toBeTruthy();
     expect(spotlight.className).toContain('w-full');
-    expect(spotlight.className).toContain('shrink-0');
+    expect(spotlight.className).toContain('flex-[3]');
 
-    // Inner wrapper has max-w and aspect/max-h constraints
     const innerWrapper = spotlight.firstElementChild as HTMLElement;
     expect(innerWrapper.className).toContain('w-full');
-    expect(innerWrapper.className).toContain('max-w-2xl');
-    expect(innerWrapper.className).toContain('max-h-[46vh]');
+    expect(innerWrapper.className).toContain('max-w-5xl');
+    expect(innerWrapper.className).toContain('h-full');
 
-    // Pinned tile shows "Focused" and "Unpin" affordances
     expect(screen.getByText('Focused')).toBeTruthy();
     expect(screen.getByText('Unpin')).toBeTruthy();
 
-    // Clicking the spotlight tile unfocuses
     fireEvent.click(spotlight.querySelector('button')!);
     expect(onPin).toHaveBeenCalledWith(null);
   });
@@ -86,6 +136,6 @@ describe('RoomGalleryGrid', () => {
       />,
     );
 
-    expect(screen.getByText('Waiting for people to join')).toBeTruthy();
+    expect(screen.getByText('Waiting for people')).toBeTruthy();
   });
 });

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { usersAPI } from '../api/client';
+import { locationPrivacyAPI, usersAPI } from '../api/client';
 
 const REPORT_REASONS = [
   { value: 'harassment', label: 'Harassment or abuse' },
@@ -17,11 +17,26 @@ type ReportReason = (typeof REPORT_REASONS)[number]['value'];
 interface ChatSafetyMenuProps {
   peerId: string;
   peerName: string;
+  /** Conversation or room thread id for SENTINEL — internal only, never shown to Al. */
+  threadId?: string;
   onNotice?: (message: string, tone?: 'success' | 'error') => void;
   onBlocked?: () => void;
+  /** Profile surfaces only: adds "Hide my location" / "Show my location". */
+  showHideLocation?: boolean;
 }
 
-export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSafetyMenuProps) {
+function errorStatus(err: unknown): number | undefined {
+  return (err as { response?: { status?: number } })?.response?.status;
+}
+
+export function ChatSafetyMenu({
+  peerId,
+  peerName,
+  threadId,
+  onNotice,
+  onBlocked,
+  showHideLocation = false,
+}: ChatSafetyMenuProps) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [blockOpen, setBlockOpen] = useState(false);
@@ -29,6 +44,8 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
   const [reportReason, setReportReason] = useState<ReportReason>('harassment');
   const [reportDetails, setReportDetails] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  /** null = not loaded yet (menu item still works: hiding is idempotent). */
+  const [locationHidden, setLocationHidden] = useState<boolean | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -41,7 +58,7 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
   const updateMenuPosition = useCallback(() => {
     if (!buttonRef.current) return;
     const rect = buttonRef.current.getBoundingClientRect();
-    const menuHeight = 148;
+    const menuHeight = showHideLocation ? 192 : 148;
     const menuWidth = 208;
     const spaceBelow = window.innerHeight - rect.bottom;
     const openUpwards = spaceBelow < menuHeight + 16 && rect.top > menuHeight + 16;
@@ -57,7 +74,7 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
       bottom: openUpwards ? Math.round(window.innerHeight - rect.top + 8) : undefined,
       right: Math.round(right),
     });
-  }, []);
+  }, [showHideLocation]);
 
   const handleToggle = () => {
     if (!menuOpen) {
@@ -73,6 +90,21 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
       updateMenuPosition();
     }
   }, [menuOpen, updateMenuPosition]);
+
+  useEffect(() => {
+    if (!menuOpen || !showHideLocation) return;
+    let cancelled = false;
+    locationPrivacyAPI
+      .listHidden()
+      .then((res) => {
+        if (cancelled) return;
+        setLocationHidden((res.data?.hidden ?? []).some((p) => p.id === peerId));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [menuOpen, showHideLocation, peerId]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -126,10 +158,31 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
     }
   };
 
+  const handleToggleLocation = async () => {
+    setMenuOpen(false);
+    const hide = locationHidden !== true;
+    try {
+      if (hide) {
+        await locationPrivacyAPI.hide(peerId);
+        onNotice?.(`${peerName} won't see you nearby or on the map.`, 'success');
+      } else {
+        await locationPrivacyAPI.unhide(peerId);
+        onNotice?.(`${peerName} can see you nearby again.`, 'success');
+      }
+      setLocationHidden(hide);
+    } catch (err: unknown) {
+      if (errorStatus(err) === 402) {
+        onNotice?.('Premium hides your location.', 'error');
+        return;
+      }
+      onNotice?.('Could not save. Try again.', 'error');
+    }
+  };
+
   const handleReport = async () => {
     setSubmitting(true);
     try {
-      await usersAPI.reportUser(peerId, reportReason, reportDetails.trim() || undefined);
+      await usersAPI.reportUser(peerId, reportReason, reportDetails.trim() || undefined, threadId);
       setReportOpen(false);
       setMenuOpen(false);
       setReportDetails('');
@@ -195,6 +248,17 @@ export function ChatSafetyMenu({ peerId, peerName, onNotice, onBlocked }: ChatSa
               >
                 Block {peerName}
               </button>
+              {showHideLocation ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-testid="menu-hide-location"
+                  onClick={() => void handleToggleLocation()}
+                  className="w-full px-4 py-2.5 text-left text-[15px] text-[var(--cream)] transition-colors hover:bg-[var(--bg-card)] focus-visible:outline-none focus-visible:bg-[var(--bg-card)]"
+                >
+                  {locationHidden ? 'Show my location' : 'Hide my location'}
+                </button>
+              ) : null}
               <button
                 type="button"
                 role="menuitem"

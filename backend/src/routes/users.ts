@@ -3,7 +3,7 @@ import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
 import { z } from 'zod';
-import { userService } from '../services/user.service';
+import { ShowDistancePremiumError, userService } from '../services/user.service';
 import { profileViewsService } from '../services/profile-views.service';
 import { notificationService } from '../services/notification.service';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
@@ -175,10 +175,17 @@ router.get('/me/referrals', async (req: AuthRequest, res: Response) => {
 router.get('/search', verifiedMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const q = typeof req.query.q === 'string' ? req.query.q : '';
-    const users = await userService.searchProfiles(req.userId!, q);
+    const by = req.query.by === 'place' ? 'place' : 'name';
+    const users = await userService.searchProfiles(req.userId!, q, by);
     res.json(users);
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    const { PlaceLookupError, PLACE_LOOKUP_FAILED_MESSAGE } = await import('../lib/ukIePlace');
+    if (error instanceof PlaceLookupError || error?.name === 'PlaceLookupError') {
+      res.status(400).json({ error: PLACE_LOOKUP_FAILED_MESSAGE });
+      return;
+    }
+    // Never surface raw codes / stack internals to the client.
+    res.status(400).json({ error: 'Search failed. Please try again.' });
   }
 });
 
@@ -199,10 +206,12 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
       limit,
       offset,
       format,
+      scope,
     } = req.query;
 
+    const discoveryScope: 'radius' | 'uk_ie' = scope === 'uk_ie' ? 'uk_ie' : 'radius';
     const requestedRadius = radius ? Number.parseFloat(radius as string) : 5;
-    if (!Number.isFinite(requestedRadius)) {
+    if (discoveryScope === 'radius' && !Number.isFinite(requestedRadius)) {
       return res.status(400).json({ error: 'Invalid radius' });
     }
 
@@ -220,6 +229,7 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
       new: isNew === 'true' || isNew === '1',
       lookingFor: typeof lookingFor === 'string' ? lookingFor : undefined,
       mood: typeof mood === 'string' ? mood : undefined,
+      discoveryScope,
     };
 
     const queryLat = typeof req.query.lat === 'string' ? Number.parseFloat(req.query.lat) : NaN;
@@ -239,7 +249,7 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
 
     const result = await userService.getNearbyUsers(
       req.userId!,
-      Math.min(Math.max(requestedRadius, 0.8), 161),
+      discoveryScope === 'uk_ie' ? 0 : Math.min(Math.max(requestedRadius, 0.8), 161),
       filters,
       clientLocation,
       { page: pageNum, limit: limitNum, offset: offsetNum },
@@ -424,6 +434,9 @@ router.post('/profile', verifiedMiddleware, async (req: AuthRequest, res: Respon
     const user = await userService.updateProfile(req.userId!, data);
     res.json(user);
   } catch (error: any) {
+    if (error instanceof ShowDistancePremiumError) {
+      return res.status(402).json({ error: error.code, feature: error.feature });
+    }
     res.status(400).json({ error: error.message });
   }
 });

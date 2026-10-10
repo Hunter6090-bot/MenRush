@@ -9,6 +9,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { PulseRing } from '../components/PulseRing';
 import { MoodPicker } from '../components/MoodPicker';
 import { GhostToggle } from '../components/GhostToggle';
+import { ShowDistanceRow } from '../components/ShowDistanceRow';
 import { ProfileViewersCard, ProfileViewer } from '../components/ProfileViewersCard';
 import { normalizeProfileImageFile } from '../lib/imageUpload';
 import { CoverBanner, DEFAULT_COVER_FRAME, normalizeCoverFrame, type CoverFrame } from '../components/CoverBanner';
@@ -19,6 +20,8 @@ import { VerifiedBadge } from '../components/VerifiedBadge';
 import { QRCodeSVG } from 'qrcode.react';
 import { profileUrl as buildProfileUrl } from '../lib/profileLinks';
 import { getPhotoUrl } from '../components/UserAvatar';
+import { BrandAvatar } from '../components/BrandAvatar';
+import { isPlaceholderAvatarUrl, realAvatarUrl } from '../lib/avatarFallback';
 
 import {
   PROFILE_TAG_GROUPS,
@@ -118,6 +121,7 @@ interface ProfileData {
   show_height?: boolean;
   show_weight?: boolean;
   show_relationship?: boolean;
+  show_distance?: boolean;
   bio?: string;
   headline?: string;
   looking_for?: string;
@@ -165,6 +169,7 @@ export const Profile = () => {
   const [showHeight, setShowHeight] = useState(true);
   const [showWeight, setShowWeight] = useState(true);
   const [showRelationship, setShowRelationship] = useState(true);
+  const [showDistance, setShowDistance] = useState(true);
   const [bio, setBio] = useState('');
   const [headline, setHeadline] = useState('');
   const [lookingFor, setLookingFor] = useState('');
@@ -217,6 +222,7 @@ export const Profile = () => {
         setShowHeight(d.show_height !== false);
         setShowWeight(d.show_weight !== false);
         setShowRelationship(d.show_relationship !== false);
+        setShowDistance(d.show_distance !== false);
         setBio(d.bio ?? '');
         setHeadline(d.headline ?? '');
         setLookingFor(d.looking_for ?? '');
@@ -537,6 +543,7 @@ export const Profile = () => {
         show_height: showHeight,
         show_weight: showWeight,
         show_relationship: showRelationship,
+        show_distance: showDistance,
       });
       setProfile((p) => (p ? { ...p, ...res.data } : p));
       if (user && token) {
@@ -564,9 +571,14 @@ export const Profile = () => {
       }
       showToast('success', 'Profile saved');
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to save. Please try again.';
+      const data = (err as { response?: { data?: { error?: string; feature?: string } } })?.response
+        ?.data;
+      if (data?.error === 'premium_required' && data.feature === 'show_distance') {
+        setShowDistance(true);
+        showToast('error', 'Premium hides distance.');
+        return;
+      }
+      const msg = data?.error || 'Failed to save. Please try again.';
       showToast('error', msg);
     } finally {
       setSaving(false);
@@ -820,11 +832,13 @@ export const Profile = () => {
           <div className="grid grid-cols-[280px_1fr] gap-8">
             <div className="space-y-3">
               <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]">
-                {getPhotoUrl(photoUrl) && !isNearbyPlaceholderFace(photoUrl) ? (
-                  <img
-                    src={getPhotoUrl(photoUrl)!}
+                {!isNearbyPlaceholderFace(photoUrl) ? (
+                  <BrandAvatar
+                    photoUrl={photoUrl}
+                    name={profile.name}
                     alt={profile.name}
-                    className="h-full w-full object-cover"
+                    variant="tile"
+                    imgClassName="h-full w-full object-cover"
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center">
@@ -846,14 +860,15 @@ export const Profile = () => {
                 </button>
               </div>
               <div className="grid grid-cols-3 gap-2">
-                {[photoUrl, coverUrl].filter(Boolean).slice(0, 3).map((src, i) => (
+                {[photoUrl, coverUrl]
+                  .filter((u): u is string => !isPlaceholderAvatarUrl(u))
+                  .slice(0, 3)
+                  .map((src, i) => (
                   <div
                     key={`${src}-${i}`}
                     className="aspect-square overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]"
                   >
-                    {getPhotoUrl(src) ? (
-                      <img src={getPhotoUrl(src)!} alt="" className="h-full w-full object-cover" />
-                    ) : null}
+                    <BrandAvatar photoUrl={src} variant="tile" />
                   </div>
                 ))}
                 <button
@@ -1116,9 +1131,9 @@ export const Profile = () => {
                   className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C4832A]/50 disabled:opacity-60"
                   data-testid="map-photo-picker"
                 >
-                  {getPhotoUrl(mapPhotoUrl) ? (
+                  {realAvatarUrl(mapPhotoUrl) ? (
                     <img
-                      src={getPhotoUrl(mapPhotoUrl)!}
+                      src={getPhotoUrl(realAvatarUrl(mapPhotoUrl)!)!}
                       alt=""
                       className="h-full w-full object-cover"
                     />
@@ -1303,6 +1318,14 @@ export const Profile = () => {
                   testId="profile-show-age"
                 />
               </div>
+
+              <ShowDistanceRow
+                checked={showDistance}
+                onChange={setShowDistance}
+                entitled={Boolean(
+                  authIsPremium || profile?.is_premium || profile?.beta_premium_included,
+                )}
+              />
 
               <div
                 id={PROFILE_ESSENTIAL_SECTION_IDS.height}
@@ -1714,6 +1737,26 @@ export const Profile = () => {
               </p>
               <p className="text-xs mt-1" style={{ color: 'var(--cream-muted)' }}>
                 You decide who sees what. Public, view once, or private.
+              </p>
+            </div>
+            <span className="text-[var(--copper)] text-lg" aria-hidden>›</span>
+          </div>
+        </Link>
+
+        {/* ── Hide my location from ── */}
+        <Link
+          to="/settings#hide-location"
+          className="block rounded-2xl p-5 shadow-card border transition-colors hover:border-[var(--copper)]"
+          style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-default)' }}
+          data-testid="profile-hide-location-link"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-base font-semibold" style={{ color: 'var(--cream)' }}>
+                Hide my location
+              </p>
+              <p className="text-[15px] mt-1" style={{ color: 'var(--cream-muted)' }}>
+                Pick who won't see you nearby.
               </p>
             </div>
             <span className="text-[var(--copper)] text-lg" aria-hidden>›</span>

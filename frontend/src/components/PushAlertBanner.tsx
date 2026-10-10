@@ -77,19 +77,19 @@ export function PushAlertBanner() {
       data-testid="push-alert-banner"
       role="status"
     >
-      <p className="text-sm font-semibold text-[var(--cream)]">
-        {iosInstall ? 'Add MenRush to your Home Screen' : 'Turn on message & call alerts'}
+      <p className="text-base font-semibold text-[var(--cream)]">
+        {iosInstall ? 'Add MenRush to Home Screen' : 'Turn on alerts'}
       </p>
-      <p className="mt-0.5 text-xs leading-relaxed text-[var(--cream-muted)]">
-        {iosInstall
-          ? 'On iPhone: Share → Add to Home Screen, open MenRush from the icon, then allow notifications. That’s how messages and calls ring when the app is closed.'
-          : 'Allow notifications so a message or incoming call still rings when MenRush is closed or in the background.'}
-      </p>
+      {iosInstall ? (
+        <p className="mt-0.5 text-sm leading-snug text-[var(--cream-muted)]">
+          Share → Add to Home Screen. Open it, then allow alerts.
+        </p>
+      ) : null}
       <div className="mt-2 flex items-center justify-end gap-2">
         <button
           type="button"
           onClick={dismiss}
-          className="rounded-xl px-3 py-1.5 text-xs font-semibold text-[var(--cream-muted)]"
+          className="rounded-xl px-3 py-1.5 text-sm font-semibold text-[var(--cream-muted)]"
         >
           Later
         </button>
@@ -99,7 +99,7 @@ export function PushAlertBanner() {
             onClick={() => void enable()}
             disabled={busy}
             data-testid="push-alert-banner-enable"
-            className="rounded-xl bg-[#C4832A] px-3 py-1.5 text-xs font-bold text-[#0D0A06] disabled:opacity-50"
+            className="rounded-xl bg-[#C4832A] px-3 py-1.5 text-sm font-bold text-[#0D0A06] disabled:opacity-50"
           >
             Turn on
           </button>

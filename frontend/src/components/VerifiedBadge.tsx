@@ -13,13 +13,12 @@ interface VerifiedBadgeProps {
 
 /**
  * Display only for an approved Veriff identity check.
- * Tick treatment only (no “Verified” word chip) — same face as Discovery/Nearby.
+ * Tick only — no circular badge/ring around the mark (Pete lock).
  */
 export function VerifiedBadge({ size = 'sm', className = '' }: VerifiedBadgeProps) {
   const [open, setOpen] = useState(false);
   const descriptionId = useId();
-  const box = size === 'lg' ? 'h-8 w-8' : 'h-7 w-7';
-  const icon = size === 'lg' ? 16 : 14;
+  const icon = size === 'lg' ? 22 : 18;
   return (
     <span className={`inline-flex shrink-0 ${className}`}>
       <button
@@ -27,10 +26,11 @@ export function VerifiedBadge({ size = 'sm', className = '' }: VerifiedBadgeProp
         aria-label="Verified. Optional ID checked through Veriff. Not the signup age gate."
         aria-expanded={open}
         aria-controls={descriptionId}
+        data-testid="verified-tick"
         onClick={(event) => { event.stopPropagation(); setOpen(!open); }}
         onKeyDown={(event) => { event.stopPropagation(); if (event.key === 'Escape') setOpen(false); }}
         onBlur={() => setOpen(false)}
-        className={`inline-flex ${box} items-center justify-center rounded-full border-2 border-[#FFF6E6] bg-[#C4832A] text-[#1A0E03] shadow-md font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--copper)]`}
+        className="inline-flex items-center justify-center bg-transparent p-0 text-[#E0A14A] drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--copper)]"
       >
         <svg width={icon} height={icon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>
       </button>

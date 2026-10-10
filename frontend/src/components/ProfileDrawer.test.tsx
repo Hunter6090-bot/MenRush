@@ -98,6 +98,17 @@ describe('ProfileDrawer grid sheet layout', () => {
     expect(photoBand!.textContent).toMatch(/28 mi/);
   });
 
+  it('shows distance once: the pill in the photo band, no "away" line', () => {
+    renderDrawer();
+    expect(screen.getAllByText(/28 mi/i)).toHaveLength(1);
+    expect(screen.queryByText(/away/i)).not.toBeInTheDocument();
+    const photoBand = screen
+      .getByTestId('profile-sheet-hero')
+      .querySelector('[class*="overflow-hidden"]');
+    expect(photoBand!.textContent).toMatch(/28 mi/);
+    expect(screen.getByText(/^offline$/i)).toBeInTheDocument();
+  });
+
   it('shows muted Sent when one-way pending', () => {
     render(
       <MemoryRouter>
@@ -192,6 +203,26 @@ describe('ProfileDrawer grid sheet layout', () => {
       </MemoryRouter>,
     );
     expect(screen.queryByText(/away/i)).not.toBeInTheDocument();
+  });
+
+  it('shows Nearby once (pill only) when the member hides distance', () => {
+    const hidden: NearbyUser = { ...graham };
+    delete (hidden as Partial<NearbyUser>).distance_km;
+    delete (hidden as Partial<NearbyUser>).distance_label;
+    render(
+      <MemoryRouter>
+        <ProfileDrawer
+          user={hidden}
+          liked={false}
+          onClose={vi.fn()}
+          onLike={vi.fn()}
+          onMessage={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getAllByText('Nearby')).toHaveLength(1);
+    expect(screen.queryByText(/away/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\d+ mi\b/)).not.toBeInTheDocument();
   });
 
   it('exposes enlarge hooks on cover and avatar when photos exist', () => {

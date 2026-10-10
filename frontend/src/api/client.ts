@@ -238,6 +238,7 @@ export const usersAPI = {
       page?: number;
       limit?: number;
       offset?: number;
+      scope?: 'uk_ie';
     }
   ) =>
     apiClient.get<NearbyRosterResponse | any[]>('/users/nearby', {
@@ -257,6 +258,7 @@ export const usersAPI = {
         page: filters?.page,
         limit: filters?.limit,
         offset: filters?.offset,
+        scope: filters?.scope,
       },
     }),
   getProfile: (id: string, coords?: { lat?: number | null; lng?: number | null }) =>
@@ -266,10 +268,10 @@ export const usersAPI = {
           ? { lat: coords.lat, lng: coords.lng }
           : undefined,
     }),
-  searchProfiles: (q: string) =>
+  searchProfiles: (q: string, by: 'name' | 'place' = 'name') =>
     apiClient.get<Array<{ id: string; name: string; age?: number; photo_url?: string; bio?: string; headline?: string }>>(
       '/users/search',
-      { params: { q } },
+      { params: { q, by } },
     ),
   updateLocation: (lat: number, lng: number) =>
     apiClient.post('/users/location', { lat, lng }),
@@ -297,6 +299,8 @@ export const usersAPI = {
     show_height?: boolean;
     show_weight?: boolean;
     show_relationship?: boolean;
+    /** Off = no distance shown to others ("Nearby"). Turning off is Premium (402). */
+    show_distance?: boolean;
   }) =>
     apiClient.post('/users/profile', data),
   uploadPhoto: (file: File) => {
@@ -567,20 +571,8 @@ export const messagesAPI = {
     apiClient.post<MessageDTO>(`/messages/${messageId}/view`),
   withdrawMedia: (messageId: string) =>
     apiClient.post<MessageDTO>(`/messages/${messageId}/withdraw`),
-};
-
-export interface MeetAgreementState {
-  my_confirmed: boolean;
-  peer_confirmed: boolean;
-  mutual: boolean;
-  my_confirmed_at: string | null;
-  peer_confirmed_at: string | null;
-}
-
-export const meetAPI = {
-  getState: (peerId: string) => apiClient.get<MeetAgreementState>(`/meet/${peerId}`),
-  confirm: (peerId: string) => apiClient.post<MeetAgreementState>(`/meet/${peerId}/confirm`),
-  revoke: (peerId: string) => apiClient.post<MeetAgreementState>(`/meet/${peerId}/revoke`),
+  withdrawLocation: (messageId: string) =>
+    apiClient.post<MessageDTO>(`/messages/${messageId}/withdraw`),
 };
 
 export const roomsAPI = {
@@ -881,8 +873,10 @@ export interface HotSpotDTO {
   category_name: string;
   category_icon: string;
   distance_km: number | null;
+  /** Display count from the server: exact for Premium; 0 to 4 exact, then '5+', for Free. */
   live_count: number | string;
-  live_count_exact: number;
+  /** Exact count, Premium only. Null for Free. Never render this; use live_count. */
+  live_count_exact: number | null;
   is_checked_in: boolean;
   my_checkin_anonymous: boolean | null;
   /** Short-lived check-in window in hours (product default: 4). */
@@ -1180,8 +1174,10 @@ export interface CommunityPostDTO {
   created_at: string;
   author_name: string;
   author_photo_url: string | null;
-  distance_km: string;
-  distance_label: string;
+  /** Coarse bucket (sorting). Absent when the author hides distance. */
+  distance_km?: string;
+  /** "<1 mi" or whole miles, to the author's fuzzed pin. Absent with distance_km. */
+  distance_label?: string;
   comment_count?: number;
 }
 
@@ -1195,6 +1191,17 @@ export interface CommunityCommentDTO {
   author_photo_url: string | null;
 }
 
+export interface CommunityMentionSuggestionDTO {
+  id: string;
+  type: 'hot_spot' | 'match';
+  name: string;
+  subtitle?: string | null;
+  photo_url?: string | null;
+  icon?: string | null;
+  category_name?: string | null;
+  category_slug?: string | null;
+}
+
 export const communityAPI = {
   listPosts: (lat: number, lng: number, radiusKm?: number) =>
     apiClient.get<{ posts: CommunityPostDTO[] }>('/community/posts', {
@@ -1202,12 +1209,30 @@ export const communityAPI = {
     }),
   createPost: (body: string) =>
     apiClient.post<{ post: CommunityPostDTO }>('/community/posts', { body }),
+  updatePost: (postId: string, body: string) =>
+    apiClient.put<{ post: CommunityPostDTO }>(`/community/posts/${postId}`, { body }),
+  deletePost: (postId: string) =>
+    apiClient.delete<{ ok: boolean }>(`/community/posts/${postId}`),
   listComments: (postId: string) =>
     apiClient.get<{ comments: CommunityCommentDTO[] }>(`/community/posts/${postId}/comments`),
   createComment: (postId: string, body: string) =>
     apiClient.post<{ comment: CommunityCommentDTO }>(`/community/posts/${postId}/comments`, {
       body,
     }),
+  updateComment: (postId: string, commentId: string, body: string) =>
+    apiClient.put<{ comment: CommunityCommentDTO }>(
+      `/community/posts/${postId}/comments/${commentId}`,
+      { body },
+    ),
+  deleteComment: (postId: string, commentId: string) =>
+    apiClient.delete<{ ok: boolean }>(`/community/posts/${postId}/comments/${commentId}`),
+  getMentionSuggestions: (q: string = '', limit: number = 10) =>
+    apiClient.get<{ suggestions: CommunityMentionSuggestionDTO[] }>(
+      '/community/mention-suggestions',
+      {
+        params: { q, limit },
+      },
+    ),
 };
 
 export const aiAPI = {
@@ -1216,6 +1241,23 @@ export const aiAPI = {
       '/ai/generate-image',
       { prompt, numberOfImages }
     ),
+};
+
+export interface LocationHiddenPerson {
+  id: string;
+  name: string;
+  photo_url?: string | null;
+  hidden_at: string;
+}
+
+/** "Hide my location from" list. Premium to add; removing is always allowed. */
+export const locationPrivacyAPI = {
+  listHidden: () =>
+    apiClient.get<{ hidden: LocationHiddenPerson[]; limit: number }>('/location-privacy/hidden'),
+  hide: (id: string) =>
+    apiClient.post<{ hidden: true }>(`/location-privacy/hidden/${encodeURIComponent(id)}`),
+  unhide: (id: string) =>
+    apiClient.delete<{ hidden: false }>(`/location-privacy/hidden/${encodeURIComponent(id)}`),
 };
 
 export { apiClient };

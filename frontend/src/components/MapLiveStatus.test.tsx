@@ -44,4 +44,11 @@ describe('MapLiveStatus', () => {
     screen.getByRole('button', { name: /Expand radius/i }).click();
     expect(onExpand).toHaveBeenCalledTimes(1);
   });
+
+  it('does not offer Expand radius when All (UK + Ireland) is selected', () => {
+    render(
+      <MapLiveStatus nearbyCount={0} liveCount={0} radiusKm={10_000} onExpandRadius={() => {}} />,
+    );
+    expect(screen.queryByRole('button', { name: /Expand radius/i })).not.toBeInTheDocument();
+  });
 });

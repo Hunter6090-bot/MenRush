@@ -185,14 +185,14 @@ function LayoutInner({ children }: LayoutProps) {
                   sidebarExpanded ? 'gap-3 px-3 py-3' : 'justify-center px-2 py-3'
                 } ${
                   active
-                    ? 'bg-[rgba(196,131,42,0.14)] text-nn-copper-bright'
+                    ? 'bg-[rgba(196,131,42,0.10)] text-[var(--nn-accent-text)]'
                     : 'text-nn-muted hover:bg-nn-card hover:text-nn-text'
                 }`}
               >
                 <span className="relative inline-flex shrink-0">
                   <item.Icon size={22} />
                   {badge > 0 ? (
-                    <span className="absolute -right-2 -top-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-nn-copper px-1 text-[10px] font-bold text-nn-on-copper">
+                    <span className="absolute -right-2 -top-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-nn-copper px-1 text-[11px] font-bold text-nn-on-copper">
                       {badge > 99 ? '99+' : badge}
                     </span>
                   ) : null}
@@ -227,7 +227,7 @@ function LayoutInner({ children }: LayoutProps) {
               className="mt-3 mx-auto flex w-11 flex-col items-center justify-center gap-0.5 rounded-xl py-1.5 text-nn-faint transition-colors hover:bg-nn-card hover:text-nn-danger"
             >
               <IconSignOut size={18} />
-              <span className="text-[9px] font-bold uppercase tracking-wide" aria-hidden>
+              <span className="text-[11px] font-bold uppercase tracking-wide" aria-hidden>
                 Out
               </span>
             </button>
@@ -281,7 +281,7 @@ function LayoutInner({ children }: LayoutProps) {
                   count={notificationUnread}
                   visible={notificationUnread > 0}
                   data-testid="badge-notifications"
-                  className="-top-0.5 -right-0.5 min-w-[16px] h-4 text-[9px] bg-[var(--copper)] border-[var(--bg-primary)]"
+                  className="-top-0.5 -right-0.5 min-w-[16px] h-4 text-[11px] bg-[var(--copper)] border-[var(--bg-primary)]"
                 />
               </Link>
             </div>
@@ -394,12 +394,12 @@ function LayoutInner({ children }: LayoutProps) {
                           ? 'badge-conversations'
                           : `badge-mobile-${item.to.replace(/\//g, '')}`
                       }
-                      className="-top-2 -right-2.5 min-w-[16px] h-[16px] text-[9px] bg-[var(--copper)] border-[var(--bg-elevated)]"
+                      className="-top-2 -right-2.5 min-w-[16px] h-[16px] text-[11px] bg-[var(--copper)] border-[var(--bg-elevated)]"
                     />
                   </span>
                   <span
                     className={`font-bold leading-none tracking-wide ${
-                      compact ? 'text-[8px]' : 'text-[9px]'
+                      compact ? 'text-[11px]' : 'text-xs'
                     }`}
                   >
                     {item.shortLabel ?? item.label}
@@ -429,7 +429,7 @@ function LayoutInner({ children }: LayoutProps) {
                 />
                 <span
                   className={`font-bold leading-none tracking-wide ${
-                    mobileTabs.length >= 5 ? 'text-[8px]' : 'text-[9px]'
+                    mobileTabs.length >= 5 ? 'text-[11px]' : 'text-xs'
                   }`}
                 >
                   More

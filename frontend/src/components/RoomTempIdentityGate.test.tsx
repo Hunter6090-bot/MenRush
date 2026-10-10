@@ -7,7 +7,6 @@ import {
   resolveTempPhotoSrc,
   type RoomIdentityGateResult,
 } from './RoomTempIdentityGate';
-import { roomLetterAvatar } from '../lib/roomLetterAvatar';
 
 vi.mock('../api/client', () => ({
   roomsAPI: {
@@ -98,14 +97,6 @@ describe('buildNameSuggestions', () => {
       'Just Visiting',
       'Discreet',
     ]);
-  });
-});
-
-describe('roomLetterAvatar', () => {
-  it('returns the first character uppercased', () => {
-    expect(roomLetterAvatar('Anon Bear')).toBe('A');
-    expect(roomLetterAvatar('gear')).toBe('G');
-    expect(roomLetterAvatar('')).toBe('?');
   });
 });
 

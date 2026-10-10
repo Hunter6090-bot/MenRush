@@ -411,7 +411,7 @@ router.post('/:messageId/view', async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.post('/:messageId/withdraw', async (req: AuthRequest, res: Response) => {
+const handleWithdrawMessage = async (req: AuthRequest, res: Response) => {
   try {
     const { forSender, forReceiver, receiverId } = await messageService.withdrawMedia(
       req.userId!,
@@ -431,7 +431,10 @@ router.post('/:messageId/withdraw', async (req: AuthRequest, res: Response) => {
     }
     res.status(500).json({ error: error.message });
   }
-});
+};
+
+router.post('/:messageId/withdraw', handleWithdrawMessage);
+router.post('/location/:messageId/withdraw', handleWithdrawMessage);
 
 router.get('/conversation/:otherId', async (req: AuthRequest, res: Response) => {
   try {

@@ -8,6 +8,7 @@ import {
 } from '../lib/cruising';
 import { formatDistanceFromKm } from '../lib/localeUnits';
 import { CruisingSpotMapThumbnail } from './CruisingSpotMapThumbnail';
+import { isHotSpotActive } from '../lib/hotSpotCounts';
 
 interface CruisingSpotCardProps {
   spot: HotSpotDTO;
@@ -27,7 +28,7 @@ export function CruisingSpotCard({
   const category = mapToCruisingCategory(spot);
   const categoryMeta = CRUISING_CATEGORY_META[category];
   const lastActive = formatLastActiveTime(spot);
-  const isCurrentlyActive = Boolean(spot.has_active_checkins || spot.live_count_exact > 0);
+  const isCurrentlyActive = isHotSpotActive(spot);
   const directionsUrl = getDirectionsUrl(spot.latitude, spot.longitude, spot.name);
   const ttlHours = spot.checkin_ttl_hours ?? 2;
 
@@ -97,7 +98,7 @@ export function CruisingSpotCard({
 
         {/* Last Active Time status indicator */}
         <div
-          className="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium"
+          className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[15px] font-medium leading-snug"
           data-testid="cruising-last-active"
         >
           <div className="flex items-center gap-1.5">
@@ -116,7 +117,7 @@ export function CruisingSpotCard({
             </span>
           </div>
 
-          <span className="text-[10px] text-[var(--cream-muted)]">
+          <span className="text-[15px] text-[var(--cream-muted)]">
             · {ttlHours}h signal
           </span>
         </div>

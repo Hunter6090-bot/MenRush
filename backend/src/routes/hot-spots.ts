@@ -1,7 +1,9 @@
 import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
 import { z } from 'zod';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
+import { privateNoStore } from '../middleware/noStore';
 import { hotSpotsService } from '../services/hot-spots.service';
 import { venueClaimService } from '../services/venue-claim.service';
 import { venueCalendarService } from '../services/venue-calendar.service';
@@ -15,12 +17,14 @@ import {
 } from '../types/validation';
 
 const router = Router();
-router.use(authMiddleware, verifiedMiddleware);
+// Every hot-spot response depends on the viewer (counts, times, my check-in).
+router.use(privateNoStore, authMiddleware, verifiedMiddleware);
 
 const checkInLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   message: { error: 'Too many check-ins. Try again in a minute.' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -29,6 +33,7 @@ const claimLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   message: { error: 'Too many claim requests. Try again in a minute.' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -47,6 +52,7 @@ const reviewLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 15,
   message: { error: 'Too many reviews submitted. Try again in a minute.' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });

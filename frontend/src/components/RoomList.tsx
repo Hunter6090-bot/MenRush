@@ -4,6 +4,7 @@ import { roomsAPI } from '../api/client';
 import { CreateGroupModal } from '../components/CreateGroupModal';
 import { useSocket } from '../hooks/useSocket';
 import { ROUTE_LABELS } from '../lib/routeLabels';
+import { RoomAvatar } from './RoomAvatar';
 
 export interface RoomRow {
   id: string;
@@ -19,14 +20,12 @@ export interface RoomRow {
   is_location_based?: boolean;
 }
 
-function roomInitials(name: string): string {
-  return name
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-}
+/** Letter-square look kept for rooms without a Claude Design icon. */
+const LETTER_TILE_STYLE: React.CSSProperties = {
+  background: 'linear-gradient(135deg, rgba(196,131,42,0.25), rgba(139,69,19,0.15))',
+  border: '1px solid rgba(196,131,42,0.25)',
+  color: '#C4832A',
+};
 
 function formatRelative(iso?: string): string {
   if (!iso) return '';
@@ -121,9 +120,18 @@ export const RoomList: React.FC<RoomListProps> = ({
       setMemberRooms(patch);
       setOfficialRooms(patch);
     };
+    const onOccupancy = (data: { room_id?: string; count?: number }) => {
+      if (!data?.room_id || typeof data.count !== 'number') return;
+      const patch = (prev: RoomRow[]) =>
+        prev.map((room) => (room.id === data.room_id ? { ...room, member_count: data.count! } : room));
+      setMemberRooms(patch);
+      setOfficialRooms(patch);
+    };
     socket.on('room:message', onRoomMessage);
+    socket.on('room:occupancy', onOccupancy);
     return () => {
       socket.off('room:message', onRoomMessage);
+      socket.off('room:occupancy', onOccupancy);
     };
   }, [socket]);
 
@@ -183,10 +191,10 @@ export const RoomList: React.FC<RoomListProps> = ({
             </>
           ) : (
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)]">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)]">
                 Groups
               </p>
-              <p className="text-sm font-semibold text-[var(--cream)]">{ROUTE_LABELS.rooms}</p>
+              <p className="text-base font-semibold text-[var(--cream)]">{ROUTE_LABELS.rooms}</p>
             </div>
           )}
           <button
@@ -289,10 +297,10 @@ export const RoomList: React.FC<RoomListProps> = ({
             {filteredOfficial.length > 0 && (
               <section aria-label="Official rooms">
                 <div className="mb-2 flex items-baseline justify-between gap-2 px-1">
-                  <h2 className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--cream-muted)]">
+                  <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--cream-muted)]">
                     Official rooms
                   </h2>
-                  <span className="text-[10px] text-[var(--cream-muted)]">Browse & join</span>
+                  <span className="text-xs text-[var(--cream-muted)]">Browse & join</span>
                 </div>
                 <div className="flex flex-col gap-2">
                   {filteredOfficial.map((room) => {
@@ -313,24 +321,22 @@ export const RoomList: React.FC<RoomListProps> = ({
                             : { background: 'var(--bg-card)', border: '1px solid var(--border-default)' }
                         }
                       >
-                        <div
-                          className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl text-base font-bold"
-                          style={{
-                            background: 'linear-gradient(135deg, rgba(196,131,42,0.25), rgba(139,69,19,0.15))',
-                            border: '1px solid rgba(196,131,42,0.25)',
-                            color: '#C4832A',
-                          }}
-                        >
-                          {roomInitials(room.name)}
-                        </div>
+                        <RoomAvatar
+                          name={room.name}
+                          officialSlug={room.official_slug}
+                          className="h-14 w-14 rounded-2xl"
+                          iconClassName="h-8 w-8"
+                          letterClassName="text-lg font-bold"
+                          letterStyle={LETTER_TILE_STYLE}
+                        />
 
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="truncate text-sm font-semibold" style={{ color: 'var(--cream)' }}>
+                            <span className="truncate text-base font-semibold" style={{ color: 'var(--cream)' }}>
                               {room.name}
                             </span>
                             <span
-                              className="flex-shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide"
+                              className="flex-shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide"
                               style={{
                                 background: 'rgba(196,131,42,0.15)',
                                 color: '#C4832A',
@@ -339,11 +345,11 @@ export const RoomList: React.FC<RoomListProps> = ({
                               Official
                             </span>
                           </div>
-                          <p className="mt-0.5 truncate text-xs" style={{ color: '#6B5035' }}>
-                            {room.description ?? `${room.member_count} members`}
+                          <p className="mt-0.5 truncate text-sm" style={{ color: '#6B5035' }}>
+                            {room.description ?? `${room.member_count} in now`}
                           </p>
                           <div className="mt-1.5 flex items-center justify-between gap-2">
-                            <span className="text-[10px]" style={{ color: '#6B5035' }}>
+                            <span className="text-xs" style={{ color: '#6B5035' }}>
                               <GroupIcon className="mr-0.5 inline h-3 w-3" />
                               {room.member_count}
                             </span>
@@ -351,7 +357,7 @@ export const RoomList: React.FC<RoomListProps> = ({
                               <button
                                 type="button"
                                 onClick={() => openRoom(room.id)}
-                                className="rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-all active:scale-95"
+                                className="rounded-lg px-2.5 py-1 text-sm font-semibold transition-all active:scale-95"
                                 style={{ color: 'var(--cream-muted)' }}
                               >
                                 Open
@@ -362,7 +368,7 @@ export const RoomList: React.FC<RoomListProps> = ({
                                 data-testid={`join-official-${room.official_slug ?? room.id}`}
                                 disabled={joiningId === room.id}
                                 onClick={(e) => void joinOfficial(room, e)}
-                                className="rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all active:scale-95 disabled:opacity-70"
+                                className="rounded-lg px-3 py-1.5 text-sm font-bold transition-all active:scale-95 disabled:opacity-70"
                                 style={{
                                   background: 'linear-gradient(135deg, #C4832A, #A45E18)',
                                   color: '#FFF5E6',
@@ -383,7 +389,7 @@ export const RoomList: React.FC<RoomListProps> = ({
             {filteredMembers.length > 0 && (
               <section aria-label="Your rooms">
                 <div className="mb-2 px-1">
-                  <h2 className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--cream-muted)]">
+                  <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--cream-muted)]">
                     Your rooms
                   </h2>
                 </div>
@@ -406,38 +412,36 @@ export const RoomList: React.FC<RoomListProps> = ({
                             : { background: 'var(--bg-card)', border: '1px solid var(--border-default)' }
                         }
                       >
-                        <div
-                          className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl text-base font-bold"
-                          style={{
-                            background: 'linear-gradient(135deg, rgba(196,131,42,0.25), rgba(139,69,19,0.15))',
-                            border: '1px solid rgba(196,131,42,0.25)',
-                            color: '#C4832A',
-                          }}
-                        >
-                          {roomInitials(room.name)}
-                        </div>
+                        <RoomAvatar
+                          name={room.name}
+                          officialSlug={room.official_slug}
+                          className="h-14 w-14 rounded-2xl"
+                          iconClassName="h-8 w-8"
+                          letterClassName="text-lg font-bold"
+                          letterStyle={LETTER_TILE_STYLE}
+                        />
 
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="truncate text-sm font-semibold" style={{ color: 'var(--cream)' }}>
+                            <span className="truncate text-base font-semibold" style={{ color: 'var(--cream)' }}>
                               {room.name}
                             </span>
-                            <span className="flex-shrink-0 text-[10px]" style={{ color: '#6B5035' }}>
+                            <span className="flex-shrink-0 text-xs" style={{ color: '#6B5035' }}>
                               {formatRelative(room.last_message_at)}
                             </span>
                           </div>
                           <div className="mt-0.5 flex items-center justify-between gap-2">
-                            <span className="truncate text-xs" style={{ color: '#6B5035' }}>
-                              {room.last_message ?? `${room.member_count} members`}
+                            <span className="truncate text-sm" style={{ color: '#6B5035' }}>
+                              {room.last_message ?? `${room.member_count} in now`}
                             </span>
                             <div className="flex flex-shrink-0 items-center gap-1.5">
-                              <span className="text-[10px]" style={{ color: '#6B5035' }}>
+                              <span className="text-xs" style={{ color: '#6B5035' }}>
                                 <GroupIcon className="mr-0.5 inline h-3 w-3" />
                                 {room.member_count}
                               </span>
                               {(room.unread_count ?? 0) > 0 && (
                                 <span
-                                  className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[9px] font-bold"
+                                  className="flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[11px] font-bold"
                                   style={{
                                     background: 'linear-gradient(135deg, #C4832A, #A45E18)',
                                     color: '#fff',

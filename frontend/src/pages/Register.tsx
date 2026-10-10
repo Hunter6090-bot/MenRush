@@ -756,11 +756,6 @@ export const Register = () => {
               </div>
             ) : null}
 
-            <p className={helperClass} data-testid="register-gift-note">
-              Sign up before 1 October 2026 and you get 30 days of Premium free. A promo
-              replaces that gift and does not stack.
-            </p>
-
             <button type="submit" disabled={loading} className={publicPrimaryButtonClass}>
               {loading ? (
                 <>

@@ -150,11 +150,11 @@ function PersonGridCard({
                 <span
                   className={`h-1.5 w-1.5 shrink-0 rounded-full md:h-2 md:w-2 ${person.online ? 'bg-[#4ADE80]' : 'bg-[#C4A882]'}`}
                 />
-                <span className="truncate text-[11px] font-bold leading-tight text-[#FFF6E6] md:text-[12px] lg:text-[13px]">
+                <span className="truncate text-[13px] font-bold leading-tight text-[#FFF6E6] md:text-sm lg:text-[15px]">
                   {person.name} {person.age}
                 </span>
               </div>
-              <p className="mt-0.5 truncate text-[9px] font-semibold text-[var(--cream)] md:text-xs">{subtitle}</p>
+              <p className="mt-0.5 truncate text-xs font-semibold text-[var(--cream)] md:text-sm">{subtitle}</p>
             </div>
           </div>
         </ProfilePhotoLink>
@@ -170,7 +170,7 @@ function PersonGridCard({
             title="Chat"
             aria-label={`Chat with ${person.name}`}
             data-testid={`match-message-${person.id}`}
-            className="flex-1 flex items-center justify-center gap-1 rounded-lg border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] py-1.5 text-[10px] font-extrabold tracking-wide text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.28)] md:rounded-xl md:py-2 md:text-[11px]"
+            className="flex-1 flex items-center justify-center gap-1 rounded-lg border border-[rgba(196,131,42,0.55)] bg-[rgba(196,131,42,0.18)] py-1.5 text-xs font-extrabold tracking-wide text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.28)] md:rounded-xl md:py-2 md:text-sm"
           >
             <IconChat size={14} />
             <span>Chat</span>
@@ -305,9 +305,6 @@ export const Matches = () => {
       <div className="mx-auto min-w-0 max-w-6xl overflow-x-clip px-4 py-4 pb-12 sm:px-6 sm:py-6" data-testid="matches-shell">
         <div className="mb-6">
           <h1 className="text-2xl font-extrabold text-[var(--cream)] lg:text-[28px]">Matches</h1>
-          <p className="mt-1 text-sm text-[var(--cream-muted)]">
-            Who liked you and mutual matches. Location is only shared when you send a pin in chat.
-          </p>
         </div>
 
         {loading ? (
@@ -345,8 +342,7 @@ export const Matches = () => {
             </div>
             <h2 className="text-lg font-bold text-[var(--cream)]">No matches yet</h2>
             <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-[var(--cream-muted)]">
-              Tap Match on Nearby or Community. When it&apos;s mutual, they land here — ready to
-              chat. Be direct. Consent first.
+              Tap Match on Nearby. Be direct. Consent first.
             </p>
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
               <Link
