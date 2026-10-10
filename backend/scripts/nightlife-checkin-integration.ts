@@ -51,7 +51,8 @@ async function main() {
   assert.strictEqual(spot!.name, 'The Copper Bar');
   assert.strictEqual(spot!.checkin_ttl_hours, 4);
   assert.strictEqual(spot!.has_active_checkins, true);
-  assert.ok(spot!.live_count_exact >= 1);
+  // Free viewers get no exact number; the rounded display count still shows the check-in.
+  assert.ok(spot!.live_count === '5+' || Number(spot!.live_count) >= 1);
   assert.strictEqual(spot!.is_checked_in, true);
   assert.strictEqual(spot!.category_slug, 'nightlife');
 
@@ -69,7 +70,7 @@ async function main() {
   const afterExpiry = await hotSpotsService.getSpot(userId, spot!.id);
   assert.ok(afterExpiry);
   assert.strictEqual(afterExpiry!.has_active_checkins, false);
-  assert.strictEqual(afterExpiry!.live_count_exact, 0);
+  assert.strictEqual(Number(afterExpiry!.live_count), 0);
   assert.strictEqual(afterExpiry!.is_checked_in, false);
 
   // cleanup

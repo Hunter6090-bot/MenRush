@@ -132,12 +132,22 @@ export function formatDistanceFromKm(
   return `${Math.round(km)} km`;
 }
 
+/** Widest Nearby search radius (~100 miles). "All" is not this number. */
+export const MAX_NEARBY_RADIUS_KM = 161;
+
+/** Client sentinel: map/list All = UK + Ireland, not a radius. */
+export const DISCOVERY_ALL_SCOPE_KM = 10_000;
+
+export function isDiscoveryAllScope(km: number): boolean {
+  return Number.isFinite(km) && km >= DISCOVERY_ALL_SCOPE_KM - 1;
+}
+
 export function formatRadiusFromKm(
   km: number,
   system: DistanceUnitSystem = resolveDistanceUnitSystem(),
 ): string {
-  const clamped = Math.min(Math.max(km, 0.8), 161);
-  if (clamped >= 160) return 'All';
+  if (isDiscoveryAllScope(km)) return 'All';
+  const clamped = Math.min(Math.max(km, 0.8), MAX_NEARBY_RADIUS_KM);
 
   if (system === 'imperial') {
     const miles = clamped * MILES_PER_KM;
@@ -161,12 +171,12 @@ export function formatRadiusLabelFromKm(
   return formatRadiusFromKm(km, system);
 }
 
-/** Metric radius picker values (km). Imperial uses mile options elsewhere. */
-export const RADIUS_KM_OPTIONS = [1, 2, 5, 10, 20, 30, 50, 80, 100, 161] as const;
+/** Metric radius picker values (km). All is a separate option, not 161 km. */
+export const RADIUS_KM_OPTIONS = [1, 2, 5, 10, 20, 30, 50, 80, 100] as const;
 
 export function kmToDisplayRadiusValue(km: number, system: DistanceUnitSystem): number | 'all' {
-  const clamped = Math.min(Math.max(km, 0.8), 161);
-  if (clamped >= 160) return 'all';
+  if (isDiscoveryAllScope(km) || (km >= 160.95 && km <= 161.05)) return 'all';
+  const clamped = Math.min(Math.max(km, 0.8), MAX_NEARBY_RADIUS_KM);
   if (system === 'imperial') return Math.max(1, Math.round(clamped * MILES_PER_KM));
   return RADIUS_KM_OPTIONS.reduce((best, option) =>
     Math.abs(option - clamped) < Math.abs(best - clamped) ? option : best,
@@ -174,11 +184,11 @@ export function kmToDisplayRadiusValue(km: number, system: DistanceUnitSystem): 
 }
 
 export function displayRadiusValueToKm(value: number | 'all', system: DistanceUnitSystem): number {
-  if (value === 'all') return 161;
+  if (value === 'all') return DISCOVERY_ALL_SCOPE_KM;
   if (system === 'imperial') {
-    return Math.min(Math.max(Math.round(value * KM_PER_MILE * 10) / 10, 0.8), 161);
+    return Math.min(Math.max(Math.round(value * KM_PER_MILE * 10) / 10, 0.8), MAX_NEARBY_RADIUS_KM);
   }
-  return Math.min(Math.max(value, 1), 161);
+  return Math.min(Math.max(value, 1), 100);
 }
 
 export { KM_PER_MILE, MILES_PER_KM };

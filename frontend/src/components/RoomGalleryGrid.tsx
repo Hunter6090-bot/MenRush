@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RoomParticipant } from '../hooks/useRoomVideo';
-import { roomLetterAvatar } from '../lib/roomLetterAvatar';
+import { BrandAvatar } from './BrandAvatar';
 import {
   attachRemoteAudio,
   attachStreamToVideo,
@@ -19,9 +19,37 @@ interface RoomGalleryGridProps {
   cameraOnForSelf?: boolean;
 }
 
+/** Column count follows occupancy so one face is not a postage stamp in a 6-col grid. */
+export function galleryGridClass(count: number): string {
+  const gap = 'gap-1.5 sm:gap-2';
+  // One person: a single centred cell. The tile itself is capped (SOLO_TILE_CLASS).
+  if (count <= 1) return `grid h-full min-h-0 grid-cols-1 grid-rows-1 place-items-center ${gap}`;
+  if (count === 2) return `grid h-full min-h-0 grid-cols-1 sm:grid-cols-2 ${gap}`;
+  if (count <= 4) return `grid h-full min-h-0 grid-cols-2 ${gap}`;
+  if (count <= 9) return `grid min-h-0 auto-rows-fr grid-cols-2 content-start sm:grid-cols-3 ${gap}`;
+  return `grid min-h-0 auto-rows-fr grid-cols-2 content-start sm:grid-cols-3 lg:grid-cols-4 ${gap}`;
+}
+
+/** Two to four people share the whole stage. One person does not (see below). */
+export function galleryTilesFillStage(count: number): boolean {
+  return count >= 2 && count <= 4;
+}
+
+/**
+ * One person alone: a large, readable portrait tile with stage still visible
+ * around it — not a postage stamp, and not full-bleed.
+ */
+export function galleryTileIsSolo(count: number): boolean {
+  return count === 1;
+}
+
+export const SOLO_TILE_CLASS = 'aspect-[4/5] h-[72%] min-h-[12rem] max-h-[36rem] max-w-full';
+
 function ParticipantTile({
   participant,
   pinned,
+  fill,
+  solo = false,
   onPin,
   stream,
   photoUrl,
@@ -29,6 +57,8 @@ function ParticipantTile({
 }: {
   participant: RoomParticipant;
   pinned: boolean;
+  fill: boolean;
+  solo?: boolean;
   onPin: () => void;
   stream: MediaStream | null;
   photoUrl: string | undefined;
@@ -108,8 +138,9 @@ function ParticipantTile({
       type="button"
       onClick={onPin}
       className={`group relative overflow-hidden rounded-sm bg-[#11100E] text-left transition-all ${
-        pinned ? 'w-full h-full' : 'w-full aspect-[4/5]'
+        pinned || fill ? 'h-full min-h-0 w-full' : solo ? SOLO_TILE_CLASS : 'w-full aspect-[4/5]'
       }`}
+      data-testid="room-gallery-tile"
       style={{
         border: pinned ? '2px solid #C4832A' : '1px solid rgba(255,255,255,0.08)',
         boxShadow: pinned ? '0 0 0 1px rgba(196,131,42,0.35)' : undefined,
@@ -119,7 +150,7 @@ function ParticipantTile({
       }`}
     >
       {pinned ? (
-        <div className="absolute top-2 left-2 z-10 flex items-center gap-1 rounded bg-[#C4832A]/90 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--nn-on-copper)] shadow-sm">
+        <div className="absolute top-2 left-2 z-10 flex items-center gap-1 rounded bg-[#C4832A]/90 px-1.5 py-0.5 text-xs font-bold uppercase tracking-wider text-[var(--nn-on-copper)] shadow-sm">
           <PinIcon className="h-3 w-3" />
           <span>Focused</span>
         </div>
@@ -127,7 +158,7 @@ function ParticipantTile({
 
       {pinned ? (
         <span
-          className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur-sm transition-colors hover:bg-black/80"
+          className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-xs font-medium text-white/90 backdrop-blur-sm transition-colors hover:bg-black/80"
           title="Unfocus"
         >
           <span>Unpin</span>
@@ -135,7 +166,7 @@ function ParticipantTile({
         </span>
       ) : (
         <span
-          className="absolute top-1.5 right-1.5 z-10 hidden rounded bg-black/50 px-1 py-0.5 text-[9px] font-semibold text-white/70 backdrop-blur-sm transition-opacity group-hover:block"
+          className="absolute top-1.5 right-1.5 z-10 hidden rounded bg-black/50 px-1.5 py-0.5 text-[11px] font-semibold text-white/70 backdrop-blur-sm transition-opacity group-hover:block"
           title="Focus video"
         >
           Focus
@@ -162,33 +193,30 @@ function ParticipantTile({
       ) : null}
 
       {(!showVideo || (!participant.isSelf && !renderVideo)) &&
-        (photoUrl ? (
-          <img src={photoUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-90" />
-        ) : (
-          <div
-            className="absolute inset-0 flex items-center justify-center text-2xl font-black"
-            style={{
-              background: 'linear-gradient(145deg, var(--bg-elevated), var(--bg-primary))',
-              color: '#C4832A',
-            }}
-          >
-            {roomLetterAvatar(participant.name)}
+        (
+          <div className="absolute inset-0" data-testid={`room-tile-face-${participant.user_id}`}>
+            <BrandAvatar
+              photoUrl={photoUrl}
+              name={participant.name}
+              variant="tile"
+              imgClassName="absolute inset-0 h-full w-full object-cover opacity-90"
+            />
           </div>
-        ))}
+        )}
 
       {!participant.isLive && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/45">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--cream-muted)]">Away</span>
+          <span className="text-xs font-bold uppercase tracking-widest text-[var(--cream-muted)]">Away</span>
         </div>
       )}
 
-      <div className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-gradient-to-t from-black/85 via-black/55 to-transparent px-2 pb-2 pt-8">
+      <div className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-gradient-to-t from-black/85 via-black/55 to-transparent px-2.5 pb-2.5 pt-8">
         {participant.isMuted && (
-          <MicOffIcon className="h-3.5 w-3.5 shrink-0 text-[#EF4444]" />
+          <MicOffIcon className="h-4 w-4 shrink-0 text-[#EF4444]" />
         )}
-        <span className="min-w-0 truncate text-[11px] font-semibold text-white">{participant.name}</span>
+        <span className="min-w-0 truncate text-sm font-semibold text-white">{participant.name}</span>
         {participant.isLive && (
-          <span className="ml-auto shrink-0 rounded bg-[#C4832A] px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[var(--nn-on-copper)]">
+          <span className="ml-auto shrink-0 rounded bg-[#C4832A] px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-[var(--nn-on-copper)]">
             Live
           </span>
         )}
@@ -211,6 +239,8 @@ export function RoomGalleryGrid({
   const ordered = [...live, ...away];
   const pinned = pinnedId ? ordered.find((p) => p.user_id === pinnedId) : null;
   const gridItems = pinned ? ordered.filter((p) => p.user_id !== pinnedId) : ordered;
+  const fillUnpinned = !pinned && galleryTilesFillStage(gridItems.length);
+  const soloUnpinned = !pinned && galleryTileIsSolo(gridItems.length);
 
   const tileVideo = (participant: RoomParticipant) => {
     const stream = getStreamFor(participant.user_id);
@@ -223,22 +253,26 @@ export function RoomGalleryGrid({
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
         <div>
-          <p className="text-sm font-semibold text-[var(--cream)]">Waiting for people to join</p>
-          <p className="mt-1 text-xs text-[var(--cream-muted)]">Share the room — members appear here in the gallery.</p>
+          <p className="text-base font-semibold text-[var(--cream)]">Waiting for people</p>
+          <p className="mt-1 text-sm text-[var(--cream-muted)]">Share the room. Faces show here.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-1 p-1">
+    <div className="flex h-full min-h-0 flex-col gap-1.5 p-1.5 sm:p-2">
       {pinned && (
-        <div className="shrink-0 w-full px-1 flex justify-center" data-testid="room-spotlight-container">
-          <div className="relative w-full max-w-2xl aspect-[4/5] sm:aspect-video max-h-[46vh] flex">
+        <div
+          className={`flex w-full min-h-0 justify-center ${gridItems.length ? 'min-h-[12rem] flex-[3]' : 'flex-1'}`}
+          data-testid="room-spotlight-container"
+        >
+          <div className="relative h-full min-h-[12rem] w-full max-w-5xl">
             <ParticipantTile
               key={pinned.user_id}
               participant={pinned}
               pinned
+              fill
               onPin={() => onPin(null)}
               stream={getStreamFor(pinned.user_id)}
               photoUrl={photoUrl(pinned.photo_url)}
@@ -247,21 +281,39 @@ export function RoomGalleryGrid({
           </div>
         </div>
       )}
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-          {gridItems.map((participant) => (
-            <ParticipantTile
-              key={participant.user_id}
-              participant={participant}
-              pinned={participant.user_id === pinnedId}
-              onPin={() => onPin(participant.user_id === pinnedId ? null : participant.user_id)}
-              stream={getStreamFor(participant.user_id)}
-              photoUrl={photoUrl(participant.photo_url)}
-              showVideo={tileVideo(participant)}
-            />
-          ))}
+      {gridItems.length > 0 ? (
+        <div
+          className={
+            pinned
+              ? 'max-h-[30%] min-h-[6.5rem] shrink-0 overflow-x-auto sm:max-h-[34%]'
+              : 'min-h-0 flex-1 overflow-y-auto'
+          }
+        >
+          <div
+            className={
+              pinned
+                ? 'grid h-full auto-cols-[minmax(7.5rem,12rem)] grid-flow-col gap-1.5 sm:auto-cols-[minmax(9rem,14rem)]'
+                : galleryGridClass(gridItems.length)
+            }
+            data-testid="room-gallery-grid"
+            data-tile-count={gridItems.length}
+          >
+            {gridItems.map((participant) => (
+              <ParticipantTile
+                key={participant.user_id}
+                participant={participant}
+                pinned={participant.user_id === pinnedId}
+                fill={fillUnpinned || Boolean(pinned)}
+                solo={soloUnpinned}
+                onPin={() => onPin(participant.user_id === pinnedId ? null : participant.user_id)}
+                stream={getStreamFor(participant.user_id)}
+                photoUrl={photoUrl(participant.photo_url)}
+                showVideo={tileVideo(participant)}
+              />
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }

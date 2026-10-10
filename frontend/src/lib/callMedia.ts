@@ -7,7 +7,7 @@ export const MOBILE_VIDEO_CONSTRAINTS: MediaTrackConstraints = {
 export function mapCallMediaError(error: unknown): string {
   const err = error as { message?: string; name?: string };
   if (err?.message === 'insecure_media_context') {
-    return 'Video calls need HTTPS';
+    return 'Camera and microphone access unavailable';
   }
   if (err?.message === 'signalling_unavailable') {
     return 'Could not connect for video calling. Check your connection and try again.';
@@ -15,7 +15,7 @@ export function mapCallMediaError(error: unknown): string {
   if (err?.message === 'match_required') {
     return 'You need a mutual match before video calling.';
   }
-  if (err?.name === 'NotAllowedError') {
+  if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
     return 'Camera and microphone access was blocked';
   }
   if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {

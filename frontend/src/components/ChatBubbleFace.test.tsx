@@ -41,6 +41,6 @@ describe('ChatBubbleFace', () => {
     const img = screen
       .getByTestId('chat-bubble-avatar-photo-peer-3')
       .querySelector('img');
-    expect(img?.getAttribute('src')).toBe('/uploads/profiles/peer.jpg');
+    expect(img?.getAttribute('src')).toContain('/uploads/profiles/peer.jpg');
   });
 });

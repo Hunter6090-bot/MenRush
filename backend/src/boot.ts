@@ -1,4 +1,9 @@
+import dotenv from 'dotenv';
+import { assertJwtSecret } from './lib/jwtSecret';
 import { runPendingMigrations } from './scripts/migrate';
+
+dotenv.config();
+assertJwtSecret();
 
 async function boot() {
   await runPendingMigrations();

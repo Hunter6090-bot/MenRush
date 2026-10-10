@@ -1,0 +1,438 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
+import { CommunityFeed } from './CommunityFeed';
+
+const listPosts = vi.fn();
+const createPost = vi.fn();
+const updatePost = vi.fn();
+const deletePost = vi.fn();
+const getMentionSuggestions = vi.fn();
+const getMe = vi.fn();
+const updateLocation = vi.fn();
+
+vi.mock('../api/client', () => ({
+  communityAPI: {
+    listPosts: (...args: unknown[]) => listPosts(...args),
+    createPost: (...args: unknown[]) => createPost(...args),
+    updatePost: (...args: unknown[]) => updatePost(...args),
+    deletePost: (...args: unknown[]) => deletePost(...args),
+    getMentionSuggestions: (...args: unknown[]) => getMentionSuggestions(...args),
+  },
+  usersAPI: {
+    getMe: (...args: unknown[]) => getMe(...args),
+    updateLocation: (...args: unknown[]) => updateLocation(...args),
+  },
+}));
+
+vi.mock('../lib/deviceLocation', () => ({
+  requestDeviceLocation: vi.fn().mockResolvedValue({
+    ok: true,
+    lat: 51.5074,
+    lng: -0.1278,
+  }),
+}));
+
+vi.mock('./UserAvatar', () => ({
+  useResolvingPhotoSrc: () => ({ src: null, onError: () => {} }),
+}));
+
+vi.mock('./CommunityPostComments', () => ({
+  CommunityPostComments: () => <div data-testid="mock-comments" />,
+}));
+
+import { useAuthStore } from '../hooks/store';
+
+function renderFeed() {
+  return render(
+    <MemoryRouter>
+      <CommunityFeed />
+    </MemoryRouter>,
+  );
+}
+
+describe('CommunityFeed Mention Autocomplete', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Own-post controls key off the signed-in user (these two cases were parked
+    // failures on main because no user was set).
+    useAuthStore.setState({ user: { id: 'u-me', name: 'Me' } as never });
+    getMe.mockResolvedValue({
+      data: {
+        id: 'u-me',
+        lat: 51.5074,
+        lng: -0.1278,
+      },
+    });
+    listPosts.mockResolvedValue({ data: { posts: [] } });
+    updateLocation.mockResolvedValue({ ok: true });
+    createPost.mockResolvedValue({
+      data: {
+        post: {
+          id: 'p1',
+          user_id: 'u-me',
+          body: 'Hello',
+          created_at: new Date().toISOString(),
+          author_name: 'Me',
+          author_photo_url: null,
+          distance_km: '0.00',
+          distance_label: 'Here',
+          comment_count: 0,
+        },
+      },
+    });
+  });
+
+  it('renders composer and shows autocomplete on typing @', async () => {
+    getMentionSuggestions.mockResolvedValue({
+      data: {
+        suggestions: [
+          {
+            id: 'hs-1',
+            type: 'hot_spot',
+            name: 'Equator Bar',
+            subtitle: 'Commercial venue',
+            photo_url: null,
+            icon: '🍸',
+          },
+          {
+            id: 'u-match-1',
+            type: 'match',
+            name: 'Marcus',
+            subtitle: 'Match',
+            photo_url: null,
+            icon: null,
+          },
+        ],
+      },
+    });
+
+    const user = userEvent.setup();
+    renderFeed();
+
+    const input = await screen.findByTestId('community-post-input');
+    await user.type(input, 'Who is at @Eq');
+
+    await waitFor(() => {
+      expect(getMentionSuggestions).toHaveBeenCalledWith('Eq', 10);
+    });
+
+    expect(await screen.findByText('@Equator Bar')).toBeInTheDocument();
+    expect(screen.getByText('@Marcus')).toBeInTheDocument();
+
+    const option = screen.getByTestId('mention-option-hot_spot-0');
+    await user.click(option);
+
+    expect(input).toHaveValue('Who is at @Equator Bar ');
+  });
+
+  it('navigates autocomplete via ArrowDown and selects with Enter', async () => {
+    getMentionSuggestions.mockResolvedValue({
+      data: {
+        suggestions: [
+          {
+            id: 'hs-1',
+            type: 'hot_spot',
+            name: 'Equator Bar',
+            subtitle: 'Commercial venue',
+            photo_url: null,
+            icon: '🍸',
+          },
+          {
+            id: 'u-match-2',
+            type: 'match',
+            name: 'Zane',
+            subtitle: 'Match',
+            photo_url: null,
+            icon: null,
+          },
+        ],
+      },
+    });
+
+    const user = userEvent.setup();
+    renderFeed();
+
+    const input = await screen.findByTestId('community-post-input');
+    await user.type(input, '@');
+
+    await waitFor(() => {
+      expect(getMentionSuggestions).toHaveBeenCalled();
+    });
+
+    expect(await screen.findByText('@Equator Bar')).toBeInTheDocument();
+
+    // Arrow down to select second option (Zane)
+    await user.keyboard('{ArrowDown}');
+    await user.keyboard('{Enter}');
+
+    expect(input).toHaveValue('@Zane ');
+  });
+
+  it('dismisses autocomplete on Escape', async () => {
+    getMentionSuggestions.mockResolvedValue({
+      data: {
+        suggestions: [
+          {
+            id: 'hs-1',
+            type: 'hot_spot',
+            name: 'Equator Bar',
+            subtitle: 'Commercial venue',
+            photo_url: null,
+            icon: '🍸',
+          },
+        ],
+      },
+    });
+
+    const user = userEvent.setup();
+    renderFeed();
+
+    const input = await screen.findByTestId('community-post-input');
+    await user.type(input, '@');
+
+    expect(await screen.findByText('@Equator Bar')).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('mention-autocomplete-list')).not.toBeInTheDocument();
+    });
+  });
+
+  it('allows author to edit own post with @ mentions autocomplete', async () => {
+    // Current user is u-me
+    listPosts.mockResolvedValue({
+      data: {
+        posts: [
+          {
+            id: 'post-mine-1',
+            user_id: 'u-me',
+            body: 'Original content',
+            created_at: new Date().toISOString(),
+            author_name: 'Me',
+            author_photo_url: null,
+            distance_km: '0.00',
+            distance_label: 'Here',
+            comment_count: 0,
+          },
+          {
+            id: 'post-other-2',
+            user_id: 'u-other',
+            body: 'Stranger post',
+            created_at: new Date().toISOString(),
+            author_name: 'Other',
+            author_photo_url: null,
+            distance_km: '1.20',
+            distance_label: '1.2 km',
+            comment_count: 0,
+          },
+        ],
+      },
+    });
+
+    updatePost.mockResolvedValue({
+      data: {
+        post: {
+          id: 'post-mine-1',
+          user_id: 'u-me',
+          body: 'Updated @Tropics Day Spa ',
+          created_at: new Date().toISOString(),
+          author_name: 'Me',
+          author_photo_url: null,
+          distance_km: '0.00',
+          distance_label: 'Here',
+          comment_count: 0,
+        },
+      },
+    });
+
+    getMentionSuggestions.mockResolvedValue({
+      data: {
+        suggestions: [
+          {
+            id: 'hs-1',
+            type: 'hot_spot',
+            name: 'Tropics Day Spa',
+            subtitle: 'Commercial sauna',
+            photo_url: null,
+            icon: '🧖',
+          },
+        ],
+      },
+    });
+
+    const user = userEvent.setup();
+    renderFeed();
+
+    // Verify edit button is only visible on own post
+    // Edit / Delete sit under the ••• menu on the member's own post only.
+    const more = await screen.findByTestId('community-post-more-post-mine-1');
+    expect(screen.queryByTestId('community-post-more-post-other-2')).not.toBeInTheDocument();
+    expect(more).toHaveClass('h-11', 'w-11');
+    await user.click(more);
+    expect(await screen.findByTestId('community-post-edit-post-mine-1')).toHaveClass('min-h-[44px]', 'text-[15px]');
+
+    // Click edit on own post
+    await user.click(screen.getByTestId('community-post-edit-post-mine-1'));
+
+    const editInput = await screen.findByTestId('community-post-edit-input-post-mine-1');
+    expect(editInput).toHaveValue('Original content');
+
+    // Type @Trop in edit composer
+    await user.clear(editInput);
+    await user.type(editInput, 'Updated @Trop');
+
+    await waitFor(() => {
+      expect(getMentionSuggestions).toHaveBeenCalledWith('Trop', 10);
+    });
+
+    expect(await screen.findByText('@Tropics Day Spa')).toBeInTheDocument();
+    const option = screen.getByTestId('mention-option-hot_spot-0');
+    await user.click(option);
+
+    expect(editInput).toHaveValue('Updated @Tropics Day Spa ');
+
+    // Save edit
+    await user.click(screen.getByTestId('community-post-edit-save-post-mine-1'));
+
+    await waitFor(() => {
+      // The component trims before saving.
+      expect(updatePost).toHaveBeenCalledWith('post-mine-1', 'Updated @Tropics Day Spa');
+    });
+
+    // The mention renders as its own element, so match on the post body's text.
+    expect(await screen.findByText((_, el) => el?.tagName === 'P' && el.textContent?.trim() === 'Updated @Tropics Day Spa')).toBeInTheDocument();
+    // Save returns focus to the post's ••• trigger.
+    await waitFor(() => expect(screen.getByTestId('community-post-more-post-mine-1')).toHaveFocus());
+
+    // Edit then Cancel also returns focus to the ••• trigger.
+    await user.click(screen.getByTestId('community-post-more-post-mine-1'));
+    await user.click(screen.getByTestId('community-post-edit-post-mine-1'));
+    await screen.findByTestId('community-post-edit-input-post-mine-1');
+    await user.click(screen.getByTestId('community-post-edit-cancel-post-mine-1'));
+    await waitFor(() => expect(screen.getByTestId('community-post-more-post-mine-1')).toHaveFocus());
+  });
+
+  it('allows author to delete own post with confirmation', async () => {
+    listPosts.mockResolvedValue({
+      data: {
+        posts: [
+          {
+            id: 'post-mine-1',
+            user_id: 'u-me',
+            body: 'Going to delete this',
+            created_at: new Date().toISOString(),
+            author_name: 'Me',
+            author_photo_url: null,
+            distance_km: '0.00',
+            distance_label: 'Here',
+            comment_count: 0,
+          },
+        ],
+      },
+    });
+
+    deletePost.mockResolvedValue({ data: { ok: true } });
+
+    const user = userEvent.setup();
+    renderFeed();
+
+    await user.click(await screen.findByTestId('community-post-more-post-mine-1'));
+    const deleteBtn = await screen.findByTestId('community-post-delete-post-mine-1');
+    await user.click(deleteBtn);
+
+    expect(await screen.findByTestId('community-post-delete-confirm-post-mine-1')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('community-post-delete-btn-post-mine-1'));
+
+    await waitFor(() => {
+      expect(deletePost).toHaveBeenCalledWith('post-mine-1');
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Going to delete this')).not.toBeInTheDocument();
+    });
+  });
+});
+
+describe('CommunityFeed 24h expiry client filter', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getMe.mockResolvedValue({
+      data: { lat: 51.5074, lng: -0.1278 },
+    });
+    updateLocation.mockResolvedValue({ ok: true });
+  });
+
+  it('filters out posts older than 24h even if the API returns them', async () => {
+    const now = Date.now();
+    const freshPost = {
+      id: 'fresh-1',
+      user_id: 'user-1',
+      body: 'Fresh post within 24h',
+      created_at: new Date(now - 2 * 60 * 60 * 1000).toISOString(), // 2h ago
+      author_name: 'Fresh Author',
+      author_photo_url: null,
+      distance_km: '0.50',
+      distance_label: '500 m',
+      comment_count: 0,
+    };
+    const stalePost = {
+      id: 'stale-1',
+      user_id: 'user-2',
+      body: 'Stale post from 16 Sept',
+      created_at: new Date(now - 48 * 60 * 60 * 1000).toISOString(), // 48h ago
+      author_name: 'Stale Author',
+      author_photo_url: null,
+      distance_km: '1.00',
+      distance_label: '1 km',
+      comment_count: 2,
+    };
+
+    listPosts.mockResolvedValue({
+      data: {
+        posts: [freshPost, stalePost],
+      },
+    });
+
+    renderFeed();
+
+    await waitFor(() => {
+      expect(screen.getByText('Fresh post within 24h')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('Stale post from 16 Sept')).not.toBeInTheDocument();
+  });
+
+  it('shows empty state when all returned posts are older than 24h', async () => {
+    const now = Date.now();
+    const stalePost = {
+      id: 'stale-2',
+      user_id: 'user-3',
+      body: 'Old post from August',
+      created_at: new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString(), // 30d ago
+      author_name: 'August Author',
+      author_photo_url: null,
+      distance_km: '2.00',
+      distance_label: '2 km',
+      comment_count: 0,
+    };
+
+    listPosts.mockResolvedValue({
+      data: {
+        posts: [stalePost],
+      },
+    });
+
+    renderFeed();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('community-empty')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('No posts nearby yet')).toBeInTheDocument();
+    expect(screen.queryByText('Old post from August')).not.toBeInTheDocument();
+  });
+});

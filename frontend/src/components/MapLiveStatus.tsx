@@ -1,4 +1,4 @@
-import { MAX_RADIUS_KM } from '../lib/discoveryFormat';
+import { isDiscoveryAllScope } from '../lib/discoveryFormat';
 
 interface MapLiveStatusProps {
   nearbyCount: number;
@@ -33,17 +33,17 @@ export function MapLiveStatus({
         aria-hidden
       />
       <div className="min-w-0">
-        <p className="text-[13px] font-bold leading-tight text-[#1A1208]">
+        <p className="text-[15px] font-bold leading-tight text-[#1A1208]">
           Men nearby
         </p>
         {liveCount > 0 ? (
-          <p className="text-[11px] font-semibold text-[#3D7A2E]" data-testid="map-live-line">
+          <p className="text-[13px] font-semibold text-[#3D7A2E]" data-testid="map-live-line">
             Live · {liveCount}
           </p>
         ) : (
-          <p className="text-[11px] font-semibold text-[#6B5B45]" data-testid="map-live-line">
+          <p className="text-[13px] font-semibold text-[#6B5B45]" data-testid="map-live-line">
             None live now
-            {nearbyCount === 0 && radiusKm < MAX_RADIUS_KM - 0.5 ? (
+            {nearbyCount === 0 && !isDiscoveryAllScope(radiusKm) ? (
               <button
                 type="button"
                 className="pointer-events-auto ml-1.5 font-extrabold text-[#B8732A] underline-offset-2 hover:underline"

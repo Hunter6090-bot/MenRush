@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { ROUTE_LABELS } from './routeLabels';
+import { readHomeView } from './homeView';
 import {
   IconChat,
   IconCommunity,
@@ -8,12 +9,13 @@ import {
   IconHotSpots,
   IconMatches,
   IconNotifications,
+  IconOut,
   IconProfile,
   IconRooms,
   IconSettings,
 } from '../components/icons';
 
-export type NavIcon = ComponentType<{ size?: number; className?: string }>;
+export type NavIcon = ComponentType<{ size?: number; className?: string; filled?: boolean }>;
 
 export interface NavItem {
   to: string;
@@ -25,22 +27,26 @@ export interface NavItem {
   desktopNav?: boolean;
   /** Reachable on mobile via the "More" sheet instead of the primary tab row. */
   mobileMore?: boolean;
+  /**
+   * Fill the icon when the tab is active. Default true for catalog items; every primary
+   * tab (Map/List, Chat, Rooms, Out, You) is outline-only, active = copper outline (board).
+   */
+  fillWhenActive?: boolean;
 }
 
+/**
+ * Redesign Step 1 (Pete 6 Oct 2026): 5 primary tabs:
+ * Home (Map|List toggle) · Chat · Rooms · Out · You.
+ * Old destinations stay in the catalog for deep links / desktop Settings.
+ */
 export function getNavItems(): NavItem[] {
   return [
     {
       to: '/discover',
-      label: ROUTE_LABELS.nearby,
+      label: ROUTE_LABELS.map,
+      shortLabel: 'Map',
       Icon: IconDiscover,
-      mobileTab: true,
-      desktopNav: true,
-    },
-    {
-      // Own destination — not a mode of Map. Between Nearby and Chat.
-      to: '/stream',
-      label: ROUTE_LABELS.community,
-      Icon: IconCommunity,
+      fillWhenActive: false,
       mobileTab: true,
       desktopNav: true,
     },
@@ -49,19 +55,48 @@ export function getNavItems(): NavItem[] {
       label: ROUTE_LABELS.messages,
       shortLabel: 'Chat',
       Icon: IconChat,
+      fillWhenActive: false,
       badgeKey: 'messages',
       mobileTab: true,
       desktopNav: true,
     },
     {
+      to: '/rooms',
+      label: ROUTE_LABELS.rooms,
+      shortLabel: 'Rooms',
+      Icon: IconRooms,
+      fillWhenActive: false,
+      mobileTab: true,
+      desktopNav: true,
+    },
+    {
+      to: '/out',
+      label: ROUTE_LABELS.out,
+      shortLabel: 'Out',
+      Icon: IconOut,
+      fillWhenActive: false,
+      mobileTab: true,
+      desktopNav: true,
+    },
+    {
+      to: '/profile',
+      label: ROUTE_LABELS.you,
+      shortLabel: 'You',
+      Icon: IconProfile,
+      fillWhenActive: false,
+      mobileTab: true,
+      desktopNav: true,
+    },
+    {
+      to: '/stream',
+      label: ROUTE_LABELS.community,
+      Icon: IconCommunity,
+    },
+    {
       to: '/events',
       label: ROUTE_LABELS.events,
       Icon: IconEvents,
-      desktopNav: true,
-      mobileMore: true,
     },
-    // Cruise (formerly Hot Spots) is a layer on the Nearby map, not a separate tab —
-    // no desktopNav/mobileMore/mobileTab. `/hot-spots` stays for deep links/bookmarks.
     {
       to: '/hot-spots',
       label: ROUTE_LABELS.hotSpots,
@@ -72,38 +107,18 @@ export function getNavItems(): NavItem[] {
       label: ROUTE_LABELS.matches,
       Icon: IconMatches,
       badgeKey: 'matches',
-      mobileTab: true,
-      desktopNav: true,
-    },
-    {
-      to: '/rooms',
-      label: ROUTE_LABELS.rooms,
-      // Phone tab shows full ROUTE_LABELS.rooms ("Video rooms") — never shorten to Rooms.
-      Icon: IconRooms,
-      // First-class chrome entry — not nested under Chat / messages.
-      mobileTab: true,
-      desktopNav: true,
-    },
-    {
-      to: '/profile',
-      label: ROUTE_LABELS.profile,
-      Icon: IconProfile,
-      mobileTab: true,
-      desktopNav: true,
     },
     {
       to: '/settings',
       label: ROUTE_LABELS.settings,
       Icon: IconSettings,
       desktopNav: true,
-      mobileMore: true,
     },
     {
       to: '/notifications',
       label: ROUTE_LABELS.alerts,
       Icon: IconNotifications,
       badgeKey: 'notifications',
-      desktopNav: false,
     },
   ];
 }
@@ -120,7 +135,7 @@ export function isNavActive(pathname: string, path: string): boolean {
     return pathname === '/notifications';
   }
   if (path === '/profile') {
-    return pathname === '/profile';
+    return pathname === '/profile' || pathname === '/profile/edit';
   }
   if (path === '/settings') {
     return pathname === '/settings';
@@ -134,20 +149,36 @@ export function isNavActive(pathname: string, path: string): boolean {
   if (path === '/stream') {
     return pathname === '/stream' || pathname.startsWith('/stream/');
   }
+  if (path === '/out') {
+    return (
+      pathname === '/out' ||
+      pathname.startsWith('/out/') ||
+      pathname === '/events' ||
+      pathname.startsWith('/events/') ||
+      pathname === '/hot-spots' ||
+      pathname.startsWith('/hot-spots/') ||
+      pathname === '/stream' ||
+      pathname.startsWith('/stream/')
+    );
+  }
   return pathname === path || pathname.startsWith(`${path}/`);
 }
 
 export function mobilePageTitle(pathname: string): string {
   if (pathname.startsWith('/messages/')) return 'Chat';
+  if (pathname === '/profile/edit') return 'Edit profile';
   if (pathname.startsWith('/profile/')) return 'Profile';
-  if (pathname.startsWith('/rooms/')) return ROUTE_LABELS.rooms;
+  if (pathname.startsWith('/rooms/')) return 'Rooms';
+  if (pathname === '/out' || pathname.startsWith('/out/')) return ROUTE_LABELS.out;
+  if (pathname === '/discover') return readHomeView() === 'list' ? 'List' : ROUTE_LABELS.map;
 
   const items = getNavItems();
   const match = items.find((item) => isNavActive(pathname, item.to));
-  if (match) return match.label;
+  if (match) return match.shortLabel ?? match.label;
 
   if (pathname === '/albums') return 'Albums';
   if (pathname === '/premium') return 'Premium';
   if (pathname === '/stream') return ROUTE_LABELS.community;
+  if (pathname === '/matches') return ROUTE_LABELS.matches;
   return 'MenRush';
 }

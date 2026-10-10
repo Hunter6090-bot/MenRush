@@ -1,14 +1,13 @@
 /** Primary mobile tabs — in-app back not shown (bottom nav is enough). */
 export const MOBILE_TAB_ROOTS = new Set([
   '/discover',
-  '/stream',
-  '/matches',
   '/conversations',
   '/rooms',
+  '/out',
   '/profile',
 ]);
 
-/** Home for signed-in users — Nearby / Discover. */
+/** Home for signed-in users: Map / Discover. */
 export const APP_HOME = '/discover';
 
 export function shouldShowMobileBack(pathname: string): boolean {
@@ -19,12 +18,14 @@ export function shouldShowMobileBack(pathname: string): boolean {
 
 export function mobileBackFallback(pathname: string): string {
   if (pathname === '/albums' || pathname === '/premium') return '/profile';
-  if (pathname === '/settings' || pathname === '/notifications') return APP_HOME;
+  if (pathname === '/settings' || pathname === '/notifications') return '/profile';
+  if (pathname === '/profile/edit') return '/profile';
   if (pathname.startsWith('/profile/setup')) return APP_HOME;
   if (pathname.startsWith('/profile/')) return APP_HOME;
-  if (pathname === '/events' || pathname === '/hot-spots') {
-    return APP_HOME;
+  if (pathname === '/events' || pathname === '/hot-spots' || pathname === '/stream') {
+    return '/out';
   }
+  if (pathname === '/matches') return '/conversations';
   if (pathname.startsWith('/messages/')) return '/conversations';
   if (pathname.startsWith('/rooms/')) return '/rooms';
   if (pathname.startsWith('/verify')) return APP_HOME;

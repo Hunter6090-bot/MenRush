@@ -25,6 +25,8 @@ interface ConversationRow {
   receiver_id: string;
   message: string;
   created_at: string;
+  read?: boolean;
+  delivered?: boolean;
   media_type: MessageMediaKind | null;
   media_url: string | null;
   media_storage_key?: string | null;
@@ -45,7 +47,7 @@ interface ConversationRow {
 const mediaDir = path.resolve(__dirname, '../../uploads/messages');
 
 /** Columns returned for every message row sent to the client. */
-const MESSAGE_COLUMNS = `id, sender_id, receiver_id, message, created_at,
+const MESSAGE_COLUMNS = `id, sender_id, receiver_id, message, created_at, read,
                  media_type, media_url, audio_duration_ms,
                  is_disappearing, expires_at, viewed_at, max_views, view_count, withdrawn_at`;
 
@@ -57,7 +59,9 @@ function scrubExpired<T extends ConversationRow>(row: T): T {
         ? 'Voice note withdrawn'
         : row.media_type === 'video'
           ? 'Video withdrawn'
-          : 'Photo withdrawn';
+          : row.media_type === 'location'
+            ? 'Location withdrawn'
+            : 'Photo withdrawn';
     return {
       ...row,
       media_url: null,
@@ -296,7 +300,7 @@ export const messageService = {
     return presentForViewer(result.rows[0] as ConversationRow, viewerId);
   },
 
-  /** Sender withdraws media from the chat — scrubs for both parties. */
+  /** Sender withdraws media or location from the chat — scrubs for both parties. */
   async withdrawMedia(senderId: string, messageId: string) {
     const existing = await query(
       `SELECT sender_id, receiver_id, media_storage_key, media_type, withdrawn_at
@@ -310,21 +314,26 @@ export const messageService = {
     if (row.withdrawn_at) {
       throw new Error('already_withdrawn');
     }
-    if (!row.media_storage_key) {
+    if (!row.media_storage_key && row.media_type !== 'location') {
       throw new Error('not_media');
     }
 
-    try {
-      fs.unlinkSync(resolveMediaPath(mediaDir, row.media_storage_key as string));
-    } catch {
-      /* file may already be gone */
+    if (row.media_storage_key) {
+      try {
+        fs.unlinkSync(resolveMediaPath(mediaDir, row.media_storage_key as string));
+      } catch {
+        /* file may already be gone */
+      }
     }
 
-    const label = row.media_type === 'audio'
-      ? 'Voice note withdrawn'
-      : row.media_type === 'video'
-        ? 'Video withdrawn'
-        : 'Photo withdrawn';
+    const label =
+      row.media_type === 'audio'
+        ? 'Voice note withdrawn'
+        : row.media_type === 'video'
+          ? 'Video withdrawn'
+          : row.media_type === 'location'
+            ? 'Location withdrawn'
+            : 'Photo withdrawn';
     const result = await query(
       `UPDATE messages SET
          media_url = NULL,
@@ -341,6 +350,11 @@ export const messageService = {
     const forSender = await presentForViewer(updated, senderId);
     const forReceiver = await presentForViewer(updated, row.receiver_id as string);
     return { forSender, forReceiver, receiverId: row.receiver_id as string };
+  },
+
+  /** Convenience alias for withdrawing a location share message. */
+  async withdrawLocation(senderId: string, messageId: string) {
+    return this.withdrawMedia(senderId, messageId);
   },
 
   async getConversation(
@@ -386,6 +400,13 @@ export const messageService = {
          WHERE receiver_id = $1 AND sender_id = $2 AND read = false`,
         [userId, otherId],
       );
+      // Ticket 4: Opened thread / read messages clear related notifs (message, photo, voice, missed_call)
+      try {
+        const { notificationService } = await import('./notification.service');
+        await notificationService.clearForActor(userId, otherId, ['message', 'photo', 'voice', 'missed_call']);
+      } catch (err) {
+        console.error('[clearForActor]', err);
+      }
     }
 
     const viewerIsPremium = await resolveViewerPremium(userId);
@@ -430,7 +451,18 @@ export const messageService = {
            CASE WHEN m.sender_id = $1 THEN m.receiver_id ELSE m.sender_id END AS other_user_id,
            u.name AS other_user_name,
            m.created_at AS last_message_time,
-           CASE WHEN m.message = $2 THEN $3 ELSE m.message END AS last_message,
+           CASE
+             WHEN m.message = $2 THEN $3
+             WHEN m.withdrawn_at IS NOT NULL THEN
+               CASE
+                 WHEN m.media_type = 'audio' THEN 'Voice note withdrawn'
+                 WHEN m.media_type = 'video' THEN 'Video withdrawn'
+                 WHEN m.media_type = 'location' THEN 'Location withdrawn'
+                 ELSE 'Photo withdrawn'
+               END
+             WHEN m.media_type = 'location' THEN '📍 Shared location'
+             ELSE m.message
+           END AS last_message,
            u.photo_url,
            COALESCE(p.online, false) AS online,
            (

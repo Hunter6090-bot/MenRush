@@ -1,5 +1,16 @@
 import { query } from '../db';
 import { v4 as uuidv4 } from 'uuid';
+import { MAP_PIN_FUZZ_DEFAULT_M, privateMapPointAround } from '../lib/mapPinFuzz';
+import { clampRadiusKm, PIN_PREFILTER_BUFFER_M, publicPinSql } from '../lib/mapPinSql';
+import { viewerStoredLocation } from '../lib/viewerOrigin';
+import { liveTripExistsSql } from '../lib/travel';
+import { locationHiddenFromViewerSql, notLocationHiddenFromViewerSql } from '../lib/locationHiddenSql';
+
+/** Most posts a single feed read returns. */
+export const MAP_FEED_LIMIT = 200;
+
+/** Sender's public pin for a post (seed map:<senderId>, sender's Discretion). */
+const SENDER_PIN = publicPinSql('mf.lat', 'mf.lng', 'mf.sender_id', 'sp.map_pin_fuzz_m');
 
 export interface MapFeedMessage {
   id: string;
@@ -19,43 +30,57 @@ export interface MapFeedMessage {
 export const mapFeedService = {
   async listNearby(
     userId: string,
-    opts: { lat?: number; lng?: number; radiusKm?: number } = {},
+    // lat / lng are ignored: the query point is always the viewer's stored
+    // location, so it cannot be moved around to triangulate someone.
+    opts: { lat?: number; lng?: number; radiusKm?: number; limit?: number } = {},
   ): Promise<MapFeedMessage[]> {
-    // Fall back to sender's own stored location when caller omits coords.
-    let lat = opts.lat;
-    let lng = opts.lng;
+    const origin = await viewerStoredLocation(userId);
+    if (!origin) return [];
 
-    if (lat === undefined || lng === undefined) {
-      const locRes = await query(
-        `SELECT lat, lng FROM profiles WHERE user_id = $1`,
-        [userId],
-      );
-      if (locRes.rows.length === 0 || locRes.rows[0].lat == null) return [];
-      lat = locRes.rows[0].lat;
-      lng = locRes.rows[0].lng;
-    }
-
-    const radiusMeters = (opts.radiusKm ?? 5) * 1000;
+    // Same radius bounds as Nearby and Community (min 0.8 km).
+    const radiusMeters = clampRadiusKm(opts.radiusKm, 5) * 1000;
     const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const limit = Math.min(MAP_FEED_LIMIT, Math.max(1, Math.floor(Number(opts.limit) || MAP_FEED_LIMIT)));
 
+    // Coordinates returned and the radius check both use the sender's public
+    // (Discretion-fuzzed) pin for the post, never raw GPS.
     const result = await query(
       `SELECT mf.id, mf.sender_id, u.name AS display_name, u.photo_url AS photo_url,
-              mf.message, mf.lat, mf.lng, mf.created_at
+              mf.message, ${SENDER_PIN.lat} AS lat, ${SENDER_PIN.lng} AS lng, mf.created_at
        FROM map_feed_messages mf
        JOIN users u ON u.id = mf.sender_id
+       LEFT JOIN profiles sp ON sp.user_id = mf.sender_id
        WHERE mf.created_at >= $3
-         AND ST_DWithin(mf.location, ST_MakePoint($2, $1)::geography, $4)
-       ORDER BY mf.created_at DESC
-       LIMIT 200`,
-      [lat, lng, fifteenMinsAgo, radiusMeters],
+         AND ST_DWithin(mf.location, ST_MakePoint($2, $1)::geography, $4::float8 + ${PIN_PREFILTER_BUFFER_M})
+         AND ST_DWithin(${SENDER_PIN.geog}, ST_MakePoint($2, $1)::geography, $4::float8)
+         -- Ghost / hidden members: their posts and pins are not shown to others.
+         AND (
+           mf.sender_id = $5
+           OR (COALESCE(sp.is_visible, FALSE) = TRUE AND COALESCE(sp.is_ghost, FALSE) = FALSE)
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM blocks b
+           WHERE (b.blocker_id = $5 AND b.blocked_id = mf.sender_id)
+              OR (b.blocker_id = mf.sender_id AND b.blocked_id = $5)
+         )
+         -- Travel: a member on a live trip is not at home, so their posts do
+         -- not show at their home pin (same rule as Nearby). They still see their own.
+         AND (mf.sender_id = $5 OR NOT ${liveTripExistsSql('mf.sender_id')})
+         -- Hide my location from: posts and pins from members who hide from the viewer.
+         -- In SQL, before LIMIT, so hidden posts never use up the page.
+         AND ${notLocationHiddenFromViewerSql('mf.sender_id', '$5::uuid')}
+       ORDER BY mf.created_at DESC, mf.id DESC
+       LIMIT $6`,
+      [origin.lat, origin.lng, fifteenMinsAgo, radiusMeters, userId, limit],
     );
 
+    // lat / lng are already the sender's public pin (SENDER_PIN in SQL).
     return result.rows;
   },
 
   async post(userId: string, text: string): Promise<MapFeedMessage & { lat: number; lng: number }> {
     const locRes = await query(
-      `SELECT lat, lng FROM profiles WHERE user_id = $1`,
+      `SELECT lat, lng, map_pin_fuzz_m FROM profiles WHERE user_id = $1`,
       [userId],
     );
 
@@ -63,7 +88,11 @@ export const mapFeedService = {
       throw new Error('location_required');
     }
 
-    const { lat, lng } = locRes.rows[0] as { lat: number; lng: number };
+    const { lat, lng, map_pin_fuzz_m: fuzzM } = locRes.rows[0] as {
+      lat: number;
+      lng: number;
+      map_pin_fuzz_m: number | null;
+    };
     const id = uuidv4();
     const sanitized = text.replace(/<script[^>]*>.*?<\/script>/gi, '').trim();
 
@@ -77,22 +106,99 @@ export const mapFeedService = {
 
     const row = insertRes.rows[0];
 
+    // HTTP reply and socket fan-out carry the public (fuzzed) pin, not raw GPS.
+    const pin = privateMapPointAround(
+      Number(row.lat),
+      Number(row.lng),
+      `map:${userId}`,
+      fuzzM != null && Number.isFinite(Number(fuzzM)) ? Number(fuzzM) : MAP_PIN_FUZZ_DEFAULT_M,
+    );
+
     const userRes = await query(`SELECT name, photo_url FROM users WHERE id = $1`, [userId]);
     return {
       ...row,
+      lat: pin.lat,
+      lng: pin.lng,
       display_name: userRes.rows[0]?.name ?? '',
       photo_url: userRes.rows[0]?.photo_url ?? null,
     };
   },
 
-  async nearbyUserIds(lat: number, lng: number, radiusKm: number): Promise<string[]> {
+  /**
+   * Socket fan-out targets for a new post. With senderId, anyone the sender
+   * blocked or who blocked the sender is left out (same block lookup as Nearby),
+   * anyone the sender hides their location from is left out,
+   * and a ghost / hidden sender, or one on a live Travel trip, only reaches themselves.
+   */
+  async nearbyUserIds(
+    lat: number,
+    lng: number,
+    radiusKm: number,
+    senderId?: string,
+  ): Promise<string[]> {
     const radiusMeters = radiusKm * 1000;
     const result = await query(
       `SELECT user_id FROM profiles
        WHERE lat IS NOT NULL
-         AND ST_DWithin(location, ST_MakePoint($2, $1)::geography, $3)`,
-      [lat, lng, radiusMeters],
+         AND ST_DWithin(location, ST_MakePoint($2, $1)::geography, $3)
+         AND (
+           $4::uuid IS NULL
+           OR profiles.user_id = $4::uuid
+           OR (
+             EXISTS (
+               SELECT 1 FROM profiles sp
+               WHERE sp.user_id = $4::uuid AND sp.is_visible = TRUE AND sp.is_ghost = FALSE
+             )
+             -- Travel: a sender on a live trip reaches only themselves at home.
+             AND NOT ${liveTripExistsSql('$4::uuid')}
+             AND NOT EXISTS (
+               SELECT 1 FROM blocks b
+               WHERE (b.blocker_id = $4::uuid AND b.blocked_id = profiles.user_id)
+                  OR (b.blocker_id = profiles.user_id AND b.blocked_id = $4::uuid)
+             )
+             AND NOT ${locationHiddenFromViewerSql('$4::uuid', 'profiles.user_id')}
+           )
+         )`,
+      [lat, lng, radiusMeters, senderId ?? null],
     );
     return result.rows.map((r: { user_id: string }) => r.user_id);
+  },
+  /**
+   * Delete the member's own map feed post, at any age. The row goes, so its
+   * saved lat / lng / location go with it. Returns the deleted row's raw
+   * point (server-side only, for the fan-out) or null when the post does not
+   * exist or belongs to someone else (callers answer 404 either way, so a
+   * non-owner learns nothing about other members' posts).
+   */
+  async deleteOwn(userId: string, postId: string): Promise<{ id: string; lat: number; lng: number } | null> {
+    const res = await query(
+      `DELETE FROM map_feed_messages WHERE id = $1 AND sender_id = $2 RETURNING id, lat, lng`,
+      [postId, userId],
+    );
+    const row = res.rows[0];
+    return row ? { id: row.id, lat: Number(row.lat), lng: Number(row.lng) } : null;
+  },
+
+  /** How many map feed posts this member has (any age), for the delete-all confirm. */
+  async countOwn(userId: string): Promise<number> {
+    const res = await query(`SELECT COUNT(*)::int AS n FROM map_feed_messages WHERE sender_id = $1`, [userId]);
+    return res.rows[0]?.n ?? 0;
+  },
+
+  /**
+   * Delete every map feed post this member has ever made (any age). Returns
+   * the removed rows' ids and raw points (server-side only, for the fan-out).
+   */
+  async deleteAllOwn(userId: string): Promise<{ deleted: number; removed: Array<{ id: string; lat: number; lng: number }> }> {
+    const res = await query(
+      `DELETE FROM map_feed_messages WHERE sender_id = $1 RETURNING id, lat, lng`,
+      [userId],
+    );
+    const removed = res.rows.map((r: { id: string; lat: unknown; lng: unknown }) => ({
+      id: r.id,
+      lat: Number(r.lat),
+      lng: Number(r.lng),
+    }));
+    return { deleted: removed.length, removed };
   },
 };

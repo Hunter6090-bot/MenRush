@@ -5,6 +5,7 @@
  */
 const APP_ROUTE_LOADERS: Array<() => Promise<unknown>> = [
   () => import('../pages/Matches'),
+  () => import('../pages/You'),
   () => import('../pages/Profile'),
   () => import('../components/MessagingRoute'),
   () => import('../components/RoomsRoute'),

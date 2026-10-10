@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { profileMetaAPI } from '../api/client';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { Layout } from './Layout';
@@ -48,7 +49,16 @@ vi.mock('../api/client', () => ({
   messagesAPI: {
     getConversations: vi.fn().mockResolvedValue({ data: [] }),
   },
+  profileMetaAPI: {
+    getMapPinFuzz: vi.fn().mockResolvedValue({ data: { map_pin_fuzz_m: 400 } }),
+    setMapPinFuzz: vi.fn().mockResolvedValue({ data: { map_pin_fuzz_m: 640 } }),
+  },
 }));
+
+vi.mock('../lib/homeView', async () => {
+  const actual = await vi.importActual<typeof import('../lib/homeView')>('../lib/homeView');
+  return { ...actual };
+});
 
 vi.mock('../lib/tabListCache', () => ({
   readCachedMatches: vi.fn().mockReturnValue(undefined),
@@ -57,32 +67,14 @@ vi.mock('../lib/tabListCache', () => ({
 
 vi.mock('../lib/navConfig', () => ({
   getNavItems: () => [
-    {
-      to: '/discover',
-      label: 'Nearby',
-      shortLabel: 'Near',
-      desktopNav: true,
-      mobileTab: true,
-      Icon: () => null,
-    },
-    {
-      to: '/matches',
-      label: 'Matches',
-      desktopNav: true,
-      mobileTab: true,
-      Icon: () => null,
-    },
-    {
-      to: '/conversations',
-      label: 'Messages',
-      shortLabel: 'Chat',
-      desktopNav: true,
-      mobileTab: true,
-      Icon: () => null,
-    },
+    { to: '/discover', label: 'Map', shortLabel: 'Map', desktopNav: true, mobileTab: true, Icon: () => null },
+    { to: '/conversations', label: 'Messages', shortLabel: 'Chat', desktopNav: true, mobileTab: true, Icon: () => null },
+    { to: '/rooms', label: 'Rooms', shortLabel: 'Rooms', desktopNav: true, mobileTab: true, Icon: () => null },
+    { to: '/out', label: 'Out', shortLabel: 'Out', desktopNav: true, mobileTab: true, Icon: () => null },
+    { to: '/profile', label: 'You', shortLabel: 'You', desktopNav: true, mobileTab: true, Icon: () => null },
   ],
   isNavActive: () => true,
-  mobilePageTitle: () => 'Nearby',
+  mobilePageTitle: () => 'Map',
 }));
 
 describe('Layout sign out', () => {
@@ -119,7 +111,7 @@ describe('Layout sign out', () => {
     expect(navigate).toHaveBeenCalledWith('/login');
   });
 
-  it('renders Nearby ↔ Matches ↔ Chat bottom nav links (React 19 / RR v6)', () => {
+  it('renders home Map|List toggle + Chat · Rooms · Out · You', () => {
     render(
       <MemoryRouter>
         <Layout>
@@ -129,11 +121,117 @@ describe('Layout sign out', () => {
     );
 
     const primary = screen.getByRole('navigation', { name: 'Primary' });
-    expect(primary.querySelector('a[href="/discover"]')).toBeTruthy();
-    expect(primary.querySelector('a[href="/matches"]')).toBeTruthy();
+    // First slot is a toggle button, not a /discover link.
+    expect(primary.querySelector('a[href="/discover"]')).toBeFalsy();
+    expect(screen.getByTestId('mobile-nav-home-toggle')).toBeTruthy();
+    expect(screen.getByTestId('mobile-nav-home-toggle').textContent).toMatch(/List|Map/);
     expect(primary.querySelector('a[href="/conversations"]')).toBeTruthy();
-    expect(screen.getByTestId('mobile-nav-discover')).toBeTruthy();
-    expect(screen.getByTestId('mobile-nav-matches')).toBeTruthy();
+    expect(primary.querySelector('a[href="/rooms"]')).toBeTruthy();
+    expect(primary.querySelector('a[href="/out"]')).toBeTruthy();
+    expect(primary.querySelector('a[href="/profile"]')).toBeTruthy();
+    expect(primary.querySelector('a[href="/matches"]')).toBeFalsy();
     expect(screen.getByTestId('mobile-nav-conversations')).toBeTruthy();
+    expect(screen.getByTestId('mobile-nav-out')).toBeTruthy();
+  });
+
+  it('top-right Menu opens account links and Sign out still confirms', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Layout>
+          <div>child</div>
+        </Layout>
+      </MemoryRouter>,
+    );
+
+    // Phone header + desktop top bar each carry one Menu button.
+    const buttons = screen.getAllByTestId('account-menu-button');
+    expect(buttons.length).toBe(2);
+    for (const b of buttons) {
+      expect(b).toHaveAttribute('aria-label', 'Menu');
+      expect(b.className).toMatch(/min-h-\[44px\]/);
+      expect(b.className).toMatch(/min-w-\[44px\]/);
+    }
+    // Header keeps theme, search and bell.
+    expect(screen.getAllByRole('button', { name: 'Search profiles' }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: 'Alerts' })).toBeTruthy();
+
+    expect(screen.queryByTestId('account-menu')).not.toBeInTheDocument();
+    await user.click(buttons[0]);
+    const menu = screen.getByTestId('account-menu');
+    const hrefs = Array.from(menu.querySelectorAll('a')).map((a) => a.getAttribute('href'));
+    expect(hrefs).toEqual(
+      expect.arrayContaining([
+        '/settings',
+        '/settings#account',
+        '/settings#two-factor',
+        '/settings#notifications',
+        '/settings#blocked',
+        '/settings#delete-account',
+        '/profile/edit#ghost',
+        '/profile/edit#privacy',
+        '/profile/edit#viewed-me',
+        '/profile/edit#invite',
+        '/profile/edit#mood',
+        '/premium',
+        '/albums',
+        '/matches',
+        '/notifications',
+        '/stream',
+        '/events',
+        '/hot-spots',
+        '/safety',
+        '/help',
+        '/get-the-app',
+        '/terms',
+        '/privacy',
+        '/cookies',
+        '/guidelines',
+        '/contact',
+      ]),
+    );
+    expect(screen.getByTestId('account-menu-ghost').tagName).toBe('A');
+    expect(screen.getByTestId('account-menu-account-security')).toHaveTextContent('Account and security');
+    expect(screen.getByTestId('account-menu-privacy-visibility')).toHaveTextContent('Privacy and visibility');
+    // The only control in the Menu besides links and Sign out is the Discretion slider.
+    expect(menu.querySelectorAll('[role="switch"], [aria-pressed], input[type="checkbox"]').length).toBe(0);
+    for (const id of ['you', 'discover', 'account', 'help']) {
+      expect(screen.getByTestId(`account-menu-section-${id}`)).toBeInTheDocument();
+    }
+    for (const a of Array.from(menu.querySelectorAll('nav a'))) {
+      expect(a.className).toMatch(/min-h-\[(4[4-9]|5\d)px\]/);
+    }
+    expect(menu.textContent).not.toMatch(/beta/i);
+    expect(menu.textContent).not.toMatch(/\u2014/);
+
+    await user.click(screen.getByTestId('account-menu-sign-out'));
+    expect(screen.queryByTestId('account-menu')).not.toBeInTheDocument();
+    expect(screen.getByTestId('sign-out-confirm')).toBeInTheDocument();
+    expect(logout).not.toHaveBeenCalled();
+  });
+
+  it('Discretion sits in the Menu, reads the saved value and only writes on change', async () => {
+    const user = userEvent.setup();
+    vi.mocked(profileMetaAPI.setMapPinFuzz).mockClear();
+    render(
+      <MemoryRouter>
+        <Layout>
+          <div>child</div>
+        </Layout>
+      </MemoryRouter>,
+    );
+    await user.click(screen.getAllByTestId('account-menu-button')[0]);
+    const range = (await screen.findByTestId('map-discretion-range')) as HTMLInputElement;
+    await waitFor(() => expect(range).not.toBeDisabled());
+    expect(screen.getByTestId('map-discretion-pill').textContent).toMatch(/400/);
+    expect(profileMetaAPI.setMapPinFuzz).not.toHaveBeenCalled();
+
+    const heard: number[] = [];
+    const onFuzz = (e: Event) => heard.push((e as CustomEvent<number>).detail);
+    window.addEventListener('menrush:map-pin-fuzz', onFuzz);
+    fireEvent.change(range, { target: { value: String(Number(range.value) + 1) } });
+    window.removeEventListener('menrush:map-pin-fuzz', onFuzz);
+    expect(profileMetaAPI.setMapPinFuzz).toHaveBeenCalledTimes(1);
+    expect(heard).toHaveLength(1);
   });
 });

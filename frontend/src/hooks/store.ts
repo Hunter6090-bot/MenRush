@@ -278,6 +278,7 @@ interface NotificationState {
   markAllAsRead: () => void;
   deleteNotification: (id: string) => void;
   deleteAllRead: () => void;
+  deleteAllNotifications: () => void;
   setUnreadCount: (count: number) => void;
   setLoadError: (message: string | null) => void;
 }
@@ -344,6 +345,8 @@ export const useNotificationStore = create<NotificationState>((set) => ({
     }),
   deleteAllRead: () =>
     set((s) => ({ notifications: s.notifications.filter((n) => !n.read) })),
+  deleteAllNotifications: () =>
+    set({ notifications: [], unreadCount: 0, pendingToasts: [] }),
   setUnreadCount: (unreadCount) => set({ unreadCount }),
   setLoadError: (loadError) => set({ loadError }),
 }));

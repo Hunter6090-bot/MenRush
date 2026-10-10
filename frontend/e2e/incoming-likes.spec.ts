@@ -144,9 +144,9 @@ test('likeUser success path from profile Match CTA', async ({ browser }) => {
   const page = await ctx.newPage();
   await page.goto(`/profile/${liker.user.id}`);
 
-  // Already mutual from a prior retry — Open chat replaces Match.
+  // Already mutual from a prior retry — Chat replaces Match.
   if (await page.getByTestId('profile-view-unmatch').isVisible().catch(() => false)) {
-    await expect(page.getByTestId('profile-view-message')).toHaveText(/Open chat/i);
+    await expect(page.getByTestId('profile-view-message')).toHaveText(/Chat/i);
   } else {
     const matchBtn = page.getByTestId('profile-view-match');
     await expect(matchBtn).toBeVisible({ timeout: 15_000 });
@@ -156,7 +156,7 @@ test('likeUser success path from profile Match CTA', async ({ browser }) => {
       expect(label).toBe('Match');
       await expect(matchBtn).toBeDisabled();
     } else {
-      await expect(matchBtn).toHaveText('Match');
+      await expect(matchBtn).toHaveText(/Match/i);
       await matchBtn.click();
       // Flash confirms the likeUser path; mutual UI may unmount Match.
       await expect(
@@ -167,16 +167,17 @@ test('likeUser success path from profile Match CTA', async ({ browser }) => {
         .isVisible()
         .catch(() => false);
       if (unmatchVisible) {
-        await expect(page.getByTestId('profile-view-message')).toHaveText(/Open chat/i);
+        await expect(page.getByTestId('profile-view-message')).toHaveText(/Chat/i);
         await expect(page.getByTestId('profile-view-matched-status')).toHaveText(
           /Matched with/i,
         );
       } else {
-        await expect(page.getByTestId('profile-view-match')).toHaveText(/^Match$/);
+        await expect(page.getByTestId('profile-view-match')).toHaveText(/Match|Sent/i);
         await expect(page.getByTestId('profile-view-match')).toBeDisabled();
       }
     }
   }
+
 
   // API-level success confirmation for the likeUser path.
   const api = await apiRequest.newContext({ baseURL: BASE_URL });

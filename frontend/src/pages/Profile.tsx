@@ -9,6 +9,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { PulseRing } from '../components/PulseRing';
 import { MoodPicker } from '../components/MoodPicker';
 import { GhostToggle } from '../components/GhostToggle';
+import { ShowDistanceRow } from '../components/ShowDistanceRow';
 import { ProfileViewersCard, ProfileViewer } from '../components/ProfileViewersCard';
 import { normalizeProfileImageFile } from '../lib/imageUpload';
 import { CoverBanner, DEFAULT_COVER_FRAME, normalizeCoverFrame, type CoverFrame } from '../components/CoverBanner';
@@ -19,6 +20,8 @@ import { VerifiedBadge } from '../components/VerifiedBadge';
 import { QRCodeSVG } from 'qrcode.react';
 import { profileUrl as buildProfileUrl } from '../lib/profileLinks';
 import { getPhotoUrl } from '../components/UserAvatar';
+import { BrandAvatar } from '../components/BrandAvatar';
+import { isPlaceholderAvatarUrl, realAvatarUrl } from '../lib/avatarFallback';
 
 import {
   PROFILE_TAG_GROUPS,
@@ -60,14 +63,14 @@ function EssentialFieldLabel({
   return (
     <label
       htmlFor={htmlFor}
-      className={`mb-1.5 block text-xs font-medium uppercase tracking-wide ${
+      className={`mb-1.5 block text-[15px] font-medium uppercase tracking-wide ${
         incomplete ? 'text-[#E0A14A]' : 'text-[var(--cream-muted)]'
       }`}
     >
       {children}
       {incomplete ? (
         <span
-          className="ml-2 inline-block rounded-full bg-[rgba(196,131,42,0.2)] px-1.5 py-0.5 text-[9px] font-extrabold normal-case tracking-wide text-[#E0A14A]"
+          className="ml-2 inline-block rounded-full bg-[rgba(196,131,42,0.2)] px-1.5 py-0.5 text-[15px] font-extrabold normal-case tracking-wide text-[#E0A14A]"
           data-testid="essential-needed-cue"
         >
           Missing
@@ -118,6 +121,7 @@ interface ProfileData {
   show_height?: boolean;
   show_weight?: boolean;
   show_relationship?: boolean;
+  show_distance?: boolean;
   bio?: string;
   headline?: string;
   looking_for?: string;
@@ -150,7 +154,7 @@ type Toast = { type: 'success' | 'error'; msg: string };
 
 export const Profile = () => {
   const verification = useVerification();
-  const { user, token, setAuth, patchUser, logout } = useAuthStore();
+  const { user, token, setAuth, patchUser } = useAuthStore();
   const betaPremiumFree = isBetaPremiumFree();
   const authIsPremium = Boolean(
     betaPremiumFree || user?.is_premium || user?.beta_premium_included,
@@ -165,6 +169,7 @@ export const Profile = () => {
   const [showHeight, setShowHeight] = useState(true);
   const [showWeight, setShowWeight] = useState(true);
   const [showRelationship, setShowRelationship] = useState(true);
+  const [showDistance, setShowDistance] = useState(true);
   const [bio, setBio] = useState('');
   const [headline, setHeadline] = useState('');
   const [lookingFor, setLookingFor] = useState('');
@@ -217,6 +222,7 @@ export const Profile = () => {
         setShowHeight(d.show_height !== false);
         setShowWeight(d.show_weight !== false);
         setShowRelationship(d.show_relationship !== false);
+        setShowDistance(d.show_distance !== false);
         setBio(d.bio ?? '');
         setHeadline(d.headline ?? '');
         setLookingFor(d.looking_for ?? '');
@@ -537,6 +543,7 @@ export const Profile = () => {
         show_height: showHeight,
         show_weight: showWeight,
         show_relationship: showRelationship,
+        show_distance: showDistance,
       });
       setProfile((p) => (p ? { ...p, ...res.data } : p));
       if (user && token) {
@@ -564,9 +571,14 @@ export const Profile = () => {
       }
       showToast('success', 'Profile saved');
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        'Failed to save. Please try again.';
+      const data = (err as { response?: { data?: { error?: string; feature?: string } } })?.response
+        ?.data;
+      if (data?.error === 'premium_required' && data.feature === 'show_distance') {
+        setShowDistance(true);
+        showToast('error', 'Premium hides distance.');
+        return;
+      }
+      const msg = data?.error || 'Failed to save. Please try again.';
       showToast('error', msg);
     } finally {
       setSaving(false);
@@ -604,11 +616,11 @@ export const Profile = () => {
         <div className="flex flex-col items-center justify-center py-24 px-4 text-center gap-4">
           {profileLoadError ? (
             <>
-              <p className="text-[var(--cream)]/80 text-sm">{profileLoadError}</p>
+              <p className="text-[var(--cream)]/80 text-[15px]">{profileLoadError}</p>
               <button
                 type="button"
                 onClick={() => window.location.reload()}
-                className="px-4 py-2 rounded-xl bg-[#C4832A]/10 hover:bg-[#C4832A]/20 text-[#C4832A] text-xs font-semibold border border-[#C4832A]/30"
+                className="px-4 py-2 rounded-xl bg-[#C4832A]/10 hover:bg-[#C4832A]/20 text-[#C4832A] text-[15px] font-semibold border border-[#C4832A]/30"
               >
                 Try again
               </button>
@@ -623,11 +635,11 @@ export const Profile = () => {
 
   return (
     <Layout>
-      <h1 className="sr-only">Your MenRush profile</h1>
+      <h1 className="sr-only">Edit your MenRush profile</h1>
       {/* Toast */}
       {toast && (
         <div
-          className={`fixed top-[calc(var(--mobile-header-height)+0.5rem)] left-1/2 z-50 -translate-x-1/2 px-5 py-2.5 rounded-xl text-sm font-medium shadow-card border animate-slide-up lg:top-6 ${
+          className={`fixed top-[calc(var(--mobile-header-height)+0.5rem)] left-1/2 z-50 -translate-x-1/2 px-5 py-2.5 rounded-xl text-[15px] font-medium shadow-card border animate-slide-up lg:top-6 ${
             toast.type === 'success'
               ? 'bg-nn-online/15 border-nn-online/25 text-[#8FC773]'
               : 'bg-[#A45E18]/15 border-[#A45E18]/25 text-[var(--cream)]/80'
@@ -693,7 +705,7 @@ export const Profile = () => {
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-[#C4832A]/30 via-[#C4832A]/10 to-[#A45E18]/10" />
                   <span className="absolute inset-0 flex items-start justify-center pt-4">
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--bg-card)]/40 bg-[var(--bg-primary)]/55 px-3 py-1.5 text-[11px] font-semibold text-[var(--cream)] backdrop-blur-sm">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--bg-card)]/40 bg-[var(--bg-primary)]/55 px-3 py-1.5 text-[15px] font-semibold text-[var(--cream)] backdrop-blur-sm">
                       {uploadingCover ? (
                         <>
                           <Spinner className="h-3.5 w-3.5" />
@@ -715,7 +727,7 @@ export const Profile = () => {
                   <button
                     type="button"
                     onClick={() => setCoverEditorOpen(true)}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-[var(--bg-card)]/40 bg-[var(--bg-primary)]/55 px-3 py-1.5 text-[11px] font-semibold text-[var(--cream)] backdrop-blur-sm hover:border-[#C4832A]/40"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[var(--bg-card)]/40 bg-[var(--bg-primary)]/55 px-3 py-1.5 text-[15px] font-semibold text-[var(--cream)] backdrop-blur-sm hover:border-[#C4832A]/40"
                   >
                     Adjust cover
                   </button>
@@ -723,7 +735,7 @@ export const Profile = () => {
                     type="button"
                     onClick={() => coverInputRef.current?.click()}
                     disabled={uploadingCover}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-[var(--bg-card)]/40 bg-[var(--bg-primary)]/55 px-3 py-1.5 text-[11px] font-semibold text-[var(--cream)] backdrop-blur-sm hover:border-[#C4832A]/40 disabled:opacity-60"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[var(--bg-card)]/40 bg-[var(--bg-primary)]/55 px-3 py-1.5 text-[15px] font-semibold text-[var(--cream)] backdrop-blur-sm hover:border-[#C4832A]/40 disabled:opacity-60"
                   >
                     {uploadingCover ? 'Uploading…' : 'Change photo'}
                   </button>
@@ -790,9 +802,9 @@ export const Profile = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-2xl font-extrabold text-[var(--cream)]">{displayName || profile.name}</h2>
                     {verification.status?.is_verified ? <VerifiedBadge /> : null}
-                    <StatusBadge online={!!profile.online} lastSeen={profile.last_seen} />
+                    <StatusBadge online={!!profile.online} lastSeen={profile.last_seen} size="md" />
                   </div>
-                  <p className="mt-1 text-sm text-[var(--cream-muted)]">
+                  <p className="mt-1 text-[15px] text-[var(--cream-muted)]">
                     {showAge
                       ? `Age ${
                           dateOfBirth
@@ -803,12 +815,12 @@ export const Profile = () => {
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {interests.slice(0, 4).map((tag) => (
-                      <span key={tag} className="mr-pill mr-pill-inactive text-xs">
+                      <span key={tag} className="mr-pill mr-pill-inactive text-[15px]">
                         {tag}
                       </span>
                     ))}
                     {mood ? (
-                      <span className="mr-pill mr-pill-active text-xs">{MOOD_LABELS[mood]}</span>
+                      <span className="mr-pill mr-pill-active text-[15px]">{MOOD_LABELS[mood]}</span>
                     ) : null}
                   </div>
                 </div>
@@ -820,11 +832,13 @@ export const Profile = () => {
           <div className="grid grid-cols-[280px_1fr] gap-8">
             <div className="space-y-3">
               <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]">
-                {getPhotoUrl(photoUrl) && !isNearbyPlaceholderFace(photoUrl) ? (
-                  <img
-                    src={getPhotoUrl(photoUrl)!}
+                {!isNearbyPlaceholderFace(photoUrl) ? (
+                  <BrandAvatar
+                    photoUrl={photoUrl}
+                    name={profile.name}
                     alt={profile.name}
-                    className="h-full w-full object-cover"
+                    variant="tile"
+                    imgClassName="h-full w-full object-cover"
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center">
@@ -846,21 +860,22 @@ export const Profile = () => {
                 </button>
               </div>
               <div className="grid grid-cols-3 gap-2">
-                {[photoUrl, coverUrl].filter(Boolean).slice(0, 3).map((src, i) => (
+                {[photoUrl, coverUrl]
+                  .filter((u): u is string => !isPlaceholderAvatarUrl(u))
+                  .slice(0, 3)
+                  .map((src, i) => (
                   <div
                     key={`${src}-${i}`}
                     className="aspect-square overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]"
                   >
-                    {getPhotoUrl(src) ? (
-                      <img src={getPhotoUrl(src)!} alt="" className="h-full w-full object-cover" />
-                    ) : null}
+                    <BrandAvatar photoUrl={src} variant="tile" />
                   </div>
                 ))}
                 <button
                   type="button"
                   onClick={() => coverInputRef.current?.click()}
                   disabled={uploadingCover}
-                  className="flex aspect-square items-center justify-center rounded-xl border border-dashed border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.08)] text-[11px] font-bold text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.14)] disabled:opacity-60"
+                  className="flex aspect-square items-center justify-center rounded-xl border border-dashed border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.08)] text-[15px] font-bold text-[#E0A14A] transition-colors hover:bg-[rgba(196,131,42,0.14)] disabled:opacity-60"
                 >
                   {uploadingCover ? '…' : coverUrl ? 'Cover' : '+ Cover'}
                 </button>
@@ -875,17 +890,17 @@ export const Profile = () => {
                   </div>
                   <div>
                     <p className="text-[15px] font-bold text-[var(--cream)]">Your QR code</p>
-                    <p className="mt-1 text-[13px] text-[var(--cream-muted)]">
+                    <p className="mt-1 text-[15px] text-[var(--cream-muted)]">
                       Scan to open your profile in person.
                     </p>
                   </div>
                 </div>
               ) : null}
               <div className="mr-card p-5">
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--cream-muted)]">
+                <p className="text-[15px] font-bold uppercase tracking-[0.16em] text-[var(--cream-muted)]">
                   About
                 </p>
-                <p className="mt-2 text-sm leading-relaxed text-[var(--cream-soft)]">
+                <p className="mt-2 text-[15px] leading-relaxed text-[var(--cream-soft)]">
                   {bio || 'Add a bio so nearby guys know what you are into.'}
                 </p>
               </div>
@@ -917,7 +932,7 @@ export const Profile = () => {
                 <button
                   type="button"
                   onClick={() => setCoverEditorOpen(true)}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--bg-card)]/40 bg-[var(--bg-primary)]/55 px-3 py-1.5 text-[11px] font-semibold text-[var(--cream)] backdrop-blur-sm hover:border-[#C4832A]/40"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--bg-card)]/40 bg-[var(--bg-primary)]/55 px-3 py-1.5 text-[15px] font-semibold text-[var(--cream)] backdrop-blur-sm hover:border-[#C4832A]/40"
                 >
                   Adjust cover
                 </button>
@@ -925,7 +940,7 @@ export const Profile = () => {
                   type="button"
                   onClick={() => coverInputRef.current?.click()}
                   disabled={uploadingCover}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--bg-card)]/40 bg-[var(--bg-primary)]/55 px-3 py-1.5 text-[11px] font-semibold text-[var(--cream)] backdrop-blur-sm hover:border-[#C4832A]/40 disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--bg-card)]/40 bg-[var(--bg-primary)]/55 px-3 py-1.5 text-[15px] font-semibold text-[var(--cream)] backdrop-blur-sm hover:border-[#C4832A]/40 disabled:opacity-60"
                 >
                   {uploadingCover ? 'Uploading…' : 'Change photo'}
                 </button>
@@ -940,7 +955,7 @@ export const Profile = () => {
                 disabled={uploadingCover}
                 className="absolute inset-0 flex items-start justify-center pt-3"
               >
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--bg-card)]/40 bg-[var(--bg-primary)]/55 px-3 py-1.5 text-[11px] font-semibold text-[var(--cream)] backdrop-blur-sm">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--bg-card)]/40 bg-[var(--bg-primary)]/55 px-3 py-1.5 text-[15px] font-semibold text-[var(--cream)] backdrop-blur-sm">
                   {uploadingCover ? (
                     <>
                       <Spinner className="w-3.5 h-3.5" />
@@ -974,10 +989,7 @@ export const Profile = () => {
           </div>
           {/* Avatar overlapping cover */}
           <div className="px-5 pb-5">
-            <p className="pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--cream-muted)] sm:hidden">
-              Tap Adjust cover to move or zoom your banner
-            </p>
-            <div className="-mt-10 mb-3 flex items-end justify-between">
+            <div className="-mt-10 mb-3 flex items-end justify-between" data-testid="profile-avatar-row">
               <div className="relative">
                 <button
                   type="button"
@@ -1017,19 +1029,19 @@ export const Profile = () => {
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                <StatusBadge online={!!profile.online} lastSeen={profile.last_seen} />
+                <StatusBadge online={!!profile.online} lastSeen={profile.last_seen} size="md" />
                 <Link
                   to="/settings"
                   aria-label="Open settings"
                   title="Settings"
-                  className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream-soft)] shadow-sm transition-colors active:bg-[var(--copper)]/15 active:text-[var(--copper)]"
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream-soft)] shadow-sm transition-colors active:bg-[var(--copper)]/15 active:text-[var(--copper)]"
                 >
                   <IconSettings size={20} />
                 </Link>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-bold text-[var(--cream)]">{displayName || profile.name}</h2>{verification.status?.is_verified ? <VerifiedBadge /> : null}</div>
-            <p className="text-[var(--cream-muted)] text-sm mt-0.5">
+            <p className="text-[var(--cream-muted)] text-[15px] mt-0.5">
               {showAge
                 ? `Age ${
                     dateOfBirth
@@ -1038,7 +1050,16 @@ export const Profile = () => {
                   }`
                 : 'Age hidden on your public profile'}
             </p>
-            <ProfileVerification verification={verification} />
+            {/* Below the avatar row so the avatar never sits on top of it (phones only). */}
+            <p
+              className="mt-2 text-[15px] font-semibold text-[var(--cream-muted)] sm:hidden"
+              data-testid="profile-adjust-cover-hint"
+            >
+              Tap Adjust cover to move or zoom your banner
+            </p>
+            <div id="verify">
+              <ProfileVerification verification={verification} />
+            </div>
           </div>
         </div>
 
@@ -1052,16 +1073,16 @@ export const Profile = () => {
           <form onSubmit={handleSave} className="space-y-4" data-testid="profile-edit-form">
             {essentials.missingItems.length > 0 ? (
               <div
-                className="sticky top-0 z-20 -mx-1 mb-1 rounded-xl border border-[rgba(196,131,42,0.45)] bg-[rgba(26,14,3,0.94)] px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm"
+                className="sticky top-0 z-20 -mx-1 mb-1 rounded-xl border border-[color-mix(in_srgb,var(--copper)_45%,transparent)] bg-[var(--bg-card)] px-3.5 py-3 shadow-[var(--shadow-lg)]"
                 data-testid="profile-missing-essentials-banner"
               >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--cream-muted)]">
+                <p className="text-[15px] font-semibold uppercase tracking-[0.12em] text-[var(--cream-muted)]">
                   Still missing
                 </p>
                 <button
                   type="button"
                   data-testid="profile-missing-named-jump"
-                  className="mt-1 text-left text-[14px] font-bold text-[#E0A14A] underline decoration-[#E0A14A]/50 underline-offset-2"
+                  className="mt-1 min-h-[44px] text-left text-[15px] font-bold text-[var(--nn-accent-text)] underline decoration-[color-mix(in_srgb,var(--nn-accent-text)_50%,transparent)] underline-offset-2"
                   onClick={() => {
                     const first = essentials.missingItems[0];
                     if (!first) return;
@@ -1071,7 +1092,7 @@ export const Profile = () => {
                   Missing · {essentials.missingItems[0].label}
                 </button>
                 <p
-                  className="mt-1 text-[12px] font-semibold text-[var(--cream-soft)]"
+                  className="mt-1 text-[15px] font-semibold text-[var(--cream-soft)]"
                   data-testid="profile-missing-essentials-score"
                 >
                   {essentials.score}/{essentials.total} filled
@@ -1081,7 +1102,7 @@ export const Profile = () => {
                     <li key={item.id}>
                       <a
                         href={`#${item.sectionId}`}
-                        className="inline-block rounded-full border border-[rgba(196,131,42,0.45)] px-2.5 py-1 text-[11px] font-semibold text-[#E0A14A]"
+                        className="inline-flex min-h-[44px] items-center rounded-full border border-[color-mix(in_srgb,var(--copper)_45%,transparent)] px-3 py-1 text-[15px] font-semibold text-[var(--nn-accent-text)]"
                         data-testid={`profile-missing-${item.id}`}
                         onClick={(e) => {
                           e.preventDefault();
@@ -1101,10 +1122,10 @@ export const Profile = () => {
               data-testid="map-photo-section"
               id="profile-map-photo"
             >
-              <p className="text-xs font-medium uppercase tracking-wide text-[var(--cream-muted)]">
+              <p className="text-[15px] font-medium uppercase tracking-wide text-[var(--cream-muted)]">
                 Map photo
               </p>
-              <p className="mt-1 text-[12px] leading-relaxed text-[var(--cream-muted)]">
+              <p className="mt-1 text-[15px] leading-relaxed text-[var(--cream-muted)]">
                 Shown on Nearby Map when your main shot stays private.
               </p>
               <div className="mt-3 flex items-center gap-3">
@@ -1116,14 +1137,14 @@ export const Profile = () => {
                   className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C4832A]/50 disabled:opacity-60"
                   data-testid="map-photo-picker"
                 >
-                  {getPhotoUrl(mapPhotoUrl) ? (
+                  {realAvatarUrl(mapPhotoUrl) ? (
                     <img
-                      src={getPhotoUrl(mapPhotoUrl)!}
+                      src={getPhotoUrl(realAvatarUrl(mapPhotoUrl)!)!}
                       alt=""
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px] font-bold text-[#E0A14A]">
+                    <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-[15px] font-bold text-[#E0A14A]">
                       <ImageIcon className="h-4 w-4" />
                       {uploadingMapPhoto ? '…' : 'Add'}
                     </span>
@@ -1134,7 +1155,7 @@ export const Profile = () => {
                     type="button"
                     onClick={() => mapPhotoInputRef.current?.click()}
                     disabled={uploadingMapPhoto}
-                    className="rounded-full border border-[#C4832A]/35 bg-[rgba(196,131,42,0.12)] px-3 py-1.5 text-[11px] font-extrabold text-[#E0A14A] disabled:opacity-60"
+                    className="rounded-full border border-[#C4832A]/35 bg-[rgba(196,131,42,0.12)] px-3 py-1.5 text-[15px] font-extrabold text-[#E0A14A] disabled:opacity-60"
                   >
                     {uploadingMapPhoto ? 'Uploading…' : mapPhotoUrl ? 'Change' : 'Upload'}
                   </button>
@@ -1143,7 +1164,7 @@ export const Profile = () => {
                       type="button"
                       onClick={() => void handleClearMapPhoto()}
                       disabled={uploadingMapPhoto}
-                      className="ml-2 rounded-full border border-[var(--border-default)] px-3 py-1.5 text-[11px] font-semibold text-[var(--cream-muted)] disabled:opacity-60"
+                      className="ml-2 rounded-full border border-[var(--border-default)] px-3 py-1.5 text-[15px] font-semibold text-[var(--cream-muted)] disabled:opacity-60"
                       data-testid="map-photo-clear"
                     >
                       Remove
@@ -1172,7 +1193,7 @@ export const Profile = () => {
                 placeholder="How you show up nearby"
                 data-testid="profile-field-display-name"
               />
-              <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1">2–24 letters, numbers, _ or -</p>
+              <p className="text-[15px] text-[var(--cream-muted)]/60 mt-1">2–24 letters, numbers, _ or -</p>
             </div>
 
             <div
@@ -1195,7 +1216,7 @@ export const Profile = () => {
                 aria-label="Date of birth"
                 data-testid="profile-field-dob"
               />
-              <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1">
+              <p className="text-[15px] text-[var(--cream-muted)]/60 mt-1">
                 Age updates automatically. Never shown as a full date.
               </p>
             </div>
@@ -1216,7 +1237,7 @@ export const Profile = () => {
                 }`}
                 data-testid="profile-field-bio"
               />
-              <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1 text-right">{bio.length}/500</p>
+              <p className="text-[15px] text-[var(--cream-muted)]/60 mt-1 text-right">{bio.length}/500</p>
             </div>
 
             <div
@@ -1256,7 +1277,7 @@ export const Profile = () => {
                       key={tag}
                       type="button"
                       onClick={() => setLookingFor(active ? '' : tag)}
-                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-all duration-150 ${
+                      className={`px-3 py-1 rounded-full text-[15px] font-medium border transition-all duration-150 ${
                         active
                           ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
                           : 'bg-[var(--bg-card)]/40 text-[var(--cream-muted)] border-[var(--border-default)] hover:bg-[var(--border-default)]/60 hover:text-[var(--cream)]/80'
@@ -1274,10 +1295,10 @@ export const Profile = () => {
               data-testid="profile-stats-section"
             >
               <div className="mb-1 flex items-center justify-between px-1">
-                <p className="text-xs font-medium uppercase tracking-wide text-[var(--cream-muted)]">
+                <p className="text-[15px] font-medium uppercase tracking-wide text-[var(--cream-muted)]">
                   Stats
                 </p>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--cream-muted)]">
+                <p className="text-[15px] font-semibold uppercase tracking-[0.12em] text-[var(--cream-muted)]">
                   Show
                 </p>
               </div>
@@ -1287,10 +1308,10 @@ export const Profile = () => {
                 data-testid="profile-stats-age"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium uppercase tracking-wide text-[var(--cream-muted)]">
+                  <p className="text-[15px] font-medium uppercase tracking-wide text-[var(--cream-muted)]">
                     Age
                   </p>
-                  <p className="mt-0.5 text-sm text-[var(--cream)]">
+                  <p className="mt-0.5 text-[15px] text-[var(--cream)]">
                     {dateOfBirth
                       ? ageFromDateOfBirth(dateOfBirth) ?? profile?.age ?? ''
                       : profile?.age ?? 'From date of birth'}
@@ -1303,6 +1324,14 @@ export const Profile = () => {
                   testId="profile-show-age"
                 />
               </div>
+
+              <ShowDistanceRow
+                checked={showDistance}
+                onChange={setShowDistance}
+                entitled={Boolean(
+                  authIsPremium || profile?.is_premium || profile?.beta_premium_included,
+                )}
+              />
 
               <div
                 id={PROFILE_ESSENTIAL_SECTION_IDS.height}
@@ -1330,7 +1359,7 @@ export const Profile = () => {
                       data-testid="profile-field-height"
                     />
                     {heightCm ? (
-                      <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1">
+                      <p className="text-[15px] text-[var(--cream-muted)]/60 mt-1">
                         {formatHeight(Number(heightCm))}
                       </p>
                     ) : null}
@@ -1351,7 +1380,7 @@ export const Profile = () => {
                 data-testid="profile-stats-weight"
               >
                 <div className="min-w-0 flex-1">
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[var(--cream-muted)]">
+                  <label className="mb-1.5 block text-[15px] font-medium uppercase tracking-wide text-[var(--cream-muted)]">
                     Weight (kg)
                   </label>
                   <input
@@ -1366,7 +1395,7 @@ export const Profile = () => {
                     data-testid="profile-field-weight"
                   />
                   {weightKg ? (
-                    <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1">
+                    <p className="text-[15px] text-[var(--cream-muted)]/60 mt-1">
                       {formatWeight(Number(weightKg))}
                     </p>
                   ) : null}
@@ -1404,7 +1433,7 @@ export const Profile = () => {
                             key={opt}
                             type="button"
                             onClick={() => setRelationshipStatus(active ? '' : opt)}
-                            className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                            className={`px-3 py-1 rounded-full text-[15px] font-medium border transition-all ${
                               active
                                 ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
                                 : 'bg-[var(--bg-card)]/40 text-[var(--cream-muted)] border-[var(--border-default)]'
@@ -1446,7 +1475,7 @@ export const Profile = () => {
                       key={opt}
                       type="button"
                       onClick={() => setHostingStatus(active ? '' : opt)}
-                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                      className={`px-3 py-1 rounded-full text-[15px] font-medium border transition-all ${
                         active
                           ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
                           : 'bg-[var(--bg-card)]/40 text-[var(--cream-muted)] border-[var(--border-default)]'
@@ -1460,7 +1489,7 @@ export const Profile = () => {
             </div>
 
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)]/30 p-4 space-y-3">
-              <p className="text-xs font-medium text-[var(--cream-muted)] uppercase tracking-wide">
+              <p className="text-[15px] font-medium text-[var(--cream-muted)] uppercase tracking-wide">
                 Sexual health <span className="normal-case text-[var(--cream-muted)]/50">(optional)</span>
               </p>
               <div className="flex flex-wrap gap-2">
@@ -1471,7 +1500,7 @@ export const Profile = () => {
                       key={opt}
                       type="button"
                       onClick={() => setSexualHealthStatus(active ? '' : opt)}
-                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                      className={`px-3 py-1 rounded-full text-[15px] font-medium border transition-all ${
                         active
                           ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
                           : 'bg-[var(--bg-card)]/40 text-[var(--cream-muted)] border-[var(--border-default)]'
@@ -1495,7 +1524,7 @@ export const Profile = () => {
                       key={opt.label}
                       type="button"
                       onClick={() => setOnPrep(active ? null : opt.value)}
-                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                      className={`px-3 py-1 rounded-full text-[15px] font-medium border transition-all ${
                         active
                           ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
                           : 'bg-[var(--bg-card)]/40 text-[var(--cream-muted)] border-[var(--border-default)]'
@@ -1507,7 +1536,7 @@ export const Profile = () => {
                 })}
               </div>
               <div>
-                <label className="block text-[11px] font-semibold text-[var(--cream-muted)] mb-1">
+                <label className="block text-[15px] font-semibold text-[var(--cream-muted)] mb-1">
                   Last tested
                 </label>
                 <input
@@ -1534,7 +1563,7 @@ export const Profile = () => {
                   type="button"
                   onClick={() => photoInputRef.current?.click()}
                   disabled={uploading}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#C4832A]/10 hover:bg-[#C4832A]/20 text-[#C4832A] text-xs font-semibold border border-[#C4832A]/30 cursor-pointer transition-all ${
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#C4832A]/10 hover:bg-[#C4832A]/20 text-[#C4832A] text-[15px] font-semibold border border-[#C4832A]/30 cursor-pointer transition-all ${
                     uploading ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                 >
@@ -1546,10 +1575,10 @@ export const Profile = () => {
                   {uploading ? 'Uploading…' : 'Upload Photo'}
                 </button>
                 {photoUrl && !uploading && (
-                  <span className="text-[10px] text-[var(--cream-muted)]/70">Current photo set</span>
+                  <span className="text-[15px] text-[var(--cream-muted)]/70">Current photo set</span>
                 )}
               </div>
-              <p className="text-[10px] text-[var(--cream-muted)]/60 mt-1.5 px-1">
+              <p className="text-[15px] text-[var(--cream-muted)]/60 mt-1.5 px-1">
                 JPEG, PNG or WebP. Max 5MB.
               </p>
             </div>
@@ -1577,11 +1606,11 @@ export const Profile = () => {
               <div className="space-y-4">
               {PROFILE_TAG_GROUPS.map((group) => (
                 <div key={group.label}>
-                  <p className="text-[10px] font-black text-[var(--cream-muted)]/60 uppercase tracking-[.18em]">
+                  <p className="text-[15px] font-black text-[var(--cream-muted)]/60 uppercase tracking-[.18em]">
                     {group.label}
                   </p>
                   <p
-                    className="mt-0.5 mb-2 text-[10px] font-medium text-[var(--cream-muted)]/50"
+                    className="mt-0.5 mb-2 text-[15px] font-medium text-[var(--cream-muted)]/50"
                     data-testid={`tag-select-hint-${group.label}`}
                   >
                     {profileTagSelectHint(group.singleSelect)}
@@ -1596,7 +1625,7 @@ export const Profile = () => {
                           type="button"
                           onClick={() => toggleInterest(tag, group)}
                           disabled={maxed}
-                          className={`px-3 py-1 rounded-full text-xs font-medium border transition-all duration-150 ${
+                          className={`px-3 py-1 rounded-full text-[15px] font-medium border transition-all duration-150 ${
                             active
                               ? 'bg-[#C4832A]/20 text-[#C4832A] border-[#C4832A]/40'
                               : maxed
@@ -1617,7 +1646,7 @@ export const Profile = () => {
             <button
               type="submit"
               disabled={saving}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#A45E18] hover:from-[#D4943B] hover:to-[#C4832A] disabled:opacity-50 text-white font-semibold text-sm transition-all hover:shadow-glow-blue active:scale-[0.98] flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#C4832A] to-[#A45E18] hover:from-[#D4943B] hover:to-[#C4832A] disabled:opacity-50 text-white font-semibold text-[15px] transition-all hover:shadow-glow-blue active:scale-[0.98] flex items-center justify-center gap-2"
             >
               {saving ? <><Spinner className="w-4 h-4" /> Saving…</> : 'Save Changes'}
             </button>
@@ -1628,41 +1657,45 @@ export const Profile = () => {
           {/* ── Right: Settings & privacy ── */}
           <div className="space-y-4 lg:sticky lg:top-6">
             <div className="hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]/40 px-4 py-3 lg:block">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)]">
+              <p className="text-[15px] font-bold uppercase tracking-[0.18em] text-[var(--cream-muted)]">
                 Account settings
               </p>
-              <p className="mt-1 text-sm text-[var(--cream-soft)]">
+              <p className="mt-1 text-[15px] text-[var(--cream-soft)]">
                 Privacy, visibility, and how you show up nearby.
               </p>
             </div>
 
-        <ProfileViewersCard
-          viewers={profileViewers}
-          total={profileViewsTotal}
-          isPremium={Boolean(authIsPremium || profile?.is_premium)}
-          hasMore={profileViewsHasMore}
-          hiddenCount={profileViewsHidden}
-          loading={profileViewsLoading}
-        />
+        <div id="viewed-me">
+          <ProfileViewersCard
+            viewers={profileViewers}
+            total={profileViewsTotal}
+            isPremium={Boolean(authIsPremium || profile?.is_premium)}
+            hasMore={profileViewsHasMore}
+            hiddenCount={profileViewsHidden}
+            loading={profileViewsLoading}
+          />
+        </div>
 
-        <ReferralCard />
+        <div id="invite">
+          <ReferralCard />
+        </div>
 
-        {/* ── Location card ── */}
-        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 flex items-center justify-between shadow-card">
+        {/* ── Location card (top of the privacy group; Menu > Privacy and visibility jumps here) ── */}
+        <div id="privacy" className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 flex items-center justify-between shadow-card">
           <div>
-            <p className="text-[var(--cream)]/80 text-sm font-semibold">Your location</p>
+            <p className="text-[var(--cream)]/80 text-[15px] font-semibold">Your location</p>
             {lat && lng ? (
-              <p className="text-[var(--cream-muted)] text-xs mt-0.5">
+              <p className="text-[var(--cream-muted)] text-[15px] mt-0.5">
                 {lat.toFixed(5)}, {lng.toFixed(5)}
               </p>
             ) : (
-              <p className="text-[var(--cream-muted)]/50 text-xs mt-0.5">Not shared yet</p>
+              <p className="text-[var(--cream-muted)]/50 text-[15px] mt-0.5">Not shared yet</p>
             )}
           </div>
           <button
             onClick={handleUpdateLocation}
             disabled={locating}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#C4832A]/10 hover:bg-[#C4832A]/20 text-[#C4832A] text-xs font-semibold border border-[#C4832A]/20 transition-all disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#C4832A]/10 hover:bg-[#C4832A]/20 text-[#C4832A] text-[15px] font-semibold border border-[#C4832A]/20 transition-all disabled:opacity-50"
           >
             {locating ? <Spinner className="w-3.5 h-3.5" /> : <PinIcon className="w-3.5 h-3.5" />}
             {locating ? 'Locating…' : 'Update'}
@@ -1670,18 +1703,18 @@ export const Profile = () => {
         </div>
 
         {/* ── Mood card ── */}
-        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 shadow-card">
+        <div id="mood" className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 shadow-card">
           <div className="flex items-end justify-between mb-3">
             <div>
-              <p className="text-[var(--cream)]/80 text-sm font-semibold">Mood</p>
-              <p className="text-[var(--cream-muted)] text-xs mt-0.5">
+              <p className="text-[var(--cream)]/80 text-[15px] font-semibold">Mood</p>
+              <p className="text-[var(--cream-muted)] text-[15px] mt-0.5">
                 Auto-clears in 6 hours. Shows on your card.
               </p>
             </div>
             {mood && (
               <button
                 onClick={() => handleMood(null)}
-                className="text-[10px] font-bold uppercase tracking-wider text-[var(--cream-muted)] hover:text-[#C4832A] transition-colors"
+                className="text-[15px] font-bold uppercase tracking-wider text-[var(--cream-muted)] hover:text-[#C4832A] transition-colors"
               >
                 Clear
               </button>
@@ -1691,14 +1724,16 @@ export const Profile = () => {
         </div>
 
         {/* ── Ghost mode card ── */}
-        <GhostToggle
-          isGhost={isGhost}
-          isPremium={authIsPremium}
-          betaIncluded={Boolean(
-            betaPremiumFree || user?.beta_premium_included || profile?.beta_premium_included,
-          )}
-          onToggle={handleGhost}
-        />
+        <div id="ghost">
+          <GhostToggle
+            isGhost={isGhost}
+            isPremium={authIsPremium}
+            betaIncluded={Boolean(
+              betaPremiumFree || user?.beta_premium_included || profile?.beta_premium_included,
+            )}
+            onToggle={handleGhost}
+          />
+        </div>
 
         {/* ── Albums card ── */}
         <Link
@@ -1708,12 +1743,32 @@ export const Profile = () => {
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--cream)' }}>
+              <p className="text-[15px] font-semibold flex items-center gap-2" style={{ color: 'var(--cream)' }}>
                 <PhotoStackIcon className="w-4 h-4" style={{ color: 'var(--copper)' }} />
                 My Photos
               </p>
-              <p className="text-xs mt-1" style={{ color: 'var(--cream-muted)' }}>
+              <p className="text-[15px] mt-1" style={{ color: 'var(--cream-muted)' }}>
                 You decide who sees what. Public, view once, or private.
+              </p>
+            </div>
+            <span className="text-[var(--copper)] text-lg" aria-hidden>›</span>
+          </div>
+        </Link>
+
+        {/* ── Hide my location from ── */}
+        <Link
+          to="/settings#hide-location"
+          className="block rounded-2xl p-5 shadow-card border transition-colors hover:border-[var(--copper)]"
+          style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-default)' }}
+          data-testid="profile-hide-location-link"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-base font-semibold" style={{ color: 'var(--cream)' }}>
+                Hide my location
+              </p>
+              <p className="text-[15px] mt-1" style={{ color: 'var(--cream-muted)' }}>
+                Pick who won't see you nearby.
               </p>
             </div>
             <span className="text-[var(--copper)] text-lg" aria-hidden>›</span>
@@ -1729,10 +1784,10 @@ export const Profile = () => {
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold" style={{ color: 'var(--cream)' }}>
+              <p className="text-[15px] font-semibold" style={{ color: 'var(--cream)' }}>
                 Blocked people
               </p>
-              <p className="text-xs mt-1" style={{ color: 'var(--cream-muted)' }}>
+              <p className="text-[15px] mt-1" style={{ color: 'var(--cream-muted)' }}>
                 Unblock someone to message or see them again.
               </p>
             </div>
@@ -1743,8 +1798,8 @@ export const Profile = () => {
         {/* ── Visibility card ── */}
         <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 flex items-center justify-between shadow-card">
           <div>
-            <p className="text-[var(--cream)]/80 text-sm font-semibold">Profile visibility</p>
-            <p className="text-[var(--cream-muted)] text-xs mt-0.5">
+            <p className="text-[var(--cream)]/80 text-[15px] font-semibold">Profile visibility</p>
+            <p className="text-[var(--cream-muted)] text-[15px] mt-0.5">
               {isVisible ? 'You appear in nearby discovery' : 'Hidden from nearby discovery'}
             </p>
           </div>
@@ -1774,18 +1829,6 @@ export const Profile = () => {
           </div>
         </div>
 
-        {/* ── Sign out (mobile only — desktop uses sidebar) ── */}
-        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 shadow-card lg:hidden">
-          <p className="text-[var(--cream)]/80 text-sm font-semibold">Sign out</p>
-          <p className="text-[var(--cream-muted)] text-xs mt-0.5">You'll need to log back in</p>
-          <button
-            onClick={() => { logout(); navigate('/login'); }}
-            className="mt-4 flex w-full items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#A45E18]/10 hover:bg-[#A45E18]/20 text-[var(--cream)]/80 text-xs font-semibold border border-[#A45E18]/20 transition-all"
-          >
-            <LogoutIcon className="w-3.5 h-3.5" />
-            Sign out
-          </button>
-        </div>
       </div>
 
       {coverEditorOpen && coverUrl && (
@@ -1799,12 +1842,6 @@ export const Profile = () => {
     </Layout>
   );
 };
-
-const LogoutIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-  </svg>
-);
 
 const PinIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">

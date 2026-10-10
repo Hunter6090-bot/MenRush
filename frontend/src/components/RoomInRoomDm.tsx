@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { getPhotoUrl } from './UserAvatar';
+import { BrandAvatar } from './BrandAvatar';
 
 export type InRoomDmMessage = {
   id: string;
@@ -75,15 +76,11 @@ export const RoomInRoomDm: React.FC<Props> = ({
           }}
           aria-hidden
         >
-          {photo ? (
-            <img src={photo} alt="" className="h-full w-full object-cover" />
-          ) : (
-            peerName.slice(0, 2).toUpperCase()
-          )}
+          <BrandAvatar photoUrl={photo} name={peerName} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-[var(--cream)]">{peerName}</p>
-          <p className="text-[10px] text-[var(--cream-muted)]">In-room 1:1 · gone when either leaves</p>
+          <p className="truncate text-base font-semibold text-[var(--cream)]">{peerName}</p>
+          <p className="text-xs text-[var(--cream-muted)]">In-room 1:1. Leaves with the room.</p>
         </div>
         <button
           type="button"
@@ -117,7 +114,7 @@ export const RoomInRoomDm: React.FC<Props> = ({
             return (
               <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                 <div
-                  className="max-w-[85%] px-3 py-2 text-sm leading-snug"
+                  className="max-w-[85%] px-3 py-2 text-base leading-snug"
                   style={
                     mine
                       ? {
@@ -134,7 +131,7 @@ export const RoomInRoomDm: React.FC<Props> = ({
                   }
                 >
                   {!mine ? (
-                    <span className="mb-0.5 block text-[10px] font-semibold opacity-70">
+                    <span className="mb-0.5 block text-xs font-semibold opacity-70">
                       {msg.sender_name}
                     </span>
                   ) : null}

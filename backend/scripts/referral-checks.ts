@@ -1,6 +1,7 @@
 /**
- * Referral system checks — unique code, reject self, count after verified,
- * 3 verified → 1 month Premium, paid upgrade records 20% pending.
+ * Referral system checks: unique code, reject self, count after the referred
+ * member confirms their email, 3 qualifying referrals give 1 month Premium,
+ * paid upgrade records 20% pending on the backend row (never shown to members).
  *
  * Requires DATABASE_URL. Run from backend/:
  *   npx ts-node scripts/referral-checks.ts
@@ -20,6 +21,11 @@ import {
 import { premiumService, PREMIUM_PAID_PRICE } from '../src/services/premium.service';
 import { isAlwaysPremiumName } from '../src/lib/always-premium';
 
+// These checks assert real end dates, so run as after free Premium ends.
+// Banking while Premium is free for everyone is covered in
+// referral-earned-months-integration.ts.
+process.env.BETA_PREMIUM_FREE = 'false';
+
 async function insertUser(opts: {
   id?: string;
   email: string;
@@ -27,17 +33,18 @@ async function insertUser(opts: {
   referralCode?: string | null;
   isPremium?: boolean;
   premiumUntil?: Date | null;
+  emailConfirmed?: boolean;
 }) {
   const id = opts.id ?? randomUUID();
   await query(
     `INSERT INTO users (
        id, email, password_hash, name, age,
        is_verified, verification_status, referral_code,
-       is_premium, premium_tier, premium_until
+       is_premium, premium_tier, premium_until, email_confirmed
      ) VALUES (
        $1, $2, 'x', $3, 28,
        FALSE, 'unverified', $4,
-       $5, $6, $7
+       $5, $6, $7, $8
      )`,
     [
       id,
@@ -47,6 +54,7 @@ async function insertUser(opts: {
       !!opts.isPremium,
       opts.isPremium ? 'premium' : 'free',
       opts.premiumUntil ?? null,
+      opts.emailConfirmed ?? true,
     ],
   );
   return id;
@@ -133,6 +141,7 @@ async function main() {
         email: `ref-b${i}-${suffix}@test.menrush.local`,
         name: `Referred${i}_${suffix}`,
         referralCode: generateReferralCode(),
+        emailConfirmed: false,
       });
       ids.push(uid);
       referred.push(uid);
@@ -169,16 +178,26 @@ async function main() {
     assert.strictEqual(summary.pending_count, 3);
     assert.strictEqual(summary.verified_count, 0);
 
-    // Count only after verified
+    const confirm = async (uid: string) => {
+      await query(`UPDATE users SET email_confirmed = TRUE WHERE id = $1`, [uid]);
+      await referralService.onReferralMaybeQualified(uid);
+    };
+
+    // Not counted while the email is unconfirmed (even after ID verification)
     await referralService.onUserVerified(referred[0]!);
+    summary = await referralService.getSummary(referrerId);
+    assert.strictEqual(summary.verified_count, 0);
+
+    // Count only after the email is confirmed
+    await confirm(referred[0]!);
     summary = await referralService.getSummary(referrerId);
     assert.strictEqual(summary.verified_count, 1);
     assert.strictEqual(summary.pending_count, 2);
     assert.strictEqual(summary.unlocks_earned, 0);
-    console.log('ok — count only after verified');
+    console.log('ok — count only after email confirmed');
 
-    await referralService.onUserVerified(referred[1]!);
-    await referralService.onUserVerified(referred[2]!);
+    await confirm(referred[1]!);
+    await confirm(referred[2]!);
     summary = await referralService.getSummary(referrerId);
     assert.strictEqual(summary.verified_count, 3);
     assert.strictEqual(summary.unlocks_earned, 1);
@@ -189,7 +208,7 @@ async function main() {
     );
     assert.strictEqual(premium.rows[0].is_premium, true);
     assert.ok(premium.rows[0].premium_until, 'premium_until set after unlock');
-    console.log('ok — 3 verified → 1 month Premium grant');
+    console.log('ok — 3 qualifying referrals → 1 month Premium grant');
 
     // Paid upgrade records 20% pending (no payout send)
     const payment = PREMIUM_PAID_PRICE;
@@ -198,13 +217,17 @@ async function main() {
     const expected = Math.round(payment * REFERRAL_PAYOUT_RATE * 100) / 100;
     assert.strictEqual(result!.payout_amount, expected);
 
+    const rec = await query(
+      `SELECT status, payout_status, payout_amount FROM referrals WHERE referred_user_id = $1`,
+      [referred[0]],
+    );
+    assert.strictEqual(rec.rows[0].status, 'credited');
+    assert.strictEqual(rec.rows[0].payout_status, 'pending');
+    assert.ok(Number(rec.rows[0].payout_amount) >= expected);
+    // The member summary carries no money fields (Al's lock).
     summary = await referralService.getSummary(referrerId);
-    assert.ok(summary.pending_payout_total >= expected);
-    const row = summary.referrals.find((r) => r.referred_user_id === referred[0]);
-    assert.ok(row);
-    assert.strictEqual(row!.status, 'credited');
-    assert.strictEqual(row!.payout_status, 'pending');
-    console.log('ok — paid upgrade records 20% pending payout');
+    assert.ok(!/payout|£/i.test(JSON.stringify(summary)));
+    console.log('ok — paid upgrade recorded on the backend row only');
 
     // Always-premium: lifetime not shortened
     const alwaysId = await insertUser({
@@ -215,8 +238,13 @@ async function main() {
       premiumUntil: null,
     });
     ids.push(alwaysId);
-    const grant = await premiumService.grantReferralMonth(alwaysId, 1);
-    assert.strictEqual(grant.skippedLifetime, true);
+    const grantRow = await query(
+      `INSERT INTO referral_premium_grants (user_id, milestone, verified_count_at_grant, months_granted)
+       VALUES ($1, 1, 3, 1) RETURNING id`,
+      [alwaysId],
+    );
+    const grant = await premiumService.grantReferralMonth(alwaysId, grantRow.rows[0].id, 1);
+    assert.strictEqual(grant.state, 'banked', 'open-ended Premium: month is banked, not an end date');
     const alwaysRow = await query(
       `SELECT is_premium, premium_until FROM users WHERE id = $1`,
       [alwaysId],

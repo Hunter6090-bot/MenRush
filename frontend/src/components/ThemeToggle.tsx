@@ -60,7 +60,7 @@ export function ThemeToggle({
         lg:bottom-[max(1.25rem,env(safe-area-inset-bottom,0px))]
       `
       : `
-        shrink-0 flex h-10 w-10 items-center justify-center rounded-full
+        shrink-0 flex h-11 w-11 items-center justify-center rounded-full
         text-[var(--cream-soft)]
         active:bg-[var(--bg-card)]
         transition-colors
@@ -84,7 +84,7 @@ export function ThemeToggle({
         <BulbIcon className="h-5 w-5" />
       )}
       <span className="sr-only">
-        {label} theme — tap for {nextHint}
+        {label} theme. Tap for {nextHint}
       </span>
     </button>
   );

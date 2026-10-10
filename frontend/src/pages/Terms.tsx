@@ -410,10 +410,11 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>7.4</Strong> Once automated card billing is activated following merchant review,
-                  users who opt into recurring billing authorise the charging of their payment method at the
-                  start of each billing period. In the interim, no automated recurring card charges occur, and
-                  any paid subscription requests are fulfilled through direct invoice upon request.
+                  <Strong>7.4</Strong> Where recurring billing is activated with a valid payment
+                  method on file, you authorise us to charge that payment method at the start of
+                  each billing period. For manual invoices, payment is due upon issuance prior to
+                  entitlement activation. You pay a manual invoice by bank transfer using the payment
+                  reference shown on it, and Premium starts once we have confirmed your payment.
                 </>,
               )}
               {para(
@@ -424,9 +425,11 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>7.6</Strong> When recurring billing is active, subscriptions auto-renew
-                  unless cancelled at least 24 hours before the renewal date. Subscriptions can be
-                  managed or cancelled through your account settings or by contacting support.
+                  <Strong>7.6</Strong> Subscriptions auto-renew unless cancelled at least 24 hours
+                  before the renewal date. You can cancel at any time through your account
+                  settings. Premium paid by manual invoice covers the period shown on the invoice
+                  and does not renew automatically. You can cancel an unpaid invoice on the Premium
+                  page.
                 </>,
               )}
               {para(
@@ -467,11 +470,11 @@ export const Terms = () => {
                   <Strong>7.9</Strong> MenRush launch promotional offer. The code{' '}
                   <span className="font-mono tracking-wide">MR3FREE</span> is for the MenRush
                   launch campaign. Exact code match at register (case-insensitive, no spaces). Live
-                  from 17 September 2026. Claim through end of 5 October 2026 Europe/London
-                  inclusive. Signups after 5 October 2026 with this code receive no promotional grant.
+                  from 17 September 2026. Claim through end of 31 October 2026 Europe/London
+                  inclusive. Signups after 31 October 2026 with this code receive no promotional grant.
                   Redeeming a valid code grants 3 months of Premium free, unlocked from day one
                   (starting the registration calendar day). One grant per account. No stacking.
-                  Does not cancel 12-month beta promises. Does not wipe existing Premium. Does not
+                  Does not cancel 12-month promises made to early members. Does not wipe existing Premium. Does not
                   stack with Pride (clause 7.7) or BSF26 (clause 7.8). Replaces the 30-day waitlist
                   Premium gift in clause 7.2. It does not add to that gift. 18+ only. You will not
                   be billed for this offer. Promoter: Bronze Apps UK Limited trading as MenRush.

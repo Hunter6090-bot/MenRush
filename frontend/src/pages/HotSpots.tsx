@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { SpotTypeIcon, spotTypeKey } from '../components/icons';
 import { createRoot, type Root } from 'react-dom/client';
 import { Link } from 'react-router-dom';
 import mapboxgl from 'mapbox-gl';
@@ -17,6 +18,7 @@ import { formatDistanceFromKm } from '../lib/localeUnits';
 import { getDirectionsUrl } from '../lib/cruising';
 import { mapboxStyleForTheme, resolvedThemeNow, THEME_CHANGED_EVENT } from '../lib/mapTheme';
 import { HOT_SPOTS_PAGE_BLURB } from '../lib/cruiseCopy';
+import { hotSpotCountLabel, isHotSpotActive } from '../lib/hotSpotCounts';
 
 export const HotSpots = () => {
   const { lat, lng } = useLocationStore();
@@ -123,12 +125,17 @@ export const HotSpots = () => {
         name: spot.name,
         category_icon: spot.category_icon,
         live_count_exact: spot.live_count_exact,
+        // Server display count (rounded for Free). The pin shows only this.
+        live_count: spot.live_count,
+        has_active_checkins: spot.has_active_checkins,
       };
 
       if (existing) {
         existing.marker.setLngLat(lngLat);
         if (
           existing.spot.live_count_exact !== spot.live_count_exact ||
+          existing.spot.live_count !== spot.live_count ||
+          existing.spot.has_active_checkins !== spot.has_active_checkins ||
           existing.spot.name !== spot.name ||
           existing.spot.category_icon !== spot.category_icon
         ) {
@@ -226,7 +233,10 @@ export const HotSpots = () => {
               onClick={() => setCategory(cat.slug)}
               className={category === cat.slug ? 'mr-pill mr-pill-active' : 'mr-pill mr-pill-inactive'}
             >
-              {cat.icon} {cat.name}
+              <span className="inline-flex items-center gap-1.5">
+                <SpotTypeIcon type={spotTypeKey(cat.slug, cat.name)} size={16} />
+                {cat.name}
+              </span>
             </button>
           ))}
         </div>
@@ -246,9 +256,8 @@ export const HotSpots = () => {
             <p className="text-[16px] font-extrabold text-[var(--cream)]">
               We need your location for Cruise
             </p>
-            <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--cream-muted)]">
-              Not a public pin on a map — we use GPS privately to rank venues near you. Others do not
-              see your exact address. Shared only while you use the app.
+            <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-[var(--cream-muted)]">
+              We use your location to show venues near you.
             </p>
             <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
               <Link
@@ -276,7 +285,7 @@ export const HotSpots = () => {
           >
             <p className="text-[15px] font-extrabold text-[var(--cream)]">No spots in this filter</p>
             <p className="mx-auto mt-2 max-w-sm text-[13px] text-[var(--cream-muted)]">
-              Try another category or check back later as the beta fills in.
+              Try another category or check back later as more spots are added.
             </p>
             <Link
               to="/discover"
@@ -298,7 +307,10 @@ export const HotSpots = () => {
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <div>
                     <p className="text-xs font-extrabold tracking-wide text-[#E0A14A]">
-                      {spot.category_icon} {spot.category_name}
+                      <span className="inline-flex items-center gap-1">
+                        <SpotTypeIcon type={spotTypeKey(spot.category_slug, spot.category_name)} size={14} />
+                        {spot.category_name}
+                      </span>
                     </p>
                     <h2 className="text-base font-bold text-[var(--cream)]">{spot.name}</h2>
                     <div className="flex flex-wrap items-center gap-1.5 text-[13px] text-[var(--cream-muted)]">
@@ -310,11 +322,11 @@ export const HotSpots = () => {
                     </div>
                   </div>
                   <div className="rounded-full border border-[var(--border-default)] bg-[rgba(196,131,42,0.12)] px-3 py-1 text-center">
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--cream-muted)]">
-                      {spot.has_active_checkins || spot.live_count_exact > 0 ? 'Active' : 'Empty'}
+                    <p className="text-[15px] font-bold uppercase tracking-wide text-[var(--cream-muted)]">
+                      {isHotSpotActive(spot) ? 'Active' : 'Empty'}
                     </p>
                     <p className="text-lg font-extrabold text-[#E0A14A]">
-                      {spot.has_active_checkins || spot.live_count_exact > 0 ? spot.live_count : '—'}
+                      {isHotSpotActive(spot) ? hotSpotCountLabel(spot) : '0'}
                     </p>
                   </div>
                 </div>

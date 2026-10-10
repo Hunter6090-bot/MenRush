@@ -1,10 +1,15 @@
-import { SVGProps } from "react";
+import { SVGProps } from 'react';
+
+export type MenRushIconProps = SVGProps<SVGSVGElement> & {
+  size?: number;
+  filled?: boolean;
+};
 
 /**
- * MenRush — Rooms icon
- * Video camera + two overlapping people — group video rooms.
+ * Rooms: video camera, as drawn on the Claude Design board
+ * (MenRush Phone App, 9 states). Outline idle, filled when active.
  */
-export function IconRooms({ size = 24, ...props }: SVGProps<SVGSVGElement> & { size?: number }) {
+export function IconRooms({ size = 24, filled = false, ...props }: MenRushIconProps) {
   return (
     <svg
       width={size}
@@ -13,25 +18,15 @@ export function IconRooms({ size = 24, ...props }: SVGProps<SVGSVGElement> & { s
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       stroke="currentColor"
-      strokeWidth="1.5"
+      strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
+      aria-hidden
+      data-icon="video-camera"
       {...props}
     >
-      {/* Back person — head + shoulders */}
-      <circle cx="6" cy="5.75" r="2.1" />
-      <path d="M2.5 13.25c0-1.85 1.55-3.35 3.5-3.35" />
-
-      {/* Front person — overlapping */}
-      <circle cx="10.75" cy="6.5" r="2.1" />
-      <path d="M7.25 13.5c0-1.7 1.55-3.05 3.5-3.05s3.5 1.35 3.5 3.05" />
-
-      {/* Camcorder body + lens */}
-      <rect x="2.75" y="14.25" width="11.5" height="6.75" rx="1.5" />
-      <circle cx="8.5" cy="17.6" r="1.85" />
-
-      {/* Side viewfinder housing */}
-      <path d="M14.25 15.75l4.5-2.35v8.2l-4.5-2.35" />
+      <rect x="2" y="6" width="14" height="12" rx="2.5" fill={filled ? 'currentColor' : 'none'} />
+      <path d="M16 10.5l6-3.5v10l-6-3.5z" fill={filled ? 'currentColor' : 'none'} />
     </svg>
   );
 }

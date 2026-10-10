@@ -38,7 +38,8 @@ describe('ActivationBanner location vs finish-profile', () => {
     expect(screen.queryByTestId('activation-finish-profile')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /finish profile/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /^profile$/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/your profile is ready/i)).toBeInTheDocument();
+    expect(screen.getByText(/We use your location to show who's nearby/i)).toBeInTheDocument();
+    expect(screen.queryByText(/roughly where you are|exact pin/i)).not.toBeInTheDocument();
   });
 
   it('links Finish profile when profile fields are incomplete', () => {

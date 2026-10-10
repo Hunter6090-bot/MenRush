@@ -1,6 +1,7 @@
 import type { Mood } from '../api/client';
 import { MOOD_LABELS } from '../api/client';
 import type { NearbyUser } from '../components/ProfileCard';
+import { isUserOnlineNow } from './discovery';
 import { INTENT_FILTERS, matchesIntentFilter, type IntentFilter } from './discoveryFormat';
 import { createdAtMs, isFreshFaceNearby, isNewlyJoined, isVisitorFresh } from './newJoiner';
 
@@ -340,7 +341,7 @@ export function applyDiscoveryClientFilters(users: NearbyUser[], state: Discover
   }
 
   if (state.status.includes('online')) {
-    result = result.filter((u) => u.online);
+    result = result.filter((u) => isUserOnlineNow(u));
   }
   if (state.status.includes('new')) {
     // Newly joined (7d) OR active visitor fresh-face — Nearby-scoped only.

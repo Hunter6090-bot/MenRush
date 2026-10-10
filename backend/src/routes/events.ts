@@ -1,18 +1,22 @@
 import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import { rateLimitKey } from '../lib/clientIp';
 import { z } from 'zod';
 import { AuthRequest, authMiddleware, verifiedMiddleware } from '../middleware/auth';
+import { privateNoStore } from '../middleware/noStore';
+import { viewerStoredLocation } from '../lib/viewerOrigin';
 import { eventService } from '../services/event.service';
 import { hotSpotsService } from '../services/hot-spots.service';
-import { LocationSchema } from '../types/validation';
 
 const router = Router();
-router.use(authMiddleware, verifiedMiddleware);
+// Ahead of auth so 401s are not stored either; covers nearby and check-in.
+router.use(privateNoStore, authMiddleware, verifiedMiddleware);
 
 const checkInLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   message: { error: 'Too many check-ins. Try again in a minute.' },
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -23,11 +27,10 @@ const EventCheckInSchema = z.object({
 
 router.get('/nearby', async (req: AuthRequest, res: Response) => {
   try {
-    const { lat, lng, radius, limit, days } = req.query;
-    const location = LocationSchema.parse({
-      lat: parseFloat(lat as string),
-      lng: parseFloat(lng as string),
-    });
+    const { radius, limit, days } = req.query;
+    // Origin: the viewer's stored location (POST /api/users/location), never the URL.
+    const location = await viewerStoredLocation(req.userId!);
+    if (!location) return res.json([]);
     const events = await eventService.getNearbyEvents({
       lat: location.lat,
       lng: location.lng,
@@ -48,7 +51,9 @@ router.post('/:id/check-in', checkInLimiter, async (req: AuthRequest, res: Respo
     const event = await eventService.getEvent(req.params.id);
     if (!event) return res.status(404).json({ error: 'Event not found' });
     const spot = await hotSpotsService.checkInAtEvent(req.userId!, event, body.anonymous);
-    res.json({ ok: true, spot });
+    // spot is null when a Ghost or hidden member is first at a venue with no pin yet:
+    // nothing is created, so their arrival is not revealed.
+    res.json({ ok: true, spot, deferred: spot === null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Check-in failed';
     const status = message === 'Event not found' ? 404 : 400;
