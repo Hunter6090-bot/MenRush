@@ -1,5 +1,6 @@
 -- Migration 085: Manual invoice Premium stopgap while card checkout is not live.
--- Renumbered from 067 (main already has 067_sauna_category_icon). Never applied
+-- Renumbered from 067 (main already has 067_sauna_category_icon; 082 to 084 are
+-- held by open PRs #406 and #410). Never applied
 -- under the old name because it never reached main.
 -- Allows manual creation, tracking, user viewing, and confirmation of Premium invoices.
 -- Does not store processor-specific tokens or fake live checkouts.

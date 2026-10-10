@@ -397,7 +397,27 @@ test('HTTP API routes: invoice create -> unpaid view -> admin confirm -> status 
       },
       body: JSON.stringify({ new_password: 'AnotherPassword456!' }),
     });
-    assert.strictEqual(resSetPwFail.status, 401);
+    // Form errors must never be 401, or the client signs the member out mid payment.
+    assert.strictEqual(resSetPwFail.status, 400);
+    assert.strictEqual(((await resSetPwFail.json()) as any).code, 'current_password_required');
+
+    const resSetPwWrong = await fetch(`${baseUrl}/api/auth/set-password`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        current_password: 'NotTheRightPassword1!',
+        new_password: 'AnotherPassword456!',
+      }),
+    });
+    assert.strictEqual(resSetPwWrong.status, 400, 'wrong current password is 400, not 401');
+    assert.strictEqual(((await resSetPwWrong.json()) as any).code, 'wrong_current_password');
+
+    // A session on another device, which a successful save must revoke.
+    const { authSessionService } = await import('../src/services/auth-session.service');
+    const otherDeviceRefresh = await authSessionService.create(user.id, 'other-device');
 
     const resSetPwOk = await fetch(`${baseUrl}/api/auth/set-password`, {
       method: 'POST',
@@ -411,6 +431,29 @@ test('HTTP API routes: invoice create -> unpaid view -> admin confirm -> status 
       }),
     });
     assert.strictEqual(resSetPwOk.status, 200);
+    const setPwOkJson = (await resSetPwOk.json()) as any;
+    assert.ok(setPwOkJson.token, 'fresh access token for this session');
+    assert.ok(setPwOkJson.refresh_token, 'fresh refresh token for this session');
+
+    // This browser keeps working with the fresh tokens.
+    const resStatusFresh = await fetch(`${baseUrl}/api/auth/password-status`, {
+      headers: { Authorization: `Bearer ${setPwOkJson.token}` },
+    });
+    assert.strictEqual(resStatusFresh.status, 200);
+    const resRefreshFresh = await fetch(`${baseUrl}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: setPwOkJson.refresh_token }),
+    });
+    assert.strictEqual(resRefreshFresh.status, 200, 'fresh session refreshes');
+
+    // The other device's session was revoked.
+    const resRefreshOther = await fetch(`${baseUrl}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: otherDeviceRefresh }),
+    });
+    assert.strictEqual(resRefreshOther.status, 401, 'other sessions are signed out');
 
     // 8. Test subscribe endpoint fails closed (503 billing_not_configured)
     const resSubscribe = await fetch(`${baseUrl}/api/premium/subscribe`, {

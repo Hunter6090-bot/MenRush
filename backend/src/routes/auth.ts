@@ -422,14 +422,27 @@ router.post('/set-password', privateNoStore, authMiddleware, accountChangeLimite
   try {
     const data = SetPasswordSchema.parse(req.body);
     const result = await authService.setOrChangePassword(req.userId!, data);
-    res.json({ ok: true, message: 'Password updated.', hasExistingPassword: result.hasExistingPassword });
+    // Saving a password signs out every session (see setOrChangePassword).
+    // Give this browser a fresh session so the member stays signed in mid payment.
+    const refreshToken = await authSessionService.create(req.userId!, req.get('user-agent'));
+    res.json({
+      ok: true,
+      message: 'Password updated.',
+      hasExistingPassword: result.hasExistingPassword,
+      token: authService.issueAccessToken(req.userId!),
+      refresh_token: refreshToken,
+    });
   } catch (error: any) {
     const msg = error?.message || 'Could not update password';
-    const status =
-      msg === 'Current password is incorrect' || msg === 'Current password is required' || msg === 'User not found'
-        ? 401
-        : 400;
-    res.status(status).json({ error: msg });
+    // A wrong or missing current password is a form error, not an expired
+    // session: never 401 here, or the client interceptor signs the member out.
+    if (msg === 'Current password is incorrect') {
+      return res.status(400).json({ error: msg, code: 'wrong_current_password' });
+    }
+    if (msg === 'Current password is required') {
+      return res.status(400).json({ error: msg, code: 'current_password_required' });
+    }
+    res.status(msg === 'User not found' ? 401 : 400).json({ error: msg });
   }
 });
 

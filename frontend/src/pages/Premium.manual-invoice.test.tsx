@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   setPassword: vi.fn(),
   navigate: vi.fn(),
   setPremium: vi.fn(),
+  setTokens: vi.fn(),
 }));
 
 vi.mock('../api/premium', () => ({
@@ -38,6 +39,7 @@ vi.mock('../hooks/store', () => ({
     selector({
       user: { id: 'user-1', name: 'Tester', is_premium: false },
       setPremium: mocks.setPremium,
+      setTokens: mocks.setTokens,
     }),
 }));
 
@@ -213,7 +215,7 @@ describe('Premium manual invoice stopgap and password step', () => {
     expect(screen.getByText(/New password \(min 8 chars\)/i)).toBeInTheDocument();
 
     mocks.setPassword.mockResolvedValue({
-      data: { ok: true, message: 'Password updated.' },
+      data: { ok: true, message: 'Password updated.', token: 'fresh-access', refresh_token: 'fresh-refresh' },
     });
 
     const inputs = screen.getAllByPlaceholderText('••••••••');
@@ -229,5 +231,34 @@ describe('Premium manual invoice stopgap and password step', () => {
         new_password: 'NewSecret123!',
       });
     });
+    await waitFor(() => {
+      expect(mocks.setTokens).toHaveBeenCalledWith('fresh-access', 'fresh-refresh');
+    });
+    const ok = await screen.findByTestId('password-saved');
+    expect(ok).toHaveTextContent(/You are still signed in here/i);
+    expect(ok).toHaveTextContent(/other devices you will need to sign in again/i);
+    expect(ok.className).toContain('text-[15px]');
+  });
+
+  it('shows a wrong current password as a form error without touching the session', async () => {
+    render(
+      <MemoryRouter>
+        <Premium />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByText('Login Password')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Change password/i }));
+
+    mocks.setPassword.mockRejectedValue({
+      response: { status: 400, data: { error: 'Current password is incorrect', code: 'wrong_current_password' } },
+    });
+    const inputs = screen.getAllByPlaceholderText('••••••••');
+    fireEvent.change(inputs[0], { target: { value: 'WrongPass123!' } });
+    fireEvent.change(inputs[1], { target: { value: 'NewSecret123!' } });
+    fireEvent.change(inputs[2], { target: { value: 'NewSecret123!' } });
+    fireEvent.click(screen.getByRole('button', { name: /Update password/i }));
+
+    expect(await screen.findByText('Current password is incorrect')).toBeInTheDocument();
+    expect(mocks.setTokens).not.toHaveBeenCalled();
   });
 });

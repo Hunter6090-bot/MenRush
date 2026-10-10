@@ -53,6 +53,15 @@ export interface ManualPaymentInstructions {
   bank_configured: boolean;
 }
 
+function escapeEmailHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function getManualPaymentInstructions(reference: string): ManualPaymentInstructions {
   const account_name = process.env.MANUAL_PAYMENT_ACCOUNT_NAME?.trim() || null;
   const sort_code = process.env.MANUAL_PAYMENT_SORT_CODE?.trim() || null;
@@ -292,28 +301,48 @@ export const invoiceService = {
             ? grantResult.premiumUntil.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
             : 'Active';
 
+          const greetingName = escapeEmailHtml(user.name || 'there');
+          const untilHtml = grantResult.premiumUntil
+            ? ` until <strong style="color:#F0E0C0;">${untilStr}</strong>`
+            : '';
           const html = buildTransactionalEmail({
-            title: 'Your MenRush Premium is on',
-            preheader: `Thanks, your payment for ${invoice.invoice_number} has arrived.`,
-            headlineHtml: 'Your <span style="color:#C4832A;">Premium</span> is on',
-            subheadline: `We have your payment of £${formattedAmount}.`,
+            title: 'Your MenRush Premium is now on',
+            preheader: "Thank you, we've received your payment.",
+            headlineHtml: 'Your <span style="color:#C4832A;">Premium</span> is now on',
+            subheadline: `We've received your payment of £${formattedAmount}.`,
             bodyHtml:
-              transactionalParagraph(`Hi ${user.name || 'there'}, thank you. Your bank transfer has come through and we have checked it.`) +
+              transactionalParagraph(`Hello ${greetingName},`) +
               transactionalParagraph(
-                `Your Premium perks are on now${grantResult.premiumUntil ? ` and run until <strong style="color:#F0E0C0;">${untilStr}</strong>` : ''}. If anything looks wrong, just reply to this email.`,
+                `Thank you for your bank transfer. It has arrived safely, and your Premium is now switched on${untilHtml}.`,
               ) +
               transactionalParagraph(
-                `<span style="color:#A89070; font-size:13px;">Invoice: ${invoice.invoice_number} &bull; Reference: ${invoice.payment_reference}</span>`,
-              ),
+                "There's nothing more you need to do. If anything doesn't look quite right, please get in touch at support@menrush.com and we'll sort it out.",
+              ) +
+              transactionalParagraph(
+                `<span style="color:#A89070; font-size:14px;">Invoice number: ${escapeEmailHtml(invoice.invoice_number)}<br>Payment reference: ${escapeEmailHtml(invoice.payment_reference)}</span>`,
+              ) +
+              transactionalParagraph('All the best,<br>MenRush'),
             ctaUrl: `${process.env.FRONTEND_URL || 'https://menrush.com'}/premium`,
             ctaLabel: 'Open MenRush',
           });
 
           await sendTransactionalEmail({
             to: user.email,
-            subject: 'Your MenRush Premium is on',
+            subject: 'Your MenRush Premium is now on',
             html,
-            text: `Hi ${user.name || 'there'}, thank you. Your payment of £${formattedAmount} for invoice ${invoice.invoice_number} has come through and your Premium is on${grantResult.premiumUntil ? ` until ${untilStr}` : ''}. If anything looks wrong, just reply to this email.`,
+            text: [
+              `Hello ${user.name || 'there'},`,
+              '',
+              `Thank you for your bank transfer. It has arrived safely, and your Premium is now switched on${grantResult.premiumUntil ? ` until ${untilStr}` : ''}.`,
+              '',
+              "There's nothing more you need to do. If anything doesn't look quite right, please get in touch at support@menrush.com and we'll sort it out.",
+              '',
+              `Invoice number: ${invoice.invoice_number}`,
+              `Payment reference: ${invoice.payment_reference}`,
+              '',
+              'All the best,',
+              'MenRush',
+            ].join('\n'),
           });
         }
       } catch (err) {

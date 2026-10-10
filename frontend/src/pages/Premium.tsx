@@ -24,6 +24,7 @@ export const Premium: React.FC = () => {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const setPremium = useAuthStore((s) => s.setPremium);
+  const setTokens = useAuthStore((s) => s.setTokens);
 
   const [plan, setPlan] = useState<PremiumPlan | null>(null);
   const [loading, setLoading] = useState(true);
@@ -134,16 +135,21 @@ export const Premium: React.FC = () => {
 
     setPwBusy(true);
     try {
-      await authAPI.setPassword({
+      const res = await authAPI.setPassword({
         current_password: hasPassword ? currentPassword : undefined,
         new_password: newPassword,
       });
+      // The server signs out every other session and hands this one a fresh token.
+      if (res.data?.token && res.data?.refresh_token) {
+        setTokens(res.data.token, res.data.refresh_token);
+      }
       setHasPassword(true);
-      setPwSuccess('Password saved successfully.');
+      setPwSuccess(
+        'Password saved. You are still signed in here. On your other devices you will need to sign in again with your new password.',
+      );
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      setTimeout(() => setShowPasswordStep(false), 1500);
     } catch (err: any) {
       const msg = err?.response?.data?.error || 'Could not update password.';
       setPwError(msg);
@@ -425,7 +431,11 @@ export const Premium: React.FC = () => {
                     </div>
 
                     {pwError && <p className="text-xs text-red-400">{pwError}</p>}
-                    {pwSuccess && <p className="text-xs text-[#C4832A]">{pwSuccess}</p>}
+                    {pwSuccess && (
+                      <p role="status" data-testid="password-saved" className="text-[15px] leading-snug text-[#C4832A]">
+                        {pwSuccess}
+                      </p>
+                    )}
 
                     <button
                       type="submit"
