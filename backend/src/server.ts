@@ -58,6 +58,7 @@ import { logResendMailerStatus } from './services/mailer.service';
 import { startVerificationRetentionWorker } from './services/verification/retention.worker';
 import { Sentry } from './observability/sentry';
 import { corsOrigin } from './security/cors';
+import { rejectQueryCoordinates } from './middleware/noQueryCoordinates';
 import { query } from './db';
 import { ensureUploadDirs, getUploadsRoot, probeUploadsWritable } from './lib/uploads-root';
 import { logCallMetric } from './services/call-metrics.service';
@@ -88,6 +89,8 @@ const io: any = new SocketIOServer(server, {
 // Middleware
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: corsOrigin, credentials: true }));
+// Coordinates never travel in a URL (query strings land in proxy logs).
+app.use('/api', rejectQueryCoordinates);
 app.use('/api/premium/webhook', premiumWebhookRoutes);
 // Veriff decision webhook needs the raw body for HMAC (before express.json).
 app.use('/api/verify/veriff', veriffRoutes);

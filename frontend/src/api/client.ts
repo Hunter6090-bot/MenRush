@@ -42,6 +42,84 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+/**
+ * Coordinates never travel in a URL: query strings end up in proxy logs
+ * (Vercel runtime logs keep the search params of every /api request). The
+ * device fix goes only in the body of POST /users/location, and every read
+ * uses the stored location on the server, which rejects URL coordinates with
+ * 400 coordinates_in_url.
+ */
+export const URL_COORDINATE_KEYS = ['lat', 'lng', 'lon', 'latitude', 'longitude'] as const;
+
+function isCoordinateKey(key: string): boolean {
+  return (URL_COORDINATE_KEYS as readonly string[]).includes(key.toLowerCase());
+}
+
+/** Safety net: drop any coordinate key from a request's params and URL query. */
+export function stripCoordinatesFromRequest<T extends { url?: string; params?: unknown }>(config: T): T {
+  if (config.params && typeof config.params === 'object') {
+    const params = { ...(config.params as Record<string, unknown>) };
+    for (const key of Object.keys(params)) {
+      if (isCoordinateKey(key)) delete params[key];
+    }
+    config.params = params;
+  }
+  if (config.url && config.url.includes('?')) {
+    const [path, qs] = config.url.split('?', 2);
+    const kept = new URLSearchParams(qs);
+    for (const key of Array.from(kept.keys())) {
+      if (isCoordinateKey(key)) kept.delete(key);
+    }
+    const rest = kept.toString();
+    config.url = rest ? `${path}?${rest}` : path;
+  }
+  return config;
+}
+
+apiClient.interceptors.request.use((config) => stripCoordinatesFromRequest(config));
+
+/** Re-send the same fix at most this often before a read. */
+const LOCATION_SYNC_FRESH_MS = 60_000;
+let lastLocationSync: { lat: number; lng: number; at: number } | null = null;
+let locationSyncInFlight: Promise<void> | null = null;
+
+/**
+ * Before a location-based read, make sure the server has this fix: POST it in
+ * the body of /users/location (jump gate applies on the server). Skips a fix
+ * already sent in the last minute. Never throws: a failed sync must not block
+ * the read, which then uses the last stored location.
+ */
+export async function syncLocationForRead(lat?: number | null, lng?: number | null): Promise<void> {
+  if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+  const fresh = () =>
+    lastLocationSync != null &&
+    lastLocationSync.lat === lat &&
+    lastLocationSync.lng === lng &&
+    Date.now() - lastLocationSync.at < LOCATION_SYNC_FRESH_MS;
+  if (fresh()) return;
+  if (locationSyncInFlight) {
+    await locationSyncInFlight;
+    if (fresh()) return;
+  }
+  const run = apiClient
+    .post('/users/location', { lat, lng })
+    .then(() => {
+      lastLocationSync = { lat, lng, at: Date.now() };
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      if (locationSyncInFlight === run) locationSyncInFlight = null;
+    });
+  locationSyncInFlight = run;
+  await run;
+}
+
+/** Tests only. */
+export function resetLocationSyncForTests(): void {
+  lastLocationSync = null;
+  locationSyncInFlight = null;
+}
+
 /** Paths that legitimately return 401 without meaning "session dead". */
 const AUTH_CHALLENGE_PATHS = [
   '/auth/login',
@@ -235,10 +313,9 @@ export const usersAPI = {
       scope?: 'uk_ie';
     }
   ) =>
+    syncLocationForRead(lat, lng).then(() =>
     apiClient.get<NearbyRosterResponse | any[]>('/users/nearby', {
       params: {
-        lat,
-        lng,
         radius,
         minAge: filters?.minAge,
         maxAge: filters?.maxAge,
@@ -254,14 +331,9 @@ export const usersAPI = {
         offset: filters?.offset,
         scope: filters?.scope,
       },
-    }),
+    })),
   getProfile: (id: string, coords?: { lat?: number | null; lng?: number | null }) =>
-    apiClient.get(`/users/profile/${id}`, {
-      params:
-        coords?.lat != null && coords?.lng != null
-          ? { lat: coords.lat, lng: coords.lng }
-          : undefined,
-    }),
+    syncLocationForRead(coords?.lat, coords?.lng).then(() => apiClient.get(`/users/profile/${id}`)),
   searchProfiles: (q: string, by: 'name' | 'place' = 'name') =>
     apiClient.get<Array<{ id: string; name: string; age?: number; photo_url?: string; bio?: string; headline?: string }>>(
       '/users/search',
@@ -652,9 +724,11 @@ export interface MapFeedMessage {
 
 export const mapFeedAPI = {
   list: (lat?: number, lng?: number, limit = 20) =>
-    apiClient.get<{ messages: MapFeedMessage[] }>('/map-feed', {
-      params: { lat, lng, limit },
-    }),
+    syncLocationForRead(lat, lng).then(() =>
+      apiClient.get<{ messages: MapFeedMessage[] }>('/map-feed', {
+        params: { limit },
+      }),
+    ),
   post: (data: { message: string; lat?: number; lng?: number; display_name?: string }) =>
     apiClient.post<MapFeedMessage>('/map-feed', data),
 };
@@ -838,9 +912,11 @@ export interface EventDTO {
 
 export const eventsAPI = {
   getNearby: (lat: number, lng: number, radiusKm?: number, limit?: number) =>
-    apiClient.get<EventDTO[]>('/events/nearby', {
-      params: { lat, lng, radius: radiusKm, limit },
-    }),
+    syncLocationForRead(lat, lng).then(() =>
+      apiClient.get<EventDTO[]>('/events/nearby', {
+        params: { radius: radiusKm, limit },
+      }),
+    ),
   /** Free venue check-in — creates/uses a Cruise (Hot Spot) pin that expires after 4 hours. */
   checkIn: (id: string, anonymous = false) =>
     apiClient.post<{ ok: boolean; spot: HotSpotDTO }>(`/events/${id}/check-in`, { anonymous }),
@@ -1015,10 +1091,9 @@ export const hotSpotsAPI = {
     category?: string,
     options?: { outdoor?: boolean; q?: string; sort?: 'closest' | 'live'; limit?: number },
   ) =>
+    syncLocationForRead(lat, lng).then(() =>
     apiClient.get<{ spots: HotSpotDTO[] }>('/hot-spots', {
       params: {
-        lat,
-        lng,
         radiusKm,
         category,
         outdoor: options?.outdoor,
@@ -1026,23 +1101,22 @@ export const hotSpotsAPI = {
         sort: options?.sort,
         limit: options?.limit,
       },
-    }),
+    })),
   searchCruising: (
     lat: number,
     lng: number,
     query?: string,
     radiusKm?: number,
   ) =>
+    syncLocationForRead(lat, lng).then(() =>
     apiClient.get<{ spots: HotSpotDTO[] }>('/hot-spots', {
       params: {
-        lat,
-        lng,
         cruising: true,
         sort: 'closest',
         q: query?.trim() || undefined,
         radiusKm: radiusKm || (query?.trim() ? undefined : 100),
       },
-    }),
+    })),
   getSpot: (id: string) => apiClient.get<{ spot: HotSpotDTO }>(`/hot-spots/${id}`),
   checkIn: (id: string, anonymous = false) =>
     apiClient.post<{ ok: boolean; spot: HotSpotDTO }>(`/hot-spots/${id}/check-in`, { anonymous }),
@@ -1198,9 +1272,11 @@ export interface CommunityMentionSuggestionDTO {
 
 export const communityAPI = {
   listPosts: (lat: number, lng: number, radiusKm?: number) =>
-    apiClient.get<{ posts: CommunityPostDTO[] }>('/community/posts', {
-      params: { lat, lng, radiusKm },
-    }),
+    syncLocationForRead(lat, lng).then(() =>
+      apiClient.get<{ posts: CommunityPostDTO[] }>('/community/posts', {
+        params: { radiusKm },
+      }),
+    ),
   createPost: (body: string) =>
     apiClient.post<{ post: CommunityPostDTO }>('/community/posts', { body }),
   updatePost: (postId: string, body: string) =>

@@ -25,12 +25,11 @@ const PostMapFeedSchema = z.object({
 // GET / — list nearby map feed messages
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
-    const lat = req.query.lat !== undefined ? parseFloat(req.query.lat as string) : undefined;
-    const lng = req.query.lng !== undefined ? parseFloat(req.query.lng as string) : undefined;
+    // Origin is the viewer's stored location inside listNearby.
     const radiusKm =
       req.query.radius !== undefined ? parseFloat(req.query.radius as string) : undefined;
 
-    const all = await mapFeedService.listNearby(req.userId!, { lat, lng, radiusKm });
+    const all = await mapFeedService.listNearby(req.userId!, { radiusKm });
     // Hide my location from: drop posts by members who hide their location from me.
     const hidingFromMe = await locationHideService.ownersHidingFrom(
       req.userId!,

@@ -232,13 +232,8 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
       discoveryScope,
     };
 
-    const queryLat = typeof req.query.lat === 'string' ? Number.parseFloat(req.query.lat) : NaN;
-    const queryLng = typeof req.query.lng === 'string' ? Number.parseFloat(req.query.lng) : NaN;
-    const clientLocation =
-      Number.isFinite(queryLat) && Number.isFinite(queryLng)
-        ? { lat: queryLat, lng: queryLng }
-        : undefined;
-
+    // Origin is the stored location only (POST /api/users/location sets it,
+    // through the jump gate). Coordinates in the URL are rejected upstream.
     const pageNum = page ? Math.max(1, Number.parseInt(String(page), 10) || 1) : 1;
     const limitNum = limit
       ? Math.min(Math.max(1, Number.parseInt(String(limit), 10) || 60), 200)
@@ -251,7 +246,7 @@ router.get('/nearby', verifiedMiddleware, async (req: AuthRequest, res: Response
       req.userId!,
       discoveryScope === 'uk_ie' ? 0 : Math.min(Math.max(requestedRadius, 0.8), 161),
       filters,
-      clientLocation,
+      undefined,
       { page: pageNum, limit: limitNum, offset: offsetNum },
     );
 
@@ -278,14 +273,8 @@ router.get('/profile/:id', verifiedMiddleware, async (req: AuthRequest, res: Res
   try {
     const viewerId = req.userId!;
     const targetId = req.params.id;
-    const queryLat = typeof req.query.lat === 'string' ? Number.parseFloat(req.query.lat) : NaN;
-    const queryLng = typeof req.query.lng === 'string' ? Number.parseFloat(req.query.lng) : NaN;
-    const clientLocation =
-      Number.isFinite(queryLat) && Number.isFinite(queryLng)
-        ? { lat: queryLat, lng: queryLng }
-        : undefined;
-
-    const user = await userService.getPublicProfile(viewerId, targetId, clientLocation);
+    // Distance uses the viewer's stored location (set by POST /api/users/location).
+    const user = await userService.getPublicProfile(viewerId, targetId);
     if (!user) {
       return res.status(404).json({ error: 'User not found', code: 'user_not_found' });
     }
