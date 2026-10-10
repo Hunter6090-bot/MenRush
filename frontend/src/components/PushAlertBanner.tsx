@@ -6,6 +6,7 @@ import {
   isPushConfigured,
 } from '../lib/push';
 import { usePromptDismissal } from '../lib/promptDismissal';
+import { usePromptSlot, type PromptSlotState } from '../lib/promptSlot';
 import { PromptDismissControls } from './PromptDismissControls';
 
 /**
@@ -33,37 +34,52 @@ function legacySnoozed(): boolean {
  * Two prompts share this slot:
  * - iPhone Safari tab: "Add MenRush to Home Screen" (the get-the-app prompt).
  * - Everywhere else with permission still default: "Turn on alerts".
- * Each has "Don't remind me again" (owner ask, 10 Oct 2026). The same rule on
+ * Each has "Don't show again" (owner ask, 10 Oct 2026). The same rule on
  * every phone. Alerts stay available in Settings, the app on /get-the-app.
  */
 export function PushAlertBanner() {
-  const [eligible, setEligible] = useState<'install' | 'alerts' | null>(null);
+  // undefined while still checking; null once we know nothing should show.
+  const [eligible, setEligible] = useState<'install' | 'alerts' | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const install = usePromptDismissal('install');
   const alerts = usePromptDismissal('alerts');
 
   useEffect(() => {
     let cancelled = false;
+    const decide = (value: 'install' | 'alerts' | null) => {
+      if (!cancelled) setEligible(value);
+    };
     void (async () => {
-      const configured = await isPushConfigured();
-      if (cancelled || !configured) return;
-      if (legacySnoozed()) return;
-      if (iosNeedsHomeScreenForPush()) {
-        setEligible('install');
-        return;
+      try {
+        const configured = await isPushConfigured();
+        if (!configured || legacySnoozed()) return decide(null);
+        if (iosNeedsHomeScreenForPush()) return decide('install');
+        if (getPushSupport() !== 'default') return decide(null);
+        decide('alerts');
+      } catch {
+        decide(null);
       }
-      if (getPushSupport() !== 'default') return;
-      setEligible('alerts');
     })();
     return () => {
       cancelled = true;
     };
   }, []);
 
+  // One prompt at a time. While still checking, hold back Finish profile so it
+  // does not flash up and then get replaced.
+  const slotState = (kind: 'install' | 'alerts', hidden: boolean): PromptSlotState => {
+    if (eligible === undefined) return kind === 'install' ? 'pending' : 'none';
+    if (eligible !== kind) return 'none';
+    return hidden ? 'none' : 'want';
+  };
+  const installOnTop = usePromptSlot('install-banner', slotState('install', install.hidden));
+  const alertsOnTop = usePromptSlot('alerts', slotState('alerts', alerts.hidden));
+
   if (!eligible) return null;
   const iosInstall = eligible === 'install';
   const prompt = iosInstall ? install : alerts;
   if (prompt.hidden) return null;
+  if (!(iosInstall ? installOnTop : alertsOnTop)) return null;
 
   const enable = async () => {
     if (busy) return;

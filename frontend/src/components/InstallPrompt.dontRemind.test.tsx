@@ -44,7 +44,7 @@ function renderSheet(variant: 'sheet' | 'card' = 'sheet') {
   );
 }
 
-describe("InstallPrompt: Don't remind me again", () => {
+describe("InstallPrompt: Don't show again", () => {
   const originalUa = navigator.userAgent;
 
   beforeEach(() => {
@@ -76,7 +76,7 @@ describe("InstallPrompt: Don't remind me again", () => {
       const first = renderSheet();
       expect(screen.getByText('Put MenRush on your Home Screen.')).toBeInTheDocument();
       expect(screen.queryByText('Not now')).toBeNull();
-      await user.click(screen.getByLabelText("Don't remind me again"));
+      await user.click(screen.getByLabelText("Don't show again"));
       await user.click(screen.getByTestId('install-prompt-close'));
       expect(screen.queryByRole('dialog', { name: 'Install MenRush' })).toBeNull();
       first.unmount();
@@ -101,7 +101,7 @@ describe("InstallPrompt: Don't remind me again", () => {
     window.sessionStorage.clear();
     const second = renderSheet();
     expect(screen.getByRole('dialog', { name: 'Install MenRush' })).toBeInTheDocument();
-    await user.click(screen.getByLabelText("Don't remind me again"));
+    await user.click(screen.getByLabelText("Don't show again"));
     await user.click(screen.getByTestId('install-prompt-close'));
     second.unmount();
 

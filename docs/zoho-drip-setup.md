@@ -94,8 +94,8 @@ For each HTML file in `email-assets/`, do this once:
 | 7 | `drip-4-founding-members.html` | `mr-d55-founding-members` | Three weeks before we open, 100 men get in early |
 | 8 | `drip-5-invitations-land.html` | `mr-d75-invitations-land` | One last note before we go quieter |
 
-Note: `welcome.html` is an older alternate of `welcome-email.html` and is **not**
-in this schedule. Decide which one you prefer and use only that.
+Note: `welcome-email.html` is the only welcome template. The older alternate
+`welcome.html` has been removed.
 
 ---
 

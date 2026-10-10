@@ -1,5 +1,5 @@
 /**
- * "Don't remind me again" for the recurring top-of-screen prompts.
+ * "Don't show again" for the recurring top-of-screen prompts.
  *
  * Owner ask (Al, 10 Oct 2026): the get-the-app, turn-on-alerts and
  * finish-your-profile prompts must stop coming back, and the choice must follow
@@ -130,7 +130,7 @@ export function syncPromptPrefs(userId: string | null | undefined): Promise<void
   return run;
 }
 
-/** Close a prompt. `forever` is the "Don't remind me again" tick. */
+/** Close a prompt. `forever` is the "Don't show again" tick. */
 export function closePrompt(id: PromptId, userId: string | null | undefined, forever: boolean): void {
   if (forever) {
     write('local', promptNeverKey(id, userId));
