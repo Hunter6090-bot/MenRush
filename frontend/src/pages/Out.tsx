@@ -4,7 +4,7 @@
  * Cruising spot search lives here (moved off the map, Pete 8 Oct 2026).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { eventsAPI, hotSpotsAPI, type EventDTO, type HotSpotDTO } from '../api/client';
 import { Layout } from '../components/Layout';
 import { PulseRing } from '../components/PulseRing';
@@ -13,7 +13,9 @@ import { CruisingSearchBar } from '../components/CruisingSearchBar';
 import { CruisingSearchSheet } from '../components/CruisingSearchSheet';
 import { HotSpotReviewsModal } from '../components/HotSpotReviewsModal';
 import { useLocationStore } from '../hooks/store';
-import { formatDistanceFromKm } from '../lib/localeUnits';
+import { formatDistanceFromKm, resolveLocaleTag } from '../lib/localeUnits';
+import { eventTicketUrl } from '../lib/eventTickets';
+import { SpotTypeIcon } from '../components/icons/SpotTypeIcon';
 import { getDirectionsUrl } from '../lib/cruising';
 import { IconCommunity } from '../components/icons';
 
@@ -317,30 +319,124 @@ function OutSpotRow({ spot }: { spot: HotSpotDTO }) {
   );
 }
 
+/** Matches backend ACTIVE_CHECKIN_TTL_HOURS (same copy as the Events page). */
+const EVENT_CHECKIN_TTL_HOURS = 4;
+
+function formatEventStart(iso?: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString(resolveLocaleTag(), {
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Europe/London',
+  });
+}
+
+/**
+ * Out event row. Tapping it opens the same actions the Events card had before the
+ * redesign (#316): Tickets when the event has a URL, Who's going (the event room)
+ * and Check in. Nothing new; only the old Events flow, reachable from Out again.
+ */
 function OutEventRow({ event }: { event: EventDTO }) {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [checkingIn, setCheckingIn] = useState(false);
+  const [notice, setNotice] = useState('');
+  const ticketUrl = eventTicketUrl(event);
+  const when = formatEventStart(event.starts_at);
+  const panelId = `out-event-actions-${event.id}`;
+
   return (
     <article
-      className="flex min-h-[72px] gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-3"
+      className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)]"
       data-testid={`out-event-${event.id}`}
     >
-      <div
-        className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-[var(--bg-elevated)] text-2xl"
-        aria-hidden
+      <button
+        type="button"
+        className="flex min-h-[72px] w-full gap-3 p-3 text-left"
+        aria-expanded={open}
+        aria-controls={panelId}
+        aria-label={`${event.name}, show event actions`}
+        data-testid={`out-event-open-${event.id}`}
+        onClick={() => setOpen((v) => !v)}
       >
-        🎟
-      </div>
-      <div className="min-w-0 flex-1">
-        <h2 className="truncate text-[15px] font-extrabold text-[var(--cream)]">{event.name}</h2>
-        <p className="mt-0.5 truncate text-[15px] font-medium text-[var(--cream-muted)]">
-          {[event.venue_name, event.starts_at].filter(Boolean).join(' · ')}
-        </p>
-      </div>
-      <span className="inline-flex min-h-[44px] shrink-0 items-center self-center rounded-full border border-[var(--copper)]/40 px-3 text-[15px] font-extrabold uppercase tracking-wide text-[var(--copper)]">
-        Event
-      </span>
+        <span
+          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-[var(--bg-elevated)] text-[var(--copper)]"
+          aria-hidden
+        >
+          <SpotTypeIcon type="event" size={28} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[15px] font-extrabold text-[var(--cream)]">{event.name}</span>
+          <span className="mt-0.5 block truncate text-[15px] font-medium text-[var(--cream-muted)]">
+            {[event.venue_name, when].filter(Boolean).join(' · ')}
+          </span>
+        </span>
+        <span className="inline-flex min-h-[44px] shrink-0 items-center self-center rounded-full border border-[var(--copper)]/40 px-3 text-[15px] font-extrabold uppercase tracking-wide text-[var(--nn-accent-text)]">
+          Event
+        </span>
+      </button>
+      {open ? (
+        <div id={panelId} className="border-t border-[var(--border-default)] p-3" data-testid={panelId}>
+          <div className="flex flex-wrap gap-2">
+            {ticketUrl ? (
+              <a
+                href={ticketUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="event-tickets"
+                className="mr-cta-gradient inline-flex min-h-[44px] flex-1 items-center justify-center rounded-full px-4 text-[15px] font-bold"
+              >
+                Tickets
+              </a>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => navigate(`/rooms/${event.id}`)}
+              data-testid="event-whos-going"
+              className={`inline-flex min-h-[44px] flex-1 items-center justify-center rounded-full px-4 text-[15px] font-bold ${
+                ticketUrl
+                  ? 'border border-[var(--border-default)] text-[var(--cream)]'
+                  : 'mr-cta-gradient'
+              }`}
+            >
+              Who&apos;s going
+            </button>
+            <button
+              type="button"
+              disabled={checkingIn || event.lat == null || event.lng == null}
+              data-testid={`event-checkin-${event.id}`}
+              onClick={() => {
+                setCheckingIn(true);
+                setNotice('');
+                void eventsAPI
+                  .checkIn(event.id)
+                  .then(() =>
+                    setNotice(
+                      `Checked in at ${event.venue_name || event.name}. Pin stays on the map for ${EVENT_CHECKIN_TTL_HOURS} hours.`,
+                    ),
+                  )
+                  .catch((err: { response?: { data?: { error?: string } } }) =>
+                    setNotice(err.response?.data?.error || 'Check-in failed.'),
+                  )
+                  .finally(() => setCheckingIn(false));
+              }}
+              className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-full border border-[var(--copper)]/50 px-4 text-[15px] font-bold text-[var(--nn-accent-text)] disabled:opacity-50"
+            >
+              {checkingIn ? 'Checking in…' : 'Check in'}
+            </button>
+          </div>
+          {notice ? (
+            <p className="mt-2 text-[15px] text-[var(--cream-muted)]" role="status" data-testid="out-event-notice">
+              {notice}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
     </article>
   );
 }
-
 
 export default Out;
