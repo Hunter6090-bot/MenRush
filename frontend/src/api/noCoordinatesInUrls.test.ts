@@ -8,6 +8,7 @@ import {
   mapFeedAPI,
   communityAPI,
   onLocationSaved,
+  recordSessionFix,
   roomsAPI,
   resetLocationSyncForTests,
   stripCoordinatesFromRequest,
@@ -73,7 +74,8 @@ describe('no coordinates in /api GET URLs', () => {
     expect(urls.some((u) => u.includes('/hot-spots'))).toBe(true);
   });
 
-  it('the fix goes once in the body of POST /users/location', async () => {
+  it('the session fix goes once in the body of POST /users/location', async () => {
+    recordSessionFix(LAT, LNG);
     await usersAPI.getNearby(LAT, LNG, 8);
     await eventsAPI.getNearby(LAT, LNG, 50, 24);
     await hotSpotsAPI.listNearby(LAT, LNG, 80);
@@ -86,14 +88,17 @@ describe('no coordinates in /api GET URLs', () => {
     expect(sent[0].method).toBe('POST');
   });
 
-  it('a moved fix is sent again before the next read', async () => {
+  it('a moved session fix is sent again before the next read', async () => {
+    recordSessionFix(LAT, LNG);
     await usersAPI.getNearby(LAT, LNG, 8);
+    recordSessionFix(LAT + 0.01, LNG);
     await usersAPI.getNearby(LAT + 0.01, LNG, 8);
     const posts = sent.filter((r) => r.method === 'POST');
     expect(posts).toHaveLength(2);
   });
 
   it('a read still goes out when the location sync fails', async () => {
+    recordSessionFix(LAT, LNG);
     apiClient.defaults.adapter = async (config: InternalAxiosRequestConfig) => {
       sent.push({ method: (config.method ?? 'get').toUpperCase(), url: apiClient.getUri(config), data: config.data });
       if (config.method === 'post') throw new Error('offline');
@@ -103,7 +108,8 @@ describe('no coordinates in /api GET URLs', () => {
     expect(gets()).toHaveLength(1);
   });
 
-  it('hot spots: location_required re-sends the fix (no one-minute skip) and retries once', async () => {
+  it('hot spots: location_required re-sends the session fix (no one-minute skip) and retries once', async () => {
+    recordSessionFix(LAT, LNG);
     let hotSpotGets = 0;
     apiClient.defaults.adapter = async (config: InternalAxiosRequestConfig) => {
       const url = apiClient.getUri(config);
@@ -121,6 +127,7 @@ describe('no coordinates in /api GET URLs', () => {
   });
 
   it('hot spots: retries only once when the location is still missing', async () => {
+    recordSessionFix(LAT, LNG);
     apiClient.defaults.adapter = async (config: InternalAxiosRequestConfig) => {
       sent.push({ method: (config.method ?? 'get').toUpperCase(), url: apiClient.getUri(config), data: config.data });
       const data = config.method === 'get' ? { spots: [], location_required: true } : { success: true };
@@ -141,11 +148,13 @@ describe('no coordinates in /api GET URLs', () => {
       const data = config.method === 'post' ? { success: false, code: 'location_not_accepted' } : {};
       return { data, status: 200, statusText: 'OK', headers: {}, config } as AxiosResponse;
     };
-    await usersAPI.updateLocation(LAT, LNG);
-    await usersAPI.getNearby(LAT, LNG, 8);
+    await usersAPI.updateLocation(LAT + 1, LNG);
     expect(saved).toHaveBeenCalledTimes(1);
-    // A refused fix is not remembered as synced: the next read sends it again.
-    await usersAPI.getNearby(LAT, LNG, 8);
+    // A refused session fix is not remembered as synced: the next read sends it again.
+    recordSessionFix(LAT + 1, LNG);
+    await usersAPI.getNearby(LAT + 1, LNG, 8);
+    await usersAPI.getNearby(LAT + 1, LNG, 8);
+    expect(saved).toHaveBeenCalledTimes(1);
     expect(sent.filter((r) => r.method === 'POST')).toHaveLength(4);
   });
 

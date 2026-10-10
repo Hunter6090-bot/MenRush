@@ -86,40 +86,69 @@ apiClient.interceptors.request.use((config) => stripCoordinatesFromRequest(confi
 
 /** Re-send the same fix at most this often before a read. */
 const LOCATION_SYNC_FRESH_MS = 60_000;
+/** A device fix older than this is never sent by a read. */
+export const SESSION_FIX_MAX_AGE_MS = 2 * 60_000;
 let lastLocationSync: { lat: number; lng: number; at: number } | null = null;
 let locationSyncInFlight: Promise<void> | null = null;
 
 /**
- * Before a location-based read, make sure the server has this fix: POST it in
- * the body of /users/location (jump gate applies on the server). Skips a fix
- * already sent in the last minute. Never throws: a failed sync must not block
- * the read, which then uses the last stored location.
+ * The last fix the DEVICE produced in this session, recorded only by
+ * useLiveLocationPublisher, so it carries that publisher's gates: signed in,
+ * ID verification when required, OS permission granted, a real GPS result.
+ * Never seeded from localStorage (menrush_last_location) or the location
+ * store, so a stale or cached point is never sent.
  */
-export async function syncLocationForRead(
-  lat?: number | null,
-  lng?: number | null,
-  opts?: { force?: boolean },
-): Promise<void> {
-  if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+let sessionFix: { lat: number; lng: number; at: number } | null = null;
+
+export function recordSessionFix(lat: number, lng: number, at: number = Date.now()): void {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+  sessionFix = { lat, lng, at };
+}
+
+/** Permission denied or revoked, signed out, or the publisher stopped. */
+export function clearSessionFix(): void {
+  sessionFix = null;
+}
+
+function freshSessionFix(): { lat: number; lng: number } | null {
+  if (!sessionFix) return null;
+  if (Date.now() - sessionFix.at > SESSION_FIX_MAX_AGE_MS) return null;
+  return { lat: sessionFix.lat, lng: sessionFix.lng };
+}
+
+/**
+ * Before a location-based read, make sure the server has this session's
+ * device fix: POST it in the body of /users/location (jump gate applies on
+ * the server). Sends nothing when there is no fresh device fix from this
+ * session (location off, permission denied, unverified, cold start from a
+ * cached point): the read then uses the stored location. Skips a fix already
+ * stored in the last minute unless forced. Never throws. Resolves true when a
+ * fix was stored by this call.
+ */
+export async function syncLocationForRead(opts?: { force?: boolean }): Promise<boolean> {
+  const fix = freshSessionFix();
+  if (!fix) return false;
+  const { lat, lng } = fix;
   const fresh = () =>
     !opts?.force &&
     lastLocationSync != null &&
     lastLocationSync.lat === lat &&
     lastLocationSync.lng === lng &&
     Date.now() - lastLocationSync.at < LOCATION_SYNC_FRESH_MS;
-  if (fresh()) return;
+  if (fresh()) return false;
   if (locationSyncInFlight) {
     await locationSyncInFlight;
-    if (fresh()) return;
+    if (fresh()) return false;
   }
+  let stored = false;
   const run = apiClient
     .post('/users/location', { lat, lng })
     .then((res) => {
       // Only a stored fix counts as synced (the server answers success:false
       // when it refused the fix).
       if ((res?.data as { success?: boolean } | undefined)?.success === false) return;
-      lastLocationSync = { lat, lng, at: Date.now() };
-      notifyLocationSaved();
+      stored = true;
+      markLocationStored(lat, lng);
     })
     .catch(() => undefined)
     .finally(() => {
@@ -127,6 +156,12 @@ export async function syncLocationForRead(
     });
   locationSyncInFlight = run;
   await run;
+  return stored;
+}
+
+function markLocationStored(lat: number, lng: number): void {
+  lastLocationSync = { lat, lng, at: Date.now() };
+  notifyLocationSaved();
 }
 
 /**
@@ -155,23 +190,24 @@ function notifyLocationSaved(): void {
 /**
  * Hot Spot reads answer { spots: [], location_required: true } when the server
  * has no stored location yet (the read landed before the first save). Re-send
- * the fix (bypassing the one-minute skip) and retry once.
+ * this session's fresh device fix (bypassing the one-minute skip) and retry
+ * once, only if that fix was stored.
  */
-async function getHotSpotsWithLocationRetry(
-  lat: number,
-  lng: number,
-  params: Record<string, unknown>,
-) {
-  await syncLocationForRead(lat, lng);
+async function getHotSpotsWithLocationRetry(params: Record<string, unknown>) {
+  await syncLocationForRead();
   const res = await apiClient.get<{ spots: HotSpotDTO[]; location_required?: boolean }>('/hot-spots', { params });
   if (!res.data?.location_required) return res;
-  await syncLocationForRead(lat, lng, { force: true });
+  // Retry only when a fresh session fix was actually stored just now; with no
+  // device fix there is nothing to send (Out reloads on onLocationSaved).
+  const stored = await syncLocationForRead({ force: true });
+  if (!stored) return res;
   return apiClient.get<{ spots: HotSpotDTO[]; location_required?: boolean }>('/hot-spots', { params });
 }
 
 /** Tests only. */
 export function resetLocationSyncForTests(): void {
   lastLocationSync = null;
+  sessionFix = null;
   locationSyncInFlight = null;
   locationSavedListeners.clear();
 }
@@ -369,7 +405,7 @@ export const usersAPI = {
       scope?: 'uk_ie';
     }
   ) =>
-    syncLocationForRead(lat, lng).then(() =>
+    syncLocationForRead().then(() =>
     apiClient.get<NearbyRosterResponse | any[]>('/users/nearby', {
       params: {
         radius,
@@ -389,7 +425,7 @@ export const usersAPI = {
       },
     })),
   getProfile: (id: string, coords?: { lat?: number | null; lng?: number | null }) =>
-    syncLocationForRead(coords?.lat, coords?.lng).then(() => apiClient.get(`/users/profile/${id}`)),
+    syncLocationForRead().then(() => apiClient.get(`/users/profile/${id}`)),
   searchProfiles: (q: string, by: 'name' | 'place' = 'name') =>
     apiClient.get<Array<{ id: string; name: string; age?: number; photo_url?: string; bio?: string; headline?: string }>>(
       '/users/search',
@@ -397,7 +433,7 @@ export const usersAPI = {
     ),
   updateLocation: (lat: number, lng: number) =>
     apiClient.post('/users/location', { lat, lng }).then((res) => {
-      if ((res?.data as { success?: boolean } | undefined)?.success !== false) notifyLocationSaved();
+      if ((res?.data as { success?: boolean } | undefined)?.success !== false) markLocationStored(lat, lng);
       return res;
     }),
   updateProfile: (data: {
@@ -783,7 +819,7 @@ export interface MapFeedMessage {
 
 export const mapFeedAPI = {
   list: (lat?: number, lng?: number, limit = 20) =>
-    syncLocationForRead(lat, lng).then(() =>
+    syncLocationForRead().then(() =>
       apiClient.get<{ messages: MapFeedMessage[] }>('/map-feed', {
         params: { limit },
       }),
@@ -971,7 +1007,7 @@ export interface EventDTO {
 
 export const eventsAPI = {
   getNearby: (lat: number, lng: number, radiusKm?: number, limit?: number) =>
-    syncLocationForRead(lat, lng).then(() =>
+    syncLocationForRead().then(() =>
       apiClient.get<EventDTO[]>('/events/nearby', {
         params: { radius: radiusKm, limit },
       }),
@@ -1152,7 +1188,7 @@ export const hotSpotsAPI = {
     category?: string,
     options?: { outdoor?: boolean; q?: string; sort?: 'closest' | 'live'; limit?: number },
   ) =>
-    getHotSpotsWithLocationRetry(lat, lng, {
+    getHotSpotsWithLocationRetry({
       radiusKm,
       category,
       outdoor: options?.outdoor,
@@ -1166,7 +1202,7 @@ export const hotSpotsAPI = {
     query?: string,
     radiusKm?: number,
   ) =>
-    getHotSpotsWithLocationRetry(lat, lng, {
+    getHotSpotsWithLocationRetry({
       cruising: true,
       sort: 'closest',
       q: query?.trim() || undefined,
@@ -1327,7 +1363,7 @@ export interface CommunityMentionSuggestionDTO {
 
 export const communityAPI = {
   listPosts: (lat: number, lng: number, radiusKm?: number) =>
-    syncLocationForRead(lat, lng).then(() =>
+    syncLocationForRead().then(() =>
       apiClient.get<{ posts: CommunityPostDTO[] }>('/community/posts', {
         params: { radiusKm },
       }),
