@@ -42,7 +42,7 @@ export const ACCOUNT_MENU_SECTIONS: AccountMenuSection[] = [
       { id: 'invite', label: 'Invite friends', to: '/profile/edit#invite' },
       { id: 'alerts', label: ROUTE_LABELS.alerts, to: '/notifications' },
       { id: 'premium', label: 'Premium', to: '/premium' },
-      { id: 'verify', label: 'Verify ID', to: '/profile/edit#verify' },
+      { id: 'verify', label: 'Get verified', to: '/profile/edit#verify' },
     ],
   },
   {

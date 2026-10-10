@@ -8,7 +8,7 @@ import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { contrast, hardcodedColourClasses, loadThemeTokens, type Theme } from '../test/themeContrast';
+import { contrast, hardcodedColourClasses, loadThemeTokens, tokenContrast, type Theme } from '../test/themeContrast';
 
 const read = (rel: string) => readFileSync(resolve(__dirname, rel), 'utf8');
 loadThemeTokens(read('../styles/menrush-tokens.css'));
@@ -225,7 +225,7 @@ describe('Nothing lost: every old You control is still reachable', () => {
     ['Profile photo upload', /aria-label="Upload profile photo"/],
     ['Active now pill', /<StatusBadge online=\{!!profile\.online\}/],
     ['Settings cog', /aria-label="Open settings"/],
-    ['Verify ID (ProfileVerification)', /<div id="verify">\s*<ProfileVerification/],
+    ['Get verified (ProfileVerification)', /<div id="verify">\s*<ProfileVerification/],
     ['Edit Profile form', /data-testid="profile-edit-form"/],
     ['Map photo', /data-testid="map-photo-section"/],
     ['Display name, DOB, bio, headline', /profile-field-display-name[\s\S]*profile-field-dob[\s\S]*profile-field-bio[\s\S]*profile-field-headline/],
@@ -261,6 +261,16 @@ describe('Nothing lost: every old You control is still reachable', () => {
     expect(menu).not.toMatch(/'\/profile#/);
   });
 
+  it('the entry behind Edit is labelled Get verified everywhere (Brand), and the tick says ID verified', () => {
+    expect(menu).toContain("{ id: 'verify', label: 'Get verified', to: '/profile/edit#verify' }");
+    expect(read('../components/ProfileVerification.tsx')).toContain("'Get verified'");
+    expect(read('./Help.tsx')).toContain('tap Get verified in You > Edit');
+    for (const f of ['../components/AccountMenu.tsx', './You.tsx', './Profile.tsx', './Help.tsx', './Settings.tsx']) {
+      expect(read(f), f).not.toMatch(/Verify ID/);
+    }
+    expect(you).toContain('<span>ID verified</span>');
+  });
+
   it('Sign out moved to the You rows page; Albums, 2FA and Settings are rows', () => {
     expect(you).toMatch(/data-testid="you-sign-out"/);
     expect(edit).not.toMatch(/You'll need to log back in/);
@@ -294,9 +304,16 @@ describe.each<Theme>(['light', 'dark'])('You contrast (%s)', (theme) => {
     for (const id of ['quiet-hours', 'merch', 'brands']) {
       const tag = screen.getByTestId(`you-row-soon-${id}`);
       expect(contrast(tag, theme), `tag ${id} (${theme})`).toBeGreaterThanOrEqual(4.5);
-      // Brand: muted cream outline, not copper, so it does not read as a button.
-      expect(tag.className).toMatch(/border-\[var\(--cream-muted\)\]/);
-      expect(tag.className).not.toMatch(/copper|accent/);
+      // Brand / QC / Pete: small and muted. Thin low-contrast outline, muted text, not copper,
+      // so it does not read as a button. Font stays 15px (lock); quiet comes from padding,
+      // weight and colour.
+      expect(tag.className).toMatch(/\bborder border-\[var\(--border-default\)\]/);
+      expect(tag.className).toMatch(/text-\[var\(--cream-muted\)\]/);
+      expect(tag.className).toMatch(/\bfont-medium\b/);
+      expect(tag.className).not.toMatch(/font-(semibold|bold|extrabold)|\bpy-|px-(3|4)|copper|accent/);
+      const outline = tokenContrast('var(--border-default)', 'var(--bg-card)', theme);
+      const text = tokenContrast('var(--cream-muted)', 'var(--bg-card)', theme);
+      expect(outline, `outline quieter than text (${theme})`).toBeLessThan(text);
     }
     for (const r of [...YOU_ROW_CARDS[0], ...YOU_ROW_CARDS[1]]) {
       expect(contrast(screen.getByTestId(`you-row-icon-${r.id}`), theme), `icon ${r.id}`).toBeGreaterThanOrEqual(3);

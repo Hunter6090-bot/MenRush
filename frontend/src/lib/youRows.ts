@@ -66,3 +66,15 @@ export function comingSoonNotice(label: string): string {
 
 /** Edit screen for everything that used to sit on the You page. */
 export const PROFILE_EDIT_PATH = '/profile/edit';
+
+/** The You rows screen (bottom tab You). */
+export const YOU_ROWS_PATH = '/profile';
+
+/**
+ * Zoul (10 Oct 2026): the app-wide location and profile-depth strips stay off the
+ * You rows screen only, so the rows sit above the fold at 390px as on the board.
+ * The Edit screen and every other route still show them.
+ */
+export function isYouRowsPath(pathname: string): boolean {
+  return pathname === YOU_ROWS_PATH || pathname === `${YOU_ROWS_PATH}/`;
+}

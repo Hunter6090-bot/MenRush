@@ -140,7 +140,7 @@ export function You() {
         <span className="min-w-0 flex-1 truncate">{row.label}</span>
         {soon ? (
           <span
-            className="shrink-0 rounded-full border border-[var(--cream-muted)] px-2.5 py-0.5 text-[15px] font-semibold text-[var(--cream-muted)]"
+            className="shrink-0 rounded-full border border-[var(--border-default)] px-2 text-[15px] font-medium leading-[22px] text-[var(--cream-muted)]"
             data-testid={`you-row-soon-${row.id}`}
           >
             Coming soon

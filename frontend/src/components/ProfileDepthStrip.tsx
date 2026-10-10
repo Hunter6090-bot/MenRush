@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { usersAPI } from '../api/client';
+import { isYouRowsPath } from '../lib/youRows';
 import {
   activationBlockers,
   type ActivationBlocker,
@@ -30,6 +31,7 @@ export function ProfileDepthStrip() {
     pathname.startsWith('/register') ||
     pathname.startsWith('/invite') ||
     pathname.startsWith('/coming-soon') ||
+    isYouRowsPath(pathname) ||
     pathname === '/';
 
   const refresh = useCallback(() => {

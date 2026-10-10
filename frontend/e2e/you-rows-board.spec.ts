@@ -32,6 +32,10 @@ async function mockApis(page: Page, writes: string[]) {
     if (p.endsWith('/auth/2fa/status')) return json({ enabled: true, enabledAt: null });
     if (p.endsWith('/profile-meta/map-pin-fuzz')) return json({ map_pin_fuzz_m: 320 });
     if (p.endsWith('/verify/status')) return json({ is_verified: true, status: 'approved' });
+    // Edit screen data (same shapes as profile-map-photo-hosting.spec.ts).
+    if (p.includes('/users/profile-views')) return json({ viewers: [], total: 0, has_more: false, hidden_count: 0 });
+    if (p.includes('/users/me/referrals')) return json({ referral_code: 'DANTEST', verified_count: 0, pending_count: 0, credited_count: 0, unlock_every: 3, progress_to_unlock: 0, unlocks_earned: 0, pending_payout_total: 0, referrals: [] });
+    if (p.includes('/profile-meta')) return json({ mood: null, is_ghost: false });
     return json({});
   });
 }
@@ -59,14 +63,26 @@ for (const theme of ['dark', 'light'] as const) {
       // Tap targets
       for (const sel of ['you-edit', 'you-sign-out', 'you-row-albums', 'you-row-merch']) {
         const box = await page.getByTestId(sel).boundingBox();
-        expect(box!.height, sel).toBeGreaterThanOrEqual(44);
+        // Round sub-pixel layout (e.g. 43.99999 at deviceScaleFactor 2).
+        expect(Math.round(box!.height), sel).toBeGreaterThanOrEqual(44);
       }
+      // Zoul: no location or Add a photo strip on You, so the rows sit above the fold.
+      await expect(page.getByTestId('location-presence-strip')).toHaveCount(0);
+      await expect(page.getByTestId('profile-depth-strip')).toHaveCount(0);
+      const tabBar = await page.getByTestId('mobile-nav-profile').boundingBox();
+      const brands = await page.getByTestId('you-row-brands').boundingBox();
+      expect(brands!.y + brands!.height, 'Brands row above the tab bar').toBeLessThanOrEqual(tabBar!.y);
       await page.screenshot({ path: testInfo.outputPath(`you-${width}-${theme}.png`), fullPage: false });
 
       await page.getByTestId('you-row-merch').click();
       await expect(page.getByTestId('you-coming-soon-notice')).toHaveText('Merch is coming soon.');
       await expect(page).toHaveURL(/\/profile$/);
       expect(writes).toEqual([]);
+
+      // The strips still show off the You rows screen (Edit screen here).
+      await page.goto('/profile/edit');
+      await expect(page.getByTestId('location-presence-strip')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByTestId('profile-depth-strip')).toBeVisible();
       await context.close();
     });
   }
