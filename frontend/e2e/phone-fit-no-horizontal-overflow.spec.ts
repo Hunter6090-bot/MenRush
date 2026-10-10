@@ -142,7 +142,7 @@ const APP_ROUTES = [
     label: 'matches',
   },
   {
-    path: '/profile',
+    path: '/profile/edit',
     ready: '[data-testid="profile-field-bio"], input[type="text"], textarea',
     label: 'profile-own',
     focus: 'input[type="text"], textarea, input[type="date"]',

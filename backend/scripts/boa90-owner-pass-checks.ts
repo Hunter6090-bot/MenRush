@@ -1,14 +1,32 @@
 /**
  * Owner-account pass (BOA90 ↔ Bigbear25): profile load + 1:1 reply send.
  * Read/write only on test thread between known accounts — does not strip Premium.
+ *
+ * Member ids come from the environment only (never hardcoded, never printed):
+ *   BOA90_USER_ID    user id of the BOA90 owner account
+ *   BIGBEAR_USER_ID  user id of the Bigbear25 owner account
+ * Exits 2 with a message if either is unset or not a UUID. Not run in CI.
+ *   BOA90_USER_ID=... BIGBEAR_USER_ID=... railway run --service backend -- \
+ *     npx ts-node --transpile-only scripts/boa90-owner-pass-checks.ts
  */
 import 'dotenv/config';
 import { messageService } from '../src/services/message.service';
 import { userService } from '../src/services/user.service';
 import pool from '../src/db';
 
-const BOA90 = '6e9b68ad-7d20-46fc-be94-3c2ac3fa16b9';
-const BIGBEAR = 'be91f22f-83ba-40fb-9de4-b39c5ecdf6ae';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function memberIdFromEnv(name: 'BOA90_USER_ID' | 'BIGBEAR_USER_ID'): string {
+  const value = process.env[name]?.trim();
+  if (!value || !UUID_RE.test(value)) {
+    console.error(`${name} is ${value ? 'not a UUID' : 'not set'}. Set it in the environment to run this owner pass.`);
+    process.exit(2);
+  }
+  return value;
+}
+
+const BOA90 = memberIdFromEnv('BOA90_USER_ID');
+const BIGBEAR = memberIdFromEnv('BIGBEAR_USER_ID');
 
 async function main() {
   const profile = await userService.getPublicProfile(BOA90, BIGBEAR);

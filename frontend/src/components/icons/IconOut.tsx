@@ -1,4 +1,4 @@
-import { SVGProps, useId } from 'react';
+import { SVGProps } from 'react';
 
 export type MenRushIconProps = SVGProps<SVGSVGElement> & {
   size?: number;
@@ -6,15 +6,11 @@ export type MenRushIconProps = SVGProps<SVGSVGElement> & {
 };
 
 /**
- * Out: map pin + star (venues / cruise / events). Claude Design menrush-icons.
+ * Out: half moon (night out), as drawn on the Claude Design board
+ * (MenRush Phone App, 9 states). It must never look like the Map pin.
+ * Outline idle, filled when active.
  */
-export function IconOut({
-  size = 24,
-  filled = false,
-  ...props
-}: MenRushIconProps) {
-  const uid = useId().replace(/:/g, '');
-  const maskId = `mr-out-m-${uid}`;
+export function IconOut({ size = 24, filled = false, ...props }: MenRushIconProps) {
   return (
     <svg
       width={size}
@@ -27,35 +23,13 @@ export function IconOut({
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden
+      data-icon="half-moon"
       {...props}
     >
-      {filled ? (
-        <>
-          <defs>
-            <mask id={maskId}>
-              <rect width="24" height="24" fill="#fff" stroke="none" />
-              <path
-                d="M12 6.2L12.94 8.51L15.42 8.69L13.52 10.29L14.12 12.71L12 11.4L9.88 12.71L10.48 10.29L8.58 8.69L11.06 8.51Z"
-                fill="#000"
-                stroke="none"
-              />
-            </mask>
-          </defs>
-          <path
-            d="M12 22s7-6.5 7-12.5a7 7 0 0 0-14 0C5 15.5 12 22 12 22z"
-            fill="currentColor"
-            mask={`url(#${maskId})`}
-          />
-        </>
-      ) : (
-        <>
-          <path d="M12 22s7-6.5 7-12.5a7 7 0 0 0-14 0C5 15.5 12 22 12 22z" />
-          <path
-            d="M12 6.2L12.94 8.51L15.42 8.69L13.52 10.29L14.12 12.71L12 11.4L9.88 12.71L10.48 10.29L8.58 8.69L11.06 8.51Z"
-            strokeWidth={1.5}
-          />
-        </>
-      )}
+      <path
+        d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
+        fill={filled ? 'currentColor' : 'none'}
+      />
     </svg>
   );
 }

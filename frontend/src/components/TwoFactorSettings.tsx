@@ -280,7 +280,7 @@ export function TwoFactorSettings() {
         </div>
       ) : null}
 
-      {error ? <p className="text-sm text-[#B0432E]">{error}</p> : null}
+      {error ? <p className="text-[15px] leading-snug text-[#B0432E]">{error}</p> : null}
 
       {mode === 'idle' ? (
         <div>

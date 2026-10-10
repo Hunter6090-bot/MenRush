@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { usersAPI } from '../api/client';
+import { isYouRowsPath } from '../lib/youRows';
 import { LOCATION_PRIVACY_LINE, requestDeviceLocation } from '../lib/deviceLocation';
 import { useLocationStore } from '../hooks/store';
 import { formatRadiusControlLabel, migrateStoredRadiusKm } from '../lib/discoveryFormat';
@@ -29,6 +30,7 @@ export function LocationPresenceStrip() {
     pathname.startsWith('/register') ||
     pathname.startsWith('/invite') ||
     pathname.startsWith('/coming-soon') ||
+    isYouRowsPath(pathname) ||
     pathname === '/';
 
   const storeReady =

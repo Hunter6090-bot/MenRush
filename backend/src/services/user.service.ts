@@ -1,5 +1,5 @@
 import { storedHomeCoord } from '../config/locationRetention';
-import { query } from '../db';
+import pool, { query } from '../db';
 import { defaultGenericAvatarUrl } from '../lib/genericAvatar';
 import { discoveryPhotoUrl } from '../lib/discoveryPhoto';
 import {
@@ -958,119 +958,83 @@ export const userService = {
     reason: string,
     details?: string,
     threadId?: string,
+    messageIds?: string[],
   ) {
-    const detailParts: string[] = [];
-    if (threadId) {
-      // Machine-readable marker for SENTINEL / team inbox — keep calm user copy elsewhere.
-      detailParts.push(`thread_id=${threadId}`);
-    }
-    if (details?.trim()) {
-      detailParts.push(details.trim());
-    }
-    const storedDetails = detailParts.length ? detailParts.join('\n') : null;
+    // Free-text stays on the report for moderators only. Do not copy thread
+    // ids or other raw ids into details — those belong in the evidence snapshot.
+    const storedDetails = details?.trim() ? details.trim() : null;
 
-    const result = await query(
-      `INSERT INTO reports (reporter_id, reported_id, reason, details)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, created_at`,
-      [reporterId, reportedId, reason, storedDetails],
-    );
-    const report = result.rows[0] as { id: string; created_at: string };
+    const client = await pool.connect();
+    let report: { id: string; created_at: string };
+    let copiedKeys: string[] = [];
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(
+        `INSERT INTO reports (reporter_id, reported_id, reason, details)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, created_at`,
+        [reporterId, reportedId, reason, storedDetails],
+      );
+      report = result.rows[0] as { id: string; created_at: string };
+      await client.query('SAVEPOINT evidence_snapshot');
+      try {
+        const { snapshotReportEvidence } = await import('./report-evidence.service');
+        copiedKeys = await snapshotReportEvidence(
+          {
+            reportId: report.id,
+            reporterId,
+            reportedId,
+            threadId,
+            messageIds,
+          },
+          (text, params) => client.query(text, params),
+        );
+      } catch {
+        copiedKeys = [];
+        await client.query('ROLLBACK TO SAVEPOINT evidence_snapshot');
+        await client.query(`UPDATE reports SET evidence_unavailable = TRUE WHERE id = $1`, [report.id]);
+        // No report id, member id, or details — the report itself is kept.
+        console.error('[reports] evidence snapshot failed');
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      if (copiedKeys.length) {
+        const { unlinkEvidenceMedia } = await import('./report-evidence.service');
+        unlinkEvidenceMedia(copiedKeys);
+      }
+      throw err;
+    } finally {
+      client.release();
+    }
 
-    // Best-effort notify team — never fail the report submission if mail is down.
-    void this.notifyTeamOfReport(
-      reporterId,
-      reportedId,
-      reason,
-      storedDetails ?? undefined,
-      report.id,
-      threadId,
-    ).catch((err) => console.error('[reports] notify failed', err));
+    // Owner brief only — never fail the report if mail is down.
+    void this.notifyTeamOfReport(reason).catch(() => {
+      console.error('[reports] notify failed');
+    });
 
     return report;
   },
 
-  async notifyTeamOfReport(
-    reporterId: string,
-    reportedId: string,
-    reason: string,
-    details: string | undefined,
-    reportId: string,
-    threadId?: string,
-  ) {
+  async notifyTeamOfReport(reason: string) {
     const { sendEmail } = await import('./mailer.service');
     const { getReportNotifyEmails } = await import('./team.service');
-    const {
-      buildTransactionalEmail,
-      transactionalParagraph,
-    } = await import('./transactional-email.template');
-
-    const esc = (value: string) =>
-      value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-
-    const people = await query(
-      `SELECT id, name, email FROM users WHERE id = ANY($1::uuid[])`,
-      [[reporterId, reportedId]],
-    );
-    const byId = new Map(people.rows.map((r: { id: string }) => [r.id, r]));
-    const reporter = byId.get(reporterId) as { name?: string; email?: string } | undefined;
-    const reported = byId.get(reportedId) as { name?: string; email?: string } | undefined;
+    const { buildOwnerReportBrief } = await import('./report-owner-brief');
 
     const recipients = getReportNotifyEmails();
     if (!recipients.length) return;
 
-    const subject = `[MenRush][SENTINEL] Report: ${reason} — ${reported?.name ?? reportedId}`;
-    const bodyHtml =
-      transactionalParagraph(
-        `<strong style="color:#F0E0C0;">Reason:</strong> ${esc(reason)}`,
-        true,
-      ) +
-      transactionalParagraph(
-        `<strong style="color:#F0E0C0;">Reporter:</strong> ${esc(reporter?.name ?? 'unknown')} (${esc(reporter?.email ?? reporterId)})`,
-        true,
-      ) +
-      transactionalParagraph(
-        `<strong style="color:#F0E0C0;">Reported:</strong> ${esc(reported?.name ?? 'unknown')} (${esc(reported?.email ?? reportedId)})`,
-        true,
-      ) +
-      (threadId
-        ? transactionalParagraph(
-            `<strong style="color:#F0E0C0;">Thread ID (SENTINEL):</strong> ${esc(threadId)}`,
-            true,
-          )
-        : '') +
-      (details
-        ? transactionalParagraph(
-            `<strong style="color:#F0E0C0;">Details:</strong> ${esc(details)}`,
-            true,
-          )
-        : '') +
-      transactionalParagraph(`Report id: ${esc(reportId)}`, true);
-
-    const html = buildTransactionalEmail({
-      title: 'New MenRush safety report',
-      preheader: `${reason} report needs review`,
-      headlineHtml: '<span style="color:#C4832A;">New safety report</span>',
-      subheadline: 'A member submitted a report that needs review.',
-      bodyHtml,
-      ctaUrl: 'https://menrush.com/settings',
-      ctaLabel: 'Open Settings',
-    });
-
+    const brief = buildOwnerReportBrief(reason);
     for (const to of recipients) {
       try {
         await sendEmail({
           to,
-          subject,
-          html,
-          text: `MenRush report ${reportId}: ${reason}. Thread ${threadId ?? 'n/a'}. Reporter ${reporter?.email ?? reporterId} → ${reported?.email ?? reportedId}. ${details ?? ''}`.trim(),
+          subject: brief.subject,
+          html: brief.html,
+          text: brief.text,
         });
-      } catch (err) {
-        console.error('[reports] email to', to, 'failed', err);
+      } catch {
+        console.error('[reports] email failed');
       }
     }
   },
@@ -1082,19 +1046,21 @@ export const userService = {
          r.reason,
          r.details,
          r.status,
+         r.legal_hold,
+         r.evidence_unavailable,
          r.created_at,
          r.resolved_at,
-         reporter.id AS reporter_id,
+         r.closed_at,
+         r.reporter_id,
          reporter.name AS reporter_name,
          reporter.email AS reporter_email,
+         r.reporter_account_deleted_at,
          r.reported_id,
          reported.name AS reported_name,
          reported.email AS reported_email,
-         -- Set when the reported member deleted their account. The report and
-         -- its details stay; reported_id / name / email are then null.
          r.reported_account_deleted_at
        FROM reports r
-       JOIN users reporter ON reporter.id = r.reporter_id
+       LEFT JOIN users reporter ON reporter.id = r.reporter_id
        LEFT JOIN users reported ON reported.id = r.reported_id
        ORDER BY
          CASE WHEN r.status = 'open' THEN 0
@@ -1104,19 +1070,73 @@ export const userService = {
        LIMIT $1`,
       [Math.min(Math.max(limit, 1), 200)],
     );
-    return result.rows;
+
+    const { listEvidenceForReports } = await import('./report-evidence.service');
+    const evidenceByReport = await listEvidenceForReports(
+      result.rows.map((row: { id: string }) => row.id),
+    );
+
+    return result.rows.map((row: {
+      reporter_name?: string | null;
+      reported_name?: string | null;
+      reporter_account_deleted_at?: string | null;
+      reported_account_deleted_at?: string | null;
+      id: string;
+    }) => ({
+      ...row,
+      reporter_name:
+        row.reporter_name ??
+        (row.reporter_account_deleted_at ? 'Deleted account' : null),
+      reported_name:
+        row.reported_name ??
+        (row.reported_account_deleted_at ? 'Deleted account' : null),
+      evidence: evidenceByReport.get(row.id) ?? [],
+    }));
   },
 
-  async updateReportStatus(reportId: string, status: 'open' | 'reviewing' | 'actioned' | 'dismissed') {
+  /**
+   * One UPDATE so a PATCH that sets both status and legal_hold applies them
+   * together. Status-then-hold used to fire the anonymise trigger after the
+   * close and before the hold landed, dropping a deleted reporter's link.
+   */
+  async updateReport(
+    reportId: string,
+    patch: {
+      status?: 'open' | 'reviewing' | 'actioned' | 'dismissed';
+      legal_hold?: boolean;
+    },
+  ) {
+    if (patch.status === undefined && patch.legal_hold === undefined) return null;
     const result = await query(
       `UPDATE reports
-       SET status = $2,
-           resolved_at = CASE WHEN $2 IN ('actioned', 'dismissed') THEN NOW() ELSE resolved_at END
+       SET status = COALESCE($2::varchar, status),
+           legal_hold = COALESCE($3::boolean, legal_hold),
+           resolved_at = CASE
+             WHEN $2::text IS NULL THEN resolved_at
+             WHEN $2::text IN ('actioned', 'dismissed') THEN COALESCE(resolved_at, NOW())
+             ELSE resolved_at
+           END,
+           closed_at = CASE
+             WHEN $2::text IS NULL THEN closed_at
+             WHEN $2::text IN ('actioned', 'dismissed') THEN COALESCE(closed_at, NOW())
+             ELSE NULL
+           END
        WHERE id = $1
-       RETURNING id, status, resolved_at`,
-      [reportId, status],
+       RETURNING id, status, resolved_at, closed_at, legal_hold, reporter_id, reporter_account_deleted_at`,
+      [reportId, patch.status ?? null, patch.legal_hold === undefined ? null : patch.legal_hold],
     );
     return result.rows[0] ?? null;
+  },
+
+  async updateReportStatus(
+    reportId: string,
+    status: 'open' | 'reviewing' | 'actioned' | 'dismissed',
+  ) {
+    return this.updateReport(reportId, { status });
+  },
+
+  async updateReportLegalHold(reportId: string, legalHold: boolean) {
+    return this.updateReport(reportId, { legal_hold: legalHold });
   },
 
   async isTeamMember(userId: string): Promise<boolean> {

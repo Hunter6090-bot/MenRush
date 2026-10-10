@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { assertJwtSecret } from './lib/jwtSecret';
 import './observability/sentry';
 import express from 'express';
 import { Server as SocketIOServer, Socket } from 'socket.io';
@@ -72,6 +73,8 @@ import { logCallMetric } from './services/call-metrics.service';
 import { mediaStorageMode } from './services/media-storage.service';
 import { warmIceServers } from './services/webrtc.service';
 import { EarlyCallIceBuffer } from './services/call-ice-buffer';
+
+assertJwtSecret();
 
 // Transient DB disconnects must not take down login/API.
 process.on('unhandledRejection', (reason) => {
@@ -992,6 +995,6 @@ server.listen(PORT, () => {
   startTravelTripRetentionWorker();
   // Off unless LOCATION_PURGE_ENABLED=true (periods TBD, see config/locationRetention.ts).
   startLocationRetentionWorker();
-  // Off unless REPORT_RETENTION_PURGE_ENABLED=true (period pending Al).
+  // Off unless REPORT_PURGE_ENABLED=true (period pending Al).
   startReportRetentionWorker();
 });

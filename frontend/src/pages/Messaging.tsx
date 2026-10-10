@@ -1387,7 +1387,7 @@ export const Messages = ({ embedded = false }: { embedded?: boolean }) => {
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 onBeforeInput={handleBeforeInput}
-                placeholder="Say something direct."
+                placeholder="Message"
                 autoComplete="off"
                 enterKeyHint="send"
                 inputMode="text"

@@ -12,6 +12,7 @@ import {
 } from '../lib/authRateLimits';
 import { authService } from '../services/auth.service';
 import { twoFactorService } from '../services/two-factor.service';
+import { TOTP_DECRYPT_FAILED_MESSAGE, TOTP_UNAVAILABLE_MESSAGE, TotpCryptoError } from '../security/totp-crypto';
 import { trustedDeviceService } from '../services/trusted-device.service';
 import {
   RegisterSchema,
@@ -450,8 +451,14 @@ router.post('/2fa/verify', twoFactorLimiter, twoFactorAccountLimiter, async (req
       userAgent: req.get('user-agent') || undefined,
     });
     res.json(await withBrowserSession(result, req.get('user-agent') || undefined));
-  } catch (error: any) {
-    res.status(401).json({ error: error.message });
+  } catch (error: unknown) {
+    // A stored secret we cannot read is our fault, not a wrong code: say so with one of two
+    // fixed texts (never the crypto error). Everything else stays the generic 401.
+    if (error instanceof TotpCryptoError) {
+      const text = error.failure === 'config' ? TOTP_UNAVAILABLE_MESSAGE : TOTP_DECRYPT_FAILED_MESSAGE;
+      return res.status(503).json({ error: text });
+    }
+    res.status(401).json({ error: 'Invalid code or token' });
   }
 });
 

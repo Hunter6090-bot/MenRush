@@ -513,8 +513,9 @@ router.get('/blocks', async (req: AuthRequest, res: Response) => {
 const ReportSchema = z.object({
   reason: z.enum(['spam', 'harassment', 'fake_profile', 'inappropriate_content', 'underage', 'other']),
   details: z.string().max(1000).optional(),
-  /** Conversation or room id for SENTINEL review — optional, free for all users. */
+  /** Conversation or room id — used only to snapshot messages onto the report. */
   thread_id: z.string().min(1).max(128).optional(),
+  message_ids: z.array(z.string().uuid()).max(50).optional(),
 });
 
 router.post('/report/:id', async (req: AuthRequest, res: Response) => {
@@ -532,6 +533,7 @@ router.post('/report/:id', async (req: AuthRequest, res: Response) => {
       parsed.data.reason,
       parsed.data.details,
       parsed.data.thread_id,
+      parsed.data.message_ids,
     );
     res.json({ reported: true, id: report.id });
   } catch (error: any) {
@@ -545,6 +547,33 @@ router.get('/me/team', async (req: AuthRequest, res: Response) => {
     res.json({ is_team: isTeam });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+const EvidenceIdParam = z.string().uuid();
+
+router.get('/reports/:id/evidence/:evidenceId/media', async (req: AuthRequest, res: Response) => {
+  try {
+    const isTeam = await userService.isTeamMember(req.userId!);
+    if (!isTeam) {
+      return res.status(403).json({ error: 'team_only' });
+    }
+    if (!EvidenceIdParam.safeParse(req.params.id).success || !EvidenceIdParam.safeParse(req.params.evidenceId).success) {
+      return res.status(404).json({ error: 'not_found' });
+    }
+    const { evidenceContentDisposition, getEvidenceMediaFile } = await import('../services/report-evidence.service');
+    const file = await getEvidenceMediaFile(req.params.id, req.params.evidenceId);
+    if (!file) return res.status(404).json({ error: 'not_found' });
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader('Content-Disposition', evidenceContentDisposition(file.filename));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return res.sendFile(file.absolute, (err) => {
+      if (!err || res.headersSent) return;
+      res.status(404).json({ error: 'not_found' });
+    });
+  } catch {
+    res.status(404).json({ error: 'not_found' });
   }
 });
 
@@ -563,7 +592,10 @@ router.get('/reports', async (req: AuthRequest, res: Response) => {
 });
 
 const ReportStatusSchema = z.object({
-  status: z.enum(['open', 'reviewing', 'actioned', 'dismissed']),
+  status: z.enum(['open', 'reviewing', 'actioned', 'dismissed']).optional(),
+  legal_hold: z.boolean().optional(),
+}).refine((data) => data.status !== undefined || data.legal_hold !== undefined, {
+  message: 'status or legal_hold required',
 });
 
 router.patch('/reports/:id', async (req: AuthRequest, res: Response) => {
@@ -576,7 +608,10 @@ router.patch('/reports/:id', async (req: AuthRequest, res: Response) => {
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error.errors[0].message });
     }
-    const updated = await userService.updateReportStatus(req.params.id, parsed.data.status);
+    const updated = await userService.updateReport(req.params.id, {
+      status: parsed.data.status,
+      legal_hold: parsed.data.legal_hold,
+    });
     if (!updated) return res.status(404).json({ error: 'Report not found' });
     res.json(updated);
   } catch (error: any) {

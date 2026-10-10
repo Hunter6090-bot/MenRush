@@ -32,3 +32,4 @@ export { IconBluesky } from "./IconBluesky";
 export { IconGrid } from "./IconGrid";
 export { IconMapPin } from "./IconMapPin";
 export { IconPlane } from "./IconPlane";
+export { SpotTypeIcon, spotTypeKey, type SpotTypeKey } from "./SpotTypeIcon";
