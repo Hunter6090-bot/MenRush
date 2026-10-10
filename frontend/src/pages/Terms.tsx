@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SiteFooter } from '../components/SiteFooter';
+import { LOCATION_RETENTION_TEXT } from '../lib/legalLocationRetention';
 
 type Section = {
   id: string;
@@ -376,12 +377,7 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>6.5</Strong> Location data is retained for up to 6 months in accordance
-                  with our{' '}
-                  <Link to="/privacy" className="text-[#c8861c] hover:text-[#d9a038] hover:underline">
-                    Privacy Policy
-                  </Link>
-                  .
+                  <Strong>6.5</Strong> {LOCATION_RETENTION_TEXT}
                 </>,
               )}
             </section>

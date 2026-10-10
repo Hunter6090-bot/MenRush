@@ -4,6 +4,10 @@ import { MemoryRouter } from 'react-router-dom';
 import { Terms } from './Terms';
 import { Privacy } from './Privacy';
 
+/** Legal ruling 10 Oct 2026, word for word. Written out here, not imported, so a drift in the copy fails. */
+const RETENTION =
+  "We keep your current location while your account is open. It's replaced each time your device sends a new one, including when you use Ghost mode, and we delete it when you delete your account. We also keep the location from when you first joined. Places you choose to share in posts or chats stay with that content until it's deleted. We're shortening how long we keep location data and will update this section when that's in place.";
+
 /** Rendered text with whitespace collapsed, so JSX line breaks do not matter. */
 function pageText(ui: React.ReactElement): string {
   const { container, unmount } = render(<MemoryRouter>{ui}</MemoryRouter>);
@@ -44,5 +48,26 @@ describe('Legal location wording (Legal, Oct 2026)', () => {
     );
     expect(text).toContain('Distances are shown rounded, as "under 1 mile" or in whole miles.');
     expect(text).not.toContain('privacy-bucketed');
+  });
+
+  it('Terms 6.5 is the Legal retention wording, word for word, with no 6 months', () => {
+    const text = pageText(<Terms />);
+    expect(text).toContain(`6.5 ${RETENTION}`);
+    expect(text).not.toMatch(/6 months|six months/i);
+    expect(text).not.toContain('Location data is retained');
+  });
+
+  it('Privacy has a location retention section with the same wording and no 6 months', () => {
+    const { getByRole, getByTestId, unmount } = render(
+      <MemoryRouter>
+        <Privacy />
+      </MemoryRouter>,
+    );
+    expect(getByRole('heading', { name: 'How long we keep location' })).toBeInTheDocument();
+    const retention = (getByTestId('privacy-location-retention').textContent ?? '').replace(/\s+/g, ' ').trim();
+    expect(retention).toBe(RETENTION);
+    expect(retention).not.toMatch(/6 months|six months/i);
+    unmount();
+    expect(pageText(<Privacy />)).not.toMatch(/6 months|six months/i);
   });
 });

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { SiteFooter } from '../components/SiteFooter';
+import { LOCATION_RETENTION_TEXT } from '../lib/legalLocationRetention';
 
 const sections = [
   {
@@ -67,6 +68,18 @@ export const Privacy = () => {
               </section>
             ))}
           </div>
+
+          <section
+            className="mt-6 rounded-2xl border border-[#3D2B0E] bg-[#0D0A06]/55 p-5"
+            aria-labelledby="privacy-location-retention"
+          >
+            <h2 id="privacy-location-retention" className="text-lg font-bold">
+              How long we keep location
+            </h2>
+            <p className="mt-2 text-sm leading-7 text-[var(--cream-muted)]" data-testid="privacy-location-retention">
+              {LOCATION_RETENTION_TEXT}
+            </p>
+          </section>
 
           <section className="mt-6 rounded-2xl border border-[#3D2B0E] bg-[#0D0A06]/55 p-5">
             <h2 className="text-lg font-bold">Sharing and processors</h2>
