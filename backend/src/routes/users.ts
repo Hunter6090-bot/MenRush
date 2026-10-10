@@ -550,6 +550,25 @@ router.get('/me/team', async (req: AuthRequest, res: Response) => {
   }
 });
 
+router.get('/reports/:id/evidence/:evidenceId/media', async (req: AuthRequest, res: Response) => {
+  try {
+    const isTeam = await userService.isTeamMember(req.userId!);
+    if (!isTeam) {
+      return res.status(403).json({ error: 'team_only' });
+    }
+    const { getEvidenceMediaPath } = await import('../services/report-evidence.service');
+    const absolute = await getEvidenceMediaPath(req.params.id, req.params.evidenceId);
+    if (!absolute) return res.status(404).json({ error: 'not_found' });
+    res.setHeader('Cache-Control', 'private, no-store');
+    return res.sendFile(absolute, (err) => {
+      if (!err || res.headersSent) return;
+      res.status(404).json({ error: 'not_found' });
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/reports', async (req: AuthRequest, res: Response) => {
   try {
     const isTeam = await userService.isTeamMember(req.userId!);
@@ -581,13 +600,10 @@ router.patch('/reports/:id', async (req: AuthRequest, res: Response) => {
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error.errors[0].message });
     }
-    let updated = null;
-    if (parsed.data.status) {
-      updated = await userService.updateReportStatus(req.params.id, parsed.data.status);
-    }
-    if (parsed.data.legal_hold !== undefined) {
-      updated = await userService.updateReportLegalHold(req.params.id, parsed.data.legal_hold);
-    }
+    const updated = await userService.updateReport(req.params.id, {
+      status: parsed.data.status,
+      legal_hold: parsed.data.legal_hold,
+    });
     if (!updated) return res.status(404).json({ error: 'Report not found' });
     res.json(updated);
   } catch (error: any) {

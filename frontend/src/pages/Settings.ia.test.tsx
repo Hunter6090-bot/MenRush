@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   getTeamStatus: vi.fn(),
   listReports: vi.fn(),
   updateReportStatus: vi.fn(),
+  getReportEvidenceMedia: vi.fn(),
   updateLocation: vi.fn(),
 }));
 
@@ -51,6 +52,7 @@ vi.mock('../api/client', () => ({
     getTeamStatus: mocks.getTeamStatus,
     listReports: mocks.listReports,
     updateReportStatus: mocks.updateReportStatus,
+    getReportEvidenceMedia: mocks.getReportEvidenceMedia,
     updateLocation: mocks.updateLocation,
   },
 }));
@@ -319,6 +321,15 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
             reported_name: 'Deleted account',
             reported_account_deleted_at: '2026-09-21T11:00:00Z',
             details: 'Fixture notes for the team only',
+            evidence: [
+              {
+                id: 'ev-1',
+                kind: 'message',
+                body: 'Meet under the bridge',
+                from_reported: true,
+                sent_at: '2026-09-20T09:00:00Z',
+              },
+            ],
           },
         ],
       },
@@ -334,6 +345,8 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
       expect(screen.getByTestId('settings-reports')).toBeInTheDocument();
       expect(screen.getByText('Deleted account → Deleted account')).toBeInTheDocument();
       expect(screen.getByText('Fixture notes for the team only')).toBeInTheDocument();
+      expect(screen.getByText(/From reported/)).toBeInTheDocument();
+      expect(screen.getByText(/Meet under the bridge/)).toBeInTheDocument();
     });
   });
 

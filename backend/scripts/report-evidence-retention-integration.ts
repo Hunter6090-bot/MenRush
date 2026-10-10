@@ -8,7 +8,9 @@
  * Fixtures are made-up local addresses only. No real member ids or emails.
  */
 import assert from 'assert';
+import fs from 'fs';
 import http from 'http';
+import path from 'path';
 import { randomUUID } from 'crypto';
 
 if (!process.env.DATABASE_URL) {
@@ -46,10 +48,23 @@ async function main() {
   await new Promise<void>((r) => server.listen(0, r));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
 
+  const { getUploadSubdir } = await import('../src/lib/uploads-root');
+  const { isEvidenceMediaKey } = await import('../src/services/report-evidence.service');
+
+  // Local DBs that already applied 084 before from_reported existed.
+  await query(
+    `ALTER TABLE report_evidence ADD COLUMN IF NOT EXISTS from_reported BOOLEAN NOT NULL DEFAULT TRUE`,
+  );
+
   const ids: string[] = [];
   const reportIds: string[] = [];
   const messageIds: string[] = [];
+  const tempFiles: string[] = [];
   const pwHash = await bcrypt.hash('pw-123456', 4);
+  const messagesDir = getUploadSubdir('messages');
+  const evidenceDir = getUploadSubdir('report-evidence');
+  fs.mkdirSync(messagesDir, { recursive: true });
+  fs.mkdirSync(evidenceDir, { recursive: true });
 
   async function makeUser(name: string, email?: string) {
     const id = randomUUID();
@@ -78,18 +93,27 @@ async function main() {
 
     const textMessageId = randomUUID();
     const mediaMessageId = randomUUID();
-    messageIds.push(textMessageId, mediaMessageId);
+    const reporterOwnMessageId = randomUUID();
+    messageIds.push(textMessageId, mediaMessageId, reporterOwnMessageId);
     const plantedDetails = 'He sent a threat about the canal lock at midnight';
-    const mediaRef = 'fixture-report-media/not-a-real-upload.jpg';
+    const mediaFile = `rer-${randomUUID().slice(0, 8)}.jpg`;
+    const mediaPath = path.join(messagesDir, mediaFile);
+    fs.writeFileSync(mediaPath, Buffer.from('fake-jpeg-bytes-for-report-evidence'));
+    tempFiles.push(mediaPath);
     await query(
       `INSERT INTO messages (id, sender_id, receiver_id, message, created_at)
-       VALUES ($1, $2, $3, $4, NOW() - INTERVAL '2 minutes')`,
+       VALUES ($1, $2, $3, $4, NOW() - INTERVAL '3 minutes')`,
       [textMessageId, reported.id, reporter.id, 'Meet me under the bridge in ten'],
     );
     await query(
       `INSERT INTO messages (id, sender_id, receiver_id, message, media_type, media_url, media_storage_key, created_at)
-       VALUES ($1, $2, $3, $4, 'image', '/api/messages/fixture/media', $5, NOW() - INTERVAL '1 minute')`,
-      [mediaMessageId, reported.id, reporter.id, 'photo from the towpath', mediaRef],
+       VALUES ($1, $2, $3, $4, 'image', '/api/messages/fixture/media', $5, NOW() - INTERVAL '2 minutes')`,
+      [mediaMessageId, reported.id, reporter.id, 'photo from the towpath', mediaFile],
+    );
+    await query(
+      `INSERT INTO messages (id, sender_id, receiver_id, message, created_at)
+       VALUES ($1, $2, $3, $4, NOW() - INTERVAL '1 minute')`,
+      [reporterOwnMessageId, reporter.id, reported.id, 'I will report this myself'],
     );
 
     const created = await userService.reportUser(
@@ -98,7 +122,7 @@ async function main() {
       'harassment',
       plantedDetails,
       `dm:${[reporter.id, reported.id].sort().join('_')}`,
-      [textMessageId, mediaMessageId],
+      [textMessageId, mediaMessageId, reporterOwnMessageId],
     );
     reportIds.push(created.id);
 
@@ -110,22 +134,66 @@ async function main() {
 
     const evidence = (
       await query(
-        `SELECT kind, body, media_type, media_ref, sent_at
+        `SELECT kind, body, media_type, media_ref, from_reported, sent_at
            FROM report_evidence WHERE report_id = $1 ORDER BY sent_at ASC`,
         [created.id],
       )
     ).rows;
-    assert.equal(evidence.length, 2, 'both reported messages were snapshotted');
+    assert.equal(evidence.length, 2, 'only the reported member\'s messages were snapshotted');
     assert.equal(evidence[0].body, 'Meet me under the bridge in ten');
     assert.ok(evidence[0].sent_at, 'snapshot keeps the original timestamp');
+    assert.equal(evidence[0].from_reported, true);
     assert.equal(evidence[1].body, 'photo from the towpath');
     assert.equal(evidence[1].media_type, 'image');
-    assert.equal(evidence[1].media_ref, mediaRef);
+    assert.equal(evidence[1].from_reported, true);
+    assert.ok(isEvidenceMediaKey(evidence[1].media_ref), 'media was copied to moderator-only evidence storage');
+    assert.ok(!evidence.some((row: { body?: string }) => row.body === 'I will report this myself'), 'reporter own message is not snapshotted');
+    const copiedMediaPath = path.join(evidenceDir, evidence[1].media_ref);
+    assert.ok(fs.existsSync(copiedMediaPath), 'copied evidence file exists');
+    tempFiles.push(copiedMediaPath);
+    const copiedMediaRef = evidence[1].media_ref as string;
+
+    const threadOnly = await userService.reportUser(
+      reporter.id,
+      reported.id,
+      'spam',
+      undefined,
+      `dm:${[reporter.id, reported.id].sort().join('_')}`,
+    );
+    reportIds.push(threadOnly.id);
+    const threadEvidence = (
+      await query(`SELECT body, from_reported FROM report_evidence WHERE report_id = $1 ORDER BY sent_at ASC`, [
+        threadOnly.id,
+      ])
+    ).rows;
+    assert.ok(threadEvidence.length >= 2, 'thread snapshot takes reported-member messages');
+    assert.ok(
+      threadEvidence.every((row: { from_reported?: boolean }) => row.from_reported === true),
+      'thread snapshot marks every row from_reported',
+    );
+    assert.ok(
+      !threadEvidence.some((row: { body?: string }) => row.body === 'I will report this myself'),
+      'thread snapshot excludes the reporter\'s own messages',
+    );
+
+    const failedSnap = await userService.reportUser(
+      reporter.id,
+      reported.id,
+      'other',
+      'failed snapshot still keeps the report',
+      'room:not-a-uuid',
+    );
+    reportIds.push(failedSnap.id);
+    const failedRow = (await query(`SELECT id, details FROM reports WHERE id = $1`, [failedSnap.id])).rows[0];
+    assert.ok(failedRow, 'failed snapshot keeps the report');
+    assert.equal(failedRow.details, 'failed snapshot still keeps the report');
+    const failedEvidence = await query(`SELECT 1 FROM report_evidence WHERE report_id = $1`, [failedSnap.id]);
+    assert.equal(failedEvidence.rows.length, 0, 'failed snapshot stores no evidence rows');
 
     const brief = buildOwnerReportBrief('harassment');
     const briefBlob = `${brief.subject}\n${brief.html}\n${brief.text}`;
     assert.equal(userService.notifyTeamOfReport.length, 1, 'owner brief path takes reason only');
-    for (const leak of [reporter.id, reported.id, reporter.email, reported.email, plantedDetails, mediaRef, 'thread_id']) {
+    for (const leak of [reporter.id, reported.id, reporter.email, reported.email, plantedDetails, mediaFile, 'thread_id']) {
       assert.ok(!briefBlob.includes(leak), `owner brief must not include ${leak}`);
     }
 
@@ -151,7 +219,9 @@ async function main() {
     ).rows;
     assert.equal(evidenceAfter.length, 2, 'evidence snapshot survives account deletion');
     assert.equal(evidenceAfter[0].body, 'Meet me under the bridge in ten');
-    assert.equal(evidenceAfter[1].media_ref, mediaRef);
+    assert.equal(evidenceAfter[1].media_ref, copiedMediaRef);
+    assert.ok(fs.existsSync(copiedMediaPath), 'copied evidence file survives account deletion');
+    assert.ok(!fs.existsSync(mediaPath), 'original chat file is unlinked on deleteAccount');
 
     const asMod = await getReports(moderator.token);
     assert.equal(asMod.status, 200);
@@ -159,13 +229,31 @@ async function main() {
       | {
           reported_name?: string | null;
           details?: string;
-          evidence?: Array<{ body?: string; media_ref?: string }>;
+          evidence?: Array<{ body?: string; media_ref?: string; from_reported?: boolean; media_available?: boolean }>;
         }
       | undefined;
     assert.ok(seen);
     assert.equal(seen.reported_name, 'Deleted account');
     assert.equal(seen.details, plantedDetails);
     assert.equal(seen.evidence?.length, 2);
+    assert.equal(seen.evidence?.[0].from_reported, true);
+    assert.equal(seen.evidence?.[1].media_available, true);
+    const evidenceId = (
+      await query(`SELECT id FROM report_evidence WHERE report_id = $1 AND media_ref = $2`, [
+        created.id,
+        copiedMediaRef,
+      ])
+    ).rows[0].id as string;
+    const mediaRes = await fetch(`${base}/api/users/reports/${created.id}/evidence/${evidenceId}/media`, {
+      headers: { Authorization: `Bearer ${moderator.token}` },
+    });
+    assert.equal(mediaRes.status, 200, 'moderator can open copied evidence media');
+    const mediaBytes = Buffer.from(await mediaRes.arrayBuffer());
+    assert.ok(mediaBytes.equals(Buffer.from('fake-jpeg-bytes-for-report-evidence')));
+    const mediaAsMember = await fetch(`${base}/api/users/reports/${created.id}/evidence/${evidenceId}/media`, {
+      headers: { Authorization: `Bearer ${other.token}` },
+    });
+    assert.equal(mediaAsMember.status, 403);
 
     const asMember = await getReports(other.token);
     assert.equal(asMember.status, 403);
@@ -234,6 +322,43 @@ async function main() {
     assert.equal(openSeen?.reporter_id, secondReporter.id);
     assert.equal(holdSeen?.reporter_name, 'Deleted account');
     assert.equal(holdSeen?.reporter_id, secondReporter.id);
+
+    // PATCH close + hold in one UPDATE: hold must land with the close so the
+    // anonymise trigger does not drop the deleted reporter link. Closed here
+    // is status=actioned (there is no 'closed' status).
+    const patchReporter = await makeUser('RER Patch Reporter');
+    const patchTarget = await makeUser('RER Patch Target');
+    const patchId = (
+      await query(
+        `INSERT INTO reports (reporter_id, reported_id, reason, details, status)
+         VALUES ($1, $2, 'harassment', 'patch close+hold notes', 'open')
+         RETURNING id`,
+        [patchReporter.id, patchTarget.id],
+      )
+    ).rows[0].id as string;
+    reportIds.push(patchId);
+    await authService.deleteAccount(patchReporter.id, { current_password: 'pw-123456', confirmation: 'DELETE' } as never);
+    const beforePatch = (
+      await query(`SELECT reporter_id, reporter_account_deleted_at, status, legal_hold FROM reports WHERE id = $1`, [
+        patchId,
+      ])
+    ).rows[0];
+    assert.equal(beforePatch.reporter_id, patchReporter.id, 'open case keeps the reporter link after delete');
+    assert.ok(beforePatch.reporter_account_deleted_at);
+    const patched = await fetch(`${base}/api/users/reports/${patchId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${moderator.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'actioned', legal_hold: true }),
+    });
+    assert.equal(patched.status, 200);
+    const patchedBody = (await patched.json()) as { reporter_id?: string | null; legal_hold?: boolean; status?: string };
+    assert.equal(patchedBody.status, 'actioned');
+    assert.equal(patchedBody.legal_hold, true);
+    assert.equal(patchedBody.reporter_id, patchReporter.id, 'PATCH closed+hold keeps the deleted reporter link');
+    const afterPatch = (await query(`SELECT reporter_id, legal_hold, status FROM reports WHERE id = $1`, [patchId])).rows[0];
+    assert.equal(afterPatch.reporter_id, patchReporter.id);
+    assert.equal(afterPatch.legal_hold, true);
+    assert.equal(afterPatch.status, 'actioned');
 
     const closedAfterClose = await userService.updateReportStatus(openId, 'actioned');
     assert.equal(closedAfterClose?.reporter_id, null, 'closing an open case drops the kept reporter link');
@@ -306,9 +431,22 @@ async function main() {
 
     console.log('report-evidence-retention-integration: OK');
   } finally {
+    const leftoverMedia = await query(
+      `SELECT media_ref FROM report_evidence WHERE report_id = ANY($1::uuid[])`,
+      [reportIds],
+    );
+    const { unlinkEvidenceMedia } = await import('../src/services/report-evidence.service');
+    unlinkEvidenceMedia(leftoverMedia.rows.map((row: { media_ref?: string | null }) => row.media_ref));
     await query(`DELETE FROM reports WHERE id = ANY($1::uuid[])`, [reportIds]);
     await query(`DELETE FROM messages WHERE id = ANY($1::uuid[])`, [messageIds]);
     await query(`DELETE FROM users WHERE id = ANY($1::uuid[])`, [ids]);
+    for (const file of tempFiles) {
+      try {
+        fs.unlinkSync(file);
+      } catch {
+        /* already gone */
+      }
+    }
     server.close();
     await pool.end();
   }

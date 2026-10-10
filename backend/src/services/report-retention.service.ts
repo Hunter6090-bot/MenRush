@@ -50,14 +50,23 @@ export const reportRetentionService = {
    * than `months` ago. Skips legal_hold. Returns the number deleted.
    */
   async purgeClosedReports(months = reportRetentionMonths()): Promise<number> {
-    const res = await query(
-      `DELETE FROM reports
+    const doomed = await query(
+      `SELECT id FROM reports
         WHERE status IN ('actioned', 'dismissed')
           AND legal_hold = FALSE
           AND COALESCE(closed_at, resolved_at) IS NOT NULL
           AND COALESCE(closed_at, resolved_at) < NOW() - make_interval(months => $1::int)`,
       [months],
     );
+    const ids = doomed.rows.map((row: { id: string }) => row.id);
+    if (!ids.length) return 0;
+    const media = await query(
+      `SELECT media_ref FROM report_evidence WHERE report_id = ANY($1::uuid[])`,
+      [ids],
+    );
+    const res = await query(`DELETE FROM reports WHERE id = ANY($1::uuid[])`, [ids]);
+    const { unlinkEvidenceMedia } = await import('./report-evidence.service');
+    unlinkEvidenceMedia(media.rows.map((row: { media_ref?: string | null }) => row.media_ref));
     return res.rowCount ?? 0;
   },
 

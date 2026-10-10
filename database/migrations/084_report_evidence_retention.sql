@@ -53,9 +53,15 @@ CREATE TABLE IF NOT EXISTS report_evidence (
   body TEXT,
   media_type TEXT,
   media_ref TEXT,
+  -- Always true for rows this migration's snapshot writes: only the reported
+  -- member's messages are copied. Kept as a column so moderators can see who
+  -- sent the line without storing a raw member id on the evidence row.
+  from_reported BOOLEAN NOT NULL DEFAULT TRUE,
   sent_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE report_evidence ADD COLUMN IF NOT EXISTS from_reported BOOLEAN NOT NULL DEFAULT TRUE;
 
 CREATE INDEX IF NOT EXISTS idx_report_evidence_report
   ON report_evidence (report_id);

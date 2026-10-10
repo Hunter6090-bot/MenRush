@@ -1,5 +1,5 @@
 import { storedHomeCoord } from '../config/locationRetention';
-import { query } from '../db';
+import pool, { query } from '../db';
 import { defaultGenericAvatarUrl } from '../lib/genericAvatar';
 import { discoveryPhotoUrl } from '../lib/discoveryPhoto';
 import {
@@ -964,25 +964,41 @@ export const userService = {
     // ids or other raw ids into details — those belong in the evidence snapshot.
     const storedDetails = details?.trim() ? details.trim() : null;
 
-    const result = await query(
-      `INSERT INTO reports (reporter_id, reported_id, reason, details)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, created_at`,
-      [reporterId, reportedId, reason, storedDetails],
-    );
-    const report = result.rows[0] as { id: string; created_at: string };
-
+    const client = await pool.connect();
+    let report: { id: string; created_at: string };
     try {
-      const { snapshotReportEvidence } = await import('./report-evidence.service');
-      await snapshotReportEvidence({
-        reportId: report.id,
-        reporterId,
-        reportedId,
-        threadId,
-        messageIds,
-      });
-    } catch {
-      console.error('[reports] evidence snapshot failed');
+      await client.query('BEGIN');
+      const result = await client.query(
+        `INSERT INTO reports (reporter_id, reported_id, reason, details)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, created_at`,
+        [reporterId, reportedId, reason, storedDetails],
+      );
+      report = result.rows[0] as { id: string; created_at: string };
+      await client.query('SAVEPOINT evidence_snapshot');
+      try {
+        const { snapshotReportEvidence } = await import('./report-evidence.service');
+        await snapshotReportEvidence(
+          {
+            reportId: report.id,
+            reporterId,
+            reportedId,
+            threadId,
+            messageIds,
+          },
+          (text, params) => client.query(text, params),
+        );
+      } catch {
+        await client.query('ROLLBACK TO SAVEPOINT evidence_snapshot');
+        // No report id, member id, or details — the report itself is kept.
+        console.error('[reports] evidence snapshot failed');
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
     }
 
     // Owner brief only — never fail the report if mail is down.
@@ -1070,37 +1086,49 @@ export const userService = {
     }));
   },
 
-  async updateReportStatus(
+  /**
+   * One UPDATE so a PATCH that sets both status and legal_hold applies them
+   * together. Status-then-hold used to fire the anonymise trigger after the
+   * close and before the hold landed, dropping a deleted reporter's link.
+   */
+  async updateReport(
     reportId: string,
-    status: 'open' | 'reviewing' | 'actioned' | 'dismissed',
+    patch: {
+      status?: 'open' | 'reviewing' | 'actioned' | 'dismissed';
+      legal_hold?: boolean;
+    },
   ) {
+    if (patch.status === undefined && patch.legal_hold === undefined) return null;
     const result = await query(
       `UPDATE reports
-       SET status = $2::varchar,
+       SET status = COALESCE($2::varchar, status),
+           legal_hold = COALESCE($3::boolean, legal_hold),
            resolved_at = CASE
+             WHEN $2::text IS NULL THEN resolved_at
              WHEN $2::text IN ('actioned', 'dismissed') THEN COALESCE(resolved_at, NOW())
              ELSE resolved_at
            END,
            closed_at = CASE
+             WHEN $2::text IS NULL THEN closed_at
              WHEN $2::text IN ('actioned', 'dismissed') THEN COALESCE(closed_at, NOW())
              ELSE NULL
            END
        WHERE id = $1
        RETURNING id, status, resolved_at, closed_at, legal_hold, reporter_id, reporter_account_deleted_at`,
-      [reportId, status],
+      [reportId, patch.status ?? null, patch.legal_hold === undefined ? null : patch.legal_hold],
     );
     return result.rows[0] ?? null;
   },
 
+  async updateReportStatus(
+    reportId: string,
+    status: 'open' | 'reviewing' | 'actioned' | 'dismissed',
+  ) {
+    return this.updateReport(reportId, { status });
+  },
+
   async updateReportLegalHold(reportId: string, legalHold: boolean) {
-    const result = await query(
-      `UPDATE reports
-       SET legal_hold = $2
-       WHERE id = $1
-       RETURNING id, status, resolved_at, closed_at, legal_hold, reporter_id, reporter_account_deleted_at`,
-      [reportId, legalHold],
-    );
-    return result.rows[0] ?? null;
+    return this.updateReport(reportId, { legal_hold: legalHold });
   },
 
   async isTeamMember(userId: string): Promise<boolean> {

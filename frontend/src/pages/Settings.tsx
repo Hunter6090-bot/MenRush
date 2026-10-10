@@ -120,10 +120,13 @@ export const Settings = () => {
       reported_email?: string | null;
       reported_account_deleted_at?: string | null;
       evidence?: Array<{
+        id?: string;
         kind: string;
         body?: string | null;
         media_type?: string | null;
         media_ref?: string | null;
+        media_available?: boolean;
+        from_reported?: boolean;
         sent_at?: string | null;
       }>;
     }>
@@ -450,6 +453,17 @@ export const Settings = () => {
       /* ignore */
     } finally {
       setReportBusyId(null);
+    }
+  };
+
+  const openEvidenceMedia = async (reportId: string, evidenceId: string) => {
+    try {
+      const res = await usersAPI.getReportEvidenceMedia(reportId, evidenceId);
+      const blob = res.data as Blob;
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      /* team-only file may already be gone */
     }
   };
 
@@ -1091,16 +1105,28 @@ export const Settings = () => {
                             <ul className="mt-2 space-y-1">
                               {report.evidence.map((item, index) => (
                                 <li
-                                  key={`${report.id}-ev-${index}`}
+                                  key={item.id ?? `${report.id}-ev-${index}`}
                                   className="text-[12px] text-[var(--cream-muted)]"
                                 >
+                                  {item.from_reported !== false ? 'From reported · ' : ''}
                                   {item.sent_at
                                     ? `${new Date(item.sent_at).toLocaleString()} · `
                                     : ''}
                                   {item.body ||
                                     (item.media_type
-                                      ? `${item.media_type}${item.media_ref ? ` (${item.media_ref})` : ''}`
+                                      ? item.media_available
+                                        ? `${item.media_type} (saved for review)`
+                                        : item.media_type
                                       : 'Media')}
+                                  {item.media_available && item.id ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => void openEvidenceMedia(report.id, item.id as string)}
+                                      className="ml-2 text-[11px] font-bold text-[var(--copper)]"
+                                    >
+                                      Open
+                                    </button>
+                                  ) : null}
                                 </li>
                               ))}
                             </ul>

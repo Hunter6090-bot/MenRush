@@ -603,16 +603,21 @@ export const usersAPI = {
         reported_account_deleted_at?: string | null;
         reported_email?: string | null;
         evidence?: Array<{
+          id?: string;
           kind: string;
           body?: string | null;
           media_type?: string | null;
           media_ref?: string | null;
+          media_available?: boolean;
+          from_reported?: boolean;
           sent_at?: string | null;
         }>;
       }>;
     }>('/users/reports'),
   updateReportStatus: (id: string, status: 'open' | 'reviewing' | 'actioned' | 'dismissed') =>
     apiClient.patch(`/users/reports/${id}`, { status }),
+  getReportEvidenceMedia: (reportId: string, evidenceId: string) =>
+    apiClient.get(`/users/reports/${reportId}/evidence/${evidenceId}/media`, { responseType: 'blob' }),
 };
 
 export const notificationsAPI = {

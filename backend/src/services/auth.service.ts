@@ -1182,7 +1182,9 @@ export const authService = {
     // does, so a failure never leaves a half-erased account behind.
     const { locationRetentionService } = await import('./location-retention.service');
     const { roomService } = await import('./room.service');
+    const { unlinkMessageMedia } = await import('./report-evidence.service');
     const client = await pool.connect();
+    let messageMediaKeys: string[] = [];
     try {
       await client.query('BEGIN');
       await client.query(`SET LOCAL lock_timeout = '5s'`);
@@ -1196,6 +1198,19 @@ export const authService = {
       // Location rows (map feed, Community, chat location shares, room
       // points, profile points); the FKs also cascade from users.
       await locationRetentionService.eraseAccountLocationData(userId, (text, params) => client.query(text, params));
+      // Live chat rows cascade with the user. Collect storage keys first so
+      // we can unlink the originals after COMMIT and not leave orphans.
+      // Report evidence copies (re-*) live under report-evidence/ and stay.
+      const media = await client.query(
+        `SELECT DISTINCT media_storage_key AS key
+           FROM messages
+          WHERE (sender_id = $1 OR receiver_id = $1)
+            AND media_storage_key IS NOT NULL`,
+        [userId],
+      );
+      messageMediaKeys = media.rows
+        .map((row: { key?: string | null }) => row.key)
+        .filter((key: string | null | undefined): key is string => Boolean(key));
       await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
       await client.query('COMMIT');
     } catch (err) {
@@ -1204,6 +1219,7 @@ export const authService = {
     } finally {
       client.release();
     }
+    unlinkMessageMedia(messageMediaKeys);
     return { ok: true };
   },
 };
