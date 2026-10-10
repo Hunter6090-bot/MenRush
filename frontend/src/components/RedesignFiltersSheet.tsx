@@ -13,6 +13,7 @@ import {
   type DiscoveryFilterState,
   withCustomAge,
 } from '../lib/discoveryFilters';
+import { AgeRangeSlider } from './AgeRangeSlider';
 
 export function RedesignFiltersSheet({
   open,
@@ -76,30 +77,13 @@ export function RedesignFiltersSheet({
             {ageMin} to {ageMax}
           </span>
         </div>
-        <div className="mb-5 flex gap-3">
-          <input
-            type="range"
+        <div className="mb-5">
+          <AgeRangeSlider
             min={AGE_CLAMP_MIN}
             max={AGE_CLAMP_MAX}
-            value={ageMin}
-            data-testid="filter-age-min"
-            onChange={(e) => {
-              const next = Math.min(Number(e.target.value), ageMax);
-              setDraft(withCustomAge(draft, next, ageMax));
-            }}
-            className="min-h-[44px] w-full accent-[#C4832A]"
-          />
-          <input
-            type="range"
-            min={AGE_CLAMP_MIN}
-            max={AGE_CLAMP_MAX}
-            value={ageMax}
-            data-testid="filter-age-max"
-            onChange={(e) => {
-              const next = Math.max(Number(e.target.value), ageMin);
-              setDraft(withCustomAge(draft, ageMin, next));
-            }}
-            className="min-h-[44px] w-full accent-[#C4832A]"
+            valueMin={ageMin}
+            valueMax={ageMax}
+            onChange={(lo, hi) => setDraft(withCustomAge(draft, lo, hi))}
           />
         </div>
 

@@ -45,7 +45,7 @@ vi.mock('../api/client', async (importOriginal) => {
     eventsAPI: {
       ...actual.eventsAPI,
       getNearby: vi.fn().mockResolvedValue({ data: [EVENT] }),
-      checkIn: vi.fn().mockResolvedValue({ data: {} }),
+      checkIn: vi.fn().mockResolvedValue({ data: { ok: true, spot: { id: 'spot-ev-1' } } }),
     },
   };
 });

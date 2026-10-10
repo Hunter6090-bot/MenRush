@@ -17,6 +17,7 @@ import { useAuthStore, useLocationStore } from '../hooks/store';
 import { spotAfterCheckToggle } from '../lib/hotSpotCounts';
 import { formatDistanceFromKm } from '../lib/localeUnits';
 import { eventMetaLine } from '../lib/eventWhen';
+import { eventCheckInNotice } from '../lib/eventCheckIn';
 import { eventTicketUrl } from '../lib/eventTickets';
 import { getDirectionsUrl } from '../lib/cruising';
 import { IconCommunity, SpotTypeIcon, spotTypeKey } from '../components/icons';
@@ -379,9 +380,9 @@ function OutSpotRow({ spot, onOpen }: { spot: HotSpotDTO; onOpen: () => void }) 
             data-testid={`out-spot-open-${spot.id}`}
             aria-haspopup="dialog"
             aria-label={`${spot.name}, open details`}
-            className="block w-full truncate text-left after:absolute after:inset-0 after:rounded-2xl after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-[var(--copper)]"
+            className="flex min-h-[44px] w-full items-center text-left after:absolute after:inset-0 after:rounded-2xl after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-[var(--copper)]"
           >
-            {spot.name}
+            <span className="truncate">{spot.name}</span>
           </button>
         </h2>
         <p className="mt-0.5 truncate text-[15px] font-medium text-[var(--cream-muted)]">
@@ -404,9 +405,6 @@ function OutSpotRow({ spot, onOpen }: { spot: HotSpotDTO; onOpen: () => void }) 
     </article>
   );
 }
-
-/** Matches backend ACTIVE_CHECKIN_TTL_HOURS (same copy as the Events page). */
-const EVENT_CHECKIN_TTL_HOURS = 4;
 
 /**
  * Out event row. Tapping it opens the same actions the Events card had before the
@@ -437,21 +435,35 @@ function OutEventRow({ event }: { event: EventDTO }) {
         onClick={() => setOpen((v) => !v)}
       >
         <span
-          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-[var(--bg-elevated)] text-[var(--copper)]"
+          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-[var(--bg-elevated)] text-[var(--nn-accent-text)]"
           aria-hidden
         >
           <SpotTypeIcon type="event" size={28} />
         </span>
+        {/* Name and 'venue · date' wrap (no truncate) so the date always shows at 360px. */}
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[15px] font-extrabold text-[var(--cream)]">{event.name}</span>
+          <span
+            className="block whitespace-normal break-words text-[15px] font-extrabold text-[var(--cream)]"
+            data-testid={`out-event-name-${event.id}`}
+          >
+            {event.name}
+          </span>
           {meta ? (
-            <span className="mt-0.5 block truncate text-[15px] font-medium text-[var(--cream-muted)]" data-testid={`out-event-meta-${event.id}`}>
+            <span
+              className="mt-0.5 block whitespace-normal break-words text-[15px] font-medium text-[var(--cream-muted)]"
+              data-testid={`out-event-meta-${event.id}`}
+            >
               {meta}
             </span>
           ) : null}
-        </span>
-        <span className="inline-flex min-h-[44px] shrink-0 items-center self-center rounded-full border border-[var(--copper)]/40 px-3 text-[15px] font-extrabold uppercase tracking-wide text-[var(--nn-accent-text)]">
-          Event
+          {/* Board style: copper line type icon + small label, same as the spot rows (no pill). */}
+          <span
+            className="mt-1 flex items-center gap-1.5 text-[15px] text-[var(--cream-soft)]"
+            data-testid={`out-event-type-${event.id}`}
+          >
+            <SpotTypeIcon type="event" size={16} className="shrink-0 text-[var(--nn-accent-text)]" />
+            <span>Event</span>
+          </span>
         </span>
       </button>
       {open ? (
@@ -489,11 +501,7 @@ function OutEventRow({ event }: { event: EventDTO }) {
                 setNotice('');
                 void eventsAPI
                   .checkIn(event.id)
-                  .then(() =>
-                    setNotice(
-                      `Checked in at ${event.venue_name || event.name}. Pin stays on the map for ${EVENT_CHECKIN_TTL_HOURS} hours.`,
-                    ),
-                  )
+                  .then((res) => setNotice(eventCheckInNotice(res.data, event.venue_name || event.name)))
                   .catch((err: { response?: { data?: { error?: string } } }) =>
                     setNotice(err.response?.data?.error || 'Check-in failed.'),
                   )

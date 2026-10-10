@@ -378,7 +378,7 @@ const NearbyGridCard = memo(function NearbyGridCard({
               if (matchDisabled) return;
               void onMatch(user);
             }}
-            className={`w-full rounded-lg py-1.5 text-[15px] font-extrabold tracking-wide transition-colors flex items-center justify-center gap-1.5 md:rounded-xl md:py-2 md:text-[15px] ${
+            className={`flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-lg text-[15px] font-extrabold tracking-wide transition-colors md:rounded-xl ${
               matchState === 'none' || matching ? 'uppercase' : ''
             } ${matchCtaCompactToneClasses(matchState)}`}
           >
@@ -415,14 +415,14 @@ const GridCardFace = memo(function GridCardFace({
       className="relative aspect-square w-full bg-[var(--bg-elevated)]"
     >
       <GridPhoto name={user.name} photoUrl={user.photo_url} age={user.age} />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.55)] to-transparent px-1.5 pb-1.5 pt-8 md:px-2.5 md:pb-2 md:pt-10">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(13,10,6,0.94)] via-[rgba(13,10,6,0.72)] to-transparent px-1.5 pb-1.5 pt-8 md:px-2.5 md:pb-2 md:pt-10">
         <div className="flex items-center gap-0.5 md:gap-1">
           <span className="min-w-0 break-words text-[15px] font-bold leading-tight text-[#FFF6E6] [overflow-wrap:anywhere] line-clamp-2" data-testid={`nearby-grid-name-${user.id}`}>
             {user.name}{typeof user.age === 'number' ? ` ${user.age}` : ''}
           </span>
 
         </div>
-        <p className="mt-0.5 text-[15px] font-semibold leading-tight text-[var(--cream)] [overflow-wrap:anywhere] line-clamp-2" data-testid={`nearby-grid-meta-${user.id}`}>
+        <p className="mt-0.5 text-[15px] font-semibold leading-tight text-[#FFF6E6] [overflow-wrap:anywhere] line-clamp-2" data-testid={`nearby-grid-meta-${user.id}`}>
           <span data-testid={`nearby-grid-distance-${user.id}`}>{distLabel}</span>
           {metaRest ? ` · ${metaRest}` : ''}
         </p>
