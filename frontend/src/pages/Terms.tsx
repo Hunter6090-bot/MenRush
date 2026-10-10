@@ -410,11 +410,11 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>7.4</Strong> Where recurring billing is activated with a valid payment
-                  method on file, you authorise us to charge that payment method at the start of
-                  each billing period. For manual invoices, payment is due upon issuance prior to
-                  entitlement activation. You pay a manual invoice by bank transfer using the payment
-                  reference shown on it, and Premium starts once we have confirmed your payment.
+                  <Strong>7.4</Strong> To buy Premium by manual invoice, you pay the invoice by bank
+                  transfer using the payment reference shown on it. The invoice shows the full amount
+                  you pay us. Premium starts once we have confirmed your payment, and we will tell you
+                  when it has started. If your payment has not been matched, email
+                  support@menrush.com with your payment reference.
                 </>,
               )}
               {para(
@@ -428,6 +428,16 @@ export const Terms = () => {
                   <Strong>7.6</Strong> Premium runs for the period you have paid for and does not
                   renew automatically. When that period ends, Premium stops unless you pay a new
                   invoice. You can cancel an unpaid invoice on the Premium page.
+                </>,
+              )}
+              {para(
+                <>
+                  <Strong>7.6A</Strong> You can cancel your Premium purchase within 14 days of buying
+                  it. When you buy, we ask whether you want Premium to start as soon as your payment
+                  is confirmed. If you choose that and then cancel within the 14 days, we refund what
+                  you paid less an amount for the days of Premium you have had. To cancel, email
+                  support@menrush.com with your invoice reference. We refund you within 14 days of
+                  you telling us, to the account you paid from.
                 </>,
               )}
               {para(
