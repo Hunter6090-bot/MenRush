@@ -1,16 +1,32 @@
 /**
- * Upsert fixed team + e2e test accounts (verified, located, mutually matched).
+ * Create fixed team + e2e test accounts (verified, located, mutually matched) in a LOCAL or CI
+ * database.
  *
- *   cd backend && npm run db:seed-test-users
+ *   cd backend && SEED_TEST_PASSWORD='<a local test password>' npm run db:seed-test-users
  *
- * Password for most seeded accounts: MenRushTest2026!
- * Individual testers may override with a custom password in SEED_USERS.
+ * Safety (scripts/seed-guard.ts):
+ * - Refuses NODE_ENV=production, a Railway production environment, and any DATABASE_URL whose
+ *   host looks like Railway or production.
+ * - The password comes only from SEED_TEST_PASSWORD. There is no default; unset is refused.
+ * - Never changes an existing account's password. New accounts get the password; existing
+ *   e2e fixtures (@example.com) keep theirs and only their profile fields are refreshed.
+ *   Existing non-fixture accounts are not touched at all (no profile, pin or visibility change).
+ * - Prints labels and counts only: never a password, email or id.
  */
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
-import pool, { query } from '../src/db';
+import { SEED_PASSWORD_ENV, SEED_REFUSAL_TEXT, seedRefusal } from './seed-guard';
 
-export const TEST_PASSWORD = 'MenRushTest2026!';
+// Refuse before src/db is even loaded, so nothing can connect to a live database.
+const refusal = seedRefusal(process.env);
+if (refusal) {
+  console.error(`Refusing to seed: ${SEED_REFUSAL_TEXT[refusal]}`);
+  process.exit(2);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { default: pool, query } = require('../src/db') as typeof import('../src/db');
+
 
 /** Shoreditch-ish — matches default Discover dev center. */
 export const TEST_LAT = 51.5136;
@@ -25,7 +41,6 @@ type SeedUser = {
   name: string;
   age: number;
   label: string;
-  password?: string;
   /** Pin to Shoreditch test coords (for remote testers who should appear in London). */
   seedLondonLocation?: boolean;
   /**
@@ -117,15 +132,39 @@ export const SEED_USERS: SeedUser[] = [
   },
 ];
 
-async function upsertUser(user: SeedUser, passwordHash: string): Promise<string> {
+type SeedOutcome = { id: string; created: boolean } | { id: null; created: false };
+
+async function upsertUser(user: SeedUser, passwordHash: string): Promise<SeedOutcome> {
   const email = user.email.toLowerCase();
   const isE2eFixture = user.email.endsWith('@example.com');
+  const values = [
+    user.id,
+    email,
+    passwordHash,
+    user.name,
+    user.age,
+    // E2E fixtures need a Discover-ready profile (bio/looking_for/interests)
+    // so RequireProfileSetup doesn't redirect them into onboarding mid-test.
+    isE2eFixture ? 'E2E test fixture, do not message.' : null,
+    isE2eFixture ? 'Test account' : null,
+    isE2eFixture ? 'chat' : null,
+    isE2eFixture ? ['vers', 'bear', 'athletic'] : [],
+  ];
+  const insertSql = `INSERT INTO users (id, email, password_hash, name, age, bio, headline, looking_for, interests, is_verified, verification_status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE, 'verified')`;
 
+  if (!isE2eFixture) {
+    // Not a fixture: insert-only. An existing account is never touched (no password,
+    // profile, pin or visibility change).
+    const inserted = await query(`${insertSql} ON CONFLICT DO NOTHING RETURNING id`, values);
+    if (inserted.rows.length === 0) return { id: null, created: false };
+  }
+
+  // Fixture (or a just-created account): the password is set on insert only. The update
+  // branch never touches password_hash, so an existing account keeps its password.
   const userRes = await query(
-    `INSERT INTO users (id, email, password_hash, name, age, bio, headline, looking_for, interests, is_verified, verification_status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE, 'verified')
+    `${insertSql}
      ON CONFLICT (email) DO UPDATE SET
-       password_hash = EXCLUDED.password_hash,
        name = EXCLUDED.name,
        age = EXCLUDED.age,
        bio = EXCLUDED.bio,
@@ -135,22 +174,11 @@ async function upsertUser(user: SeedUser, passwordHash: string): Promise<string>
        is_verified = TRUE,
        verification_status = 'verified',
        updated_at = NOW()
-     RETURNING id`,
-    [
-      user.id,
-      email,
-      passwordHash,
-      user.name,
-      user.age,
-      // E2E fixtures need a Discover-ready profile (bio/looking_for/interests)
-      // so RequireProfileSetup doesn't redirect them into onboarding mid-test.
-      isE2eFixture ? 'E2E test fixture — do not message.' : null,
-      isE2eFixture ? 'Test account' : null,
-      isE2eFixture ? 'chat' : null,
-      isE2eFixture ? ['vers', 'bear', 'athletic'] : [],
-    ],
+     RETURNING id, (xmax = 0) AS created`,
+    values,
   );
   const userId = userRes.rows[0].id as string;
+  const created = isE2eFixture ? userRes.rows[0].created === true : true;
 
   const useLondonPin =
     !user.authOnly && !user.skipLocationPin && (isE2eFixture || user.seedLondonLocation === true);
@@ -207,7 +235,7 @@ async function upsertUser(user: SeedUser, passwordHash: string): Promise<string>
     );
   }
 
-  return userId;
+  return { id: userId, created };
 }
 
 /**
@@ -261,31 +289,36 @@ async function ensureMutualMatch(a: string, b: string) {
 }
 
 async function main() {
-  if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL is required');
-  }
-
+  const password = process.env[SEED_PASSWORD_ENV] as string; // checked by seedRefusal above
+  const passwordHash = await bcrypt.hash(password, 10);
   const ids: Record<string, string> = {};
+  let created = 0;
+  let kept = 0;
+  let untouched = 0;
 
   for (const user of SEED_USERS) {
-    const password = user.password ?? TEST_PASSWORD;
-    const passwordHash = await bcrypt.hash(password, 10);
-    ids[user.email.toLowerCase()] = await upsertUser(user, passwordHash);
+    const outcome = await upsertUser(user, passwordHash);
+    if (outcome.id === null) {
+      untouched += 1;
+      console.log(`  ${user.label}: already exists, left untouched`);
+      continue;
+    }
+    ids[user.email.toLowerCase()] = outcome.id;
+    if (outcome.created) created += 1;
+    else kept += 1;
+    console.log(`  ${user.label}: ${outcome.created ? 'created' : 'exists, login unchanged'}`);
   }
 
   // E2E fixtures stay pre-matched; team accounts start unmatched for map/discovery testing.
-  await ensureMutualMatch(ids['alice@example.com'], ids['bob@example.com']);
+  const alice = SEED_USERS.find((u) => u.name === 'Alice');
+  const bob = SEED_USERS.find((u) => u.name === 'Bob');
+  if (alice && bob && ids[alice.email.toLowerCase()] && ids[bob.email.toLowerCase()]) {
+    await ensureMutualMatch(ids[alice.email.toLowerCase()], ids[bob.email.toLowerCase()]);
+  }
 
   await seedTestHotSpot();
 
-  console.log('Seeded test accounts:\n');
-  for (const user of SEED_USERS) {
-    const password = user.password ?? TEST_PASSWORD;
-    console.log(`  ${user.label}`);
-    console.log(`    email:    ${user.email.toLowerCase()}`);
-    console.log(`    password: ${password}`);
-    console.log(`    id:       ${user.id}\n`);
-  }
+  console.log(`\nSeed done: created=${created} kept=${kept} untouched=${untouched}. Passwords of existing accounts were not changed.`);
 }
 
 main()

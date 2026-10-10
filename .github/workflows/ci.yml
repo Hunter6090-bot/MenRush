@@ -43,6 +43,8 @@ jobs:
         run: npm run test:london-midnight
       - name: Security checks (source guards, uploads, media, CORS)
         run: npm run test:security
+      - name: Seed refuses production, needs SEED_TEST_PASSWORD, no hardcoded password
+        run: npm run test:seed-safety
 
   backend-adult-assurance:
     name: Adult assurance + Veriff checks
@@ -206,6 +208,8 @@ jobs:
         run: npm run test:delete-room-creator-integration
       - name: Ghost or hidden first event check-in creates no public spot (real PG)
         run: npm run test:events-ghost-first-checkin
+      - name: Seed never changes an existing account's password (real PG)
+        run: npm run test:seed-safety-integration
       # --if-present: these scripts arrive with their own PRs (#333, #327,
       # #328, Community Ghost). The step is a no-op until the script exists.
       - name: Radius on the fuzzed pin (oracle)

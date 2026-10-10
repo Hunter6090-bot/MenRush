@@ -11,7 +11,9 @@ import pool from '../src/db';
 
 const ALICE = 'alice@example.com';
 const BOB = 'bob@example.com';
-const PASS = 'MenRushTest2026!';
+const PASS: string = process.env.SEED_TEST_PASSWORD || (() => {
+  throw new Error('Set SEED_TEST_PASSWORD (the password you seeded with). There is no default.');
+})();
 
 async function main() {
   const aliceLogin = await authService.login({ email: ALICE, password: PASS });

@@ -65,6 +65,14 @@ jobs:
         working-directory: backend
         run: npm run db:migrate
 
+      # A fresh random test password per run (masked). Nothing in the repo knows it; the
+      # seed refuses to run without it, and the e2e specs read the same env.
+      - name: Generate test password
+        run: |
+          pw="$(openssl rand -hex 24)"
+          echo "::add-mask::$pw"
+          echo "SEED_TEST_PASSWORD=$pw" >> "$GITHUB_ENV"
+
       - name: Seed test accounts
         working-directory: backend
         run: npm run db:seed-test-users

@@ -11,7 +11,9 @@ import assert from 'assert';
 import { io as ioClient, Socket } from 'socket.io-client';
 
 const API = process.env.API_URL || 'http://localhost:3000';
-const PASSWORD = 'MenRushTest2026!';
+const PASSWORD: string = process.env.SEED_TEST_PASSWORD || (() => {
+  throw new Error('Set SEED_TEST_PASSWORD (the password you seeded with). There is no default.');
+})();
 
 async function login(email: string) {
   const res = await fetch(`${API}/api/auth/login`, {

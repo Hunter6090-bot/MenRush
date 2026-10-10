@@ -9,6 +9,8 @@
     "start": "node dist/boot.js",
     "db:migrate": "ts-node src/scripts/migrate.ts",
     "db:seed-test-users": "ts-node scripts/seed-test-users.ts",
+    "test:seed-safety": "ts-node scripts/seed-test-users-checks.ts",
+    "test:seed-safety-integration": "ts-node --transpile-only scripts/seed-test-users-integration.ts",
     "db:seed-social-launch-pack": "ts-node scripts/seed-social-launch-pack.ts",
     "test:social-launch-pack": "ts-node scripts/test-social-launch-pack-seed.ts",
     "test:social-copy-guard": "ts-node scripts/social-copy-guard-checks.ts",
