@@ -1102,7 +1102,22 @@ export const authService = {
       /* best-effort */
     }
 
-    await query(`DELETE FROM users WHERE id = $1`, [userId]);
+    // One transaction: hand over or delete the groups they own, then delete
+    // the user. A failure rolls both back.
+    const { roomService } = await import('./room.service');
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`SET LOCAL lock_timeout = '5s'`);
+      await roomService.handOverOwnedRoomsOnAccountDeletion(userId, (text, params) => client.query(text, params));
+      await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
     return { ok: true };
   },
 };
