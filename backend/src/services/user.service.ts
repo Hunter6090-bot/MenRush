@@ -1076,13 +1076,13 @@ export const userService = {
   ) {
     const result = await query(
       `UPDATE reports
-       SET status = $2,
+       SET status = $2::varchar,
            resolved_at = CASE
-             WHEN $2 IN ('actioned', 'dismissed') THEN COALESCE(resolved_at, NOW())
+             WHEN $2::text IN ('actioned', 'dismissed') THEN COALESCE(resolved_at, NOW())
              ELSE resolved_at
            END,
            closed_at = CASE
-             WHEN $2 IN ('actioned', 'dismissed') THEN COALESCE(closed_at, NOW())
+             WHEN $2::text IN ('actioned', 'dismissed') THEN COALESCE(closed_at, NOW())
              ELSE NULL
            END
        WHERE id = $1

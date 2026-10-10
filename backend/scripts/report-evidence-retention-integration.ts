@@ -18,6 +18,8 @@ if (!process.env.DATABASE_URL) {
 process.env.JWT_SECRET ||= 'report-evidence-retention-integration-secret';
 const MOD_EMAIL = `rer-mod-${randomUUID().slice(0, 8)}@test.menrush.local`;
 process.env.TEAM_EMAILS = MOD_EMAIL;
+// Empty notify list so the owner-brief builder is tested without sending mail.
+process.env.REPORT_NOTIFY_EMAIL = ',';
 delete process.env.REPORT_PURGE_ENABLED;
 delete process.env.REPORT_RETENTION_PURGE_ENABLED;
 delete process.env.REPORT_RETENTION_MONTHS;
