@@ -4,11 +4,12 @@
  */
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import fs from 'fs';
+import { MOCK_OWNER_ID } from './support/mock-member-ids';
 
 const OWNER = {
   token: 'e2emapphoto.e2emapphotosignature00001',
   user: {
-    id: '6e9b68ad-7d20-46fc-be94-3c2ac3fa16b9',
+    id: MOCK_OWNER_ID,
     email: 'boa90@test.menrush',
     name: 'BOA90',
     is_verified: false,

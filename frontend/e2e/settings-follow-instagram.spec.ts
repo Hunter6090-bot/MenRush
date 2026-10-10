@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
+import { MOCK_OWNER_ID } from './support/mock-member-ids';
 
 const ARTIFACTS = '/opt/cursor/artifacts';
 const PHONE = { width: 390, height: 750 } as const;
@@ -8,7 +9,7 @@ const PHONE = { width: 390, height: 750 } as const;
 const OWNER = {
   token: 'e2efollowpayload.e2efollowsignature000',
   user: {
-    id: '6e9b68ad-7d20-46fc-be94-3c2ac3fa16b9',
+    id: MOCK_OWNER_ID,
     email: 'boa90@test.menrush',
     name: 'BOA90',
     is_verified: false,
