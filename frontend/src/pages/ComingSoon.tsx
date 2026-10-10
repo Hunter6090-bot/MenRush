@@ -56,7 +56,7 @@ export const ComingSoon = () => {
         <section className="mx-auto flex w-full max-w-[720px] flex-col items-center px-6 pb-14 pt-4 text-center sm:pt-8">
           <BrandMark size="hero" className="mb-8" />
 
-          <p className="mr-home-overline mb-5">FREE TO JOIN</p>
+          <p className="mr-home-overline mb-5">Free to join</p>
 
           <h1 className="mr-home-heading max-w-[900px] text-balance">
             See who&apos;s around.

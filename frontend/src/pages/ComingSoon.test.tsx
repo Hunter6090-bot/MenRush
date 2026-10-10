@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { ComingSoon } from './ComingSoon';
+import { Landing } from './Landing';
 
 vi.mock('../observability/analytics', () => ({
   trackEventOnce: vi.fn(),
@@ -44,15 +47,10 @@ describe('ComingSoon homepage', () => {
     expect(within(list).getAllByRole('listitem')).toHaveLength(4);
   });
 
-  it('makes no claims the app cannot keep', () => {
-    const { container } = renderHome();
-    const text = container.textContent ?? '';
-    expect(text).not.toMatch(/verified profiles/i);
-    expect(text).not.toMatch(/total discretion/i);
-    expect(text).not.toMatch(/live proximity|right now|no swiping/i);
-    expect(text).not.toMatch(/meet is real/i);
-    expect(text).not.toMatch(/\b(date|dating|drinks|friends|romantic|coffee)\b/i);
-    expect(text).not.toContain('\u2014');
+  it('shows the overline in normal case, not all caps', () => {
+    renderHome();
+    expect(screen.getByText('Free to join')).toBeInTheDocument();
+    expect(screen.queryByText(/LIVE NOW/i)).not.toBeInTheDocument();
   });
 
   it('shows no beta text or beta links', () => {
@@ -65,5 +63,47 @@ describe('ComingSoon homepage', () => {
     renderHome();
     expect(screen.getByRole('link', { name: 'Sign up free' })).toHaveAttribute('href', '/register');
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login');
+  });
+});
+
+/** Al's rule: every promise on a public landing must be strictly true. */
+const UNTRUE_CLAIMS = [
+  /verified profiles/i,
+  /total discretion/i,
+  /live proximity/i,
+  /right now/i,
+  /no swiping/i,
+  /meet is real/i,
+  /real-time presence/i,
+  /LIVE NOW/i,
+];
+
+function expectOnlyTrueClaims(text: string) {
+  for (const claim of UNTRUE_CLAIMS) expect(text).not.toMatch(claim);
+  expect(text).not.toMatch(/\b(date|dating|drinks|friends|romantic|coffee)\b/i);
+  expect(text).not.toMatch(/beta/i);
+  expect(text).not.toContain('\u2014');
+}
+
+describe('public landings make only true claims', () => {
+  it('ComingSoon (the live homepage) renders no untrue claims', () => {
+    const { container } = renderHome();
+    expectOnlyTrueClaims(container.textContent ?? '');
+  });
+
+  it('Landing renders no untrue claims', () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={['/']}>
+        <Landing />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent("See who's around.On the map.");
+    expect(screen.getByText(/Rooms \(Premium only\)/)).toBeInTheDocument();
+    expectOnlyTrueClaims(container.textContent ?? '');
+  });
+
+  it.each(['ComingSoon.tsx', 'Landing.tsx'])('%s source has no untrue claims', (file) => {
+    const src = readFileSync(resolve(__dirname, file), 'utf8');
+    for (const claim of UNTRUE_CLAIMS) expect(src).not.toMatch(claim);
   });
 });

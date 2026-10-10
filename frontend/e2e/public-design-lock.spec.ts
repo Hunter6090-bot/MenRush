@@ -32,7 +32,7 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   // Honest face: no claims the app cannot keep.
   await expect(page.getByText(/Verified profiles|Total discretion|Live proximity|meet is real/i)).toHaveCount(0);
 
-  await expect(page.getByText(/^FREE TO JOIN$/)).toBeVisible();
+  await expect(page.getByText(/^Free to join$/)).toBeVisible();
   await expect(page.getByText(/LIVE NOW\. UK OPEN/i)).toHaveCount(0);
   await expect(page.getByText(/OPENS 1 OCTOBER 2026/i)).toHaveCount(0);
   await expect(page.getByText(/leave your email/i)).toHaveCount(0);
