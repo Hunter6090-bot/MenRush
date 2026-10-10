@@ -240,7 +240,7 @@ test.describe('dead pressables', () => {
     // Temp-identity gate must be completed before chat chrome mounts.
     await expect(page.getByTestId('room-temp-identity-gate')).toBeVisible({ timeout: 15_000 });
     await page.getByRole('button', { name: 'Anon Guest' }).click();
-    await page.getByRole('button', { name: /Enter group/i }).click();
+    await page.getByRole('button', { name: /^Join/ }).click();
     await expect(page.getByTestId('room-temp-identity-gate')).toHaveCount(0, { timeout: 10_000 });
     await expect(page.getByRole('button', { name: 'Room settings' })).toBeVisible();
     // Self tile uses temp name, not profile "Alice".

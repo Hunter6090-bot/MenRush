@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { contrast, hardcodedColourClasses, loadThemeTokens, type Theme } from '../test/themeContrast';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
@@ -46,6 +49,8 @@ vi.mock('./SelfieCaptureModal', () => ({
 }));
 
 import { roomsAPI } from '../api/client';
+
+loadThemeTokens(readFileSync(resolve(__dirname, '../styles/menrush-tokens.css'), 'utf8'));
 
 const mockedGet = vi.mocked(roomsAPI.getTempIdentity);
 const mockedDelete = vi.mocked(roomsAPI.deleteTempIdentity);
@@ -164,7 +169,7 @@ describe('RoomTempIdentityGate', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Use 2 characters or more.');
-    expect(alert).toHaveStyle({ color: '#B0432E' });
+    expect(alert.className).toContain('text-[var(--nn-danger-text)]');
   });
 
   it('allows temp enter with name only — no temporary photo required', async () => {
@@ -322,7 +327,109 @@ describe('RoomTempIdentityGate', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(/Could not upload photo/i);
-    expect(alert).toHaveStyle({ color: '#B0432E' });
+    expect(alert.className).toContain('text-[var(--nn-danger-text)]');
     expect(screen.queryByTestId('room-temp-photo-preview')).not.toBeInTheDocument();
+  });
+});
+
+describe('RoomTempIdentityGate matches the board (Room pre-join)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedGet.mockResolvedValue({ data: {} } as never);
+    mockedUpload.mockResolvedValue({ data: { photo_url: '/uploads/room-temp/test.jpg' } } as never);
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+  });
+
+  it('shows Rooms back, room name, N in room, preview card with Preview and name chips, and Join', async () => {
+    const user = userEvent.setup();
+    renderGate({ activeCount: 4, roomName: 'Soho late' });
+    await waitFor(() => expect(mockedGet).toHaveBeenCalled());
+    expect(screen.getByTestId('room-temp-not-now')).toHaveTextContent('Rooms');
+    expect(screen.getByRole('heading', { name: 'Soho late' })).toBeInTheDocument();
+    expect(screen.getByTestId('room-temp-active-count')).toHaveTextContent('4 in room');
+    expect(screen.getByTestId('room-temp-preview-card')).toHaveTextContent('Preview');
+    expect(screen.getByTestId('room-temp-preview-name')).toHaveTextContent('Pick a name');
+    await user.type(screen.getByTestId('room-temp-name'), 'Guest 27');
+    expect(screen.getByTestId('room-temp-preview-name')).toHaveTextContent('Guest 27');
+    expect(screen.getByTestId('room-temp-enter')).toHaveTextContent(/^Join$/);
+  });
+
+  it('hides the count when there is none (no made-up numbers)', async () => {
+    renderGate({ activeCount: 0 });
+    await waitFor(() => expect(mockedGet).toHaveBeenCalled());
+    expect(screen.queryByTestId('room-temp-active-count')).toBeNull();
+  });
+
+  it('identity result is unchanged: Join sends the same temp payload', async () => {
+    const user = userEvent.setup();
+    const { onReady } = renderGate();
+    await waitFor(() => expect(mockedGet).toHaveBeenCalled());
+    await user.type(screen.getByTestId('room-temp-name'), 'Anon Guest');
+    await user.click(screen.getByTestId('room-temp-enter'));
+    await waitFor(() =>
+      expect(onReady).toHaveBeenCalledWith({
+        mode: 'temp',
+        displayName: 'Anon Guest',
+        photoUrl: '',
+        saveName: false,
+        savePhoto: false,
+      }),
+    );
+  });
+
+  it('every tap target is at least 44px, text is 15px or more, no dashes or beta in copy', async () => {
+    renderGate({ activeCount: 3 });
+    await waitFor(() => expect(mockedGet).toHaveBeenCalled());
+    const src = readFileSync(resolve(__dirname, 'RoomTempIdentityGate.tsx'), 'utf8');
+    expect(src).not.toMatch(/\btext-(xs|sm)\b|text-\[(\d|1[0-4])px\]/);
+    const gate = screen.getByTestId('room-temp-identity-gate');
+    for (const el of gate.querySelectorAll('button')) {
+      const cls = el.className;
+      const ok = /min-h-\[(4[4-9]|[5-9]\d)px\]|\bh-11\b|\bh-1[2-9]\b/.test(cls);
+      expect(ok, `${el.textContent} ${cls}`).toBe(true);
+    }
+    expect(gate.textContent).not.toMatch(/[\u2013\u2014]|\bbeta\b/i);
+    expect(hardcodedColourClasses(gate)).toEqual([]);
+  });
+});
+
+describe.each<Theme>(['light', 'dark'])('Room join contrast (%s)', (theme) => {
+  beforeEach(() => {
+    mockedGet.mockResolvedValue({ data: {} } as never);
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: false, media: query, onchange: null, addListener: vi.fn(), removeListener: vi.fn(),
+        addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
+      })),
+    });
+  });
+
+  it('all text is at least 4.5:1 and the Join label is AA on copper', async () => {
+    const user = userEvent.setup();
+    renderGate({ activeCount: 4, roomDescription: 'Late group' });
+    await waitFor(() => expect(mockedGet).toHaveBeenCalled());
+    await user.type(screen.getByTestId('room-temp-name'), 'Guest 27');
+    const gate = screen.getByTestId('room-temp-identity-gate');
+    const texts = [...gate.querySelectorAll('p, span, button, label, h1')].filter(
+      (el) => el.children.length === 0 && (el.textContent ?? '').trim().length > 0,
+    );
+    expect(texts.length).toBeGreaterThan(10);
+    for (const el of texts) {
+      expect(contrast(el, theme), `${el.textContent}`).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(contrast(screen.getByTestId('room-temp-enter'), theme)).toBeGreaterThanOrEqual(4.5);
   });
 });
