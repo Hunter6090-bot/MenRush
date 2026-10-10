@@ -67,6 +67,8 @@ jobs:
         run: npm run test:veriff
       - name: Hot-spot counts stay rounded for Free (no exact number)
         run: npm run test:hot-spot-free-counts
+      - name: Travel (dates, coarse centre, one place at a time)
+        run: npm run test:travel
 
   frontend-build:
     name: Frontend build
@@ -170,3 +172,5 @@ jobs:
         run: npm run --if-present test:hide-location-integration
       - name: Community leaves out Ghost and hidden members
         run: npm run --if-present test:community-ghost-hidden
+      - name: Travel (Look around and Plan a trip)
+        run: npm run --if-present test:travel-integration

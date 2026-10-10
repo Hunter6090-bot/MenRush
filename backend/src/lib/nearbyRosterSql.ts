@@ -3,6 +3,7 @@ import { notLocationHiddenFromViewerSql } from './locationHiddenSql';
 import { MAP_PIN_FUZZ_DEFAULT_M } from './mapPinFuzz';
 import { PRESENCE_LIVE_SQL } from './presence';
 import { nearbyLocationPredicate } from './ukIrelandBounds';
+import { LIVE_TRIP_JOIN_SQL, TRAVEL_VISIBLE_RADIUS_M, liveTripExistsSql } from './travel';
 
 export type DiscoveryScope = 'radius' | 'uk_ie';
 
@@ -52,15 +53,43 @@ export function nearbyRosterSelectSql(): string {
     `;
 }
 
+/**
+ * Travel: where a visitor (live trip, alias tt) counts as "in range". Measured
+ * from the viewer's stored origin to the trip's coarse city centre, never to the
+ * visitor's GPS. All scope binds $4 = 0, so every live trip in UK + Ireland counts.
+ */
+export function visitorLocationPredicate(scope: DiscoveryScope): string {
+  if (scope === 'uk_ie') {
+    // Trips are UK + Ireland cities by construction. Binds stay typed for PG.
+    return `AND $1::float8 IS NOT NULL AND $2::float8 IS NOT NULL AND $4::float8 >= 0`;
+  }
+  return `AND ST_DWithin(
+          ST_MakePoint(tt.centre_lng, tt.centre_lat)::geography,
+          ST_MakePoint($2, $1)::geography,
+          GREATEST($4::float8, ${TRAVEL_VISIBLE_RADIUS_M})
+        )`;
+}
+
+/**
+ * `home` (default): members at their stored location. A member with a live trip
+ * is left out here, so they show in one place only (the destination).
+ * `visitors`: members with a live trip near the viewer (needs LIVE_TRIP_JOIN_SQL).
+ */
 export function nearbyRosterWhereSql(
   scope: DiscoveryScope,
   includeE2eFixtures: boolean,
+  mode: 'home' | 'visitors' = 'home',
 ): string {
+  const locationSql =
+    mode === 'visitors'
+      ? visitorLocationPredicate(scope)
+      : `${nearbyLocationPredicate(scope)}
+        AND NOT ${liveTripExistsSql('u.id')}`;
   let whereClause = `
       WHERE u.id != $3
         AND u.photo_url IS NOT NULL
         AND TRIM(u.photo_url) <> ''
-        ${nearbyLocationPredicate(scope)}
+        ${locationSql}
         AND p.is_visible = true
         AND p.is_ghost = false
         AND p.lat IS NOT NULL
@@ -105,6 +134,38 @@ export function nearbyRosterListSql(
         (u.photo_url IS NOT NULL AND u.photo_url NOT LIKE '/avatars/generic/%') DESC,
         p.last_seen DESC NULLS LAST
       LIMIT $${limitIndex} OFFSET $${offsetIndex}
+    `;
+}
+
+/** Visitors in range of the viewer, with the trip's coarse centre and dates. */
+export function nearbyVisitorsListSql(whereClause: string, limitIndex: number): string {
+  const select = nearbyRosterSelectSql().replace(
+    /\n\s*FROM users u\s*\n\s*JOIN profiles p ON u.id = p.user_id\s*$/,
+    `,
+        tt.city_name AS visit_city,
+        tt.centre_lat AS visit_lat,
+        tt.centre_lng AS visit_lng,
+        tt.starts_at AS visit_starts_at,
+        tt.ends_at AS visit_ends_at
+      FROM users u
+      JOIN profiles p ON u.id = p.user_id`,
+  );
+  return `
+      ${select}
+      ${LIVE_TRIP_JOIN_SQL}
+      ${whereClause}
+      ORDER BY ${PRESENCE_LIVE_SQL} DESC, p.last_seen DESC NULLS LAST
+      LIMIT $${limitIndex}
+    `;
+}
+
+export function nearbyVisitorsCountSql(whereClause: string): string {
+  return `
+      SELECT COUNT(*)::int AS total
+      FROM users u
+      JOIN profiles p ON u.id = p.user_id
+      ${LIVE_TRIP_JOIN_SQL}
+      ${whereClause}
     `;
 }
 

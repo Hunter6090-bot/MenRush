@@ -54,7 +54,8 @@ export type PremiumFeature =
   | 'video_intro'
   | 'incognito'
   | 'advanced_filters'
-  | 'premium_rooms';
+  | 'premium_rooms'
+  | 'travel';
 
 export const FREE_LIMITS = {
   likesPerDay: 20,
