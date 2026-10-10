@@ -127,7 +127,11 @@ test.describe('Pride promotion landing', () => {
     await expect(body).toContainText(/Manchester Village Pride/i);
     await expect(body).toContainText(/1 October 2026/i);
     await expect(body).toContainText(/1 January 2027/i);
-    await expect(body).toContainText(/If launch slips/i);
+    await expect(body).toContainText(
+      'For a code redeemed on or after 1 October 2026, Premium runs for 3 months from the day you register.',
+    );
+    await expect(body).toContainText('So if you have an unused Pride code, register by 31 October 2026.');
+    await expect(body).not.toContainText(/If launch slips|booked before launch/i);
     await expect(body).toContainText(/7\.8/i);
     await expect(body).toContainText('BSF26');
     await expect(body).toContainText(/BearScotsFest 2026/i);
