@@ -1,22 +1,24 @@
 /**
- * Idempotent seed for the Oct 1 2026 launch social campaign (`oct1-2026`).
+ * Idempotent seed for the launch pack social campaign (stored campaign id `oct1-2026`).
  *
- *   cd backend && npm run db:seed-social-oct1
+ *   cd backend && npm run db:seed-social-launch-pack
  *
  * Safe to re-run: templates upsert on slug; posts use deterministic UUIDs
  * and INSERT … ON CONFLICT (id) DO NOTHING. Never publishes; never calls
- * platform APIs. See docs/social-oct1-2026.md.
+ * platform APIs. See docs/social-launch-pack.md.
  */
 import 'dotenv/config';
 import { v5 as uuidv5 } from 'uuid';
 import pool, { query } from '../src/db';
 import { renderTemplate, type SocialPlatform } from '../src/services/social.service';
 
+// Stored identifier: post ids (seedId) and Social Studio's campaign filter use it, so it
+// keeps its original value. Template slugs below are stored identifiers too.
 export const CAMPAIGN = 'oct1-2026';
 export const CTA = 'https://menrush.com';
 export const LOGO = 'https://menrush.com/menrush-logo.png';
 export const MEDIA_NOTE = `Official MenRush medallion logo (unmodified): ${LOGO}`;
-export const CREATED_BY = 'seed-social-oct1-2026';
+export const CREATED_BY = 'seed-social-launch-pack';
 
 /** Fixed namespace so seed IDs stay stable across re-runs. */
 const SEED_NS = '6f1c0a10-0c71-4b2e-9a3d-a1b2c3d4e5f6';
@@ -38,7 +40,7 @@ type TemplateSeed = {
 export const TEMPLATES: TemplateSeed[] = [
   {
     slug: 'oct1-launch-signal',
-    name: 'Oct1. Launch signal',
+    name: 'Launch pack. Launch signal',
     category: 'launch-signal',
     platforms: ['x', 'instagram', 'bluesky', 'tiktok'],
     bodyTemplate: `{{hook}}
@@ -61,7 +63,7 @@ export const TEMPLATES: TemplateSeed[] = [
   },
   {
     slug: 'oct1-nearby-rooms',
-    name: 'Oct1. Nearby energy',
+    name: 'Launch pack. Nearby energy',
     category: 'nearby-rooms',
     platforms: ['x', 'instagram', 'bluesky', 'tiktok', 'reddit'],
     bodyTemplate: `{{hook}}
@@ -93,7 +95,7 @@ export const TEMPLATES: TemplateSeed[] = [
   },
   {
     slug: 'oct1-early-premium',
-    name: 'Oct1. Open now, free to join',
+    name: 'Launch pack. Open now, free to join',
     category: 'early-premium',
     platforms: ['x', 'instagram', 'bluesky', 'tiktok'],
     bodyTemplate: `{{hook}}
@@ -124,7 +126,7 @@ export const TEMPLATES: TemplateSeed[] = [
   },
   {
     slug: 'oct1-founder-build',
-    name: 'Oct1. Founder / build in public',
+    name: 'Launch pack. Founder / build in public',
     category: 'founder-build',
     platforms: ['x', 'instagram', 'bluesky', 'tiktok', 'reddit'],
     bodyTemplate: `{{hook}}
@@ -155,7 +157,7 @@ export const TEMPLATES: TemplateSeed[] = [
   },
   {
     slug: 'oct1-trust-discretion',
-    name: 'Oct1. Trust / discretion',
+    name: 'Launch pack. Trust / discretion',
     category: 'trust-discretion',
     platforms: ['x', 'instagram', 'bluesky', 'tiktok', 'reddit'],
     bodyTemplate: `{{hook}}
@@ -978,7 +980,7 @@ export async function insertPosts(slugToId: Map<string, string>): Promise<{
   return { inserted, skipped, total: posts.length };
 }
 
-export async function seedSocialOct1(): Promise<{
+export async function seedSocialLaunchPack(): Promise<{
   templates: number;
   posts: { inserted: number; skipped: number; total: number };
 }> {
@@ -1006,7 +1008,7 @@ export function assertTemplatesRender(): void {
 
 async function main() {
   assertTemplatesRender();
-  const result = await seedSocialOct1();
+  const result = await seedSocialLaunchPack();
   console.log(
     JSON.stringify(
       {

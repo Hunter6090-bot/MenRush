@@ -20,8 +20,8 @@ import path from 'path';
 
 const ROOT = path.join(__dirname, '..', '..');
 const FILES = [
-  'backend/scripts/seed-social-oct1-2026.ts',
-  'social-studio/src/drafts/oct1-2026.json',
+  'backend/scripts/seed-social-launch-pack.ts',
+  'social-studio/src/drafts/launch-pack.json',
 ];
 
 const RULES: Array<{ name: string; re: RegExp }> = [
@@ -38,7 +38,7 @@ const RULES: Array<{ name: string; re: RegExp }> = [
 ];
 
 function scrub(file: string, text: string): string {
-  if (!file.endsWith('seed-social-oct1-2026.ts')) return text;
+  if (!file.endsWith('seed-social-launch-pack.ts')) return text;
   // The tag blocker itself names '#Waitlist' so it can strip it.
   return text.replace(/(const FORBIDDEN_TAGS = \[[^\]]*?)'#Waitlist',?\s*/, '$1');
 }
@@ -65,6 +65,14 @@ assert.ok(
   `seed mentions waitlist outside FORBIDDEN_TAGS: ${rawWaitlistLines.join(' | ')}`,
 );
 assert.ok(/'#Waitlist'/.test(seedRaw), "FORBIDDEN_TAGS still strips '#Waitlist'");
+
+// Internal names are neutral: 'oct1' survives only in the stored ids (campaign
+// 'oct1-2026' and the 'oct1-*' template slugs), which keep existing rows matched.
+const oct1Left = seedRaw
+  .replace(/'oct1-[a-z0-9-]+'/g, '')
+  .replace(/`oct1-2026`/g, '')
+  .match(/oct1/gi);
+assert.ok(!oct1Left, `seed still uses 'oct1' outside stored ids (${oct1Left?.length} left)`);
 
 // Self-check: the rules catch what they are for.
 for (const [sample, rule] of [
@@ -119,7 +127,7 @@ async function postChecks() {
   checkPosts('studio pack', pack.posts.map((p) => ({ where: p.id, body: p.body })));
 
   // The seed module only builds posts here; it is never run and nothing touches the DB.
-  const seed = await import('./seed-social-oct1-2026');
+  const seed = await import('./seed-social-launch-pack');
   checkPosts('seed', seed.buildAllPosts().map((p) => ({ where: p.key, body: p.body })));
   const defaults: Post[] = [];
   for (const t of seed.TEMPLATES) {
