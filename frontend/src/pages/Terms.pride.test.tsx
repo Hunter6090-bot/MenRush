@@ -18,5 +18,9 @@ describe('Terms 7.7 Pride cutoff', () => {
     expect(text).toMatch(/refused from 1 November 2026/);
     expect(text).not.toMatch(/beta/i);
     expect(text).not.toMatch(/[\u2013\u2014]/);
+    expect(text).toMatch(/Pride replaces the 30 days of Premium in clause 7\.2/);
+    expect(text).not.toMatch(/waitlist/i);
+    // 7.2, 7.8 and 7.9 too: the 30 days of Premium, no waitlist wording anywhere in Terms.
+    expect(document.body.textContent ?? '').not.toMatch(/waitlist/i);
   });
 });

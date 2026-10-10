@@ -391,12 +391,10 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>7.2</Strong> Waitlist members who joined before our public launch are
-                  entitled to <Strong>30 days of Premium free</Strong>, as stated at the time of
-                  sign-up, unless a valid promotional offer (including a Pride /{' '}
-                  <span className="font-mono tracking-wide">PRIDE</span> promo code) grants a
-                  longer free Premium period instead. Where such a promo applies, it replaces the
-                  30-day waitlist reward — it is not added on top.
+                  <Strong>7.2</Strong> Members who registered before 1 October 2026 received{' '}
+                  <Strong>30 days of Premium free</Strong>, unless a valid promotional code
+                  (including a Pride code) granted a longer free Premium period instead. Where
+                  such a code applies, it replaces the 30 days. It is not added on top.
                 </>,
               )}
               {para(
@@ -439,8 +437,8 @@ export const Terms = () => {
                   That covers both kinds: Brighton Pride personal promo codes sent by email, and
                   MenRush Pride invites (MENRUSH codes) from the menrush.com/pride claim form. The
                   claim form closes at the same time. Redeeming a valid Pride code grants 3 months of
-                  Premium. One grant per person. No stacking. Pride replaces the 30-day
-                  waitlist Premium gift in clause 7.2. It does not add to that gift. Cannot be
+                  Premium. One grant per person. No stacking. Pride replaces the 30 days of
+                  Premium in clause 7.2. It does not add to them. Cannot be
                   combined with the{' '}
                   <span className="font-mono tracking-wide">BSF26</span> promo in clause 7.8 or the{' '}
                   <span className="font-mono tracking-wide">MR3FREE</span> promo in clause 7.9. 18+
@@ -460,8 +458,8 @@ export const Terms = () => {
                   Europe/London, Premium starts 1 October 2026. If redeemed on 1 October, Premium
                   starts 1 October. If redeemed on 2, 3, 4 or 5 October Europe/London, Premium
                   starts that calendar day. One grant per person. No stacking. Does not stack with
-                  Pride (clause 7.7) or MR3FREE (clause 7.9). Replaces the 30-day waitlist Premium
-                  gift in clause 7.2. It does not add to that gift. 18+ only. You will not be billed
+                  Pride (clause 7.7) or MR3FREE (clause 7.9). Replaces the 30 days of Premium in
+                  clause 7.2. It does not add to them. 18+ only. You will not be billed
                   for this offer. Promoter: Bronze Apps UK Limited trading as MenRush.
                 </>,
               )}
@@ -475,8 +473,8 @@ export const Terms = () => {
                   Redeeming a valid code grants 3 months of Premium free, unlocked from day one
                   (starting the registration calendar day). One grant per account. No stacking.
                   Does not cancel 12-month promises made to early members. Does not wipe existing Premium. Does not
-                  stack with Pride (clause 7.7) or BSF26 (clause 7.8). Replaces the 30-day waitlist
-                  Premium gift in clause 7.2. It does not add to that gift. 18+ only. You will not
+                  stack with Pride (clause 7.7) or BSF26 (clause 7.8). Replaces the 30 days of
+                  Premium in clause 7.2. It does not add to them. 18+ only. You will not
                   be billed for this offer. Promoter: Bronze Apps UK Limited trading as MenRush.
                 </>,
               )}
