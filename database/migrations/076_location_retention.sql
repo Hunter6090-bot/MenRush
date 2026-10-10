@@ -8,6 +8,11 @@
 --    New location writes set it. Existing rows stay NULL until the gated
 --    worker backfills them from last_seen; until then the stale sweep falls
 --    back to last_seen itself.
+-- The runner wraps this file in one transaction. Give up after 5 s instead of
+-- queueing behind a long-held lock on these busy tables (and blocking every
+-- query queued behind the ALTER); a failed deploy just retries.
+SET LOCAL lock_timeout = '5s';
+
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS location_updated_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_profiles_location_updated_at
   ON profiles (location_updated_at) WHERE lat IS NOT NULL OR location IS NOT NULL;

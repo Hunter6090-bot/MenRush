@@ -197,17 +197,20 @@ export const locationRetentionService = {
    * user row goes (the FKs cascade too; this keeps it explicit and covers rooms,
    * whose created_by is SET NULL rather than cascaded).
    */
-  async eraseAccountLocationData(userId: string) {
-    await query(`DELETE FROM map_feed_messages WHERE sender_id = $1`, [userId]);
-    await query(`DELETE FROM community_posts WHERE user_id = $1`, [userId]);
+  async eraseAccountLocationData(
+    userId: string,
+    q: (text: string, params?: unknown[]) => Promise<unknown> = (text, params) => query(text, params as any[]),
+  ) {
+    await q(`DELETE FROM map_feed_messages WHERE sender_id = $1`, [userId]);
+    await q(`DELETE FROM community_posts WHERE user_id = $1`, [userId]);
     // Chat location shares sent or received by the member.
-    await query(
+    await q(
       `DELETE FROM messages WHERE media_type = 'location' AND (sender_id = $1 OR receiver_id = $1)`,
       [userId],
     );
     // Member-made rooms survive for the other members, without the point the
     // creator set. Official, venue and event rooms keep their venue location.
-    await query(
+    await q(
       `UPDATE rooms SET location = NULL, lat = NULL, lng = NULL
         WHERE created_by = $1
           AND is_official = FALSE
@@ -216,7 +219,7 @@ export const locationRetentionService = {
           AND kind <> 'event'`,
       [userId],
     );
-    await query(
+    await q(
       `UPDATE profiles
           SET lat = NULL, lng = NULL, location = NULL,
               home_lat = NULL, home_lng = NULL, home_set_at = NULL,

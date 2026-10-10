@@ -163,6 +163,7 @@ async function main() {
       'migration 076 changes no data (no rounding, no backfill)',
     );
     assert.ok(!/\bUPDATE\b/i.test(migration.replace(/--.*$/gm, '')), 'migration 076 has no UPDATE');
+    assert.ok(/SET LOCAL lock_timeout = '5s'/.test(migration), 'migration 076 sets a lock_timeout');
     await locationRetentionService.runPurge(new Date());
     p = await profile(legacy);
     assert.deepStrictEqual([Number(p.home_lat), Number(p.home_lng)], [51.51, -0.13], 'backfill rounds home');
@@ -377,6 +378,39 @@ async function main() {
     process.env.LOCATION_PURGE_ENABLED = 'true';
     await query(`DELETE FROM hot_spots WHERE id = $1`, [spotId]);
     console.log('✓ optional: check-ins deleted 24 h after they end (own flag, off by default)');
+
+    // ── 5a. Account deletion is one transaction ──────────────────────────────
+    {
+      const stuck = await makeUser('LRP Stuck', { lat: LAT, lng: LNG });
+      const stuckPost = await mf(stuck, new Date());
+      await query(
+        `INSERT INTO trusted_devices (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 days')`,
+        [stuck, `lrp-${stuck}`],
+      );
+      // Make the final DELETE FROM users fail for this member only.
+      await query(`CREATE OR REPLACE FUNCTION lrp_block_delete() RETURNS trigger AS $$
+        BEGIN
+          IF OLD.id = '${stuck}'::uuid THEN RAISE EXCEPTION 'lrp: delete blocked'; END IF;
+          RETURN OLD;
+        END $$ LANGUAGE plpgsql`);
+      await query(`CREATE TRIGGER lrp_block_delete BEFORE DELETE ON users FOR EACH ROW EXECUTE FUNCTION lrp_block_delete()`);
+      try {
+        await assert.rejects(
+          () => authService.deleteAccount(stuck, { current_password: PASSWORD, confirmation: 'DELETE' } as any),
+          /delete blocked/,
+        );
+      } finally {
+        await query(`DROP TRIGGER IF EXISTS lrp_block_delete ON users`);
+        await query(`DROP FUNCTION IF EXISTS lrp_block_delete()`);
+      }
+      assert.ok(await mfRow(stuckPost), 'failed deletion: map feed post still there (rolled back)');
+      assert.strictEqual(Number((await profile(stuck)).lat), LAT, 'failed deletion: profile location untouched');
+      const dev = await query(`SELECT revoked_at FROM trusted_devices WHERE user_id = $1`, [stuck]);
+      assert.ok(dev.rows.every((r: any) => r.revoked_at === null), 'failed deletion: trusted devices not revoked');
+      await authService.deleteAccount(stuck, { current_password: PASSWORD, confirmation: 'DELETE' } as any);
+      assert.strictEqual((await query(`SELECT 1 FROM users WHERE id = $1`, [stuck])).rows.length, 0, 'retry succeeds');
+      console.log('✓ account deletion is one transaction: a failure rolls every step back');
+    }
 
     // ── 5. Account deletion ───────────────────────────────────────────────────
     const leaver = await makeUser('LRP Leaver', { lat: LAT, lng: LNG });

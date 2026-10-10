@@ -1095,19 +1095,29 @@ export const authService = {
       throw new Error('Type DELETE to confirm account deletion');
     }
 
-    try {
-      const { trustedDeviceService } = await import('./trusted-device.service');
-      await trustedDeviceService.revokeAll(userId);
-    } catch {
-      /* best-effort */
-    }
-
-    // Location rows first (map feed, Community, chat location shares, room
-    // points, profile points); the FKs also cascade from users.
+    // One transaction: either every step lands (devices revoked, location
+    // rows erased, user deleted) or none does, so a failure never leaves a
+    // half-erased account behind.
     const { locationRetentionService } = await import('./location-retention.service');
-    await locationRetentionService.eraseAccountLocationData(userId);
-
-    await query(`DELETE FROM users WHERE id = $1`, [userId]);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`SET LOCAL lock_timeout = '5s'`);
+      await client.query(
+        `UPDATE trusted_devices SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`,
+        [userId],
+      );
+      // Location rows first (map feed, Community, chat location shares, room
+      // points, profile points); the FKs also cascade from users.
+      await locationRetentionService.eraseAccountLocationData(userId, (text, params) => client.query(text, params));
+      await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
     return { ok: true };
   },
 };
