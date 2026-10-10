@@ -246,6 +246,21 @@ const SPOT_SELECT_COLS = `
           c.name AS category_name,
           c.icon AS category_icon`;
 
+/**
+ * A check-in only adds to a spot's (or event's) live count while its member is
+ * neither in Ghost nor hidden. Read at query time, so leaving Ghost while still
+ * checked in counts them again. Members with no profile row count, as before.
+ * Ghost members can still check in for themselves (is_checked_in stays true),
+ * but nobody, free or Premium, sees them in the number, themselves included.
+ */
+export function countableCheckinSql(ciAlias: string): string {
+  return `NOT EXISTS (
+                SELECT 1 FROM profiles gp
+                 WHERE gp.user_id = ${ciAlias}.user_id
+                   AND (gp.is_ghost IS TRUE OR gp.is_visible IS FALSE)
+               )`;
+}
+
 const CHECKIN_INTERVAL_SQL = `(
   CASE WHEN c.slug IN ('parks-trails', 'open-spaces', 'parking') THEN '${OUTDOOR_CHECKIN_TTL_HOURS} hours'::interval
        ELSE '${ACTIVE_CHECKIN_TTL_HOURS} hours'::interval END
@@ -360,6 +375,7 @@ export const hotSpotsService = {
              WHERE ci.spot_id = hs.id
                AND ci.checked_out_at IS NULL
                AND ci.checked_in_at > NOW() - ${CHECKIN_INTERVAL_SQL}
+               AND ${countableCheckinSql('ci')}
           ) AS live_count_exact,
           EXISTS (
             SELECT 1 FROM hot_spot_checkins mine
@@ -416,6 +432,7 @@ export const hotSpotsService = {
              WHERE ci.spot_id = hs.id
                AND ci.checked_out_at IS NULL
                AND ci.checked_in_at > NOW() - ${CHECKIN_INTERVAL_SQL}
+               AND ${countableCheckinSql('ci')}
           ) AS live_count_exact,
           EXISTS (
             SELECT 1 FROM hot_spot_checkins mine
@@ -492,10 +509,18 @@ export const hotSpotsService = {
       [spotId, userId, anonymous],
     );
 
-    await query(
-      `UPDATE hot_spots SET last_activity_at = NOW() WHERE id = $1`,
-      [spotId],
+    // A Ghost / hidden check-in does not count, so it must not freshen the spot either
+    // (last_activity_at would otherwise show that someone just arrived).
+    const me = await query(
+      `SELECT (is_ghost IS TRUE OR is_visible IS FALSE) AS unseen FROM profiles WHERE user_id = $1`,
+      [userId],
     );
+    if (!me.rows[0]?.unseen) {
+      await query(
+        `UPDATE hot_spots SET last_activity_at = NOW() WHERE id = $1`,
+        [spotId],
+      );
+    }
 
     return this.getSpot(userId, spotId);
   },
