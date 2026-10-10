@@ -6,12 +6,22 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const terms = readFileSync(resolve(__dirname, './Terms.tsx'), 'utf8').replace(/\s+/g, ' ');
+// Source text with the mail link component read as its text, so wording checks stay word for word.
+const terms = readFileSync(resolve(__dirname, './Terms.tsx'), 'utf8')
+  .replace(/\s+/g, ' ')
+  .replace(/\{' '\}/g, ' ')
+  .replace(/<MailLink \/>/g, 'support@menrush.com')
+  .replace(/ {2,}/g, ' ');
 
 const S74 =
-  '7.4</Strong> To buy Premium by manual invoice, you pay the invoice by bank transfer using the payment reference shown on it. The invoice shows the full amount you pay us. Premium starts once we have confirmed your payment, and we will tell you when it has started. If your payment has not been matched, email support@menrush.com with your payment reference.';
-const S76A =
-  '7.6A</Strong> You can cancel your Premium purchase within 14 days of buying it. When you buy, we ask whether you want Premium to start as soon as your payment is confirmed. If you choose that and then cancel within the 14 days, we refund what you paid less an amount for the days of Premium you have had. To cancel, email support@menrush.com with your invoice reference. We refund you within 14 days of you telling us, to the account you paid from.';
+  '7.4</Strong> To buy Premium by manual invoice, you pay the invoice by bank transfer using the payment reference shown on it. The invoice shows the full amount you pay us. When Premium starts depends on the choice you make when you buy, as set out in section 7.6A. We will tell you when your Premium has started. If your payment has not been matched, email support@menrush.com with your payment reference.';
+/** Legal's 7.6A, in its four parts (intro, (a), (b), how to cancel). */
+const S76A_PARTS = [
+  '7.6A</Strong> You can cancel your Premium purchase within 14 days of buying it. When you buy, you choose when Premium starts:',
+  '(a) If you tick the box asking for Premium to start straight away, it starts once we have confirmed your payment. If you then cancel within the 14 days, we refund what you paid less an amount for the days of Premium you have had.',
+  '(b) If you leave the box unticked, Premium starts when the 14 days end, or when we confirm your payment if that is later. If you cancel within the 14 days, we refund what you paid in full.',
+  'To cancel, email support@menrush.com with your invoice reference. We refund you within 14 days of you telling us, to the account you paid from.',
+];
 
 const S73 =
   '7.3</Strong> Card payments are not available yet. Before card payment opens, we will update these Terms and tell you who processes card payments. For now, you can buy Premium by manual invoice from the Premium page.';
@@ -20,7 +30,7 @@ const S75 =
   '7.5</Strong> Prices are shown in pounds sterling (GBP). The price shown on your invoice is the full amount you pay us, and if VAT applies it is shown there. If we change the price of Premium, the new price applies only to Premium you buy after the change, and you will see it before you pay.';
 
 const S8: Array<[string, string]> = [
-  ['8.1', 'You can cancel a Premium purchase within 14 days of buying it, as set out in section 7.6A. If you asked for Premium to start as soon as your payment was confirmed, your refund is reduced for the days of Premium you have had. Otherwise you get a full refund.'],
+  ['8.1', 'You can cancel a Premium purchase within 14 days of buying it, as set out in section 7.6A. If you asked for Premium to start straight away, your refund is reduced for the days of Premium you have had. If you did not, you get a full refund.'],
   ['8.2', 'After those 14 days, we do not refund the rest of a Premium period you have started, unless the law gives you a right to a refund or we have made a mistake.'],
   ['8.3', 'If Premium does not work as described, or we charged you wrongly, please email support@menrush.com and we will put it right, which may include a refund. Nothing in these Terms affects your legal rights.'],
   ['8.4', 'We send refunds to the account you paid from, within 14 days of agreeing them.'],
@@ -86,8 +96,14 @@ describe('Terms section 7 manual invoice wording', () => {
     expect(terms).not.toMatch(/recurring billing/i);
   });
 
-  it('7.6A is Legal wording exactly and sits right after 7.6', () => {
-    expect(terms).toContain(S76A);
+  it('7.6A is Legal wording exactly, in order, and sits right after 7.6', () => {
+    let at = -1;
+    for (const part of S76A_PARTS) {
+      const i = terms.indexOf(part);
+      expect(i, part).toBeGreaterThan(at);
+      at = i;
+    }
+    expect(terms).not.toMatch(/we ask whether you want Premium to start/);
     const i76 = terms.indexOf('<Strong>7.6</Strong>');
     const i76a = terms.indexOf('<Strong>7.6A</Strong>');
     const i77 = terms.indexOf('<Strong>7.7</Strong>');
@@ -99,7 +115,15 @@ describe('Terms section 7 manual invoice wording', () => {
   it('the /premium tick names the same choice 7.6A describes', () => {
     const premium = readFileSync(resolve(__dirname, './Premium.tsx'), 'utf8');
     expect(premium).toContain(
-      'Start my Premium as soon as my payment is confirmed. I understand that if I cancel within 14 days, my refund will be reduced for the days of Premium I have had.',
+      'Start my Premium as soon as my payment is confirmed. I understand that if I cancel within 14 days, my refund will be reduced for the days of Premium I have had. If I leave this unticked, Premium starts after the 14 day cancellation period.',
     );
+  });
+
+  it('every support@menrush.com in the Terms is a mailto link', () => {
+    const raw = readFileSync(resolve(__dirname, './Terms.tsx'), 'utf8');
+    const body = raw.slice(raw.indexOf('export const Terms'));
+    const bare = body.replace(/<MailLink \/>/g, '').match(/support@menrush\.com/g) ?? [];
+    expect(bare).toHaveLength(0);
+    expect((body.match(/<MailLink \/>/g) ?? []).length).toBeGreaterThanOrEqual(5);
   });
 });

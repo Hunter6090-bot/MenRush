@@ -59,6 +59,20 @@ const Strong = ({ children }: { children: React.ReactNode }) => (
   <strong className="font-semibold text-[#f0e4cc]">{children}</strong>
 );
 
+/**
+ * support@menrush.com as a mailto link. Inline in body text, so the 44px tap
+ * area comes from an invisible ::after box rather than padding (no reflow).
+ */
+const MailLink = () => (
+  <a
+    href="mailto:support@menrush.com"
+    data-testid="terms-support-mail"
+    className="relative text-[#c8861c] underline underline-offset-2 transition-colors hover:text-[#d9a038] after:absolute after:-inset-x-1 after:-inset-y-3 after:min-h-[44px] after:content-['']"
+  >
+    support@menrush.com
+  </a>
+);
+
 const A = ({ href, children }: { href: string; children: React.ReactNode }) => (
   <a
     href={href}
@@ -410,9 +424,9 @@ export const Terms = () => {
                 <>
                   <Strong>7.4</Strong> To buy Premium by manual invoice, you pay the invoice by bank
                   transfer using the payment reference shown on it. The invoice shows the full amount
-                  you pay us. Premium starts once we have confirmed your payment, and we will tell you
-                  when it has started. If your payment has not been matched, email
-                  support@menrush.com with your payment reference.
+                  you pay us. When Premium starts depends on the choice you make when you buy, as set
+                  out in section 7.6A. We will tell you when your Premium has started. If your payment
+                  has not been matched, email <MailLink /> with your payment reference.
                 </>,
               )}
               {para(
@@ -433,10 +447,28 @@ export const Terms = () => {
               {para(
                 <>
                   <Strong>7.6A</Strong> You can cancel your Premium purchase within 14 days of buying
-                  it. When you buy, we ask whether you want Premium to start as soon as your payment
-                  is confirmed. If you choose that and then cancel within the 14 days, we refund what
-                  you paid less an amount for the days of Premium you have had. To cancel, email
-                  support@menrush.com with your invoice reference. We refund you within 14 days of
+                  it. When you buy, you choose when Premium starts:
+                </>,
+              )}
+              <div className="mt-2 space-y-2 pl-5" data-testid="terms-7-6a-choices">
+                {para(
+                  <>
+                    (a) If you tick the box asking for Premium to start straight away, it starts once
+                    we have confirmed your payment. If you then cancel within the 14 days, we refund
+                    what you paid less an amount for the days of Premium you have had.
+                  </>,
+                )}
+                {para(
+                  <>
+                    (b) If you leave the box unticked, Premium starts when the 14 days end, or when we
+                    confirm your payment if that is later. If you cancel within the 14 days, we refund
+                    what you paid in full.
+                  </>,
+                )}
+              </div>
+              {para(
+                <>
+                  To cancel, email <MailLink /> with your invoice reference. We refund you within 14 days of
                   you telling us, to the account you paid from.
                 </>,
               )}
@@ -496,9 +528,9 @@ export const Terms = () => {
               {para(
                 <>
                   <Strong>8.1</Strong> You can cancel a Premium purchase within 14 days of buying it,
-                  as set out in section 7.6A. If you asked for Premium to start as soon as your
-                  payment was confirmed, your refund is reduced for the days of Premium you have had.
-                  Otherwise you get a full refund.
+                  as set out in section 7.6A. If you asked for Premium to start straight away, your
+                  refund is reduced for the days of Premium you have had. If you did not, you get a
+                  full refund.
                 </>,
               )}
               {para(
@@ -511,8 +543,8 @@ export const Terms = () => {
               {para(
                 <>
                   <Strong>8.3</Strong> If Premium does not work as described, or we charged you
-                  wrongly, please email support@menrush.com and we will put it right, which may
-                  include a refund. Nothing in these Terms affects your legal rights.
+                  wrongly, please email <MailLink /> and we will put it right, which may include a refund.
+                  Nothing in these Terms affects your legal rights.
                 </>,
               )}
               {para(
@@ -639,7 +671,7 @@ export const Terms = () => {
                 <>
                   <Strong>13.1</Strong> You may delete your account at any time through your
                   account settings or by contacting{' '}
-                  <A href="mailto:support@menrush.com">support@menrush.com</A>.
+                  <MailLink />.
                 </>,
               )}
               {para(
@@ -730,7 +762,7 @@ export const Terms = () => {
                     Support
                   </dt>
                   <dd>
-                    <A href="mailto:support@menrush.com">support@menrush.com</A>
+                    <MailLink />
                   </dd>
 
                   <dt className="font-semibold uppercase tracking-[0.12em] text-[#c8861c]/90 text-xs sm:text-[11px]">
