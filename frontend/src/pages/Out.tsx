@@ -281,22 +281,22 @@ export function Out() {
                 Nothing in this chip yet.
               </p>
             ) : null}
-            <div className="flex flex-wrap gap-2 pt-2">
+            <div className="flex flex-wrap gap-2 pt-2" data-testid="out-footer-links">
               <Link
                 to="/hot-spots"
-                className="inline-flex min-h-[44px] items-center text-[15px] font-bold text-[var(--copper)] underline-offset-2 hover:underline"
+                className="inline-flex min-h-[44px] items-center text-[15px] font-bold text-[var(--nn-accent-text)] underline-offset-2 hover:underline"
               >
                 Full Cruise map
               </Link>
               <Link
                 to="/events"
-                className="inline-flex min-h-[44px] items-center text-[15px] font-bold text-[var(--copper)] underline-offset-2 hover:underline"
+                className="inline-flex min-h-[44px] items-center text-[15px] font-bold text-[var(--nn-accent-text)] underline-offset-2 hover:underline"
               >
                 Full Events
               </Link>
               <Link
                 to="/stream"
-                className="inline-flex min-h-[44px] items-center text-[15px] font-bold text-[var(--copper)] underline-offset-2 hover:underline"
+                className="inline-flex min-h-[44px] items-center text-[15px] font-bold text-[var(--nn-accent-text)] underline-offset-2 hover:underline"
               >
                 Community feed
               </Link>
