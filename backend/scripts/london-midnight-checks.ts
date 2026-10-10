@@ -106,9 +106,16 @@ test('Pride grant on time ends at the end of 1 Jan 2027 London, matching Terms 7
   assert.strictEqual(booked.premiumEnd.toISOString(), '2027-01-01T23:59:59.999Z');
   assert.strictEqual(europeLondonYmd(booked.premiumEnd), '2027-01-01');
   assert.notStrictEqual(europeLondonYmd(new Date(booked.premiumEnd.getTime() + 1)), '2027-01-01');
-  // Terms wording still says so.
-  const terms = readFileSync(path.resolve(__dirname, '../../frontend/src/pages/Terms.tsx'), 'utf8');
-  assert.match(terms, /On-time open 1 October 2026 ends 1 January 2027\./);
+  // Terms wording still says so. Tolerant of the #364 rewording: either
+  // 'On-time open 1 October 2026 ends 1 January 2027.' (before #364) or
+  // 'Premium runs from 1 October 2026 to 1 January 2027' (after #364).
+  // JSX can wrap the sentence, so whitespace is collapsed first.
+  const terms = readFileSync(path.resolve(__dirname, '../../frontend/src/pages/Terms.tsx'), 'utf8').replace(/\s+/g, ' ');
+  assert.match(
+    terms,
+    /(?:On-time open 1 October 2026 ends|Premium runs from 1 October 2026 to) 1 January 2027\b/,
+    'Terms 7.7 must still say the on-time Pride grant runs from 1 October 2026 to 1 January 2027',
+  );
 });
 
 test('Pride grant redeemed after launch ends at the end of the London anniversary day', () => {
