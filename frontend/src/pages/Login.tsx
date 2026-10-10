@@ -20,6 +20,7 @@ import {
 import { FEATURES } from '../lib/featureFlags';
 import { PasswordInput } from '../components/PasswordInput';
 import { loginErrorMessage } from '../lib/authErrors';
+import { withTrackingParams } from '../lib/trackingParams';
 import {
   clearDeviceTrustToken,
   getDeviceTrustToken,
@@ -117,7 +118,8 @@ export const Login = () => {
     }
   };
 
-  const registerPath = '/register';
+  // Keep ref (referral code) and utm_* when a visitor goes on to create an account.
+  const registerPath = withTrackingParams('/register', searchParams);
 
   return (
     <PublicAuthShell>

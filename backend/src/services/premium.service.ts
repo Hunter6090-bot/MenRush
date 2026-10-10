@@ -3,6 +3,16 @@ import pool, { query } from '../db';
 import { isInviteRequired } from './invite-code.service';
 import { isAlwaysPremiumName } from '../lib/always-premium';
 import { registerTravelPremiumIncluded } from '../lib/travel';
+import {
+  endAfterPaidStops,
+  isRefundLikeEvent,
+  paidEndWithEarnedMonths,
+  placeEarnedGrant,
+  referralExtendedEnd,
+} from './referral-earned-months';
+
+// Kept here for existing importers; the rule lives in referral-earned-months.
+export { referralExtendedEnd };
 
 type Queryable = PoolClient | typeof pool;
 
@@ -198,46 +208,25 @@ export const premiumService = {
   },
 
   /**
-   * Entitlement grant from 3 verified referrals → 1 month Premium.
-   * Never strips always-Premium accounts (BOA90, Bigbear25, HantsBear).
-   * Extends finite windows; leaves open-ended (null until) alone.
+   * Referral unlock: place one earned grant (see referral-earned-months).
+   * Open-ended Premium is never shortened, for anyone: the month is banked.
+   * While Premium is free for everyone the month is banked too, and starts
+   * when free Premium ends. With an active paid subscription it is stacked on
+   * top of the paid period. Otherwise it is added after the current end.
+   * Caller holds the referrer row lock in `client`'s transaction.
    */
   async grantReferralMonth(
     userId: string,
+    grantId: string,
     months = 1,
     now = new Date(),
-  ): Promise<{ premiumUntil: Date | null; skippedLifetime: boolean }> {
-    const row = await query(
-      `SELECT name, is_premium, premium_until, premium_starts_at
-         FROM users WHERE id = $1`,
-      [userId],
-    );
-    const user = row.rows[0];
-    if (!user) return { premiumUntil: null, skippedLifetime: false };
-
-    const always = isAlwaysPremiumName(user.name);
-    const currentUntil = user.premium_until ? new Date(user.premium_until) : null;
-
-    // Open-ended Premium (typical for always-Premium owners): keep forever.
-    if (always && Boolean(user.is_premium) && !currentUntil) {
-      return { premiumUntil: null, skippedLifetime: true };
-    }
-
-    const base =
-      currentUntil && currentUntil.getTime() > now.getTime() ? currentUntil : now;
-    const premiumUntil = new Date(base.getTime() + months * 30 * 24 * 60 * 60 * 1000);
-
-    await query(
-      `UPDATE users
-       SET is_premium = TRUE,
-           premium_tier = 'premium',
-           premium_starts_at = COALESCE(premium_starts_at, $2),
-           premium_until = $3,
-           updated_at = NOW()
-       WHERE id = $1`,
-      [userId, now, premiumUntil],
-    );
-    return { premiumUntil, skippedLifetime: false };
+    client?: PoolClient,
+  ): Promise<{ premiumUntil: Date | null; state: 'banked' | 'stacked' | 'applied' }> {
+    const db: Queryable = client ?? pool;
+    return placeEarnedGrant(db, userId, grantId, months, {
+      freeForEveryone: this.isBetaPremiumFree(),
+      now,
+    });
   },
 
   /** Parse billed amount from a webhook body; fallback to list price. */
@@ -353,7 +342,11 @@ export const premiumService = {
       ],
     );
 
-    await syncUserEntitlements(event.userId, tier, true, periodEnd);
+    // Earned referral months ride on top of the paid period (never overwritten).
+    const until = await paidEndWithEarnedMonths(pool, event.userId, periodEnd, {
+      freeForEveryone: this.isBetaPremiumFree(),
+    });
+    await syncUserEntitlements(event.userId, tier, true, until);
 
     // Referral commission — record only; never send money / call payout rails.
     try {
@@ -394,7 +387,12 @@ export const premiumService = {
       [event.userId, periodEnd, event.subscriptionId, JSON.stringify(event.raw)],
     );
 
-    await syncUserEntitlements(event.userId, tier, true, periodEnd);
+    // Earned referral months ride on top of the new paid period end, so a
+    // renewal never overwrites them (QC #355).
+    const until = await paidEndWithEarnedMonths(pool, event.userId, periodEnd, {
+      freeForEveryone: this.isBetaPremiumFree(),
+    });
+    await syncUserEntitlements(event.userId, tier, true, until);
 
     try {
       const { referralService } = await import('./referral.service');
@@ -424,12 +422,31 @@ export const premiumService = {
       return { ok: true, userId: event.userId, preserved: true };
     }
 
+    const last = await query(
+      `SELECT current_period_end FROM subscriptions
+       WHERE user_id = $1
+       ORDER BY (status = 'active') DESC, created_at DESC LIMIT 1`,
+      [event.userId],
+    );
+
     await query(
       `UPDATE subscriptions
        SET status = 'expired', updated_at = NOW()
        WHERE user_id = $1 AND status = 'active'`,
       [event.userId],
     );
+
+    // Earned referral months survive the paid subscription stopping: they run
+    // on after the paid period end (cancel / expiry), or from now when the
+    // paid period is void (refund / chargeback).
+    const now = new Date();
+    const periodEnd = last.rows[0]?.current_period_end ? new Date(last.rows[0].current_period_end) : null;
+    const base = isRefundLikeEvent(event.eventType) || !periodEnd ? now : periodEnd;
+    const keepUntil = await endAfterPaidStops(pool, event.userId, base, now);
+    if (keepUntil) {
+      await syncUserEntitlements(event.userId, 'premium', true, keepUntil);
+      return { ok: true, userId: event.userId, earnedMonthsUntil: keepUntil };
+    }
 
     await syncUserEntitlements(event.userId, 'free', false, null);
     // Travel: a lapsed member's trip ends now (queries already stop showing it).

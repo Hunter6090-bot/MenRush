@@ -42,6 +42,8 @@ vi.mock('./CommunityPostComments', () => ({
   CommunityPostComments: () => <div data-testid="mock-comments" />,
 }));
 
+import { useAuthStore } from '../hooks/store';
+
 function renderFeed() {
   return render(
     <MemoryRouter>
@@ -53,6 +55,9 @@ function renderFeed() {
 describe('CommunityFeed Mention Autocomplete', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Own-post controls key off the signed-in user (these two cases were parked
+    // failures on main because no user was set).
+    useAuthStore.setState({ user: { id: 'u-me', name: 'Me' } as never });
     getMe.mockResolvedValue({
       data: {
         id: 'u-me',
@@ -262,8 +267,12 @@ describe('CommunityFeed Mention Autocomplete', () => {
     renderFeed();
 
     // Verify edit button is only visible on own post
-    expect(await screen.findByTestId('community-post-edit-post-mine-1')).toBeInTheDocument();
-    expect(screen.queryByTestId('community-post-edit-post-other-2')).not.toBeInTheDocument();
+    // Edit / Delete sit under the ••• menu on the member's own post only.
+    const more = await screen.findByTestId('community-post-more-post-mine-1');
+    expect(screen.queryByTestId('community-post-more-post-other-2')).not.toBeInTheDocument();
+    expect(more).toHaveClass('h-11', 'w-11');
+    await user.click(more);
+    expect(await screen.findByTestId('community-post-edit-post-mine-1')).toHaveClass('min-h-[44px]', 'text-[15px]');
 
     // Click edit on own post
     await user.click(screen.getByTestId('community-post-edit-post-mine-1'));
@@ -289,10 +298,21 @@ describe('CommunityFeed Mention Autocomplete', () => {
     await user.click(screen.getByTestId('community-post-edit-save-post-mine-1'));
 
     await waitFor(() => {
-      expect(updatePost).toHaveBeenCalledWith('post-mine-1', 'Updated @Tropics Day Spa ');
+      // The component trims before saving.
+      expect(updatePost).toHaveBeenCalledWith('post-mine-1', 'Updated @Tropics Day Spa');
     });
 
-    expect(await screen.findByText('Updated @Tropics Day Spa ')).toBeInTheDocument();
+    // The mention renders as its own element, so match on the post body's text.
+    expect(await screen.findByText((_, el) => el?.tagName === 'P' && el.textContent?.trim() === 'Updated @Tropics Day Spa')).toBeInTheDocument();
+    // Save returns focus to the post's ••• trigger.
+    await waitFor(() => expect(screen.getByTestId('community-post-more-post-mine-1')).toHaveFocus());
+
+    // Edit then Cancel also returns focus to the ••• trigger.
+    await user.click(screen.getByTestId('community-post-more-post-mine-1'));
+    await user.click(screen.getByTestId('community-post-edit-post-mine-1'));
+    await screen.findByTestId('community-post-edit-input-post-mine-1');
+    await user.click(screen.getByTestId('community-post-edit-cancel-post-mine-1'));
+    await waitFor(() => expect(screen.getByTestId('community-post-more-post-mine-1')).toHaveFocus());
   });
 
   it('allows author to delete own post with confirmation', async () => {
@@ -319,6 +339,7 @@ describe('CommunityFeed Mention Autocomplete', () => {
     const user = userEvent.setup();
     renderFeed();
 
+    await user.click(await screen.findByTestId('community-post-more-post-mine-1'));
     const deleteBtn = await screen.findByTestId('community-post-delete-post-mine-1');
     await user.click(deleteBtn);
 

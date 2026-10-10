@@ -75,6 +75,8 @@ jobs:
         run: npm run test:veriff
       - name: Hot-spot counts stay rounded for Free (no exact number)
         run: npm run test:hot-spot-free-counts
+      - name: Prompt prefs (auth, allowlist, no-store)
+        run: npm run test:prompt-prefs
       - name: Travel (dates, coarse centre, one place at a time)
         run: npm run test:travel
       - name: Travel GETs keep 'private, no-store'
@@ -188,6 +190,12 @@ jobs:
         run: npm run test:hot-spot-ghost-live-count
       - name: Pride code holders can register (real PG)
         run: npm run test:pride-invite-register-integration
+      - name: Referrals grant 1 month Premium every 3 (real PG)
+        run: npm run test:referral-grant-integration
+      - name: Referral checks (real PG)
+        run: npm run test:referrals
+      - name: Earned referral months survive renewal and cancel, cap, Gmail dedupe, read-only card (real PG)
+        run: npm run test:referral-earned-months-integration
       - name: Deleting a member who created a room works (real PG)
         run: npm run test:delete-room-creator-integration
       - name: Ghost or hidden first event check-in creates no public spot (real PG)
@@ -200,8 +208,12 @@ jobs:
         run: npm run --if-present test:show-distance-integration
       - name: Hide my location from
         run: npm run --if-present test:hide-location-integration
+      - name: Prompt prefs on real PG (Don't show again across devices)
+        run: npm run --if-present test:prompt-prefs-integration
       - name: Community leaves out Ghost and hidden members
         run: npm run --if-present test:community-ghost-hidden
+      - name: Members delete their own map and Community posts (real PG)
+        run: npm run test:delete-own-posts-integration
       - name: Travel (Look around and Plan a trip)
         run: npm run --if-present test:travel-integration
       - name: Account deletion erases Travel trips, all-or-nothing (real PG)

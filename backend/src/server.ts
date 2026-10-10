@@ -34,6 +34,7 @@ import campaignRoutes from './routes/campaigns';
 import socialRoutes from './routes/social';
 import mapFeedRoutes from './routes/map-feed';
 import locationPrivacyRoutes from './routes/location-privacy';
+import promptPrefsRoutes from './routes/prompt-prefs';
 import travelRoutes from './routes/travel';
 import communityRoutes from './routes/community';
 import mediaDisplayRoutes from './routes/media-display';
@@ -159,6 +160,7 @@ app.use('/api/campaigns', campaignRoutes);
 app.use('/api/social', socialRoutes);
 app.use('/api/map-feed', mapFeedRoutes);
 app.use('/api/location-privacy', locationPrivacyRoutes);
+app.use('/api/prompt-prefs', promptPrefsRoutes);
 app.use('/api/travel', travelRoutes);
 app.use('/api/community', communityRoutes);
 

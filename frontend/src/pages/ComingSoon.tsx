@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { BrandMark } from '../components/BrandMark';
 import { SiteFooter } from '../components/SiteFooter';
 import { trackEventOnce, getAttributionParams } from '../observability/analytics';
+import { withTrackingParams } from '../lib/trackingParams';
 import '../styles/home-surface.css';
 
 const COMING_SOON_BG = '/images/menrush/31-london-rooftop-dusk.jpeg';
@@ -18,7 +19,11 @@ const WHAT_YOU_GET = [
 ] as const;
 
 export const ComingSoon = () => {
-  const { hash } = useLocation();
+  const { hash, search } = useLocation();
+  // Keep ref (referral code) and utm_* on the way to /register, /invite and /login.
+  const registerTo = withTrackingParams('/register', search);
+  const inviteTo = withTrackingParams('/invite', search);
+  const loginTo = withTrackingParams('/login', search);
 
   useEffect(() => {
     trackEventOnce('landing_viewed', { surface: 'coming_soon', ...getAttributionParams() });
@@ -65,7 +70,7 @@ export const ComingSoon = () => {
 
           <div id="waitlist" className="relative mt-9 w-full max-w-[460px]">
             <Link
-              to="/register"
+              to={registerTo}
               className="inline-flex min-h-[52px] w-full items-center justify-center rounded-full border-0 bg-[var(--nn-copper)] px-[28px] py-3.5 text-[16px] font-extrabold tracking-[0.08em] text-[var(--nn-on-copper)] shadow-[0_0_24px_rgba(196,131,42,0.4)] transition-colors hover:bg-[var(--nn-copper-bright)]"
             >
               Sign up free
@@ -74,7 +79,7 @@ export const ComingSoon = () => {
             <p className="mt-3 text-[15px] text-[var(--cream-muted)]" data-testid="hero-sign-in">
               Already a member?{' '}
               <Link
-                to="/login"
+                to={loginTo}
                 className="inline-flex min-h-[44px] items-center px-1 font-semibold text-[var(--nn-accent-text)] underline underline-offset-4 transition-colors hover:text-[var(--nn-text)]"
               >
                 Sign in
@@ -108,7 +113,7 @@ export const ComingSoon = () => {
 
         <section className="mx-auto w-full max-w-[560px] px-6 pb-16 text-center">
           <Link
-            to="/invite"
+            to={inviteTo}
             className="inline-flex min-h-[44px] items-center px-3 text-[15px] font-semibold text-[var(--cream-muted)] underline-offset-4 transition-colors hover:text-[var(--nn-accent-text)] hover:underline"
           >
             Have a code?
