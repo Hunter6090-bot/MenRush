@@ -115,6 +115,10 @@ describe('Out spot card opens the spot sheet', () => {
   });
 
   it('anonymous check-in uses the same API and updates the sheet', async () => {
+    // The list re-read after check-in returns the server's view (follow-up to #386).
+    vi.mocked(hotSpotsAPI.listNearby)
+      .mockResolvedValueOnce({ data: { spots: [spot] } } as never)
+      .mockResolvedValue({ data: { spots: [{ ...spot, is_checked_in: true, my_checkin_anonymous: true, live_count: 3 }] } } as never);
     renderOut();
     fireEvent.click(await screen.findByTestId(`out-spot-open-${spot.id}`));
     fireEvent.click(await screen.findByTestId('hotspot-sheet-checkin-anon'));
@@ -124,6 +128,9 @@ describe('Out spot card opens the spot sheet', () => {
 
   it('with no server spot the count is left alone (#368: Ghost viewers are never counted)', async () => {
     vi.mocked(hotSpotsAPI.checkIn).mockResolvedValue({ data: { ok: true } } as never);
+    vi.mocked(hotSpotsAPI.listNearby)
+      .mockResolvedValueOnce({ data: { spots: [spot] } } as never)
+      .mockResolvedValue({ data: { spots: [{ ...spot, is_checked_in: true, my_checkin_anonymous: true }] } } as never);
     renderOut();
     fireEvent.click(await screen.findByTestId(`out-spot-open-${spot.id}`));
     fireEvent.click(await screen.findByTestId('hotspot-sheet-checkin-anon'));
