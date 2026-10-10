@@ -77,6 +77,8 @@ jobs:
         run: npm run test:hot-spot-free-counts
       - name: No coordinates in URLs (ignored and stripped, reads use the stored location)
         run: npm run test:no-query-coordinates
+      - name: Social drafts say no waitlist, no dating app, no em dashes
+        run: npm run test:social-copy-guard
       - name: Welcome emails use the official mark (no typed wordmark)
         run: npm run test:welcome-email-brand
 

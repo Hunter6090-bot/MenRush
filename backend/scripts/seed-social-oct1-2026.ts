@@ -85,7 +85,7 @@ export const TEMPLATES: TemplateSeed[] = [
       {
         key: 'cta_line',
         label: 'CTA line',
-        default: 'Waitlist open. Launch 1 October.',
+        default: 'Open now in the UK. Sign up free.',
       },
       { key: 'link', label: 'Link', default: CTA },
     ],
@@ -93,7 +93,7 @@ export const TEMPLATES: TemplateSeed[] = [
   },
   {
     slug: 'oct1-early-premium',
-    name: 'Oct1. Early Premium reward',
+    name: 'Oct1. Open now, free to join',
     category: 'early-premium',
     platforms: ['x', 'instagram', 'bluesky', 'tiktok'],
     bodyTemplate: `{{hook}}
@@ -106,17 +106,17 @@ export const TEMPLATES: TemplateSeed[] = [
       {
         key: 'hook',
         label: 'Opening line',
-        default: 'If you are early, we remember it.',
+        default: 'MenRush is open in the UK.',
       },
       {
         key: 'body',
         label: 'Supporting lines',
-        default: 'Waitlist members get 30 days of Premium free when MenRush launches.',
+        default: 'Sign up free at menrush.com.',
       },
       {
         key: 'cta_line',
         label: 'CTA line',
-        default: 'No code hunting. Just a thank-you for showing up first.',
+        default: 'No code hunting. Free to join.',
       },
       { key: 'link', label: 'Link', default: CTA },
     ],
@@ -179,7 +179,7 @@ export const TEMPLATES: TemplateSeed[] = [
       {
         key: 'cta_line',
         label: 'CTA line',
-        default: 'Trust before scale. Waitlist:',
+        default: 'Trust before scale. Sign up free:',
       },
       { key: 'link', label: 'Link', default: CTA },
     ],
@@ -222,7 +222,6 @@ export function polishSocialCopy(body: string, platform: SocialPlatform): string
   s = s.replace(/\s*\u2013\s*UK first/gi, ' (UK first)');
   s = s.replace(/\s*\u2014\s*opens 1 October/gi, '. Opens 1 October');
   s = s.replace(/\s*\u2013\s*opens 1 October/gi, '. Opens 1 October');
-  s = s.replace(/Waitlist\s*[\u2014\u2013]\s*/gi, 'Waitlist: ');
   s = s.replace(/menrush\.com\s*[\u2014\u2013]\s*/gi, 'menrush.com. ');
   s = s.replace(/MenRush\s*[\u2014\u2013]\s*/gi, 'MenRush. ');
   s = s.replace(/clock\s*[\u2014\u2013]\s*/gi, 'clock. ');
@@ -335,7 +334,7 @@ MenRush opens 1 October. UK first.
 
 Built for fast chemistry, local signal, and less noise.
 
-Waitlist:
+Sign up free:
 ${CTA}`,
       xPm: `Built for men who know what they want.
 
@@ -351,16 +350,16 @@ No endless noise. No pretending. No waiting around for a maybe.
 
 MenRush. 1 October. UK first.
 
-Join the waitlist at menrush.com`,
+Sign up free at menrush.com`,
       bluesky: `MenRush is being built for men who want less noise and more right-now signal.
 
-Opens 1 October. Waitlist:
+Open now, UK first. Sign up free:
 ${CTA}`,
-      tiktok: `POV: dating apps forgot what men actually want.
+      tiktok: `POV: most apps forgot what men actually want.
 
 Beat: call out endless swiping, then introduce MenRush as speed, proximity, and intent.
-CTA: waitlist at menrush.com. Opens 1 October.`,
-      reddit: `Title: What would make a dating app feel faster and less exhausting for men?
+CTA: sign up free at menrush.com.`,
+      reddit: `Title: What would make an app for gay men feel faster and less exhausting?
 
 Body:
 I am working on MenRush, a new app built around a simple question: who nearby is actually worth your attention right now?
@@ -369,7 +368,7 @@ The idea is less noise, less wasted motion, and more local signal. We open 1 Oct
 
 I would genuinely like to know what makes apps feel immediate instead of endless for you.
 
-If anyone wants to follow the build, the waitlist is at ${CTA}`,
+If anyone wants to follow the build, you can sign up free at ${CTA}`,
     }),
   );
 
@@ -403,7 +402,7 @@ menrush.com. 1 October`,
 MenRush is being built for momentum.
 
 ${CTA}`,
-      tiktok: `What if a dating app felt immediate instead of exhausting?
+      tiktok: `What if an app for gay men felt immediate instead of exhausting?
 
 Beat: contrast scrolling for hours with who is actually nearby now.
 CTA: join early at menrush.com`,
@@ -413,30 +412,30 @@ CTA: join early at menrush.com`,
   out.push(
     ...dayPosts('2026-08-23', 1, 'full', {
       templateSlug: 'oct1-early-premium',
-      xAm: `If you are early, we remember it.
+      xAm: `MenRush is open in the UK.
 
-Waitlist members get 30 days of Premium free when MenRush launches.
+Sign up free and see who is nearby.
 
 Join now:
 ${CTA}`,
-      xPm: `Early MenRush members get 30 days of Premium free at launch.
+      xPm: `MenRush is open in the UK. Sign up free.
 
-No code hunting. No gimmick. Just a thank-you for showing up first.
+No code hunting. No gimmick. Free to join.
 
 ${CTA}`,
-      ig: `Early gets rewarded.
+      ig: `Open now.
 
-Waitlist members get 30 days of Premium free at launch.
+MenRush is open in the UK.
 
-If that sounds like your kind of app, get on the list.
+If that sounds like your kind of app, sign up free.
 
 menrush.com`,
-      bluesky: `Early MenRush waitlist members get 30 days of Premium free at launch.
+      bluesky: `MenRush is open in the UK. Sign up free.
 
 ${CTA}`,
-      tiktok: `The first men in get 30 days of Premium free.
+      tiktok: `MenRush is open in the UK. Sign up free.
 
-Beat: explain the waitlist reward in one sentence, then say what MenRush is built for.
+Beat: say MenRush is open and free to join in one sentence, then say what MenRush is built for.
 CTA: menrush.com`,
     }),
   );
@@ -461,16 +460,16 @@ ${CTA}`,
 
 We are building MenRush in public, one sharp move at a time.
 
-Join the list:
+Sign up free:
 menrush.com`,
       bluesky: `We are building in public because launches need attention, not silence.
 
-Waitlist:
+Sign up free:
 ${CTA}`,
       tiktok: `Here is what building under a launch clock actually looks like.
 
 Beat: screen recording, launch checklist, or founder talking-head.
-CTA: follow the build and join the waitlist.`,
+CTA: sign up free at menrush.com.`,
       reddit: `Title: We are building a new app for men around speed, proximity, and intent
 
 Body:
@@ -480,7 +479,7 @@ We are trying something tighter with MenRush: more local context, faster chemist
 
 Still early. we open 1 October (UK first). I would genuinely like to know what would make an app like that worth trying for you.
 
-Waitlist:
+Sign up free:
 ${CTA}`,
     }),
   );
@@ -498,7 +497,7 @@ ${CTA}`,
 
 That is what we are building.
 
-Waitlist open:
+Open now. Sign up free:
 ${CTA}`,
       ig: `Less friction.
 
@@ -527,7 +526,7 @@ CTA: join early at menrush.com`,
 
 Who is actually around, available, and worth your attention right now?
 
-Waitlist:
+Sign up free:
 ${CTA}`,
       xPm: `The product question is simple:
 
@@ -547,10 +546,10 @@ menrush.com`,
 who nearby is actually worth your attention right now?
 
 ${CTA}`,
-      tiktok: `This is the product question every dating app should start with.
+      tiktok: `This is the product question every app for gay men should start with.
 
 Beat: "Who is actually nearby and worth your attention right now?"
-CTA: MenRush waitlist is live.`,
+CTA: sign up free at menrush.com.`,
       reddit: `Comment angle: Ask for feature feedback without over-selling.
 
 Copy:
@@ -569,13 +568,13 @@ If MenRush sounds like your kind of app, join early:
 ${CTA}`,
       xPm: `MenRush is for men who want the room to feel faster, closer, and more intentional.
 
-If that is you, get on the list:
+If that is you, sign up free:
 ${CTA}`,
-      ig: `If this sounds like your kind of app, you are exactly who we want early.
+      ig: `If this sounds like your kind of app, you are exactly who we want.
 
-Waitlist open now.
+Open now. Sign up free.
 
-menrush.com. opens 1 October`,
+menrush.com. UK first`,
       bluesky: `No audience, no launch.
 
 MenRush is coming for men who want less friction, more signal, and a room that actually moves.
@@ -583,7 +582,7 @@ MenRush is coming for men who want less friction, more signal, and a room that a
 ${CTA}`,
       tiktok: `No audience, no launch. So here is exactly who MenRush is for.
 
-Beat: list the target user in direct language, then invite them into the waitlist.
+Beat: list the target user in direct language, then invite them to sign up free.
 CTA: menrush.com`,
     }),
   );
@@ -598,7 +597,7 @@ That is the product truth MenRush is built around.
 
 Map-first. Local. Immediate.
 
-Waitlist. opens 1 October:
+Open now. Sign up free:
 ${CTA}`,
       xPm: `Not another endless grid.
 
@@ -618,13 +617,13 @@ MenRush opens 1 October. UK first.
 ${CTA}`,
       tiktok: `Hook: Stop swiping strangers across the country. Start with who is near you.
 
-Beat: map energy, local signal, CTA waitlist.`,
-      reddit: `Title: What does "nearby now" need to feel useful (not creepy) in a dating app?
+Beat: map energy, local signal, CTA: sign up free at menrush.com.`,
+      reddit: `Title: What does "nearby now" need to feel useful (not creepy) in an app for gay men?
 
 Body:
 Building MenRush around live proximity for men. Curious what distance, privacy, and intent controls would make you actually turn location on.
 
-Waitlist if you want to follow: ${CTA}`,
+Sign up free if you want to try it: ${CTA}`,
     }),
   );
 
@@ -652,7 +651,7 @@ menrush.com`,
 ${CTA}`,
       tiktok: `Hook: The group chat lasted three weeks. Nobody met.
 
-Beat: nearby presence vs endless texting. CTA waitlist.`,
+Beat: nearby presence vs endless texting. CTA: sign up free at menrush.com.`,
     }),
   );
 
@@ -681,8 +680,8 @@ Opens 1 October.
 ${CTA}`,
       tiktok: `Hook: We are not pretending rooms are live.
 
-Beat: honest build. nearby + rooms at launch. CTA waitlist.`,
-      reddit: `Comment angle: In a thread about group chats / rooms on dating apps.
+Beat: honest build. nearby + rooms at launch. CTA: sign up free at menrush.com.`,
+      reddit: `Comment angle: In a thread about group chats / rooms on apps for gay men.
 
 Copy:
 We are shipping rooms with MenRush at launch (1 Oct, UK first). not claiming a live catalog now. Curious what makes a room feel useful vs noisy for you.`,
@@ -712,7 +711,7 @@ menrush.com`,
 ${CTA}`,
       tiktok: `Hook: Your Friday night app should know who is near you.
 
-Beat: map / presence vibe. CTA waitlist.`,
+Beat: map / presence vibe. CTA: sign up free at menrush.com.`,
     }),
   );
 
@@ -738,7 +737,7 @@ menrush.com`,
 ${CTA}`,
       tiktok: `Hook: You can be discreet and still find who is nearby.
 
-Beat: control + proximity. CTA waitlist.`,
+Beat: control + proximity. CTA: sign up free at menrush.com.`,
       reddit: `Title: How do you balance discretion with actually meeting people nearby?
 
 Body:
@@ -755,7 +754,7 @@ ${CTA}`,
 
 If MenRush opened tomorrow, what nearby feature would you use first. map, filters, or rooms?
 
-Tell us. Then get on the list:
+Tell us. Then sign up free:
 ${CTA}`,
       xPm: `We are listening before 1 October.
 
@@ -772,7 +771,7 @@ menrush.com`,
 ${CTA}`,
       tiktok: `Hook: Map, filters, or rooms. what do you open first?
 
-Beat: poll-style, genuine ask. CTA waitlist.`,
+Beat: poll-style, genuine ask. CTA: sign up free at menrush.com.`,
     }),
   );
 
@@ -781,25 +780,25 @@ Beat: poll-style, genuine ask. CTA waitlist.`,
       templateSlug: 'oct1-early-premium',
       xAm: `Bridge to September:
 
-Waitlist members still get 30 days of Premium free at launch.
+MenRush is open in the UK. Sign up free.
 
 Early means something.
 ${CTA}`,
       xPm: `One month out from October.
 
-Stay early. Stay on the list.
+Open now. Free to join.
 ${CTA}`,
-      ig: `Early still gets rewarded.
+      ig: `Open now.
 
-30 days Premium free at launch for waitlist members.
+MenRush is open in the UK. Sign up free.
 
 menrush.com`,
-      bluesky: `30 days Premium free at launch for waitlist members.
+      bluesky: `MenRush is open in the UK. Sign up free.
 
 ${CTA}`,
       tiktok: `Hook: One month out. Early still matters.
 
-Beat: Premium thank-you + 1 Oct date. CTA waitlist.`,
+Beat: open now, free to join. CTA: sign up free at menrush.com.`,
     }),
   );
 
@@ -827,7 +826,7 @@ export function buildOutlinePosts(): PostSeed[] {
         '2026-09-09',
         '2026-09-10',
       ],
-      theme: 'Early Premium. 30 days free for waitlist at launch. Thank-you tone, no fake scarcity.',
+      theme: 'Open now. Free to join. Thank-you tone, no fake scarcity.',
       redditDates: ['2026-09-05', '2026-09-08'],
     },
     {

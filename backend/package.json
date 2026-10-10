@@ -11,6 +11,7 @@
     "db:seed-test-users": "ts-node scripts/seed-test-users.ts",
     "db:seed-social-oct1": "ts-node scripts/seed-social-oct1-2026.ts",
     "test:social-oct1": "ts-node scripts/test-social-oct1-seed.ts",
+    "test:social-copy-guard": "ts-node scripts/social-copy-guard-checks.ts",
     "waitlist:import": "ts-node src/scripts/import-waitlist.ts",
     "hotspots:import": "ts-node scripts/import-hot-spots.ts",
     "hotspots:seed-commercial": "ts-node scripts/seed-commercial-venues.ts",
