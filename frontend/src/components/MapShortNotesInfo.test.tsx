@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MapShortNotesInfo, mapNotesSheetMaxHeightPx, mapNotesSheetCeilingPx } from './MapShortNotesInfo';
 
@@ -73,6 +73,36 @@ describe('MapShortNotesInfo dismiss', () => {
     await user.click(screen.getByTestId('map-pill-radius'));
     expect(screen.queryByTestId('map-short-notes-sheet')).toBeNull();
     expect(onRadius).not.toHaveBeenCalled();
+  });
+
+  it('does not swallow a later Radius tap after an outside drag closes the sheet', async () => {
+    const user = userEvent.setup();
+    const onRadius = vi.fn();
+    render(
+      <div>
+        <button type="button" data-testid="outside">
+          Outside
+        </button>
+        <button type="button" data-testid="map-pill-radius" onClick={onRadius}>
+          Radius 5 miles
+        </button>
+        <div data-testid="map-top-stack" className="relative">
+          <MapShortNotesInfo spotsText={SPOTS} pinText={PIN} spotsLayerOn />
+        </div>
+      </div>,
+    );
+    await user.click(screen.getByTestId('map-short-notes-info'));
+    expect(screen.getByTestId('map-short-notes-sheet')).toBeInTheDocument();
+
+    const outside = screen.getByTestId('outside');
+    fireEvent.pointerDown(outside);
+    fireEvent.pointerMove(outside);
+    fireEvent.pointerUp(outside);
+    expect(screen.queryByTestId('map-short-notes-sheet')).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await user.click(screen.getByTestId('map-pill-radius'));
+    expect(onRadius).toHaveBeenCalled();
   });
 });
 

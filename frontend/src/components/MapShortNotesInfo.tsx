@@ -63,6 +63,7 @@ export function MapShortNotesInfo({
   const [maxHeight, setMaxHeight] = useState(176);
   const infoRef = useRef<HTMLButtonElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
+  const swallowRef = useRef<{ disarm: () => void } | null>(null);
 
   const spotsUnread = Boolean(spotsText) && spotsLayerOn && spotsOn;
   const pinUnread = Boolean(pinText) && pinOn;
@@ -133,12 +134,31 @@ export function MapShortNotesInfo({
       e.preventDefault();
       e.stopPropagation();
       closeSheet(true);
+      // One-shot click swallow for this gesture only. Survives the open-effect
+      // teardown (closeSheet sets open=false). Disarm on pointerup/cancel so a
+      // drag/pan cannot eat the next tap; 400ms is the stuck-pointer backstop.
+      swallowRef.current?.disarm();
       const swallowClick = (ev: Event) => {
         ev.preventDefault();
         ev.stopPropagation();
+        swallowRef.current?.disarm();
+      };
+      const onRelease = () => {
+        // Click is synthesized after pointerup; drop on the next task.
+        window.setTimeout(() => swallowRef.current?.disarm(), 0);
+      };
+      const disarm = () => {
         document.removeEventListener('click', swallowClick, true);
+        document.removeEventListener('pointerup', onRelease, true);
+        document.removeEventListener('pointercancel', onRelease, true);
+        window.clearTimeout(backstop);
+        swallowRef.current = null;
       };
       document.addEventListener('click', swallowClick, true);
+      document.addEventListener('pointerup', onRelease, true);
+      document.addEventListener('pointercancel', onRelease, true);
+      const backstop = window.setTimeout(disarm, 400);
+      swallowRef.current = { disarm };
     };
     document.addEventListener('keydown', onKey);
     document.addEventListener('pointerdown', blockOutside, true);
@@ -151,6 +171,8 @@ export function MapShortNotesInfo({
       document.removeEventListener('touchstart', blockOutside, true);
     };
   }, [open]);
+
+  useEffect(() => () => swallowRef.current?.disarm(), []);
 
   const openSheet = () => {
     setHideSpots(false);
