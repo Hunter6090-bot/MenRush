@@ -1182,7 +1182,7 @@ export const authService = {
     // does, so a failure never leaves a half-erased account behind.
     const { locationRetentionService } = await import('./location-retention.service');
     const { roomService } = await import('./room.service');
-    const { unlinkMessageMedia } = await import('./report-evidence.service');
+    const { listSentMessageMediaKeys, unlinkMessageMedia } = await import('./report-evidence.service');
     const client = await pool.connect();
     let messageMediaKeys: string[] = [];
     let committed = false;
@@ -1199,19 +1199,9 @@ export const authService = {
       // Location rows (map feed, Community, chat location shares, room
       // points, profile points); the FKs also cascade from users.
       await locationRetentionService.eraseAccountLocationData(userId, (text, params) => client.query(text, params));
-      // Live chat rows cascade with the user. Collect storage keys first so
-      // we can unlink the originals after COMMIT and not leave orphans.
-      // Direction (sender / both) is waiting on Al — do not change this query.
-      const media = await client.query(
-        `SELECT DISTINCT media_storage_key AS key
-           FROM messages
-          WHERE (sender_id = $1 OR receiver_id = $1)
-            AND media_storage_key IS NOT NULL`,
-        [userId],
-      );
-      messageMediaKeys = media.rows
-        .map((row: { key?: string | null }) => row.key)
-        .filter((key: string | null | undefined): key is string => Boolean(key));
+      // Conservative: only this account's outbound chat files. Incoming media
+      // belongs to the other member. Both-directions can wait if Al chooses it.
+      messageMediaKeys = await listSentMessageMediaKeys([userId], (text, params) => client.query(text, params));
       await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
       await client.query('COMMIT');
       committed = true;

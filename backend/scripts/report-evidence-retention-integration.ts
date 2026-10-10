@@ -49,7 +49,11 @@ async function main() {
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
 
   const { getUploadSubdir } = await import('../src/lib/uploads-root');
-  const { isEvidenceMediaKey } = await import('../src/services/report-evidence.service');
+  const { evidenceServeType, isEvidenceMediaKey } = await import('../src/services/report-evidence.service');
+  assert.equal(evidenceServeType('image', 're-a.jpg'), 'image/jpeg');
+  assert.equal(evidenceServeType('image', 're-a.html'), null, 'html is not served as image');
+  assert.equal(evidenceServeType('image', 're-a.js'), null, 'js is not served as image');
+  assert.equal(evidenceServeType('video', 're-a.mp4'), 'video/mp4');
 
   // Local DBs that already applied 084 before from_reported existed.
   await query(
@@ -302,8 +306,30 @@ async function main() {
       headers: { Authorization: `Bearer ${moderator.token}` },
     });
     assert.equal(mediaRes.status, 200, 'moderator can open copied evidence media');
+    assert.ok((mediaRes.headers.get('content-type') ?? '').startsWith('image/'), 'evidence is served as image');
+    assert.ok(
+      (mediaRes.headers.get('content-disposition') ?? '').toLowerCase().includes('inline'),
+      'evidence has Content-Disposition',
+    );
+    assert.equal(mediaRes.headers.get('x-content-type-options'), 'nosniff');
     const mediaBytes = Buffer.from(await mediaRes.arrayBuffer());
     assert.ok(mediaBytes.equals(Buffer.from('fake-jpeg-bytes-for-report-evidence')));
+    const htmlKey = `re-${randomUUID()}.html`;
+    const htmlPath = path.join(evidenceDir, htmlKey);
+    fs.writeFileSync(htmlPath, '<script>alert(1)</script>');
+    tempFiles.push(htmlPath);
+    const htmlEvidenceId = (
+      await query(
+        `INSERT INTO report_evidence (report_id, kind, body, media_type, media_ref, from_reported)
+         VALUES ($1, 'message', 'html bait', 'image', $2, TRUE)
+         RETURNING id`,
+        [created.id, htmlKey],
+      )
+    ).rows[0].id as string;
+    const htmlRes = await fetch(`${base}/api/users/reports/${created.id}/evidence/${htmlEvidenceId}/media`, {
+      headers: { Authorization: `Bearer ${moderator.token}` },
+    });
+    assert.equal(htmlRes.status, 404, 'non-image evidence is not served');
     const mediaAsMember = await fetch(`${base}/api/users/reports/${created.id}/evidence/${evidenceId}/media`, {
       headers: { Authorization: `Bearer ${other.token}` },
     });
@@ -470,6 +496,56 @@ async function main() {
       assert.equal((await query(`SELECT 1 FROM users WHERE id = $1`, [rollbackUser.id])).rows.length, 1);
       await query(`DROP TRIGGER IF EXISTS rer_block_account_delete ON users`);
       await query(`DROP FUNCTION IF EXISTS rer_block_account_delete()`);
+    }
+
+    // Conservative: only files the deleted accounts SENT. Incoming / survivor
+    // sent files stay. Both-directions can wait if Al chooses it.
+    {
+      const doomedA = await makeUser('RER Bulk Doomed A');
+      const doomedB = await makeUser('RER Bulk Doomed B');
+      const survivor = await makeUser('RER Bulk Survivor');
+      const doomedAName = `rer-bulk-a-${randomUUID().slice(0, 8)}.jpg`;
+      const doomedBName = `rer-bulk-b-${randomUUID().slice(0, 8)}.jpg`;
+      const survivorName = `rer-bulk-s-${randomUUID().slice(0, 8)}.jpg`;
+      const doomedAPath = path.join(messagesDir, doomedAName);
+      const doomedBPath = path.join(messagesDir, doomedBName);
+      const survivorPath = path.join(messagesDir, survivorName);
+      fs.writeFileSync(doomedAPath, Buffer.from('doomed-a-bytes'));
+      fs.writeFileSync(doomedBPath, Buffer.from('doomed-b-bytes'));
+      fs.writeFileSync(survivorPath, Buffer.from('survivor-bytes'));
+      tempFiles.push(doomedAPath, doomedBPath, survivorPath);
+      const msgA = randomUUID();
+      const msgB = randomUUID();
+      const msgS = randomUUID();
+      messageIds.push(msgA, msgB, msgS);
+      await query(
+        `INSERT INTO messages (id, sender_id, receiver_id, message, media_type, media_storage_key)
+         VALUES ($1, $2, $3, 'photo', 'image', $4)`,
+        [msgA, doomedA.id, survivor.id, doomedAName],
+      );
+      await query(
+        `INSERT INTO messages (id, sender_id, receiver_id, message, media_type, media_storage_key)
+         VALUES ($1, $2, $3, 'photo', 'image', $4)`,
+        [msgB, doomedB.id, survivor.id, doomedBName],
+      );
+      await query(
+        `INSERT INTO messages (id, sender_id, receiver_id, message, media_type, media_storage_key)
+         VALUES ($1, $2, $3, 'photo', 'image', $4)`,
+        [msgS, survivor.id, doomedA.id, survivorName],
+      );
+      const { listSentMessageMediaKeys } = await import('../src/services/report-evidence.service');
+      const listed = await listSentMessageMediaKeys([doomedA.id, doomedB.id]);
+      assert.deepEqual(
+        listed.sort(),
+        [doomedAName, doomedBName].sort(),
+        'bulk list is sender-only for the doomed accounts',
+      );
+      assert.ok(!listed.includes(survivorName), 'survivor sent key is not listed');
+      await authService.deleteAccount(doomedA.id, { current_password: 'pw-123456', confirmation: 'DELETE' } as never);
+      await authService.deleteAccount(doomedB.id, { current_password: 'pw-123456', confirmation: 'DELETE' } as never);
+      assert.ok(!fs.existsSync(doomedAPath), 'doomed A sent file is unlinked');
+      assert.ok(!fs.existsSync(doomedBPath), 'doomed B sent file is unlinked');
+      assert.ok(fs.existsSync(survivorPath), 'survivor sent file is kept');
     }
 
     // ── Retention purge: off does nothing; on deletes only eligible rows ──

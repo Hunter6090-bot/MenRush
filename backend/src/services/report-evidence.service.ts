@@ -64,6 +64,58 @@ export function unlinkMessageMedia(keys: Array<string | null | undefined>): void
 }
 
 /**
+ * Storage keys of files these accounts sent. Incoming chat media is the
+ * other member's file and is left alone.
+ */
+export async function listSentMessageMediaKeys(
+  userIds: string[],
+  sql: SqlFn = query,
+): Promise<string[]> {
+  const ids = userIds.filter(Boolean);
+  if (!ids.length) return [];
+  const found = await sql(
+    `SELECT DISTINCT media_storage_key AS key
+       FROM messages
+      WHERE sender_id = ANY($1::uuid[])
+        AND media_storage_key IS NOT NULL`,
+    [ids],
+  );
+  return found.rows
+    .map((row) => ((row.key as string | undefined) ?? '').trim())
+    .filter((key) => Boolean(key) && path.basename(key) === key);
+}
+
+const IMAGE_TYPES: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+};
+const VIDEO_TYPES: Record<string, string> = {
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+};
+
+/** Image or video only — refuse anything that could run as script. */
+export function evidenceServeType(mediaType: string | null | undefined, storageKey: string): string | null {
+  const ext = path.extname(storageKey).toLowerCase();
+  if (IMAGE_TYPES[ext]) return IMAGE_TYPES[ext];
+  if (VIDEO_TYPES[ext]) return VIDEO_TYPES[ext];
+  // .html / .js / .svg / any other extension must not ride the team session.
+  if (ext) return null;
+  const kind = (mediaType ?? '').trim().toLowerCase();
+  if (kind === 'image' || kind.startsWith('image/')) return 'image/jpeg';
+  if (kind === 'video' || kind.startsWith('video/')) return 'video/mp4';
+  return null;
+}
+
+export function evidenceContentDisposition(filename: string): string {
+  const safe = path.basename(filename).replace(/[^\w.-]/g, '_');
+  return `inline; filename="${safe}"`;
+}
+
+/**
  * Copy chat media into a moderator-only evidence folder. The copy survives
  * account deletion and is removed when the report (or the purge) is deleted.
  * Returns the new basename, or null if the original file is missing.
@@ -83,15 +135,21 @@ export function copyReportedMedia(storageKey: string): string | null {
   }
 }
 
-export async function getEvidenceMediaPath(reportId: string, evidenceId: string): Promise<string | null> {
+export async function getEvidenceMediaFile(
+  reportId: string,
+  evidenceId: string,
+): Promise<{ absolute: string; contentType: string; filename: string } | null> {
   const found = await query(
-    `SELECT media_ref FROM report_evidence WHERE id = $1 AND report_id = $2`,
+    `SELECT media_ref, media_type FROM report_evidence WHERE id = $1 AND report_id = $2`,
     [evidenceId, reportId],
   );
   const key = (found.rows[0]?.media_ref as string | undefined) ?? '';
   if (!isEvidenceMediaKey(key)) return null;
+  const contentType = evidenceServeType(found.rows[0]?.media_type as string | undefined, key);
+  if (!contentType) return null;
   const absolute = resolveMediaPath(evidenceDir(), key);
-  return fs.existsSync(absolute) ? absolute : null;
+  if (!fs.existsSync(absolute)) return null;
+  return { absolute, contentType, filename: key };
 }
 
 function mediaRefOf(row: { media_storage_key?: string | null; media_url?: string | null }): string | null {

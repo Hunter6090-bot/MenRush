@@ -460,6 +460,7 @@ export const Settings = () => {
   const openEvidenceMedia = async (reportId: string, evidenceId: string) => {
     // Open first, on the tap. iPhone Safari blocks window.open after an await.
     const popup = window.open('about:blank', '_blank');
+    if (popup) popup.opener = null;
     try {
       const res = await usersAPI.getReportEvidenceMedia(reportId, evidenceId);
       const url = URL.createObjectURL(res.data as Blob);
@@ -467,10 +468,10 @@ export const Settings = () => {
         URL.revokeObjectURL(url);
         return;
       }
-      popup.location.href = url;
       const revoke = () => URL.revokeObjectURL(url);
       popup.addEventListener?.('load', revoke, { once: true });
-      window.setTimeout(revoke, 0);
+      window.setTimeout(revoke, 60_000);
+      popup.location.href = url;
     } catch {
       popup?.close();
     }

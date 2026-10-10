@@ -561,11 +561,14 @@ router.get('/reports/:id/evidence/:evidenceId/media', async (req: AuthRequest, r
     if (!EvidenceIdParam.safeParse(req.params.id).success || !EvidenceIdParam.safeParse(req.params.evidenceId).success) {
       return res.status(404).json({ error: 'not_found' });
     }
-    const { getEvidenceMediaPath } = await import('../services/report-evidence.service');
-    const absolute = await getEvidenceMediaPath(req.params.id, req.params.evidenceId);
-    if (!absolute) return res.status(404).json({ error: 'not_found' });
+    const { evidenceContentDisposition, getEvidenceMediaFile } = await import('../services/report-evidence.service');
+    const file = await getEvidenceMediaFile(req.params.id, req.params.evidenceId);
+    if (!file) return res.status(404).json({ error: 'not_found' });
     res.setHeader('Cache-Control', 'private, no-store');
-    return res.sendFile(absolute, (err) => {
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader('Content-Disposition', evidenceContentDisposition(file.filename));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return res.sendFile(file.absolute, (err) => {
       if (!err || res.headersSent) return;
       res.status(404).json({ error: 'not_found' });
     });

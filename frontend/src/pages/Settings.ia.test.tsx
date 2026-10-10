@@ -386,12 +386,14 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     const popup = {
       closed: false,
       close: vi.fn(),
+      opener: {} as unknown,
       location: { href: '' },
       addEventListener: vi.fn(),
     };
     const openSpy = vi.spyOn(window, 'open').mockReturnValue(popup as unknown as Window);
     const createSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:evidence-1');
     const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const timeoutSpy = vi.spyOn(window, 'setTimeout');
 
     render(
       <MemoryRouter>
@@ -407,19 +409,26 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     fireEvent.click(openBtn);
     expect(openSpy).toHaveBeenCalled();
     expect(popup.location.href).toBe('');
+    expect(popup.opener).toBeNull();
 
     resolveMedia({ data: new Blob(['bytes']) });
     await waitFor(() => {
       expect(popup.location.href).toBe('blob:evidence-1');
     });
     expect(createSpy).toHaveBeenCalled();
-    await waitFor(() => {
-      expect(revokeSpy).toHaveBeenCalledWith('blob:evidence-1');
-    });
+    expect(revokeSpy).not.toHaveBeenCalled();
+    expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 60_000);
+    const loadHandler = popup.addEventListener.mock.calls.find((call) => call[0] === 'load')?.[1] as
+      | (() => void)
+      | undefined;
+    expect(loadHandler).toEqual(expect.any(Function));
+    loadHandler?.();
+    expect(revokeSpy).toHaveBeenCalledWith('blob:evidence-1');
 
     openSpy.mockRestore();
     createSpy.mockRestore();
     revokeSpy.mockRestore();
+    timeoutSpy.mockRestore();
   });
 
   it('closes the evidence window when the media fetch fails', async () => {
@@ -452,6 +461,7 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     const popup = {
       closed: false,
       close: vi.fn(),
+      opener: {} as unknown,
       location: { href: '' },
       addEventListener: vi.fn(),
     };
@@ -464,6 +474,7 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
+    expect(popup.opener).toBeNull();
     await waitFor(() => {
       expect(popup.close).toHaveBeenCalled();
     });
