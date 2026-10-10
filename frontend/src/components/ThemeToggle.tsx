@@ -73,7 +73,7 @@ export function ThemeToggle({
       data-testid={variant === 'fab' ? 'theme-toggle-fab' : 'theme-toggle'}
       onClick={() => setPref(cycleThemePreference())}
       aria-label={`Theme: ${label}. Switch to ${nextHint}.`}
-      title={`Theme: ${label} (tap for ${nextHint})`}
+      title={`Theme: ${label}. Tap for ${nextHint}.`}
       className={`${base} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--copper)] ${className}`}
     >
       {pref === 'system' ? (
@@ -84,7 +84,7 @@ export function ThemeToggle({
         <BulbIcon className="h-5 w-5" />
       )}
       <span className="sr-only">
-        {label} theme — tap for {nextHint}
+        {label} theme. Tap for {nextHint}.
       </span>
     </button>
   );
