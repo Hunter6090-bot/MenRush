@@ -97,6 +97,10 @@ const EmptyFacesPreview = lazyNamed(
   () => import('./pages/EmptyFacesPreview'),
   'EmptyFacesPreview',
 );
+const EmailNotificationsPreview = lazyNamed(
+  () => import('./pages/EmailNotificationsPreview'),
+  'EmailNotificationsPreview',
+);
 
 function RouteFallback() {
   return (
@@ -459,6 +463,7 @@ function AppShell() {
               <Route path="/dev/room-inroom-dm" element={<RoomInRoomDmPreview />} />
               <Route path="/dev/profile-sheet" element={<ProfileDrawerPreview />} />
               <Route path="/dev/empty-faces" element={<EmptyFacesPreview />} />
+              <Route path="/dev/email-notifications" element={<EmailNotificationsPreview />} />
             </>
           ) : null}
           <Route path="*" element={<NotFound />} />

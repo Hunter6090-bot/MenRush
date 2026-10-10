@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { NotificationSettings } from '../components/NotificationSettings';
+import { EmailNotificationSettings } from '../components/EmailNotificationSettings';
 import { HideLocationList } from '../components/HideLocationList';
 import { ShowInLookAroundRow } from '../components/ShowInLookAroundRow';
 import { TwoFactorSettings } from '../components/TwoFactorSettings';
@@ -28,7 +29,7 @@ import {
 
 const RADIUS_KEY = 'menrush_default_radius_km';
 /** Section ids the top-right Menu links to. */
-const SETTINGS_ANCHORS = ['account', 'two-factor', 'notifications', 'blocked', 'delete-account'];
+const SETTINGS_ANCHORS = ['account', 'two-factor', 'notifications', 'email-notifications', 'blocked', 'delete-account'];
 
 const fieldClass =
   'w-full rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3.5 py-2.5 text-[16px] text-[var(--cream)] placeholder:text-[var(--cream-faded)] outline-none focus:border-[var(--copper)]';
@@ -964,6 +965,11 @@ export const Settings = () => {
                 </div>
               </Link>
             </div>
+          </div>
+
+          <div>
+            <SectionLabel>Email notifications</SectionLabel>
+            <EmailNotificationSettings />
           </div>
 
           {/* ── SAFETY ── */}

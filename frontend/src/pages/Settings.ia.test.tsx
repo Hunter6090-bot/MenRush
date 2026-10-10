@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   listReports: vi.fn(),
   updateReportStatus: vi.fn(),
   updateLocation: vi.fn(),
+  getEmailNotify: vi.fn(),
+  updateEmailNotify: vi.fn(),
 }));
 
 vi.mock('../api/client', () => ({
@@ -43,6 +45,10 @@ vi.mock('../api/client', () => ({
     listHidden: vi.fn().mockResolvedValue({ data: { hidden: [], limit: 500 } }),
     hide: vi.fn(),
     unhide: vi.fn(),
+  },
+  emailNotificationsAPI: {
+    get: mocks.getEmailNotify,
+    update: mocks.updateEmailNotify,
   },
   usersAPI: {
     getMe: mocks.getMe,
@@ -136,6 +142,12 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
       data: { is_team: false },
     });
     mocks.logoutApi.mockResolvedValue({});
+    mocks.getEmailNotify.mockResolvedValue({
+      data: { messages: true, matches: true, jerks: true },
+    });
+    mocks.updateEmailNotify.mockResolvedValue({
+      data: { messages: true, matches: true, jerks: true },
+    });
   });
 
   it('renders phone-first sectioned IA with all must-keep controls intact', async () => {
@@ -180,6 +192,9 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     // Section 6: Notifications (Push toggle + Activity link)
     expect(screen.getByTestId('notification-settings')).toBeInTheDocument();
     expect(screen.getByText('Activity')).toBeInTheDocument();
+    expect(screen.getByTestId('email-notification-settings')).toBeInTheDocument();
+    expect(screen.getByText('Email notifications')).toBeInTheDocument();
+    expect(screen.getByText('Coming soon')).toBeInTheDocument();
 
     // Section 7: Safety (Safety centre + Blocked people)
     expect(screen.getByText('Safety centre')).toBeInTheDocument();
@@ -356,10 +371,14 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     expect(text).not.toMatch(/Video room defaults/i);
     expect(text).not.toMatch(/Sexual health filters/i);
 
-    // MenRush hookup voice: never dating/match/relationship section labels
+    // MenRush hookup voice: never dating/match/relationship section labels.
+    // "Matches" on the email-notifications card is the existing activity type, not a dating section.
     const shellScope = within(shell);
     expect(shellScope.queryByText(/^dating$/i)).not.toBeInTheDocument();
-    expect(shellScope.queryByText(/^matches$/i)).not.toBeInTheDocument();
+    const datingMatches = shellScope
+      .queryAllByText(/^matches$/i)
+      .filter((el) => !el.closest('[data-testid="email-notification-settings"]'));
+    expect(datingMatches).toHaveLength(0);
     expect(shellScope.queryByText(/^relationship$/i)).not.toBeInTheDocument();
   });
 
