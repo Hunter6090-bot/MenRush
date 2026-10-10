@@ -5,7 +5,10 @@
  *    ::ffff: handling, fallback to req.ip when missing or invalid).
  * 2. Source: every rateLimit({...}) in src/routes uses keyGenerator:
  *    rateLimitKey, no route reads X-Forwarded-For for a key, and server.ts
- *    keeps `trust proxy` 1.
+ *    keeps `trust proxy` 1. Exception: email-unsubscribe success limiter
+ *    (skipFailedRequests) keys by user+type so a shared Vercel egress IP
+ *    cannot lock everyone out; its invalid-token fallback still uses
+ *    rateLimitKey. The fail limiter on that route stays rateLimitKey.
  * 3. Behaviour over loopback with `trust proxy` 1 (as server.ts):
  *    - a rotated, spoofed client X-Forwarded-For does not change the key
  *    - users behind the same Railway hop get their own buckets
@@ -115,7 +118,19 @@ function sourceChecks() {
     const blocks = code.match(/rateLimit\(\{[\s\S]*?\}\);/g) || [];
     for (const block of blocks) {
       limiters += 1;
-      assert.match(block, /keyGenerator:\s*rateLimitKey\s*,/, `${file}: every limiter must use keyGenerator: rateLimitKey`);
+      const unsubSuccess =
+        file === 'email-unsubscribe.ts' && /skipFailedRequests\s*:\s*true/.test(block);
+      if (unsubSuccess) {
+        assert.match(
+          block,
+          /email-unsub:\$\{payload\.userId\}:\$\{payload\.type\}/,
+          `${file}: success limiter keys by user+type`,
+        );
+        assert.match(block, /rateLimitKey\(req\)/, `${file}: invalid-token fallback uses rateLimitKey`);
+        assert.doesNotMatch(block, /x-forwarded-for/i, `${file}: success limiter must not read X-Forwarded-For`);
+      } else {
+        assert.match(block, /keyGenerator:\s*rateLimitKey\s*,/, `${file}: every limiter must use keyGenerator: rateLimitKey`);
+      }
     }
     if (blocks.length) {
       assert.match(code, /import \{ rateLimitKey \} from '\.\.\/lib\/clientIp';/, `${file}: imports rateLimitKey`);
