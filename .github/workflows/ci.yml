@@ -37,6 +37,8 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
+      - name: London midnight follows BST and GMT (promo Premium start)
+        run: npm run test:london-midnight
       - name: Security checks (source guards, uploads, media, CORS)
         run: npm run test:security
 
@@ -71,6 +73,8 @@ jobs:
         run: npm run test:veriff
       - name: Hot-spot counts stay rounded for Free (no exact number)
         run: npm run test:hot-spot-free-counts
+      - name: Welcome emails use the official mark (no typed wordmark)
+        run: npm run test:welcome-email-brand
 
   frontend-build:
     name: Frontend build
@@ -162,8 +166,12 @@ jobs:
         run: npm run db:migrate
       - name: Map feed leaves out blocked and Ghost members
         run: npm run test:map-feed-blocks
+      - name: Map feed respects Hide my location from (before LIMIT)
+        run: npm run test:map-feed-hide-location
       - name: Hot-spot list on real PG (Free rounded sort, Premium exact)
         run: npm run test:hot-spot-live-sort-integration
+      - name: Pride code holders can register (real PG)
+        run: npm run test:pride-invite-register-integration
       # --if-present: these scripts arrive with their own PRs (#333, #327,
       # #328, Community Ghost). The step is a no-op until the script exists.
       - name: Radius on the fuzzed pin (oracle)
