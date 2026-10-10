@@ -4,6 +4,7 @@
  *   npm run test:email-notifications
  */
 import assert from 'assert';
+import crypto from 'crypto';
 import fs from 'fs';
 import http from 'http';
 import path from 'path';
@@ -120,6 +121,23 @@ async function main() {
 
   const { authService } = await import('../src/services/auth.service');
   assert.throws(() => authService.verifyToken(token), /Invalid token/);
+  const jwtSignedUnsub = (() => {
+    const claims = {
+      userId: '00000000-0000-4000-8000-000000000001',
+      type: 'message',
+      purpose: svc.EMAIL_UNSUB_PURPOSE,
+      v: 1,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    };
+    const json = JSON.stringify(claims);
+    const sig = crypto.createHmac('sha256', process.env.JWT_SECRET as string).update(json).digest();
+    return `${Buffer.from(json).toString('base64url')}.${Buffer.from(sig).toString('base64url')}`;
+  })();
+  assert.throws(
+    () => authService.verifyToken(jwtSignedUnsub),
+    /Invalid token/,
+    'session allow-list rejects JWT_SECRET-signed unsub claims',
+  );
   const svcSrc = fs.readFileSync(
     path.join(__dirname, '../src/services/email-notification.service.ts'),
     'utf8',
@@ -219,18 +237,35 @@ async function main() {
     );
 
     const unsubAsLogin = svc.signUnsubscribeToken('member-a', 'message');
-    for (const pathName of ['/api/users/me', '/api/messages/conversations'] as const) {
-      const denied = await fetch(`http://127.0.0.1:${port}${pathName}`, {
-        headers: { Authorization: `Bearer ${unsubAsLogin}` },
+    const jwtSignedAsLogin = (() => {
+      const claims = {
+        userId: 'member-a',
+        type: 'message',
+        purpose: svc.EMAIL_UNSUB_PURPOSE,
+        v: 1,
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      };
+      const json = JSON.stringify(claims);
+      const sig = crypto.createHmac('sha256', process.env.JWT_SECRET as string).update(json).digest();
+      return `${Buffer.from(json).toString('base64url')}.${Buffer.from(sig).toString('base64url')}`;
+    })();
+    for (const [label, bearer] of [
+      ['derived-key unsub', unsubAsLogin],
+      ['JWT_SECRET-signed unsub claims', jwtSignedAsLogin],
+    ] as const) {
+      for (const pathName of ['/api/users/me', '/api/messages/conversations'] as const) {
+        const denied = await fetch(`http://127.0.0.1:${port}${pathName}`, {
+          headers: { Authorization: `Bearer ${bearer}` },
+        });
+        assert.strictEqual(denied.status, 401, `${pathName} rejects ${label}`);
+      }
+      const deniedPut = await fetch(base, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${bearer}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: true }),
       });
-      assert.strictEqual(denied.status, 401, `${pathName} rejects unsub token`);
+      assert.strictEqual(deniedPut.status, 401, `PUT /api/email-notifications rejects ${label}`);
     }
-    const deniedPut = await fetch(base, {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${unsubAsLogin}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: true }),
-    });
-    assert.strictEqual(deniedPut.status, 401, 'PUT /api/email-notifications rejects unsub token');
 
     res = await fetch(base, {
       method: 'PUT',
