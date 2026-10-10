@@ -56,6 +56,7 @@ import { messageService } from './services/message.service';
 import { accessControl } from './security/access';
 import { logResendMailerStatus } from './services/mailer.service';
 import { startVerificationRetentionWorker } from './services/verification/retention.worker';
+import { startReportRetentionWorker } from './services/report-retention.service';
 import { Sentry } from './observability/sentry';
 import { corsOrigin } from './security/cors';
 import { noQueryCoordinates } from './middleware/noQueryCoordinates';
@@ -976,4 +977,6 @@ server.listen(PORT, () => {
   startRoomTempIdentityPurgeCron();
   startRoomMessagePurgeCron();
   startVerificationRetentionWorker();
+  // Off unless REPORT_RETENTION_PURGE_ENABLED=true (period pending Al).
+  startReportRetentionWorker();
 });

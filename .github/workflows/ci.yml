@@ -178,6 +178,8 @@ jobs:
         run: npm run test:hot-spot-live-sort-integration
       - name: Pride code holders can register (real PG)
         run: npm run test:pride-invite-register-integration
+      - name: Ghost or hidden first event check-in creates no public spot (real PG)
+        run: npm run test:events-ghost-first-checkin
       # --if-present: these scripts arrive with their own PRs (#333, #327,
       # #328, Community Ghost). The step is a no-op until the script exists.
       - name: Radius on the fuzzed pin (oracle)
@@ -190,3 +192,5 @@ jobs:
         run: npm run --if-present test:community-ghost-hidden
       - name: Members delete their own map and Community posts (real PG)
         run: npm run test:delete-own-posts-integration
+      - name: Reports survive when the reported member deletes their account (real PG)
+        run: npm run test:reports-survive-deletion-integration
