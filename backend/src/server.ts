@@ -58,6 +58,7 @@ import { messageService } from './services/message.service';
 import { accessControl } from './security/access';
 import { logResendMailerStatus } from './services/mailer.service';
 import { startVerificationRetentionWorker } from './services/verification/retention.worker';
+import { startTravelTripRetentionWorker } from './services/travel.service';
 import { Sentry } from './observability/sentry';
 import { corsOrigin } from './security/cors';
 import { query } from './db';
@@ -975,4 +976,6 @@ server.listen(PORT, () => {
   startRoomMessagePurgeCron();
   startTravelCleanupCron();
   startVerificationRetentionWorker();
+  // Travel: trips deleted 30 days after they end.
+  startTravelTripRetentionWorker();
 });

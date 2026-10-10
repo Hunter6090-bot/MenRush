@@ -190,3 +190,5 @@ jobs:
         run: npm run --if-present test:community-ghost-hidden
       - name: Travel (Look around and Plan a trip)
         run: npm run --if-present test:travel-integration
+      - name: Travel trips deleted when ended, and 30 days after they end (real PG)
+        run: npm run test:travel-retention-integration
