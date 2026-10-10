@@ -79,7 +79,7 @@ export function EmailNotificationSettings({ flush = false }: EmailNotificationSe
   };
 
   if (enabled === null) {
-    return <div id="email-notifications" className="scroll-mt-24" data-testid="email-notifications-anchor" />;
+    return <div className="scroll-mt-24" data-testid="email-notifications-anchor" />;
   }
 
   if (!enabled) return null;

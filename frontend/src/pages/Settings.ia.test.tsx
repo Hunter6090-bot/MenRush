@@ -244,6 +244,34 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
   });
 
+  it('keeps waiting past 1s for #email-notifications to mount', async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    mocks.getEmailNotify.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(
+            () =>
+              resolve({
+                data: { enabled: true, jerkEnabled: false, messages: true, matches: true, jerks: true },
+              }),
+            1200,
+          );
+        }),
+    );
+    render(
+      <MemoryRouter initialEntries={['/settings#email-notifications']}>
+        <Settings />
+      </MemoryRouter>,
+    );
+    await new Promise((r) => setTimeout(r, 1100));
+    expect(screen.queryByTestId('email-notifications-heading')).not.toBeInTheDocument();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    const heading = await screen.findByTestId('email-notifications-heading', {}, { timeout: 3000 });
+    expect(heading).toHaveAttribute('id', 'email-notifications');
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled(), { timeout: 3000 });
+  });
+
   it('hides email ticks when GET /email-notifications reports enabled false', async () => {
     mocks.getEmailNotify.mockResolvedValue({
       data: { enabled: false, jerkEnabled: false, messages: true, matches: true, jerks: true },

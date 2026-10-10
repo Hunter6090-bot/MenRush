@@ -410,28 +410,54 @@ export const Settings = () => {
 
   // Deep links from the top-right Menu: #account, #two-factor, #notifications,
   // #email-notifications, #blocked, #delete-account. Email ticks load after
-  // GET /email-notifications, so retry that hash until the sub-heading exists.
+  // GET /email-notifications, so wait up to 10s (observer + retry) for that
+  // sub-heading to mount.
   useEffect(() => {
     const id = location.hash.replace(/^#/, '');
     if (!SETTINGS_ANCHORS.includes(id)) return;
     if (id === 'blocked' && blockedLoading) return;
     let cancelled = false;
-    const tryScroll = (attempt = 0) => {
+    let observer: MutationObserver | null = null;
+    let retryTimer: number | undefined;
+    const deadline = Date.now() + 10_000;
+
+    const scrollTo = (el: Element) => {
+      window.requestAnimationFrame(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    };
+
+    const stopWaiting = () => {
+      observer?.disconnect();
+      observer = null;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      retryTimer = undefined;
+    };
+
+    const tryScroll = () => {
       if (cancelled) return;
       const el = document.getElementById(id);
       if (el) {
-        window.requestAnimationFrame(() => {
-          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
+        stopWaiting();
+        scrollTo(el);
         return;
       }
-      if (id === 'email-notifications' && attempt < 25) {
-        window.setTimeout(() => tryScroll(attempt + 1), 40);
+      if (id === 'email-notifications' && Date.now() < deadline) {
+        retryTimer = window.setTimeout(tryScroll, 100);
+      } else {
+        stopWaiting();
       }
     };
+
     tryScroll();
+    if (id === 'email-notifications' && !document.getElementById(id)) {
+      observer = new MutationObserver(() => tryScroll());
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
+
     return () => {
       cancelled = true;
+      stopWaiting();
     };
   }, [location.hash, blockedLoading, blocked.length]);
 
