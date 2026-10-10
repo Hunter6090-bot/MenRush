@@ -38,6 +38,17 @@ function edgeBox(id: string): SheetEdge | null {
   return { left: r.left, right: r.right, top: r.top };
 }
 
+const MAP_NOTES_DRAG_PX = 10;
+const MAP_NOTES_SWALLOW_MS = 400;
+
+function pointerClient(e: Event): { x: number; y: number } | null {
+  if ('clientX' in e && typeof (e as PointerEvent).clientX === 'number') {
+    return { x: (e as PointerEvent).clientX, y: (e as PointerEvent).clientY };
+  }
+  const touch = (e as TouchEvent).changedTouches?.[0] ?? (e as TouchEvent).touches?.[0];
+  return touch ? { x: touch.clientX, y: touch.clientY } : null;
+}
+
 /**
  * Short-map access to the 18+ spots note and Discretion pin note.
  * One 44px info button stays on the pills row after dismiss (no unread
@@ -135,29 +146,39 @@ export function MapShortNotesInfo({
       e.stopPropagation();
       closeSheet(true);
       // One-shot click swallow for this gesture only. Survives the open-effect
-      // teardown (closeSheet sets open=false). Disarm on pointerup/cancel so a
-      // drag/pan cannot eat the next tap; 400ms is the stuck-pointer backstop.
+      // teardown (closeSheet sets open=false). A drag (≥10px) disarms on
+      // pointerup/cancel; a tap stays armed until the click or 400ms.
       swallowRef.current?.disarm();
+      const start = pointerClient(e);
+      let dragged = false;
       const swallowClick = (ev: Event) => {
         ev.preventDefault();
         ev.stopPropagation();
         swallowRef.current?.disarm();
       };
+      const onMove = (ev: Event) => {
+        const now = pointerClient(ev);
+        if (!start || !now) return;
+        if (Math.hypot(now.x - start.x, now.y - start.y) >= MAP_NOTES_DRAG_PX) {
+          dragged = true;
+        }
+      };
       const onRelease = () => {
-        // Click is synthesized after pointerup; drop on the next task.
-        window.setTimeout(() => swallowRef.current?.disarm(), 0);
+        if (dragged) swallowRef.current?.disarm();
       };
       const disarm = () => {
         document.removeEventListener('click', swallowClick, true);
+        document.removeEventListener('pointermove', onMove, true);
         document.removeEventListener('pointerup', onRelease, true);
         document.removeEventListener('pointercancel', onRelease, true);
         window.clearTimeout(backstop);
         swallowRef.current = null;
       };
       document.addEventListener('click', swallowClick, true);
+      document.addEventListener('pointermove', onMove, true);
       document.addEventListener('pointerup', onRelease, true);
       document.addEventListener('pointercancel', onRelease, true);
-      const backstop = window.setTimeout(disarm, 400);
+      const backstop = window.setTimeout(disarm, MAP_NOTES_SWALLOW_MS);
       swallowRef.current = { disarm };
     };
     document.addEventListener('keydown', onKey);

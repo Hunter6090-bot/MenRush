@@ -75,6 +75,31 @@ describe('MapShortNotesInfo dismiss', () => {
     expect(onRadius).not.toHaveBeenCalled();
   });
 
+  it('swallows a touch tap on Radius when click arrives after pointerup', async () => {
+    const user = userEvent.setup();
+    const onRadius = vi.fn();
+    render(
+      <div>
+        <button type="button" data-testid="map-pill-radius" onClick={onRadius}>
+          Radius 5 miles
+        </button>
+        <div data-testid="map-top-stack" className="relative">
+          <MapShortNotesInfo spotsText={SPOTS} pinText={PIN} spotsLayerOn />
+        </div>
+      </div>,
+    );
+    await user.click(screen.getByTestId('map-short-notes-info'));
+    expect(screen.getByTestId('map-short-notes-sheet')).toBeInTheDocument();
+
+    const radius = screen.getByTestId('map-pill-radius');
+    fireEvent.pointerDown(radius, { pointerType: 'touch', clientX: 40, clientY: 20 });
+    fireEvent.pointerUp(radius, { pointerType: 'touch', clientX: 40, clientY: 20 });
+    expect(screen.queryByTestId('map-short-notes-sheet')).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    fireEvent.click(radius);
+    expect(onRadius).not.toHaveBeenCalled();
+  });
+
   it('does not swallow a later Radius tap after an outside drag closes the sheet', async () => {
     const user = userEvent.setup();
     const onRadius = vi.fn();
@@ -95,11 +120,10 @@ describe('MapShortNotesInfo dismiss', () => {
     expect(screen.getByTestId('map-short-notes-sheet')).toBeInTheDocument();
 
     const outside = screen.getByTestId('outside');
-    fireEvent.pointerDown(outside);
-    fireEvent.pointerMove(outside);
-    fireEvent.pointerUp(outside);
+    fireEvent.pointerDown(outside, { clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(outside, { clientX: 28, clientY: 10 });
+    fireEvent.pointerUp(outside, { clientX: 28, clientY: 10 });
     expect(screen.queryByTestId('map-short-notes-sheet')).toBeNull();
-    await new Promise((resolve) => setTimeout(resolve, 0));
 
     await user.click(screen.getByTestId('map-pill-radius'));
     expect(onRadius).toHaveBeenCalled();
