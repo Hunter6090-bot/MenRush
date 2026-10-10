@@ -72,6 +72,7 @@ import { logCallMetric } from './services/call-metrics.service';
 import { mediaStorageMode } from './services/media-storage.service';
 import { warmIceServers } from './services/webrtc.service';
 import { EarlyCallIceBuffer } from './services/call-ice-buffer';
+import { ownerListStartupLine } from './lib/always-premium';
 
 assertJwtSecret();
 
@@ -982,6 +983,10 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  // Owner lists: counts only, a warning when ALWAYS_PREMIUM_USER_IDS is empty.
+  const owners = ownerListStartupLine();
+  if (owners.level === 'warn') console.warn(owners.text);
+  else console.log(owners.text);
   warmIceServers();
   startPulseExpiryCron();
   startRoomTempIdentityPurgeCron();
