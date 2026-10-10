@@ -497,7 +497,7 @@ export const Settings = () => {
                         {completion.missingItems.map((item) => (
                           <Link
                             key={item.id}
-                            to={`/profile#${item.sectionId}`}
+                            to={`/profile/edit#${item.sectionId}`}
                             data-testid={`settings-missing-${item.id}`}
                             className="rounded-full border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.1)] px-2.5 py-1 text-[11px] font-semibold text-[#E0A14A] transition-colors hover:border-[var(--copper)] hover:bg-[rgba(196,131,42,0.18)]"
                           >
@@ -510,8 +510,8 @@ export const Settings = () => {
                   <Link
                     to={
                       completion && completion.missingItems.length > 0
-                        ? `/profile#${completion.missingItems[0].sectionId}`
-                        : '/profile'
+                        ? `/profile/edit#${completion.missingItems[0].sectionId}`
+                        : '/profile/edit'
                     }
                     data-testid="settings-profile-edit"
                     className="shrink-0 rounded-full border border-[rgba(196,131,42,0.4)] px-3.5 py-1.5 text-[12px] font-extrabold uppercase tracking-wide text-[#E0A14A] transition-colors hover:border-[var(--copper)] hover:bg-[rgba(196,131,42,0.1)]"
@@ -535,7 +535,7 @@ export const Settings = () => {
 
               <div className={groupClass}>
                 <Link
-                  to="/profile"
+                  to="/profile/edit"
                   className={rowActionClass}
                 >
                   <div>
@@ -903,7 +903,7 @@ export const Settings = () => {
               </div>
 
               <Link
-                to="/profile"
+                to="/profile/edit#privacy"
                 className={rowActionClass}
               >
                 <div>

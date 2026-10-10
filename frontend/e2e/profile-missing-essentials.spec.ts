@@ -198,7 +198,7 @@ test.describe('profile missing essentials highlight', () => {
     });
 
     const edit = page.getByTestId('settings-profile-edit');
-    await expect(edit).toHaveAttribute('href', /\/profile#profile-essential-/);
+    await expect(edit).toHaveAttribute('href', /\/profile\/edit#profile-essential-/);
     await edit.click();
 
     await expect(page.getByTestId('profile-edit-form')).toBeVisible({ timeout: 15000 });

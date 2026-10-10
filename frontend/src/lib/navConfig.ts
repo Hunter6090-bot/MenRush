@@ -125,7 +125,7 @@ export function isNavActive(pathname: string, path: string): boolean {
     return pathname === '/notifications';
   }
   if (path === '/profile') {
-    return pathname === '/profile';
+    return pathname === '/profile' || pathname === '/profile/edit';
   }
   if (path === '/settings') {
     return pathname === '/settings';
@@ -156,6 +156,7 @@ export function isNavActive(pathname: string, path: string): boolean {
 
 export function mobilePageTitle(pathname: string): string {
   if (pathname.startsWith('/messages/')) return 'Chat';
+  if (pathname === '/profile/edit') return 'Edit profile';
   if (pathname.startsWith('/profile/')) return 'Profile';
   if (pathname.startsWith('/rooms/')) return 'Rooms';
   if (pathname === '/out' || pathname.startsWith('/out/')) return ROUTE_LABELS.out;

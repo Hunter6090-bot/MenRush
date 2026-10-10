@@ -32,17 +32,17 @@ export const ACCOUNT_MENU_SECTIONS: AccountMenuSection[] = [
     id: 'you',
     title: 'You',
     links: [
-      { id: 'viewed-me', label: 'Viewed me', to: '/profile#viewed-me' },
+      { id: 'viewed-me', label: 'Viewed me', to: '/profile/edit#viewed-me' },
       { id: 'albums', label: 'Albums', to: '/albums' },
       { id: 'matches', label: ROUTE_LABELS.matches, to: '/matches' },
-      { id: 'mood', label: 'Mood', to: '/profile#mood' },
-      // Jumps to the existing Ghost card on the You page. No toggle here:
+      { id: 'mood', label: 'Mood', to: '/profile/edit#mood' },
+      // Jumps to the existing Ghost card on the Edit screen (You > Edit). No toggle here:
       // Ghost work is held for Al.
-      { id: 'ghost', label: 'Ghost mode', to: '/profile#ghost' },
-      { id: 'invite', label: 'Invite friends', to: '/profile#invite' },
+      { id: 'ghost', label: 'Ghost mode', to: '/profile/edit#ghost' },
+      { id: 'invite', label: 'Invite friends', to: '/profile/edit#invite' },
       { id: 'alerts', label: ROUTE_LABELS.alerts, to: '/notifications' },
       { id: 'premium', label: 'Premium', to: '/premium' },
-      { id: 'verify', label: 'Verify ID', to: '/profile' },
+      { id: 'verify', label: 'Verify ID', to: '/profile/edit#verify' },
     ],
   },
   {
@@ -60,7 +60,7 @@ export const ACCOUNT_MENU_SECTIONS: AccountMenuSection[] = [
     links: [
       { id: 'settings', label: ROUTE_LABELS.settings, to: '/settings' },
       { id: 'account-security', label: 'Account and security', to: '/settings#account' },
-      { id: 'privacy-visibility', label: 'Privacy and visibility', to: '/profile#privacy' },
+      { id: 'privacy-visibility', label: 'Privacy and visibility', to: '/profile/edit#privacy' },
       { id: 'two-factor', label: 'Two-factor', to: '/settings#two-factor' },
       { id: 'notifications', label: 'Notifications', to: '/settings#notifications' },
       { id: 'blocked', label: 'Blocked', to: '/settings#blocked' },

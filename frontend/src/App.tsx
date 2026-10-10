@@ -51,6 +51,7 @@ const ConfirmEmail = lazyNamed(() => import('./pages/ConfirmEmail'), 'ConfirmEma
 const Discover = lazyNamed(() => import('./pages/Discover'), 'Discover');
 const Stream = lazyNamed(() => import('./pages/Stream'), 'Stream');
 const Profile = lazyNamed(() => import('./pages/Profile'), 'Profile');
+const You = lazyNamed(() => import('./pages/You'), 'You');
 const ProfileSetup = lazyNamed(() => import('./pages/ProfileSetup'), 'ProfileSetup');
 const ProfileView = lazyNamed(() => import('./pages/ProfileView'), 'ProfileView');
 const Albums = lazyNamed(() => import('./pages/Albums'), 'Albums');
@@ -363,6 +364,14 @@ function AppShell() {
           />
           <Route
             path="/profile"
+            element={
+              <RequireVerified allowIncompleteProfile>
+                <You />
+              </RequireVerified>
+            }
+          />
+          <Route
+            path="/profile/edit"
             element={
               <RequireVerified allowIncompleteProfile>
                 <Profile />

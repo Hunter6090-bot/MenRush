@@ -129,6 +129,13 @@ function LayoutInner({ children }: LayoutProps) {
     setAccountMenuOpen(false);
   }, [location.pathname]);
 
+  // You tab Sign out row asks for the same confirm as the Menu and sidebar.
+  useEffect(() => {
+    const ask = () => setSignOutConfirmOpen(true);
+    window.addEventListener('menrush:request-sign-out', ask);
+    return () => window.removeEventListener('menrush:request-sign-out', ask);
+  }, []);
+
   useEffect(() => {
     const openSearch = () => setSearchOpen(true);
     window.addEventListener('menrush:open-search', openSearch);
