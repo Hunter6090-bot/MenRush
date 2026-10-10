@@ -10,7 +10,7 @@ import {
 } from '../lib/cruising';
 import { CruisingSpotCard } from './CruisingSpotCard';
 import { PulseRing } from './PulseRing';
-import { IconClose } from './icons';
+import { IconClose, SpotTypeIcon, spotTypeKey } from './icons';
 
 interface CruisingSearchSheetProps {
   open: boolean;
@@ -242,7 +242,7 @@ export function CruisingSearchSheet({
                       : 'border border-[var(--border-default)] bg-[var(--bg-card)] text-[var(--cream-soft)] hover:border-[color-mix(in_srgb,var(--copper)_40%,transparent)]'
                   }`}
                 >
-                  <span aria-hidden="true">{meta.icon}</span>
+                  <SpotTypeIcon type={spotTypeKey(catKey)} size={18} />
                   <span>{meta.label}</span>
                 </button>
               );
@@ -273,8 +273,8 @@ export function CruisingSearchSheet({
               data-testid="cruising-search-empty"
               className="flex flex-col items-center justify-center py-16 text-center"
             >
-              <span className="text-3xl" aria-hidden="true">
-                {selectedCategory !== 'all' ? CRUISING_CATEGORY_META[selectedCategory].icon : '🌲'}
+              <span className="text-[var(--nn-accent-text)]" aria-hidden="true">
+                <SpotTypeIcon type={selectedCategory !== 'all' ? spotTypeKey(selectedCategory) : 'trees'} size={32} />
               </span>
               <p className="mt-2 text-[15px] font-bold text-[var(--cream)]">
                 No spots found

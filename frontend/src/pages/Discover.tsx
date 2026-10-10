@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { EventDTO, HotSpotDTO, Mood, hotSpotsAPI, profileMetaAPI, pulseAPI, usersAPI } from '../api/client';
 import { readCachedMatches, refreshMatches } from '../lib/tabListCache';
 import { useLocationStore, useAuthStore } from '../hooks/store';
@@ -1814,6 +1814,52 @@ export const Discover = () => {
     });
   }, [hotSpots, mapLoaded, hotSpotsLayerOn, mapZoom]);
 
+  // Out card "View on map" lands here as /discover?spot=<id>: show the map, centre on
+  // the spot's pin and open the same spot sheet. Only a spot id travels in the URL.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkSpotId = searchParams.get('spot');
+  const focusSpotOnMap = useCallback((spot: HotSpotDTO) => {
+    const map = mapRef.current;
+    if (!map || !Number.isFinite(spot.latitude) || !Number.isFinite(spot.longitude)) return;
+    userMovedMapRef.current = true;
+    map.easeTo({ center: [spot.longitude, spot.latitude], zoom: Math.max(map.getZoom(), 14), duration: 700 });
+  }, []);
+  useEffect(() => {
+    if (!deepLinkSpotId) return;
+    // Session-only switch to the map; the saved Map|List choice is left alone.
+    setNearbyView('map');
+    setMapPanelMode('default');
+    if (!mapLoaded) return;
+    let cancelled = false;
+    const clearParam = () => {
+      const next = new URLSearchParams(searchParams);
+      next.delete('spot');
+      setSearchParams(next, { replace: true });
+    };
+    const known = hotSpots.find((s) => s.id === deepLinkSpotId);
+    const open = (spot: HotSpotDTO) => {
+      if (cancelled) return;
+      setHotSpotsLayerOn(true);
+      setSelectedHotSpot(spot);
+      focusSpotOnMap(spot);
+      clearParam();
+    };
+    if (known) open(known);
+    else {
+      hotSpotsAPI
+        .getSpot(deepLinkSpotId)
+        .then((res) => open(res.data.spot))
+        .catch(() => {
+          if (!cancelled) clearParam();
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+    // hotSpots intentionally omitted: one lookup per deep link.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkSpotId, mapLoaded]);
+
   // Keep the open sheet's data fresh as hotSpots re-polls (mirrors selectedUser above).
   useEffect(() => {
     if (!selectedHotSpot) return;
@@ -2669,7 +2715,15 @@ export const Discover = () => {
           setHotSpotActionError('');
         }}
         onCheckIn={handleHotSpotCheckIn}
-        onOpenReviews={(spot) => setReviewsSpot(spot)}
+        onSpotUpdated={(updated) => {
+          setSelectedHotSpot((prev) => (prev && prev.id === updated.id ? { ...prev, ...updated } : prev));
+          setHotSpots((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));
+        }}
+        onViewOnMap={(spot) => {
+          setSelectedHotSpot(null);
+          setHotSpotActionError('');
+          focusSpotOnMap(spot);
+        }}
       />
 
       <HotSpotReviewsModal

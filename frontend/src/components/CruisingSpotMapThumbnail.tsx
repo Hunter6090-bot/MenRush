@@ -25,7 +25,7 @@ export function CruisingSpotMapThumbnail({
 
   return (
     <div
-      className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-[var(--border-default)] bg-[#14120E] sm:h-24 sm:w-24 ${className}`}
+      className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-card)] sm:h-24 sm:w-24 ${className}`}
       data-testid="cruising-map-thumbnail"
       aria-hidden="true"
     >
@@ -72,8 +72,14 @@ export function CruisingSpotMapThumbnail({
                 <circle cx="12" cy="10" r="3" />
               </svg>
             </span>
-            <span className="mt-1 font-mono text-[11px] font-bold tracking-tight text-[var(--cream-muted)]">
-              {latitude.toFixed(2)}, {longitude.toFixed(2)}
+            {/* 15px floor: one value per line so it fits the 80px tile. Token colour on the
+                token card fill keeps >= 4.5:1 in light and dark. */}
+            <span
+              data-testid="cruising-map-thumbnail-coords"
+              className="mt-1 flex flex-col font-mono text-[15px] font-bold leading-[1.1] tracking-tight text-[var(--cream-soft)]"
+            >
+              <span>{latitude.toFixed(2)},</span>
+              <span>{longitude.toFixed(2)}</span>
             </span>
           </div>
         </div>
