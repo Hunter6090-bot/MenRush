@@ -68,10 +68,8 @@ router.post('/invoices', async (req: AuthRequest, res: Response) => {
   try {
     const invoice = await invoiceService.createInvoice({
       userId: req.userId!,
+      // Amount and days come from PREMIUM_PRICE_LIST on the server, never the client.
       planTier: parsed.data.plan_tier,
-      planDays: parsed.data.plan_days,
-      amountPence: parsed.data.amount_pence,
-      notes: parsed.data.notes,
       immediateStartConsent: parsed.data.immediate_start_consent,
     });
 

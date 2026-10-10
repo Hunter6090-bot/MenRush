@@ -434,24 +434,36 @@ export type AlbumMediaMessageInput = z.infer<typeof AlbumMediaMessageSchema>;
 export const IMMEDIATE_START_CONSENT_TEXT =
   'Start my Premium as soon as my payment is confirmed. I understand that if I cancel within 14 days, my refund will be reduced for the days of Premium I have had.';
 
-export const CreateInvoiceSchema = z.object({
-  plan_tier: z.enum(['premium', 'premium_plus']).default('premium'),
-  plan_days: z.number().int().min(1).max(3650).default(30),
-  amount_pence: z.number().int().min(0).default(699),
-  notes: z.string().max(500).optional(),
-  // Required and must be exactly true: no invoice is issued unless the member ticked it.
-  immediate_start_consent: z.literal(true, {
-    errorMap: () => ({ message: 'Please tick the box to confirm when your Premium starts.' }),
-  }),
-});
+export const CreateInvoiceSchema = z
+  .object({
+    // The server sets the amount and length from PREMIUM_PRICE_LIST. Anything else a
+    // client sends (amount_pence, plan_days, notes, ...) is refused with 400.
+    plan_tier: z.literal('premium').default('premium'),
+    // Required and must be exactly true: no invoice is issued unless the member ticked it.
+    immediate_start_consent: z.literal(true, {
+      errorMap: () => ({ message: 'Please tick the box to confirm when your Premium starts.' }),
+    }),
+  })
+  .strict();
 
-export const AdminCreateInvoiceSchema = z.object({
-  user_id: z.string().uuid('Valid user UUID required'),
-  plan_tier: z.enum(['premium', 'premium_plus']).default('premium'),
-  plan_days: z.number().int().min(1).max(3650).default(30),
-  amount_pence: z.number().int().min(0).default(699),
-  notes: z.string().max(500).optional(),
-});
+export const AdminCreateInvoiceSchema = z
+  .object({
+    user_id: z.string().uuid('Valid user UUID required'),
+    plan_tier: z.literal('premium').default('premium'),
+    // Optional ops override of the price list. Logged with admin_actor.
+    plan_days: z.number().int().min(1).max(3650).optional(),
+    amount_pence: z.number().int().min(0).optional(),
+    notes: z.string().max(500).optional(),
+    // The member's own choice, as they told ops. Not given unless they said yes.
+    immediate_start_consent: z.boolean().default(false),
+    // Who in ops made this invoice (the shared ADMIN_TOKEN names no one). Required for an override.
+    admin_actor: z.string().trim().min(1).max(64).optional(),
+  })
+  .strict()
+  .refine((v) => (v.plan_days === undefined && v.amount_pence === undefined) || Boolean(v.admin_actor), {
+    message: 'admin_actor is required to override the price list',
+    path: ['admin_actor'],
+  });
 
 export const AdminConfirmInvoiceSchema = z.object({
   notes: z.string().max(500).optional(),
