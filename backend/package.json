@@ -60,6 +60,8 @@
     "test:nightlife-checkin": "ts-node scripts/nightlife-checkin-checks.ts",
     "test:hot-spot-free-counts": "ts-node --transpile-only scripts/hot-spot-free-counts-checks.ts",
     "test:hot-spot-live-sort-integration": "ts-node --transpile-only scripts/hot-spot-live-sort-integration.ts",
+    "test:pride-personal-expiry": "ts-node scripts/pride-personal-expiry-checks.ts",
+    "test:pride-personal-expiry-integration": "ts-node --transpile-only scripts/pride-personal-expiry-integration.ts",
     "test:nightlife-integration": "ts-node scripts/nightlife-checkin-integration.ts",
     "test:push": "ts-node scripts/test-push.ts",
     "test:features": "bash ../test-features.sh",

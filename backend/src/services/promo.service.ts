@@ -241,12 +241,53 @@ export function formatPromoExpiryDate(d: Date): string {
   return `${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
-/** User-facing expiry line for a personal Pride code (uses issued row date when present). */
-export function personalPrideExpiredMessage(expiresAt?: Date | null): string {
-  if (expiresAt && !Number.isNaN(expiresAt.getTime())) {
-    return `This Pride promo code expired on ${formatPromoExpiryDate(expiresAt)}.`;
-  }
-  return 'This Pride promo code expired on 31 October 2026.';
+/** Clock used by promo checks. Tests may swap now(); production never does. */
+export const promoClock = { now: (): Date => new Date() };
+
+/**
+ * Midnight at the start of a Europe/London calendar day, as a UTC instant.
+ * Uses the zone's own rules (BST or GMT for that date), no fixed offset.
+ */
+export function europeLondonMidnightUtc(ymd: string): Date {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const guess = Date.UTC(y, m - 1, d, 0, 0, 0);
+  const offsetAt = (t: number): number => {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: EUROPE_LONDON,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }).formatToParts(new Date(t));
+    const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value);
+    const wall = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
+    return wall - t;
+  };
+  let t = guess - offsetAt(guess);
+  t = guess - offsetAt(t);
+  return new Date(t);
+}
+
+/**
+ * Personal Pride codes (brightonpride26, sent by email) can be redeemed up to
+ * and including 31 October 2026 23:59:59 Europe/London. This is the first
+ * instant they are closed: midnight starting 1 November London time
+ * (GMT then, so 2026-11-01T00:00:00Z). Exclusive.
+ */
+export const PERSONAL_PRIDE_REDEEM_ENDS = europeLondonMidnightUtc('2026-11-01');
+
+export const PERSONAL_PRIDE_EXPIRED_MESSAGE = 'This Pride code has expired. You can still join free.';
+
+export function isPersonalPrideRedeemOpen(now: Date = promoClock.now()): boolean {
+  return now.getTime() < PERSONAL_PRIDE_REDEEM_ENDS.getTime();
+}
+
+/** User-facing line for an expired personal Pride code. Kind and plain; no date maths for the reader. */
+export function personalPrideExpiredMessage(_expiresAt?: Date | null): string {
+  return PERSONAL_PRIDE_EXPIRED_MESSAGE;
 }
 
 export function isSharedPrideCode(raw: string): boolean {
@@ -965,6 +1006,7 @@ export const promoService = {
   async validate(
     code: string,
     email: string,
+    now: Date = promoClock.now(),
   ): Promise<PromoValidateResult> {
     const normalised = code.trim().toUpperCase();
     const emailHash = hashEmail(email);
@@ -989,7 +1031,14 @@ export const promoService = {
 
     if (row.email_hash !== emailHash) return { valid: false, reason: 'email_mismatch' };
     if (row.redeemed_at) return { valid: false, reason: 'already_redeemed' };
-    if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) {
+    if (row.campaign === BRIGHTON_PRIDE_CAMPAIGN) {
+      // One cutoff for every personal Pride code, from Europe/London rules:
+      // open through 31 Oct 23:59:59 London, closed from 1 Nov 00:00 London.
+      // The row's expires_at is not used here, so a code never closes early.
+      if (!isPersonalPrideRedeemOpen(now)) {
+        return { valid: false, reason: 'expired', expiresAt: PERSONAL_PRIDE_REDEEM_ENDS };
+      }
+    } else if (row.expires_at && new Date(row.expires_at).getTime() < now.getTime()) {
       return { valid: false, reason: 'expired', expiresAt: new Date(row.expires_at) };
     }
 
