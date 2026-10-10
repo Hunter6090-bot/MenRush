@@ -130,3 +130,12 @@ export function hardcodedColourClasses(root: Element, skip: (el: Element) => boo
   }
   return found;
 }
+
+/** Contrast between two token colours (for example a slider fill against its track). */
+export function tokenContrast(a: string, b: string, theme: Theme, base = 'var(--bg-card)'): number {
+  const under = parseColor(resolveVars(base, theme));
+  const ca = over(parseColor(resolveVars(a, theme)), under);
+  const cb = over(parseColor(resolveVars(b, theme)), under);
+  const [x, y] = [luminance(ca), luminance(cb)].sort((m, n) => n - m);
+  return (x + 0.05) / (y + 0.05);
+}
