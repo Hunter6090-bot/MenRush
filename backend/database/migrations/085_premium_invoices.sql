@@ -22,10 +22,17 @@ CREATE TABLE IF NOT EXISTS premium_invoices (
   paid_at TIMESTAMPTZ,
   confirmed_by_admin_id UUID REFERENCES users(id) ON DELETE SET NULL,
   cancelled_at TIMESTAMPTZ,
+  -- When the member ticked "Start my Premium as soon as my payment is confirmed"
+  -- (14-day cancellation, Terms 7.6A). Set on member-created invoices only.
+  immediate_start_consent_at TIMESTAMPTZ,
   metadata JSONB NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- 085 has never been applied anywhere (it is not on main yet); this keeps any
+-- local dev table from an earlier draft of this branch in step.
+ALTER TABLE premium_invoices ADD COLUMN IF NOT EXISTS immediate_start_consent_at TIMESTAMPTZ;
 
 DO $$ BEGIN
   ALTER TABLE premium_invoices

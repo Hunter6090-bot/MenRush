@@ -135,6 +135,7 @@ describe('Premium manual invoice stopgap and password step', () => {
       expect(screen.getByTestId('generate-invoice-button')).toBeInTheDocument();
     });
 
+    fireEvent.click(screen.getByTestId('immediate-start-consent'));
     fireEvent.click(screen.getByTestId('generate-invoice-button'));
 
     await waitFor(() => {
@@ -181,6 +182,7 @@ describe('Premium manual invoice stopgap and password step', () => {
       expect(screen.getByTestId('generate-invoice-button')).toBeInTheDocument();
     });
 
+    fireEvent.click(screen.getByTestId('immediate-start-consent'));
     fireEvent.click(screen.getByTestId('generate-invoice-button'));
 
     await waitFor(() => {
@@ -193,6 +195,60 @@ describe('Premium manual invoice stopgap and password step', () => {
     expect(screen.queryByText('Sort Code:')).not.toBeInTheDocument();
     expect(screen.queryByText('Account No:')).not.toBeInTheDocument();
     expect(screen.getByText(/Bank details are not shown here yet/i)).toBeInTheDocument();
+  });
+
+  it('immediate start tick starts unticked, is required, is 44px and 15px, and is sent with the invoice', async () => {
+    mocks.createInvoice.mockResolvedValue({
+      data: {
+        invoice: {
+          id: 'inv-tick',
+          invoice_number: 'MR-INV-20261010-TICK01',
+          amount_pence: 699,
+          plan_days: 30,
+          status: 'unpaid',
+          payment_reference: 'MR-0000TICK',
+        },
+        payment_instructions: {
+          account_name: null,
+          sort_code: null,
+          account_number: null,
+          bank_name: null,
+          currency: 'GBP',
+          payment_reference: 'MR-0000TICK',
+          instructions: 'Bank details are not shown here yet.',
+          bank_configured: false,
+        },
+      },
+    });
+    render(
+      <MemoryRouter>
+        <Premium />
+      </MemoryRouter>,
+    );
+    const box = (await screen.findByTestId('immediate-start-consent')) as HTMLInputElement;
+    const label = screen.getByTestId('immediate-start-consent-label');
+    expect(box.type).toBe('checkbox');
+    expect(box.checked).toBe(false);
+    expect(box.required).toBe(true);
+    expect(label).toHaveTextContent(
+      'Start my Premium as soon as my payment is confirmed. I understand that if I cancel within 14 days, my refund will be reduced for the days of Premium I have had.',
+    );
+    expect(label.className).toContain('min-h-[44px]');
+    expect(label.className).toContain('text-[15px]');
+
+    const button = screen.getByTestId('generate-invoice-button') as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    fireEvent.click(button);
+    expect(mocks.createInvoice).not.toHaveBeenCalled();
+
+    fireEvent.click(box);
+    expect(box.checked).toBe(true);
+    expect(button.disabled).toBe(false);
+    fireEvent.click(button);
+    await waitFor(() => expect(mocks.createInvoice).toHaveBeenCalledTimes(1));
+    expect(mocks.createInvoice).toHaveBeenCalledWith(
+      expect.objectContaining({ immediate_start_consent: true }),
+    );
   });
 
   it('includes set/change password step in the manual payment journey', async () => {

@@ -72,6 +72,7 @@ router.post('/invoices', async (req: AuthRequest, res: Response) => {
       planDays: parsed.data.plan_days,
       amountPence: parsed.data.amount_pence,
       notes: parsed.data.notes,
+      immediateStartConsent: parsed.data.immediate_start_consent,
     });
 
     const paymentInstructions = getManualPaymentInstructions(invoice.payment_reference);
