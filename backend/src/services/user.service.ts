@@ -988,9 +988,12 @@ export const userService = {
          reporter.id AS reporter_id,
          reporter.name AS reporter_name,
          reporter.email AS reporter_email,
-         reported.id AS reported_id,
+         r.reported_id,
          reported.name AS reported_name,
-         reported.email AS reported_email
+         reported.email AS reported_email,
+         -- Set when the reported member deleted their account. The report and
+         -- its details stay; reported_id / name / email are then null.
+         r.reported_account_deleted_at
        FROM reports r
        JOIN users reporter ON reporter.id = r.reporter_id
        LEFT JOIN users reported ON reported.id = r.reported_id

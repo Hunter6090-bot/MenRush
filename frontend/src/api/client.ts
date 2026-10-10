@@ -401,6 +401,8 @@ export const usersAPI = {
         reporter_email: string;
         reported_id?: string | null;
         reported_name?: string | null;
+        /** Set when the reported member deleted their account (report kept). */
+        reported_account_deleted_at?: string | null;
         reported_email?: string | null;
       }>;
     }>('/users/reports'),
