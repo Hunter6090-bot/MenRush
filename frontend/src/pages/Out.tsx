@@ -162,6 +162,18 @@ export function Out() {
       >
         <div className="mb-3 flex items-center justify-between gap-3">
           <h1 className="text-2xl font-extrabold text-[var(--cream)]">Out</h1>
+          {/* Board state 09: Map pill top-right opens the existing Cruise map. */}
+          <Link
+            to="/hot-spots"
+            data-testid="out-map-pill"
+            aria-label="Open the Cruise map"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-[var(--border-default)] bg-[var(--bg-card)] px-4 text-[15px] font-bold text-[var(--cream)]"
+          >
+            <span className="text-[var(--nn-accent-text)]" aria-hidden>
+              <SpotTypeIcon type="pin" size={18} />
+            </span>
+            Map
+          </Link>
         </div>
 
         <div className="mb-3 shrink-0">

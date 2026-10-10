@@ -112,3 +112,18 @@ describe('tap audit: grid tiles and chat rows open something', () => {
     expect(screen.getByTestId('thread-route')).toBeInTheDocument();
   });
 });
+
+describe('tap audit: board additions open real screens', () => {
+  it('Out Map pill opens the Cruise map', async () => {
+    render(
+      <MemoryRouter initialEntries={['/out']}>
+        <Routes>
+          <Route path="/out" element={<Out />} />
+          <Route path="/hot-spots" element={<p data-testid="cruise-map-route">map</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByTestId('out-map-pill'));
+    expect(screen.getByTestId('cruise-map-route')).toBeInTheDocument();
+  });
+});
