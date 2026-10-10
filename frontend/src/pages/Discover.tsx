@@ -85,7 +85,7 @@ import { mapboxStyleForTheme, resolvedThemeNow, THEME_CHANGED_EVENT } from '../l
 import { readLayerVisible, writeLayerVisible } from '../lib/discoveryLayers';
 import { useIsDesktopLayout } from '../hooks/useMediaQuery';
 import { MAP_PIN_FUZZ_EVENT } from '../components/MenuDiscretion';
-import { IconDiscover, IconHotSpots } from '../components/icons';
+import { IconDiscover, IconHotSpots, IconPlane } from '../components/icons';
 import {
   mapPinZIndex,
   shouldShowHotSpotLabel,
@@ -132,6 +132,7 @@ function MapFloatingChrome({
   hotSpotsLayerOn,
   onTogglePeopleLayer,
   onToggleHotSpotsLayer,
+  onTravel,
   /** In-flow under MapTopPillBar children, no absolute offset, safe at 360/390/430. */
   placement = 'stacked',
 }: {
@@ -139,6 +140,8 @@ function MapFloatingChrome({
   hotSpotsLayerOn: boolean;
   onTogglePeopleLayer: () => void;
   onToggleHotSpotsLayer: () => void;
+  /** Travel (plane): Look around another city or plan a trip. */
+  onTravel?: () => void;
   placement?: 'stacked' | 'absolute';
 }) {
   // One-time Legal quiet-face dismiss — same localStorage pattern as match coach.
@@ -186,6 +189,19 @@ function MapFloatingChrome({
               {HOT_SPOTS_CHIP_LABEL}
             </span>
           </button>
+          {onTravel ? (
+            <button
+              type="button"
+              onClick={onTravel}
+              data-testid="map-travel"
+              aria-label="Travel"
+              title="Travel"
+              className={mapChromeBtnClass}
+            >
+              {/* Pete's spec: Travel glyph at 24px. */}
+              <IconPlane size={24} />
+            </button>
+          ) : null}
         </div>
       </div>
       {hotSpotsLayerOn && !mapBannerDismissed ? (
@@ -2238,6 +2254,7 @@ export const Discover = () => {
               hotSpotsLayerOn={hotSpotsLayerOn}
               onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
               onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
+              onTravel={() => navigate('/travel')}
             />
             {!needsLocationGate && !tokenMissing ? (
               <p
@@ -2369,6 +2386,7 @@ export const Discover = () => {
                 hotSpotsLayerOn={hotSpotsLayerOn}
                 onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
                 onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
+              onTravel={() => navigate('/travel')}
               />
               {!needsLocationGate && !tokenMissing ? (
                 <p

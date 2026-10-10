@@ -14,7 +14,7 @@ export { OFFICIAL_LOGO } from './media-store.js';
 export { PLATFORM_TAGS };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PACK_PATH = path.join(__dirname, 'drafts', 'oct1-2026.json');
+const PACK_PATH = path.join(__dirname, 'drafts', 'launch-pack.json');
 
 /** Platforms that get a visual workspace (preview + prompt + upload). */
 export const VISUAL_PLATFORMS = new Set(['instagram', 'x', 'bluesky']);
@@ -22,7 +22,7 @@ export const VISUAL_PLATFORMS = new Set(['instagram', 'x', 'bluesky']);
 /** Formats that Approve may publish (Story/Reel stay draft+preview only). */
 export const PUBLISHABLE_FORMATS = new Set(['feed', 'post']);
 
-/** Campaign weeks aligned with docs/social-oct1-2026.md (UK calendar). */
+/** Campaign weeks aligned with docs/social-launch-pack.md (UK calendar). */
 export const WEEK_RANGES = [
   { week: 1, start: '2026-08-21', end: '2026-08-27', theme: 'Launch signal' },
   { week: 2, start: '2026-08-28', end: '2026-09-03', theme: 'Nearby / rooms energy' },

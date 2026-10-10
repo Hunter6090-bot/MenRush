@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { HideLocationList } from '../components/HideLocationList';
+import { ShowInLookAroundRow } from '../components/ShowInLookAroundRow';
 import { TwoFactorSettings } from '../components/TwoFactorSettings';
 import { PasswordInput } from '../components/PasswordInput';
 import { authAPI, usersAPI } from '../api/client';
@@ -883,6 +884,9 @@ export const Settings = () => {
             </section>
             <div className="mt-3">
               <HideLocationList />
+            </div>
+            <div className="mt-3">
+              <ShowInLookAroundRow />
             </div>
           </div>
 

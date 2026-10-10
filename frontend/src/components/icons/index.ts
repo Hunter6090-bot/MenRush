@@ -31,3 +31,4 @@ export { IconBluesky } from "./IconBluesky";
 
 export { IconGrid } from "./IconGrid";
 export { IconMapPin } from "./IconMapPin";
+export { IconPlane } from "./IconPlane";
