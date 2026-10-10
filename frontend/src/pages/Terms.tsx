@@ -98,7 +98,7 @@ export const Terms = () => {
           >
             <header>
               <span className="inline-block rounded-full border border-[#c8861c]/30 bg-[#c8861c]/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#c8861c]">
-                Last updated: 06 May 2026
+                Last updated: 10 October 2026
               </span>
               <h1 className="mr-page-heading mt-4">
                 Terms and Conditions
@@ -353,13 +353,19 @@ export const Terms = () => {
               {para(
                 <>
                   <Strong>6.2</Strong> By enabling location services, you consent to your
-                  approximate location being visible to other users within the Platform.
+                  approximate location being visible to other members, unless you use Ghost or
+                  hidden mode. Even an approximate location can help someone nearby work out
+                  roughly where you are, so set Discretion to suit you.
                 </>,
               )}
               {para(
                 <>
-                  <Strong>6.3</Strong> Your exact GPS coordinates are never shared with other
-                  users. Only proximity (e.g. "500m away") is displayed.
+                  <Strong>6.3</Strong> We never show your exact location to other members. They
+                  see an approximate position, moved by your Discretion setting, and distances
+                  rounded to "under 1 mile" or whole miles. Members who choose Ghost or hidden
+                  mode don't appear on the map. If you choose to share a place or location
+                  yourself, for example in a chat or a check-in, other members will see what you
+                  share.
                 </>,
               )}
               {para(

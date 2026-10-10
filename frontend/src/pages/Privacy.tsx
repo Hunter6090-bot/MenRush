@@ -7,7 +7,7 @@ const sections = [
     items: [
       'Account details such as email, display name, age and encrypted login credentials.',
       'Profile content you choose to add, including photos, bio, interests, mood and preferences.',
-      'Approximate location data when you use nearby discovery, Pulse, rooms or location features.',
+      'Precise location from your device, with your permission, when you use the map and nearby discovery. We use it to work out an approximate position and rounded distance that other members can see. We never show your exact location to other members.',
       'Messages, media metadata, reports, blocks and safety signals needed to operate the service.',
       'Device, log and security information used to protect accounts and prevent abuse.',
     ],
@@ -16,7 +16,7 @@ const sections = [
     title: 'How we use it',
     items: [
       'To create your account, authenticate you and provide the MenRush app experience.',
-      'To show nearby profiles using privacy-bucketed distance rather than exact public coordinates.',
+      'To show nearby profiles. Distances are shown rounded, as "under 1 mile" or in whole miles.',
       'To run verification, moderation, support, safety reviews and abuse prevention.',
       'To send transactional emails, waitlist updates and service notices.',
       'To improve product reliability, performance and launch readiness.',
