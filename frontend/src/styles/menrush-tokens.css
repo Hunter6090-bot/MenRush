@@ -42,6 +42,11 @@
   --mr-tick-delivered: #F0E0C0;
   --mr-tick-read:      #E0A14A;
 
+  /* Accent text (links, copper labels): readable copper per theme, >= 4.5:1 on card and tinted fills */
+  --nn-accent-text: var(--nn-copper-bright);
+  /* Destructive text (Block): >= 4.5:1 on elevated menus */
+  --nn-danger-text: var(--nn-danger-light);
+
   --nn-fg-1: var(--nn-text);
   --nn-fg-2: var(--nn-muted);
   --nn-fg-3: var(--nn-faint);
@@ -197,6 +202,9 @@ html.theme-light {
   /* Ticket 6: Brand Soft receipt ticks (light cream/paper) */
   --mr-tick-delivered: #1E1508;
   --mr-tick-read:      #8B5A1A;
+
+  --nn-accent-text: var(--nn-rust);
+  --nn-danger-text: var(--nn-danger);
 
   --bg-primary: var(--nn-bg);
   --bg-elevated: var(--nn-elevated);
