@@ -879,6 +879,7 @@ export const authService = {
   },
 
   async consumeTwoFactorPendingJti(userId: string, jti: string): Promise<boolean> {
+    await query(`DELETE FROM two_factor_pending_used WHERE expires_at < NOW()`);
     const used = await query(
       `INSERT INTO two_factor_pending_used (jti_hash, user_id, expires_at)
        VALUES ($1, $2, NOW() + INTERVAL '1 hour')

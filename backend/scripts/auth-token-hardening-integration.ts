@@ -102,7 +102,33 @@ async function main() {
       body: { pendingToken, code },
     });
     assert.equal(replay.status, 401, 'pending token is single-use');
+    assert.equal(replay.json.error, 'Invalid code or token');
     assert.ok(!replay.json.token, 'replay does not issue a second session');
+
+    const otherPending = authService.signTwoFactorPendingToken(userId);
+    const reusedCode = await call('POST', '/api/auth/2fa/verify', {
+      body: { pendingToken: otherPending, code },
+    });
+    assert.equal(reusedCode.status, 401, 'same TOTP code cannot complete a second pending token');
+    assert.equal(reusedCode.json.error, 'Invalid code or token');
+    assert.ok(!reusedCode.json.token, 'reused code does not issue a second session');
+
+    const expiredHash = `expired-pending-${randomUUID()}`;
+    await query(
+      `INSERT INTO two_factor_pending_used (jti_hash, user_id, expires_at)
+       VALUES ($1, $2, NOW() - INTERVAL '1 minute')`,
+      [expiredHash, userId],
+    );
+    assert.equal(
+      (await authService.consumeTwoFactorPendingJti(userId, randomUUID())),
+      true,
+      'fresh jti still consumes after prune',
+    );
+    const leftover = await query(
+      `SELECT 1 FROM two_factor_pending_used WHERE jti_hash = $1`,
+      [expiredHash],
+    );
+    assert.equal(leftover.rows.length, 0, 'expired pending rows are pruned on consume');
 
     const meSession = await call('GET', '/api/users/me', { token: sessionToken });
     assert.equal(meSession.status, 200, 'session token accepted on /users/me');
@@ -130,9 +156,46 @@ async function main() {
     assert.equal((await call('GET', '/api/users/me', { token: legacy })).status, 200);
     assert.equal((await call('GET', '/api/auth/account', { token: legacy })).status, 200);
 
+    const parallelId = randomUUID();
+    const parallelEmail = `ath-${parallelId.slice(0, 8)}@test.invalid`;
+    const parallelSecret = authenticator.generateSecret();
+    await query(
+      `INSERT INTO users (
+         id, email, password_hash, name, age, email_confirmed,
+         totp_enabled, totp_secret_encrypted, totp_enabled_at,
+         is_verified, verification_status, verification_provider
+       ) VALUES (
+         $1, $2, $3, 'Token Check', 30, TRUE,
+         TRUE, $4, NOW(),
+         TRUE, 'verified', 'veriff'
+       )`,
+      [parallelId, parallelEmail, passwordHash, encryptTotpSecret(parallelSecret)],
+    );
+    const parallelLogin = await call('POST', '/api/auth/login', {
+      body: { email: parallelEmail, password },
+    });
+    assert.equal(parallelLogin.status, 200, 'parallel fixture login');
+    const parallelPending = parallelLogin.json.pendingToken as string;
+    const parallelCode = authenticator.generate(parallelSecret);
+    const [first, second] = await Promise.all([
+      call('POST', '/api/auth/2fa/verify', {
+        body: { pendingToken: parallelPending, code: parallelCode },
+      }),
+      call('POST', '/api/auth/2fa/verify', {
+        body: { pendingToken: parallelPending, code: parallelCode },
+      }),
+    ]);
+    const statuses = [first.status, second.status].sort((a, b) => a - b);
+    assert.deepEqual(statuses, [200, 401], 'parallel verify: one session, one reject');
+    const winner = first.status === 200 ? first : second;
+    const loser = first.status === 401 ? first : second;
+    assert.equal(typeof winner.json.token, 'string', 'parallel winner issues a session');
+    assert.ok(!loser.json.token, 'parallel loser does not issue a session');
+    assert.equal(loser.json.error, 'Invalid code or token');
+
     console.log('auth-token-hardening-integration: ok');
   } finally {
-    await query(`DELETE FROM users WHERE id = $1`, [userId]).catch(() => undefined);
+    await query(`DELETE FROM users WHERE email LIKE 'ath-%@test.invalid'`).catch(() => undefined);
     await new Promise<void>((resolve, reject) =>
       server.close((err) => (err ? reject(err) : resolve())),
     );
