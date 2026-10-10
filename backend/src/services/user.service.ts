@@ -486,7 +486,8 @@ export const userService = {
     return result.rows[0]?.name as string | undefined;
   },
 
-  async updateLocation(userId: string, lat: number, lng: number) {
+  /** Returns false when the jump gate refused the fix (nothing stored). */
+  async updateLocation(userId: string, lat: number, lng: number): Promise<boolean> {
     // Implausible jump (teleporting the query point to triangulate someone):
     // keep the stored location, refresh presence only.
     if (!acceptLocationFix(userId, lat, lng)) {
@@ -494,7 +495,7 @@ export const userService = {
         `UPDATE profiles SET online = true, last_seen = NOW() WHERE user_id = $1`,
         [userId],
       );
-      return;
+      return false;
     }
 
     // Upsert live pin + presence first.
@@ -521,7 +522,7 @@ export const userService = {
       [userId],
     );
     const row = existing.rows[0] as VisitorProfileState | undefined;
-    if (!row) return;
+    if (!row) return true;
 
     const plan = planVisitorLocationUpdate(lat, lng, {
       home_lat: row.home_lat != null ? Number(row.home_lat) : null,
@@ -549,7 +550,7 @@ export const userService = {
         // About 1 km (2 dp) only when LOCATION_PURGE_ENABLED=true; precise otherwise.
         [userId, storedHomeCoord(plan.homeLat), storedHomeCoord(plan.homeLng)],
       );
-      return;
+      return true;
     }
 
     if (plan.action === 'clear_visitor') {
@@ -562,7 +563,7 @@ export const userService = {
           WHERE user_id = $1`,
         [userId],
       );
-      return;
+      return true;
     }
 
     if (plan.action === 'start_visit') {
@@ -576,6 +577,7 @@ export const userService = {
         [userId, plan.since, plan.expiresAt, storedHomeCoord(plan.anchorLat), storedHomeCoord(plan.anchorLng)],
       );
     }
+    return true;
   },
 
   async setOnlineStatus(userId: string, online: boolean) {
@@ -989,9 +991,12 @@ export const userService = {
          reporter.id AS reporter_id,
          reporter.name AS reporter_name,
          reporter.email AS reporter_email,
-         reported.id AS reported_id,
+         r.reported_id,
          reported.name AS reported_name,
-         reported.email AS reported_email
+         reported.email AS reported_email,
+         -- Set when the reported member deleted their account. The report and
+         -- its details stay; reported_id / name / email are then null.
+         r.reported_account_deleted_at
        FROM reports r
        JOIN users reporter ON reporter.id = r.reporter_id
        LEFT JOIN users reported ON reported.id = r.reported_id

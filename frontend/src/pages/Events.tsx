@@ -99,7 +99,7 @@ export const Events = () => {
           <p
             role="status"
             data-testid="event-checkin-notice"
-            className="mb-4 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--cream)]"
+            className="mb-4 rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2 text-[15px] text-[var(--cream)]"
           >
             {checkInNotice}
           </p>
@@ -251,9 +251,11 @@ export const Events = () => {
                             setCheckInNotice('');
                             void eventsAPI
                               .checkIn(ev.id)
-                              .then(() => {
+                              .then((res) => {
                                 setCheckInNotice(
-                                  `Checked in at ${ev.venue_name || ev.name}. Pin stays on the map for ${CHECKIN_TTL_HOURS} hours.`,
+                                  res.data.spot
+                                    ? `Checked in at ${ev.venue_name || ev.name}. Pin stays on the map for ${CHECKIN_TTL_HOURS} hours.`
+                                    : `You're in Ghost or hidden, so no pin was added at ${ev.venue_name || ev.name}.`,
                                 );
                               })
                               .catch((err: { response?: { data?: { error?: string } } }) => {
