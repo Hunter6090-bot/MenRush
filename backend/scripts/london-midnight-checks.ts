@@ -3,8 +3,14 @@
  * Run from backend/: npm run test:london-midnight
  */
 import assert from 'assert';
+import { readFileSync } from 'fs';
+import path from 'path';
 import {
   europeLondonYmd,
+  premiumEndFromLaunch,
+  pridePremiumEnd,
+  pridePremiumWindow,
+  SHARED_PRIDE_SCHEDULED_LAUNCH,
   mr3FreePremiumWindow,
   bsf26PremiumWindow,
   startOfEuropeLondonDay,
@@ -51,12 +57,76 @@ test('each start really is London midnight on that date', () => {
   }
 });
 
-test('MR3FREE redeemed on a GMT day starts at London midnight and keeps the full last day', () => {
+test('MR3FREE redeemed on a GMT day starts at London midnight and ends the day before its anniversary', () => {
   const w = mr3FreePremiumWindow(3, new Date('2026-10-27T15:00:00Z'));
   assert.strictEqual(w.premiumStart.toISOString(), '2026-10-27T00:00:00.000Z');
-  assert.strictEqual(w.premiumEnd.toISOString(), '2027-01-27T23:59:59.999Z');
+  // London rule: 27 Oct + 3 months = 27 Jan; end is 1 ms before London midnight 27 Jan,
+  // the same as a BST-day start. (The old UTC rule ended 27 Jan 23:59:59.999Z.)
+  assert.strictEqual(w.premiumEnd.toISOString(), '2027-01-26T23:59:59.999Z');
   const w31 = mr3FreePremiumWindow(3, new Date('2026-10-31T23:30:00Z'));
   assert.strictEqual(w31.premiumStart.toISOString(), '2026-10-31T00:00:00.000Z');
+});
+
+test('Premium end: 25 Oct (BST midnight) and 26 Oct (GMT) starts', () => {
+  // 25 Oct London starts at 24 Oct 23:00Z; 3 months on is 25 Jan (GMT).
+  assert.strictEqual(premiumEndFromLaunch(startOfEuropeLondonDay('2026-10-25'), 3).toISOString(), '2027-01-24T23:59:59.999Z');
+  assert.strictEqual(premiumEndFromLaunch(startOfEuropeLondonDay('2026-10-26'), 3).toISOString(), '2027-01-25T23:59:59.999Z');
+  // Any instant on the London day gives the same end.
+  assert.strictEqual(premiumEndFromLaunch(new Date('2026-10-25T23:30:00Z'), 3).toISOString(), '2027-01-24T23:59:59.999Z'); // 23:30 GMT, still 25 Oct
+  assert.strictEqual(premiumEndFromLaunch(new Date('2026-10-26T23:59:59Z'), 3).toISOString(), '2027-01-25T23:59:59.999Z');
+});
+
+test('Premium end: summer start ending in winter, winter start ending in summer', () => {
+  // 15 Jul (BST) + 3 = 15 Oct (BST): end 14 Oct 23:59:59.999 London = 22:59:59.999Z.
+  assert.strictEqual(premiumEndFromLaunch(new Date('2026-07-15T10:00:00Z'), 3).toISOString(), '2026-10-14T22:59:59.999Z');
+  // 15 Aug (BST) + 3 = 15 Nov (GMT): end 14 Nov 23:59:59.999Z.
+  assert.strictEqual(premiumEndFromLaunch(new Date('2026-08-15T10:00:00Z'), 3).toISOString(), '2026-11-14T23:59:59.999Z');
+  // 15 Jan (GMT) + 3 = 15 Apr (BST): end 14 Apr 23:59:59.999 London = 22:59:59.999Z.
+  assert.strictEqual(premiumEndFromLaunch(new Date('2027-01-15T10:00:00Z'), 3).toISOString(), '2027-04-14T22:59:59.999Z');
+  // 1 Dec (GMT) + 3 = 1 Mar (GMT): end 28 Feb 23:59:59.999Z.
+  assert.strictEqual(premiumEndFromLaunch(new Date('2026-12-01T10:00:00Z'), 3).toISOString(), '2027-02-28T23:59:59.999Z');
+  // Late evening BST belongs to that London day: 31 Aug 23:30 London (22:30Z) + 3 rolls to 1 Dec.
+  assert.strictEqual(premiumEndFromLaunch(new Date('2026-08-31T22:30:00Z'), 3).toISOString(), '2026-11-30T23:59:59.999Z');
+});
+
+test('Premium end is always the last ms of a London day, N months generally', () => {
+  for (const start of ['2026-03-29T00:30:00Z', '2026-10-25T00:30:00Z', '2026-06-01T12:00:00Z', '2026-11-20T12:00:00Z']) {
+    for (const n of [1, 3, 6, 12]) {
+      const end = premiumEndFromLaunch(new Date(start), n);
+      assert.notStrictEqual(europeLondonYmd(end), europeLondonYmd(new Date(end.getTime() + 1)), `${start} +${n}: end is the last ms of a London day`);
+    }
+  }
+});
+
+test('Pride grant on time ends at the end of 1 Jan 2027 London, matching Terms 7.7', () => {
+  const launch = new Date(SHARED_PRIDE_SCHEDULED_LAUNCH);
+  assert.strictEqual(pridePremiumEnd(launch, 3).toISOString(), '2027-01-01T23:59:59.999Z');
+  // Booked before launch: starts at launch, same end.
+  const booked = pridePremiumWindow(3, new Date('2026-08-25T12:00:00Z'));
+  assert.strictEqual(booked.premiumEnd.toISOString(), '2027-01-01T23:59:59.999Z');
+  assert.strictEqual(europeLondonYmd(booked.premiumEnd), '2027-01-01');
+  assert.notStrictEqual(europeLondonYmd(new Date(booked.premiumEnd.getTime() + 1)), '2027-01-01');
+  // Terms wording still says so. Tolerant of the #364 rewording: either
+  // 'On-time open 1 October 2026 ends 1 January 2027.' (before #364) or
+  // 'Premium runs from 1 October 2026 to 1 January 2027' (after #364).
+  // JSX can wrap the sentence, so whitespace is collapsed first.
+  const terms = readFileSync(path.resolve(__dirname, '../../frontend/src/pages/Terms.tsx'), 'utf8').replace(/\s+/g, ' ');
+  assert.match(
+    terms,
+    /(?:On-time open 1 October 2026 ends|Premium runs from 1 October 2026 to) 1 January 2027\b/,
+    'Terms 7.7 must still say the on-time Pride grant runs from 1 October 2026 to 1 January 2027',
+  );
+});
+
+test('Pride grant redeemed after launch ends at the end of the London anniversary day', () => {
+  // 10 Oct (BST) + 3 = 10 Jan (GMT): end of 10 Jan London.
+  assert.strictEqual(pridePremiumWindow(3, new Date('2026-10-10T10:00:00Z')).premiumEnd.toISOString(), '2027-01-10T23:59:59.999Z');
+  // 27 Oct (GMT) + 3 = 27 Jan.
+  assert.strictEqual(pridePremiumEnd(new Date('2026-10-27T15:00:00Z'), 3).toISOString(), '2027-01-27T23:59:59.999Z');
+  // 15 Jan (GMT) + 3 = 15 Apr (BST): end of 15 Apr London = 22:59:59.999Z.
+  assert.strictEqual(pridePremiumEnd(new Date('2027-01-15T10:00:00Z'), 3).toISOString(), '2027-04-15T22:59:59.999Z');
+  // MR3FREE and BSF26 keep the day-before rule for the same start.
+  assert.strictEqual(premiumEndFromLaunch(new Date('2026-10-27T15:00:00Z'), 3).toISOString(), '2027-01-26T23:59:59.999Z');
 });
 
 test('BST-day windows unchanged (BSF26 1 Oct, MR3FREE 5 Oct)', () => {

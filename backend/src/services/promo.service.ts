@@ -179,7 +179,20 @@ export function pridePremiumWindow(
 ): { premiumStart: Date; premiumEnd: Date } {
   const launch = getMenRushLaunchDate();
   const premiumStart = now.getTime() >= launch.getTime() ? now : launch;
-  return { premiumStart, premiumEnd: premiumEndFromLaunch(premiumStart, months) };
+  return { premiumStart, premiumEnd: pridePremiumEnd(premiumStart, months) };
+}
+
+/**
+ * Pride grants only (invites, public and personal Pride codes): Premium runs to
+ * the END of the London day N months after the start's London date. On-time
+ * launch (1 Oct 2026) ends at the end of 1 Jan 2027 London time
+ * (2027-01-01T23:59:59.999Z), as Terms 7.7 say. MR3FREE and BSF26 use
+ * premiumEndFromLaunch (ends the day before the anniversary).
+ */
+export function pridePremiumEnd(start: Date, months = SHARED_PRIDE_MONTHS_FREE): Date {
+  const [y, m, d] = europeLondonYmd(start).split('-').map(Number);
+  const dayAfterAnniversary = new Date(Date.UTC(y, m - 1 + months, d + 1)).toISOString().slice(0, 10);
+  return new Date(startOfEuropeLondonDay(dayAfterAnniversary).getTime() - 1);
 }
 
 /** YYYY-MM-DD for an instant in Europe/London. */
@@ -323,12 +336,18 @@ export function getMenRushLaunchDate(): Date {
   return new Date(SHARED_PRIDE_SCHEDULED_LAUNCH);
 }
 
-/** End of N calendar months from launch. On-time: 1 Oct → 1 Jan. Late launch: end moves with open date — never hard-code 1 January. */
+/**
+ * End of N calendar months of Premium, on Europe/London calendar days:
+ * London midnight at the start of (start's London date + N months), minus 1 ms.
+ * So Premium runs through the day before the anniversary, the same way in BST
+ * and GMT. A day past the end of the target month rolls into the next month
+ * (31 Aug + 3 months = 1 Dec), as before. Late launch: the end moves with the
+ * open date; never hard-code 1 January.
+ */
 export function premiumEndFromLaunch(launch: Date, months = SHARED_PRIDE_MONTHS_FREE): Date {
-  const end = new Date(launch);
-  end.setUTCMonth(end.getUTCMonth() + months);
-  end.setUTCHours(23, 59, 59, 999);
-  return end;
+  const [y, m, d] = europeLondonYmd(launch).split('-').map(Number);
+  const anniversaryYmd = new Date(Date.UTC(y, m - 1 + months, d)).toISOString().slice(0, 10);
+  return new Date(startOfEuropeLondonDay(anniversaryYmd).getTime() - 1);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
