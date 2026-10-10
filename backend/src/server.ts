@@ -173,7 +173,7 @@ app.post('/api/waitlist', async (req, res) => {
       console.log('[drip] PAUSED — welcome held for', result.email);
     }
     // There is no waitlist any more: MenRush is open. Keep the reply strictly
-    // true and point people at sign-up (guarded by waitlistReplyCopy.test.ts).
+    // true and point people at sign-up (guarded by frontend/src/test/retiredWaitlistPaths.test.ts).
     return res.json({
       success: true,
       already_subscribed: result.alreadySubscribed,

@@ -28,6 +28,10 @@ describe('retired waitlist paths', () => {
     const start = server.indexOf("app.post('/api/waitlist'");
     const handler = server.slice(start, server.indexOf('\n});', start));
 
+    it('server.ts comment names this guard file', () => {
+      expect(server).toContain('guarded by frontend/src/test/retiredWaitlistPaths.test.ts');
+    });
+
     it('handler is found', () => {
       expect(start).toBeGreaterThan(-1);
       expect(handler).toMatch(/message:/);
@@ -70,10 +74,11 @@ describe('retired waitlist paths', () => {
       const window = campaigns.slice(campaigns.indexOf("err.message === 'issue_window_closed'"));
       for (const block of [closed.slice(0, 400), window.slice(0, 400)]) {
         expect(block).not.toMatch(/\/pride/);
-        expect(block).toMatch(/sign up/);
+        expect(block).toMatch(/sign up/i);
         expect(block).toMatch(/menrush\.com/);
       }
       expect(closed.slice(0, 400)).toMatch(/redirect: '\/register'/);
+      expect(window.slice(0, 400)).toMatch(/register by 31 October, when all Pride codes end/);
     });
   });
 });

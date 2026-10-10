@@ -171,7 +171,7 @@ router.post('/:campaignId/signup', signupLimiter, async (req: Request, res: Resp
     if (err.message === 'issue_window_closed') {
       res.status(410).json({
         error:
-          'The Pride claim window closed after 31 August 2026. If you already claimed, enter your code when you sign up at menrush.com with the same email.',
+          'The Pride claim window closed after 31 August 2026. If you already claimed a code, please register by 31 October, when all Pride codes end. Sign up at menrush.com with the same email and enter your code.',
         code: 'issue_window_closed',
       });
       return;
