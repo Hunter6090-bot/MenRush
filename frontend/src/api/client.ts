@@ -1090,6 +1090,16 @@ export interface HotSpotDTO {
   nation?: string | null;
   venue_type?: string | null;
   source_url?: string | null;
+  /**
+   * Venue photo URL. Not served yet: the 10 Oct 2026 prod audit found no photo
+   * column on hot_spots. Out shows it only when present and it loads.
+   */
+  photo_url?: string | null;
+  /**
+   * Opening hours as display text. Not served yet (no hours column on prod,
+   * 10 Oct 2026 audit). Out shows it only when present; never invented.
+   */
+  opening_hours?: string | null;
   verified_at?: string | null;
   last_activity_at?: string | null;
   claimed_by_user_id?: string | null;
