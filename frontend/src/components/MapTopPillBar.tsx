@@ -141,7 +141,7 @@ export function MapTopPillBar({
             </div>
             {moreBelow ? (
               <div
-                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[#0D0A06] via-[#0D0A06]/80 to-transparent"
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[#0D0A06] via-[rgba(240,224,192,0.22)] to-transparent"
                 data-testid="map-overlay-scroll-cue"
                 aria-hidden
               />
