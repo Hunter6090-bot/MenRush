@@ -2199,7 +2199,7 @@ export const Discover = () => {
         </div>
         {nearbyView === 'grid' && !needsLocationGate ? (
           <details className="mb-3 shrink-0 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/70 px-4 py-2.5">
-            <summary className="cursor-pointer text-[12px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]">
+            <summary className="flex min-h-[44px] cursor-pointer items-center text-[15px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]" data-testid="discover-filters-mood-summary">
               Mood & filters
             </summary>
             <div className="mt-3 space-y-3" data-testid="discover-mood-strip">
@@ -2508,7 +2508,7 @@ export const Discover = () => {
 
             {/* Compact filters + mood (grid view) */}
             <details className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)]/60 px-3 py-2">
-              <summary className="cursor-pointer text-[12px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]">
+              <summary className="flex min-h-[44px] cursor-pointer items-center text-[15px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)]" data-testid="discover-filters-mood-summary">
                 Filters & mood
               </summary>
               <div className="mt-3 space-y-3">

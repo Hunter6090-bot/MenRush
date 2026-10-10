@@ -97,7 +97,7 @@ export function DiscoveryFilterPanel({
             aria-expanded={open}
             aria-controls={panelId}
             onClick={() => setOpen((prev) => !prev)}
-            className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-bold transition-colors ${
+            className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[15px] font-bold transition-colors ${
               open || activeCount > 0
                 ? 'border-[var(--copper)] bg-[var(--copper)]/15 text-[var(--copper)]'
                 : 'border-[var(--border-default)] bg-[var(--bg-elevated)]/85 text-[var(--cream-soft)] hover:border-[var(--copper)]/40'
@@ -105,20 +105,20 @@ export function DiscoveryFilterPanel({
           >
             Filters
             {activeCount > 0 ? (
-              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--copper)] px-1 text-[10px] font-black text-[var(--bg-primary)]">
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--copper)] px-1 text-[15px] font-black text-[var(--bg-primary)]">
                 {activeCount}
               </span>
             ) : null}
           </button>
         ) : (
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-[var(--cream-muted)]">Filters</p>
+          <p className="text-[15px] font-extrabold uppercase tracking-[0.1em] text-[var(--cream-muted)]">Filters</p>
         )}
 
         {activeCount > 0 ? (
           <button
             type="button"
             onClick={clearAll}
-            className="text-[11px] font-semibold text-[var(--cream-muted)] transition-colors hover:text-[var(--copper)]"
+            className="text-[15px] font-semibold text-[var(--cream-muted)] transition-colors hover:text-[var(--copper)]"
           >
             Clear all
           </button>
@@ -147,7 +147,7 @@ export function DiscoveryFilterPanel({
                   key={cat.id}
                   type="button"
                   onClick={() => setActiveCategory(cat.id)}
-                  className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold transition-colors ${
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-[15px] font-bold transition-colors ${
                     activeCategory === cat.id
                       ? 'bg-[var(--copper)] text-[var(--bg-primary)]'
                       : 'bg-[var(--bg-primary)]/60 text-[var(--cream-muted)] hover:text-[var(--cream)]'
@@ -161,7 +161,7 @@ export function DiscoveryFilterPanel({
             <button
               type="button"
               onClick={() => setActiveCategory('age')}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold transition-colors ${
+              className={`shrink-0 rounded-full px-3 py-1.5 text-[15px] font-bold transition-colors ${
                 activeCategory === 'age'
                   ? 'bg-[var(--copper)] text-[var(--bg-primary)]'
                   : 'bg-[var(--bg-primary)]/60 text-[var(--cream-muted)] hover:text-[var(--cream)]'
@@ -172,7 +172,7 @@ export function DiscoveryFilterPanel({
             <button
               type="button"
               onClick={() => setActiveCategory('status')}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold transition-colors ${
+              className={`shrink-0 rounded-full px-3 py-1.5 text-[15px] font-bold transition-colors ${
                 activeCategory === 'status'
                   ? 'bg-[var(--copper)] text-[var(--bg-primary)]'
                   : 'bg-[var(--bg-primary)]/60 text-[var(--cream-muted)] hover:text-[var(--cream)]'
@@ -183,7 +183,7 @@ export function DiscoveryFilterPanel({
             <button
               type="button"
               onClick={() => setActiveCategory('mood')}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold transition-colors ${
+              className={`shrink-0 rounded-full px-3 py-1.5 text-[15px] font-bold transition-colors ${
                 activeCategory === 'mood'
                   ? 'bg-[var(--copper)] text-[var(--bg-primary)]'
                   : 'bg-[var(--bg-primary)]/60 text-[var(--cream-muted)] hover:text-[var(--cream)]'
@@ -218,7 +218,7 @@ export function DiscoveryFilterPanel({
                   role="group"
                   aria-label="Custom age range"
                 >
-                  <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--cream-muted)]">
+                  <label className="flex flex-col gap-1 text-[15px] font-bold uppercase tracking-[0.08em] text-[var(--cream-muted)]">
                     Min
                     <input
                       type="number"
@@ -234,8 +234,8 @@ export function DiscoveryFilterPanel({
                       className={ageInputClass}
                     />
                   </label>
-                  <span className="pb-2 text-xs text-[var(--cream-muted)]">–</span>
-                  <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--cream-muted)]">
+                  <span className="pb-2 text-[15px] text-[var(--cream-muted)]">–</span>
+                  <label className="flex flex-col gap-1 text-[15px] font-bold uppercase tracking-[0.08em] text-[var(--cream-muted)]">
                     Max
                     <input
                       type="number"
@@ -255,7 +255,7 @@ export function DiscoveryFilterPanel({
                     <button
                       type="button"
                       onClick={() => onChange(withAgePreset(value, 'any'))}
-                      className="pb-2 text-[11px] font-semibold text-[var(--cream-muted)] hover:text-[var(--copper)]"
+                      className="pb-2 text-[15px] font-semibold text-[var(--cream-muted)] hover:text-[var(--copper)]"
                       data-testid="custom-age-clear"
                     >
                       Clear custom
