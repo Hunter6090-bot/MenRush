@@ -1,7 +1,7 @@
 import { query } from '../db';
 
 /**
- * Per-member "Don't remind me again" for the recurring prompts.
+ * Per-member "Don't show again" for the recurring prompts.
  * Stored in users.prompt_prefs as { "<prompt>": "never" }.
  */
 export const PROMPT_KEYS = ['install', 'alerts', 'profile'] as const;

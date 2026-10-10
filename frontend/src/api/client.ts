@@ -1273,7 +1273,7 @@ function resolveSocketUrl(): string {
 // the static frontend (e.g. Railway backend + Vercel frontend).
 export const SOCKET_URL = resolveSocketUrl();
 
-/** "Don't remind me again" across devices. Keys: install, alerts, profile. */
+/** "Don't show again" across devices. Keys: install, alerts, profile. */
 export type PromptPrefKey = 'install' | 'alerts' | 'profile';
 
 export const promptPrefsAPI = {

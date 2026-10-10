@@ -182,7 +182,7 @@ jobs:
         run: npm run --if-present test:show-distance-integration
       - name: Hide my location from
         run: npm run --if-present test:hide-location-integration
-      - name: Prompt prefs on real PG (Don't remind me again across devices)
+      - name: Prompt prefs on real PG (Don't show again across devices)
         run: npm run --if-present test:prompt-prefs-integration
       - name: Community leaves out Ghost and hidden members
         run: npm run --if-present test:community-ghost-hidden

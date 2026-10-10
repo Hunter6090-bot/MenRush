@@ -74,7 +74,7 @@ describe("InstallPrompt: Don't show again", () => {
       const user = userEvent.setup();
 
       const first = renderSheet();
-      expect(screen.getByText('Put MenRush on your Home Screen.')).toBeInTheDocument();
+      expect(await screen.findByText('Put MenRush on your Home Screen.')).toBeInTheDocument();
       expect(screen.queryByText('Not now')).toBeNull();
       await user.click(screen.getByLabelText("Don't show again"));
       await user.click(screen.getByTestId('install-prompt-close'));
@@ -95,12 +95,12 @@ describe("InstallPrompt: Don't show again", () => {
     setUa(phones['Android Chrome']);
     const user = userEvent.setup();
     const first = renderSheet();
-    await user.click(screen.getByTestId('install-prompt-close'));
+    await user.click(await screen.findByTestId('install-prompt-close'));
     first.unmount();
 
     window.sessionStorage.clear();
     const second = renderSheet();
-    expect(screen.getByRole('dialog', { name: 'Install MenRush' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Install MenRush' })).toBeInTheDocument();
     await user.click(screen.getByLabelText("Don't show again"));
     await user.click(screen.getByTestId('install-prompt-close'));
     second.unmount();
@@ -108,7 +108,7 @@ describe("InstallPrompt: Don't show again", () => {
     window.sessionStorage.clear();
     useAuthStore.setState({ user: { id: 'member-b', name: 'Other' } as never, token: 't' });
     renderSheet();
-    expect(screen.getByRole('dialog', { name: 'Install MenRush' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Install MenRush' })).toBeInTheDocument();
   });
 });
 
@@ -131,10 +131,10 @@ describe('InstallPrompt sheet and the phone tab bar', () => {
   });
 
   for (const [phone, ua] of Object.entries(phones)) {
-    it(`${phone}: the Get the app sheet sits above the tab bar, not over it`, () => {
+    it(`${phone}: the Get the app sheet sits above the tab bar, not over it`, async () => {
       Object.defineProperty(navigator, 'userAgent', { configurable: true, get: () => ua });
       renderSheet();
-      const sheet = screen.getByRole('dialog', { name: 'Install MenRush' });
+      const sheet = await screen.findByRole('dialog', { name: 'Install MenRush' });
       const classes = sheet.className.split(/\s+/);
       expect(classes).toContain('fixed');
       expect(classes).toContain('bottom-[var(--mobile-tab-bar-height)]');

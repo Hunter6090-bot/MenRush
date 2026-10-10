@@ -45,8 +45,14 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
 
   // One prompt at a time: the Get the app sheet comes first, then alerts, then
   // Finish profile. The sign in page card has nothing to share the screen with.
-  const wants = eligible && !dismissal.hidden;
-  const onTop = usePromptSlot('install-sheet', variant === 'sheet' && wants ? 'want' : 'none');
+  // On a new device, wait for the member's server prefs (or the short timeout)
+  // so a prompt they already turned off never flashes up.
+  const wants = eligible && !dismissal.hidden && dismissal.ready;
+  const waiting = eligible && !dismissal.hidden && !dismissal.ready;
+  const onTop = usePromptSlot(
+    'install-sheet',
+    variant !== 'sheet' ? 'none' : wants ? 'want' : waiting ? 'pending' : 'none',
+  );
 
   if (!wants || (variant === 'sheet' && !onTop)) return null;
 

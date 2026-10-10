@@ -67,15 +67,18 @@ export function PushAlertBanner() {
 
   // One prompt at a time. While still checking, hold back Finish profile so it
   // does not flash up and then get replaced.
+  // On a new device also wait for the member's server prefs (or the short
+  // timeout), so the banner never shows and then vanishes.
+  const ready = install.ready && alerts.ready;
   const slotState = (kind: 'install' | 'alerts', hidden: boolean): PromptSlotState => {
-    if (eligible === undefined) return kind === 'install' ? 'pending' : 'none';
+    if (eligible === undefined || !ready) return kind === 'install' ? 'pending' : 'none';
     if (eligible !== kind) return 'none';
     return hidden ? 'none' : 'want';
   };
   const installOnTop = usePromptSlot('install-banner', slotState('install', install.hidden));
   const alertsOnTop = usePromptSlot('alerts', slotState('alerts', alerts.hidden));
 
-  if (!eligible) return null;
+  if (!eligible || !ready) return null;
   const iosInstall = eligible === 'install';
   const prompt = iosInstall ? install : alerts;
   if (prompt.hidden) return null;

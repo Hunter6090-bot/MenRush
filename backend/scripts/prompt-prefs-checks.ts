@@ -107,8 +107,59 @@ async function main() {
     assert.strictEqual(res.status, 500);
     const body = await res.json();
     assert.ok(!JSON.stringify(body).includes('prompt_prefs'), 'no DB detail in the error');
+
+    // ...but the DB error is logged server side, for both read and save.
+    const logged: unknown[][] = [];
+    const realError = console.error;
+    console.error = (...args: unknown[]) => {
+      logged.push(args);
+    };
+    try {
+      res = await req('', 'GET', tokenA);
+      assert.strictEqual(res.status, 500);
+      svc.promptPrefsService.setNever = async () => {
+        throw new Error('deadlock detected on users');
+      };
+      res = await req('/alerts/never', 'PUT', tokenA);
+      assert.strictEqual(res.status, 500);
+      assert.ok(!JSON.stringify(await res.json()).includes('deadlock'), 'no DB detail in the save error');
+    } finally {
+      console.error = realError;
+    }
+    assert.ok(
+      logged.some((args) => String(args[0]).includes('[prompt-prefs] read failed') && String(args[1]).includes('prompt_prefs')),
+      'read error logged with the DB message',
+    );
+    assert.ok(
+      logged.some((args) => String(args[0]).includes('[prompt-prefs] save failed') && String(args[1]).includes('deadlock')),
+      'save error logged with the DB message',
+    );
+
+    // Rate limit is per member, not per IP: all requests here share 127.0.0.1.
+    svc.promptPrefsService.setNever = async (_userId: string, key: any) => [key];
+    const tokenC = authService.issueAccessToken('member-c');
+    const tokenD = authService.issueAccessToken('member-d');
+    for (let i = 0; i < 30; i += 1) {
+      res = await req('/install/never', 'PUT', tokenC);
+      assert.strictEqual(res.status, 200, `member C change ${i + 1} allowed`);
+    }
+    res = await req('/install/never', 'PUT', tokenC);
+    assert.strictEqual(res.status, 429, 'member C is limited after 30 changes');
+    res = await req('/install/never', 'PUT', tokenD);
+    assert.strictEqual(res.status, 200, 'member D on the same IP is not limited by member C');
   } finally {
     server.close();
+  }
+
+  // Migration 074 sets a lock timeout before touching users.
+  const fs = await import('fs');
+  const path = await import('path');
+  for (const dir of ['database/migrations', '../database/migrations']) {
+    const sql = fs.readFileSync(path.resolve(__dirname, '..', dir, '074_prompt_prefs.sql'), 'utf8');
+    const lock = sql.search(/^SET LOCAL lock_timeout = '\d+s';$/m);
+    const alter = sql.search(/^ALTER TABLE users/m);
+    assert.ok(lock >= 0, `${dir}/074 sets lock_timeout`);
+    assert.ok(lock < alter, `${dir}/074 sets lock_timeout before ALTER TABLE`);
   }
 
   console.log('prompt-prefs-checks: ok');

@@ -122,7 +122,7 @@ describe("Finish your profile: Don't show again", () => {
         <ActivationBanner profile={incomplete} />
       </MemoryRouter>,
     );
-    expect(screen.getByTestId('activation-finish-profile')).toBeInTheDocument();
+    expect(await screen.findByTestId('activation-finish-profile')).toBeInTheDocument();
     await user.click(screen.getByLabelText("Don't show again"));
     await user.click(screen.getByTestId('profile-prompt-close'));
     expect(screen.queryByTestId('activation-banner')).toBeNull();

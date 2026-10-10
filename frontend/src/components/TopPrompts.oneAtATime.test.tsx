@@ -18,12 +18,20 @@ import { useAuthStore } from '../hooks/store';
 import * as push from '../lib/push';
 import { resetInstallPromptStoreForTests } from '../lib/installPromptStore';
 import { resetPromptSlotsForTests } from '../lib/promptSlot';
+import { resetPromptPrefsSyncForTests } from '../lib/promptDismissal';
 import { contrast, loadThemeTokens, tokenContrast, type Theme } from '../test/themeContrast';
 import type { ProfileSetupSnapshot } from '../lib/profileSetup';
 
 vi.mock('../api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/client')>();
-  return { ...actual, usersAPI: { ...actual.usersAPI, getMe: vi.fn() } };
+  return {
+    ...actual,
+    usersAPI: { ...actual.usersAPI, getMe: vi.fn() },
+    promptPrefsAPI: {
+      get: vi.fn().mockResolvedValue({ data: { never: [] } }),
+      setNever: vi.fn().mockResolvedValue({ data: { never: [] } }),
+    },
+  };
 });
 
 vi.mock('../lib/push', () => ({
@@ -90,6 +98,7 @@ beforeEach(() => {
   window.sessionStorage.clear();
   resetInstallPromptStoreForTests();
   resetPromptSlotsForTests();
+  resetPromptPrefsSyncForTests();
   useAuthStore.setState({ user: { id: 'member-a', name: 'Member' } as never, token: 't' });
   vi.mocked(push.getPushSupport).mockReturnValue('default');
   vi.mocked(push.iosNeedsHomeScreenForPush).mockReturnValue(false);
