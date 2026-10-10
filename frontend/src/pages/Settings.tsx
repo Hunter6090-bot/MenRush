@@ -116,6 +116,7 @@ export const Settings = () => {
       reporter_email: string;
       reported_name?: string | null;
       reported_email?: string | null;
+      reported_account_deleted_at?: string | null;
     }>
   >([]);
   const [reportsLoading, setReportsLoading] = useState(false);
@@ -931,6 +932,20 @@ export const Settings = () => {
               <NotificationSettings flush />
 
               <Link
+                to="/get-the-app"
+                className={rowActionClass}
+                data-testid="settings-get-the-app"
+              >
+                <div>
+                  <p className="text-[15px] font-bold text-[var(--cream)]">Get the app</p>
+                  <p className="mt-0.5 text-[15px] text-[var(--cream-muted)]">
+                    Put MenRush on your Home Screen.
+                  </p>
+                </div>
+                <ChevronRight />
+              </Link>
+
+              <Link
                 to="/notifications"
                 className={rowActionClass}
               >
@@ -1052,7 +1067,7 @@ export const Settings = () => {
                             </p>
                           </div>
                           <p className="mt-1 text-[12px] text-[var(--cream-muted)]">
-                            {report.reporter_name} → {report.reported_name ?? 'unknown'}
+                            {report.reporter_name} → {report.reported_name ?? (report.reported_account_deleted_at ? 'Deleted account' : 'unknown')}
                           </p>
                           {report.details ? (
                             <p className="mt-1 text-[12px] text-[var(--cream)]">{report.details}</p>

@@ -59,8 +59,11 @@ import { accessControl } from './security/access';
 import { logResendMailerStatus } from './services/mailer.service';
 import { startVerificationRetentionWorker } from './services/verification/retention.worker';
 import { startTravelTripRetentionWorker } from './services/travel.service';
+import { startLocationRetentionWorker } from './services/location-retention.service';
+import { startReportRetentionWorker } from './services/report-retention.service';
 import { Sentry } from './observability/sentry';
 import { corsOrigin } from './security/cors';
+import { noQueryCoordinates } from './middleware/noQueryCoordinates';
 import { query } from './db';
 import { ensureUploadDirs, getUploadsRoot, probeUploadsWritable } from './lib/uploads-root';
 import { logCallMetric } from './services/call-metrics.service';
@@ -91,6 +94,10 @@ const io: any = new SocketIOServer(server, {
 // Middleware
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: corsOrigin, credentials: true }));
+// Coordinates never travel in a URL (query strings land in proxy logs).
+// Lenient by default: coordinate keys are stripped from the query before any
+// route sees them. STRICT_NO_URL_COORDINATES=true rejects with 400 instead.
+app.use('/api', noQueryCoordinates);
 app.use('/api/premium/webhook', premiumWebhookRoutes);
 // Veriff decision webhook needs the raw body for HMAC (before express.json).
 app.use('/api/verify/veriff', veriffRoutes);
@@ -978,4 +985,8 @@ server.listen(PORT, () => {
   startVerificationRetentionWorker();
   // Travel: trips deleted 30 days after they end.
   startTravelTripRetentionWorker();
+  // Off unless LOCATION_PURGE_ENABLED=true (periods TBD, see config/locationRetention.ts).
+  startLocationRetentionWorker();
+  // Off unless REPORT_RETENTION_PURGE_ENABLED=true (period pending Al).
+  startReportRetentionWorker();
 });

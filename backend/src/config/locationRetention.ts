@@ -1,0 +1,83 @@
+/**
+ * Location retention periods. ALL VALUES TBD pending Legal and Al's approval:
+ * the defaults below are placeholders, set per environment with the env vars.
+ *
+ * The purge worker is OFF unless LOCATION_PURGE_ENABLED=true, so merging this
+ * changes nothing in prod until Zoul turns it on. Read at call time so tests
+ * (and a restart with new env) pick up changes.
+ */
+
+/** Map feed posts are shown for 15 minutes (map-feed.service listNearby). */
+export const MAP_FEED_VISIBLE_MINUTES = 15;
+/** Community posts are shown for 24 hours (community.service). */
+export const COMMUNITY_VISIBLE_HOURS = 24;
+/** Home and visit anchor are stored at 2 decimal places (about 1 km). */
+export const LOCATION_HOME_DECIMALS = 2;
+/** Report statuses that hold a member's post coordinates for moderation. */
+export const REPORT_HOLD_STATUSES = ['open', 'reviewing'] as const;
+
+function numEnv(name: string, fallback: number, min: number, max: number): number {
+  const raw = process.env[name];
+  if (raw == null || raw.trim() === '') return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(Math.max(n, min), max);
+}
+
+export type LocationRetentionConfig = {
+  /** LOCATION_PURGE_ENABLED (default false): start the purge worker at boot. */
+  enabled: boolean;
+  /** LOCATION_LIVE_STALE_DAYS (default 30, TBD): clear live location after this long without an update. */
+  liveStaleDays: number;
+  /** LOCATION_MAP_FEED_COORDS_GRACE_HOURS (default 24, TBD): remove map feed post coordinates this long after the post expires. */
+  mapFeedCoordsGraceHours: number;
+  /** LOCATION_COMMUNITY_COORDS_GRACE_HOURS (default 24, TBD): remove Community post coordinates this long after the post expires. */
+  communityCoordsGraceHours: number;
+  /** LOCATION_PURGE_INTERVAL_MINUTES (default 60): how often the worker runs. */
+  purgeIntervalMinutes: number;
+  /** LOCATION_CHAT_SHARE_PURGE_ENABLED (default false, optional rule): clear chat location share coordinates. */
+  chatSharePurgeEnabled: boolean;
+  /** LOCATION_CHAT_SHARE_DAYS (default 7): clear chat location share coordinates this long after sending. */
+  chatShareDays: number;
+  /** CHECKIN_PURGE_ENABLED (default false, optional rule): delete ended Hot Spot check-ins. */
+  checkinPurgeEnabled: boolean;
+  /** CHECKIN_PURGE_HOURS (default 24): delete a check-in this long after it ended. */
+  checkinPurgeHours: number;
+};
+
+function boolEnv(name: string): boolean {
+  return String(process.env[name] || '').trim().toLowerCase() === 'true';
+}
+
+/** True when any purge job is switched on, so the worker should start. */
+export function anyLocationPurgeEnabled(cfg: LocationRetentionConfig = locationRetentionConfig()): boolean {
+  return cfg.enabled || cfg.chatSharePurgeEnabled || cfg.checkinPurgeEnabled;
+}
+
+export function locationRetentionConfig(): LocationRetentionConfig {
+  return {
+    enabled: boolEnv('LOCATION_PURGE_ENABLED'),
+    liveStaleDays: numEnv('LOCATION_LIVE_STALE_DAYS', 30, 1, 3650),
+    mapFeedCoordsGraceHours: numEnv('LOCATION_MAP_FEED_COORDS_GRACE_HOURS', 24, 0, 24 * 365),
+    communityCoordsGraceHours: numEnv('LOCATION_COMMUNITY_COORDS_GRACE_HOURS', 24, 0, 24 * 365),
+    purgeIntervalMinutes: numEnv('LOCATION_PURGE_INTERVAL_MINUTES', 60, 5, 24 * 60),
+    chatSharePurgeEnabled: boolEnv('LOCATION_CHAT_SHARE_PURGE_ENABLED'),
+    chatShareDays: numEnv('LOCATION_CHAT_SHARE_DAYS', 7, 1, 3650),
+    checkinPurgeEnabled: boolEnv('CHECKIN_PURGE_ENABLED'),
+    checkinPurgeHours: numEnv('CHECKIN_PURGE_HOURS', 24, 0, 24 * 365),
+  };
+}
+
+/** Round a coordinate to LOCATION_HOME_DECIMALS (about 1 km). */
+export function coarsenCoord(value: number, decimals: number = LOCATION_HOME_DECIMALS): number {
+  const f = 10 ** decimals;
+  return Math.round(value * f) / f;
+}
+
+/**
+ * Home and visit anchor as stored on write: about 1 km only once
+ * LOCATION_PURGE_ENABLED=true, so nothing changes in prod before that.
+ */
+export function storedHomeCoord(value: number): number {
+  return locationRetentionConfig().enabled ? coarsenCoord(value) : value;
+}

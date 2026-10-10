@@ -101,7 +101,7 @@ import {
   nearestMapPinFuzzStep,
   privateMapPointAround,
 } from '../lib/mapPinFuzz';
-import { adjustHotSpotLiveCount, isHotSpotActive } from '../lib/hotSpotCounts';
+import { isHotSpotActive, spotAfterCheckToggle } from '../lib/hotSpotCounts';
 
 /**
  * Pete lock (8 Oct 2026): Map is home. One toggle swaps the whole screen between
@@ -852,9 +852,10 @@ export const Discover = () => {
     }
     setNeedsLocationGate(false);
     setLocationNotice('');
-    setActivationProfile((prev) =>
-      prev ? { ...prev, lat: latitude, lng: longitude } : { lat: latitude, lng: longitude },
-    );
+    // Merge only into the real /users/me profile. A coords-only stub made the
+    // banner read every field as missing, so complete profiles saw "Finish profile"
+    // on each Discover load until (or unless) /users/me answered.
+    setActivationProfile((prev) => (prev ? { ...prev, lat: latitude, lng: longitude } : prev));
   }, []);
 
   const useDiscoveryLocation = useCallback(
@@ -1311,22 +1312,17 @@ export const Discover = () => {
       setHotSpotActing(true);
       setHotSpotActionError('');
       try {
+        // Server count only: no optimistic +1 / -1, which was wrong for a Ghost or hidden
+        // viewer (never counted, so their check-out dropped the number) (#368).
         let updatedSpot: HotSpotDTO | undefined;
         if (spot.is_checked_in) {
-          await hotSpotsAPI.checkOut(spot.id);
-          updatedSpot = {
-            ...spot,
-            is_checked_in: false,
-            ...adjustHotSpotLiveCount(spot, -1),
-          };
+          const res = await hotSpotsAPI.checkOut(spot.id);
+          updatedSpot = spotAfterCheckToggle(spot, res.data?.spot, false);
         } else {
           const res = await hotSpotsAPI.checkIn(spot.id, anonymous);
-          updatedSpot = res.data?.spot ?? {
-            ...spot,
-            is_checked_in: true,
+          updatedSpot = spotAfterCheckToggle(spot, res.data?.spot, true, {
             my_checkin_anonymous: anonymous,
-            ...adjustHotSpotLiveCount(spot, 1),
-          };
+          });
         }
         if (selectedHotSpot && selectedHotSpot.id === spot.id && updatedSpot) {
           setSelectedHotSpot(updatedSpot);
