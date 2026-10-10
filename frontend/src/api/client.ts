@@ -1215,8 +1215,8 @@ export const hotSpotsAPI = {
     apiClient.post<{ ok: boolean; spot: HotSpotDTO }>(`/hot-spots/${id}/check-in`, { anonymous }),
   checkOut: (id?: string) =>
     id
-      ? apiClient.post<{ ok: boolean }>(`/hot-spots/${id}/check-out`)
-      : apiClient.post<{ ok: boolean }>('/hot-spots/check-out'),
+      ? apiClient.post<{ ok: boolean; spot?: HotSpotDTO | null }>(`/hot-spots/${id}/check-out`)
+      : apiClient.post<{ ok: boolean; spot?: HotSpotDTO | null }>('/hot-spots/check-out'),
   getMyCheckIn: () =>
     apiClient.get<{ check_in: unknown | null }>('/hot-spots/me/check-in'),
 
@@ -1421,6 +1421,22 @@ export const locationPrivacyAPI = {
     apiClient.post<{ hidden: true }>(`/location-privacy/hidden/${encodeURIComponent(id)}`),
   unhide: (id: string) =>
     apiClient.delete<{ hidden: false }>(`/location-privacy/hidden/${encodeURIComponent(id)}`),
+};
+
+/** Travel (Premium). No call sends your location: Travel never moves you. */
+export const travelAPI = {
+  lookAround: (city: string) =>
+    apiClient.get<{ place: import('../lib/travel').TravelPlace; members: import('../lib/travel').LookAroundMember[] }>(
+      '/travel/look-around',
+      { params: { city } },
+    ),
+  getTrip: () => apiClient.get<{ trip: import('../lib/travel').TravelTrip | null }>('/travel/trip'),
+  planTrip: (body: { city: string; startsOn: string; endsOn: string }) =>
+    apiClient.post<{ trip: import('../lib/travel').TravelTrip }>('/travel/trip', body),
+  endTrip: () => apiClient.delete<{ ended: boolean }>('/travel/trip'),
+  getSettings: () => apiClient.get<{ show_in_look_around: boolean }>('/travel/settings'),
+  setShowInLookAround: (value: boolean) =>
+    apiClient.put<{ show_in_look_around: boolean }>('/travel/settings', { show_in_look_around: value }),
 };
 
 export { apiClient };

@@ -122,8 +122,8 @@ describe('ProfileView distance display', () => {
 
     expect(screen.getByText(/Age 28/i)).toBeInTheDocument();
     expect(screen.queryByText(/away/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/mi/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/km/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/(^|[\d\s])mi\b/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/(^|[\d\s])km\b/i)).not.toBeInTheDocument();
   });
 
   it('redirects to /profile for own profile ID', async () => {

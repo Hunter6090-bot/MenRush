@@ -434,12 +434,15 @@ test('source guards preserve location, push, socket, and media privacy boundarie
   const users = fs.readFileSync(path.join(root, 'src/services/user.service.ts'), 'utf8');
   const messages = fs.readFileSync(path.join(root, 'src/routes/messages.ts'), 'utf8');
   const albums = fs.readFileSync(path.join(root, 'src/routes/albums.ts'), 'utf8');
-  for (const route of ['rooms', 'events', 'pulse', 'profile-meta']) {
+  for (const route of ['rooms', 'events', 'pulse', 'profile-meta', 'travel']) {
     assertRouterGuard(route, fs.readFileSync(path.join(root, `src/routes/${route}.ts`), 'utf8'));
   }
   // Events: keep no-store at router level ahead of auth, so nearby, check-in and their 401s are never cached.
   const events = stripComments(fs.readFileSync(path.join(root, 'src/routes/events.ts'), 'utf8'));
   assert.match(events, /^router\.use\(privateNoStore,\s*authMiddleware,\s*verifiedMiddleware\);?[ \t]*$/m);
+  // Travel: same, so Look around and trip reads (and their 401s) are never cached.
+  const travel = stripComments(fs.readFileSync(path.join(root, 'src/routes/travel.ts'), 'utf8'));
+  assert.match(travel, /^router\.use\(privateNoStore,\s*authMiddleware,\s*verifiedMiddleware\);?[ \t]*$/m);
 
   assert.equal(server.includes("app.use('/uploads', express.static"), false);
   assert.equal(server.includes('ST_DWithin(p.location::geography'), false);

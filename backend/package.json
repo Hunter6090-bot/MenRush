@@ -39,6 +39,10 @@
     "test:discreet-media-blur": "ts-node scripts/discreet-media-blur-checks.ts",
     "test:hide-location": "ts-node scripts/hide-location-checks.ts",
     "test:hide-location-integration": "ts-node scripts/hide-location-integration.ts",
+    "test:travel": "ts-node scripts/travel-checks.ts",
+    "test:travel-cache-headers": "ts-node scripts/travel-cache-headers-checks.ts",
+    "test:travel-integration": "ts-node scripts/travel-integration.ts",
+    "test:travel-account-deletion-integration": "ts-node scripts/travel-account-deletion-integration.ts",
     "test:my-photos": "ts-node scripts/my-photos-checks.ts",
     "test:map-photo-hosting": "ts-node scripts/map-photo-hosting-checks.ts",
     "test:chat-attach-my-photos": "ts-node scripts/chat-attach-my-photos-checks.ts",
@@ -65,8 +69,10 @@
     "test:nightlife-checkin": "ts-node scripts/nightlife-checkin-checks.ts",
     "test:hot-spot-free-counts": "ts-node --transpile-only scripts/hot-spot-free-counts-checks.ts",
     "test:hot-spot-live-sort-integration": "ts-node --transpile-only scripts/hot-spot-live-sort-integration.ts",
+    "test:hot-spot-ghost-live-count": "ts-node scripts/hot-spot-ghost-live-count-integration.ts",
     "test:events-ghost-first-checkin": "ts-node scripts/events-ghost-first-checkin-integration.ts",
     "test:pride-invite-register-integration": "ts-node --transpile-only scripts/pride-invite-register-integration.ts",
+    "test:delete-room-creator-integration": "ts-node --transpile-only scripts/delete-room-creator-integration.ts",
     "test:nightlife-integration": "ts-node scripts/nightlife-checkin-integration.ts",
     "test:push": "ts-node scripts/test-push.ts",
     "test:features": "bash ../test-features.sh",
@@ -89,7 +95,8 @@
     "test:call-ice-buffer": "ts-node scripts/call-ice-buffer-checks.ts",
     "test:common-sense": "ts-node scripts/common-sense-checks.ts",
     "predeploy": "npm run build && bash ../test-features.sh",
-    "audit:safety": "bash ../scripts/audit-safety.sh"
+    "audit:safety": "bash ../scripts/audit-safety.sh",
+    "test:location-retention-integration": "ts-node scripts/location-retention-integration.ts"
   },
   "dependencies": {
     "@huggingface/inference": "^4.13.21",

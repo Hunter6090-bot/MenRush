@@ -85,7 +85,7 @@ import { mapboxStyleForTheme, resolvedThemeNow, THEME_CHANGED_EVENT } from '../l
 import { readLayerVisible, writeLayerVisible } from '../lib/discoveryLayers';
 import { useIsDesktopLayout } from '../hooks/useMediaQuery';
 import { MAP_PIN_FUZZ_EVENT } from '../components/MenuDiscretion';
-import { IconDiscover, IconHotSpots } from '../components/icons';
+import { IconDiscover, IconHotSpots, IconPlane } from '../components/icons';
 import {
   mapPinZIndex,
   shouldShowHotSpotLabel,
@@ -101,7 +101,7 @@ import {
   nearestMapPinFuzzStep,
   privateMapPointAround,
 } from '../lib/mapPinFuzz';
-import { adjustHotSpotLiveCount, isHotSpotActive } from '../lib/hotSpotCounts';
+import { isHotSpotActive, spotAfterCheckToggle } from '../lib/hotSpotCounts';
 
 /**
  * Pete lock (8 Oct 2026): Map is home. One toggle swaps the whole screen between
@@ -132,6 +132,7 @@ function MapFloatingChrome({
   hotSpotsLayerOn,
   onTogglePeopleLayer,
   onToggleHotSpotsLayer,
+  onTravel,
   /** In-flow under MapTopPillBar children, no absolute offset, safe at 360/390/430. */
   placement = 'stacked',
 }: {
@@ -139,6 +140,8 @@ function MapFloatingChrome({
   hotSpotsLayerOn: boolean;
   onTogglePeopleLayer: () => void;
   onToggleHotSpotsLayer: () => void;
+  /** Travel (plane): Look around another city or plan a trip. */
+  onTravel?: () => void;
   placement?: 'stacked' | 'absolute';
 }) {
   // One-time Legal quiet-face dismiss — same localStorage pattern as match coach.
@@ -186,6 +189,19 @@ function MapFloatingChrome({
               {HOT_SPOTS_CHIP_LABEL}
             </span>
           </button>
+          {onTravel ? (
+            <button
+              type="button"
+              onClick={onTravel}
+              data-testid="map-travel"
+              aria-label="Travel"
+              title="Travel"
+              className={mapChromeBtnClass}
+            >
+              {/* Pete's spec: Travel glyph at 24px. */}
+              <IconPlane size={24} />
+            </button>
+          ) : null}
         </div>
       </div>
       {hotSpotsLayerOn && !mapBannerDismissed ? (
@@ -836,9 +852,10 @@ export const Discover = () => {
     }
     setNeedsLocationGate(false);
     setLocationNotice('');
-    setActivationProfile((prev) =>
-      prev ? { ...prev, lat: latitude, lng: longitude } : { lat: latitude, lng: longitude },
-    );
+    // Merge only into the real /users/me profile. A coords-only stub made the
+    // banner read every field as missing, so complete profiles saw "Finish profile"
+    // on each Discover load until (or unless) /users/me answered.
+    setActivationProfile((prev) => (prev ? { ...prev, lat: latitude, lng: longitude } : prev));
   }, []);
 
   const useDiscoveryLocation = useCallback(
@@ -1295,22 +1312,17 @@ export const Discover = () => {
       setHotSpotActing(true);
       setHotSpotActionError('');
       try {
+        // Server count only: no optimistic +1 / -1, which was wrong for a Ghost or hidden
+        // viewer (never counted, so their check-out dropped the number) (#368).
         let updatedSpot: HotSpotDTO | undefined;
         if (spot.is_checked_in) {
-          await hotSpotsAPI.checkOut(spot.id);
-          updatedSpot = {
-            ...spot,
-            is_checked_in: false,
-            ...adjustHotSpotLiveCount(spot, -1),
-          };
+          const res = await hotSpotsAPI.checkOut(spot.id);
+          updatedSpot = spotAfterCheckToggle(spot, res.data?.spot, false);
         } else {
           const res = await hotSpotsAPI.checkIn(spot.id, anonymous);
-          updatedSpot = res.data?.spot ?? {
-            ...spot,
-            is_checked_in: true,
+          updatedSpot = spotAfterCheckToggle(spot, res.data?.spot, true, {
             my_checkin_anonymous: anonymous,
-            ...adjustHotSpotLiveCount(spot, 1),
-          };
+          });
         }
         if (selectedHotSpot && selectedHotSpot.id === spot.id && updatedSpot) {
           setSelectedHotSpot(updatedSpot);
@@ -2240,6 +2252,7 @@ export const Discover = () => {
               hotSpotsLayerOn={hotSpotsLayerOn}
               onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
               onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
+              onTravel={() => navigate('/travel')}
             />
             {!needsLocationGate && !tokenMissing ? (
               <p
@@ -2371,6 +2384,7 @@ export const Discover = () => {
                 hotSpotsLayerOn={hotSpotsLayerOn}
                 onTogglePeopleLayer={() => setPeopleLayerOn(!peopleLayerOn)}
                 onToggleHotSpotsLayer={() => setHotSpotsLayerOn(!hotSpotsLayerOn)}
+              onTravel={() => navigate('/travel')}
               />
               {!needsLocationGate && !tokenMissing ? (
                 <p
