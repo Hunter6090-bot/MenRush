@@ -141,6 +141,8 @@ jobs:
         run: npm run test:edge-proxy-secret
       - name: No coordinates in /api GET URLs (fix only in the POST body)
         run: npm run test:no-coords-in-urls
+      - name: 2FA step shows the 503 support copy at 15px and keeps the code step
+        run: npx vitest run src/pages/Login.twoFactorFailure.test.tsx
       # vercel build, then import and call the exact built middleware.js under
       # plain Node ESM from an isolated copy (catches ERR_MODULE_NOT_FOUND /
       # MIDDLEWARE_INVOCATION_FAILED that vitest and tsc cannot see). No
@@ -214,6 +216,8 @@ jobs:
         run: npm run test:events-ghost-first-checkin
       - name: TOTP key rotation (lazy re-encrypt, dry run, apply, verify, reverse) (real PG)
         run: npm run test:totp-rotation-integration
+      - name: 2FA verify returns 503 with support copy when a secret cannot be read (real PG, HTTP)
+        run: npm run test:totp-verify-http-integration
       # --if-present: these scripts arrive with their own PRs (#333, #327,
       # #328, Community Ghost). The step is a no-op until the script exists.
       - name: Radius on the fuzzed pin (oracle)

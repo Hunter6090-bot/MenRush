@@ -1,11 +1,15 @@
 /**
  * Rotate the TOTP (2FA) wrap key. Prints counts only: never a secret, ciphertext, key or user id.
  *
- *   npm run totp:rotate                # dry run (default): counts, no writes
- *   npm run totp:rotate -- --apply     # one transaction, FOR UPDATE, check before commit
- *   npm run totp:rotate -- --verify    # every row v2 and readable with TOTP_ENCRYPTION_KEY alone
- *   npm run totp:rotate -- --reverse   # code rollback only: v1 under the current key
- *                                      # (refuses unless TOTP_WRITE_FORMAT=v1 is set)
+ * Runbook (deploy, rotate, verify, key rollback, code rollback): docs/totp-key-rotation.md
+ *
+ *   npm run totp:rotate                                    # dry run (default): counts, no writes
+ *   npm run totp:rotate -- --apply --confirm-production    # one transaction, FOR UPDATE, check before commit
+ *   npm run totp:rotate -- --verify                        # every row in the write format, readable with
+ *                                                          # TOTP_ENCRYPTION_KEY alone
+ *   npm run totp:rotate -- --reverse --confirm-production  # code rollback only: v1 under the current key
+ *                                                          # (refuses unless TOTP_WRITE_FORMAT=v1 is set)
+ * (--confirm-production is required for --apply and --reverse when NODE_ENV=production.)
  *
  * Safety: NODE_ENV must be set explicitly for the run. NODE_ENV=production is the only way to
  * reach a Railway database, and on production --apply and --reverse also need

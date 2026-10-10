@@ -278,6 +278,34 @@ const tests: [string, () => void][] = [
     assert.ok(!r.out.includes('--aply'), 'unknown flags are counted, not echoed');
     fs.rmSync(dir, { recursive: true, force: true });
   }],
+  ['runbook: real order, --confirm-production on every write, --reverse needs TOTP_WRITE_FORMAT=v1', () => {
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    const doc = fs.readFileSync(path.join(__dirname, '../../docs/totp-key-rotation.md'), 'utf8');
+    const header = fs.readFileSync(path.join(__dirname, 'rotate-totp-key.ts'), 'utf8').split('*/')[0];
+    for (const text of [doc, header]) {
+      for (const line of text.split('\n')) {
+        if (/totp:rotate\b.*--(apply|reverse)\b/.test(line)) {
+          assert.ok(line.includes('--confirm-production'), `write command without --confirm-production: ${line.trim()}`);
+        }
+      }
+      assert.ok(!/being revised|to be revised|\bTBD\b|\bTODO\b/i.test(text), 'no placeholder runbook text');
+      assert.match(text, /--reverse[^\n]*\n?[^\n]*TOTP_WRITE_FORMAT=v1/, '--reverse is described with its v1 requirement');
+    }
+    const order = ['## 1. Deploy', '## 2. Rotate', '## 3. Verify', '## 4. Key rollback', '## 5. Code rollback'];
+    let at = -1;
+    for (const heading of order) {
+      const i = doc.indexOf(heading);
+      assert.ok(i > at, `runbook section in order: ${heading}`);
+      at = i;
+    }
+    const code = doc.slice(doc.indexOf('## 5. Code rollback'));
+    const v1 = code.indexOf('TOTP_WRITE_FORMAT=v1');
+    const reverse = code.indexOf('--reverse --confirm-production');
+    const revert = code.indexOf('Revert the code');
+    assert.ok(v1 > 0 && reverse > v1 && revert > reverse, 'code rollback: v1 writes, then --reverse, then revert');
+    assert.ok(!/[\u2013\u2014]/.test(doc), 'no en or em dashes');
+  }],
 ];
 
 let failures = 0;
