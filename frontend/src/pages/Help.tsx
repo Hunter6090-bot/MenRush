@@ -8,7 +8,7 @@ const faqs = [
   },
   {
     q: 'How do I get verified?',
-    a: 'Opt into ID during signup, or tap Get verified on Profile. Veriff checks your ID; MenRush does not keep copies of your ID. Verified means you opted into ID only. It is not the signup selfie age gate.',
+    a: 'Opt into ID during signup, or tap Get verified in You > Edit. Veriff checks your ID; MenRush does not keep copies of your ID. Verified means you opted into ID only. It is not the signup selfie age gate.',
   },
   {
     q: 'What is the difference between age check and Verified?',

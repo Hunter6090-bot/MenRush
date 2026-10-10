@@ -30,11 +30,11 @@ const MAIN_ROUTES: Record<string, string> = {
   '/premium': 'sidebar promo, Settings Membership',
   '/settings#blocked': 'You > Blocked card',
   '/settings#account': 'Settings > Account (email, password, ID, 2FA)',
-  '/profile#ghost': 'You > Ghost mode card',
-  '/profile#privacy': 'Settings > Privacy & visibility -> You (location, visibility)',
-  '/profile#viewed-me': 'You > Who viewed you',
-  '/profile#invite': 'You > Referrals card',
-  '/profile#mood': 'You > Mood card',
+  '/profile/edit#ghost': 'You > Ghost mode card (now You > Edit)',
+  '/profile/edit#privacy': 'Settings > Privacy & visibility -> You (location, visibility) (now You > Edit)',
+  '/profile/edit#viewed-me': 'You > Who viewed you (now You > Edit)',
+  '/profile/edit#invite': 'You > Referrals card (now You > Edit)',
+  '/profile/edit#mood': 'You > Mood card (now You > Edit)',
   '/settings#delete-account': 'Settings > Delete account',
   '/help': 'Settings About',
   '/safety': 'Settings Safety',
@@ -85,7 +85,8 @@ describe('new shell keeps every main route reachable', () => {
   it('Settings and You page anchors used by the Menu exist', () => {
     const pages: Record<string, string> = {
       '/settings': src('pages/Settings.tsx'),
-      '/profile': src('pages/Profile.tsx'),
+      '/profile': src('pages/You.tsx'),
+      '/profile/edit': src('pages/Profile.tsx'),
     };
     for (const section of ACCOUNT_MENU_SECTIONS) {
       for (const l of section.links) {
@@ -108,14 +109,14 @@ describe('new shell keeps every main route reachable', () => {
 
   it('Ghost mode is a link to the existing card, not a new toggle', () => {
     const ghost = ACCOUNT_MENU_LINKS.filter((l) => /ghost/i.test(l.label));
-    expect(ghost).toEqual([{ id: 'ghost', label: 'Ghost mode', to: '/profile#ghost' }]);
+    expect(ghost).toEqual([{ id: 'ghost', label: 'Ghost mode', to: '/profile/edit#ghost' }]);
     expect(src('components/AccountMenu.tsx')).not.toMatch(/GhostToggle|setGhost|ghostAPI/);
   });
 
   it('privacy rows are labelled for where they go', () => {
     const byId = Object.fromEntries(ACCOUNT_MENU_LINKS.map((l) => [l.id, l]));
     expect(byId['account-security']).toMatchObject({ label: 'Account and security', to: '/settings#account' });
-    expect(byId['privacy-visibility']).toMatchObject({ label: 'Privacy and visibility', to: '/profile#privacy' });
+    expect(byId['privacy-visibility']).toMatchObject({ label: 'Privacy and visibility', to: '/profile/edit#privacy' });
     expect(ACCOUNT_MENU_LINKS.some((l) => l.label === 'Privacy and security')).toBe(false);
   });
 

@@ -154,7 +154,7 @@ type Toast = { type: 'success' | 'error'; msg: string };
 
 export const Profile = () => {
   const verification = useVerification();
-  const { user, token, setAuth, patchUser, logout } = useAuthStore();
+  const { user, token, setAuth, patchUser } = useAuthStore();
   const betaPremiumFree = isBetaPremiumFree();
   const authIsPremium = Boolean(
     betaPremiumFree || user?.is_premium || user?.beta_premium_included,
@@ -635,7 +635,7 @@ export const Profile = () => {
 
   return (
     <Layout>
-      <h1 className="sr-only">Your MenRush profile</h1>
+      <h1 className="sr-only">Edit your MenRush profile</h1>
       {/* Toast */}
       {toast && (
         <div
@@ -1057,7 +1057,9 @@ export const Profile = () => {
             >
               Tap Adjust cover to move or zoom your banner
             </p>
-            <ProfileVerification verification={verification} />
+            <div id="verify">
+              <ProfileVerification verification={verification} />
+            </div>
           </div>
         </div>
 
@@ -1827,18 +1829,6 @@ export const Profile = () => {
           </div>
         </div>
 
-        {/* ── Sign out (mobile only — desktop uses sidebar) ── */}
-        <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-2xl p-5 shadow-card lg:hidden">
-          <p className="text-[var(--cream)]/80 text-[15px] font-semibold">Sign out</p>
-          <p className="text-[var(--cream-muted)] text-[15px] mt-0.5">You'll need to log back in</p>
-          <button
-            onClick={() => { logout(); navigate('/login'); }}
-            className="mt-4 flex w-full items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#A45E18]/10 hover:bg-[#A45E18]/20 text-[var(--cream)]/80 text-[15px] font-semibold border border-[#A45E18]/20 transition-all"
-          >
-            <LogoutIcon className="w-3.5 h-3.5" />
-            Sign out
-          </button>
-        </div>
       </div>
 
       {coverEditorOpen && coverUrl && (
@@ -1852,12 +1842,6 @@ export const Profile = () => {
     </Layout>
   );
 };
-
-const LogoutIcon = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-  </svg>
-);
 
 const PinIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">

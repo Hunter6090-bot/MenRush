@@ -18,6 +18,7 @@ loadThemeTokens(readFileSync(resolve(__dirname, '../styles/menrush-tokens.css'),
 
 const logout = vi.fn();
 const navigate = vi.fn();
+let currentPath = '/discover';
 
 vi.mock('../hooks/store', () => ({
   useAuthStore: (sel?: (s: { user: { id: string; name: string }; logout: () => void }) => unknown) => {
@@ -46,7 +47,7 @@ vi.mock('react-router-dom', async () => {
   return {
     ...actual,
     useNavigate: () => navigate,
-    useLocation: () => ({ pathname: '/discover', search: '', hash: '', state: null, key: 'x' }),
+    useLocation: () => ({ pathname: currentPath, search: '', hash: '', state: null, key: 'x' }),
   };
 });
 
@@ -123,6 +124,87 @@ describe('bottom tab icons match the board', () => {
     expect(iconOf('mobile-nav-out')).not.toBe('map-pin');
     cleanup();
     localStorage.removeItem(HOME_VIEW_KEY);
+  });
+});
+
+describe('Chat icon is the board\'s round outlined bubble', () => {
+  const ROUND_BUBBLE = 'M7.9 20A9 9 0 1 0 4 16.1L2 22Z';
+
+  function chatSvg(): SVGSVGElement {
+    const svg = screen.getByTestId('mobile-nav-conversations').querySelector('svg');
+    if (!svg) throw new Error('no chat svg');
+    return svg;
+  }
+
+  function expectOutline(svg: SVGSVGElement) {
+    expect(svg.getAttribute('fill')).toBe('none');
+    expect(svg.getAttribute('stroke')).toBe('currentColor');
+    expect(svg.getAttribute('stroke-width')).toBe('2');
+    const paths = svg.querySelectorAll('path');
+    expect(paths).toHaveLength(1);
+    expect(paths[0].getAttribute('d')).toBe(ROUND_BUBBLE);
+    expect(paths[0].getAttribute('fill')).toBe('none');
+    expect(svg.querySelector('[fill="currentColor"]')).toBeNull();
+    expect(svg.hasAttribute('filled')).toBe(false);
+  }
+
+  it('idle: round bubble path, stroke only, same size and stroke as the other tabs', () => {
+    currentPath = '/discover';
+    renderShell();
+    const svg = chatSvg();
+    expectOutline(svg);
+    const rooms = screen.getByTestId('mobile-nav-rooms').querySelector('svg');
+    expect(svg.getAttribute('width')).toBe(rooms?.getAttribute('width'));
+    expect(svg.getAttribute('stroke-width')).toBe(rooms?.getAttribute('stroke-width'));
+    cleanup();
+  });
+
+  it('active: still an outline (copper via the tab colour), never filled', () => {
+    currentPath = '/conversations';
+    renderShell();
+    const tab = screen.getByTestId('mobile-nav-conversations');
+    expect(tab.className).toContain('text-[var(--nn-accent-text)]');
+    expectOutline(chatSvg());
+    cleanup();
+    currentPath = '/discover';
+  });
+});
+
+describe('every tab is a copper outline when active, never filled (board)', () => {
+  const TABS = [
+    { testId: 'mobile-nav-home-toggle', path: '/discover' },
+    { testId: 'mobile-nav-conversations', path: '/conversations' },
+    { testId: 'mobile-nav-rooms', path: '/rooms' },
+    { testId: 'mobile-nav-out', path: '/out' },
+    { testId: 'mobile-nav-profile', path: '/profile' },
+  ] as const;
+
+  function expectNoFill(testId: string) {
+    const svg = screen.getByTestId(testId).querySelector('svg');
+    if (!svg) throw new Error(`no svg for ${testId}`);
+    expect(svg.getAttribute('stroke')).toBe('currentColor');
+    expect(svg.querySelector('[fill="currentColor"]')).toBeNull();
+    expect(svg.getAttribute('fill')).not.toBe('currentColor');
+  }
+
+  it.each(['map', 'list'] as const)('idle (%s home): all five tabs render outline only', (view) => {
+    localStorage.setItem(HOME_VIEW_KEY, view);
+    currentPath = '/settings';
+    renderShell();
+    for (const { testId } of TABS) expectNoFill(testId);
+    cleanup();
+    currentPath = '/discover';
+    localStorage.removeItem(HOME_VIEW_KEY);
+  });
+
+  it.each(TABS)('active $testId: copper accent, outline only', ({ testId, path }) => {
+    currentPath = path;
+    renderShell();
+    const tab = screen.getByTestId(testId);
+    expect(tab.className).toContain('text-[var(--nn-accent-text)]');
+    expectNoFill(testId);
+    cleanup();
+    currentPath = '/discover';
   });
 });
 

@@ -8,7 +8,7 @@ import {
   type ProfileSetupSnapshot,
 } from '../lib/profileSetup';
 
-const EXEMPT_PATHS = ['/profile/setup', '/profile', '/settings'];
+const EXEMPT_PATHS = ['/profile/setup', '/profile', '/profile/edit', '/settings'];
 
 function isExemptPath(pathname: string): boolean {
   if (EXEMPT_PATHS.includes(pathname)) return true;
