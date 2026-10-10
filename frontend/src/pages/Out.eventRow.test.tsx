@@ -61,6 +61,11 @@ describe('eventCheckInNotice', () => {
     expect(msg).toBe("You're in Ghost or hidden, so you weren't checked in and no pin was added at Hide.");
     expect(msg).not.toMatch(/Pin stays/);
   });
+  it('Ghost / hidden at an existing pin (spot, unseen): no pin line, no false "not checked in"', () => {
+    const msg = eventCheckInNotice({ spot: { id: 's' }, deferred: false, unseen: true }, 'Hide');
+    expect(msg).toBe("You're in Ghost or hidden, so you checked in at Hide without adding to its live count. No pin was added for you.");
+    expect(msg).not.toMatch(/Pin stays|4 hours/);
+  });
   it('a real spot: checked in with the 4 hour pin line', () => {
     expect(eventCheckInNotice({ spot: { id: 's' } }, 'Hide')).toBe('Checked in at Hide. Pin stays on the map for 4 hours.');
   });

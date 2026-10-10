@@ -2332,7 +2332,7 @@ export const Discover = () => {
                 data-live-count={liveCount}
                 className="mb-3 inline-flex min-h-[36px] items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
               >
-                <p className="text-[13px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
+                <p className="text-[15px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
                   {loading && nearbyCount === 0 ? (
                     <span className="text-[var(--cream-muted)]">Scanning…</span>
                   ) : nearbyCount === 0 && allScope ? (
@@ -2350,7 +2350,7 @@ export const Discover = () => {
                     <>
                       <span className="font-extrabold text-[var(--cream-soft)]">Men nearby</span>
                       {liveCount > 0 ? (
-                        <span className="ml-1.5 font-semibold text-[#8FC773]" data-testid="nearby-live-count">
+                        <span className="ml-1.5 font-semibold text-[var(--status-online)]" data-testid="nearby-live-count">
                           · {liveCount} live
                         </span>
                       ) : nearbyCount > 0 ? (
@@ -2502,7 +2502,7 @@ export const Discover = () => {
                 data-live-count={liveCount}
                 className="inline-flex min-h-[36px] max-w-full items-center rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)]/85 px-3 py-1.5 shadow-md backdrop-blur-sm"
               >
-                <p className="text-[13px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
+                <p className="text-[15px] font-bold tracking-wide text-[var(--cream-soft)] whitespace-nowrap">
                   {loading && nearbyCount === 0 ? (
                     <span className="text-[var(--cream-muted)]">Scanning…</span>
                   ) : nearbyCount === 0 && allScope ? (
@@ -2520,7 +2520,7 @@ export const Discover = () => {
                     <>
                       <span className="font-extrabold text-[var(--cream-soft)]">Men nearby</span>
                       {liveCount > 0 ? (
-                        <span className="ml-1.5 font-semibold text-[#8FC773]" data-testid="nearby-live-count">
+                        <span className="ml-1.5 font-semibold text-[var(--status-online)]" data-testid="nearby-live-count">
                           · {liveCount} live
                         </span>
                       ) : nearbyCount > 0 ? (

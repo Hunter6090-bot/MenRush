@@ -52,7 +52,7 @@ export function getNavItems(): NavItem[] {
     },
     {
       to: '/conversations',
-      label: ROUTE_LABELS.messages,
+      label: ROUTE_LABELS.chat,
       shortLabel: 'Chat',
       Icon: IconChat,
       fillWhenActive: false,

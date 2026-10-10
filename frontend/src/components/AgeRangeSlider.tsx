@@ -4,9 +4,17 @@ import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
  * Age range on ONE track with two handles (Claude Design board, Filters state 04).
  * Each handle is a role="slider" with a 44px target, arrow / Page / Home / End keys,
  * and an aria-valuetext that reads the age. Min never passes max and max never
- * passes min. Colours reuse the Discretion slider tokens (contrast-tested >= 3:1):
- * fill --cream, empty track --nn-range-track, thumb --nn-accent-text ringed --bg-card.
+ * passes min. Colours as on board 05: copper between the handles, cream handles.
+ * The handle is board cream (#FFF6E6) inside a dark --nn-on-copper ring, so it stands
+ * out >= 3:1 against both the card and the copper fill in light and dark
+ * (AgeRangeSlider.test.tsx). The empty track is the quiet --border-default.
  */
+export const AGE_SLIDER_COLOURS = {
+  fill: 'var(--nn-copper)',
+  track: 'var(--border-default)',
+  handle: '#FFF6E6',
+  handleRing: 'var(--nn-on-copper)',
+} as const;
 export function AgeRangeSlider({
   min,
   max,
@@ -100,7 +108,8 @@ export function AgeRangeSlider({
       >
         <span
           aria-hidden="true"
-          className="block h-6 w-6 rounded-full border-4 border-[var(--bg-card)] bg-[var(--nn-accent-text)] shadow"
+          data-testid={`filter-age-${which}-thumb`}
+          className="block h-6 w-6 rounded-full border-[3px] border-[var(--nn-on-copper)] bg-[#FFF6E6] shadow"
         />
       </div>
     );
@@ -111,11 +120,11 @@ export function AgeRangeSlider({
       <div
         ref={trackRef}
         data-testid="filter-age-track"
-        className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-[var(--nn-range-track)]"
+        className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-[var(--border-default)]"
       >
         <div
           data-testid="filter-age-fill"
-          className="absolute inset-y-0 rounded-full bg-[var(--cream)]"
+          className="absolute inset-y-0 rounded-full bg-[var(--nn-copper)]"
           style={{ left: `${pct(valueMin)}%`, right: `${100 - pct(valueMax)}%` }}
         />
       </div>

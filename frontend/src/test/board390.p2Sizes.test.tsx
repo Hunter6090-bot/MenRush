@@ -42,3 +42,24 @@ describe('board #390 P2 sizes', () => {
     expect(read('../pages/Out.tsx')).toMatch(/data-testid=\{`out-spot-open-\$\{spot\.id\}`\}[\s\S]{0,200}className="flex min-h-\[44px\]/);
   });
 });
+
+describe('board #390 round 2', () => {
+  it('bell badge sits inside the 44px Alerts button (no negative top offset)', () => {
+    const layout = read('../components/Layout.tsx');
+    const bell = layout.match(/data-testid="badge-notifications"[\s\S]{0,200}?\/>/)?.[0] ?? '';
+    const before = layout.slice(layout.indexOf('to="/notifications"'), layout.indexOf('data-testid="badge-notifications"'));
+    expect(before + bell).toContain('position="top-0 right-0"');
+    expect(before + bell).not.toMatch(/-top-/);
+    render(<NotificationDot count={3} visible position="top-0 right-0" data-testid="bell" />);
+    const dot = screen.getByTestId('bell');
+    expect(dot).toHaveClass('top-0', 'right-0');
+    expect(dot.className).not.toMatch(/-top-|-right-/);
+  });
+
+  it("desktop sidebar label for /conversations is 'Chat', same as the tab (board)", async () => {
+    const { getNavItems } = await import('../lib/navConfig');
+    const chat = getNavItems().find((i) => i.to === '/conversations')!;
+    expect(chat.label).toBe('Chat');
+    expect(chat.shortLabel).toBe('Chat');
+  });
+});

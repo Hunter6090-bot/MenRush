@@ -318,7 +318,8 @@ function LayoutInner({ children }: LayoutProps) {
                   count={notificationUnread}
                   visible={notificationUnread > 0}
                   data-testid="badge-notifications"
-                  className="-top-1.5 -right-1.5 bg-[var(--copper)] border-[var(--bg-primary)]"
+                  position="top-0 right-0"
+                  className="bg-[var(--copper)] border-[var(--bg-primary)]"
                 />
               </Link>
               <AccountMenuButton open={accountMenuOpen} onClick={() => setAccountMenuOpen(true)} />
@@ -473,7 +474,8 @@ function LayoutInner({ children }: LayoutProps) {
                           ? 'badge-conversations'
                           : `badge-mobile-${item.to.replace(/\//g, '')}`
                       }
-                      className="-top-2.5 -right-3 bg-[var(--copper)] border-[var(--bg-elevated)]"
+                      position="-top-2.5 -right-3"
+                      className="bg-[var(--copper)] border-[var(--bg-elevated)]"
                     />
                   </span>
                   <span
