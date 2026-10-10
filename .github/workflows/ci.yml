@@ -77,6 +77,8 @@ jobs:
         run: npm run test:hot-spot-free-counts
       - name: No coordinates in URLs (ignored and stripped, reads use the stored location)
         run: npm run test:no-query-coordinates
+      - name: Event check-in route reports deferred for a Ghost first check-in
+        run: npm run test:events-checkin-deferred-route
       - name: Welcome emails use the official mark (no typed wordmark)
         run: npm run test:welcome-email-brand
 
