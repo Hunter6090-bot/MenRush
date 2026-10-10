@@ -18,6 +18,7 @@ import {
   ADULT_ASSURANCE_COPY,
 } from '../components/AdultAssuranceFlow';
 import { registerErrorMessage } from '../lib/authErrors';
+import { getParamIgnoreCase, REFERRAL_PARAM } from '../lib/trackingParams';
 import {
   readStoredInviteCode,
   storeInviteCode,
@@ -91,7 +92,8 @@ export const Register = () => {
     if (fromQuery) return fromQuery.trim().toUpperCase().replace(/\s+/g, ' ');
     return fromStore || '';
   });
-  const referralFromQuery = searchParams.get('ref')?.trim() || '';
+  // Case-insensitive so ?REF=CODE from a shared link still credits the referrer.
+  const referralFromQuery = getParamIgnoreCase(searchParams, REFERRAL_PARAM)?.trim() || '';
   const [referralCode, setReferralCode] = useState(() => referralFromQuery.toUpperCase());
   const [form, setForm] = useState<FormState>({
     displayName: '',

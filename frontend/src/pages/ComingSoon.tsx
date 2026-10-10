@@ -4,6 +4,7 @@ import { BrandMark } from '../components/BrandMark';
 import { SiteFooter } from '../components/SiteFooter';
 import { trackEventOnce, getAttributionParams } from '../observability/analytics';
 import { publicLinkClass, publicNavLinkPrimary } from '../lib/publicStyles';
+import { withTrackingParams } from '../lib/trackingParams';
 
 const COMING_SOON_BG = '/images/menrush/31-london-rooftop-dusk.jpeg';
 const COMING_SOON_GRADIENT =
@@ -21,7 +22,10 @@ const WHAT_YOU_GET = [
 ] as const;
 
 export const ComingSoon = () => {
-  const { hash } = useLocation();
+  const { hash, search } = useLocation();
+  // Keep ref (referral code) and utm_* on the way to /register and /invite.
+  const registerTo = withTrackingParams('/register', search);
+  const inviteTo = withTrackingParams('/invite', search);
 
   useEffect(() => {
     trackEventOnce('landing_viewed', { surface: 'coming_soon', ...getAttributionParams() });
@@ -76,7 +80,7 @@ export const ComingSoon = () => {
 
           <div id="waitlist" className="relative mt-9 w-full max-w-[460px]">
             <Link
-              to="/register"
+              to={registerTo}
               className="inline-flex w-full items-center justify-center rounded-full border-0 bg-[#C4832A] px-[28px] py-3.5 text-xs font-extrabold tracking-[0.12em] text-[#1A0E03] shadow-[0_0_24px_rgba(196,131,42,0.4)] transition-colors hover:bg-[#E0A14A]"
             >
               Sign up free
@@ -85,7 +89,7 @@ export const ComingSoon = () => {
 
           <p className="mt-5 text-sm text-[var(--cream-muted)]">
             Already have an invite?{' '}
-            <Link to="/invite" className={publicLinkClass}>
+            <Link to={inviteTo} className={publicLinkClass}>
               Enter your code
             </Link>
           </p>
@@ -120,7 +124,7 @@ export const ComingSoon = () => {
 
         <section className="mx-auto w-full max-w-[560px] px-6 pb-16 text-center">
           <p className="mt-0">
-            <Link to="/register" className={publicLinkClass}>
+            <Link to={registerTo} className={publicLinkClass}>
               Back to signup
             </Link>
           </p>
