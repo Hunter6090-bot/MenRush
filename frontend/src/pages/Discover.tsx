@@ -1737,6 +1737,8 @@ export const Discover = () => {
         id: spot.id,
         name: spot.name,
         category_icon: spot.category_icon,
+        category_slug: spot.category_slug,
+        category_name: spot.category_name,
         live_count_exact: spot.live_count_exact,
         live_count: spot.live_count,
         has_active_checkins: spot.has_active_checkins,
@@ -1759,7 +1761,7 @@ export const Discover = () => {
           existing.spot.live_count_exact !== spot.live_count_exact ||
           existing.spot.live_count !== spot.live_count ||
           existing.spot.name !== spot.name ||
-          existing.spot.category_icon !== spot.category_icon ||
+          existing.spot.category_slug !== spot.category_slug ||
           labelChanged
         ) {
           existing.root.render(<HotSpotPin spot={pinData} size={52} showLabel={showLabel} />);
