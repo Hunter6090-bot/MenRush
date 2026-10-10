@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { SpotTypeIcon, spotTypeKey } from '../components/icons';
 import { createRoot, type Root } from 'react-dom/client';
 import { Link } from 'react-router-dom';
 import mapboxgl from 'mapbox-gl';
@@ -234,7 +235,10 @@ export const HotSpots = () => {
               onClick={() => setCategory(cat.slug)}
               className={category === cat.slug ? 'mr-pill mr-pill-active' : 'mr-pill mr-pill-inactive'}
             >
-              {cat.icon} {cat.name}
+              <span className="inline-flex items-center gap-1.5">
+                <SpotTypeIcon type={spotTypeKey(cat.slug, cat.name)} size={16} />
+                {cat.name}
+              </span>
             </button>
           ))}
         </div>
@@ -305,7 +309,10 @@ export const HotSpots = () => {
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <div>
                     <p className="text-xs font-extrabold tracking-wide text-[#E0A14A]">
-                      {spot.category_icon} {spot.category_name}
+                      <span className="inline-flex items-center gap-1">
+                        <SpotTypeIcon type={spotTypeKey(spot.category_slug, spot.category_name)} size={14} />
+                        {spot.category_name}
+                      </span>
                     </p>
                     <h2 className="text-base font-bold text-[var(--cream)]">{spot.name}</h2>
                     <div className="flex flex-wrap items-center gap-1.5 text-[13px] text-[var(--cream-muted)]">

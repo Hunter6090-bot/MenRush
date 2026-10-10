@@ -12,13 +12,14 @@ import { CommunityFeed } from '../components/CommunityFeed';
 import { CruisingSearchBar } from '../components/CruisingSearchBar';
 import { CruisingSearchSheet } from '../components/CruisingSearchSheet';
 import { HotSpotReviewsModal } from '../components/HotSpotReviewsModal';
-import { useLocationStore } from '../hooks/store';
+import { HotSpotSheet } from '../components/HotSpotSheet';
+import { useAuthStore, useLocationStore } from '../hooks/store';
+import { spotAfterCheckToggle } from '../lib/hotSpotCounts';
 import { formatDistanceFromKm } from '../lib/localeUnits';
 import { eventMetaLine } from '../lib/eventWhen';
 import { eventTicketUrl } from '../lib/eventTickets';
-import { SpotTypeIcon } from '../components/icons/SpotTypeIcon';
 import { getDirectionsUrl } from '../lib/cruising';
-import { IconCommunity } from '../components/icons';
+import { IconCommunity, SpotTypeIcon, spotTypeKey } from '../components/icons';
 
 type OutChip = 'all' | 'sauna' | 'bar' | 'event' | 'community';
 
@@ -70,19 +71,43 @@ export function Out() {
   const [cruisingSearchOpen, setCruisingSearchOpen] = useState(false);
   const [actingSpotId, setActingSpotId] = useState<string | null>(null);
   const [reviewsSpot, setReviewsSpot] = useState<HotSpotDTO | null>(null);
+  // Tapping a card opens the same spot sheet the map pin opens (lose-nothing fix, 10 Oct).
+  const [sheetSpotId, setSheetSpotId] = useState<string | null>(null);
+  const [sheetError, setSheetError] = useState('');
+  const isPremium = useAuthStore((s) => Boolean(s.user?.is_premium));
+  const navigate = useNavigate();
+  const sheetSpot = useMemo(
+    () => (sheetSpotId ? spots.find((s) => s.id === sheetSpotId) ?? null : null),
+    [spots, sheetSpotId],
+  );
 
-  // Same check-in / check-out calls the map used for this sheet.
-  const handleCheckIn = useCallback(async (spot: HotSpotDTO, anonymous: boolean) => {
-    setActingSpotId(spot.id);
-    try {
-      if (spot.is_checked_in) await hotSpotsAPI.checkOut(spot.id);
-      else await hotSpotsAPI.checkIn(spot.id, anonymous);
-    } catch {
-      /* card keeps its state; try again */
-    } finally {
-      setActingSpotId(null);
-    }
+  const replaceSpot = useCallback((updated: HotSpotDTO) => {
+    setSpots((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));
   }, []);
+
+  // Same check-in / check-out calls the map sheet uses (Discover handleHotSpotCheckIn).
+  const handleCheckIn = useCallback(
+    async (spot: HotSpotDTO, anonymous: boolean) => {
+      setActingSpotId(spot.id);
+      setSheetError('');
+      try {
+        // Server count only, same as the map sheet: no client +1 / -1, which is
+        // wrong for a Ghost or hidden viewer who is never counted (#368).
+        if (spot.is_checked_in) {
+          const res = await hotSpotsAPI.checkOut(spot.id);
+          replaceSpot(spotAfterCheckToggle(spot, res.data?.spot, false));
+        } else {
+          const res = await hotSpotsAPI.checkIn(spot.id, anonymous);
+          replaceSpot(spotAfterCheckToggle(spot, res.data?.spot, true, { my_checkin_anonymous: anonymous }));
+        }
+      } catch {
+        setSheetError('Check-in failed. Try again.');
+      } finally {
+        setActingSpotId(null);
+      }
+    },
+    [replaceSpot],
+  );
 
   const setChip = useCallback(
     (next: OutChip) => {
@@ -260,7 +285,7 @@ export function Out() {
         ) : (
           <div className="space-y-3" data-testid="out-list">
             {visibleSpots.map((spot) => (
-              <OutSpotRow key={spot.id} spot={spot} />
+              <OutSpotRow key={spot.id} spot={spot} onOpen={() => setSheetSpotId(spot.id)} />
             ))}
             {visibleEvents.map((ev) => (
               <OutEventRow key={ev.id} event={ev} />
@@ -303,6 +328,22 @@ export function Out() {
         onOpenReviews={(spot) => setReviewsSpot(spot)}
         actingSpotId={actingSpotId}
       />
+      <HotSpotSheet
+        spot={sheetSpot}
+        isPremium={isPremium}
+        acting={Boolean(sheetSpot && actingSpotId === sheetSpot.id)}
+        error={sheetError}
+        onClose={() => {
+          setSheetSpotId(null);
+          setSheetError('');
+        }}
+        onCheckIn={handleCheckIn}
+        onSpotUpdated={replaceSpot}
+        onViewOnMap={(spot) => {
+          setSheetSpotId(null);
+          navigate(`/discover?spot=${encodeURIComponent(spot.id)}`);
+        }}
+      />
       <HotSpotReviewsModal
         spot={reviewsSpot}
         open={Boolean(reviewsSpot)}
@@ -312,33 +353,50 @@ export function Out() {
   );
 }
 
-function OutSpotRow({ spot }: { spot: HotSpotDTO }) {
+function OutSpotRow({ spot, onOpen }: { spot: HotSpotDTO; onOpen: () => void }) {
   const dist =
     typeof spot.distance_km === 'number' ? formatDistanceFromKm(spot.distance_km) : null;
   const mapUrl = getDirectionsUrl(spot.latitude, spot.longitude, spot.name);
+  const typeKey = spotTypeKey(spot.category_slug, spot.category_name);
 
   return (
     <article
-      className="flex min-h-[72px] gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-3"
+      className="relative flex min-h-[72px] gap-3 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] p-3"
       data-testid={`out-spot-${spot.id}`}
     >
-      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--bg-elevated)] text-2xl">
-        {spot.category_icon || '📍'}
+      <div
+        className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--bg-elevated)] text-[var(--nn-accent-text)]"
+        data-testid="out-spot-type-tile"
+      >
+        <SpotTypeIcon type={typeKey} size={28} />
       </div>
       <div className="min-w-0 flex-1">
-        <h2 className="truncate text-[15px] font-extrabold text-[var(--cream)]">{spot.name}</h2>
+        <h2 className="truncate text-[15px] font-extrabold text-[var(--cream)]">
+          {/* Whole card is the tap target (stretched button); MAP stays its own link above it. */}
+          <button
+            type="button"
+            onClick={onOpen}
+            data-testid={`out-spot-open-${spot.id}`}
+            aria-haspopup="dialog"
+            aria-label={`${spot.name}, open details`}
+            className="block w-full truncate text-left after:absolute after:inset-0 after:rounded-2xl after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-[var(--copper)]"
+          >
+            {spot.name}
+          </button>
+        </h2>
         <p className="mt-0.5 truncate text-[15px] font-medium text-[var(--cream-muted)]">
           {[dist, spot.city].filter(Boolean).join(' · ') || spot.category_name}
         </p>
-        <p className="mt-1 text-[15px] text-[var(--cream-soft)]">
-          {spot.category_icon} {spot.category_name}
+        <p className="mt-1 flex items-center gap-1.5 text-[15px] text-[var(--cream-soft)]" data-testid="out-spot-type">
+          <SpotTypeIcon type={typeKey} size={16} className="shrink-0 text-[var(--nn-accent-text)]" />
+          <span>{spot.category_name}</span>
         </p>
       </div>
       <a
         href={mapUrl}
         target="_blank"
         rel="noreferrer"
-        className="inline-flex min-h-[44px] shrink-0 items-center self-center rounded-full border border-[var(--border-default)] px-3 text-[15px] font-extrabold uppercase tracking-wide text-[var(--cream)]"
+        className="relative z-10 inline-flex min-h-[44px] shrink-0 items-center self-center rounded-full border border-[var(--border-default)] px-3 text-[15px] font-extrabold uppercase tracking-wide text-[var(--cream)]"
         aria-label={`Map directions to ${spot.name}`}
       >
         Map

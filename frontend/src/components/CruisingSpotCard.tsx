@@ -9,6 +9,7 @@ import {
 import { formatDistanceFromKm } from '../lib/localeUnits';
 import { CruisingSpotMapThumbnail } from './CruisingSpotMapThumbnail';
 import { isHotSpotActive } from '../lib/hotSpotCounts';
+import { SpotTypeIcon, spotTypeKey } from './icons';
 
 interface CruisingSpotCardProps {
   spot: HotSpotDTO;
@@ -52,7 +53,7 @@ export function CruisingSpotCard({
             data-testid="cruising-category-badge"
             className="inline-flex items-center gap-1 rounded-full border border-[#C4832A]/30 bg-[#C4832A]/10 px-2.5 py-0.5 text-[15px] font-bold text-[#E0A14A]"
           >
-            <span aria-hidden="true">{categoryMeta.icon}</span>
+            <SpotTypeIcon type={spotTypeKey(category)} size={16} />
             <span>{categoryMeta.label}</span>
           </span>
 
