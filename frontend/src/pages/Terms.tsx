@@ -98,7 +98,7 @@ export const Terms = () => {
           >
             <header>
               <span className="inline-block rounded-full border border-[#c8861c]/30 bg-[#c8861c]/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#c8861c]">
-                Last updated: 06 May 2026
+                Last updated: 10 October 2026
               </span>
               <h1 className="mr-page-heading mt-4">
                 Terms and Conditions
@@ -192,15 +192,15 @@ export const Terms = () => {
               )}
               {para(
                 <>
-                  <Strong>1.4</Strong> Signup includes a required 18+ check via a Veriff live
-                  selfie (liveness / age estimation). That check is an age gate only. If it shows
-                  you are under 18 or fails, no MenRush account is created. You may optionally
-                  complete an ID check in the same flow for a Verified tick. Veriff checks your
-                  ID; MenRush does not keep copies of your ID document. The optional Verified
-                  tick is separate from the age gate and does not mean every member is
-                  ID-checked. We may also request further age checks later and may suspend or
-                  terminate an account if we have reason to believe you do not meet the
-                  eligibility requirements.
+                  <Strong>1.4</Strong> When you sign up, you enter your date of birth and tick a box
+                  to confirm you are 18 or over. There is no selfie or ID check at signup. You can
+                  choose to complete an optional ID check with Veriff at any time from Get verified
+                  on the Edit screen in the You tab. If Veriff approves it, you receive the Verified
+                  badge. Veriff checks your ID; MenRush does not keep copies of your ID document.
+                  The Verified badge is optional and does not mean every member is ID checked. We
+                  may ask you to confirm your age again later and may suspend or terminate an
+                  account if we have reason to believe you do not meet the eligibility
+                  requirements.
                 </>,
               )}
             </section>
@@ -242,11 +242,11 @@ export const Terms = () => {
               {para(
                 <>
                   <Strong>3.1</Strong> The Verified badge is optional and free. Complete an ID check
-                  (during signup or later from Profile) with Veriff to receive the badge after
-                  approval. Veriff checks your ID; MenRush does not keep copies of your ID
-                  document. The badge is not the signup 18+ selfie age gate in section 1.4, and
-                  it does not mean every member is identity-checked or that MenRush pre-moderates
-                  all user content.
+                  with Veriff from Get verified on the Edit screen in the You tab to receive the
+                  badge after approval. Veriff checks your ID; MenRush does not keep copies of your
+                  ID document. The badge is separate from the date of birth and 18 or over
+                  confirmation in section 1.4, and it does not mean every member is identity
+                  checked or that MenRush checks all user content in advance.
                 </>,
               )}
               {para(
