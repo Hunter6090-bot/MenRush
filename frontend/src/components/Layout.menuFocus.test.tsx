@@ -103,20 +103,18 @@ describe.each(['/discover', '/rooms'])('Menu Discretion focus on %s', (path) => 
     range.focus();
     expect(document.activeElement).toBe(range);
 
-    let index = MAP_PIN_FUZZ_STEPS_M.indexOf(Number(range.value));
-    expect(index).toBeGreaterThanOrEqual(0);
+    let index = Number(range.value);
     const dir = index + 3 < MAP_PIN_FUZZ_STEPS_M.length ? 1 : -1;
     for (let i = 1; i <= 3; i += 1) {
-      const before = range.value;
+      const before = range.getAttribute('aria-valuenow');
       fireEvent.keyDown(range, { key: dir > 0 ? 'ArrowRight' : 'ArrowLeft' });
-      // The browser nudges a metre-valued range by 1 m; the slider moves a whole step.
-      fireEvent.change(range, { target: { value: String(Number(before) + dir) } });
       index += dir;
+      fireEvent.change(range, { target: { value: String(index) } });
       rerender(tree(i)); // parent re-render with fresh inline props
-      const now = screen.getByTestId('map-discretion-range') as HTMLInputElement;
+      const now = screen.getByTestId('map-discretion-range');
       expect(document.activeElement).toBe(now);
-      expect(now.value).not.toBe(before);
-      expect(now.value).toBe(String(MAP_PIN_FUZZ_STEPS_M[index]));
+      expect(now.getAttribute('aria-valuenow')).not.toBe(before);
+      expect(now.getAttribute('aria-valuenow')).toBe(String(MAP_PIN_FUZZ_STEPS_M[index]));
       expect(now.getAttribute('aria-valuetext')).toBe(`~${MAP_PIN_FUZZ_STEPS_M[index]} m`);
     }
   });
