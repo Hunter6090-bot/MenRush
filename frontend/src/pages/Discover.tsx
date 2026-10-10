@@ -35,6 +35,7 @@ import { NearbyMapGridToggle, readNearbyView, writeNearbyView, type NearbyView }
 import { HOME_VIEW_EVENT, homeViewToNearby, nearbyToHomeView, readHomeView, writeHomeView, type HomeView } from '../lib/homeView';
 import { MapTopPillBar } from '../components/MapTopPillBar';
 import { MapEmptyRadius } from '../components/MapEmptyRadius';
+import { ClearTopPrompt } from '../components/ClearTopPrompt';
 import { RedesignFiltersSheet } from '../components/RedesignFiltersSheet';
 import { NearbySortToggle } from '../components/NearbySortToggle';
 import { DiscoveryShellPublisher } from '../context/DiscoveryShellContext';
@@ -2171,6 +2172,7 @@ export const Discover = () => {
       !pulseNudgeDismissed &&
       lat != null &&
       lng != null ? (
+        <ClearTopPrompt testId="pulse-nudge-clearance">
         <div
           className="mx-3 mb-3 rounded-2xl border border-[rgba(196,131,42,0.45)] bg-[rgba(196,131,42,0.1)] px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
           role="status"
@@ -2179,19 +2181,20 @@ export const Discover = () => {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-base font-extrabold text-[var(--cream)]">Quiet map? Start Pulse</p>
-              <p className="mt-1 text-sm text-[var(--cream-muted)]">Seen first for 90 minutes.</p>
+              <p className="mt-1 text-[15px] text-[var(--cream-muted)]">Seen first for 90 minutes.</p>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
               <button
                 type="button"
                 data-testid="pulse-nudge-start"
                 onClick={requestOpenPulse}
-                className="rounded-full bg-[#C4832A] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-[#C4832A] px-4 text-[15px] font-extrabold uppercase tracking-wide text-[#1A0E03] transition-colors hover:bg-[#E0A14A]"
               >
                 Start Pulse
               </button>
               <button
                 type="button"
+                data-testid="pulse-nudge-dismiss"
                 onClick={() => {
                   setPulseNudgeDismissed(true);
                   try {
@@ -2200,13 +2203,14 @@ export const Discover = () => {
                     /* ignore */
                   }
                 }}
-                className="rounded-full border border-[rgba(196,131,42,0.45)] px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)] transition-colors hover:text-[var(--cream)]"
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-[rgba(196,131,42,0.45)] px-4 text-[15px] font-extrabold uppercase tracking-wide text-[var(--cream-muted)] transition-colors hover:text-[var(--cream)]"
               >
                 Not now
               </button>
             </div>
           </div>
         </div>
+        </ClearTopPrompt>
       ) : null}
 
       {needsLocationGate ? (
@@ -2291,6 +2295,11 @@ export const Discover = () => {
             onRadiusClick={handleRadiusCycle}
             onFiltersClick={() => setFiltersSheetOpen(true)}
             filtersActive={countActiveDiscoveryFilters(discoveryFilters) > 0}
+            footer={
+              !loading && nearbyCount === 0 && !allScope && !needsLocationGate ? (
+                <MapEmptyRadius nextRadiusKm={nextWidenRadiusKm} onWiden={handleRadiusCycle} />
+              ) : null
+            }
           >
             <MapFloatingChrome
               placement="stacked"
@@ -2314,9 +2323,6 @@ export const Discover = () => {
               </p>
             ) : null}
           </MapTopPillBar>
-          {!loading && nearbyCount === 0 && !allScope && !needsLocationGate ? (
-            <MapEmptyRadius nextRadiusKm={nextWidenRadiusKm} onWiden={handleRadiusCycle} />
-          ) : null}
           <DiscoverChatDock open={chatDockOpen} onOpenChange={setChatDockOpen} />
         </div>
         ) : null}
@@ -2423,6 +2429,11 @@ export const Discover = () => {
               onRadiusClick={handleRadiusCycle}
               onFiltersClick={() => setFiltersSheetOpen(true)}
               filtersActive={countActiveDiscoveryFilters(discoveryFilters) > 0}
+              footer={
+                !loading && nearbyCount === 0 && !allScope && !needsLocationGate ? (
+                  <MapEmptyRadius nextRadiusKm={nextWidenRadiusKm} onWiden={handleRadiusCycle} />
+                ) : null
+              }
             >
               <MapFloatingChrome
                 placement="stacked"
@@ -2446,9 +2457,6 @@ export const Discover = () => {
                 </p>
               ) : null}
             </MapTopPillBar>
-          ) : null}
-          {mapPanelMode !== 'hidden' && !loading && nearbyCount === 0 && !allScope && !needsLocationGate ? (
-            <MapEmptyRadius nextRadiusKm={nextWidenRadiusKm} onWiden={handleRadiusCycle} />
           ) : null}
 
 

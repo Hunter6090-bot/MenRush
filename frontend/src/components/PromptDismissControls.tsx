@@ -39,19 +39,19 @@ export function PromptDismissControls({
           tinted strip in light and dark. Ticked fills with --nn-accent-text and the tick
           is --bg-card, at least 4.5:1 in both themes.
         */}
-        <span className="relative inline-flex h-6 w-6 shrink-0">
+        <span className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center">
           <input
             id={inputId}
             type="checkbox"
             checked={forever}
             onChange={(e) => setForever(e.target.checked)}
             data-testid={`${testIdPrefix}-never`}
-            className="peer h-6 w-6 shrink-0 cursor-pointer appearance-none rounded-md border-2 border-[var(--cream-muted)] bg-transparent checked:border-[var(--nn-accent-text)] checked:bg-[var(--nn-accent-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nn-accent-text)]"
+            className="peer h-11 w-11 min-h-[44px] min-w-[44px] shrink-0 cursor-pointer appearance-none rounded-md border-2 border-[var(--cream-muted)] bg-transparent checked:border-[var(--nn-accent-text)] checked:bg-[var(--nn-accent-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--nn-accent-text)]"
           />
           <svg
             aria-hidden="true"
             viewBox="0 0 24 24"
-            className="pointer-events-none absolute inset-0 m-auto hidden h-4 w-4 text-[var(--bg-card)] peer-checked:block"
+            className="pointer-events-none absolute inset-0 m-auto hidden h-5 w-5 text-[var(--bg-card)] peer-checked:block"
             fill="none"
             stroke="currentColor"
             strokeWidth={3.5}

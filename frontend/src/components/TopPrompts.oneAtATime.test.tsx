@@ -251,7 +251,9 @@ describe.each<Theme>(['light', 'dark'])('Top prompts: size and contrast (%s)', (
     expect(tokenContrast('var(--bg-card)', 'var(--nn-accent-text)', theme)).toBeGreaterThanOrEqual(4.5);
     await user.click(box);
     expect(box).toBeChecked();
-    // The 44px tap target is the whole label row.
+    // The tick itself is a 44px target (QC after #392); the label row stays 44px too.
+    expect(box.className).toMatch(/min-h-\[44px\]/);
+    expect(box.className).toMatch(/min-w-\[44px\]/);
     expect(screen.getByTestId('install-prompt-never-label').className).toContain('min-h-[44px]');
   });
 
