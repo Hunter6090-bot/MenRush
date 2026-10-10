@@ -122,14 +122,17 @@ describe('React Router v7 BOA90 — login', () => {
 });
 
 describe('React Router v7 BOA90 — routing / bottom nav + deep links', () => {
-  it('exposes Nearby, Matches, and Chat as primary mobile tabs', () => {
+  it('exposes Discover home + Chat · Rooms · Out · You as primary mobile tabs', () => {
     const mobile = getNavItems().filter((i) => i.mobileTab).map((i) => i.to);
-    expect(mobile).toEqual(
-      expect.arrayContaining(['/discover', '/matches', '/conversations']),
-    );
-    // Stable primary order: Nearby before Chat before Matches in mobile chrome.
-    expect(mobile.indexOf('/discover')).toBeLessThan(mobile.indexOf('/conversations'));
-    expect(mobile.indexOf('/conversations')).toBeLessThan(mobile.indexOf('/matches'));
+    expect(mobile).toEqual([
+      '/discover',
+      '/conversations',
+      '/rooms',
+      '/out',
+      '/profile',
+    ]);
+    expect(mobile).not.toContain('/matches');
+    expect(mobile).not.toContain('/stream');
   });
 
   it('treats /messages/:id as Chat-active deep link (Router v7 path)', () => {

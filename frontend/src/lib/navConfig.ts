@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { ROUTE_LABELS } from './routeLabels';
+import { readHomeView } from './homeView';
 import {
   IconChat,
   IconCommunity,
@@ -8,12 +9,13 @@ import {
   IconHotSpots,
   IconMatches,
   IconNotifications,
+  IconOut,
   IconProfile,
   IconRooms,
   IconSettings,
 } from '../components/icons';
 
-export type NavIcon = ComponentType<{ size?: number; className?: string }>;
+export type NavIcon = ComponentType<{ size?: number; className?: string; filled?: boolean }>;
 
 export interface NavItem {
   to: string;
@@ -27,20 +29,18 @@ export interface NavItem {
   mobileMore?: boolean;
 }
 
+/**
+ * Redesign Step 1 (Pete 6 Oct 2026): 5 primary tabs:
+ * Home (Map|List toggle) · Chat · Rooms · Out · You.
+ * Old destinations stay in the catalog for deep links / desktop Settings.
+ */
 export function getNavItems(): NavItem[] {
   return [
     {
       to: '/discover',
-      label: ROUTE_LABELS.nearby,
+      label: ROUTE_LABELS.map,
+      shortLabel: 'Map',
       Icon: IconDiscover,
-      mobileTab: true,
-      desktopNav: true,
-    },
-    {
-      // Own destination — not a mode of Map. Between Nearby and Chat.
-      to: '/stream',
-      label: ROUTE_LABELS.community,
-      Icon: IconCommunity,
       mobileTab: true,
       desktopNav: true,
     },
@@ -54,14 +54,39 @@ export function getNavItems(): NavItem[] {
       desktopNav: true,
     },
     {
+      to: '/rooms',
+      label: ROUTE_LABELS.rooms,
+      shortLabel: 'Rooms',
+      Icon: IconRooms,
+      mobileTab: true,
+      desktopNav: true,
+    },
+    {
+      to: '/out',
+      label: ROUTE_LABELS.out,
+      shortLabel: 'Out',
+      Icon: IconOut,
+      mobileTab: true,
+      desktopNav: true,
+    },
+    {
+      to: '/profile',
+      label: ROUTE_LABELS.you,
+      shortLabel: 'You',
+      Icon: IconProfile,
+      mobileTab: true,
+      desktopNav: true,
+    },
+    {
+      to: '/stream',
+      label: ROUTE_LABELS.community,
+      Icon: IconCommunity,
+    },
+    {
       to: '/events',
       label: ROUTE_LABELS.events,
       Icon: IconEvents,
-      desktopNav: true,
-      mobileMore: true,
     },
-    // Cruise (formerly Hot Spots) is a layer on the Nearby map, not a separate tab —
-    // no desktopNav/mobileMore/mobileTab. `/hot-spots` stays for deep links/bookmarks.
     {
       to: '/hot-spots',
       label: ROUTE_LABELS.hotSpots,
@@ -72,38 +97,18 @@ export function getNavItems(): NavItem[] {
       label: ROUTE_LABELS.matches,
       Icon: IconMatches,
       badgeKey: 'matches',
-      mobileTab: true,
-      desktopNav: true,
-    },
-    {
-      to: '/rooms',
-      label: ROUTE_LABELS.rooms,
-      // Phone tab shows ROUTE_LABELS.rooms ("Rooms").
-      Icon: IconRooms,
-      // First-class chrome entry — not nested under Chat / messages.
-      mobileTab: true,
-      desktopNav: true,
-    },
-    {
-      to: '/profile',
-      label: ROUTE_LABELS.profile,
-      Icon: IconProfile,
-      mobileTab: true,
-      desktopNav: true,
     },
     {
       to: '/settings',
       label: ROUTE_LABELS.settings,
       Icon: IconSettings,
       desktopNav: true,
-      mobileMore: true,
     },
     {
       to: '/notifications',
       label: ROUTE_LABELS.alerts,
       Icon: IconNotifications,
       badgeKey: 'notifications',
-      desktopNav: false,
     },
   ];
 }
@@ -134,20 +139,35 @@ export function isNavActive(pathname: string, path: string): boolean {
   if (path === '/stream') {
     return pathname === '/stream' || pathname.startsWith('/stream/');
   }
+  if (path === '/out') {
+    return (
+      pathname === '/out' ||
+      pathname.startsWith('/out/') ||
+      pathname === '/events' ||
+      pathname.startsWith('/events/') ||
+      pathname === '/hot-spots' ||
+      pathname.startsWith('/hot-spots/') ||
+      pathname === '/stream' ||
+      pathname.startsWith('/stream/')
+    );
+  }
   return pathname === path || pathname.startsWith(`${path}/`);
 }
 
 export function mobilePageTitle(pathname: string): string {
   if (pathname.startsWith('/messages/')) return 'Chat';
   if (pathname.startsWith('/profile/')) return 'Profile';
-  if (pathname.startsWith('/rooms/')) return ROUTE_LABELS.rooms;
+  if (pathname.startsWith('/rooms/')) return 'Rooms';
+  if (pathname === '/out' || pathname.startsWith('/out/')) return ROUTE_LABELS.out;
+  if (pathname === '/discover') return readHomeView() === 'list' ? 'List' : ROUTE_LABELS.map;
 
   const items = getNavItems();
   const match = items.find((item) => isNavActive(pathname, item.to));
-  if (match) return match.label;
+  if (match) return match.shortLabel ?? match.label;
 
   if (pathname === '/albums') return 'Albums';
   if (pathname === '/premium') return 'Premium';
   if (pathname === '/stream') return ROUTE_LABELS.community;
+  if (pathname === '/matches') return ROUTE_LABELS.matches;
   return 'MenRush';
 }

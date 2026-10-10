@@ -65,6 +65,8 @@ describe('Discover nearby headcount display lock', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.localStorage.clear();
+    // These checks cover the grid. Map is home, and the grid only renders in grid view.
+    window.localStorage.setItem('menrush_home_view', 'list');
 
     useAuthStore.setState({
       user: {

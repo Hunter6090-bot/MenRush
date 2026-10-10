@@ -358,7 +358,7 @@ const NearbyGridCard = memo(function NearbyGridCard({
             <GridCardFace user={user} distLabel={distLabel} metaRest={metaRest} />
           </ProfilePhotoLink>
         )}
-        {isFreshFaceNearby(user) ? (
+        {false && isFreshFaceNearby(user) ? (
           <NewJoinerBadge />
         ) : null}
       </div>

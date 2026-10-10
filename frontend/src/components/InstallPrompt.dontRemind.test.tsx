@@ -111,3 +111,33 @@ describe("InstallPrompt: Don't remind me again", () => {
     expect(screen.getByRole('dialog', { name: 'Install MenRush' })).toBeInTheDocument();
   });
 });
+
+describe('InstallPrompt sheet and the phone tab bar', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    resetInstallPromptStoreForTests();
+    useAuthStore.setState({ user: { id: 'member-a', name: 'Member' } as never, token: 't' });
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    });
+  });
+
+  for (const [phone, ua] of Object.entries(phones)) {
+    it(`${phone}: the Get the app sheet sits above the tab bar, not over it`, () => {
+      Object.defineProperty(navigator, 'userAgent', { configurable: true, get: () => ua });
+      renderSheet();
+      const sheet = screen.getByRole('dialog', { name: 'Install MenRush' });
+      const classes = sheet.className.split(/\s+/);
+      expect(classes).toContain('fixed');
+      expect(classes).toContain('bottom-[var(--mobile-tab-bar-height)]');
+      expect(classes).not.toContain('bottom-0');
+    });
+  }
+});

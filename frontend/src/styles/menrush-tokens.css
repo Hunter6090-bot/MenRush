@@ -46,6 +46,8 @@
   --nn-accent-text: var(--nn-copper-bright);
   /* Destructive text (Block): >= 4.5:1 on elevated menus */
   --nn-danger-text: var(--nn-danger-light);
+  /* Discretion slider empty track: >= 3:1 vs --bg-card and vs the --cream fill */
+  --nn-range-track: var(--nn-rust);
 
   --nn-fg-1: var(--nn-text);
   --nn-fg-2: var(--nn-muted);
@@ -205,6 +207,7 @@ html.theme-light {
 
   --nn-accent-text: var(--nn-rust);
   --nn-danger-text: var(--nn-danger);
+  --nn-range-track: var(--nn-copper);
 
   --bg-primary: var(--nn-bg);
   --bg-elevated: var(--nn-elevated);

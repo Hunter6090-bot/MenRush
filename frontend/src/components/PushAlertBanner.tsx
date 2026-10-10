@@ -8,6 +8,12 @@ import {
 import { usePromptDismissal } from '../lib/promptDismissal';
 import { PromptDismissControls } from './PromptDismissControls';
 
+/**
+ * Device-wide "Don't show again" key from the redesign (#316). Still honoured as
+ * already dismissed (see lib/promptDismissal LEGACY_NEVER_KEYS); never written now.
+ */
+export const HOME_SCREEN_CARD_NEVER_KEY = 'menrush_home_screen_card_never';
+
 /** Older 12h "Later" snooze. Still honoured until it runs out; never written now. */
 const LEGACY_SNOOZE_KEY = 'menrush_push_banner_snooze_until';
 

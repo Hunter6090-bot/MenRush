@@ -72,7 +72,9 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
 
   const wrap =
     variant === 'sheet'
-      ? 'fixed inset-x-0 bottom-0 z-[60] border-t border-[var(--border-default)] bg-[var(--bg-card)] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4'
+      ? // Sits on top of the phone tab bar, never over it (tab bar is fixed bottom-0, z-50,
+        // and already pads the home-indicator safe area).
+        'fixed inset-x-0 bottom-[var(--mobile-tab-bar-height)] z-[60] border-y border-[var(--border-default)] bg-[var(--bg-card)] px-4 pb-4 pt-4'
       : 'mt-4 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-4 py-4';
 
   return (
