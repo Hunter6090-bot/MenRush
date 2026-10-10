@@ -75,6 +75,16 @@ export const ComingSoon = () => {
             >
               Sign up free
             </Link>
+            {/* Secondary to Sign up free: plain text with an underlined link, 15px, 44px tap area. */}
+            <p className="mt-3 text-[15px] text-[var(--cream-muted)]" data-testid="hero-sign-in">
+              Already a member?{' '}
+              <Link
+                to="/login"
+                className="inline-flex min-h-[44px] items-center px-1 font-semibold text-[var(--nn-accent-text)] underline underline-offset-4 transition-colors hover:text-[var(--nn-text)]"
+              >
+                Sign in
+              </Link>
+            </p>
           </div>
         </section>
 
