@@ -1,4 +1,5 @@
 import { lazy, Suspense, type ComponentType, type ReactElement, type ReactNode } from 'react';
+import { FirstLaunchAgeGate, UnderAgeExit } from './components/FirstLaunchAgeGate';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { LegacyInviteRedirect } from './components/LegacyInviteRedirect';
 import { useEffect } from 'react';
@@ -253,6 +254,7 @@ function AppShell() {
   return (
     <>
       {token ? <ToastNotifications /> : null}
+      <FirstLaunchAgeGate>
       <LazyRoute>
         <Routes>
           <Route path="/" element={<ComingSoon />} />
@@ -273,6 +275,7 @@ function AppShell() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/check-email" element={<CheckEmail />} />
           <Route path="/confirm-email" element={<ConfirmEmail />} />
+          <Route path="/under-18" element={<UnderAgeExit />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/cookies" element={<Cookies />} />
@@ -454,6 +457,7 @@ function AppShell() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </LazyRoute>
+      </FirstLaunchAgeGate>
       {token ? <InstallPrompt variant="sheet" /> : null}
       {token && FEATURES.videoCalls ? (
         <LazyRoute>

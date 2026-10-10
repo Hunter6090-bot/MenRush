@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { guardAgainstSideEffects } from './support/network-guard';
+import { AGE_GATE_ADULT_VALUE, AGE_GATE_STORAGE_KEY, FRESH_DEVICE_STORAGE_STATE } from './support/age-gate';
 
 /** Accessible name of ComingSoon's h1 (br-separated lines collapse to one name). */
 const LANDING_H1 =
@@ -73,13 +74,54 @@ test.describe('anonymous route protection', () => {
   for (const path of protectedRoutes) {
     test(`${path} redirects to login with next=`, async ({ page }) => {
       await page.goto('/');
-      await page.evaluate(() => localStorage.clear());
+      // Signed out, but this device already passed the 18+ gate.
+      await page.evaluate(
+        ([k, v]) => {
+          localStorage.clear();
+          localStorage.setItem(k, v);
+        },
+        [AGE_GATE_STORAGE_KEY, AGE_GATE_ADULT_VALUE],
+      );
 
       await page.goto(path);
 
       // App.tsx appends `?next=<encoded path>` so sign-in returns the user here.
       await expect(page).toHaveURL(`/login?next=${encodeURIComponent(path)}`);
       await expect(page.getByRole('button', { name: 'Sign In' })).toBeVisible();
+    });
+  }
+});
+
+test.describe('first-launch 18+ gate (fresh device)', () => {
+  test.use({ storageState: FRESH_DEVICE_STORAGE_STATE });
+
+  test('shows on first app launch, is remembered, and keeps the deep link', async ({ page }) => {
+    await page.goto('/discover?view=list');
+    await expect(page.getByTestId('age-gate')).toBeVisible();
+    await expect(page.getByRole('heading', { name: '18+' })).toBeVisible();
+    await page.getByRole('button', { name: "I'm 18 or over" }).click();
+    // The protected deep link carries on to sign in with next= intact.
+    await expect(page).toHaveURL(`/login?next=${encodeURIComponent('/discover?view=list')}`);
+    await expect(page.getByTestId('age-gate')).toHaveCount(0);
+    expect(await page.evaluate((k) => localStorage.getItem(k), AGE_GATE_STORAGE_KEY)).toBe(AGE_GATE_ADULT_VALUE);
+    await page.reload();
+    await expect(page.getByTestId('age-gate')).toHaveCount(0);
+  });
+
+  test("I'm under 18 leaves the app and stores nothing", async ({ page }) => {
+    await page.goto('/login');
+    await page.getByRole('button', { name: "I'm under 18" }).click();
+    await expect(page).toHaveURL('/under-18');
+    await expect(page.getByTestId('age-gate-exit')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Sign In' })).toHaveCount(0);
+    expect(await page.evaluate((k) => localStorage.getItem(k), AGE_GATE_STORAGE_KEY)).toBeNull();
+  });
+
+  for (const path of ['/', '/pride', '/terms', '/privacy', '/help', '/register', '/invite']) {
+    test(`${path} skips the gate`, async ({ page }) => {
+      await page.goto(path);
+      await expect(page.locator('body')).not.toBeEmpty();
+      await expect(page.getByTestId('age-gate')).toHaveCount(0);
     });
   }
 });

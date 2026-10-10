@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 import { PLAYWRIGHT_BASE_URL } from './e2e/support/base-url';
+import { ADULT_CONFIRMED_STORAGE_STATE } from './e2e/support/age-gate';
 
 const externalBaseUrl = process.env.PLAYWRIGHT_BASE_URL;
 const baseURL = PLAYWRIGHT_BASE_URL;
@@ -15,6 +16,8 @@ export default defineConfig({
   reporter: isCI ? [['line'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL,
+    // Every spec starts past the first-launch 18+ gate (age-gate specs opt out).
+    storageState: ADULT_CONFIRMED_STORAGE_STATE,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
     video: 'off',
