@@ -350,11 +350,7 @@ function OutEventRow({ event }: { event: EventDTO }) {
           {[event.venue_name, event.starts_at].filter(Boolean).join(' · ')}
         </p>
       </div>
-      {/* Theme accent text: copper on dark, rust on light (>= 4.5:1 on the card in both). */}
-      <span
-        data-testid="out-event-pill"
-        className="inline-flex min-h-[44px] shrink-0 items-center self-center rounded-full border border-[color-mix(in_srgb,var(--nn-accent-text)_55%,transparent)] px-3 text-[15px] font-extrabold uppercase tracking-wide text-[var(--nn-accent-text)]"
-      >
+      <span className="inline-flex min-h-[44px] shrink-0 items-center self-center rounded-full border border-[var(--copper)]/40 px-3 text-[15px] font-extrabold uppercase tracking-wide text-[var(--copper)]">
         Event
       </span>
     </article>

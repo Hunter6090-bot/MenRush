@@ -1,6 +1,7 @@
 /**
- * Out EVENT pill and footer links follow the theme: text >= 4.5:1 on light and dark.
- * Plain var(--copper) text was about 3.4:1 on the light card.
+ * Out footer links (Full Cruise map, Full Events, Community feed) follow the
+ * theme: text >= 4.5:1 on light and dark. Plain var(--copper) text was about
+ * 3.4:1 in light mode. The EVENT pill is fixed in #390.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -27,23 +28,13 @@ vi.mock('../api/client', async (importOriginal) => {
 
 loadThemeTokens(readFileSync(resolve(__dirname, '../styles/menrush-tokens.css'), 'utf8'));
 
-describe.each<Theme>(['light', 'dark'])('Out EVENT pill and footer contrast (%s)', (theme) => {
+describe.each<Theme>(['light', 'dark'])('Out footer link contrast (%s)', (theme) => {
   beforeEach(() => {
     useLocationStore.setState({ lat: 51.5, lng: -0.12 });
     vi.mocked(hotSpotsAPI.listNearby).mockResolvedValue({ data: { spots: [] } } as never);
     vi.mocked(eventsAPI.getNearby).mockResolvedValue({
-      data: [{ id: 'ev1', name: 'Bear night', venue_name: 'The Eagle', starts_at: 'Sat 21:00' }],
+      data: [],
     } as never);
-  });
-
-  it('EVENT pill: theme tokens, 15px, 44px, text >= 4.5:1', async () => {
-    render(<MemoryRouter><Out /></MemoryRouter>);
-    const pill = await screen.findByTestId('out-event-pill');
-    expect(hardcodedColourClasses(pill)).toEqual([]);
-    expect(pill.className).toContain('text-[15px]');
-    expect(pill.className).toContain('min-h-[44px]');
-    expect(contrast(pill, theme)).toBeGreaterThanOrEqual(4.5);
-    expect(tokenContrast('var(--nn-accent-text)', 'var(--bg-card)', theme)).toBeGreaterThanOrEqual(3);
   });
 
   it('footer links: theme tokens, 15px, 44px targets, text >= 4.5:1', async () => {
