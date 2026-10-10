@@ -133,7 +133,8 @@ test.describe('public design lock — auth pages', () => {
     await page.goto('/login');
     await assertAuthShell(page);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Sign in and see who's/i);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/near you right now/i);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/around on the map\./i);
+    await expect(page.getByText(/right now/i)).toHaveCount(0);
     await expect(page.getByText(/For invite holders only/i)).toHaveCount(0);
     await expect(page.getByRole('link', { name: /Create an account/i })).toHaveAttribute(
       'href',

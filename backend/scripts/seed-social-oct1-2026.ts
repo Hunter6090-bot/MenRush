@@ -74,7 +74,7 @@ export const TEMPLATES: TemplateSeed[] = [
       {
         key: 'hook',
         label: 'Opening line',
-        default: 'See who is near you right now.',
+        default: "See who's around on the map.",
       },
       {
         key: 'body',
@@ -592,7 +592,7 @@ CTA: menrush.com`,
   out.push(
     ...dayPosts('2026-08-28', 2, 'full', {
       templateSlug: 'oct1-nearby-rooms',
-      xAm: `See who is near you right now.
+      xAm: `See who's around on the map.
 
 That is the product truth MenRush is built around.
 
