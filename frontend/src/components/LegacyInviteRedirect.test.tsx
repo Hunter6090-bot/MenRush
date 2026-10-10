@@ -38,7 +38,7 @@ describe('LegacyInviteRedirect', () => {
   it('sends the old preview address home and shows no beta text', async () => {
     const { container } = renderAt('/beta');
     expect((await screen.findByTestId('where')).textContent).toBe('/');
-    expect(screen.getByText(/Already have an invite\?/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Have a code?' })).toBeInTheDocument();
     expect(container.textContent ?? '').not.toMatch(/beta/i);
     expect(container.innerHTML).not.toMatch(/href="[^"]*\/beta/i);
   });

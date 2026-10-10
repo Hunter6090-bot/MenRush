@@ -6,7 +6,6 @@ import { BrandMark } from '../components/BrandMark';
 import { RandomBackground } from '../components/RandomBackground';
 import { PulseRing } from '../components/PulseRing';
 import { SiteFooter } from '../components/SiteFooter';
-import { formatRadiusFromKm } from '../lib/localeUnits';
 import { PasswordInput } from '../components/PasswordInput';
 import { loginErrorMessage } from '../lib/authErrors';
 import {
@@ -15,10 +14,11 @@ import {
   saveDeviceTrustToken,
 } from '../lib/deviceTrust';
 
+/** Strictly true facts only: sign-up is free, 18+ is enforced, the map is home. */
 const stats = [
-  { value: formatRadiusFromKm(5), label: 'Discovery radius' },
-  { value: '1 tap', label: 'Match to message' },
-  { value: 'Live', label: 'Real-time presence' },
+  { value: 'Free', label: 'To join' },
+  { value: '18+', label: 'Adults only' },
+  { value: 'Map', label: 'Home screen' },
 ];
 
 export const Landing = () => {
@@ -113,13 +113,13 @@ export const Landing = () => {
           {/* Left: Hero */}
           <section className="text-center lg:text-left">
             <h1 className="mr-hero-heading">
-              Guys nearby
-              <span className="mr-hero-accent">right now.</span>
+              See who&apos;s around.
+              <span className="mr-hero-accent">On the map.</span>
             </h1>
 
             <p className="mr-copy mt-5 max-w-md lg:max-w-none">
-              A real-time discovery app for gay, bi, trans, discreet and curious men.
-              Verified profiles, live proximity, direct chat.
+              For gay, bi, trans and curious men. 18+ only.
+              Map, one-to-one chat, Rooms and Out. Private groups need Premium.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center justify-center gap-4 lg:justify-start">
@@ -255,7 +255,7 @@ export const Landing = () => {
               <p className="mt-5 text-sm text-[var(--cream-muted)]">
                 No account yet?{' '}
                 <Link to="/register" className="font-semibold text-[#C4832A] transition-colors hover:text-[#D4943B]">
-                  Create one — it's free
+                  Create one. It&apos;s free.
                 </Link>
               </p>
             </div>

@@ -3,7 +3,7 @@ import { guardAgainstSideEffects } from './support/network-guard';
 
 /** Accessible name of ComingSoon's h1 (br-separated lines collapse to one name). */
 const LANDING_H1 =
-  /Real men\.\s*Verified profiles\.\s*Total discretion\./i;
+  /See who's around\.\s*On the map\./i;
 
 test.describe('public routes', () => {
   const routes = [
