@@ -200,6 +200,32 @@ export const AUTH_ONLY_ROUTERS: Record<string, string> = {
   'email-notifications': 'own email notification ticks only',
 };
 
+const PUBLIC_NO_AUTH_GUARD_LINE = /^router\.use\(privateNoStore\);?[ \t]*$/m;
+
+/**
+ * Public routers: no login. Must still be private, no-store (prefs / tokens
+ * must not land in a shared cache) and rate limited. Failed attempts count
+ * per IP; successful applies must not share one Vercel egress bucket.
+ */
+export const PUBLIC_RATE_LIMITED_ROUTERS: Record<string, string> = {
+  'email-unsubscribe': 'public RFC 8058 unsubscribe; no auth; privateNoStore; rate limited',
+};
+
+export function assertPublicRateLimitedRouterGuard(route: string, source: string): void {
+  const code = stripComments(source);
+  const guard = PUBLIC_NO_AUTH_GUARD_LINE.exec(code);
+  assert.ok(guard, `${route}: router.use must start a line and apply privateNoStore only`);
+  const firstRoute = FIRST_ROUTE.exec(code);
+  assert.ok(firstRoute, `${route}: no routes found`);
+  assert.ok(guard.index < firstRoute.index, `${route}: router.use must come before the first route`);
+  assert.ok(!/\bauthMiddleware\b/.test(code), `${route}: public route must not use authMiddleware`);
+  assert.ok(!/\bverifiedMiddleware\b/.test(code), `${route}: public route must not use verifiedMiddleware`);
+  assert.ok(/\brateLimit\s*\(/.test(code), `${route}: must be rate limited`);
+  assert.ok(/skipSuccessfulRequests\s*:\s*true/.test(code), `${route}: IP limiter counts only failed / invalid tokens`);
+  assert.ok(/skipFailedRequests\s*:\s*true/.test(code), `${route}: success limiter ignores invalid tokens`);
+  assert.ok(/userId/.test(code) && /type/.test(code), `${route}: successful applies must key by user and type`);
+}
+
 export function assertAuthOnlyRouterGuard(route: string, source: string): void {
   const code = stripComments(source);
   const uses = code.match(/\brouter\s*\.\s*use\s*\(/g) ?? [];
@@ -460,6 +486,20 @@ test('source guard helpers reject commented, hidden, extra, late or indented rou
   assert.match(stripped, /^ *e\(\);$/m);
 });
 
+test('public rate-limited guard requires privateNoStore, no auth, and split rate keys', () => {
+  const ok =
+    "const router = Router();\nrouter.use(privateNoStore);\nconst fail = rateLimit({ skipSuccessfulRequests: true, keyGenerator: rateLimitKey });\nconst win = rateLimit({ skipFailedRequests: true, keyGenerator: (req) => `email-unsub:${payload.userId}:${payload.type}` });\nrouter.get('/', fail, h);\n";
+  assertPublicRateLimitedRouterGuard('ok', ok);
+  const bad: Record<string, string> = {
+    'has auth': ok.replace('privateNoStore);', 'privateNoStore, authMiddleware);'),
+    'no no-store': ok.replace('router.use(privateNoStore);\n', ''),
+    'after first route': "const router = Router();\nrouter.get('/', h);\nrouter.use(privateNoStore);\n",
+  };
+  for (const [name, source] of Object.entries(bad)) {
+    assert.throws(() => assertPublicRateLimitedRouterGuard(name, source), assert.AssertionError, name);
+  }
+});
+
 test('auth-only guard helper rejects missing no-store, extra use, aliases and member ids from the request', () => {
   const ok = "const router = Router();\nrouter.use(privateNoStore, authMiddleware);\nrouter.get('/', (req, res) => res.json(req.userId));\n";
   assertAuthOnlyRouterGuard('ok', ok);
@@ -489,6 +529,10 @@ test('source guards preserve location, push, socket, and media privacy boundarie
   }
   for (const route of Object.keys(AUTH_ONLY_ROUTERS)) {
     assertAuthOnlyRouterGuard(route, fs.readFileSync(path.join(root, `src/routes/${route}.ts`), 'utf8'));
+    assert.match(server, new RegExp(`app\\.use\\('/api/${route}',`), `${route}: mounted under /api/${route}`);
+  }
+  for (const route of Object.keys(PUBLIC_RATE_LIMITED_ROUTERS)) {
+    assertPublicRateLimitedRouterGuard(route, fs.readFileSync(path.join(root, `src/routes/${route}.ts`), 'utf8'));
     assert.match(server, new RegExp(`app\\.use\\('/api/${route}',`), `${route}: mounted under /api/${route}`);
   }
   // Events: keep no-store at router level ahead of auth, so nearby, check-in and their 401s are never cached.

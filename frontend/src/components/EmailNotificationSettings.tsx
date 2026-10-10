@@ -4,29 +4,35 @@ import { emailNotificationsAPI, type EmailNotifyPrefs } from '../api/client';
 const ROWS: Array<{
   key: keyof EmailNotifyPrefs;
   label: string;
-  comingSoon?: boolean;
+  needsJerkFlag?: boolean;
 }> = [
   { key: 'messages', label: 'Messages' },
   { key: 'matches', label: 'Matches' },
-  { key: 'jerks', label: 'Jerks', comingSoon: true },
+  { key: 'jerks', label: 'Jerks', needsJerkFlag: true },
 ];
 
 const DEFAULT_PREFS: EmailNotifyPrefs = { messages: true, matches: true, jerks: true };
 
+export interface EmailNotificationSettingsProps {
+  flush?: boolean;
+}
+
 /**
- * Server-saved activity-mail ticks. All three start on. Jerks stays behind
- * the product hold (#325/#326) with a muted Coming soon tag.
+ * Server-saved activity-mail ticks. Folded into the Notifications card.
+ * Hidden entirely when EMAIL_NOTIFICATIONS_ENABLED is off. Jerks stays
+ * hidden until EMAIL_NOTIFY_JERK_ENABLED.
  */
-export function EmailNotificationSettings() {
+export function EmailNotificationSettings({ flush = false }: EmailNotificationSettingsProps) {
   const [prefs, setPrefs] = useState<EmailNotifyPrefs>(DEFAULT_PREFS);
-  const [ready, setReady] = useState(false);
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [jerkEnabled, setJerkEnabled] = useState(false);
   const [busy, setBusy] = useState<keyof EmailNotifyPrefs | null>(null);
 
   useEffect(() => {
     let live = true;
     const load = emailNotificationsAPI?.get;
     if (typeof load !== 'function') {
-      setReady(true);
+      setEnabled(false);
       return () => {
         live = false;
       };
@@ -34,13 +40,17 @@ export function EmailNotificationSettings() {
     void load()
       .then((res) => {
         if (!live) return;
-        setPrefs({ ...DEFAULT_PREFS, ...res.data });
+        const data = res.data ?? {};
+        setEnabled(Boolean(data.enabled));
+        setJerkEnabled(Boolean(data.jerkEnabled));
+        setPrefs({
+          messages: data.messages ?? true,
+          matches: data.matches ?? true,
+          jerks: data.jerks ?? true,
+        });
       })
       .catch(() => {
-        /* keep defaults until the next visit */
-      })
-      .finally(() => {
-        if (live) setReady(true);
+        if (live) setEnabled(false);
       });
     return () => {
       live = false;
@@ -54,7 +64,13 @@ export function EmailNotificationSettings() {
     setBusy(key);
     try {
       const res = await emailNotificationsAPI.update({ [key]: next[key] });
-      setPrefs({ ...DEFAULT_PREFS, ...res.data });
+      setPrefs({
+        messages: res.data.messages ?? next.messages,
+        matches: res.data.matches ?? next.matches,
+        jerks: res.data.jerks ?? next.jerks,
+      });
+      if (typeof res.data.enabled === 'boolean') setEnabled(res.data.enabled);
+      if (typeof res.data.jerkEnabled === 'boolean') setJerkEnabled(res.data.jerkEnabled);
     } catch {
       setPrefs(prefs);
     } finally {
@@ -62,20 +78,28 @@ export function EmailNotificationSettings() {
     }
   };
 
+  if (!enabled) return null;
+
+  const rows = ROWS.filter((row) => !row.needsJerkFlag || jerkEnabled);
+
   return (
     <div
       id="email-notifications"
-      className="scroll-mt-24 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] divide-y divide-[var(--border-default)]/60 shadow-card"
+      className={
+        flush
+          ? 'scroll-mt-24 divide-y divide-[var(--border-default)]/60'
+          : 'scroll-mt-24 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] divide-y divide-[var(--border-default)]/60 shadow-card'
+      }
       data-testid="email-notification-settings"
     >
-      {ROWS.map((row) => {
+      {rows.map((row) => {
         const on = prefs[row.key];
         return (
           <button
             key={row.key}
             type="button"
             onClick={() => void toggle(row.key)}
-            disabled={!ready || busy === row.key}
+            disabled={busy === row.key}
             aria-pressed={on}
             aria-label={`${row.label} email notifications`}
             data-testid={`email-notify-${row.key}`}
@@ -83,20 +107,15 @@ export function EmailNotificationSettings() {
           >
             <span className="flex min-w-0 items-center gap-2">
               <span className="text-[15px] font-bold text-[var(--cream)]">{row.label}</span>
-              {row.comingSoon ? (
-                <span
-                  className="shrink-0 rounded-full border border-[var(--border-default)] px-2 text-[15px] font-medium leading-[22px] text-[var(--cream-muted)]"
-                  data-testid="email-notify-jerks-soon"
-                >
-                  Coming soon
-                </span>
-              ) : null}
             </span>
             <span
-              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full ${
-                on ? 'bg-[var(--copper)]' : 'bg-[var(--border-default)]'
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full box-border ${
+                on
+                  ? 'bg-[var(--copper)]'
+                  : 'border-2 border-[var(--cream)] bg-[var(--bg-elevated)]'
               }`}
               aria-hidden
+              data-testid={`email-notify-${row.key}-track`}
             >
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-[var(--cream)] shadow-sm ${

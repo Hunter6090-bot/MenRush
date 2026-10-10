@@ -20,7 +20,11 @@ import {
   buildEmailNotificationText,
   type EmailNotifyType,
 } from '../src/services/email-notification.emails';
-import { isEmailNotifyType, settingsEmailNotificationsUrl } from '../src/services/email-notification.service';
+import {
+  isEmailNotifyType,
+  settingsEmailNotificationsUrl,
+  unsubscribeUrl,
+} from '../src/services/email-notification.service';
 
 function arg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -77,18 +81,43 @@ async function main() {
     return;
   }
 
+  const headers = await listUnsubscribeHeaders(to, type);
   const result = await sendEmail({
     to,
     subject: EMAIL_NOTIFY_SUBJECT,
     html,
     text,
-    headers: {
-      'List-Unsubscribe': `<${openUrl}/settings#email-notifications>`,
-      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-    },
+    ...(headers ? { headers } : {}),
     logHint: `email-notify-test:${type}`,
   });
   console.log(`Sent type=${type} id=${result.id}`);
+}
+
+/**
+ * Real RFC 8058 header only when --to is an existing member (token bound to
+ * them). Never point List-Unsubscribe at Settings. Omit the header otherwise.
+ */
+async function listUnsubscribeHeaders(
+  to: string,
+  type: EmailNotifyType,
+): Promise<Record<string, string> | undefined> {
+  try {
+    const { query, default: pool } = await import('../src/db');
+    const result = await query(`SELECT id FROM users WHERE LOWER(email) = LOWER($1)`, [to]);
+    const userId = result.rows[0]?.id as string | undefined;
+    if (!userId) {
+      await pool.end().catch(() => undefined);
+      return undefined;
+    }
+    const unsub = await unsubscribeUrl(userId, type);
+    await pool.end().catch(() => undefined);
+    return {
+      'List-Unsubscribe': `<${unsub}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 main().catch((err) => {

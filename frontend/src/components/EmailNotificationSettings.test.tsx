@@ -22,41 +22,64 @@ vi.mock('../api/client', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  api.get.mockResolvedValue({ data: { messages: true, matches: true, jerks: true } });
+  api.get.mockResolvedValue({
+    data: { enabled: true, jerkEnabled: false, messages: true, matches: true, jerks: true },
+  });
   api.update.mockImplementation(async (patch: Record<string, boolean>) => ({
-    data: { messages: true, matches: true, jerks: true, ...patch },
+    data: { enabled: true, jerkEnabled: false, messages: true, matches: true, jerks: true, ...patch },
   }));
 });
 
 describe('Email notifications settings', () => {
-  it('loads three ticks, all on, and saves a change', async () => {
+  it('loads Messages and Matches, hides Jerks until the jerk flag, and saves a change', async () => {
     render(<EmailNotificationSettings />);
     const messages = await screen.findByTestId('email-notify-messages');
     expect(messages).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('email-notify-matches')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByTestId('email-notify-jerks')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByTestId('email-notify-jerks-soon')).toHaveTextContent('Coming soon');
+    expect(screen.queryByTestId('email-notify-jerks')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('email-notify-jerks-soon')).not.toBeInTheDocument();
     fireEvent.click(messages);
     await waitFor(() => expect(api.update).toHaveBeenCalledWith({ messages: false }));
+  });
+
+  it('shows the Jerks tick when EMAIL_NOTIFY_JERK_ENABLED is on', async () => {
+    api.get.mockResolvedValue({
+      data: { enabled: true, jerkEnabled: true, messages: true, matches: true, jerks: true },
+    });
+    render(<EmailNotificationSettings />);
+    expect(await screen.findByTestId('email-notify-jerks')).toBeInTheDocument();
+  });
+
+  it('hides the rows entirely when the master flag is off', async () => {
+    api.get.mockResolvedValue({
+      data: { enabled: false, jerkEnabled: false, messages: true, matches: true, jerks: true },
+    });
+    render(<EmailNotificationSettings />);
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+    expect(screen.queryByTestId('email-notification-settings')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('email-notify-messages')).not.toBeInTheDocument();
   });
 });
 
 describe.each<Theme>(['light', 'dark'])('Email notifications contrast (%s)', (theme) => {
-  it('15px text, 44px rows, 4.5:1, theme tokens only', async () => {
+  it('15px text, 44px rows, 4.5:1, off-track border, theme tokens only', async () => {
+    api.get.mockResolvedValue({
+      data: { enabled: true, jerkEnabled: false, messages: false, matches: true, jerks: true },
+    });
     render(<EmailNotificationSettings />);
     const root = await screen.findByTestId('email-notification-settings');
     expect(hardcodedColourClasses(root)).toEqual([]);
-    for (const label of ['Messages', 'Matches', 'Jerks']) {
+    for (const label of ['Messages', 'Matches']) {
       expect(contrast(screen.getByText(label), theme), `${label} (${theme})`).toBeGreaterThanOrEqual(4.5);
     }
-    expect(contrast(screen.getByTestId('email-notify-jerks-soon'), theme)).toBeGreaterThanOrEqual(4.5);
-    for (const id of ['messages', 'matches', 'jerks']) {
+    for (const id of ['messages', 'matches']) {
       const row = screen.getByTestId(`email-notify-${id}`);
       expect(row.className).toMatch(/min-h-\[44px\]/);
-      expect(row.className).toMatch(/text-\[15px\]|[\s"]text-\[15px\]/);
+      expect(row.className).toMatch(/text-\[15px\]/);
     }
+    const offTrack = screen.getByTestId('email-notify-messages-track');
+    expect(offTrack.className).toMatch(/border-2/);
+    expect(offTrack.className).toMatch(/border-\[var\(--cream\)\]/);
     expect(screen.getByText('Messages').className).toMatch(/text-\[15px\]/);
-    expect(screen.getByTestId('email-notify-jerks-soon').className).toMatch(/text-\[15px\]/);
-    expect(screen.getByTestId('email-notify-jerks-soon').className).toMatch(/text-\[var\(--cream-muted\)\]/);
   });
 });

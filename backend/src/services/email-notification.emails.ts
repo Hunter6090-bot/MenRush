@@ -6,6 +6,9 @@
  *
  * Copy is identical for message, match and jerk. The word "jerk" never appears
  * in the subject or preview.
+ *
+ * Body order: Hello, body line, [Open MenRush], footer settings line,
+ * All the best / MenRush. The settings sentence is not repeated.
  */
 
 import {
@@ -52,16 +55,16 @@ export function buildEmailNotificationHtml(options: NotificationEmailOptions): s
       transactionalParagraph(escapeHtml(EMAIL_NOTIFY_HELLO)),
       senderLine,
       transactionalParagraph(escapeHtml(EMAIL_NOTIFY_BODY)),
-      transactionalParagraph(
-        `You can choose which emails you get at any time in ${settingsLink}.`,
-      ),
+    ].join(''),
+    ctaUrl: options.openUrl,
+    ctaLabel: EMAIL_NOTIFY_CTA,
+    afterCtaHtml: [
+      transactionalParagraph(`You can choose which emails you get at any time in ${settingsLink}.`),
       transactionalParagraph(
         `${escapeHtml(EMAIL_NOTIFY_SIGN_OFF)}<br/>${escapeHtml(EMAIL_NOTIFY_SIGN_NAME)}`,
       ),
     ].join(''),
-    ctaUrl: options.openUrl,
-    ctaLabel: EMAIL_NOTIFY_CTA,
-    footerNote: EMAIL_NOTIFY_FOOTER,
+    footerNote: '',
   });
 }
 
@@ -76,7 +79,6 @@ export function buildEmailNotificationText(options: NotificationEmailOptions): s
     `${EMAIL_NOTIFY_CTA}: ${options.openUrl}`,
     '',
     EMAIL_NOTIFY_FOOTER,
-    `Open Settings: ${options.settingsUrl}`,
     '',
     EMAIL_NOTIFY_SIGN_OFF,
     EMAIL_NOTIFY_SIGN_NAME,

@@ -38,10 +38,9 @@ export function EmailNotificationsPreview() {
             Cream
           </button>
         </div>
-        <p className="mb-2 px-1 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[var(--cream-muted)]">
-          Email notifications
-        </p>
-        <EmailNotificationSettings />
+        <div className="overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] divide-y divide-[var(--border-default)]/60 shadow-card">
+          <EmailNotificationSettings flush />
+        </div>
       </div>
     </div>
   );

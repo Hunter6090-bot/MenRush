@@ -335,11 +335,6 @@ router.post('/like/:id', verifiedMiddleware, async (req: AuthRequest, res: Respo
         linkPath: `/messages/${req.userId}`,
       });
       queueEmailNotification({
-        recipientId: req.userId!,
-        actorId: req.params.id,
-        type: 'match',
-      });
-      queueEmailNotification({
         recipientId: req.params.id,
         actorId: req.userId!,
         type: 'match',

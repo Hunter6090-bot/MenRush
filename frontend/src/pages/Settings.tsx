@@ -964,12 +964,9 @@ export const Settings = () => {
                   <ChevronRight />
                 </div>
               </Link>
-            </div>
-          </div>
 
-          <div>
-            <SectionLabel>Email notifications</SectionLabel>
-            <EmailNotificationSettings />
+              <EmailNotificationSettings flush />
+            </div>
           </div>
 
           {/* ── SAFETY ── */}

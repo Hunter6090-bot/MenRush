@@ -67,6 +67,23 @@ async function main() {
       .replace(/<style[\s\S]*?<\/style>/gi, ' ')
       .replace(/<[^>]+>/g, ' ')
       .replace(/&nbsp;/g, ' ');
+    const helloAt = visible.indexOf(emails.EMAIL_NOTIFY_HELLO);
+    const bodyAt = visible.indexOf(emails.EMAIL_NOTIFY_BODY);
+    const ctaAt = visible.indexOf(emails.EMAIL_NOTIFY_CTA);
+    const footerAt = visible.indexOf(emails.EMAIL_NOTIFY_FOOTER);
+    const signAt = visible.indexOf(emails.EMAIL_NOTIFY_SIGN_OFF);
+    assert.ok(helloAt >= 0 && helloAt < bodyAt && bodyAt < ctaAt && ctaAt < footerAt && footerAt < signAt, 'HTML order');
+    const textHello = text.indexOf(emails.EMAIL_NOTIFY_HELLO);
+    const textBody = text.indexOf(emails.EMAIL_NOTIFY_BODY);
+    const textCta = text.indexOf(emails.EMAIL_NOTIFY_CTA);
+    const textFooter = text.indexOf(emails.EMAIL_NOTIFY_FOOTER);
+    const textSign = text.indexOf(emails.EMAIL_NOTIFY_SIGN_OFF);
+    assert.ok(
+      textHello < textBody && textBody < textCta && textCta < textFooter && textFooter < textSign,
+      'text order',
+    );
+    assert.strictEqual(visible.split(emails.EMAIL_NOTIFY_FOOTER).length - 1, 1, 'settings line once in HTML');
+    assert.ok(!text.includes('Open Settings:'), 'no extra Settings line in text');
     for (const surface of [subject, preheader, visible, text]) {
       assert.ok(!/\u2014|\u2013/.test(surface), 'no em/en dashes');
       assert.ok(!/\bbeta\b/i.test(surface), 'no beta');
@@ -88,15 +105,27 @@ async function main() {
 
   assert.ok(templateSrc.includes(OFFICIAL_MARK));
 
-  // Signed unsubscribe token: per user, per type.
+  // Signed unsubscribe token: separate key, distinct purpose, no login fallback.
   const token = svc.signUnsubscribeToken('00000000-0000-4000-8000-000000000001', 'message');
   const payload = svc.verifyUnsubscribeToken(token);
   assert.strictEqual(payload.type, 'message');
   assert.strictEqual(payload.userId, '00000000-0000-4000-8000-000000000001');
-  assert.strictEqual(payload.purpose, 'email-unsub');
+  assert.strictEqual(payload.purpose, svc.EMAIL_UNSUB_PURPOSE);
+  assert.strictEqual(payload.v, 1);
   assert.throws(() => svc.verifyUnsubscribeToken('not.a-token'));
   const matchTok = svc.signUnsubscribeToken('00000000-0000-4000-8000-000000000001', 'match');
   assert.notStrictEqual(token, matchTok, 'token is per type');
+
+  const { authService } = await import('../src/services/auth.service');
+  assert.throws(() => authService.verifyToken(token), /Invalid token/);
+  const svcSrc = fs.readFileSync(
+    path.join(__dirname, '../src/services/email-notification.service.ts'),
+    'utf8',
+  );
+  assert.ok(!svcSrc.includes('your-secret-key'), 'no your-secret-key fallback');
+  assert.match(svcSrc, /EMAIL_UNSUB_SECRET/);
+  assert.match(svcSrc, /email-unsub-v1/);
+  assert.ok(!/JWT_SECRET \|\|/.test(svcSrc), 'unsub must not fall back to JWT_SECRET as the HMAC key');
 
   assert.strictEqual(svc.isEmailNotificationsEnabled(), false);
   assert.strictEqual(svc.showSenderName(), false);
@@ -125,13 +154,17 @@ async function main() {
     return next;
   };
 
+  const { authMiddleware } = await import('../src/middleware/auth');
   const express = (await import('express')).default;
   const app = express();
   app.use(express.json());
+  app.get('/api/users/me', authMiddleware, (_req, res) => res.json({ ok: true }));
+  app.get('/api/messages/conversations', authMiddleware, (_req, res) => res.json([]));
   app.use('/api/email-notifications', emailNotificationsRoutes);
   const server = http.createServer(app);
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const base = `http://127.0.0.1:${(server.address() as any).port}/api/email-notifications`;
+  const port = (server.address() as any).port;
+  const base = `http://127.0.0.1:${port}/api/email-notifications`;
   const tokenA = authService.issueAccessToken('member-a');
   const tokenB = authService.issueAccessToken('member-b');
 
@@ -149,17 +182,47 @@ async function main() {
     let res = await fetch(base, { headers: { Authorization: `Bearer ${tokenA}` } });
     assert.strictEqual(res.status, 200);
     assert.strictEqual(res.headers.get('cache-control'), 'private, no-store');
-    assert.deepStrictEqual(await res.json(), { messages: true, matches: true, jerks: true });
+    assert.deepStrictEqual(await res.json(), {
+      enabled: false,
+      jerkEnabled: false,
+      messages: true,
+      matches: true,
+      jerks: true,
+    });
 
     res = await fetch(base, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${tokenA}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: false }),
     });
-    assert.deepStrictEqual(await res.json(), { messages: false, matches: true, jerks: true });
+    assert.deepStrictEqual(await res.json(), {
+      enabled: false,
+      jerkEnabled: false,
+      messages: false,
+      matches: true,
+      jerks: true,
+    });
 
     res = await fetch(base, { headers: { Authorization: `Bearer ${tokenB}` } });
-    assert.deepStrictEqual(await res.json(), { messages: true, matches: true, jerks: true }, 'member B untouched');
+    assert.deepStrictEqual(
+      await res.json(),
+      { enabled: false, jerkEnabled: false, messages: true, matches: true, jerks: true },
+      'member B untouched',
+    );
+
+    const unsubAsLogin = svc.signUnsubscribeToken('member-a', 'message');
+    for (const pathName of ['/api/users/me', '/api/messages/conversations'] as const) {
+      const denied = await fetch(`http://127.0.0.1:${port}${pathName}`, {
+        headers: { Authorization: `Bearer ${unsubAsLogin}` },
+      });
+      assert.strictEqual(denied.status, 401, `${pathName} rejects unsub token`);
+    }
+    const deniedPut = await fetch(base, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${unsubAsLogin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: true }),
+    });
+    assert.strictEqual(deniedPut.status, 401, 'PUT /api/email-notifications rejects unsub token');
 
     res = await fetch(base, {
       method: 'PUT',
@@ -177,7 +240,19 @@ async function main() {
   assert.match(script, /There is no default recipient/);
   assert.match(script, /buildEmailNotificationHtml/);
   assert.match(script, /sendEmail\(/);
+  assert.match(script, /unsubscribeUrl/);
+  assert.ok(!/List-Unsubscribe.*settings#email-notifications/.test(script), 'List-Unsubscribe must not point at Settings');
   assert.ok(!/sendTransactionalEmail|sendViaZoho|zoho/i.test(script), 'test send is Resend only');
+
+  const usersSrc = fs.readFileSync(path.join(__dirname, '../src/routes/users.ts'), 'utf8');
+  const likeBlock = usersSrc.slice(usersSrc.indexOf("router.post('/like/:id'"), usersSrc.indexOf("router.post('/like/:id'") + 1800);
+  assert.strictEqual(
+    (likeBlock.match(/queueEmailNotification\(/g) || []).length,
+    1,
+    'match mail goes to the person who did not just act',
+  );
+  assert.match(likeBlock, /recipientId:\s*req\.params\.id/);
+  assert.match(likeBlock, /actorId:\s*req\.userId/);
 
   console.log('email-notification-checks: ok');
 }

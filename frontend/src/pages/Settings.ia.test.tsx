@@ -143,10 +143,10 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     });
     mocks.logoutApi.mockResolvedValue({});
     mocks.getEmailNotify.mockResolvedValue({
-      data: { messages: true, matches: true, jerks: true },
+      data: { enabled: true, jerkEnabled: false, messages: true, matches: true, jerks: true },
     });
     mocks.updateEmailNotify.mockResolvedValue({
-      data: { messages: true, matches: true, jerks: true },
+      data: { enabled: true, jerkEnabled: false, messages: true, matches: true, jerks: true },
     });
   });
 
@@ -192,9 +192,13 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     // Section 6: Notifications (Push toggle + Activity link)
     expect(screen.getByTestId('notification-settings')).toBeInTheDocument();
     expect(screen.getByText('Activity')).toBeInTheDocument();
-    expect(screen.getByTestId('email-notification-settings')).toBeInTheDocument();
-    expect(screen.getByText('Email notifications')).toBeInTheDocument();
-    expect(screen.getByText('Coming soon')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('email-notification-settings')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('email-notify-messages')).toBeInTheDocument();
+    expect(screen.getByTestId('email-notify-matches')).toBeInTheDocument();
+    expect(screen.queryByTestId('email-notify-jerks')).not.toBeInTheDocument();
+    expect(screen.queryByText('Email notifications')).not.toBeInTheDocument();
 
     // Section 7: Safety (Safety centre + Blocked people)
     expect(screen.getByText('Safety centre')).toBeInTheDocument();
@@ -218,6 +222,20 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     // Section 10: Account actions (Delete account + Sign out)
     expect(screen.getByTestId('settings-delete-account')).toBeInTheDocument();
     expect(screen.getByTestId('settings-sign-out')).toBeInTheDocument();
+  });
+
+  it('hides email ticks when GET /email-notifications reports enabled false', async () => {
+    mocks.getEmailNotify.mockResolvedValue({
+      data: { enabled: false, jerkEnabled: false, messages: true, matches: true, jerks: true },
+    });
+    render(
+      <MemoryRouter>
+        <Settings />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(mocks.getEmailNotify).toHaveBeenCalled());
+    expect(screen.queryByTestId('email-notification-settings')).not.toBeInTheDocument();
+    expect(screen.getByTestId('notification-settings')).toBeInTheDocument();
   });
 
   it('allows copying Account ID to clipboard', async () => {

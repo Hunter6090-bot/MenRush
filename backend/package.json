@@ -59,7 +59,7 @@
     "test:welcome-email-brand": "ts-node scripts/welcome-email-brand-checks.ts",
     "render:welcome-emails": "ts-node scripts/render-welcome-emails.ts",
     "test:email-notifications": "ts-node --transpile-only scripts/email-notification-checks.ts",
-    "test:email-notifications-integration": "ts-node --transpile-only scripts/email-notification-integration.ts",
+    "test:email-notifications-integration": "TZ=Europe/London ts-node --transpile-only scripts/email-notification-integration.ts",
     "email:test-notification": "ts-node --transpile-only scripts/send-test-notification-email.ts",
     "test:referrals": "ts-node scripts/referral-checks.ts",
     "test:referral-grant-integration": "ts-node --transpile-only scripts/referral-grant-integration.ts",

@@ -26,18 +26,22 @@ async function main() {
   const svc = await import('../src/services/email-notification.service');
   const { default: emailNotificationsRoutes } = await import('../src/routes/email-notifications');
   const { default: emailUnsubscribeRoutes } = await import('../src/routes/email-unsubscribe');
+  const { default: usersRoutes } = await import('../src/routes/users');
+  const { default: messagesRoutes } = await import('../src/routes/messages');
   const { authService } = await import('../src/services/auth.service');
   const express = (await import('express')).default;
 
   const col = await query(
     `SELECT column_name FROM information_schema.columns
       WHERE table_name = 'users'
-        AND column_name IN ('email_notify_messages', 'email_notify_matches', 'email_notify_jerks')
+        AND column_name IN (
+          'email_notify_messages', 'email_notify_matches', 'email_notify_jerks', 'email_unsub_version'
+        )
       ORDER BY column_name`,
   );
   assert.deepStrictEqual(
     col.rows.map((r: { column_name: string }) => r.column_name),
-    ['email_notify_jerks', 'email_notify_matches', 'email_notify_messages'],
+    ['email_notify_jerks', 'email_notify_matches', 'email_notify_messages', 'email_unsub_version'],
   );
   const table = await query(
     `SELECT 1 FROM information_schema.tables WHERE table_name = 'email_notification_sends'`,
@@ -83,6 +87,8 @@ async function main() {
   app.use(express.urlencoded({ extended: false }));
   app.use('/api/email-notifications', emailNotificationsRoutes);
   app.use('/api/email-unsubscribe', emailUnsubscribeRoutes);
+  app.use('/api/users', usersRoutes);
+  app.use('/api/messages', messagesRoutes);
   const server = http.createServer(app);
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const port = (server.address() as any).port;
@@ -186,9 +192,24 @@ async function main() {
     });
     assert.strictEqual(result.status, 'sent');
 
-    // One-click unsubscribe token unticks that type only.
+    // One-click unsubscribe token unticks that type only (POST). GET / HEAD do not.
     const unsubUser = await makeUser('Unsub');
-    const token = svc.signUnsubscribeToken(unsubUser.id, 'jerk');
+    const token = await svc.issueUnsubscribeToken(unsubUser.id, 'jerk');
+    const headRes = await fetch(`http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(token)}`, {
+      method: 'HEAD',
+    });
+    assert.strictEqual(headRes.status, 200);
+    prefs = await svc.getEmailNotifyPrefs(unsubUser.id);
+    assert.strictEqual(prefs.jerks, true, 'HEAD must not change prefs');
+
+    const getRes = await fetch(`http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(token)}`);
+    assert.strictEqual(getRes.status, 200);
+    const confirmPage = await getRes.text();
+    assert.match(confirmPage, /Stop these emails/);
+    assert.match(confirmPage, /<form method="POST"/);
+    prefs = await svc.getEmailNotifyPrefs(unsubUser.id);
+    assert.strictEqual(prefs.jerks, true, 'GET must not change prefs');
+
     const res = await fetch(`http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(token)}`, {
       method: 'POST',
     });
@@ -203,14 +224,25 @@ async function main() {
     });
     assert.deepStrictEqual(result, { status: 'skipped', reason: 'opt_out' });
 
-    // GET unsubscribe also works.
-    const unsub2 = await makeUser('UnsubGet');
-    const getToken = svc.signUnsubscribeToken(unsub2.id, 'match');
-    const getRes = await fetch(`http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(getToken)}`);
-    assert.strictEqual(getRes.status, 200);
-    prefs = await svc.getEmailNotifyPrefs(unsub2.id);
-    assert.strictEqual(prefs.matches, false);
-    assert.strictEqual(prefs.messages, true);
+    const replay = await fetch(`http://127.0.0.1:${port}/api/email-unsubscribe?token=${encodeURIComponent(token)}`, {
+      method: 'POST',
+    });
+    assert.strictEqual(replay.status, 400, 'version bump revokes the used token');
+
+    // Unsub token is not a login.
+    const loginProbe = await svc.issueUnsubscribeToken(unsubUser.id, 'message');
+    for (const pathName of ['/api/users/me', '/api/messages/conversations'] as const) {
+      const denied = await fetch(`http://127.0.0.1:${port}${pathName}`, {
+        headers: { Authorization: `Bearer ${loginProbe}` },
+      });
+      assert.strictEqual(denied.status, 401, `${pathName} rejects unsub token`);
+    }
+    const deniedPut = await fetch(`http://127.0.0.1:${port}/api/email-notifications`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${loginProbe}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: false }),
+    });
+    assert.strictEqual(deniedPut.status, 401);
 
     // Block both directions.
     const blockedA = await makeUser('BlockA');
@@ -275,7 +307,7 @@ async function main() {
     });
     assert.deepStrictEqual(result, { status: 'skipped', reason: 'unconfirmed' });
 
-    // Sender-name switch.
+    // Sender-name switch. Ghost senders never appear by name.
     sent.length = 0;
     const named = await makeUser('Named');
     process.env.EMAIL_NOTIFY_SHOW_SENDER_NAME = 'true';
@@ -286,6 +318,18 @@ async function main() {
     });
     assert.strictEqual(result.status, 'sent');
     assert.ok(sent[0].html.includes('Actor'), 'adds the sender profile name');
+
+    const ghostActor = await makeUser('GhostFace');
+    await query(`UPDATE profiles SET is_ghost = TRUE WHERE user_id = $1`, [ghostActor.id]);
+    const ghostRecipient = await makeUser('GhostInbox');
+    sent.length = 0;
+    result = await svc.maybeSendEmailNotification({
+      recipientId: ghostRecipient.id,
+      actorId: ghostActor.id,
+      type: 'message',
+    });
+    assert.strictEqual(result.status, 'sent');
+    assert.ok(!sent[0].html.includes('GhostFace'), 'never show a Ghost sender name');
     process.env.EMAIL_NOTIFY_SHOW_SENDER_NAME = 'false';
     const named2 = await makeUser('NamedOff');
     sent.length = 0;
@@ -329,13 +373,28 @@ async function main() {
     });
     assert.strictEqual(prefsRes.status, 200);
     assert.strictEqual(prefsRes.headers.get('cache-control'), 'private, no-store');
-    assert.deepStrictEqual(await prefsRes.json(), { messages: true, matches: true, jerks: true });
+    assert.deepStrictEqual(await prefsRes.json(), {
+      enabled: true,
+      jerkEnabled: true,
+      messages: true,
+      matches: true,
+      jerks: true,
+    });
     const putRes = await fetch(`http://127.0.0.1:${port}/api/email-notifications`, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ matches: false, jerks: false }),
     });
-    assert.deepStrictEqual(await putRes.json(), { messages: true, matches: false, jerks: false });
+    assert.deepStrictEqual(await putRes.json(), {
+      enabled: true,
+      jerkEnabled: true,
+      messages: true,
+      matches: false,
+      jerks: false,
+    });
+
+    const slot = await query(`SELECT date_trunc('hour', NOW(), 'UTC') AS hour_slot`);
+    assert.ok(slot.rows[0].hour_slot, 'UTC hour slot');
   } finally {
     svc.setEmailNotificationSender(null);
     server.close();

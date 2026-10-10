@@ -30,6 +30,18 @@ export type EmailNotifyPrefs = {
   jerks: boolean;
 };
 
+export type EmailNotifyState = EmailNotifyPrefs & {
+  enabled: boolean;
+  jerkEnabled: boolean;
+};
+
+export function emailNotifyFlags(): { enabled: boolean; jerkEnabled: boolean } {
+  return {
+    enabled: isEmailNotificationsEnabled(),
+    jerkEnabled: isJerkEmailEnabled(),
+  };
+}
+
 export type NotifySkipReason =
   | 'disabled'
   | 'jerk_hold'
@@ -106,8 +118,25 @@ export function settingsEmailNotificationsUrl(): string {
   return `${publicAppBaseUrl()}/settings#email-notifications`;
 }
 
-function unsubSecret(): string {
-  return process.env.JWT_SECRET || 'your-secret-key';
+/** Distinct from login tokens. The hotfix that rejects purpose on login is not required. */
+export const EMAIL_UNSUB_PURPOSE = 'email-unsub-v1' as const;
+export const EMAIL_UNSUB_KEY_INFO = 'email-unsub-v1';
+/** 90 days — short-lived relative to a login, and revocable via email_unsub_version. */
+export const EMAIL_UNSUB_TTL_SECONDS = 90 * 24 * 60 * 60;
+
+/**
+ * Signing key for unsubscribe tokens. Never JWT_SECRET itself, and never the
+ * 'your-secret-key' fallback. EMAIL_UNSUB_SECRET if set; otherwise
+ * HMAC-SHA256(JWT_SECRET, 'email-unsub-v1').
+ */
+export function unsubSigningKey(): Buffer {
+  const dedicated = (process.env.EMAIL_UNSUB_SECRET ?? '').trim();
+  if (dedicated) return Buffer.from(dedicated, 'utf8');
+  const jwt = (process.env.JWT_SECRET ?? '').trim();
+  if (!jwt) {
+    throw new Error('EMAIL_UNSUB_SECRET or JWT_SECRET is required');
+  }
+  return crypto.createHmac('sha256', jwt).update(EMAIL_UNSUB_KEY_INFO).digest();
 }
 
 function base64UrlEncode(value: string | Buffer): string {
@@ -122,39 +151,47 @@ function base64UrlDecode(input: string): Buffer {
 export type UnsubscribePayload = {
   userId: string;
   type: EmailNotifyType;
-  purpose: 'email-unsub';
+  purpose: typeof EMAIL_UNSUB_PURPOSE;
+  v: number;
   exp: number;
 };
 
 export function signUnsubscribeToken(
   userId: string,
   type: EmailNotifyType,
-  ttlSeconds = 365 * 24 * 60 * 60,
+  options?: { ttlSeconds?: number; version?: number },
 ): string {
   const payload: UnsubscribePayload = {
     userId,
     type,
-    purpose: 'email-unsub',
-    exp: Math.floor(Date.now() / 1000) + ttlSeconds,
+    purpose: EMAIL_UNSUB_PURPOSE,
+    v: options?.version ?? 1,
+    exp: Math.floor(Date.now() / 1000) + (options?.ttlSeconds ?? EMAIL_UNSUB_TTL_SECONDS),
   };
   const payloadJson = JSON.stringify(payload);
-  const signature = crypto.createHmac('sha256', unsubSecret()).update(payloadJson).digest();
+  const signature = crypto.createHmac('sha256', unsubSigningKey()).update(payloadJson).digest();
   return `${base64UrlEncode(payloadJson)}.${base64UrlEncode(signature)}`;
 }
 
+/** Crypto + purpose + expiry. Does not check the per-user version. */
 export function verifyUnsubscribeToken(token: string): UnsubscribePayload {
   const [payloadPart, signaturePart] = token.split('.');
   if (!payloadPart || !signaturePart) {
     throw new Error('invalid_token');
   }
   const payloadJson = base64UrlDecode(payloadPart).toString('utf8');
-  const expected = crypto.createHmac('sha256', unsubSecret()).update(payloadJson).digest();
+  const expected = crypto.createHmac('sha256', unsubSigningKey()).update(payloadJson).digest();
   const actual = base64UrlDecode(signaturePart);
   if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) {
     throw new Error('invalid_token');
   }
   const payload = JSON.parse(payloadJson) as UnsubscribePayload;
-  if (payload.purpose !== 'email-unsub' || !isEmailNotifyType(payload.type) || !payload.userId) {
+  if (
+    payload.purpose !== EMAIL_UNSUB_PURPOSE ||
+    !isEmailNotifyType(payload.type) ||
+    !payload.userId ||
+    !Number.isInteger(payload.v)
+  ) {
     throw new Error('invalid_token');
   }
   if (payload.exp < Math.floor(Date.now() / 1000)) {
@@ -163,8 +200,37 @@ export function verifyUnsubscribeToken(token: string): UnsubscribePayload {
   return payload;
 }
 
-export function unsubscribeUrl(userId: string, type: EmailNotifyType): string {
-  const token = signUnsubscribeToken(userId, type);
+export async function currentUnsubVersion(userId: string): Promise<number | null> {
+  const result = await query(
+    `SELECT email_unsub_version AS v FROM users WHERE id = $1`,
+    [userId],
+  );
+  if (!result.rows[0]) return null;
+  const v = Number(result.rows[0].v);
+  return Number.isInteger(v) ? v : 1;
+}
+
+/** Verify signature, purpose, expiry, and the live per-user version. */
+export async function readValidUnsubscribeToken(token: string): Promise<UnsubscribePayload> {
+  const payload = verifyUnsubscribeToken(token);
+  const version = await currentUnsubVersion(payload.userId);
+  if (version === null || version !== payload.v) {
+    throw new Error('revoked_token');
+  }
+  return payload;
+}
+
+export async function issueUnsubscribeToken(
+  userId: string,
+  type: EmailNotifyType,
+  ttlSeconds = EMAIL_UNSUB_TTL_SECONDS,
+): Promise<string> {
+  const version = (await currentUnsubVersion(userId)) ?? 1;
+  return signUnsubscribeToken(userId, type, { ttlSeconds, version });
+}
+
+export async function unsubscribeUrl(userId: string, type: EmailNotifyType): Promise<string> {
+  const token = await issueUnsubscribeToken(userId, type);
   return `${publicApiBaseUrl()}/api/email-unsubscribe?token=${encodeURIComponent(token)}`;
 }
 
@@ -186,6 +252,11 @@ export async function getEmailNotifyPrefs(userId: string): Promise<EmailNotifyPr
     matches: Boolean(result.rows[0].matches),
     jerks: Boolean(result.rows[0].jerks),
   };
+}
+
+export async function getEmailNotifyState(userId: string): Promise<EmailNotifyState> {
+  const prefs = await getEmailNotifyPrefs(userId);
+  return { ...emailNotifyFlags(), ...prefs };
 }
 
 export async function setEmailNotifyPrefs(
@@ -221,7 +292,12 @@ export async function setEmailNotifyPrefs(
 export async function optOutType(userId: string, type: EmailNotifyType): Promise<boolean> {
   const col = PREF_COLUMN[type];
   const result = await query(
-    `UPDATE users SET ${col} = FALSE, updated_at = NOW() WHERE id = $1 RETURNING id`,
+    `UPDATE users
+        SET ${col} = FALSE,
+            email_unsub_version = email_unsub_version + 1,
+            updated_at = NOW()
+      WHERE id = $1
+      RETURNING id`,
     [userId],
   );
   return Boolean(result.rows[0]);
@@ -230,22 +306,24 @@ export async function optOutType(userId: string, type: EmailNotifyType): Promise
 type SafetyRow = {
   actor_id: string;
   actor_name: string;
+  actor_ghost: boolean;
   recipient_id: string;
   recipient_email: string | null;
   email_confirmed: boolean;
   pref_on: boolean;
   blocked: boolean;
   hidden: boolean;
-  socket_online: boolean;
-  last_seen: Date | string | null;
+  recipient_active: boolean;
 };
 
 async function loadSafety(actorId: string, recipientId: string, type: EmailNotifyType): Promise<SafetyRow | null> {
   const prefCol = PREF_COLUMN[type];
+  const minutes = emailNotifyActiveMinutes();
   const result = await query(
     `SELECT
        actor.id AS actor_id,
        actor.name AS actor_name,
+       COALESCE(actor_p.is_ghost, FALSE) AS actor_ghost,
        recipient.id AS recipient_id,
        recipient.email AS recipient_email,
        COALESCE(recipient.email_confirmed, FALSE) AS email_confirmed,
@@ -260,23 +338,21 @@ async function loadSafety(actorId: string, recipientId: string, type: EmailNotif
          WHERE (lh.owner_id = $1 AND lh.hidden_user_id = $2)
             OR (lh.owner_id = $2 AND lh.hidden_user_id = $1)
        ) AS hidden,
-       COALESCE(p.online, FALSE) AS socket_online,
-       p.last_seen
+       (
+         COALESCE(p.online, FALSE)
+         OR (
+           p.last_seen IS NOT NULL
+           AND p.last_seen > NOW() - make_interval(mins => $3::int)
+         )
+       ) AS recipient_active
      FROM users actor
      JOIN users recipient ON recipient.id = $2
      LEFT JOIN profiles p ON p.user_id = recipient.id
+     LEFT JOIN profiles actor_p ON actor_p.user_id = actor.id
      WHERE actor.id = $1`,
-    [actorId, recipientId],
+    [actorId, recipientId, minutes],
   );
   return (result.rows[0] as SafetyRow) ?? null;
-}
-
-function isRecipientActive(row: SafetyRow, now = Date.now()): boolean {
-  if (row.socket_online) return true;
-  if (!row.last_seen) return false;
-  const seen = row.last_seen instanceof Date ? row.last_seen.getTime() : Date.parse(String(row.last_seen));
-  if (!Number.isFinite(seen)) return false;
-  return now - seen < emailNotifyActiveMinutes() * 60 * 1000;
 }
 
 function skipFromSafety(row: SafetyRow | null, type: EmailNotifyType): NotifySkipReason | null {
@@ -286,7 +362,7 @@ function skipFromSafety(row: SafetyRow | null, type: EmailNotifyType): NotifySki
   if (row.hidden) return 'hidden';
   if (!row.email_confirmed) return 'unconfirmed';
   if (!row.recipient_email || !String(row.recipient_email).includes('@')) return 'no_email';
-  if (isRecipientActive(row)) return 'active';
+  if (row.recipient_active) return 'active';
   void type;
   return null;
 }
@@ -297,7 +373,7 @@ async function claimHourlySlot(
 ): Promise<{ claimed: boolean; hourSlot: Date }> {
   const result = await query(
     `INSERT INTO email_notification_sends (user_id, notify_type, hour_slot)
-     VALUES ($1, $2, date_trunc('hour', timezone('UTC', NOW())))
+     VALUES ($1, $2, date_trunc('hour', NOW(), 'UTC'))
      ON CONFLICT (user_id, notify_type, hour_slot) DO NOTHING
      RETURNING hour_slot`,
     [userId, type],
@@ -305,7 +381,7 @@ async function claimHourlySlot(
   if (result.rows[0]) {
     return { claimed: true, hourSlot: result.rows[0].hour_slot };
   }
-  const slot = await query(`SELECT date_trunc('hour', timezone('UTC', NOW())) AS hour_slot`);
+  const slot = await query(`SELECT date_trunc('hour', NOW(), 'UTC') AS hour_slot`);
   return { claimed: false, hourSlot: slot.rows[0].hour_slot };
 }
 
@@ -369,7 +445,8 @@ export async function maybeSendEmailNotification(params: {
     return { status: 'skipped', reason: againReason ?? 'deleted' };
   }
 
-  const senderName = showSenderName() ? String(again.actor_name || '').trim() : '';
+  const senderName =
+    showSenderName() && !again.actor_ghost ? String(again.actor_name || '').trim() : '';
   const openUrl = publicAppBaseUrl();
   const settingsUrl = settingsEmailNotificationsUrl();
   const html = buildEmailNotificationHtml({
@@ -382,7 +459,7 @@ export async function maybeSendEmailNotification(params: {
     settingsUrl,
     senderName: senderName || null,
   });
-  const unsub = unsubscribeUrl(recipientId, type);
+  const unsub = await unsubscribeUrl(recipientId, type);
 
   try {
     const send = senderOverride ?? sendEmail;

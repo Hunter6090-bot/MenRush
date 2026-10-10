@@ -5,13 +5,17 @@ import { rateLimitKey } from '../lib/clientIp';
 import { accountLimiter, userAccountKey } from '../lib/authRateLimits';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 import { privateNoStore } from '../middleware/noStore';
-import { getEmailNotifyPrefs, setEmailNotifyPrefs } from '../services/email-notification.service';
+import {
+  emailNotifyFlags,
+  getEmailNotifyPrefs,
+  setEmailNotifyPrefs,
+} from '../services/email-notification.service';
 
 /**
  * Own email-notification ticks. Owner-only, never cached.
  *
- *   GET /api/email-notifications  -> { messages, matches, jerks }
- *   PUT /api/email-notifications  -> { messages, matches, jerks }
+ *   GET /api/email-notifications  -> { enabled, jerkEnabled, messages, matches, jerks }
+ *   PUT /api/email-notifications  -> { enabled, jerkEnabled, messages, matches, jerks }
  *
  * There is no endpoint to read another member's prefs: the member always
  * comes from the token.
@@ -51,7 +55,7 @@ const PrefsPatchSchema = z
 
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
-    res.json(await getEmailNotifyPrefs(req.userId!));
+    res.json({ ...emailNotifyFlags(), ...(await getEmailNotifyPrefs(req.userId!)) });
   } catch (err) {
     console.error('[email-notifications] read failed');
     res.status(500).json({ error: 'Could not load email notification settings' });
@@ -64,7 +68,8 @@ router.put('/', changeIpLimiter, changeMemberLimiter, async (req: AuthRequest, r
     return res.status(400).json({ error: 'invalid_prefs' });
   }
   try {
-    res.json(await setEmailNotifyPrefs(req.userId!, parsed.data));
+    await setEmailNotifyPrefs(req.userId!, parsed.data);
+    res.json({ ...emailNotifyFlags(), ...(await getEmailNotifyPrefs(req.userId!)) });
   } catch (err) {
     console.error('[email-notifications] save failed');
     res.status(500).json({ error: 'Could not save email notification settings' });
