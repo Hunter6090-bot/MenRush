@@ -79,6 +79,7 @@
     "test:hot-spot-live-sort-integration": "ts-node --transpile-only scripts/hot-spot-live-sort-integration.ts",
     "test:hot-spot-ghost-live-count": "ts-node scripts/hot-spot-ghost-live-count-integration.ts",
     "test:events-ghost-first-checkin": "ts-node scripts/events-ghost-first-checkin-integration.ts",
+    "test:register-dob-integration": "ts-node --transpile-only scripts/register-dob-integration.ts",
     "test:pride-invite-register-integration": "ts-node --transpile-only scripts/pride-invite-register-integration.ts",
     "test:delete-room-creator-integration": "ts-node --transpile-only scripts/delete-room-creator-integration.ts",
     "test:nightlife-integration": "ts-node scripts/nightlife-checkin-integration.ts",

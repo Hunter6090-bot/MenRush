@@ -19,10 +19,26 @@ export function isInvalidReferralError(err: unknown): boolean {
 
 export const REFERRAL_IGNORED_NOTE = "That referral link didn't work, but you can still join free.";
 
+const REGISTER_DOB_CODES = new Set(['date_of_birth_required', 'date_of_birth_invalid', 'under_18']);
+
 export function registerErrorMessage(err: unknown): {
   message: string;
   isDuplicateEmail?: boolean;
 } {
+  // Date of birth refusals come as { error: code, message } with a friendly message.
+  const data =
+    typeof err === 'object' && err !== null && 'response' in err
+      ? (err as { response?: { data?: { error?: unknown; message?: unknown } } }).response?.data
+      : undefined;
+  if (
+    data &&
+    typeof data.error === 'string' &&
+    REGISTER_DOB_CODES.has(data.error) &&
+    typeof data.message === 'string' &&
+    data.message.trim()
+  ) {
+    return { message: data.message.trim() };
+  }
   const apiError = extractApiErrorMessage(err);
   if (apiError) {
     if (/email already exists/i.test(apiError)) {

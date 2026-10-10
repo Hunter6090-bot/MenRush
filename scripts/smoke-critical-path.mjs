@@ -49,6 +49,7 @@ async function main() {
       name: 'Smoke',
       email,
       age: 28,
+      date_of_birth: '1998-01-01',
       password,
       invite_code: process.env.SMOKE_INVITE_CODE || undefined,
     }),

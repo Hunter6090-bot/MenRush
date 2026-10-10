@@ -44,6 +44,7 @@ import {
 } from './promo.service';
 import { assertPrideInviteEmailMatch } from './prideInvite.service';
 import { ageFromDateOfBirth } from '../lib/age';
+import { registerDobError, RegisterDobRefusedError } from '../lib/registerDob';
 import { premiumService } from './premium.service';
 import { referralService } from './referral.service';
 import {
@@ -314,18 +315,14 @@ export const authService = {
       throw new Error('Adult assurance is required. Complete the 18+ check and try again.');
     }
 
-    let age = data.age;
-    let dateOfBirth: string | null = data.date_of_birth ?? null;
-    if (dateOfBirth) {
-      try {
-        age = ageFromDateOfBirth(dateOfBirth);
-      } catch {
-        throw new Error('Enter a valid date of birth.');
-      }
+    // A full, real date of birth is required; a bare age is refused. Checked
+    // before any transaction, so under 18 never creates an account row.
+    const dobError = registerDobError(data.date_of_birth);
+    if (dobError) {
+      throw new RegisterDobRefusedError(dobError);
     }
-    if (age < 18) {
-      throw new Error('You must be 18 or older to join MenRush.');
-    }
+    const dateOfBirth: string = data.date_of_birth;
+    const age = ageFromDateOfBirth(dateOfBirth);
 
     // Al lock: confirm/welcome mails only to al@menrush.com / BOA90 until
     // EMAIL_CONFIRM_MAIL_OPEN=true. Others keep legacy live session (no mass-send).

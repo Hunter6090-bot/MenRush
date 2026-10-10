@@ -88,3 +88,16 @@ describe('authErrors', () => {
     });
   });
 });
+
+describe('registerErrorMessage: date of birth refusals', () => {
+  it('shows the friendly message, never the bare code', () => {
+    for (const [code, message] of [
+      ['date_of_birth_required', 'Please enter your full date of birth.'],
+      ['date_of_birth_invalid', 'Please enter a real date of birth, with the day, month and year.'],
+      ['under_18', 'You must be 18 or older to join MenRush.'],
+    ]) {
+      const err = { response: { status: 400, data: { error: code, message } } };
+      expect(registerErrorMessage(err).message).toBe(message);
+    }
+  });
+});

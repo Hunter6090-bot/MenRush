@@ -1,3 +1,4 @@
+import { registerDobError, RegisterDobRefusedError } from '../lib/registerDob';
 import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { rateLimitKey } from '../lib/clientIp';
@@ -317,11 +318,19 @@ router.post('/adult-assurance/fixture', adultAssuranceLimiter, async (req, res: 
 });
 
 router.post('/register', registerLimiter, async (req: AuthRequest, res: Response) => {
+  // Full date of birth first, so a bare age or a bad date gets a friendly code.
+  const dobError = registerDobError((req.body ?? {}).date_of_birth);
+  if (dobError) {
+    return res.status(400).json({ error: dobError.code, message: dobError.message });
+  }
   try {
     const data = RegisterSchema.parse(req.body);
     const result = await authService.register(data);
     res.status(201).json(await withBrowserSession(result, req.get('user-agent') || undefined));
   } catch (error: any) {
+    if (error instanceof RegisterDobRefusedError) {
+      return res.status(400).json({ error: error.code, message: error.message });
+    }
     res.status(400).json({ error: error.message });
   }
 });
