@@ -2,7 +2,12 @@
  * Fixed test accounts from `backend/scripts/seed-test-users.ts`.
  * IDs are stable (uuid v5 from email) — use these in URLs instead of looking up IDs.
  */
-export const TEST_PASSWORD = 'MenRushTest2026!';
+/**
+ * The password the seed used: SEED_TEST_PASSWORD, set for the seed and the e2e run alike.
+ * There is no default in the repo. Empty when unset, so login specs fail loudly while public
+ * route checks (which never log in) still run.
+ */
+export const TEST_PASSWORD: string = process.env.SEED_TEST_PASSWORD ?? '';
 
 export const FOUNDER = {
   id: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',

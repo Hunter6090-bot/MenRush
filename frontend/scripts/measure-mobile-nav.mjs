@@ -7,6 +7,14 @@
 import { chromium, devices } from '@playwright/test';
 import { writeFileSync } from 'node:fs';
 
+/** The password the local seed used (SEED_TEST_PASSWORD). There is no default. */
+function seedPassword() {
+  const pw = process.env.SEED_TEST_PASSWORD;
+  if (!pw) throw new Error('Set SEED_TEST_PASSWORD (the password you seeded with).');
+  return pw;
+}
+
+
 const BASE = (process.env.PLAYWRIGHT_BASE_URL || 'https://menrush.com').replace(/\/$/, '');
 const API = (process.env.MEASURE_API_URL || 'https://backend-production-d587.up.railway.app/api').replace(
   /\/$/,
@@ -24,7 +32,7 @@ async function loginToken() {
   const res = await fetch(`${API}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'alice@example.com', password: 'MenRushTest2026!' }),
+    body: JSON.stringify({ email: 'alice@example.com', password: seedPassword() }),
   });
   if (!res.ok) throw new Error(`login failed ${res.status}`);
   return res.json();
