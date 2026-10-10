@@ -52,6 +52,7 @@ export const ACCOUNT_MENU_SECTIONS: AccountMenuSection[] = [
       { id: 'community', label: ROUTE_LABELS.community, to: '/stream' },
       { id: 'events', label: ROUTE_LABELS.events, to: '/events' },
       { id: 'cruise', label: `${ROUTE_LABELS.hotSpots} map`, to: '/hot-spots' },
+      { id: 'travel', label: 'Travel', to: '/travel' },
     ],
   },
   {
