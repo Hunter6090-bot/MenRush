@@ -61,6 +61,9 @@ function sectionFromParam(raw: string | null): OutChip {
   return 'all';
 }
 
+/** A re-read after a check-in gives up after this long; the server spot is kept. */
+export const OUT_REFRESH_TIMEOUT_MS = 5000;
+
 export function Out() {
   const [params, setParams] = useSearchParams();
   const chip = sectionFromParam(params.get('section') || params.get('chip'));
@@ -89,21 +92,52 @@ export function Out() {
     return live ?? (sheetSnapshotRef.current?.id === sheetSpotId ? sheetSnapshotRef.current : null);
   }, [spots, sheetSpotId]);
 
-  const replaceSpot = useCallback((updated: HotSpotDTO) => {
-    setSpots((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));
+  // Latest-wins for every spot list read (first load, location change, re-read after a
+  // check-in). Each read takes a ticket; a reply is applied only if no newer read or
+  // server spot merge has happened since. So a slow re-read for spot A can never
+  // overwrite spot B's newer check-in, and an old location's list never overwrites the
+  // new one (QC P0 on #393).
+  const listSeqRef = useRef(0);
+  const takeListTicket = useCallback(() => {
+    listSeqRef.current += 1;
+    return listSeqRef.current;
   }, []);
+  const isLatestList = useCallback((ticket: number) => ticket === listSeqRef.current, []);
+
+  const replaceSpot = useCallback(
+    (updated: HotSpotDTO) => {
+      // A server spot is newer than any list read already in flight: retire those reads.
+      takeListTicket();
+      setSpots((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));
+    },
+    [takeListTicket],
+  );
 
   // Quiet re-read of the list after a check-in or check-out (no spinner, the sheet stays
   // open). Counts come from the server, which leaves out Ghost and hidden members (#368).
+  // A hung re-read gives up after OUT_REFRESH_TIMEOUT_MS and the server spot from the
+  // check-in reply stays; its late reply is then dropped.
   const refreshSpots = useCallback(async () => {
     if (lat == null || lng == null || chip === 'community' || chip === 'event') return;
+    const ticket = takeListTicket();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), OUT_REFRESH_TIMEOUT_MS);
+    });
     try {
-      const res = await hotSpotsAPI.listNearby(lat, lng, 80);
-      setSpots(res.data.spots ?? []);
+      const res = await Promise.race([hotSpotsAPI.listNearby(lat, lng, 80), timedOut]);
+      if (res === 'timeout') {
+        // Retire this read so a reply that turns up later is ignored.
+        if (isLatestList(ticket)) takeListTicket();
+        return;
+      }
+      if (isLatestList(ticket)) setSpots(res.data.spots ?? []);
     } catch {
       /* keep the server spot we already merged */
+    } finally {
+      clearTimeout(timer);
     }
-  }, [lat, lng, chip]);
+  }, [lat, lng, chip, takeListTicket, isLatestList]);
 
   // Same check-in / check-out calls the map sheet uses (Discover handleHotSpotCheckIn).
   const handleCheckIn = useCallback(
@@ -167,12 +201,13 @@ export function Out() {
         if (chip !== 'community' && chip !== 'event') {
           tasks.push(
             (async () => {
+              const ticket = takeListTicket();
               if (lat == null || lng == null) {
                 if (!cancelled) setSpots([]);
                 return;
               }
               const res = await hotSpotsAPI.listNearby(lat, lng, 80);
-              if (!cancelled) {
+              if (!cancelled && isLatestList(ticket)) {
                 setSpots(res.data.spots ?? []);
                 setNeedsLocation(Boolean((res.data as { location_required?: boolean }).location_required));
               }
@@ -206,7 +241,7 @@ export function Out() {
     return () => {
       cancelled = true;
     };
-  }, [chip, lat, lng, reloadKey]);
+  }, [chip, lat, lng, reloadKey, takeListTicket, isLatestList]);
 
   const visibleSpots = useMemo(
     () => spots.filter((s) => spotMatchesChip(s, chip)),
