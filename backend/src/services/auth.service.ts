@@ -1102,6 +1102,11 @@ export const authService = {
       /* best-effort */
     }
 
+    // Location rows first (map feed, Community, chat location shares, room
+    // points, profile points); the FKs also cascade from users.
+    const { locationRetentionService } = await import('./location-retention.service');
+    await locationRetentionService.eraseAccountLocationData(userId);
+
     await query(`DELETE FROM users WHERE id = $1`, [userId]);
     return { ok: true };
   },

@@ -81,7 +81,8 @@
     "test:call-ice-buffer": "ts-node scripts/call-ice-buffer-checks.ts",
     "test:common-sense": "ts-node scripts/common-sense-checks.ts",
     "predeploy": "npm run build && bash ../test-features.sh",
-    "audit:safety": "bash ../scripts/audit-safety.sh"
+    "audit:safety": "bash ../scripts/audit-safety.sh",
+    "test:location-retention-integration": "ts-node scripts/location-retention-integration.ts"
   },
   "dependencies": {
     "@huggingface/inference": "^4.13.21",

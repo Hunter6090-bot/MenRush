@@ -178,3 +178,7 @@ jobs:
         run: npm run --if-present test:hide-location-integration
       - name: Community leaves out Ghost and hidden members
         run: npm run --if-present test:community-ghost-hidden
+      # Keep last: its fake 2027 clock clears every live location and strips
+      # old post coordinates in this test database.
+      - name: Location retention purge (fake clock)
+        run: npm run test:location-retention-integration

@@ -56,6 +56,7 @@ import { messageService } from './services/message.service';
 import { accessControl } from './security/access';
 import { logResendMailerStatus } from './services/mailer.service';
 import { startVerificationRetentionWorker } from './services/verification/retention.worker';
+import { startLocationRetentionWorker } from './services/location-retention.service';
 import { Sentry } from './observability/sentry';
 import { corsOrigin } from './security/cors';
 import { query } from './db';
@@ -971,4 +972,6 @@ server.listen(PORT, () => {
   startRoomTempIdentityPurgeCron();
   startRoomMessagePurgeCron();
   startVerificationRetentionWorker();
+  // Off unless LOCATION_PURGE_ENABLED=true (periods TBD, see config/locationRetention.ts).
+  startLocationRetentionWorker();
 });
