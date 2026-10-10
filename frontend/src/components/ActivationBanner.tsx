@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   activationBlockers,
@@ -66,11 +67,20 @@ export function ActivationBanner({ profile, onEnableLocation }: ActivationBanner
   // and alerts. The location prompt is not part of that order.
   const finishOnTop = usePromptSlot(
     'profile',
-    finishProfileMode && !profileDismissal.hidden ? 'want' : 'none',
+    finishProfileMode && !profileDismissal.hidden && profileDismissal.ready ? 'want' : 'none',
   );
 
+  const finishVisible =
+    finishProfileMode && !profileDismissal.hidden && profileDismissal.ready && finishOnTop;
+  const { markShown } = profileDismissal;
+  // Once on screen it stays until closed, whatever the server prefs say later.
+  useEffect(() => {
+    if (finishVisible) markShown();
+  }, [finishVisible, markShown]);
+
   if (nothingMissing) return null;
-  if (finishProfileMode && (profileDismissal.hidden || !finishOnTop)) return null;
+  // On a new device, wait for the server prefs (or the short timeout) first.
+  if (finishProfileMode && (profileDismissal.hidden || !profileDismissal.ready || !finishOnTop)) return null;
 
   return (
     <div

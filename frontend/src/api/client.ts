@@ -43,6 +43,32 @@ apiClient.interceptors.request.use((config) => {
 });
 
 /**
+ * Short timeout for the small requests that gate the top prompts (QC P1 on
+ * #354). A hung /push/vapid-public or /prompt-prefs used to hold the alerts
+ * banner in "still checking" for ever, and with it Finish profile behind it.
+ *
+ * Scoped on purpose rather than a client-wide default: sign up, Veriff, map
+ * reads after a cold start and every upload can take longer than 4s, and
+ * uploads already set their own long timeouts (60s to 180s) or none. A call
+ * that passes its own timeout keeps it.
+ */
+export const SHORT_REQUEST_TIMEOUT_MS = 4000;
+const SHORT_TIMEOUT_PATHS: readonly RegExp[] = [/^\/?push\/vapid-public(?:[?#]|$)/, /^\/?prompt-prefs(?:[/?#]|$)/];
+
+export function shortTimeoutFor(url: string | undefined): number | undefined {
+  if (!url) return undefined;
+  return SHORT_TIMEOUT_PATHS.some((re) => re.test(url)) ? SHORT_REQUEST_TIMEOUT_MS : undefined;
+}
+
+apiClient.interceptors.request.use((config) => {
+  if (!config.timeout) {
+    const short = shortTimeoutFor(config.url);
+    if (short) config.timeout = short;
+  }
+  return config;
+});
+
+/**
  * Coordinates never travel in a URL: query strings end up in proxy logs
  * (Vercel runtime logs keep the search params of every /api request). The
  * device fix goes only in the body of POST /users/location, and every read
@@ -373,13 +399,15 @@ export const usersAPI = {
       unlock_every: number;
       progress_to_unlock: number;
       unlocks_earned: number;
-      pending_payout_total: number;
+      months_saved?: number;
+      reward_mode?: 'free_for_everyone' | 'open_ended' | 'paid' | 'end_date' | 'no_end_date';
+      max_months_per_12_months?: number;
+      at_cap?: boolean;
       referrals: Array<{
         referred_user_id: string;
         name: string | null;
+        qualified: boolean;
         status: 'pending' | 'verified' | 'credited';
-        payout_amount: number;
-        payout_status: 'none' | 'pending' | 'paid';
         created_at: string;
         verified_at: string | null;
         credited_at: string | null;
@@ -811,6 +839,7 @@ export const roomsAPI = {
 // ── Map feed (Sniffies-style location chat on Discover map) ─────────────────
 export interface MapFeedMessage {
   id: string;
+  sender_id?: string;
   display_name: string;
   photo_url?: string | null;
   message: string;
@@ -828,6 +857,12 @@ export const mapFeedAPI = {
     ),
   post: (data: { message: string; lat?: number; lng?: number; display_name?: string }) =>
     apiClient.post<MapFeedMessage>('/map-feed', data),
+  /** Delete your own map post (any age). The saved location goes with it. */
+  deleteMessage: (id: string) => apiClient.delete<{ ok: boolean }>(`/map-feed/${id}`),
+  /** How many map posts you have (any age). */
+  countMine: () => apiClient.get<{ count: number }>('/map-feed/mine/count'),
+  /** Delete every map post you have made. */
+  deleteAllMine: () => apiClient.delete<{ ok: boolean; deleted: number }>('/map-feed/mine'),
 };
 
 export type ContactSubmitPayload = {
@@ -1376,6 +1411,11 @@ export const communityAPI = {
     apiClient.put<{ post: CommunityPostDTO }>(`/community/posts/${postId}`, { body }),
   deletePost: (postId: string) =>
     apiClient.delete<{ ok: boolean }>(`/community/posts/${postId}`),
+  /** How many Community posts you have (any age). */
+  countMyPosts: () => apiClient.get<{ count: number }>('/community/posts/mine/count'),
+  /** Delete every Community post you have made (any age). */
+  deleteAllMyPosts: () =>
+    apiClient.delete<{ ok: boolean; deleted: number }>('/community/posts/mine'),
   listComments: (postId: string) =>
     apiClient.get<{ comments: CommunityCommentDTO[] }>(`/community/posts/${postId}/comments`),
   createComment: (postId: string, body: string) =>
@@ -1457,3 +1497,12 @@ function resolveSocketUrl(): string {
 // Keep signalling on the same host as the API when deployed separately from
 // the static frontend (e.g. Railway backend + Vercel frontend).
 export const SOCKET_URL = resolveSocketUrl();
+
+/** "Don't show again" across devices. Keys: install, alerts, profile. */
+export type PromptPrefKey = 'install' | 'alerts' | 'profile';
+
+export const promptPrefsAPI = {
+  get: () => apiClient.get<{ never: PromptPrefKey[] }>('/prompt-prefs'),
+  setNever: (prompt: PromptPrefKey) =>
+    apiClient.put<{ never: PromptPrefKey[] }>(`/prompt-prefs/${encodeURIComponent(prompt)}/never`),
+};

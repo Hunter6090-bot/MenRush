@@ -52,7 +52,7 @@ export const twoFactorService = {
 
     await query(
       `UPDATE users
-       SET totp_enabled = TRUE, totp_enabled_at = NOW(), updated_at = NOW()
+       SET totp_enabled = TRUE, totp_enabled_at = NOW(), totp_last_step = NULL, updated_at = NOW()
        WHERE id = $1`,
       [userId],
     );
@@ -68,7 +68,8 @@ export const twoFactorService = {
 
     await query(
       `UPDATE users
-       SET totp_secret_encrypted = NULL, totp_enabled = FALSE, totp_enabled_at = NULL, updated_at = NOW()
+       SET totp_secret_encrypted = NULL, totp_enabled = FALSE, totp_enabled_at = NULL,
+           totp_last_step = NULL, updated_at = NOW()
        WHERE id = $1`,
       [userId],
     );
@@ -86,7 +87,22 @@ export const twoFactorService = {
 
   async verifyForLogin(userId: string, code: string): Promise<boolean> {
     const secret = await this.requireEnabledSecret(userId);
-    return this.verifyCode(secret, code);
+    const normalized = code.replace(/\s/g, '');
+    if (!/^\d{6}$/.test(normalized)) return false;
+    const delta = authenticator.checkDelta(normalized, secret);
+    if (delta === null || typeof delta !== 'number') return false;
+    const stepSize = authenticator.options.step ?? 30;
+    const step = Math.floor(Date.now() / 1000 / stepSize) + delta;
+    const claimed = await query(
+      `UPDATE users
+          SET totp_last_step = $2, updated_at = NOW()
+        WHERE id = $1
+          AND totp_enabled = TRUE
+          AND (totp_last_step IS NULL OR totp_last_step < $2)
+        RETURNING id`,
+      [userId, step],
+    );
+    return claimed.rows.length > 0;
   },
 
   verifyCode(secret: string, code: string): boolean {

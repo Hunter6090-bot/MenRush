@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { markTopPromptPending, setTopPromptBottom } from '../lib/topPromptOverlay';
 import {
   enablePushNotifications,
   getPushSupport,
@@ -57,7 +58,10 @@ export function PushAlertBanner() {
         if (getPushSupport() !== 'default') return decide(null);
         decide('alerts');
       } catch {
-        decide(null);
+        if (!cancelled) {
+          decide(null);
+          setTopPromptBottom(null);
+        }
       }
     })();
     return () => {
@@ -67,19 +71,58 @@ export function PushAlertBanner() {
 
   // One prompt at a time. While still checking, hold back Finish profile so it
   // does not flash up and then get replaced.
+  // On a new device also wait for the member's server prefs (or the short
+  // timeout), so the banner never shows and then vanishes.
+  const ready = install.ready && alerts.ready;
   const slotState = (kind: 'install' | 'alerts', hidden: boolean): PromptSlotState => {
-    if (eligible === undefined) return kind === 'install' ? 'pending' : 'none';
+    if (eligible === undefined || !ready) return kind === 'install' ? 'pending' : 'none';
     if (eligible !== kind) return 'none';
     return hidden ? 'none' : 'want';
   };
   const installOnTop = usePromptSlot('install-banner', slotState('install', install.hidden));
   const alertsOnTop = usePromptSlot('alerts', slotState('alerts', alerts.hidden));
 
-  if (!eligible) return null;
   const iosInstall = eligible === 'install';
   const prompt = iosInstall ? install : alerts;
-  if (prompt.hidden) return null;
-  if (!(iosInstall ? installOnTop : alertsOnTop)) return null;
+  const visible = Boolean(eligible) && ready && !prompt.hidden && (iosInstall ? installOnTop : alertsOnTop);
+  const { markShown } = prompt;
+  // Once on screen it stays until closed, whatever the server prefs say later.
+  useEffect(() => {
+    if (visible) markShown();
+  }, [visible, markShown]);
+
+  // Publish where the floating card ends, so the map's top controls can move
+  // below it instead of being covered (QC P2 on #357).
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    if (eligible === undefined || !ready) {
+      markTopPromptPending();
+      return;
+    }
+    const card = cardRef.current;
+    if (!visible || !card) {
+      setTopPromptBottom(null);
+      return;
+    }
+    const publish = () => setTopPromptBottom(card.getBoundingClientRect().bottom);
+    publish();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(publish) : null;
+    ro?.observe(card);
+    window.addEventListener('resize', publish);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', publish);
+    };
+  }, [visible, eligible, ready]);
+
+  useLayoutEffect(
+    () => () => {
+      setTopPromptBottom(null);
+    },
+    [],
+  );
+
+  if (!visible) return null;
 
   const enable = async () => {
     if (busy) return;
@@ -92,38 +135,44 @@ export function PushAlertBanner() {
     }
   };
 
+  // Overlays the top of the page instead of pushing it down, so content does
+  // not jump when the banner appears or closes (QC P2). The wrapper takes no
+  // height; the card floats over the page's top edge.
   return (
-    <div
-      className="mx-3 mb-2 mt-2 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2.5 shadow-card"
-      data-testid="push-alert-banner"
-      role="status"
-    >
-      <p className="text-base font-semibold text-[var(--cream)]">
-        {iosInstall ? 'Add MenRush to Home Screen' : 'Turn on alerts'}
-      </p>
-      {iosInstall ? (
-        <p className="mt-0.5 text-[15px] leading-snug text-[var(--cream-muted)]">
-          Share, then Add to Home Screen. Open it, then allow alerts.
-        </p>
-      ) : null}
-      <PromptDismissControls
-        onClose={prompt.close}
-        closeLabel={iosInstall ? 'Close Add to Home Screen' : 'Close turn on alerts'}
-        testIdPrefix={iosInstall ? 'install-prompt' : 'alerts-prompt'}
-        className="mt-1"
+    <div className="relative z-40 h-0" data-testid="push-alert-banner-slot">
+      <div
+        ref={cardRef}
+        className="absolute inset-x-0 top-0 mx-3 mt-2 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-card)] px-3 py-2.5 shadow-card"
+        data-testid="push-alert-banner"
+        role="status"
       >
-        {iosInstall ? null : (
-          <button
-            type="button"
-            onClick={() => void enable()}
-            disabled={busy}
-            data-testid="push-alert-banner-enable"
-            className="min-h-[44px] rounded-xl bg-[var(--copper)] px-4 text-[15px] font-bold text-[var(--nn-on-copper)] disabled:opacity-50"
-          >
-            Turn on
-          </button>
-        )}
-      </PromptDismissControls>
+        <p className="text-base font-semibold text-[var(--cream)]">
+          {iosInstall ? 'Add MenRush to Home Screen' : 'Turn on alerts'}
+        </p>
+        {iosInstall ? (
+          <p className="mt-0.5 text-[15px] leading-snug text-[var(--cream-muted)]">
+            Share, then Add to Home Screen. Open it, then allow alerts.
+          </p>
+        ) : null}
+        <PromptDismissControls
+          onClose={prompt.close}
+          closeLabel={iosInstall ? 'Close Add to Home Screen' : 'Close turn on alerts'}
+          testIdPrefix={iosInstall ? 'install-prompt' : 'alerts-prompt'}
+          className="mt-1"
+        >
+          {iosInstall ? null : (
+            <button
+              type="button"
+              onClick={() => void enable()}
+              disabled={busy}
+              data-testid="push-alert-banner-enable"
+              className="min-h-[44px] rounded-xl bg-[var(--copper)] px-4 text-[15px] font-bold text-[var(--nn-on-copper)] disabled:opacity-50"
+            >
+              Turn on
+            </button>
+          )}
+        </PromptDismissControls>
+      </div>
     </div>
   );
 }

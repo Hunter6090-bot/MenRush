@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { assertJwtSecret } from './lib/jwtSecret';
 import './observability/sentry';
 import express from 'express';
 import { Server as SocketIOServer, Socket } from 'socket.io';
@@ -34,6 +35,7 @@ import campaignRoutes from './routes/campaigns';
 import socialRoutes from './routes/social';
 import mapFeedRoutes from './routes/map-feed';
 import locationPrivacyRoutes from './routes/location-privacy';
+import promptPrefsRoutes from './routes/prompt-prefs';
 import travelRoutes from './routes/travel';
 import communityRoutes from './routes/community';
 import mediaDisplayRoutes from './routes/media-display';
@@ -58,6 +60,7 @@ import { messageService } from './services/message.service';
 import { accessControl } from './security/access';
 import { logResendMailerStatus } from './services/mailer.service';
 import { startVerificationRetentionWorker } from './services/verification/retention.worker';
+import { startTravelTripRetentionWorker } from './services/travel.service';
 import { startLocationRetentionWorker } from './services/location-retention.service';
 import { startReportRetentionWorker } from './services/report-retention.service';
 import { Sentry } from './observability/sentry';
@@ -69,6 +72,8 @@ import { logCallMetric } from './services/call-metrics.service';
 import { mediaStorageMode } from './services/media-storage.service';
 import { warmIceServers } from './services/webrtc.service';
 import { EarlyCallIceBuffer } from './services/call-ice-buffer';
+
+assertJwtSecret();
 
 // Transient DB disconnects must not take down login/API.
 process.on('unhandledRejection', (reason) => {
@@ -158,6 +163,7 @@ app.use('/api/campaigns', campaignRoutes);
 app.use('/api/social', socialRoutes);
 app.use('/api/map-feed', mapFeedRoutes);
 app.use('/api/location-privacy', locationPrivacyRoutes);
+app.use('/api/prompt-prefs', promptPrefsRoutes);
 app.use('/api/travel', travelRoutes);
 app.use('/api/community', communityRoutes);
 
@@ -982,6 +988,8 @@ server.listen(PORT, () => {
   startRoomMessagePurgeCron();
   startTravelCleanupCron();
   startVerificationRetentionWorker();
+  // Travel: trips deleted 30 days after they end.
+  startTravelTripRetentionWorker();
   // Off unless LOCATION_PURGE_ENABLED=true (periods TBD, see config/locationRetention.ts).
   startLocationRetentionWorker();
   // Off unless REPORT_RETENTION_PURGE_ENABLED=true (period pending Al).

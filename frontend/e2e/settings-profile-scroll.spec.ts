@@ -252,7 +252,7 @@ test.describe('settings + profile vertical scroll', () => {
       fullPage: false,
     });
 
-    await page.goto('/profile');
+    await page.goto('/profile/edit');
     const profile = await assertRouteScrolls(
       page,
       'profile',

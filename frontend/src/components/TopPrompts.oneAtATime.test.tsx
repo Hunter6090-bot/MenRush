@@ -18,12 +18,20 @@ import { useAuthStore } from '../hooks/store';
 import * as push from '../lib/push';
 import { resetInstallPromptStoreForTests } from '../lib/installPromptStore';
 import { resetPromptSlotsForTests } from '../lib/promptSlot';
+import { resetPromptPrefsSyncForTests } from '../lib/promptDismissal';
 import { contrast, loadThemeTokens, tokenContrast, type Theme } from '../test/themeContrast';
 import type { ProfileSetupSnapshot } from '../lib/profileSetup';
 
 vi.mock('../api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/client')>();
-  return { ...actual, usersAPI: { ...actual.usersAPI, getMe: vi.fn() } };
+  return {
+    ...actual,
+    usersAPI: { ...actual.usersAPI, getMe: vi.fn() },
+    promptPrefsAPI: {
+      get: vi.fn().mockResolvedValue({ data: { never: [] } }),
+      setNever: vi.fn().mockResolvedValue({ data: { never: [] } }),
+    },
+  };
 });
 
 vi.mock('../lib/push', () => ({
@@ -90,6 +98,7 @@ beforeEach(() => {
   window.sessionStorage.clear();
   resetInstallPromptStoreForTests();
   resetPromptSlotsForTests();
+  resetPromptPrefsSyncForTests();
   useAuthStore.setState({ user: { id: 'member-a', name: 'Member' } as never, token: 't' });
   vi.mocked(push.getPushSupport).mockReturnValue('default');
   vi.mocked(push.iosNeedsHomeScreenForPush).mockReturnValue(false);
@@ -228,9 +237,12 @@ describe.each<Theme>(['light', 'dark'])('Top prompts: size and contrast (%s)', (
     renderShell();
     await settle();
     const box = screen.getByTestId('install-prompt-never');
+    const visual = screen.getByTestId('install-prompt-never-box');
     expect(box.className).toContain('appearance-none');
-    expect(box.className).toContain('border-2');
-    expect(box.className).toContain('border-[var(--cream-muted)]');
+    expect(visual.className).toContain('h-5');
+    expect(visual.className).toContain('w-5');
+    expect(visual.className).toContain('border-2');
+    expect(visual.className).toContain('border-[var(--cream-muted)]');
     expect(box.className).not.toMatch(/accent-\[/);
     // Box border on the card (sheet and banner) and on the copper tinted Finish profile strip.
     expect(tokenContrast('var(--cream-muted)', 'var(--bg-card)', theme)).toBeGreaterThanOrEqual(3);
@@ -242,7 +254,9 @@ describe.each<Theme>(['light', 'dark'])('Top prompts: size and contrast (%s)', (
     expect(tokenContrast('var(--bg-card)', 'var(--nn-accent-text)', theme)).toBeGreaterThanOrEqual(4.5);
     await user.click(box);
     expect(box).toBeChecked();
-    // The 44px tap target is the whole label row.
+    // Invisible 44px hit area; the drawn box is ~20px. The label row stays 44px too.
+    expect(box.className).toMatch(/min-h-\[44px\]/);
+    expect(box.className).toMatch(/min-w-\[44px\]/);
     expect(screen.getByTestId('install-prompt-never-label').className).toContain('min-h-[44px]');
   });
 

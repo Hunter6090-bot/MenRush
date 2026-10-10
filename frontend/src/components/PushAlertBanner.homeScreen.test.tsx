@@ -2,7 +2,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import { PushAlertBanner, HOME_SCREEN_CARD_NEVER_KEY } from './PushAlertBanner';
 import { useAuthStore } from '../hooks/store';
-import { promptNeverKey } from '../lib/promptDismissal';
+import { promptNeverKey, resetPromptPrefsSyncForTests } from '../lib/promptDismissal';
+
+// Server prefs: nothing stored, so these cases cover the on-device rule.
+vi.mock('../api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../api/client')>();
+  return {
+    ...actual,
+    promptPrefsAPI: {
+      get: vi.fn().mockResolvedValue({ data: { never: [] } }),
+      setNever: vi.fn().mockResolvedValue({ data: { never: [] } }),
+    },
+  };
+});
 
 vi.mock('../lib/push', () => ({
   isPushConfigured: vi.fn().mockResolvedValue(true),
@@ -21,6 +33,7 @@ describe('Add MenRush to Home Screen card', () => {
     cleanup();
     window.localStorage.clear();
     window.sessionStorage.clear();
+    resetPromptPrefsSyncForTests();
     useAuthStore.setState({ user: { id: 'member-a', name: 'Member' } as never, token: 't' });
   });
 

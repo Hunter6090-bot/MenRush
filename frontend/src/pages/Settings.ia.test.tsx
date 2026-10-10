@@ -3,6 +3,8 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { Settings } from './Settings';
+import { YOU_FEATURE_STATUS, YOU_ROW_CARDS } from '../lib/youRows';
+import { ACCOUNT_MENU_LINKS, ACCOUNT_MENU_FOOTER_LINKS } from '../components/AccountMenu';
 
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
@@ -347,6 +349,7 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     expect(text).not.toMatch(/Visiting/i);
     expect(text).not.toMatch(/explore city/i);
     expect(text).not.toMatch(/explore-city/i);
+    // Merch and Brands belong on You only (Claude Design board 07), not in Settings.
     expect(text).not.toMatch(/Merch/i);
     expect(text).not.toMatch(/Brands/i);
     expect(text).not.toMatch(/Advertise/i);
@@ -358,6 +361,20 @@ describe('Settings IA reorganisation (phone-first sectioned)', () => {
     expect(shellScope.queryByText(/^dating$/i)).not.toBeInTheDocument();
     expect(shellScope.queryByText(/^matches$/i)).not.toBeInTheDocument();
     expect(shellScope.queryByText(/^relationship$/i)).not.toBeInTheDocument();
+  });
+
+  it('Merch and Brands are allowed on You only, as Coming soon rows while not built', () => {
+    // Board 07 You / settings: card 2 is Merch then Brands.
+    expect(YOU_ROW_CARDS[1].map((r) => r.label)).toEqual(['Merch', 'Brands']);
+    // Not built yet, so they carry the Coming soon tag and no destination.
+    for (const id of ['merch', 'brands'] as const) {
+      expect(YOU_FEATURE_STATUS[id]).toBe('coming_soon');
+      expect(YOU_ROW_CARDS[1].find((r) => r.id === id)?.to).toBeUndefined();
+    }
+    // Still kept off everywhere else the board does not show them.
+    const elsewhere = [...ACCOUNT_MENU_LINKS, ...ACCOUNT_MENU_FOOTER_LINKS].map((l) => l.label).join(' ');
+    expect(elsewhere).not.toMatch(/Merch|Brands/i);
+    expect(YOU_ROW_CARDS[0].map((r) => r.label).join(' ')).not.toMatch(/Merch|Brands/i);
   });
 
   it('renders official Instagram and Bluesky follow rows with real glyphs, correct links, and no unverified platforms', () => {
