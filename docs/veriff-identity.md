@@ -89,7 +89,7 @@ Both `/api/verify/veriff/webhook` and `/api/verify/webhook` accept signed decisi
 
 ## Notes
 
-- Webhook is primary (`/api/verify/veriff/webhook`); `/api/verify/webhook` is an alias for misconfigured Station URLs; re-poll is backup for missed delivery (e.g. BOA90-style stuck `created`)
+- Webhook is primary (`/api/verify/veriff/webhook`); `/api/verify/webhook` is an alias for misconfigured Station URLs; re-poll is backup for missed delivery (e.g. owner account-style stuck `created`)
 - One optional Veriff path only — Verified badge when approved. No Authentic-person live challenge; no Adult Trust Centre badge; no “Identity checked” product label.
 - Client SDK completion never grants the badge — webhook or re-poll `applyDecision` only
 - Parked PR #97 (adult-assurance / signup gate) stays parked; FEATURES.requireIdVerification stays false

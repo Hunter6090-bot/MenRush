@@ -91,6 +91,8 @@ jobs:
         run: npm run test:report-owner-brief
       - name: Social drafts say no waitlist, no dating app, no em dashes
         run: npm run test:social-copy-guard
+      - name: Member data guard (no real member handles, emails or ids in tracked files)
+        run: npm run test:member-data-guard
 
   frontend-build:
     name: Frontend build

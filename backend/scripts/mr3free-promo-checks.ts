@@ -214,15 +214,16 @@ test('MR3FREE DB registration, 3 months premium, case insensitivity, one use per
       beta12MoDate.toISOString(),
     );
 
-    // 6. Does not wipe lifetime Premium for always-premium owners (e.g. BOA90)
+    // 6. Does not wipe lifetime Premium for always-premium owners (id from env)
     const alwaysUserRes = await query(
       `INSERT INTO users (id, email, password_hash, name, age, is_premium, premium_tier, premium_until)
-       VALUES ($1, $2, 'x', 'BOA90', 32, TRUE, 'premium', NULL)
+       VALUES ($1, $2, 'x', $3, 32, TRUE, 'premium', NULL)
        RETURNING id`,
-      [randomUUID(), `always-${suffix}@test.menrush.local`],
+      [randomUUID(), `always-${suffix}@test.menrush.local`, `Owner ${suffix}`],
     );
     const alwaysId = alwaysUserRes.rows[0].id;
     userIds.push(alwaysId);
+    process.env.ALWAYS_PREMIUM_USER_IDS = alwaysId;
 
     const alwaysGrant = await promoService.applyMr3FreePremiumGrant(alwaysId, 3);
     assert.strictEqual(alwaysGrant.premiumUntil, null);
@@ -231,6 +232,7 @@ test('MR3FREE DB registration, 3 months premium, case insensitivity, one use per
     assert.strictEqual(alwaysDbRow.rows[0].is_premium, true);
     assert.strictEqual(alwaysDbRow.rows[0].premium_until, null);
   } finally {
+    delete process.env.ALWAYS_PREMIUM_USER_IDS;
     if (userIds.length > 0) {
       await query(`DELETE FROM shared_promo_redemptions WHERE user_id = ANY($1)`, [userIds]);
       await query(`DELETE FROM users WHERE id = ANY($1)`, [userIds]);

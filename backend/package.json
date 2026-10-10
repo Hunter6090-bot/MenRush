@@ -12,6 +12,7 @@
     "db:seed-social-launch-pack": "ts-node scripts/seed-social-launch-pack.ts",
     "test:social-launch-pack": "ts-node scripts/test-social-launch-pack-seed.ts",
     "test:social-copy-guard": "ts-node scripts/social-copy-guard-checks.ts",
+    "test:member-data-guard": "ts-node --transpile-only scripts/member-data-guard-checks.ts",
     "waitlist:import": "ts-node src/scripts/import-waitlist.ts",
     "hotspots:import": "ts-node scripts/import-hot-spots.ts",
     "hotspots:seed-commercial": "ts-node scripts/seed-commercial-venues.ts",

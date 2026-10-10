@@ -188,7 +188,7 @@ async function mockChatWithVideo(page: Page, state: { accessToken: string; failM
           contentType: 'application/json',
           body: JSON.stringify({
             id: PEER_ID,
-            name: 'BOA90',
+            name: 'TestOwner',
             photo_url: null,
             online: true,
             last_seen: new Date().toISOString(),

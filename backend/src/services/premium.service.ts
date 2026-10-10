@@ -1,7 +1,7 @@
 import type { PoolClient } from 'pg';
 import pool, { query } from '../db';
 import { isInviteRequired } from './invite-code.service';
-import { isAlwaysPremiumName } from '../lib/always-premium';
+import { isAlwaysPremiumUserId } from '../lib/always-premium';
 import { registerTravelPremiumIncluded } from '../lib/travel';
 import {
   endAfterPaidStops,
@@ -411,8 +411,7 @@ export const premiumService = {
     if (!event.userId) return { ok: false, reason: 'missing_user_id' };
 
     // Never strip always-Premium owner accounts.
-    const nameRow = await query(`SELECT name FROM users WHERE id = $1`, [event.userId]);
-    if (isAlwaysPremiumName(nameRow.rows[0]?.name)) {
+    if (isAlwaysPremiumUserId(event.userId)) {
       await query(
         `UPDATE subscriptions
          SET status = 'expired', updated_at = NOW()

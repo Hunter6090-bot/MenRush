@@ -27,6 +27,8 @@ export type StoredAuthUser = {
   is_premium?: boolean;
   premium_tier?: 'free' | 'premium' | 'premium_plus';
   beta_premium_included?: boolean;
+  /** Own profile only: owner account with the Travel bypass (server env). */
+  travel_owner?: boolean;
 };
 
 function isPlausibleToken(token: unknown): token is string {

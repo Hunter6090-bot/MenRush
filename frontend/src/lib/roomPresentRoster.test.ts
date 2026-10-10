@@ -11,7 +11,7 @@ describe('roomPresentRoster', () => {
     const first = replacePresentRoster([
       { user_id: 'self', name: 'Self', photo_url: null },
       { user_id: 'alex', name: 'Alex', photo_url: '/a.jpg' },
-      { user_id: 'bear', name: 'Bigbear', photo_url: null },
+      { user_id: 'bear', name: 'Member B', photo_url: null },
     ]);
     expect(first.map((p) => p.user_id).sort()).toEqual(['alex', 'bear', 'self']);
 

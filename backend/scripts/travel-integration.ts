@@ -95,7 +95,7 @@ async function main() {
     const local = await makeUser('TR Local', 53.4808, -2.2426); // Manchester
     const manc = await makeUser('TR Manc', 53.47, -2.25); // Manchester
     const free = await makeUser('TR Free', 51.508, -0.128);
-    const owner = await makeUser('HantsBear', 51.507, -0.127); // always Premium, not paying
+    const owner = await makeUser('TR Owner', 51.507, -0.127); // owner id from env, not paying
 
     // ── Premium gate ─────────────────────────────────────────────────────────
     const is402 = (e: unknown) => e instanceof TravelError && (e as any).code === 'premium_required' && (e as any).status === 402;
@@ -103,9 +103,13 @@ async function main() {
     await assert.rejects(() => travelService.planTrip(free, { city: 'Manchester', startsOn: today, endsOn: today }), is402);
     assert.deepStrictEqual(await travelService.endTrip(free), { ended: false }, 'ending is always allowed');
     ok('Free members get the Premium gate for Look around and Plan a trip');
+    delete process.env.ALWAYS_PREMIUM_USER_IDS;
+    delete process.env.TRAVEL_OWNER_USER_IDS;
+    await assert.rejects(() => travelService.lookAround(owner, 'Manchester'), is402, 'no owner env: no bypass');
+    process.env.ALWAYS_PREMIUM_USER_IDS = owner;
     const ownerLook = await travelService.lookAround(owner, 'Manchester');
     assert.strictEqual(ownerLook.place.name, 'Manchester');
-    ok('always-Premium owner accounts pass the gate');
+    ok('owner accounts (ids from env) pass the gate; unset env gives no bypass');
 
     // ── Look around never moves anyone's location or distance origin ─────────
     const before = await storedLoc(looker);
@@ -312,12 +316,14 @@ async function main() {
     assert.strictEqual(await travelService.getTrip(traveller), null);
     await query(`UPDATE users SET is_premium = TRUE, premium_tier = 'premium', premium_until = NOW() + INTERVAL '30 days' WHERE id = $1`, [traveller]);
     // An always-Premium owner's trip keeps showing even without the flag.
-    await query(`UPDATE users SET name = 'Bigbear25', is_premium = FALSE, premium_until = NULL WHERE id = $1`, [traveller]);
+    process.env.TRAVEL_OWNER_USER_IDS = traveller;
+    await query(`UPDATE users SET is_premium = FALSE, premium_until = NULL WHERE id = $1`, [traveller]);
     await travelService.planTrip(traveller, { city: 'Manchester', startsOn: today, endsOn: today });
     assert.ok(find(await nearby(local), traveller), 'owner trip still live');
     assert.strictEqual(await travelService.endExpiredAndLapsedTrips(traveller), 0, 'owner trip not ended by cleanup');
     await travelService.endTrip(traveller);
-    await query(`UPDATE users SET name = 'TR Traveller', is_premium = TRUE, premium_until = NOW() + INTERVAL '30 days' WHERE id = $1`, [traveller]);
+    delete process.env.TRAVEL_OWNER_USER_IDS;
+    await query(`UPDATE users SET is_premium = TRUE, premium_until = NOW() + INTERVAL '30 days' WHERE id = $1`, [traveller]);
     ok('a lapsed visitor stops showing at once and cleanup ends the trip; owners are kept');
 
     // ── Lapsed Premium still ends and reads its trip ────────────────────────
@@ -326,6 +332,8 @@ async function main() {
   } finally {
     premiumService.isBetaPremiumFree = origBetaFree;
     globalThis.fetch = realFetch;
+    delete process.env.ALWAYS_PREMIUM_USER_IDS;
+    delete process.env.TRAVEL_OWNER_USER_IDS;
     if (ids.length) {
       await query(`DELETE FROM travel_trips WHERE user_id = ANY($1::uuid[])`, [ids]);
       await query(`DELETE FROM map_feed_messages WHERE sender_id = ANY($1::uuid[])`, [ids]);

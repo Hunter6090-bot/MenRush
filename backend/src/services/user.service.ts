@@ -12,6 +12,7 @@ import { accessControl } from '../security/access';
 import { ProfileInput } from '../types/validation';
 import { ageFromDateOfBirth, AGE_FILTER_MIN } from '../lib/age';
 import { premiumService } from './premium.service';
+import { isTravelOwnerUserId } from '../lib/always-premium';
 import {
   isVisitorBoostActive,
   planVisitorLocationUpdate,
@@ -446,6 +447,9 @@ export const userService = {
       row.premium_until = status.premium_until;
       row.beta_premium_included = status.beta_premium_included;
     }
+    // Own profile only: Travel owner accounts (ids from env) skip the Travel
+    // Premium card. Hint for the client; the Travel API decides.
+    row.travel_owner = isTravelOwnerUserId(userId);
     return row;
   },
 

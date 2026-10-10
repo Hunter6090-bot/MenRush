@@ -45,11 +45,11 @@ Pride public code `PRIDE 3MONTH FREE`:
 
 BSF26 reuses redemption table + grant shape, but applies via **`applyBsf26PremiumGrant` → `bsf26PremiumWindow`** (Al London calendar lock).
 
-## Smoke-test (BOA90 / owner account path)
+## Smoke-test (owner account / owner account path)
 
-Product tests on BOA90 before merge. After deploy:
+Product tests on owner account before merge. After deploy:
 
-1. Soft-refresh BOA90 app / staging.
+1. Soft-refresh owner account app / staging.
 2. Register with `?promo=BSF26` (or type `BSF26`) on a **fresh** 18+ email. Complete adult assurance if required (#97).
 3. Confirm Premium: before 1 Oct → `premium_starts_at` = 1 Oct London midnight; on 2–5 Oct → that London day. Confirm **no** stacked 30-day gift.
 4. Negatives: double-claim; Pride path + BSF26; `BSF 26` / `BSF-26`; after claim-by; referral field with `BSF26`.

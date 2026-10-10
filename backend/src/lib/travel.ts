@@ -11,6 +11,7 @@
  *  - locationJumpGate is untouched: a trip does not move the stored location.
  */
 import type { UkIePlace } from './ukIePlace';
+import { travelOwnerUserIds } from './always-premium';
 
 /** A trip can start today or up to this many days ahead. */
 export const TRAVEL_MAX_LEAD_DAYS = 7;
@@ -159,13 +160,20 @@ export function registerTravelPremiumIncluded(fn: () => boolean): void {
   premiumIncludedNow = fn;
 }
 
-/** Owner accounts that never lose Premium (lower-case), same as lib/always-premium. */
-const ALWAYS_PREMIUM_SQL_LIST = "('boa90', 'bigbear25', 'hantsbear')";
+/**
+ * SQL clause for the Travel owner bypass (ids from env, see lib/always-premium).
+ * Ids are UUID-validated before they reach SQL. No owners set: no clause.
+ */
+function travelOwnerSql(column: string): string {
+  const ids = travelOwnerUserIds();
+  if (ids.length === 0) return '';
+  return `\n              OR ${column} IN (${ids.map((id) => `'${id}'::uuid`).join(', ')})`;
+}
 
 /**
  * SQL: member `${userExpr}` has Premium right now. Same rule as
  * premiumService.getStatus (is_premium, started, not expired), plus the
- * always-Premium owners. A lapsed member's trip stops showing immediately.
+ * Travel owner ids from env. A lapsed member's trip stops showing immediately.
  */
 export function travelPremiumSql(userExpr: string): string {
   if (premiumIncludedNow()) return 'TRUE';
@@ -175,8 +183,7 @@ export function travelPremiumSql(userExpr: string): string {
             AND (
               (COALESCE(tpu.is_premium, FALSE)
                 AND (tpu.premium_starts_at IS NULL OR tpu.premium_starts_at <= NOW())
-                AND (tpu.premium_until IS NULL OR tpu.premium_until > NOW()))
-              OR LOWER(TRIM(tpu.name)) IN ${ALWAYS_PREMIUM_SQL_LIST}
+                AND (tpu.premium_until IS NULL OR tpu.premium_until > NOW()))${travelOwnerSql('tpu.id')}
             )
         )`;
 }

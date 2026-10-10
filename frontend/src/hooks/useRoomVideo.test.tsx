@@ -191,7 +191,7 @@ describe('useRoomVideo occupancy (live membership only)', () => {
       result.current.applyPresenceSync([
         { user_id: 'self', name: 'Self', photo_url: null },
         { user_id: 'alex', name: 'Alex', photo_url: '/a.jpg' },
-        { user_id: 'bear', name: 'Bigbear25', photo_url: '/b.jpg' },
+        { user_id: 'bear', name: 'TestMemberB', photo_url: '/b.jpg' },
       ]);
     });
     expect(result.current.participants.map((p) => p.user_id).sort()).toEqual([
@@ -201,7 +201,7 @@ describe('useRoomVideo occupancy (live membership only)', () => {
     ]);
 
     act(() => {
-      // Only self still in the room (Alex and Bigbear left).
+      // Only self still in the room (Alex and Member B left).
       result.current.applyPresenceSync([{ user_id: 'self', name: 'Self', photo_url: null }]);
     });
 

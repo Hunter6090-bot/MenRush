@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import type { PoolClient } from 'pg';
 import pool, { query } from '../db';
 import { sendTransactionalEmail } from './mailer.service';
-import { isAlwaysPremiumName } from '../lib/always-premium';
+import { isAlwaysPremiumUserId } from '../lib/always-premium';
 
 type Queryable = PoolClient | typeof pool;
 
@@ -559,7 +559,7 @@ export const promoService = {
       [userId],
     );
     const existing = userRow.rows[0];
-    const always = isAlwaysPremiumName(existing?.name);
+    const always = isAlwaysPremiumUserId(userId);
     const existingUntil = existing?.premium_until ? new Date(existing.premium_until) : null;
     const existingStarts = existing?.premium_starts_at ? new Date(existing.premium_starts_at) : null;
 

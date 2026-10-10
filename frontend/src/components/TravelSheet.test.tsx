@@ -9,7 +9,7 @@ import { TravelSheet } from './TravelSheet';
 loadThemeTokens(readFileSync(resolve(__dirname, '../styles/menrush-tokens.css'), 'utf8'));
 
 const mocks = vi.hoisted(() => ({
-  user: { id: 'me', name: 'Member', is_premium: true } as { id: string; name: string; is_premium: boolean },
+  user: { id: 'me', name: 'Member', is_premium: true } as { id: string; name: string; is_premium: boolean; travel_owner?: boolean },
   getTrip: vi.fn(),
   planTrip: vi.fn(),
   endTrip: vi.fn(),
@@ -57,8 +57,8 @@ describe('TravelSheet', () => {
     expect(screen.queryByTestId('travel-save-trip')).not.toBeInTheDocument();
   });
 
-  it('always-Premium owner accounts get the form even without the flag', () => {
-    mocks.user = { id: 'me', name: 'BOA90', is_premium: false };
+  it('Travel owner accounts (server travel_owner) get the form even without the flag', () => {
+    mocks.user = { id: 'me', name: 'Member', is_premium: false, travel_owner: true };
     renderSheet();
     expect(screen.getByTestId('travel-city')).toBeInTheDocument();
   });

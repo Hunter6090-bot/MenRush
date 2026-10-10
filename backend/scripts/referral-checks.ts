@@ -10,7 +10,6 @@ import assert from 'assert';
 import { randomUUID } from 'crypto';
 import pool, { query } from '../src/db';
 import {
-  ALWAYS_PREMIUM_NAMES,
   classifyForeignCode,
   generateReferralCode,
   normalizeReferralCode,
@@ -19,7 +18,12 @@ import {
   REFERRAL_UNLOCK_EVERY,
 } from '../src/services/referral.service';
 import { premiumService, PREMIUM_PAID_PRICE } from '../src/services/premium.service';
-import { isAlwaysPremiumName } from '../src/lib/always-premium';
+import {
+  isAlwaysPremiumUserId,
+  isTravelOwnerUserId,
+  parseUserIdList,
+  travelOwnerUserIds,
+} from '../src/lib/always-premium';
 
 // These checks assert real end dates, so run as after free Premium ends.
 // Banking while Premium is free for everyone is covered in
@@ -74,10 +78,32 @@ async function main() {
   // ── Pure surface checks (no DB) ──────────────────────────────────────────
   assert.strictEqual(REFERRAL_UNLOCK_EVERY, 3);
   assert.strictEqual(REFERRAL_PAYOUT_RATE, 0.2);
-  assert.ok(ALWAYS_PREMIUM_NAMES.includes('BOA90'));
-  assert.ok(isAlwaysPremiumName('Bigbear25'));
-  assert.ok(isAlwaysPremiumName('HantsBear'));
-  assert.ok(!isAlwaysPremiumName('RandomGuy'));
+  // Owner accounts come from env by id only (made-up UUIDs here, never real ids).
+  const ownerA = '0e0e0e0e-0000-4000-8000-00000000a0a1';
+  const ownerB = '0e0e0e0e-0000-4000-8000-00000000b0b2';
+  const travelOnly = '0e0e0e0e-0000-4000-8000-00000000c0c3';
+  assert.deepStrictEqual(parseUserIdList(undefined), []);
+  assert.deepStrictEqual(parseUserIdList(''), []);
+  assert.deepStrictEqual(
+    parseUserIdList(` ${ownerA.toUpperCase()} , not-a-uuid,${ownerB},${ownerA}, ' OR 1=1 --`),
+    [ownerA, ownerB],
+    'trimmed, lower-case, UUIDs only, no repeats',
+  );
+  const envNone = {} as NodeJS.ProcessEnv;
+  assert.ok(!isAlwaysPremiumUserId(ownerA, envNone), 'unset env: no owner perks');
+  assert.ok(!isTravelOwnerUserId(ownerA, envNone), 'unset env: no Travel bypass');
+  const envOwners = {
+    ALWAYS_PREMIUM_USER_IDS: `${ownerA},${ownerB}`,
+    TRAVEL_OWNER_USER_IDS: travelOnly,
+  } as NodeJS.ProcessEnv;
+  assert.ok(isAlwaysPremiumUserId(ownerA, envOwners));
+  assert.ok(isAlwaysPremiumUserId(ownerB.toUpperCase(), envOwners));
+  assert.ok(!isAlwaysPremiumUserId(travelOnly, envOwners), 'Travel-only id is not always-Premium');
+  assert.ok(isTravelOwnerUserId(travelOnly, envOwners));
+  assert.ok(isTravelOwnerUserId(ownerA, envOwners), 'always-Premium owners also get Travel');
+  assert.deepStrictEqual(travelOwnerUserIds(envOwners), [ownerA, ownerB, travelOnly]);
+  assert.ok(!isAlwaysPremiumUserId(randomUUID(), envOwners));
+  assert.ok(!isAlwaysPremiumUserId(null, envOwners));
 
   const codeA = generateReferralCode();
   const codeB = generateReferralCode();
@@ -93,7 +119,7 @@ async function main() {
   assert.strictEqual(classifyForeignCode('MENRUSH-ABCD-EFGH'), 'invite');
   assert.strictEqual(classifyForeignCode('MRK7N2P9QX'), null);
 
-  console.log('ok — surface: code format, foreign codes, always-premium names');
+  console.log('ok — surface: code format, foreign codes, always-Premium owner ids from env');
 
   // ── DB integration ───────────────────────────────────────────────────────
   const ids: string[] = [];
@@ -229,15 +255,16 @@ async function main() {
     assert.ok(!/payout|£/i.test(JSON.stringify(summary)));
     console.log('ok — paid upgrade recorded on the backend row only');
 
-    // Always-premium: lifetime not shortened
+    // Always-premium (owner id from env): lifetime not shortened
     const alwaysId = await insertUser({
       email: `ref-always-${suffix}@test.menrush.local`,
-      name: 'BOA90',
+      name: `RefOwner${suffix}`.slice(0, 30),
       referralCode: generateReferralCode(),
       isPremium: true,
       premiumUntil: null,
     });
     ids.push(alwaysId);
+    process.env.ALWAYS_PREMIUM_USER_IDS = alwaysId;
     const grantRow = await query(
       `INSERT INTO referral_premium_grants (user_id, milestone, verified_count_at_grant, months_granted)
        VALUES ($1, 1, 3, 1) RETURNING id`,
@@ -251,7 +278,8 @@ async function main() {
     );
     assert.strictEqual(alwaysRow.rows[0].is_premium, true);
     assert.strictEqual(alwaysRow.rows[0].premium_until, null);
-    console.log('ok — always-Premium (BOA90) not stripped');
+    console.log('ok — always-Premium owner (id from env) not stripped');
+    delete process.env.ALWAYS_PREMIUM_USER_IDS;
 
     console.log('\nreferral-checks: all passed');
   } finally {

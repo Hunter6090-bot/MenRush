@@ -86,9 +86,9 @@ EVA Manchester, Fibre Leeds, Equator Bar Birmingham). Keep-list unchanged.
 **Soft AMBER (do not seed):** Centre Stage MCR, Eden Bar, Blayds Bar.
 Remaining AMBER research names and RED outdoor/PSE omitted. Deferred this pass: **none**.
 
-### BOA90 soft-refresh (Cruise map)
+### owner account soft-refresh (Cruise map)
 
-After migrate (or JSON seed) on the BOA90 environment:
+After migrate (or JSON seed) on the owner account environment:
 
 1. Nearby Map → enable **Hot Spots** chip (cruise-ship icon). Layer toggles independent of People.
 2. Pan UK — new pins show **Cruise** until a real check-in exists; then venue name + count only.
@@ -121,7 +121,7 @@ See `docs/outdoor-hotspots-override-2026-09-12.md` and `docs/outdoor-hotspots-ba
 
 Never wipe or rewrite real user photos, covers, or albums when touching Cruise / Hot Spots.
 
-## BOA90 test plan
+## owner account test plan
 
 1. Nearby Map → Hot Spots chip (cruise-ship icon) toggles the spot layer independently of People.
 2. Helper / map banner shows Legal quiet face (independent venues + outdoor locations) — never "Commercial venues only" while outdoor pins are live (#258).

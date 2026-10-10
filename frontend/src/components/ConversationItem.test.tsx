@@ -58,13 +58,13 @@ describe('ConversationItem avatars', () => {
 
   it('keeps real /uploads photos (media lock) and drops square ring', () => {
     const { container } = renderItem({
-      name: 'Bigbear25',
+      name: 'TestMemberB',
       photoUrl: '/uploads/profiles/real.jpg',
       online: false,
     });
 
     expect(screen.queryByTestId('faded-brand-face')).not.toBeInTheDocument();
-    const photo = container.querySelector('img[alt="Bigbear25"]');
+    const photo = container.querySelector('img[alt="TestMemberB"]');
     expect(photo).not.toBeNull();
     expect(photo!.getAttribute('src')).toContain('/uploads/profiles/real.jpg');
 
