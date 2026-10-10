@@ -1,7 +1,6 @@
 /**
  * Delete confirms (Community post / comment, Settings "Delete my posts") meet
- * WCAG AA in light and dark using theme tokens only; the map dock confirm
- * (always dark) meets AA too.
+ * WCAG AA in light and dark using theme tokens only (map dock included).
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -55,20 +54,11 @@ describe('Delete confirms use the shared token styles', () => {
     }
   });
 
-  it('map dock confirm (always dark) colours are >= 4.5:1', () => {
-    // Pull the dock confirm's colours from source and check them on its own opaque box.
-    expect(dock).toContain('bg-[#1A130B]');
-    render(
-      <div className="bg-[#1A130B]">
-        <p className="text-[#FF9A8A]">title</p>
-        <p className="text-[#F0DFC0]">body</p>
-        <button type="button" className="bg-[#FF9A8A] text-[#1A0E03]">delete</button>
-      </div>,
-    );
-    expect(dock).toContain('text-[#FF9A8A]">Delete this post?');
-    for (const t of ['title', 'body', 'delete']) {
-      expect(contrast(screen.getByText(t), 'dark'), t).toBeGreaterThanOrEqual(4.5);
+  it('map dock confirm uses the same token styles', () => {
+    for (const k of ['CONFIRM_BOX', 'CONFIRM_TITLE', 'CONFIRM_BODY', 'CONFIRM_DANGER_BTN', 'CONFIRM_CANCEL_BTN']) {
+      expect(dock).toContain(k);
     }
+    expect(dock).not.toMatch(/#FF9A8A|#1A130B/);
   });
 });
 

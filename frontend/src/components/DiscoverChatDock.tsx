@@ -5,6 +5,13 @@ import { useAuthStore, useLocationStore } from '../hooks/store';
 import { IconClose } from './icons';
 import { FadedBrandFace } from './FadedBrandFace';
 import { OwnPostMenu } from './OwnPostMenu';
+import {
+  CONFIRM_BODY,
+  CONFIRM_BOX,
+  CONFIRM_CANCEL_BTN,
+  CONFIRM_DANGER_BTN,
+  CONFIRM_TITLE,
+} from '../lib/confirmStyles';
 
 const DOCK_STORAGE_KEY = 'menrush_discover_chat_dock';
 const MAX_VISIBLE = 6;
@@ -24,13 +31,20 @@ function msgAge(msg: MapFeedMessage): number {
   return Date.now() - new Date(msg.created_at).getTime();
 }
 
+/**
+ * Lowest opacity an ageing message fades to before it drops off. Kept high so the
+ * faded text still meets WCAG AA (4.5:1) in light and dark: see
+ * DiscoverChatDock.contrast.test.tsx.
+ */
+export const DOCK_MIN_OPACITY = 0.9;
+
 function msgOpacity(msg: MapFeedMessage): number {
   const age = msgAge(msg);
   if (age >= FADE_AFTER_MS) return 0;
-  // Fade from 1 → 0.35 over the last 4 minutes
+  // Fade gently from 1 to DOCK_MIN_OPACITY over the last 4 minutes.
   const fadeStart = FADE_AFTER_MS - 4 * 60 * 1000;
   if (age < fadeStart) return 1;
-  return 0.35 + 0.65 * (1 - (age - fadeStart) / (4 * 60 * 1000));
+  return DOCK_MIN_OPACITY + (1 - DOCK_MIN_OPACITY) * (1 - (age - fadeStart) / (4 * 60 * 1000));
 }
 
 function formatTime(iso: string): string {
@@ -203,12 +217,12 @@ export function DiscoverChatDock({
         aria-label="Open map chat"
         title="Map chat"
         onClick={() => onOpenChange(true)}
-        className="pointer-events-auto absolute bottom-12 left-3 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-[rgba(196,131,42,0.5)] bg-[rgba(15,10,6,0.82)] text-[#E0A14A] shadow-[0_8px_28px_rgba(0,0,0,0.5)] backdrop-blur-md transition-transform active:scale-95"
+        className="pointer-events-auto absolute bottom-12 left-3 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-[var(--border-strong)] bg-[var(--bg-card)] text-[var(--nn-accent-text)] shadow-[var(--nn-shadow-card)] transition-transform active:scale-95"
         data-map-chrome-corner="bottom-left"
       >
         <ChatBubbleIcon className="h-5 w-5" />
         {hasNewMsg && (
-          <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full bg-[#C4832A] ring-2 ring-[rgba(15,10,6,0.9)]" />
+          <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full bg-[var(--nn-accent-text)] ring-2 ring-[var(--bg-card)]" />
         )}
       </button>
     );
@@ -217,35 +231,33 @@ export function DiscoverChatDock({
   return (
     <div
       data-testid="discover-chat-dock"
-      className="pointer-events-auto absolute bottom-12 left-3 z-30 flex w-[min(100%-5.5rem,340px)] flex-col overflow-hidden rounded-2xl border border-[rgba(196,131,42,0.35)] shadow-[0_16px_48px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+      className="pointer-events-auto absolute bottom-12 left-3 z-30 flex w-[min(100%-5.5rem,340px)] flex-col overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-card)] text-[var(--cream)] shadow-[var(--nn-shadow-card)]"
       data-map-chrome-corner="bottom-left"
-      style={{
-        background: 'rgba(13,10,6,0.82)',
-        maxHeight: '56vh',
-      }}
+      style={{ maxHeight: '56vh' }}
       role="dialog"
       aria-label="Nearby map chat"
     >
       {/* Header */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-[rgba(196,131,42,0.2)] px-3 py-2">
-        <span className="h-2 w-2 rounded-full bg-[#C4832A] shadow-[0_0_6px_#C4832A]" />
-        <p className="flex-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[#E0A14A]">
+      <div className="flex shrink-0 items-center gap-2 border-b border-[var(--border-default)] py-0.5 pl-3 pr-1">
+        <span aria-hidden="true" className="h-2 w-2 rounded-full bg-[var(--nn-accent-text)]" />
+        <p data-testid="map-dock-label" className="flex-1 text-[15px] font-bold uppercase tracking-[0.08em] text-[var(--nn-accent-text)]">
           Nearby · Live
         </p>
         <button
           type="button"
           aria-label="Close map chat"
           onClick={handleClose}
-          className="flex h-7 w-7 items-center justify-center rounded-full text-[#A89070] transition-colors hover:text-[#E0A14A]"
+          data-testid="map-dock-close"
+          className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--cream-muted)] transition-colors hover:text-[var(--nn-accent-text)]"
         >
-          <IconClose size={14} />
+          <IconClose size={18} />
         </button>
       </div>
 
       {/* Message list */}
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2" style={{ scrollbarWidth: 'none' }}>
         {visible.length === 0 ? (
-          <p className="py-8 text-center text-[11px] text-[#6B5035]">
+          <p data-testid="map-dock-empty" className="py-8 text-center text-[15px] text-[var(--cream-muted)]">
             No nearby messages yet. Say something!
           </p>
         ) : (
@@ -263,39 +275,29 @@ export function DiscoverChatDock({
                   {/* Map-feed has no photos: ONE Brand placeholder face (no initials). */}
                   <div
                     className="mt-0.5 h-8 w-8 shrink-0 overflow-hidden rounded-full"
-                    style={{ border: '1px solid rgba(196,131,42,0.3)' }}
+                    style={{ border: '1px solid var(--border-default)' }}
                     data-testid="map-feed-brand-face"
                   >
                     <FadedBrandFace variant="profile" size={30} label={msg.display_name || 'MenRush'} />
                   </div>
                   <div className={`flex max-w-[78%] flex-col ${isMine ? 'items-end' : 'items-start'}`}>
-                    <span className="mb-0.5 text-xs font-semibold text-[#A89070]">
+                    <span data-testid="map-dock-name" className="mb-0.5 text-[15px] font-semibold text-[var(--cream-muted)]">
                       {isMine ? 'You' : msg.display_name}
                       {msg.distance_label ? ` · ${msg.distance_label}` : ''}
                     </span>
                     <div className={`flex items-start gap-1 ${isMine ? 'flex-row-reverse' : ''}`}>
                     <div
-                      className="rounded-2xl px-3 py-1.5 text-base leading-snug"
-                      style={
+                      data-testid={isMine ? 'map-dock-bubble-mine' : 'map-dock-bubble'}
+                      className={`px-3 py-1.5 text-[16px] leading-snug ${
                         isMine
-                          ? {
-                              background: 'linear-gradient(135deg,#C4832A,#A45E18)',
-                              color: '#FFF5E6',
-                              borderRadius: '14px 14px 4px 14px',
-                            }
-                          : {
-                              background: 'rgba(255,255,255,0.06)',
-                              border: '1px solid rgba(196,131,42,0.18)',
-                              color: '#F0DFC0',
-                              borderRadius: '14px 14px 14px 4px',
-                            }
-                      }
+                          ? 'rounded-[14px_14px_4px_14px] bg-[var(--nn-copper)] text-[var(--nn-on-copper)]'
+                          : 'rounded-[14px_14px_14px_4px] border border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--cream)]'
+                      }`}
                     >
                       {msg.message}
                     </div>
                     {isMine ? (
                       <OwnPostMenu
-                        tone="dark"
                         label="Options for your map post"
                         testId={`map-feed-more-${msg.id}`}
                         items={[
@@ -314,10 +316,10 @@ export function DiscoverChatDock({
                         data-testid={`map-feed-delete-confirm-${msg.id}`}
                         role="group"
                         aria-label="Delete this post?"
-                        className="mt-1.5 w-full rounded-xl border border-[#FF9A8A] bg-[#1A130B] p-2.5"
+                        className={`mt-1.5 w-full ${CONFIRM_BOX}`}
                       >
-                        <p className="text-[15px] font-bold text-[#FF9A8A]">Delete this post?</p>
-                        <p className="mt-0.5 text-[15px] leading-snug text-[#F0DFC0]">
+                        <p className={CONFIRM_TITLE}>Delete this post?</p>
+                        <p className={CONFIRM_BODY}>
                           You can&apos;t undo this. The location saved with it goes too.
                         </p>
                         <div className="mt-2 flex flex-wrap gap-2">
@@ -326,7 +328,7 @@ export function DiscoverChatDock({
                             data-testid={`map-feed-delete-btn-${msg.id}`}
                             disabled={deletingId === msg.id}
                             onClick={() => void handleDelete(msg.id)}
-                            className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-[#FF9A8A] px-4 text-[15px] font-bold text-[#1A0E03] disabled:opacity-50"
+                            className={CONFIRM_DANGER_BTN}
                           >
                             {deletingId === msg.id ? 'Deleting…' : 'Delete post'}
                           </button>
@@ -338,20 +340,22 @@ export function DiscoverChatDock({
                               setConfirmDeleteId(null);
                               focusMenuTrigger(msg.id);
                             }}
-                            className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-[rgba(240,223,192,0.5)] px-4 text-[15px] font-bold text-[#F0DFC0]"
+                            className={CONFIRM_CANCEL_BTN}
                           >
                             Cancel
                           </button>
                         </div>
                       </div>
                     ) : null}
-                    <span className="mt-0.5 text-xs text-[#4A3520]">{formatTime(msg.created_at)}</span>
+                    <span data-testid="map-dock-time" className="mt-0.5 text-[15px] text-[var(--text-secondary)]">
+                      {formatTime(msg.created_at)}
+                    </span>
                   </div>
                 </div>
               );
             })}
             {deleteError ? (
-              <p role="alert" className="text-[15px] font-semibold text-[#FF9A8A]">
+              <p role="alert" className="text-[15px] font-semibold text-[var(--nn-danger-text)]">
                 {deleteError}
               </p>
             ) : null}
@@ -361,7 +365,7 @@ export function DiscoverChatDock({
       </div>
 
       {/* Compose */}
-      <div className="shrink-0 border-t border-[rgba(196,131,42,0.18)] px-3 py-2">
+      <div className="shrink-0 border-t border-[var(--border-default)] px-3 py-2">
         <div className="flex items-center gap-2">
           <input
             ref={inputRef}
@@ -376,18 +380,18 @@ export function DiscoverChatDock({
             }}
             placeholder="Say something nearby…"
             maxLength={200}
-            className="flex-1 rounded-full bg-[rgba(255,255,255,0.06)] px-3.5 py-2 text-[16px] text-[#F0DFC0] placeholder-[#4A3520] outline-none focus:ring-1 focus:ring-[rgba(196,131,42,0.4)]"
-            style={{ border: '1px solid rgba(196,131,42,0.22)' }}
+            data-testid="map-dock-input"
+            className="min-h-[44px] min-w-0 flex-1 rounded-full border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3.5 py-2 text-[16px] text-[var(--cream)] placeholder:text-[var(--text-secondary)] outline-none focus:ring-2 focus:ring-[var(--nn-accent-text)]"
           />
           <button
             type="button"
             disabled={!input.trim() || sending}
             onClick={() => void handleSend()}
             aria-label="Send"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all active:scale-95 disabled:opacity-30"
-            style={{ background: 'linear-gradient(135deg,#C4832A,#A45E18)' }}
+            data-testid="map-dock-send"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--nn-copper)] text-[var(--nn-on-copper)] transition-all active:scale-95 disabled:opacity-50"
           >
-            <SendIcon className="h-3.5 w-3.5 text-white" />
+            <SendIcon className="h-4 w-4" />
           </button>
         </div>
       </div>
