@@ -18,6 +18,64 @@ import {
 } from '../src/security/media';
 import { isAllowedOrigin, isMenRushVercelHost } from '../src/security/cors';
 
+/**
+ * Remove // and /* *\/ comments so commented-out code cannot satisfy a source guard.
+ * String and template literals are kept as they are; newlines are kept so line anchors still work.
+ */
+export function stripComments(source: string): string {
+  let out = '';
+  let i = 0;
+  while (i < source.length) {
+    const ch = source[i];
+    const next = source[i + 1];
+    if (ch === '/' && next === '/') {
+      while (i < source.length && source[i] !== '\n') i += 1;
+      continue;
+    }
+    if (ch === '/' && next === '*') {
+      const end = source.indexOf('*/', i + 2);
+      const stop = end < 0 ? source.length : end + 2;
+      out += source.slice(i, stop).replace(/[^\n]/g, '');
+      i = stop;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      let j = i + 1;
+      while (j < source.length && source[j] !== ch) j += source[j] === '\\' ? 2 : 1;
+      out += source.slice(i, j + 1);
+      i = j + 1;
+      continue;
+    }
+    out += ch;
+    i += 1;
+  }
+  return out;
+}
+
+const ROUTER_GUARD_LINE = /^router\.use\((?:privateNoStore,\s*)?authMiddleware,\s*verifiedMiddleware\);?[ \t]*$/m;
+const FIRST_ROUTE = /\brouter\s*\.\s*(?:get|post|put|patch|delete)\s*\(/;
+
+/**
+ * Guarded routers apply auth and verification once, at router level, before any route:
+ * exactly one router.use, at the start of a line, reading
+ * router.use([privateNoStore, ]authMiddleware, verifiedMiddleware), ahead of the first route.
+ * A router-level privateNoStore may sit ahead of auth on purpose (#348) so 401s carry
+ * Cache-Control: private, no-store as well.
+ */
+export function assertRouterGuard(route: string, source: string): void {
+  const code = stripComments(source);
+  const uses = code.match(/\brouter\s*\.\s*use\s*\(/g) ?? [];
+  assert.equal(uses.length, 1, `${route}: expected exactly one router.use, found ${uses.length}`);
+  const guard = ROUTER_GUARD_LINE.exec(code);
+  assert.ok(
+    guard,
+    `${route}: router.use must start a line and apply authMiddleware then verifiedMiddleware (optionally after privateNoStore)`,
+  );
+  const firstRoute = FIRST_ROUTE.exec(code);
+  assert.ok(firstRoute, `${route}: no routes found`);
+  assert.ok(guard.index < firstRoute.index, `${route}: router.use must come before the first route`);
+}
+
 type Test = { name: string; run: () => void | Promise<void> };
 const tests: Test[] = [];
 
@@ -205,6 +263,24 @@ test('protected media paths cannot traverse storage and expired media is denied'
   assert.throws(() => verifyMediaAccess(token, '/api/messages/message-2/media'));
 });
 
+test('source guard helpers reject commented, extra, late or indented router.use', () => {
+  const ok = "import x from 'y';\nconst router = Router();\nrouter.use(authMiddleware, verifiedMiddleware);\nrouter.get('/', h);\n";
+  assertRouterGuard('ok', ok);
+  assertRouterGuard('no-store first', ok.replace('router.use(', 'router.use(privateNoStore, '));
+  assertRouterGuard('url in string', ok + "router.get('/x', (_q, r) => r.send('https://a.b/*'));\n");
+  const bad: Record<string, string> = {
+    'line comment': ok.replace('router.use(', '// router.use('),
+    'block comment': ok.replace('router.use(authMiddleware, verifiedMiddleware);', '/* router.use(authMiddleware, verifiedMiddleware); */'),
+    'extra router.use': ok + 'router.use(evilMw);\n',
+    'not at line start': ok.replace('router.use(', 'if (on) router.use('),
+    'after first route': "const router = Router();\nrouter.get('/', h);\nrouter.use(authMiddleware, verifiedMiddleware);\n",
+    'missing verified': ok.replace('authMiddleware, verifiedMiddleware', 'authMiddleware'),
+  };
+  for (const [name, source] of Object.entries(bad)) {
+    assert.throws(() => assertRouterGuard(name, source), assert.AssertionError, name);
+  }
+});
+
 test('source guards preserve location, push, socket, and media privacy boundaries', () => {
   const root = path.resolve(__dirname, '..');
   const server = fs.readFileSync(path.join(root, 'src/server.ts'), 'utf8');
@@ -212,9 +288,11 @@ test('source guards preserve location, push, socket, and media privacy boundarie
   const messages = fs.readFileSync(path.join(root, 'src/routes/messages.ts'), 'utf8');
   const albums = fs.readFileSync(path.join(root, 'src/routes/albums.ts'), 'utf8');
   for (const route of ['rooms', 'events', 'pulse', 'profile-meta']) {
-    const source = fs.readFileSync(path.join(root, `src/routes/${route}.ts`), 'utf8');
-    assert.match(source, /router\.use\(authMiddleware,\s*verifiedMiddleware\)/);
+    assertRouterGuard(route, fs.readFileSync(path.join(root, `src/routes/${route}.ts`), 'utf8'));
   }
+  // Events: keep no-store at router level ahead of auth, so nearby, check-in and their 401s are never cached.
+  const events = stripComments(fs.readFileSync(path.join(root, 'src/routes/events.ts'), 'utf8'));
+  assert.match(events, /^router\.use\(privateNoStore,\s*authMiddleware,\s*verifiedMiddleware\);?[ \t]*$/m);
 
   assert.equal(server.includes("app.use('/uploads', express.static"), false);
   assert.equal(server.includes('ST_DWithin(p.location::geography'), false);

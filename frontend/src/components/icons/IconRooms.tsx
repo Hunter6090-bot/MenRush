@@ -1,10 +1,20 @@
-import { SVGProps } from "react";
+import { SVGProps, useId } from 'react';
+
+export type MenRushIconProps = SVGProps<SVGSVGElement> & {
+  size?: number;
+  filled?: boolean;
+};
 
 /**
- * MenRush — Rooms icon
- * Video camera + two overlapping people — group video rooms.
+ * Rooms: video frame + people. Claude Design menrush-icons.
  */
-export function IconRooms({ size = 24, ...props }: SVGProps<SVGSVGElement> & { size?: number }) {
+export function IconRooms({
+  size = 24,
+  filled = false,
+  ...props
+}: MenRushIconProps) {
+  const uid = useId().replace(/:/g, '');
+  const maskId = `mr-rooms-m-${uid}`;
   return (
     <svg
       width={size}
@@ -13,25 +23,45 @@ export function IconRooms({ size = 24, ...props }: SVGProps<SVGSVGElement> & { s
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       stroke="currentColor"
-      strokeWidth="1.5"
+      strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
+      aria-hidden
       {...props}
     >
-      {/* Back person — head + shoulders */}
-      <circle cx="6" cy="5.75" r="2.1" />
-      <path d="M2.5 13.25c0-1.85 1.55-3.35 3.5-3.35" />
-
-      {/* Front person — overlapping */}
-      <circle cx="10.75" cy="6.5" r="2.1" />
-      <path d="M7.25 13.5c0-1.7 1.55-3.05 3.5-3.05s3.5 1.35 3.5 3.05" />
-
-      {/* Camcorder body + lens */}
-      <rect x="2.75" y="14.25" width="11.5" height="6.75" rx="1.5" />
-      <circle cx="8.5" cy="17.6" r="1.85" />
-
-      {/* Side viewfinder housing */}
-      <path d="M14.25 15.75l4.5-2.35v8.2l-4.5-2.35" />
+      {filled ? (
+        <>
+          <defs>
+            <mask id={maskId}>
+              <rect width="24" height="24" fill="#fff" stroke="none" />
+              <circle cx="6" cy="10" r="1.9" fill="#000" stroke="none" />
+              <circle cx="12" cy="10" r="1.9" fill="#000" stroke="none" />
+              <path d="M3 17a3 3 0 0 1 6 0z" fill="#000" stroke="none" />
+              <path d="M9 17a3 3 0 0 1 6 0z" fill="#000" stroke="none" />
+            </mask>
+          </defs>
+          <rect
+            x="1.5"
+            y="5"
+            width="15"
+            height="14"
+            rx="2.5"
+            fill="currentColor"
+            stroke="currentColor"
+            mask={`url(#${maskId})`}
+          />
+          <path d="M16.5 10.5l5.5-3v9l-5.5-3z" fill="currentColor" />
+        </>
+      ) : (
+        <>
+          <rect x="1.5" y="5" width="15" height="14" rx="2.5" />
+          <path d="M16.5 10.5l5.5-3v9l-5.5-3" />
+          <circle cx="6" cy="9.75" r="1.75" fill="currentColor" stroke="none" />
+          <circle cx="12" cy="9.75" r="1.75" fill="currentColor" stroke="none" />
+          <path d="M3.5 16.5a2.5 2.5 0 0 1 5 0" />
+          <path d="M9.5 16.5a2.5 2.5 0 0 1 5 0" />
+        </>
+      )}
     </svg>
   );
 }

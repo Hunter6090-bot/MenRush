@@ -32,7 +32,7 @@ export function ProfileAlbumsSection({ ownerId, ownerName }: ProfileAlbumsSectio
   if (albums.length === 0) return null;
 
   return (
-    <section className="space-y-3">
+    <section id="albums" className="space-y-3" data-testid="profile-albums-section">
       <div>
         <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#C4832A]">Albums</p>
         <p className="text-xs text-[var(--cream-muted)] mt-0.5">Tap an album to view or request access.</p>

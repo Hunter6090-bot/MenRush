@@ -25,35 +25,32 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
 
   const heroHeading = page.getByRole('heading', {
     level: 1,
-    name: /Real men\.\s*Verified profiles\.\s*Total discretion\./i,
+    name: /See who's around\.\s*On the map\./i,
   });
   await expect(heroHeading).toBeVisible();
-  await expect(heroHeading).toHaveClass(/mr-coming-soon-heading/);
+  await expect(heroHeading).toHaveClass(/mr-home-heading/);
+  // Honest face: no claims the app cannot keep.
+  await expect(page.getByText(/Verified profiles|Total discretion|Live proximity|meet is real/i)).toHaveCount(0);
 
-  await expect(page.getByText(/LIVE NOW\. UK OPEN/i)).toBeVisible();
+  await expect(page.getByText(/^Free to join$/)).toBeVisible();
+  await expect(page.getByText(/LIVE NOW\. UK OPEN/i)).toHaveCount(0);
   await expect(page.getByText(/OPENS 1 OCTOBER 2026/i)).toHaveCount(0);
   await expect(page.getByText(/leave your email/i)).toHaveCount(0);
   await expect(page.getByText(/LONDON · MANCHESTER · BIRMINGHAM · BRIGHTON/i)).toHaveCount(0);
 
   await expect(page.getByRole('heading', { name: /What you get/i })).toBeVisible();
-  await expect(page.getByRole('heading', { name: /^Nearby$/i })).toBeVisible();
-  await expect(page.getByRole('heading', { name: /^Matches$/i })).toBeVisible();
-  // Brand live-face kill: no Video rooms card on What you get (LIVE NOW + rooms read as open).
+  // What you get: the app as it is now. Free members can join official and nearby rooms; only private groups need Premium.
+  for (const name of ['Map', 'Chat', 'Rooms', 'Out']) {
+    await expect(page.getByRole('heading', { level: 3, name, exact: true })).toBeVisible();
+  }
+  await expect(page.getByText("Your home screen. Browse who's around.")).toBeVisible();
+  await expect(page.getByText('One-to-one messages.')).toBeVisible();
+  await expect(page.getByText('Group chats. Private groups need Premium.')).toBeVisible();
+  await expect(page.getByText(/premium only/i)).toHaveCount(0);
+  await expect(page.getByText('Cruising spots, hot spots and events.')).toBeVisible();
   await expect(page.getByRole('heading', { name: /^Video rooms$/i })).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: /^Rooms$/i })).toHaveCount(0);
-  await expect(
-    page.getByText('Group spaces for men who already know the vibe. Less noise. More signal.'),
-  ).toHaveCount(0);
-
-  // Period lock on card bodies — no em dash, en dash, or hyphen-as-aside (same as hero overline).
-  await expect(
-    page.getByText(
-      'See who is around you right now. Live proximity, not a stack of stale profiles.',
-    ),
-  ).toBeVisible();
-  await expect(
-    page.getByText('Mutual interest opens chat. Direct when it is real. No endless maybe.'),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Nearby$/i })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: /^Matches$/i })).toHaveCount(0);
 
   // Stale pre-1-Oct waitlist gift removed (live now). Quiet face: no BSF26 blast.
   await expect(page.getByText(/Sign up before 1 October 2026/i)).toHaveCount(0);
@@ -81,10 +78,11 @@ async function assertComingSoonDesignLock(page: import('@playwright/test').Page)
   await expect(signUpLink).toHaveCount(1);
   await expect(signUpLink).toHaveAttribute('href', '/register');
 
-  const backToSignup = page.getByRole('link', { name: /^Back to signup$/i });
-  await expect(backToSignup).toHaveAttribute('href', '/register');
-
-  const inviteLink = page.getByRole('link', { name: /Enter your code/i });
+  // Open sign-up: no Back to signup, no invite line in the hero, quiet code link lower down.
+  await expect(page.getByRole('link', { name: /Back to signup/i })).toHaveCount(0);
+  await expect(page.getByText(/Already have an invite/i)).toHaveCount(0);
+  await expect(page.getByRole('link', { name: /Enter your code/i })).toHaveCount(0);
+  const inviteLink = page.getByRole('link', { name: /^Have a code\?$/ });
   await expect(inviteLink).toBeVisible();
   await expect(inviteLink).toHaveAttribute('href', '/invite');
 

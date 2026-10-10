@@ -1,0 +1,43 @@
+/*
+ * Public homepage surface. The homepage is always the dark brand surface
+ * (night photo and gradient), whatever the member's light or dark setting.
+ * Re-declare the dark tokens here so text stays readable (>= 4.5:1) when
+ * <html> is in light mode.
+ */
+.mr-home-surface {
+  --nn-bg: #0D0A06;
+  --nn-copper: #C4832A;
+  --nn-copper-bright: #E0A14A;
+  --nn-on-copper: #1A0E03;
+  --nn-text: #F0E0C0;
+  --nn-muted: #D4C4A8;
+  --nn-border: #3D2B0E;
+  --nn-accent-text: var(--nn-copper-bright);
+  --cream: var(--nn-text);
+  --cream-muted: var(--nn-muted);
+  color-scheme: dark;
+  background-color: var(--nn-bg);
+  color: var(--nn-text);
+}
+
+.mr-home-overline {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  color: var(--nn-accent-text);
+}
+
+.mr-home-heading {
+  margin: 0;
+  color: var(--nn-text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: clamp(36px, 7vw, 68px);
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mr-home-accent {
+  color: var(--nn-accent-text);
+}

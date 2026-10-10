@@ -101,10 +101,10 @@ describe('referral code carried through sign up into register', () => {
     expect(payload.referral_code).toBe('PETE1');
   });
 
-  it('home with ref, then the invite link, keeps ref on /invite', () => {
-    renderApp('/?ref=PETE1');
-    fireEvent.click(screen.getByRole('link', { name: 'Enter your code' }));
-    expect(screen.getByTestId('where').textContent).toBe('/invite?ref=PETE1');
+  it('home with ref, then Have a code?, keeps ref and utm on /invite', () => {
+    renderApp('/?REF=PETE1&UTM_Source=x&utm_id=c42');
+    fireEvent.click(screen.getByRole('link', { name: 'Have a code?' }));
+    expect(screen.getByTestId('where').textContent).toBe('/invite?ref=PETE1&utm_source=x&utm_id=c42');
   });
 
   it('/invite with ref, then Sign up free, lands on /register with ref and sends it at signup', async () => {

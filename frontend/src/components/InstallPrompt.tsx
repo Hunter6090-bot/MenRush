@@ -87,7 +87,7 @@ export function InstallPrompt({ variant }: { variant: 'card' | 'sheet' }) {
     <aside className={wrap} role="dialog" aria-label="Install MenRush">
       <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#C4832A]">Get the app</p>
       <p className="mt-1 text-[17px] font-extrabold leading-tight text-[#F0E0C0]">Put MenRush on your Home Screen.</p>
-      <p className="mt-1 text-[13px] leading-snug text-[#A89070]">
+      <p className="mt-1 text-[15px] leading-snug text-[#A89070]">
         {isIos()
           ? 'Safari only. Share, then Add to Home Screen.'
           : 'Opens like an app. No store. No extra download.'}
