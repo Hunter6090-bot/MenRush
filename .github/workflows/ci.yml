@@ -178,6 +178,8 @@ jobs:
         run: npm run test:map-feed-hide-location
       - name: Hot-spot list on real PG (Free rounded sort, Premium exact)
         run: npm run test:hot-spot-live-sort-integration
+      - name: Ghost and hidden check-ins do not add to live counts
+        run: npm run test:hot-spot-ghost-live-count
       - name: Pride code holders can register (real PG)
         run: npm run test:pride-invite-register-integration
       - name: Deleting a member who created a room works (real PG)
