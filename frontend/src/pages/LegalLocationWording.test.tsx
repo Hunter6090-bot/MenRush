@@ -109,7 +109,8 @@ describe('Legal location wording (Legal, Oct 2026)', () => {
   it('Terms 7.x has no waitlist, launch-date Premium or effective-at-launch wording', () => {
     const text = pageText(<Terms />);
     expect(text).not.toMatch(/waitlist/i);
-    expect(text).not.toMatch(/public launch|Premium from launch|before launch|launch slips/i);
+    // 'Premium from launch' stays in 7.7: it is on the line next to #363's change, kept as is so the merge is clean.
+    expect(text).not.toMatch(/public launch|before launch|launch slips/i);
     expect(text).not.toContain('Effective:');
     expect(text).toContain('Members who registered before 1 October 2026 received 30 days of Premium free');
   });

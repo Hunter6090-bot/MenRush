@@ -436,10 +436,9 @@ export const Terms = () => {
                   including 31 October 2026 (23:59:59 UK time) and are refused from 1 November 2026.
                   That covers both kinds: Brighton Pride personal promo codes sent by email, and
                   MenRush Pride invites (MENRUSH codes) from the menrush.com/pride claim form. The
-                  claim form closes at the same time. So if you have an unused Pride code, register by
-                  31 October 2026. Redeeming a valid Pride code grants 3 months of Premium. One grant
-                  per person. No stacking. Pride replaces
-                  the 30 days of Premium in clause 7.2. It does not add to them. Cannot be
+                  claim form closes at the same time. Redeeming a valid Pride code grants 3 months of
+                  Premium from launch. One grant per person. No stacking. Pride replaces the 30-day
+                  Premium in clause 7.2. It does not add to that gift. Cannot be
                   combined with the{' '}
                   <span className="font-mono tracking-wide">BSF26</span> promo in clause 7.8 or the{' '}
                   <span className="font-mono tracking-wide">MR3FREE</span> promo in clause 7.9. 18+
@@ -447,7 +446,7 @@ export const Terms = () => {
                   Southampton Pride or Manchester Village Pride. Duration: for a code redeemed before
                   1 October 2026, Premium runs from 1 October 2026 to 1 January 2027. For a code
                   redeemed on or after 1 October 2026, Premium runs for 3 months from the day you
-                  register.
+                  register. So if you have an unused Pride code, register by 31 October 2026.
                 </>,
               )}
               {para(
