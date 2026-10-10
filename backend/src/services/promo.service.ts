@@ -1,7 +1,6 @@
 import crypto from 'crypto';
 import type { PoolClient } from 'pg';
 import pool, { query } from '../db';
-import { sendTransactionalEmail } from './mailer.service';
 import { isAlwaysPremiumName } from '../lib/always-premium';
 
 type Queryable = PoolClient | typeof pool;
@@ -928,70 +927,24 @@ export const promoService = {
   /**
    * Issue a promo code for the given email + campaign.
    *
-   * New brightonpride26 claims are closed (public offer is /pride only).
-   * Already-issued personal codes stay redeemable via validate/redeem.
-   * Pride waitlist uses Pride-flagged MENRUSH invites (prideInvite.service) — not this.
+   * Every promo campaign is closed to new codes: brightonpride26 closed and the
+   * public offer was /pride only (also closed). Already-issued personal codes
+   * stay redeemable via validate/redeem. Pride waitlist used Pride-flagged
+   * MENRUSH invites (prideInvite.service), not this. The old Brighton code
+   * email (sendPromoEmail) was unreachable and has been removed.
    */
   async issueCode(
     email: string,
     campaignId: string,
   ): Promise<PromoSignupResult> {
+    void email;
     const campaign = getCampaign(campaignId);
     if (!campaign) throw new Error(`Unknown campaign: ${campaignId}`);
-
-    if (campaignId === BRIGHTON_PRIDE_CAMPAIGN) {
-      throw new Error('campaign_closed');
-    }
     if (campaignId === 'pride26_waitlist') {
-      // Face form posts here historically — route layer should call prideInviteService.
+      // Face form posts here historically. Route layer should call prideInviteService.
       throw new Error('use_pride_invite');
     }
-
-    const normalised = email.trim().toLowerCase();
-    const emailHash = hashEmail(normalised);
-
-    // Check for existing code for this email+campaign
-    const existing = await query(
-      `SELECT code FROM promo_codes
-       WHERE email_hash = $1 AND campaign = $2
-       LIMIT 1`,
-      [emailHash, campaignId],
-    );
-
-    if (existing.rows.length > 0) {
-      const code = (existing.rows[0] as { code: string }).code;
-      await sendPromoEmail({ to: normalised, code, campaign });
-      return { outcome: 'existing', code };
-    }
-
-    // Generate a unique code (retry on collision — astronomically rare)
-    let code = '';
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const candidate = generatePromoCode(campaign.codePrefix);
-      try {
-        await query(
-          `INSERT INTO promo_codes
-             (code, email, email_hash, campaign, months_free, expires_at)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [
-            candidate,
-            normalised,
-            emailHash,
-            campaign.id,
-            campaign.monthsFree,
-            campaign.expiresAt,
-          ],
-        );
-        code = candidate;
-        break;
-      } catch (err: any) {
-        // 23505 = unique_violation (code collision)
-        if (err.code !== '23505' || attempt === 4) throw err;
-      }
-    }
-
-    await sendPromoEmail({ to: normalised, code, campaign });
-    return { outcome: 'created', code };
+    throw new Error('campaign_closed');
   },
 
   /**
@@ -1148,137 +1101,3 @@ export const promoService = {
   },
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Email template
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function sendPromoEmail(params: {
-  to: string;
-  code: string;
-  campaign: CampaignConfig;
-}): Promise<void> {
-  const { to, code, campaign } = params;
-
-  const formattedCode = code; // already formatted as PREFIX-XXXX-XXXX
-
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Your MenRush Pride code</title>
-</head>
-<body style="margin:0;padding:0;background:#0D0A06;font-family:system-ui,-apple-system,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#0D0A06;padding:40px 20px;">
-  <tr>
-    <td align="center">
-      <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
-
-        <!-- Rainbow stripe -->
-        <tr>
-          <td style="height:8px;background:linear-gradient(to right,#E40303,#FF8C00,#FFED00,#008026,#004DFF,#750787);border-radius:4px 4px 0 0;"></td>
-        </tr>
-
-        <!-- Body -->
-        <tr>
-          <td style="background:#120E08;border:1px solid #2a2010;border-top:none;border-radius:0 0 4px 4px;padding:40px 36px;">
-
-            <!-- Logo / brand -->
-            <p style="margin:0 0 32px;font-size:13px;letter-spacing:4px;text-transform:uppercase;color:#C4832A;font-weight:700;">MENRUSH</p>
-
-            <!-- Headline -->
-            <h1 style="margin:0 0 12px;font-size:28px;font-weight:900;color:#F0E0C0;line-height:1.1;text-transform:uppercase;letter-spacing:-0.5px;">
-              Your Brighton Pride<br>offer is here.
-            </h1>
-            <p style="margin:0 0 32px;font-size:15px;color:#7a6a5a;line-height:1.6;">
-              You're on the list. Your personal code is below (format PRIDE-XXXX-XXXX).
-              It is <strong style="color:#8a7a6a;">not</strong> an invite code (MENRUSH-XXXX).
-              Enter this code at account signup on the same email — do not enter the public
-              code PRIDE&nbsp;3MONTH&nbsp;FREE. Your ${campaign.monthsFree}&nbsp;months of Premium
-              start on launch (1&nbsp;October&nbsp;2026), not the day you claimed this email.
-            </p>
-
-            <!-- Code box -->
-            <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
-              <tr>
-                <td style="background:#C4832A;padding:20px 24px;text-align:center;">
-                  <p style="margin:0 0 4px;font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#0D0A06;opacity:0.6;">Your personal code</p>
-                  <p style="margin:0;font-size:28px;font-weight:900;letter-spacing:4px;color:#0D0A06;font-family:monospace;">${formattedCode}</p>
-                </td>
-              </tr>
-            </table>
-
-            <!-- Lock note -->
-            <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 32px;">
-              <tr>
-                <td style="border:1px solid #2a2010;padding:14px 18px;border-radius:4px;">
-                  <p style="margin:0;font-size:13px;color:#5a4a3a;line-height:1.6;">
-                    <strong style="color:#C4832A;">This code is yours alone.</strong>
-                    It only works with the email address you signed up with
-                    (<strong style="color:#8a7a6a;">${to}</strong>).
-                    It cannot be transferred or resold.
-                  </p>
-                </td>
-              </tr>
-            </table>
-
-            <!-- How to redeem -->
-            <h2 style="margin:0 0 12px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#C4832A;font-weight:700;">How to redeem</h2>
-            <ol style="margin:0 0 32px;padding-left:20px;color:#7a6a5a;font-size:14px;line-height:1.8;">
-              <li>Keep this email — your code is locked to <strong style="color:#8a7a6a;">${to}</strong></li>
-              <li>This is a Premium promo code (PRIDE-XXXX-XXXX), not a MENRUSH invite code</li>
-              <li>Redemption is at account signup — enter this personal code (not PRIDE 3MONTH FREE)</li>
-              <li>When redeemed, Premium starts on launch. If open is 1&nbsp;October&nbsp;2026, Premium ends 1&nbsp;January&nbsp;2027. If launch slips, the 3 months run from the actual open date — not still 1&nbsp;January</li>
-              <li>Redeem by 31&nbsp;October&nbsp;2026. Replaces the 30-day waitlist gift. Do not stack with the public /pride code</li>
-            </ol>
-
-            <!-- Fine print -->
-            <p style="margin:0 0 32px;font-size:11px;color:#2a2010;line-height:1.6;border-top:1px solid #1a1210;padding-top:20px;">
-              New members only. One code per user. Redeem by 31&nbsp;October&nbsp;2026 at account
-              signup. Benefit clocks from launch (not claim day) for three calendar
-              months. Replaces the 30-day waitlist Premium gift. Cannot be combined
-              with other offers or the public /pride code. MenRush is an 18+ platform.
-              Bronze Apps UK Limited — Company No.&nbsp;17249857.
-            </p>
-
-            <!-- CTA -->
-            <p style="margin:0;font-size:13px;color:#4a3a2a;">
-              Questions? Reply to this email or visit
-              <a href="https://menrush.com" style="color:#C4832A;text-decoration:none;">menrush.com</a>
-            </p>
-
-          </td>
-        </tr>
-
-      </table>
-    </td>
-  </tr>
-</table>
-</body>
-</html>`;
-
-  const text = `Your MenRush Pride code
-
-${campaign.monthsFree} months free Premium starting 1 October 2026 (not the day you claim).
-
-YOUR CODE: ${formattedCode}
-
-This code is locked to ${to}. Format PRIDE-XXXX-XXXX. Not a MENRUSH invite.
-
-How to redeem:
-1. Keep this email
-2. At account signup, enter this personal code (not PRIDE 3MONTH FREE) on the same email
-3. When redeemed, Premium starts on launch. If open is 1 October 2026, Premium ends 1 January 2027. If launch slips, the 3 months run from the actual open date — not still 1 January
-4. Redeem by 31 October 2026
-
-Replaces the 30-day waitlist gift. Do not stack with the public /pride code.
-New members only. One code per user. 18+.
-Bronze Apps UK Limited — Company No. 17249857.`;
-
-  await sendTransactionalEmail({
-    to,
-    subject: `Your MenRush Pride code: ${formattedCode}`,
-    html,
-    text,
-  });
-}

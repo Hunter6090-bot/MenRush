@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
  */
 const ROOT = resolve(__dirname, '../../..');
 const FILES = [
+  'frontend/index.html',
   'frontend/src/pages/Login.tsx',
   'frontend/src/pages/ComingSoon.tsx',
   'frontend/public/manifest.json',
@@ -58,4 +59,13 @@ describe('no "right now" in customer-facing copy', () => {
     const manifest = JSON.parse(readFileSync(resolve(ROOT, 'frontend/public/manifest.json'), 'utf8'));
     expect(manifest.description).toBe("See who's around on the map. Chat, Rooms and Out. 18+ only.");
   });
+
+  it.each(['email-assets/welcome-email.html', 'backend/email-assets/welcome-email.html'])(
+    "%s button says 'Open MenRush', not 'Yes, open MenRush'",
+    (file) => {
+      const html = readFileSync(resolve(ROOT, file), 'utf8');
+      expect(html).not.toMatch(/Yes, open MenRush/);
+      expect(html).toMatch(/>\s*Open MenRush\s*</);
+    },
+  );
 });

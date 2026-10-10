@@ -162,16 +162,16 @@ router.post('/:campaignId/signup', signupLimiter, async (req: Request, res: Resp
     }
     if (err.message === 'campaign_closed') {
       res.status(410).json({
-        error: 'This claim form is closed. Use the Pride offer at /pride.',
+        error: 'This claim form is closed. MenRush is open now, so you can sign up free at menrush.com.',
         code: 'campaign_closed',
-        redirect: '/pride',
+        redirect: '/register',
       });
       return;
     }
     if (err.message === 'issue_window_closed') {
       res.status(410).json({
         error:
-          'The Pride claim window closed after 31 August 2026. If you already claimed, use the same email on /pride to resend your code.',
+          'The Pride claim window closed after 31 August 2026. If you already claimed, enter your code when you sign up at menrush.com with the same email.',
         code: 'issue_window_closed',
       });
       return;
