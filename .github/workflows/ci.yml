@@ -37,6 +37,8 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
+      - name: London midnight follows BST and GMT (promo Premium start)
+        run: npm run test:london-midnight
       - name: Security checks (source guards, uploads, media, CORS)
         run: npm run test:security
       - name: Personal Pride codes end 31 October 23:59:59 London (boundary)
@@ -168,6 +170,8 @@ jobs:
         run: npm run test:hot-spot-live-sort-integration
       - name: Personal Pride codes end 31 October (real PG)
         run: npm run test:pride-personal-expiry-integration
+      - name: Pride code holders can register (real PG)
+        run: npm run test:pride-invite-register-integration
       # --if-present: these scripts arrive with their own PRs (#333, #327,
       # #328, Community Ghost). The step is a no-op until the script exists.
       - name: Radius on the fuzzed pin (oracle)
